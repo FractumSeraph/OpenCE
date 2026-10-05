@@ -8,13 +8,15 @@ Windows/Linux builds of OpenCE. The browser port comes from
 up to date with it. It runs at
 [halo.fractumseraph.net](https://halo.fractumseraph.net/).
 
-**Download the browser build:**
-[halo-web.zip](https://github.com/FractumSeraph/OpenCE/releases/download/web-latest/halo-web.zip),
-built from the latest `main`. Unzip it, put the game's Xbox `.map` files in
-`halo-web/assets/maps/` (or let each player load their own Xbox disc image),
-and serve the folder; `README.txt` inside says how. It contains no game
-data. Online play also needs the lobby service and the native gateway beside
-it (see below).
+**Download it** (built from the latest `main`; no game data included):
+
+| File | What it is |
+| --- | --- |
+| [halo-server-windows-x64.zip](https://github.com/FractumSeraph/OpenCE/releases/download/web-latest/halo-server-windows-x64.zip) | Everything to host it on Windows: the game, its server, the lobby service for online play, the gateway for native `halo://join` links, and Node.js. Unzip, put the game's Xbox `.map` files in `halo-server/public/assets/maps/`, and double-click `Start Halo (Windows).bat`. |
+| [halo-server-linux-x64.zip](https://github.com/FractumSeraph/OpenCE/releases/download/web-latest/halo-server-linux-x64.zip) | The same for Linux x64 (`./start-halo.sh`). [HOSTING-VPS.md](services/selfhost/HOSTING-VPS.md) sets it up on a VPS with your own domain and HTTPS. |
+| [halo-web.zip](https://github.com/FractumSeraph/OpenCE/releases/download/web-latest/halo-web.zip) | The game alone, to put on any web server. Without the lobby service there is no online play. |
+
+The kits' instructions: [services/selfhost/README.md](services/selfhost/README.md).
 
 The `main` branch here is OpenCE's `main` with the changes below merged in.
 Everything after this section is OpenCE's own README, with a row for the
@@ -61,8 +63,7 @@ OpenCE's own CI.
   lists the public games of native hosts. The site's server relays their
   signed listings from internet play's brokers, the game checks the
   signatures (`p2p_lobby.c`), and choosing one joins it through the native
-  gateway. (The relay is part of the self-hosting server, which is not in
-  this repository.)
+  gateway. (The relay is part of the self-hosting server: `public-games.mjs`.)
 
 ### Added: online services
 
@@ -73,6 +74,13 @@ OpenCE's own CI.
   `halo://join` invite. It speaks OpenCE's internet-play protocol (`hceu/3`
   over the MQTT brokers, then the encrypted UDP tunnel), with OpenCE's own
   broker added to its list. Written in Rust.
+- **`services/selfhost`**: the self-hosting server the kits run. One Node.js
+  process serves the game (with byte ranges and the isolation headers), runs
+  the lobby service in Miniflare, starts the gateway, relays the server
+  browser's public games (`public-games.mjs`), and can add Umami analytics.
+  It works under any domain or sub-path, and comes with launchers, a Windows
+  autostart task and a VPS guide. `tools/selfhost_package.py` builds the
+  kits.
 - **`services/web`**, **`infra/aws-native-gateway`**, **`docs/telemetry.md`**,
   **`tools/halo_telemetry.mjs`**: web-halo's own hosting (Cloudflare, AWS) and
   telemetry, kept as they came.
@@ -117,8 +125,9 @@ OpenCE's own CI.
 - **A workflow for the browser build** (`.github/workflows/web.yml`): every
   push builds it, runs the browser tests and packages
   [`halo-web.zip`](https://github.com/FractumSeraph/OpenCE/releases/download/web-latest/halo-web.zip)
-  (`tools/web_package.py`). On `main` the zip goes on the `web-latest`
-  release. OpenCE's own `build.yml` (the native builds and their releases)
+  (`tools/web_package.py`), then builds the two self-hosting kits, each on
+  its own platform (Windows and Linux). On `main` all three zips go on the
+  `web-latest` release. OpenCE's own `build.yml` (the native builds and their releases)
   is unchanged. web-halo's workflows, which deployed its own services, are
   not included.
 

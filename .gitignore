@@ -31,3 +31,12 @@ original/
 
 # CI build outputs (tools/ci_build.py)
 dist/
+# the self-hosting server's generated and local files (services/selfhost)
+/services/selfhost/public/
+/services/selfhost/data/
+/services/selfhost/logs/
+/services/selfhost/config.json
+/services/selfhost/server/node_modules/
+/services/selfhost/server/signaling/
+/services/selfhost/server/bin/
+/services/selfhost/server/runtime/

@@ -1,10 +1,16 @@
 name: Web build
 
-# The browser version: `ninja web` with Emscripten, the browser tests, and
-# halo-web.zip (tools/web_package.py: the page, the game, touch controls and
-# app icons, ready to serve; no game data). Every run keeps the zip as an
-# artifact; a run on main also puts it on the "web-latest" release, so
-#   https://github.com/<repository>/releases/download/web-latest/halo-web.zip
+# The browser version and the kits to host it:
+# - halo-web.zip: `ninja web` with Emscripten, after the browser tests
+#   (tools/web_package.py: the page, the game, touch controls and app icons,
+#   ready to serve; no game data);
+# - halo-server-linux-x64.zip and halo-server-windows-x64.zip: the same game
+#   with its server, lobby service, native gateway and Node.js, ready to run
+#   (tools/selfhost_package.py, services/selfhost), each built on its own
+#   platform.
+# Every run keeps them as artifacts; a run on main also puts them on the
+# "web-latest" release, so
+#   https://github.com/<repository>/releases/download/web-latest/<file>
 # is always the newest. (That release is not marked latest: OpenCE's Build
 # workflow keeps "latest" for the native builds.)
 
@@ -21,12 +27,12 @@ concurrency:
 
 env:
   EMSCRIPTEN_VERSION: 6.0.11
+  # the Node.js the kits carry (and run their server with)
+  NODE_VERSION: 24.21.0
 
 jobs:
   web:
     runs-on: ubuntu-24.04
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -70,15 +76,116 @@ jobs:
           name: halo-web
           path: dist/halo-web.zip
 
+  selfhost:
+    needs: web
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            platform: linux-x64
+            kit: linux-x64
+            node: linux-x64.tar.xz
+            exe: ""
+          - os: windows-2022
+            platform: win32-x64
+            kit: windows-x64
+            node: win-x64.zip
+            exe: .exe
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: halo-web
+          path: dist
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Gateway cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            services/native-gateway/target
+          key: gateway-${{ matrix.platform }}-${{ hashFiles('services/native-gateway/Cargo.lock') }}
+
+      - name: Native gateway
+        working-directory: services/native-gateway
+        run: |
+          cargo --version
+          cargo build --release --locked
+
+      - name: Lobby service
+        working-directory: services/signaling
+        run: |
+          npm ci --no-audit --no-fund
+          npx wrangler deploy --dry-run --outdir bundle
+
+      # the official build, checked against nodejs.org's checksums
+      - name: Node.js
+        run: |
+          file="node-v$NODE_VERSION-${{ matrix.node }}"
+          mkdir -p "$RUNNER_TEMP/node" && cd "$RUNNER_TEMP/node"
+          curl -fsSLO "https://nodejs.org/dist/v$NODE_VERSION/$file"
+          curl -fsSLO "https://nodejs.org/dist/v$NODE_VERSION/SHASUMS256.txt"
+          grep " $file\$" SHASUMS256.txt | sha256sum -c -
+          python -c "import shutil, sys; shutil.unpack_archive(sys.argv[1], 'x')" "$file"
+          root="x/${file%.tar.xz}"; root="${root%.zip}"
+          if [ -f "$root/node.exe" ]; then cp "$root/node.exe" node.exe; else cp "$root/bin/node" node; fi
+          cp "$root/LICENSE" LICENSE
+
+      - name: Package
+        run: >
+          python tools/selfhost_package.py --platform ${{ matrix.platform }}
+          --site dist/halo-web.zip
+          --signaling services/signaling/bundle/index.js
+          --gateway services/native-gateway/target/release/halo-native-gateway${{ matrix.exe }}
+          --node "$RUNNER_TEMP/node/node${{ matrix.exe }}"
+          --node-license "$RUNNER_TEMP/node/LICENSE"
+          --output dist/halo-server-${{ matrix.kit }}.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: halo-server-${{ matrix.kit }}
+          path: dist/halo-server-${{ matrix.kit }}.zip
+
+  release:
+    needs: [web, selfhost]
+    if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
       - name: Release
-        if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
           notes="The browser version (WebAssembly) of $GITHUB_SHA, from $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID.
 
-          Unzip it, add the game's Xbox .map files to halo-web/assets/maps (or let players load their own Xbox disc image), and serve the folder: see README.txt inside. No game data is included."
+          - halo-server-windows-x64.zip / halo-server-linux-x64.zip: everything to host it (the game, its server, the lobby service for online play, the gateway for native halo://join links, Node.js). Unzip, put the game's Xbox .map files in halo-server/public/assets/maps, and start it; see README.md inside.
+          - halo-web.zip: the game alone, to serve from any web server (no online play without the lobby service); see README.txt inside.
+
+          No game data is included."
           git tag -f web-latest "$GITHUB_SHA"
           git push -f origin refs/tags/web-latest
           if gh release view web-latest >/dev/null 2>&1; then
@@ -86,4 +193,4 @@ jobs:
           else
             gh release create web-latest --title "Browser build (latest)" --notes "$notes" --latest=false
           fi
-          gh release upload web-latest dist/halo-web.zip --clobber
+          gh release upload web-latest dist/halo-web.zip dist/halo-server-linux-x64.zip dist/halo-server-windows-x64.zip --clobber

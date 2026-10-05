@@ -1,0 +1,18 @@
+{
+  "name": "halo-web-selfhost",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Self-hosted Halo web server: static game files, lobby service and native gateway.",
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "miniflare": "4.20260730.0",
+    "selfsigned": "^2.4.1"
+  },
+  "optionalDependencies": {
+    "@cloudflare/workerd-windows-64": "1.20260730.1",
+    "@cloudflare/workerd-linux-64": "1.20260730.1"
+  }
+}

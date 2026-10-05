@@ -1,0 +1,253 @@
+# Halo (self-hosted web version)
+
+This folder is a complete, portable Halo: Combat Evolved web server: the
+WebAssembly game, the multiplayer lobby service and the gateway for native
+`halo://join` invites. You add the maps (see [Maps](#maps)). Nothing needs to
+be installed. Copy the whole folder to another computer, or put it behind any
+domain or sub-path, and it keeps working without edits.
+
+It is built from [FractumSeraph/OpenCE](https://github.com/FractumSeraph/OpenCE)
+(OpenCE with the browser port); the newest kits are on its
+[web-latest release](https://github.com/FractumSeraph/OpenCE/releases/tag/web-latest):
+`halo-server-windows-x64.zip` and `halo-server-linux-x64.zip`.
+
+## Start it
+
+| Host | How |
+| --- | --- |
+| Windows (x64) | Double-click **`Start Halo (Windows).bat`**. Close the window to stop. |
+| Linux (x64) | Run `./start-halo.sh` (or `sh start-halo.sh`). Ctrl+C stops it. |
+
+The window lists the addresses to open:
+
+- **This computer:** `http://localhost:8765/`
+- **Other devices on your network:** `https://<this-computer's-IP>:8443/`.
+  The certificate is self-signed, so each device shows a one-time warning.
+  Choose **Advanced → Proceed**. If someone opens the plain `http://<IP>:8765`
+  address, they are redirected to HTTPS automatically. Browsers only run the
+  game over HTTPS or on localhost.
+
+The first time it starts on Windows, allow `node.exe` through the firewall on
+**private networks**.
+
+Players need a current desktop Chrome, Edge or Firefox.
+
+## Play together
+
+1. One player selects **Play online**, picks a map and mode, and creates a
+   lobby (up to 128 players).
+2. They copy the invite link and send it to everyone else.
+3. Friends open the link, or paste it into **Join game**. The host starts the
+   match when everyone is ready.
+
+The **Join game** box accepts:
+
+- invite links from this server;
+- invite links from another copy of this folder running under a different
+  domain (the browser contacts that copy's lobby directly);
+- `halo://join/…` links created by the Windows/Linux builds of the game. These
+  go through the native gateway (see "Internet play" below).
+
+Gameplay traffic goes directly between each player and the host's browser
+(WebRTC). Only the lobby handshake goes through this server.
+
+**Public games:** in the game, **Multiplayer → Join Game → Server Browser**
+lists the public games hosted with the Windows/Linux builds of OpenCE.
+Choosing one joins it through the native gateway, like a `halo://join`
+link. This server fetches the list from internet play's brokers
+(`server/public-games.mjs`, only while someone has the browser open). The
+game checks each listing's signature itself.
+
+**Keep the game visible while you play, especially the host.** Browsers
+pause background tabs, and after about a minute in the background the game
+times out and the match ends ("A networking error has occurred"). A window
+that is visible but not focused is fine. To try two players on one computer,
+use two separate browser windows side by side, not two tabs.
+
+Troubleshooting: run the server with the environment variable
+`HALO_LOG_REQUESTS=1` to log every request it serves.
+
+## Start automatically with Windows
+
+`server\windows\install-autostart.ps1` (run as administrator) adds a
+scheduled task, **Halo Web Server**, that starts the server at boot before
+anyone logs in, restarts it if it stops, and logs to `logs\halo-server.log`.
+`server\windows\uninstall-autostart.ps1` removes it. After moving this folder,
+run the installer again.
+
+While the task runs, don't also start `Start Halo (Windows).bat`: the ports
+are already in use. To stop or start it by hand, open an administrator
+PowerShell and run `Stop-ScheduledTask "Halo Web Server"` or
+`Start-ScheduledTask "Halo Web Server"`.
+
+After changing `config.json` or the files in `server\`, restart it with
+`server\windows\restart.ps1` (as administrator). It also ends a server
+process left holding the ports, and logs to `logs\restart.log`.
+
+After changing `config.json` or the files in `server`, restart it with
+`serverwindowsestart.ps1` (as administrator). It also ends a server
+process left holding the ports, and logs to `logsestart.log`.
+
+## Phones and tablets (touch controls)
+
+Open the game on a phone (`https://<this-computer's-IP>:8443/` at home) and
+hold it sideways. Once the game has loaded, touch controls appear by
+themselves:
+
+- **Move:** put your left thumb anywhere on the left side; a stick appears
+  under it.
+- **Aim:** drag on the right side. The large fire button also aims while
+  you hold it.
+- **Buttons:** jump, crouch, melee, reload, swap weapon, grenade (and its
+  type), flashlight, zoom, pause and score. In the game's menus, use the
+  stick to move and **Jump (A)** / **Melee (B)** to select and go back.
+- **The ☰ button (top left):** choose the **Modern** layout or the
+  **Original Xbox controller** layout, change the look speed, **Edit layout**
+  (drag any control to move it, pick one to resize it, set the opacity),
+  or open **Play online** for lobbies and invite links.
+
+These settings are saved on each device. Connecting a Bluetooth or USB
+controller hides the touch controls while it is connected. On a tablet or
+touchscreen laptop, use the **Touch** button under the game to switch touch
+controls on or off. Adding `?touch=1` to the address forces them on.
+
+The touch controls are ported from
+[Halo Mobile](https://github.com/OMG-Guest/Halo-Mobile) (CC0).
+
+## Install as an app
+
+Halo can be installed like an app: an icon on the home screen that opens it
+full screen and sideways, without the browser's bars.
+
+- **Android, and Chrome or Edge on a computer:** tap **Install app** under
+  the game (or in the ☰ menu in touch mode), then **Install**.
+- **iPhone or iPad:** tap **Install app** for the steps: **Share** →
+  **Add to Home Screen** → **Add**.
+
+Installing needs a **real HTTPS certificate**, such as a domain with Let's
+Encrypt (see [HOSTING-VPS.md](HOSTING-VPS.md)). On the home network's
+self-signed address, phones can play in the browser but most won't install
+the app. An installed app on iPhone keeps its own saves, separate from
+Safari's.
+
+## Maps
+
+Maps are served from **`public/assets/maps/`**, so players never pick an ISO.
+The kit comes without them: copy the game's Xbox-format `.map` files there
+(`tools/xiso_extract.py` in the repository takes them from an Xbox disc
+image). Replace any file with your modified version and players get it the
+next time they load the page. The game expects these
+file names:
+
+```
+ui.map  a10 a30 a50 b30 b40 c10 c20 c40 d20 d40 (campaign)
+beavercreek bloodgulch boardingaction carousel chillout damnation
+hangemhigh longest prisoner putput ratrace sidewinder wizard (multiplayer)
+```
+
+If `ui.map` is missing, the page falls back to asking each player for their
+own XISO.
+
+The lobby artwork in `public/assets/ui/` is placeholder art. Replace any image
+with your own, keeping the same file name.
+
+## Internet play / your own domain
+
+**Step-by-step VPS setup (domain, HTTPS, firewall, optional TURN relay and
+password): [HOSTING-VPS.md](HOSTING-VPS.md).**
+
+Put any HTTPS reverse proxy in front of `http://<this-computer>:8765`, with or
+without a sub-path. For example, Caddy:
+
+```
+halo.example.com {
+    reverse_proxy 127.0.0.1:8765
+}
+example.com {
+    handle_path /halo/* {
+        reverse_proxy 127.0.0.1:8765
+    }
+}
+```
+
+Cloudflare Tunnel, nginx and similar work the same way. WebSockets must be
+allowed, and `X-Forwarded-For`/`X-Forwarded-Proto` should be set. Most
+proxies do this by default.
+
+- **Native `halo://join` links** need UDP ports **40000-40127** forwarded to
+  this computer. The gateway detects your public IP automatically; set
+  `nativeGateway.publicIp` if detection picks the wrong one.
+- **Players behind strict NATs** may need a TURN relay. Add one to
+  `iceServers` in `config.json`, for example a coturn server:
+
+  ```json
+  "iceServers": [
+    { "urls": ["stun:stun.cloudflare.com:3478"] },
+    { "urls": ["turn:turn.example.com:3478"], "username": "halo", "credential": "secret" }
+  ]
+  ```
+
+## Settings (`config.json`)
+
+| Setting | Meaning |
+| --- | --- |
+| `http.port` / `https.port` | Ports for plain HTTP (localhost, reverse proxy) and HTTPS (LAN). |
+| `https.certFile` / `https.keyFile` | Use your own certificate instead of the generated one (paths relative to this folder). |
+| `lobby.externalUrl` | Use another server's lobby instead of this one (e.g. `https://halo.example.com/`). Leave empty normally. |
+| `lobby.maxRoomCapacity` | Players per lobby (the game's maximum is 128). |
+| `lobby.roomHours` | How long a lobby invite stays valid. |
+| `iceServers` | STUN/TURN servers handed to players. |
+| `nativeGateway.*` | Native-invite gateway: enable/disable, public IP, UDP port range. |
+| `publicGames.enabled` / `publicGames.brokers` | The in-game server browser's list of public games, and the MQTT brokers it comes from. |
+| `analytics.umamiScriptUrl` / `analytics.umamiWebsiteId` | Optional Umami page-view tracking: the tracker script's URL and the website ID. Added to the page when served; leave empty for none. |
+
+## Folder layout
+
+```
+Start Halo (Windows).bat, start-halo.sh   launchers
+config.json                               settings
+public/                                   game files and maps (what browsers download)
+server/                                   server, bundled Node.js, lobby runtime, gateway
+data/                                     created at first start: lobby state, secrets,
+                                          certificate. Delete it to reset.
+```
+
+## Updating
+
+Download the newest kit and copy its contents over this folder. Your
+`config.json`, `data/` and maps are not in the kit, so they are kept. Then
+restart the server (on Windows with the autostart task:
+`server\windows\restart.ps1`, as administrator). Players get the new game
+on their next page load.
+
+## Building it yourself
+
+The kit is built by the repository's `Web build` workflow
+(`.github/workflows/web.yml`): the game (`ninja web` with Emscripten), the
+lobby service (`services/signaling`, bundled with `wrangler deploy --dry-run`),
+the gateway (`services/native-gateway`, `cargo build --release`), Node.js,
+and this server (`services/selfhost`), put together by
+`tools/selfhost_package.py`.
+
+To run the server from a checkout (Node.js 22 or newer):
+
+```
+# the game: unzip dist/halo-web.zip (tools/web_package.py, after ninja web)
+# and rename its halo-web folder to services/selfhost/public
+# the lobby service
+cd services/signaling
+npm ci
+npx wrangler deploy --dry-run --outdir ../selfhost/server/signaling
+# the gateway, for native halo:// invites (optional; Rust): copy
+# target/release/halo-native-gateway[.exe] to
+# services/selfhost/server/bin/halo-native-gateway-<linux-x64|win32-x64>[.exe]
+cd ../native-gateway
+cargo build --release
+# the server
+cd ../selfhost/server
+npm ci --omit=dev
+node server.mjs
+```
+
+Without the lobby service or the gateway, the server starts without online
+play or native invites, and says so.
