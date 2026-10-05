@@ -4073,8 +4073,8 @@ void WINAPI D3DDevice_End(void)
 		gl_check_errors("immediate upload");
 		for (index = 0; index < XGPU_VERTEX_ATTRIBUTE_COUNT; index++)
 		{
-			state_attribute_pointer(index, device.stream_buffer, 4, GL_FLOAT, GL_FALSE, FALSE,
-				4 * sizeof(float), offset + index * count * 4 * sizeof(float));
+			state_attribute_stream(index, 0, device.stream_buffer, 4, GL_FLOAT, GL_FALSE, FALSE,
+				4 * sizeof(float), offset + index * count * 4 * sizeof(float), 0);
 		}
 	}
 #else

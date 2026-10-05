@@ -831,6 +831,9 @@ GLuint xgpu_texture_get(const DWORD *resource, const D3DCOLOR *palette, GLenum *
 			return texture_entry_result(entry, target, description);
 		}
 	}
+	#else
+	/* (no recent lookups without memory_watch.c: always the buckets) */
+	entry = NULL;
 	#endif
 
 	if (!entry)
