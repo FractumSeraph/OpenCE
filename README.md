@@ -1,3 +1,118 @@
+# OpenCE in the browser (FractumSeraph's fork)
+
+This fork is [OpenCE](https://github.com/OpenCommunityEdition/OpenCE) with a
+browser version added: the same game compiled to WebAssembly, playable in
+Chrome, Edge, Firefox and on phones, online with other browsers and with the
+Windows/Linux builds of OpenCE. The browser port comes from
+[web-halo](https://github.com/ecumene/web-halo), merged onto OpenCE and kept
+up to date with it. It runs at
+[halo.fractumseraph.net](https://halo.fractumseraph.net/).
+
+The `main` branch here is OpenCE's `main` with the changes below merged in.
+Everything after this section is OpenCE's own README, with a row for the
+browser added to its tables and a [Browser build](#browser-build) section at
+the end.
+
+## What this fork changes compared with OpenCE
+
+**The native builds are meant to be the same as OpenCE's.** Browser-only code
+is inside `#ifdef HALO_WEB` (or in files only the browser build compiles), and
+nothing sent over the network is changed: browser and native players share
+games, on the same network version as OpenCE. This fork only builds and tests
+the browser version, so a native build here has not been checked beyond
+OpenCE's own CI.
+
+### Added: the browser build
+
+- **`ninja web`** builds `build/web/halo.html`, `halo.js` and `halo.wasm` with
+  Emscripten (`tools/web_build.py`; `configure.py --web-cc PATH`). Threads
+  (pthreads), WebGL 2 through the Android OpenGL ES code, maps read from the
+  web server with byte ranges, saves and settings in the browser's private
+  storage. The link fails on WebAssembly signature mismatches, which would
+  otherwise crash at run time.
+- **The browser platform layer** (`port/web/src`): storage and map mounting
+  (`web_platform.c`), sockets carried over WebRTC between browsers
+  (`web_loopback_net.c`), the page's hosting and invite flow
+  (`web_online_ui.c`), the in-game server browser (`web_public_games.c`), and
+  UPnP stubs (`web_upnp.c`).
+- **The page** (`port/web/shell.html`, `online_client.js`,
+  `library_web_transport.js`): loading screen, a "Play online" panel to host a
+  lobby and share an invite link (up to 128 players), and joining invites from
+  any copy of the site, on any domain, or a native `halo://join` link. Without
+  server-hosted maps, players can load the maps from their own Xbox disc image
+  (`xiso.js`). The layout keeps its panels off the game on phones in either
+  orientation.
+- **Touch controls** for phones and tablets (`port/web/assets/touch`, after
+  [Halo Mobile](https://github.com/OMG-Guest/Halo-Mobile)): a floating stick,
+  aiming by dragging, every button, two layouts (modern or original Xbox
+  controller) and an on-screen editor. A connected gamepad hides them.
+- **Installing as an app** (PWA): `port/web/manifest.webmanifest`,
+  `port/web/assets/pwa`, and `coi-serviceworker.js`, which also provides the
+  cross-origin isolation that threads need.
+- **The in-game server browser** (Multiplayer > Join Game > Server Browser)
+  lists the public games of native hosts. The site's server relays their
+  signed listings from internet play's brokers, the game checks the
+  signatures (`p2p_lobby.c`), and choosing one joins it through the native
+  gateway. (The relay is part of the self-hosting server, which is not in
+  this repository.)
+
+### Added: online services
+
+- **`services/signaling`**: the lobby service for browser games (a Cloudflare
+  Worker: rooms, invite tickets and WebRTC signalling; the self-hosting server
+  runs it locally in Miniflare).
+- **`services/native-gateway`**: lets a browser join a native host's
+  `halo://join` invite. It speaks OpenCE's internet-play protocol (`hceu/3`
+  over the MQTT brokers, then the encrypted UDP tunnel), with OpenCE's own
+  broker added to its list. Written in Rust.
+- **`services/web`**, **`infra/aws-native-gateway`**, **`docs/telemetry.md`**,
+  **`tools/halo_telemetry.mjs`**: web-halo's own hosting (Cloudflare, AWS) and
+  telemetry, kept as they came.
+
+### Changed: shared code
+
+- **Inside `HALO_WEB`**, the browser's versions of:
+  - **graphics** (`d3d8_gl.c`, `d3d8_resources.c`, `xbox_textures.c`,
+    `memory_watch.c`, `gl.h`, `gl_functions.c`): WebGL 2 instead of desktop
+    OpenGL, texture changes found by content checks instead of page
+    protection, and Xbox colour order converted before upload;
+  - **memory and CPU** (`xbox_memory.c`, `msvc_crt.c`): the Xbox address
+    window inside WebAssembly memory, and the floating-point control word,
+    which WebAssembly does not have, kept for the game to read back;
+  - **platform** (`sdl_platform.c`, `xinput_sdl.c`, `dsound_sdl.c`,
+    `port_config.c`): the frame driven by the browser, touch aiming, browser
+    audio, and browser defaults for some settings (for example crouch on `C`);
+  - **networking** (`posix_net.c`, `xnet.c`, `p2p.c`): sockets through the
+    browser layer, and invites handed to the page;
+  - **menus** (`menu_functions.c`): the server browser joins through the page;
+  - **game code** (`source/`): a player re-sent to a browser client that
+    missed it (`network_server_message_handler.c`,
+    `network_client_manager.c`), a fatal error ending the browser runtime
+    instead of looping (`main.c`), and small fixes in the cache, saved-game
+    and rasterizer code.
+- **Outside `HALO_WEB`**, changes that do not alter what the game does:
+  - the main loop split into one frame per call (`main_loop_iteration` in
+    `main.c`), which the browser needs and the native loop calls in turn;
+  - functions only the browser calls: a quick network-server setup with a
+    chosen map and gametype (`player_ui.c`), and `main_campaign_in_progress`;
+  - fixes that let the code compile for WebAssembly: missing prototypes and
+    includes (`players.h`, `object_types.c` and others), and string tables
+    stored as arrays (`saved_game_files.c`);
+  - `configure.py`'s `--web-cc` option and the `ninja web` target.
+
+### Added: repository files
+
+- **Tools**: `tools/web_build.py` (the build), `web_serve.py` and `web_run.py`
+  (a local server with the headers the page needs), `web_stage_cloudflare.py`,
+  `xiso_extract.py` (maps from an Xbox disc image), and tests under
+  `port/web/tests` and `tools/test_*.py`.
+- **GitHub workflows from web-halo** (`.github/workflows/ci.yml`,
+  `deploy.yml`, `native-gateway-image.yml`): they test, deploy and publish
+  web-halo's own services and need its secrets, so on this fork the deploys
+  fail without doing anything. OpenCE's `build.yml` is unchanged.
+
+---
+
 # Halo: Combat Evolved for Linux, Windows and Android
 
 [![Join our Discord](https://invidget.switchblade.xyz/9gqcHyr5km)](https://discord.gg/9gqcHyr5km)
