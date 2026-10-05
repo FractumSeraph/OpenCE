@@ -8,6 +8,14 @@ Windows/Linux builds of OpenCE. The browser port comes from
 up to date with it. It runs at
 [halo.fractumseraph.net](https://halo.fractumseraph.net/).
 
+**Download the browser build:**
+[halo-web.zip](https://github.com/FractumSeraph/OpenCE/releases/download/web-latest/halo-web.zip),
+built from the latest `main`. Unzip it, put the game's Xbox `.map` files in
+`halo-web/assets/maps/` (or let each player load their own Xbox disc image),
+and serve the folder; `README.txt` inside says how. It contains no game
+data. Online play also needs the lobby service and the native gateway beside
+it (see below).
+
 The `main` branch here is OpenCE's `main` with the changes below merged in.
 Everything after this section is OpenCE's own README, with a row for the
 browser added to its tables and a [Browser build](#browser-build) section at
@@ -106,10 +114,13 @@ OpenCE's own CI.
   (a local server with the headers the page needs), `web_stage_cloudflare.py`,
   `xiso_extract.py` (maps from an Xbox disc image), and tests under
   `port/web/tests` and `tools/test_*.py`.
-- **GitHub workflows from web-halo** (`.github/workflows/ci.yml`,
-  `deploy.yml`, `native-gateway-image.yml`): they test, deploy and publish
-  web-halo's own services and need its secrets, so on this fork the deploys
-  fail without doing anything. OpenCE's `build.yml` is unchanged.
+- **A workflow for the browser build** (`.github/workflows/web.yml`): every
+  push builds it, runs the browser tests and packages
+  [`halo-web.zip`](https://github.com/FractumSeraph/OpenCE/releases/download/web-latest/halo-web.zip)
+  (`tools/web_package.py`). On `main` the zip goes on the `web-latest`
+  release. OpenCE's own `build.yml` (the native builds and their releases)
+  is unchanged. web-halo's workflows, which deployed its own services, are
+  not included.
 
 ---
 

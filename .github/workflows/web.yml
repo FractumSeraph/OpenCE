@@ -1,0 +1,89 @@
+name: Web build
+
+# The browser version: `ninja web` with Emscripten, the browser tests, and
+# halo-web.zip (tools/web_package.py: the page, the game, touch controls and
+# app icons, ready to serve; no game data). Every run keeps the zip as an
+# artifact; a run on main also puts it on the "web-latest" release, so
+#   https://github.com/<repository>/releases/download/web-latest/halo-web.zip
+# is always the newest. (That release is not marked latest: OpenCE's Build
+# workflow keeps "latest" for the native builds.)
+
+on:
+  push:
+    paths-ignore:
+      - "**.md"
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: web-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  EMSCRIPTEN_VERSION: 6.0.11
+
+jobs:
+  web:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ninja
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ninja-build
+
+      # the SDK, and Emscripten's cache with the SDL3 port built in it
+      - name: Emscripten cache
+        uses: actions/cache@v4
+        with:
+          path: ~/emsdk
+          key: emsdk-${{ env.EMSCRIPTEN_VERSION }}-${{ hashFiles('port/web/halo_sdl3.py') }}
+          restore-keys: emsdk-${{ env.EMSCRIPTEN_VERSION }}-
+
+      - name: Install Emscripten
+        run: |
+          if [ ! -x ~/emsdk/upstream/emscripten/emcc ]; then
+            rm -rf ~/emsdk
+            git clone -q --depth 1 https://github.com/emscripten-core/emsdk.git ~/emsdk
+            ~/emsdk/emsdk install "$EMSCRIPTEN_VERSION"
+            ~/emsdk/emsdk activate "$EMSCRIPTEN_VERSION"
+          fi
+
+      - name: Build
+        run: |
+          source ~/emsdk/emsdk_env.sh
+          emcc --version | head -1
+          python3 configure.py --release --pgo=off --lto=off --web-cc ~/emsdk/upstream/emscripten/emcc
+          ninja web
+
+      - name: Test
+        run: |
+          source ~/emsdk/emsdk_env.sh
+          node --test port/web/tests/*.js
+
+      - name: Package
+        run: python3 tools/web_package.py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: halo-web
+          path: dist/halo-web.zip
+
+      - name: Release
+        if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          notes="The browser version (WebAssembly) of $GITHUB_SHA, from $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID.
+
+          Unzip it, add the game's Xbox .map files to halo-web/assets/maps (or let players load their own Xbox disc image), and serve the folder: see README.txt inside. No game data is included."
+          git tag -f web-latest "$GITHUB_SHA"
+          git push -f origin refs/tags/web-latest
+          if gh release view web-latest >/dev/null 2>&1; then
+            gh release edit web-latest --notes "$notes"
+          else
+            gh release create web-latest --title "Browser build (latest)" --notes "$notes" --latest=false
+          fi
+          gh release upload web-latest dist/halo-web.zip --clobber
