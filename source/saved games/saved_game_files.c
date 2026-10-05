@@ -486,12 +486,12 @@ static short enumerate_default_profiles(
 /* ---------- globals */
 
 /* only the hard drive is supported by this build */
-static wchar_t *memory_unit_root_path[NUMBER_OF_SUPPORTED_MEMORY_UNITS] =
+static wchar_t memory_unit_root_path[NUMBER_OF_SUPPORTED_MEMORY_UNITS][4] =
 {
-	L"u:\\"
+	{ L'u', L':', L'\\', 0 }
 };
 
-static char *memory_unit_mapfile_path[NUMBER_OF_SUPPORTED_MEMORY_UNITS] =
+static char memory_unit_mapfile_path[NUMBER_OF_SUPPORTED_MEMORY_UNITS][sizeof("z:\\saved\\hdmu.map")] =
 {
 	"z:\\saved\\hdmu.map"
 };

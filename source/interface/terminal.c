@@ -114,7 +114,14 @@ static long terminal_new_line(void);
 
 /* ---------- globals */
 
+#ifdef HALO_WEB
+/* Browser diagnostics live behind the shell's Logs button.  Keeping the
+in-game terminal hidden avoids covering menus and drawing hundreds of glyph
+quads for routine platform notices. */
+boolean terminal_render_enable = FALSE;
+#else
 boolean terminal_render_enable = TRUE;
+#endif
 
 /* name from the 2003 PC demo PDB and the HCEX PDB (terminal file static const short[3]); January's 6 bytes
  * are identical to the demo's and it has no public for it (static) */
@@ -250,7 +257,9 @@ void terminal_draw(
 			rasterizer_draw_string(&terminal_gets_bounds, NULL, NULL, 0, buffer);
 		}
 
-		if (terminal_render_enable)
+		/* Web builds hide routine terminal chatter during normal play, but the
+		 * backquote console is unusable if its command output stays hidden too. */
+		if (terminal_render_enable || terminal_globals.input_state)
 		{
 			struct output_line_datum *line;
 			long line_index;
@@ -347,7 +356,11 @@ void terminal_printf(
 	...)
 {
 	real_argb_color default_terminal_printf_color;
+#ifdef HALO_WEB
+	va_list arglist;
+#else
 	char *arglist;
+#endif
 
 	va_start(arglist, format);
 

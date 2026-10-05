@@ -29,6 +29,9 @@ with the host ABI.
 #include <unistd.h>
 
 #include "posix.h"
+#ifdef HALO_WEB
+#include "../../web/src/web_loopback_net.h"
+#endif
 
 /* Winsock error codes (winsockx.h) */
 #define WSAEINTR 10004
@@ -134,21 +137,36 @@ int posix_socket_last_error(void)
 
 int posix_socket(int family, int type, int protocol)
 {
+#ifdef HALO_WEB
+	return succeed(web_net_socket(family, type, protocol));
+#else
 	return succeed(socket(family, type | SOCK_CLOEXEC, protocol));
+#endif
 }
 
 int posix_socket_close(int socket)
 {
+#ifdef HALO_WEB
+	return succeed(web_net_close(socket));
+#else
 	return succeed(close(socket));
+#endif
 }
 
 int posix_socket_bind(int socket, const void *address, int address_length)
 {
+#ifdef HALO_WEB
+	return succeed(web_net_bind(socket, address, address_length));
+#else
 	return succeed(bind(socket, address, (socklen_t)address_length));
+#endif
 }
 
 int posix_socket_connect(int socket, const void *address, int address_length)
 {
+#ifdef HALO_WEB
+	return succeed(web_net_connect(socket, address, address_length));
+#else
 	/* A non-blocking connect that is under way is EINPROGRESS here but
 	WSAEWOULDBLOCK in Winsock, which is what the game waits on before it
 	selects for the socket becoming writeable (connect_endpoint,
@@ -163,43 +181,67 @@ int posix_socket_connect(int socket, const void *address, int address_length)
 		return -1;
 	}
 	return succeed(result);
+#endif
 }
 
 int posix_socket_listen(int socket, int backlog)
 {
+#ifdef HALO_WEB
+	return succeed(web_net_listen(socket, backlog));
+#else
 	return succeed(listen(socket, backlog));
+#endif
 }
 
 int posix_socket_accept(int socket, void *address, int *address_length)
 {
+#ifdef HALO_WEB
+	return succeed(web_net_accept(socket, address, address_length));
+#else
 	socklen_t length = address_length ? (socklen_t)*address_length : 0;
 	int result = accept4(socket, address, address_length ? &length : NULL, SOCK_CLOEXEC);
 
 	if (address_length)
 		*address_length = (int)length;
 	return succeed(result);
+#endif
 }
 
 int posix_socket_send(int socket, const void *buffer, int length, int flags)
 {
+#ifdef HALO_WEB
+	return succeed(web_net_send(socket, buffer, length, flags));
+#else
 	return succeed((int)send(socket, buffer, (size_t)length, flags | MSG_NOSIGNAL));
+#endif
 }
 
 int posix_socket_sendto(int socket, const void *buffer, int length, int flags,
 	const void *address, int address_length)
 {
+#ifdef HALO_WEB
+	return succeed(web_net_sendto(socket, buffer, length, flags, address, address_length));
+#else
 	return succeed((int)sendto(socket, buffer, (size_t)length, flags | MSG_NOSIGNAL,
 		address, (socklen_t)address_length));
+#endif
 }
 
 int posix_socket_recv(int socket, void *buffer, int length, int flags)
 {
+#ifdef HALO_WEB
+	return succeed(web_net_recv(socket, buffer, length, flags));
+#else
 	return succeed((int)recv(socket, buffer, (size_t)length, flags));
+#endif
 }
 
 int posix_socket_recvfrom(int socket, void *buffer, int length, int flags,
 	void *address, int *address_length)
 {
+#ifdef HALO_WEB
+	return succeed(web_net_recvfrom(socket, buffer, length, flags, address, address_length));
+#else
 	struct iovec vector;
 	struct msghdr message;
 	int result;
@@ -222,38 +264,58 @@ int posix_socket_recvfrom(int socket, void *buffer, int length, int flags,
 		return -1;
 	}
 	return succeed(result);
+#endif
 }
 
 int posix_socket_shutdown(int socket, int how)
 {
+#ifdef HALO_WEB
+	return succeed(web_net_shutdown(socket, how));
+#else
 	return succeed(shutdown(socket, how));
+#endif
 }
 
 int posix_socket_set_nonblocking(int socket, int nonblocking)
 {
+#ifdef HALO_WEB
+	return succeed(web_net_set_nonblocking(socket, nonblocking));
+#else
 	int flags = fcntl(socket, F_GETFL);
 
 	if (flags < 0)
 		return fail();
 	flags = nonblocking ? (flags | O_NONBLOCK) : (flags & ~O_NONBLOCK);
 	return succeed(fcntl(socket, F_SETFL, flags));
+#endif
 }
 
 int posix_socket_set_nodelay(int socket)
 {
+#ifdef HALO_WEB
+	int value = 1;
+
+	/* (browser sockets have no Nagle delay: the option is accepted) */
+	return succeed(web_net_setsockopt(socket, IPPROTO_TCP, TCP_NODELAY, &value, (int)sizeof(value)));
+#else
 	int value = 1;
 
 	return succeed(setsockopt(socket, IPPROTO_TCP, TCP_NODELAY, &value, sizeof(value)));
+#endif
 }
 
 int posix_socket_bytes_available(int socket, posix_ulong *count)
 {
+#ifdef HALO_WEB
+	return succeed(web_net_bytes_available(socket, count));
+#else
 	int available = 0;
 	int result = ioctl(socket, FIONREAD, &available);
 
 	if (result >= 0)
 		*count = (posix_ulong)available;
 	return succeed(result);
+#endif
 }
 
 static int translate_option(int level, int name, int *host_level, int *host_name)
@@ -290,7 +352,11 @@ int posix_socket_setsockopt(int socket, int level, int name, const void *value, 
 		last_error = 0;
 		return 0;
 	}
+#ifdef HALO_WEB
+	return succeed(web_net_setsockopt(socket, host_level, host_name, value, length));
+#else
 	return succeed(setsockopt(socket, host_level, host_name, value, (socklen_t)length));
+#endif
 }
 
 int posix_socket_getsockopt(int socket, int level, int name, void *value, int *length)
@@ -304,32 +370,56 @@ int posix_socket_getsockopt(int socket, int level, int name, void *value, int *l
 		last_error = WSAENOPROTOOPT;
 		return -1;
 	}
+#ifdef HALO_WEB
+	(void)socket_length;
+	result = web_net_getsockopt(socket, host_level, host_name, value, length);
+#else
 	result = getsockopt(socket, host_level, host_name, value, &socket_length);
 	*length = (int)socket_length;
+#endif
 	return succeed(result);
 }
 
 int posix_socket_getsockname(int socket, void *address, int *address_length)
 {
+#ifdef HALO_WEB
+	return succeed(web_net_getsockname(socket, address, address_length));
+#else
 	socklen_t length = (socklen_t)*address_length;
 	int result = getsockname(socket, address, &length);
 
 	*address_length = (int)length;
 	return succeed(result);
+#endif
 }
 
 int posix_socket_getpeername(int socket, void *address, int *address_length)
 {
+#ifdef HALO_WEB
+	return succeed(web_net_getpeername(socket, address, address_length));
+#else
 	socklen_t length = (socklen_t)*address_length;
 	int result = getpeername(socket, address, &length);
 
 	*address_length = (int)length;
 	return succeed(result);
+#endif
 }
 
 int posix_socket_select(int *read, int *read_count, int *write, int *write_count,
 	int *error, int *error_count, posix_long timeout_seconds, posix_long timeout_microseconds, int infinite)
 {
+#ifdef HALO_WEB
+	int result;
+
+	result = web_net_select(read, read_count, write, write_count, error, error_count,
+		timeout_seconds, timeout_microseconds, infinite);
+	if (result < 0)
+		return fail();
+	if (result > 0)
+		last_error = 0;
+	return result;
+#else
 	/* poll, which takes any descriptor (select none from FD_SETSIZE on,
 	which a process allowed more files has), with select's readiness: read
 	for data, the end or an error, write for room or an error, error for
@@ -432,8 +522,10 @@ int posix_socket_select(int *read, int *read_count, int *write, int *write_count
 	if (result > 0)
 		last_error = 0;
 	return result;
+#endif
 }
 
+#ifndef HALO_WEB
 /* the first IPv4 address of an interface that is up, running, not
 loopback and has these flags; or 0 */
 static posix_ulong interface_address(unsigned int flags)
@@ -461,9 +553,13 @@ static posix_ulong interface_address(unsigned int flags)
 	freeifaddrs(addresses);
 	return result;
 }
+#endif
 
 posix_ulong posix_local_ipv4_address(void)
 {
+#ifdef HALO_WEB
+	return htonl(INADDR_LOOPBACK);
+#else
 	struct sockaddr_in route;
 	socklen_t length = sizeof(route);
 	posix_ulong result = 0;
@@ -498,6 +594,7 @@ posix_ulong posix_local_ipv4_address(void)
 	/* no route out (a network without the internet): the first interface
 	that is up, running and not loopback */
 	return result ? result : interface_address(0);
+#endif
 }
 
 void posix_random_bytes(void *buffer, posix_ulong size)
@@ -506,7 +603,12 @@ void posix_random_bytes(void *buffer, posix_ulong size)
 
 	while (size)
 	{
+#ifdef HALO_WEB
+		size_t wanted = size > 256 ? 256 : (size_t)size;
+		ssize_t count = getentropy(cursor, wanted) == 0 ? (ssize_t)wanted : -1;
+#else
 		ssize_t count = getrandom(cursor, size, 0);
+#endif
 
 		if (count < 0 && errno == EINTR)
 			continue;
@@ -599,7 +701,7 @@ posix_ulong posix_process_id(void)
 
 int posix_user_secret(unsigned char *secret, int size)
 {
-#ifdef __ANDROID__
+#if defined(__ANDROID__) || defined(HALO_WEB)
 	(void)secret;
 	(void)size;
 	return 0;
@@ -658,7 +760,7 @@ int posix_user_secret(unsigned char *secret, int size)
 #endif
 }
 
-#ifndef __ANDROID__
+#if !defined(__ANDROID__) && !defined(HALO_WEB)
 /* runs a program with its arguments and waits for it; its exit status, or -1 */
 static int run_program(char *const arguments[])
 {
@@ -676,7 +778,7 @@ static int run_program(char *const arguments[])
 
 int posix_register_url_scheme(const char *scheme, const char *description)
 {
-#ifdef __ANDROID__
+#if defined(__ANDROID__) || defined(HALO_WEB)
 	(void)scheme;
 	(void)description;
 	return 0;
@@ -740,7 +842,7 @@ int posix_register_url_scheme(const char *scheme, const char *description)
 
 int posix_discord_connect(void)
 {
-#ifdef __ANDROID__
+#if defined(__ANDROID__) || defined(HALO_WEB)
 	return -1;
 #else
 	/* where Discord (and its Flatpak and Snap packages) put discord-ipc-N */

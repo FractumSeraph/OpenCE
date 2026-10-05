@@ -1,0 +1,38 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "halo-web",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-29",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "../../build/cloudflare-web",
+    "binding": "ASSETS",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "none"
+  },
+  "analytics_engine_datasets": [
+    {
+      "binding": "PERFORMANCE_TELEMETRY",
+      "dataset": "halo_web_performance"
+    },
+    {
+      "binding": "CAMPAIGN_TELEMETRY",
+      "dataset": "halo_web_campaign_loads"
+    },
+    {
+      "binding": "RUNTIME_TELEMETRY",
+      "dataset": "halo_web_runtime"
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 0.01
+    }
+  }
+}

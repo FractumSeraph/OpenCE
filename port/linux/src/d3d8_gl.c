@@ -274,6 +274,17 @@ struct framebuffer_entry
 static struct render_target_entry *render_targets;
 static struct framebuffer_entry *framebuffers;
 
+#ifdef HALO_WEB
+/* WebGL rejects a draw that samples the texture attached to its framebuffer.
+The Xbox permits that pattern: a draw reads the target as it looked before
+the draw and writes the result back into it.  Keep one scratch texture for a
+per-draw snapshot of that target. */
+static GLuint bound_color_texture;
+static GLsizei bound_color_width, bound_color_height;
+static GLuint feedback_snapshot_texture;
+static GLsizei feedback_snapshot_width, feedback_snapshot_height;
+#endif
+
 /* ---------- the device */
 
 #ifdef HALO_ANDROID
@@ -322,6 +333,9 @@ struct gl_device
 	{
 		DWORD data;
 		UINT stride;
+#ifdef HALO_WEB
+		D3DVertexBuffer *buffer;
+#endif
 	} streams[16];
 	/* SetIndices' base vertex: added to every index of an indexed draw (the
 	dynamic vertex buffers keep each buffer's vertices at an offset into one
@@ -350,6 +364,12 @@ struct gl_device
 
 	GLuint queries[VISIBILITY_TEST_SLOTS];
 	BOOL query_pending[VISIBILITY_TEST_SLOTS];
+#ifdef HALO_WEB
+	/* WebGL query completion is asynchronous.  Keep the most recent result so
+	the Xbox callers never busy-wait and prevent the browser from completing
+	the query they are polling. */
+	GLuint query_results[VISIBILITY_TEST_SLOTS];
+#endif
 	/* the pixels each of the game's pixels covered in the test's target
 	(render_target_get), which its count is divided by */
 	float query_area[VISIBILITY_TEST_SLOTS];
@@ -712,6 +732,12 @@ void WINAPI D3DDevice_BlockUntilVerticalBlank(void)
 
 /* ---------- GL helpers */
 
+#ifdef HALO_ANDROID
+static void gl_check_errors(const char *where);
+#else
+#define gl_check_errors(where) ((void)0)
+#endif
+
 static GLuint compile_shader(GLenum type, const char *source, const char *what)
 {
 	GLuint shader = glCreateShader(type);
@@ -793,14 +819,18 @@ static struct render_target_entry *render_target_get(const D3DSurface *surface)
 	entry->target.gl_width = (unsigned long)(width * scale[0] + 0.5f);
 	entry->target.gl_height = (unsigned long)(height * scale[1] + 0.5f);
 	glGenTextures(1, &entry->target.texture);
+	gl_check_errors("target texture create");
 	glBindTexture(GL_TEXTURE_2D, entry->target.texture);
+	gl_check_errors("target texture bind");
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+	gl_check_errors("target texture parameters");
 	if (depth)
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, (GLsizei)entry->target.gl_width,
 			(GLsizei)entry->target.gl_height, 0, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, NULL);
 	else
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, (GLsizei)entry->target.gl_width, (GLsizei)entry->target.gl_height,
 			0, GL_BGRA, GL_UNSIGNED_BYTE, NULL);
+	gl_check_errors(depth ? "depth target storage" : "color target storage");
 	xgpu_gl_state_invalidate();
 	entry->next = render_targets;
 	render_targets = entry;
@@ -835,12 +865,21 @@ static GLuint framebuffer_get(GLuint color, GLuint depth)
 	entry->color = color;
 	entry->depth = depth;
 	glGenFramebuffers(1, &entry->framebuffer);
+	gl_check_errors("framebuffer create");
 	glBindFramebuffer(GL_FRAMEBUFFER, entry->framebuffer);
+	gl_check_errors("framebuffer bind");
 	if (color)
+	{
 		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, color, 0);
+		gl_check_errors("framebuffer color");
+	}
 	if (depth)
+	{
 		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, depth, 0);
+		gl_check_errors("framebuffer depth");
+	}
 	glDrawBuffers(1, &draw_buffer);
+	gl_check_errors("framebuffer draw buffers");
 	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
 		platform_log("framebuffer %u/%u is incomplete", color, depth);
 	xgpu_gl_state_invalidate();
@@ -875,6 +914,11 @@ static BOOL bind_targets(BOOL *has_depth)
 	target_scale[0] = color ? color->target.scale[0] : depth->target.scale[0];
 	target_scale[1] = color ? color->target.scale[1] : depth->target.scale[1];
 	state_framebuffer(framebuffer_get(color ? color->target.texture : 0, depth ? depth->target.texture : 0));
+#ifdef HALO_WEB
+	bound_color_texture = color ? color->target.texture : 0;
+	bound_color_width = color ? (GLsizei)color->target.gl_width : 0;
+	bound_color_height = color ? (GLsizei)color->target.gl_height : 0;
+#endif
 	*has_depth = depth != NULL;
 	return TRUE;
 }
@@ -908,6 +952,7 @@ static void gl_initialize(void)
 			xgpu_capabilities.atomic_counters = counters > 0;
 		}
 		xgpu_capabilities.s3tc = host_gl_has_extension("GL_EXT_texture_compression_s3tc") ||
+			host_gl_has_extension("GL_WEBGL_compressed_texture_s3tc") ||
 			(host_gl_has_extension("GL_EXT_texture_compression_dxt1") &&
 			host_gl_has_extension("GL_ANGLE_texture_compression_dxt3") &&
 			host_gl_has_extension("GL_ANGLE_texture_compression_dxt5"));
@@ -927,7 +972,7 @@ static void gl_initialize(void)
 #endif
 	glGenVertexArrays(1, &device.vertex_array);
 	glBindVertexArray(device.vertex_array);
-#ifdef HALO_ANDROID
+#if defined(HALO_ANDROID) && !defined(HALO_WEB)
 	{
 		int ring;
 
@@ -944,7 +989,7 @@ static void gl_initialize(void)
 		device.index_buffer = device.index_buffers[0];
 	}
 #endif
-#ifndef HALO_ANDROID
+#if !defined(HALO_ANDROID) && !defined(HALO_WEB)
 	glGenBuffers(1, &device.stream_buffer);
 	glBindBuffer(GL_ARRAY_BUFFER, device.stream_buffer);
 	glBufferData(GL_ARRAY_BUFFER, STREAM_BUFFER_SIZE, NULL, GL_STREAM_DRAW);
@@ -1153,7 +1198,7 @@ HRESULT WINAPI Direct3D_CreateDevice(UINT adapter, D3DDEVTYPE device_type, void 
 
 /* ---------- the menus' pointer */
 
-#ifdef HALO_ANDROID
+#if defined(HALO_ANDROID) && !defined(HALO_WEB)
 int halo_ui_pointer_update(int menus_active, struct halo_ui_pointer *pointer)
 {
 	(void)pointer;
@@ -1479,7 +1524,15 @@ HRESULT WINAPI D3DDevice_GetVisibilityTestResult(DWORD index, UINT *result, ULON
 #endif
 	glGetQueryObjectuiv(device.queries[index], GL_QUERY_RESULT_AVAILABLE, &available);
 	if (!available)
+	{
+#ifdef HALO_WEB
+		if (result)
+			*result = device.query_results[index];
+		return S_OK;
+#else
 		return D3DERR_TESTINCOMPLETE;
+#endif
+	}
 	glGetQueryObjectuiv(device.queries[index], GL_QUERY_RESULT, &samples);
 #ifdef HALO_ANDROID
 	/* ES only says whether any sample passed. The game divides the count by
@@ -1489,6 +1542,9 @@ HRESULT WINAPI D3DDevice_GetVisibilityTestResult(DWORD index, UINT *result, ULON
 		samples = VISIBILITY_ALL_SAMPLES;
 #else
 	samples = visibility_unscaled(samples, index);
+#endif
+#ifdef HALO_WEB
+	device.query_results[index] = samples;
 #endif
 	if (result)
 		*result = samples;
@@ -2163,15 +2219,20 @@ static GLuint mip_composite_get(const struct xgpu_texture_description *descripti
 		if (!target || target->width != width || target->height != height ||
 			target->gl_width != width || target->gl_height != height)
 			break;
-#ifdef HALO_ANDROID
+	#ifdef HALO_WEB
+		copy_level_by_blit(target->texture, composite->texture, (GLint)level, (GLsizei)width, (GLsizei)height);
+	#elif defined(HALO_ANDROID)
 		if (!xgpu_capabilities.copy_image)
 		{
 			copy_level_by_blit(target->texture, composite->texture, (GLint)level, (GLsizei)width, (GLsizei)height);
 		}
 		else
-#endif
+			glCopyImageSubData(target->texture, GL_TEXTURE_2D, 0, 0, 0, 0,
+				composite->texture, GL_TEXTURE_2D, (GLint)level, 0, 0, 0, (GLsizei)width, (GLsizei)height, 1);
+	#else
 		glCopyImageSubData(target->texture, GL_TEXTURE_2D, 0, 0, 0, 0,
 			composite->texture, GL_TEXTURE_2D, (GLint)level, 0, 0, 0, (GLsizei)width, (GLsizei)height, 1);
+	#endif
 		rendered_levels++;
 	}
 	glBindTexture(GL_TEXTURE_2D, composite->texture);
@@ -2186,6 +2247,61 @@ static GLuint mip_composite_get(const struct xgpu_texture_description *descripti
 	return composite->texture;
 }
 
+#ifdef HALO_WEB
+static BOOL feedback_snapshot_needed(void)
+{
+	int stage;
+
+	if (!bound_color_texture)
+		return FALSE;
+	for (stage = 0; stage < D3DTSS_MAXSTAGES; stage++)
+	{
+		D3DBaseTexture *texture = device.textures[stage];
+		unsigned long mode = stage_texture_mode(stage);
+		struct xgpu_render_target *target;
+		struct xgpu_texture_description description;
+
+		if (!texture || !texture->Data || mode == 0 || mode == 0x04 || mode == 0x05 || mode == 0x11)
+			continue;
+		target = xgpu_render_target_find(texture->Data);
+		if (!target || target->texture != bound_color_texture)
+			continue;
+		xgpu_texture_describe(texture->Format, texture->Size, &description);
+		/* A complete mip chain is copied into a separate texture below, so it
+		never forms a feedback loop. */
+		if (!description.linear && !description.cube_map && description.levels > 1 &&
+			target->width == description.width && target->height == description.height)
+		{
+			continue;
+		}
+		return TRUE;
+	}
+	return FALSE;
+}
+
+static void feedback_snapshot_copy(void)
+{
+	if (!feedback_snapshot_texture)
+		glGenTextures(1, &feedback_snapshot_texture);
+	/* Use a raw bind so the copy happens before any stage is configured, then
+	forget the shadow state and let the loop below bind every stage normally. */
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, feedback_snapshot_texture);
+	if (feedback_snapshot_width != bound_color_width || feedback_snapshot_height != bound_color_height)
+	{
+		feedback_snapshot_width = bound_color_width;
+		feedback_snapshot_height = bound_color_height;
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, feedback_snapshot_width, feedback_snapshot_height,
+			0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	}
+	glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, feedback_snapshot_width, feedback_snapshot_height);
+	gl_check_errors("render target feedback snapshot");
+	xgpu_gl_state_invalidate();
+}
+#endif
+
 static void bind_textures(struct nv2a_pixel_shader_key *key, float texture_scale[4][4])
 {
 	/* Bind only after resolving every stage, since texture uploads can
@@ -2194,6 +2310,12 @@ static void bind_textures(struct nv2a_pixel_shader_key *key, float texture_scale
 	GLuint gl_textures[D3DTSS_MAXSTAGES];
 	int stage;
 
+#ifdef HALO_WEB
+	/* Take the copy before binding any draw textures.  Several stages may
+	read the target, but they all use this one pre-draw snapshot. */
+	if (feedback_snapshot_needed())
+		feedback_snapshot_copy();
+#endif
 	for (stage = 0; stage < D3DTSS_MAXSTAGES; stage++)
 	{
 		D3DBaseTexture *texture = device.textures[stage];
@@ -2229,6 +2351,10 @@ static void bind_textures(struct nv2a_pixel_shader_key *key, float texture_scale
 					gl_texture = mip_composite_get(&description, texture->Data);
 				else
 					description.levels = 1;
+#ifdef HALO_WEB
+				if (gl_texture == bound_color_texture)
+					gl_texture = feedback_snapshot_texture;
+#endif
 			}
 			else
 			{
@@ -2473,8 +2599,6 @@ static void gl_check_errors(const char *where)
 			platform_log("GL error %04x at %s (frame %lu)", (unsigned)error, where, device.frame);
 	}
 }
-#else
-#define gl_check_errors(where) ((void)0)
 #endif
 
 /* the uniforms of the latest draws, converted from these inputs; the serial
@@ -2552,7 +2676,9 @@ static struct program_entry *prepare_draw(BOOL immediate)
 		stats.skipped_no_target++;
 		return NULL;
 	}
+	gl_check_errors("bind targets");
 	apply_raster_state(has_depth);
+	gl_check_errors("raster state");
 
 	memset(&key, 0, sizeof(key));
 	memcpy(key.combiner_state, D3D__RenderState, sizeof(key.combiner_state));
@@ -2562,6 +2688,7 @@ static struct program_entry *prepare_draw(BOOL immediate)
 	key.combiner_state[D3DRS_PSFINALCOMBINERCONSTANT1] = 0;
 	key.texture_modes = D3D__RenderState[D3DRS_PSTEXTUREMODES];
 	bind_textures(&key, uniforms.texture_scale);
+	gl_check_errors("bind textures");
 	for (stage = 0; stage < D3DTSS_MAXSTAGES; stage++)
 	{
 		key.alpha_kill[stage] = D3D__TextureState[stage][D3DTSS_ALPHAKILL] == D3DTALPHAKILL_ENABLE;
@@ -2585,13 +2712,14 @@ static struct program_entry *prepare_draw(BOOL immediate)
 		gl_check_errors("program");
 		return NULL;
 	}
-	gl_check_errors("state");
+	gl_check_errors("program lookup");
 	if (immediate)
 		stats.immediate_draws++;
 	else
 		stats.draws++;
 	draw_flush();
 	state_program(entry->program);
+	gl_check_errors("program bind");
 #ifdef HALO_ANDROID
 	if (key.count_samples)
 		glBindBufferRange(GL_ATOMIC_COUNTER_BUFFER, 0, device.visibility_counters,
@@ -2736,6 +2864,7 @@ static struct program_entry *prepare_draw(BOOL immediate)
 	uniform_vec4(entry->texture_scale, entry->uniforms.texture_scale[0], draw_uniforms.texture_scale[0], 4);
 	uniform_float(entry->screen_offset, &entry->uniforms.screen_offset, draw_uniforms.screen_offset);
 	uniform_vec4(entry->texture_lod_bias, entry->uniforms.texture_lod_bias, draw_uniforms.texture_lod_bias, 1);
+	gl_check_errors("uniforms");
 	return entry;
 }
 
@@ -2984,6 +3113,16 @@ the range is outside the window, spans two segments or is volatile */
 static BOOL mirror_range(unsigned long address, unsigned long size, GLuint *buffer, unsigned long *offset,
 	unsigned long *generation)
 {
+#ifdef HALO_WEB
+	/* Wasm cannot use page protection to notice arbitrary guest writes.
+	The normal streaming-buffer path is slower but always correct. */
+	(void)address;
+	(void)size;
+	(void)buffer;
+	(void)offset;
+	(void)generation;
+	return FALSE;
+#else
 	unsigned long start = address - PLATFORM_CONTIGUOUS_BASE;
 	unsigned long segment, first, last, page, oldest = ~0UL, newest = 0;
 	BOOL present = TRUE;
@@ -3031,6 +3170,7 @@ static BOOL mirror_range(unsigned long address, unsigned long size, GLuint *buff
 		*generation = newest;
 	stats.mirrored_bytes += size;
 	return TRUE;
+#endif
 }
 
 /* the smallest and largest index of an index range the mirror holds: the
@@ -3095,10 +3235,72 @@ static void stream_reserve(unsigned long size)
 	}
 }
 
+#ifdef HALO_WEB
+/* WebGL/ANGLE can treat a buffer update as a whole-resource hazard.  A large
+buffer with nonoverlapping subranges then serializes every upload behind the
+draw before it.  Give each dynamic upload its own small buffer, and keep three
+frames of them before reuse. */
+#define WEB_TRANSIENT_BUFFER_SLOTS 512
+
+static GLuint web_transient_vertex_buffers[STREAM_BUFFER_RING][WEB_TRANSIENT_BUFFER_SLOTS];
+static GLuint web_transient_index_buffers[STREAM_BUFFER_RING][WEB_TRANSIENT_BUFFER_SLOTS];
+static unsigned long web_transient_vertex_count;
+static unsigned long web_transient_index_count;
+static unsigned long web_transient_frame = ~0UL;
+
+static GLuint web_transient_upload(GLenum target, const void *data, unsigned long size)
+{
+	GLuint (*buffers)[WEB_TRANSIENT_BUFFER_SLOTS];
+	unsigned long *count;
+	unsigned long ring = device.frame % STREAM_BUFFER_RING;
+	GLuint buffer;
+
+	if (web_transient_frame != device.frame)
+	{
+		web_transient_frame = device.frame;
+		web_transient_vertex_count = 0;
+		web_transient_index_count = 0;
+	}
+	if (target == GL_ARRAY_BUFFER)
+	{
+		buffers = web_transient_vertex_buffers;
+		count = &web_transient_vertex_count;
+	}
+	else
+	{
+		buffers = web_transient_index_buffers;
+		count = &web_transient_index_count;
+	}
+	if (*count >= WEB_TRANSIENT_BUFFER_SLOTS)
+	{
+		/* Busy gameplay should remain below this.  Orphan the last buffer on
+		overflow, preserving correctness without writing outside the pool. */
+		*count = WEB_TRANSIENT_BUFFER_SLOTS - 1;
+	}
+	buffer = buffers[ring][(*count)++];
+	if (!buffer)
+	{
+		glGenBuffers(1, &buffer);
+		buffers[ring][*count - 1] = buffer;
+	}
+	if (target == GL_ARRAY_BUFFER)
+		state_array_buffer(buffer);
+	else
+		state_element_array_buffer(buffer);
+	glBufferData(target, (GLsizeiptr)size, data, GL_STREAM_DRAW);
+	return buffer;
+}
+#endif
+
 static unsigned long stream_upload(const void *data, unsigned long size)
 {
 	unsigned long offset;
 
+	#ifdef HALO_WEB
+	device.stream_buffer = web_transient_upload(GL_ARRAY_BUFFER, data, size);
+	device.stream_offset = 0;
+	return 0;
+	#else
 	size = (size + 15) & ~15UL;
 	stream_reserve(size);
 	offset = device.stream_offset;
@@ -3110,6 +3312,7 @@ static unsigned long stream_upload(const void *data, unsigned long size)
 #endif
 	device.stream_offset += size;
 	return offset;
+	#endif
 }
 
 #ifdef HALO_ANDROID
@@ -3158,6 +3361,11 @@ static unsigned long index_upload(const void *data, unsigned long size)
 {
 	unsigned long offset;
 
+	#ifdef HALO_WEB
+	device.index_buffer = web_transient_upload(GL_ELEMENT_ARRAY_BUFFER, data, size);
+	device.index_offset = 0;
+	return 0;
+	#else
 	size = (size + 15) & ~15UL;
 	state_element_array_buffer(device.index_buffer);
 	if (device.index_offset + size > INDEX_BUFFER_SIZE)
@@ -3173,6 +3381,7 @@ static unsigned long index_upload(const void *data, unsigned long size)
 #endif
 	device.index_offset += size;
 	return offset;
+	#endif
 }
 
 static void attribute_format(const struct vertex_element *element, GLint *size, GLenum *type, GLboolean *normalized)
@@ -3225,6 +3434,163 @@ static BOOL stream_has_colors(const struct vertex_shader_object *declaration, un
 }
 #endif
 
+#ifdef HALO_WEB
+/* ANGLE may serialize glBufferSubData against any earlier draw that used the
+same buffer, even when the byte ranges do not overlap.  Halo reuses almost all
+of its vertex ranges unchanged, so keep exact ranges in separate GL buffers
+and only replace a buffer when its guest bytes really changed. */
+#define WEB_STREAM_CACHE_BUCKETS 1024
+#define WEB_STREAM_CACHE_IDLE_FRAMES 600
+
+struct web_stream_cache_entry
+{
+	struct web_stream_cache_entry *next;
+	unsigned long address;
+	unsigned long size;
+	unsigned long declaration_id;
+	unsigned long stream;
+	unsigned long stride;
+	unsigned long content_hash;
+	unsigned long generation;
+	unsigned long last_used_frame;
+	GLuint buffers[STREAM_BUFFER_RING];
+	GLuint buffer;
+	BOOL uploaded;
+};
+
+static struct web_stream_cache_entry *web_stream_cache[WEB_STREAM_CACHE_BUCKETS];
+
+static unsigned long web_stream_hash(const unsigned char *bytes, unsigned long size)
+{
+	unsigned long hash = 2166136261UL;
+	unsigned long index;
+
+	for (index = 0; index < size; index++)
+		hash = (hash ^ bytes[index]) * 16777619UL;
+	return hash;
+}
+
+static GLuint web_stream_buffer_get(const struct vertex_shader_object *declaration, unsigned long stream,
+	const unsigned char *data, unsigned long size, unsigned long stride, unsigned long generation)
+{
+	static unsigned char *scratch;
+	static unsigned long scratch_size;
+	unsigned long address = (unsigned long)data;
+	unsigned long slot = ((address >> 4) ^ size ^ (declaration->id * 2654435761UL) ^ stream) %
+		WEB_STREAM_CACHE_BUCKETS;
+	struct web_stream_cache_entry *entry;
+	BOOL changed;
+
+	for (entry = web_stream_cache[slot]; entry; entry = entry->next)
+	{
+		if (entry->address == address && entry->size == size && entry->declaration_id == declaration->id &&
+			entry->stream == stream && entry->stride == stride)
+			break;
+	}
+	if (!entry)
+	{
+		entry = calloc(1, sizeof(*entry));
+		entry->address = address;
+		entry->size = size;
+		entry->declaration_id = declaration->id;
+		entry->stream = stream;
+		entry->stride = stride;
+		glGenBuffers(STREAM_BUFFER_RING, entry->buffers);
+		entry->next = web_stream_cache[slot];
+		web_stream_cache[slot] = entry;
+	}
+	entry->last_used_frame = device.frame;
+	changed = !entry->uploaded;
+	/* A zero generation is an unregistered guest buffer: retain the safe
+	per-draw content check for that fallback.  Normal buffers get a new serial
+	on Create, Register and every Lock. */
+	if (changed || !generation || entry->generation != generation)
+	{
+		unsigned long hash = web_stream_hash(data, size);
+
+		entry->generation = generation;
+		if (!entry->uploaded || entry->content_hash != hash)
+		{
+			entry->content_hash = hash;
+			changed = TRUE;
+		}
+	}
+	if (changed)
+	{
+		const void *upload = data;
+		GLuint replacement = entry->buffers[device.frame % STREAM_BUFFER_RING];
+
+		if (stream_has_colors(declaration, stream) && stride)
+		{
+			unsigned long offsets[XGPU_VERTEX_ATTRIBUTE_COUNT];
+			unsigned long count = 0, element, vertex;
+
+			if (scratch_size < size)
+			{
+				scratch_size = size + 65536;
+				scratch = realloc(scratch, scratch_size);
+			}
+			memcpy(scratch, data, size);
+			for (element = 0; element < declaration->element_count; element++)
+			{
+				if (declaration->elements[element].stream == stream &&
+					declaration->elements[element].type == D3DVSDT_D3DCOLOR)
+				{
+					offsets[count++] = declaration->elements[element].offset;
+				}
+			}
+			for (vertex = 0; vertex + stride <= size; vertex += stride)
+			{
+				for (element = 0; element < count; element++)
+				{
+					unsigned char *color = scratch + vertex + offsets[element];
+					unsigned char blue = color[0];
+
+					color[0] = color[2];
+					color[2] = blue;
+				}
+			}
+			upload = scratch;
+		}
+		state_array_buffer(replacement);
+		glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)size, upload, GL_STATIC_DRAW);
+		entry->buffer = replacement;
+		entry->uploaded = TRUE;
+		stats.streamed_bytes += size;
+	}
+	return entry->buffer;
+}
+
+static void web_stream_cache_expire(void)
+{
+	unsigned long slot;
+
+	if (!device.frame || device.frame % WEB_STREAM_CACHE_IDLE_FRAMES)
+		return;
+	for (slot = 0; slot < WEB_STREAM_CACHE_BUCKETS; slot++)
+	{
+		struct web_stream_cache_entry **link = &web_stream_cache[slot];
+
+		while (*link)
+		{
+			struct web_stream_cache_entry *entry = *link;
+
+			if (device.frame - entry->last_used_frame > WEB_STREAM_CACHE_IDLE_FRAMES)
+			{
+				*link = entry->next;
+				glDeleteBuffers(STREAM_BUFFER_RING, entry->buffers);
+				free(entry);
+				xgpu_gl_state_invalidate();
+			}
+			else
+			{
+				link = &entry->next;
+			}
+		}
+	}
+}
+#endif
+
 static void setup_streams(unsigned long first, unsigned long count)
 {
 	struct vertex_shader_object *declaration = device.vertex_shader;
@@ -3256,7 +3622,11 @@ static void setup_streams(unsigned long first, unsigned long count)
 		stream_buffers[stream] = 0;
 		total += (bytes + 15) & ~15UL;
 	}
+	#ifndef HALO_WEB
 	stream_reserve(total);
+	#else
+	(void)total;
+	#endif
 	for (index = 0; index < declaration->element_count; index++)
 	{
 		const struct vertex_element *element = &declaration->elements[index];
@@ -3273,13 +3643,20 @@ static void setup_streams(unsigned long first, unsigned long count)
 			const unsigned char *base = PLATFORM_PHYSICAL_TO_VIRTUAL(device.streams[stream].data);
 			unsigned long bytes = stride ? stride * count : 64;
 
-#ifdef HALO_ANDROID
+		#ifdef HALO_WEB
+			stream_buffers[stream] = web_stream_buffer_get(declaration, stream,
+				base + first * stride, bytes, stride,
+				device.streams[stream].buffer ? device.streams[stream].buffer->Lock : 0);
+			stream_offsets[stream] = 0;
+		#elif defined(HALO_ANDROID)
 			stream_offsets[stream] = stream_upload_swizzled(declaration, stream, base + first * stride, bytes, stride);
 #else
 			stream_offsets[stream] = stream_upload(base + first * stride, bytes);
 #endif
+		#ifndef HALO_WEB
 			stream_buffers[stream] = device.stream_buffer;
 			stats.streamed_bytes += bytes;
+		#endif
 		}
 		if (element->type == D3DVSDT_NORMPACKED3)
 		{
@@ -3348,6 +3725,9 @@ void WINAPI D3DDevice_SetStreamSource(UINT stream_number, D3DVertexBuffer *strea
 		return;
 	device.streams[stream_number].data = stream_data ? stream_data->Data : 0;
 	device.streams[stream_number].stride = stride;
+#ifdef HALO_WEB
+	device.streams[stream_number].buffer = stream_data;
+#endif
 }
 
 void WINAPI D3DDevice_SetIndices(D3DIndexBuffer *index_data, UINT base_vertex_index)
@@ -3358,7 +3738,9 @@ void WINAPI D3DDevice_SetIndices(D3DIndexBuffer *index_data, UINT base_vertex_in
 
 void WINAPI D3DDevice_DrawVertices(D3DPRIMITIVETYPE primitive_type, UINT start_vertex, UINT vertex_count)
 {
-	if (!vertex_count || !prepare_draw(FALSE))
+	if (!vertex_count)
+		return;
+	if (!prepare_draw(FALSE))
 		return;
 	trace_draw("draw", primitive_type, vertex_count, NULL);
 	setup_streams(start_vertex, vertex_count);
@@ -3386,7 +3768,9 @@ void WINAPI D3DDevice_DrawIndexedVertices(D3DPRIMITIVETYPE primitive_type, UINT 
 	GLuint index_buffer = 0;
 	BOOL mirrored;
 
-	if (!vertex_count || !index_data || !prepare_draw(FALSE))
+	if (!vertex_count || !index_data)
+		return;
+	if (!prepare_draw(FALSE))
 		return;
 	/* quads are drawn as triangles, from indices made for the draw */
 	mirrored = primitive_type != D3DPT_QUADLIST &&
@@ -3398,6 +3782,7 @@ void WINAPI D3DDevice_DrawIndexedVertices(D3DPRIMITIVETYPE primitive_type, UINT 
 	trace_draw("indexed", primitive_type, vertex_count, NULL);
 	/* (the streams from the base vertex on: index i is vertex base + i) */
 	setup_streams(device.base_vertex_index + minimum, maximum - minimum + 1);
+	#ifndef HALO_WEB
 	if (mirrored)
 	{
 		/* the attributes start at vertex minimum */
@@ -3406,6 +3791,7 @@ void WINAPI D3DDevice_DrawIndexedVertices(D3DPRIMITIVETYPE primitive_type, UINT 
 			(const void *)index_offset, -(GLint)minimum);
 		return;
 	}
+	#endif
 	stats.streamed_bytes += vertex_count * sizeof(WORD);
 	count = vertex_count;
 	if (primitive_type == D3DPT_QUADLIST)
@@ -3413,7 +3799,7 @@ void WINAPI D3DDevice_DrawIndexedVertices(D3DPRIMITIVETYPE primitive_type, UINT 
 		indices = quad_indices(index_data, vertex_count, &count);
 		source = indices;
 	}
-#ifdef HALO_ANDROID
+	#ifdef HALO_ANDROID
 	if (!xgpu_capabilities.base_vertex)
 	{
 		/* the indices are copied anyway: rebase them */
@@ -3427,11 +3813,13 @@ void WINAPI D3DDevice_DrawIndexedVertices(D3DPRIMITIVETYPE primitive_type, UINT 
 		free(indices);
 		return;
 	}
-#endif
+	#endif
 	(void)index;
+	#ifndef HALO_WEB
 	glDrawElementsBaseVertex(primitive_mode(primitive_type), (GLsizei)count, GL_UNSIGNED_SHORT,
 		(const void *)index_upload(source, count * sizeof(WORD)), -(GLint)minimum);
 	free(indices);
+	#endif
 }
 
 /* ---------- immediate mode */
@@ -3464,15 +3852,54 @@ void WINAPI D3DDevice_End(void)
 	D3DPRIMITIVETYPE type = device.immediate_type;
 
 	device.immediate_active = FALSE;
-	if (!count || !prepare_draw(TRUE))
+	if (!count)
+		return;
+	if (!prepare_draw(TRUE))
 		return;
 	trace_draw("immediate", type, count, device.immediate_vertices);
+#ifdef HALO_WEB
+	{
+		static float *packed;
+		static unsigned long packed_floats;
+		unsigned long required = count * XGPU_VERTEX_ATTRIBUTE_COUNT * 4;
+		unsigned long vertex;
+
+		/* WebGL limits vertexAttribPointer's stride to 255 bytes.  Xbox
+		immediate vertices contain all 16 four-float registers, for a 256-byte
+		stride, so transpose them into 16 tightly packed attribute arrays. */
+		if (packed_floats < required)
+		{
+			packed_floats = required;
+			packed = realloc(packed, packed_floats * sizeof(float));
+		}
+		for (index = 0; index < XGPU_VERTEX_ATTRIBUTE_COUNT; index++)
+		{
+			for (vertex = 0; vertex < count; vertex++)
+			{
+				memcpy(
+					packed + (index * count + vertex) * 4,
+					device.immediate_vertices + (vertex * XGPU_VERTEX_ATTRIBUTE_COUNT + index) * 4,
+					4 * sizeof(float));
+			}
+		}
+		offset = stream_upload(packed, required * sizeof(float));
+		gl_check_errors("immediate upload");
+		for (index = 0; index < XGPU_VERTEX_ATTRIBUTE_COUNT; index++)
+		{
+			state_attribute_pointer(index, device.stream_buffer, 4, GL_FLOAT, GL_FALSE, FALSE,
+				4 * sizeof(float), offset + index * count * 4 * sizeof(float));
+		}
+	}
+#else
 	offset = stream_upload(device.immediate_vertices, count * stride);
+	gl_check_errors("immediate upload");
 	for (index = 0; index < XGPU_VERTEX_ATTRIBUTE_COUNT; index++)
 	{
 		state_attribute_pointer(index, device.stream_buffer, 4, GL_FLOAT, GL_FALSE, FALSE, (GLsizei)stride,
 			offset + index * 4 * sizeof(float));
 	}
+#endif
+	gl_check_errors("immediate attributes");
 	if (type == D3DPT_QUADLIST)
 	{
 		unsigned long index_count;
@@ -3682,6 +4109,11 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 	if (device.gl_ready)
 	{
 		struct render_target_entry *back_buffer = render_target_get(&device.back_buffer);
+#ifdef HALO_WEB
+		/* (looked up before the default framebuffer is bound for the blit: a
+		new framebuffer_get entry binds itself) */
+		GLuint back_buffer_framebuffer = framebuffer_get(back_buffer->target.texture, 0);
+#endif
 		int window_width, window_height, width, height, x, y;
 
 		if (trace_frame())
@@ -3706,14 +4138,27 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 		glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
+#ifdef HALO_WEB
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, back_buffer_framebuffer);
+#else
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, framebuffer_get(back_buffer->target.texture, 0));
+#endif
 		/* row 0 of the render target is the top of the picture */
+#ifdef HALO_WEB
+		/* WebGL rejects a framebuffer blit whose destination rectangle is
+		vertically reversed.  Its canvas presentation already uses the same
+		top-left convention as the ES shader path. */
+		glBlitFramebuffer(0, 0, (GLint)back_buffer->target.gl_width, (GLint)back_buffer->target.gl_height,
+			x, y, x + width, y + height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+#else
 		glBlitFramebuffer(0, 0, (GLint)back_buffer->target.gl_width, (GLint)back_buffer->target.gl_height,
 			x, y + height, x + width, y, GL_COLOR_BUFFER_BIT, GL_LINEAR);
+#endif
+		gl_check_errors("present blit");
 		platform_video_swap();
 		xgpu_gl_state_invalidate();
 		xgpu_texture_cache_begin_frame();
-#ifdef HALO_ANDROID
+#if defined(HALO_ANDROID) && !defined(HALO_WEB)
 		host_gl_fence_frame((unsigned int)device.buffer_ring);
 		device.buffer_ring = (device.buffer_ring + 1) % STREAM_BUFFER_RING;
 		host_gl_wait_frame((unsigned int)device.buffer_ring);
@@ -3721,12 +4166,15 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 		device.index_buffer = device.index_buffers[device.buffer_ring];
 		device.stream_offset = 0;
 		device.index_offset = 0;
-#else
+	#elif !defined(HALO_WEB)
 		device.stream_offset = STREAM_BUFFER_SIZE; /* orphan next frame */
 		device.index_offset = INDEX_BUFFER_SIZE;
 #endif
 	}
 	device.frame++;
+	#ifdef HALO_WEB
+	web_stream_cache_expire();
+	#endif
 	stats.presents++;
 	if (debug_settings.statistics && device.frame % 60 == 0)
 	{

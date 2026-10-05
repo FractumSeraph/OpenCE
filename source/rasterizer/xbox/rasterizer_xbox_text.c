@@ -117,7 +117,7 @@ void rasterizer_error(
 void rasterizer_set_framebuffer_blend_function(
 	short function);
 
-void rasterizer_set_texture_bitmap_data(
+boolean rasterizer_set_texture_bitmap_data(
 	short stage,
 	struct bitmap_data const *bitmap);
 

@@ -11,6 +11,10 @@ and the debug keyboard that the game's console reads.
 
 #include "platform.h"
 #include "sdl_platform.h"
+
+#ifdef HALO_WEB
+#include <emscripten/emscripten.h>
+#endif
 #include "gl.h"
 #include "port_config.h"
 #include "p2p.h"
@@ -29,6 +33,21 @@ static SDL_GLContext platform_gl_context;
 static SDL_ThreadID platform_event_thread;
 static BOOL platform_sdl_started = FALSE;
 
+#ifdef HALO_WEB
+static struct
+{
+	double callback_start;
+	double callback_total;
+	double callback_maximum;
+	unsigned long starts;
+	unsigned long loops;
+	unsigned long swaps;
+	unsigned long over_budget;
+	unsigned long stops;
+	long stop_connection;
+} web_frame_meter;
+#endif
+
 static struct platform_input_state input_state;
 /* keys pressed since the last read, so a press and release between two
 reads still counts as a press (input injected on Android, or a slow frame) */
@@ -36,7 +55,7 @@ static unsigned char keys_pressed[SDL_SCANCODE_COUNT];
 /* likewise the mouse buttons pressed since the last read, so that a click
 quicker than a frame still counts */
 static unsigned char mouse_buttons_pressed[PLATFORM_MOUSE_BUTTON_COUNT];
-#ifndef HALO_ANDROID
+#if !defined(HALO_ANDROID) || defined(HALO_WEB)
 /* the menus' pointer (platform_ui_pointer_set_active), under input_lock */
 static struct platform_ui_pointer ui_pointer;
 static float ui_pointer_wheel;
@@ -97,10 +116,16 @@ BOOL platform_sdl_initialize(void)
 #endif
 	/* a copy of the game started to open an invite link hands it to the
 	one already running, and goes */
-	if (p2p_hand_off_invite())
+	if (
+#ifndef HALO_WEB
+		p2p_hand_off_invite()
+#else
+		FALSE
+#endif
+	)
 		exit(EXIT_SUCCESS);
 	SDL_SetHint(SDL_HINT_APP_NAME, "Halo");
-#ifdef HALO_ANDROID
+#if defined(HALO_ANDROID) && !defined(HALO_WEB)
 	/* landscape only; the back key arrives as a key event (xinput_sdl.c)
 	instead of closing the activity */
 	SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
@@ -115,12 +140,14 @@ BOOL platform_sdl_initialize(void)
 		return FALSE;
 	}
 	platform_sdl_started = TRUE;
-#ifndef HALO_ANDROID
+#if !defined(HALO_ANDROID) || defined(HALO_WEB)
 	/* found (or offered to the player, platform_offer_game_data) before the
 	game's window opens */
 	platform_data_root();
+	#ifndef HALO_WEB
 	/* (a new version looked for meanwhile, updater_poll asking about it) */
 	updater_start();
+	#endif
 #endif
 	return TRUE;
 }
@@ -680,7 +707,14 @@ BOOL platform_video_initialize(unsigned long width, unsigned long height)
 	if (!platform_sdl_initialize())
 		return FALSE;
 
-#ifdef HALO_ANDROID
+#ifdef HALO_WEB
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+	/* Halo uses destination alpha as scratch data.  The display is opaque, so
+	do not let that alpha mask the ImageBitmap presented by the browser. */
+	SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 0);
+#elif defined(HALO_ANDROID)
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
@@ -708,8 +742,14 @@ BOOL platform_video_initialize(unsigned long width, unsigned long height)
 
 		if (scale < 1)
 			scale = 1;
+#ifdef HALO_WEB
+		/* (the page's canvas, which the page sizes and makes fullscreen) */
+		platform_window = SDL_CreateWindow("Halo", (int)(width * scale), (int)(height * scale),
+			SDL_WINDOW_OPENGL);
+#else
 		platform_window = SDL_CreateWindow("Halo", (int)(width * scale), (int)(height * scale),
 			SDL_WINDOW_OPENGL | SDL_WINDOW_FULLSCREEN);
+#endif
 	}
 #else
 	/* fullscreen (either kind) unless display.mode is the window, which F11
@@ -751,11 +791,17 @@ BOOL platform_video_initialize(unsigned long width, unsigned long height)
 	SDL_GL_MakeCurrent(platform_window, platform_gl_context);
 	if (!gl_functions_load())
 		return FALSE;
+#ifdef HALO_WEB
+	/* The browser publishes the OffscreenCanvas when each timed main-loop
+	callback returns. */
+	version = 0;
+#else
 	version = SDL_GL_SetSwapInterval(config_boolean("display.vsync") ? 1 : 0);
+#endif
 	(void)version;
 	platform_event_thread = SDL_GetCurrentThreadID();
 	platform_log("OpenGL %s on %s", (const char *)glGetString(GL_VERSION), (const char *)glGetString(GL_RENDERER));
-#ifndef HALO_ANDROID
+#if !defined(HALO_ANDROID)
 	platform_mouse_capture(TRUE);
 #endif
 	return TRUE;
@@ -788,7 +834,11 @@ void platform_display_apply(void)
 	if (!platform_window)
 		return;
 #endif
+#ifndef HALO_WEB
+	/* (the browser presents when each main-loop callback returns: no swap
+	interval, platform_video_initialize) */
 	SDL_GL_SetSwapInterval(config_boolean("display.vsync") ? 1 : 0);
+#endif
 }
 
 void platform_video_drawable_size(int *width, int *height)
@@ -828,6 +878,73 @@ static Uint64 frame_interval_ns(void)
 }
 
 #endif
+#ifdef HALO_WEB
+void platform_web_frame_begin(void)
+{
+	web_frame_meter.starts++;
+	web_frame_meter.callback_start = emscripten_get_now();
+}
+
+void platform_web_frame_end(void)
+{
+	double now = emscripten_get_now();
+	double duration = now - web_frame_meter.callback_start;
+
+	web_frame_meter.loops++;
+	web_frame_meter.callback_total += duration;
+	if (duration > web_frame_meter.callback_maximum)
+		web_frame_meter.callback_maximum = duration;
+	if (duration > 16.7)
+		web_frame_meter.over_budget++;
+}
+
+void platform_web_frame_stopped(long connection)
+{
+	web_frame_meter.stop_connection = connection;
+	web_frame_meter.stops++;
+}
+
+EMSCRIPTEN_KEEPALIVE unsigned long platform_web_profile_loops(void)
+{
+	return web_frame_meter.loops;
+}
+
+EMSCRIPTEN_KEEPALIVE unsigned long platform_web_profile_starts(void)
+{
+	return web_frame_meter.starts;
+}
+
+EMSCRIPTEN_KEEPALIVE unsigned long platform_web_profile_swaps(void)
+{
+	return web_frame_meter.swaps;
+}
+
+EMSCRIPTEN_KEEPALIVE unsigned long platform_web_profile_over_budget(void)
+{
+	return web_frame_meter.over_budget;
+}
+
+EMSCRIPTEN_KEEPALIVE unsigned long platform_web_profile_stops(void)
+{
+	return web_frame_meter.stops;
+}
+
+EMSCRIPTEN_KEEPALIVE long platform_web_profile_stop_connection(void)
+{
+	return web_frame_meter.stop_connection;
+}
+
+EMSCRIPTEN_KEEPALIVE double platform_web_profile_callback_total(void)
+{
+	return web_frame_meter.callback_total;
+}
+
+EMSCRIPTEN_KEEPALIVE double platform_web_profile_callback_maximum(void)
+{
+	return web_frame_meter.callback_maximum;
+}
+#endif
+
 void platform_video_swap(void)
 {
 #ifndef HALO_ANDROID
@@ -835,7 +952,12 @@ void platform_video_swap(void)
 	Uint64 interval, now;
 
 #endif
+#ifdef HALO_WEB
+	web_frame_meter.swaps++;
+	/* Returning from the browser's main-loop callback presents this canvas. */
+#else
 	SDL_GL_SwapWindow(platform_window);
+#endif
 #ifndef HALO_ANDROID
 	interval = frame_interval_ns();
 	if (!interval)
@@ -1003,7 +1125,7 @@ BOOL platform_next_keystroke(struct platform_keystroke *keystroke)
 
 /* ---------- internet play's invite links (p2p.c) */
 
-#ifdef HALO_ANDROID
+#if defined(HALO_ANDROID) && !defined(HALO_WEB)
 /* SDL declares it for Android builds only, which the guest is not
 (guest/runtime/guest_sdl.c passes it to the host) */
 bool SDL_ShowAndroidToast(const char *message, int duration, int gravity, int xoffset, int yoffset);
@@ -1059,7 +1181,7 @@ static void platform_invite_clipboard(BOOL look)
 		SDL_SetClipboardText(invite);
 		snprintf(seen, sizeof(seen), "%s", invite);
 		platform_log("Internet play: the invite link is on the clipboard");
-#ifdef HALO_ANDROID
+	#if defined(HALO_ANDROID) && !defined(HALO_WEB)
 		SDL_ShowAndroidToast("Hosting: the invite link is on the clipboard", 1, -1, 0, 0);
 #endif
 	}
@@ -1074,7 +1196,7 @@ static void platform_invite_clipboard(BOOL look)
 			checksum copied for something else) */
 			if (platform_text_has_invite_link(text) && p2p_join_invite(text))
 			{
-#ifdef HALO_ANDROID
+			#if defined(HALO_ANDROID) && !defined(HALO_WEB)
 				SDL_ShowAndroidToast("Joining the invite on the clipboard", 1, -1, 0, 0);
 #endif
 			}
@@ -1239,17 +1361,22 @@ void platform_pump_events(void)
 				input_state.mouse_released = !input_state.mouse_released;
 				platform_mouse_capture(!input_state.mouse_released && !input_state.ui_pointer);
 			}
-#ifndef HALO_ANDROID
+		#if !defined(HALO_ANDROID) || defined(HALO_WEB)
 			/* F11 switches between fullscreen and the window (SDL keeps the
 			window's size and place while fullscreen) */
 			if (event.key.down && !event.key.repeat && event.key.scancode == SDL_SCANCODE_F11)
 			{
+			#ifdef HALO_WEB
+				SDL_SetWindowFullscreen(platform_window,
+					(SDL_GetWindowFlags(platform_window) & SDL_WINDOW_FULLSCREEN) ? false : true);
+			#else
 				platform_window_set_fullscreen(!platform_window_fullscreen());
+			#endif
 			}
 #endif
 			break;
 		case SDL_EVENT_MOUSE_MOTION:
-#ifndef HALO_ANDROID
+		#if !defined(HALO_ANDROID) || defined(HALO_WEB)
 			/* in the menus the mouse moves the pointer, not the view */
 			if (input_state.ui_pointer)
 			{
@@ -1280,7 +1407,7 @@ void platform_pump_events(void)
 				binding_captured_input = INPUT_MOUSE + event.button.button;
 				break;
 			}
-#ifndef HALO_ANDROID
+#if !defined(HALO_ANDROID) || defined(HALO_WEB)
 			/* clicks in the menus go to the pointer; a button held down
 			when the menu closes stays up until pressed again, so the click
 			that resumes the game does not also fire */
@@ -1331,7 +1458,7 @@ void platform_pump_events(void)
 				}
 				break;
 			}
-#ifndef HALO_ANDROID
+#if !defined(HALO_ANDROID) || defined(HALO_WEB)
 			if (input_state.ui_pointer)
 			{
 				/* whole notches: smooth-scrolling wheels send fractions */
@@ -1360,7 +1487,7 @@ void platform_pump_events(void)
 		case SDL_EVENT_WINDOW_FOCUS_GAINED:
 			input_state.focused = TRUE;
 			look_at_clipboard = TRUE;
-#ifndef HALO_ANDROID
+#if !defined(HALO_ANDROID) || defined(HALO_WEB)
 			if (!input_state.mouse_released && !input_state.ui_pointer)
 				platform_mouse_capture(TRUE);
 #endif
@@ -1368,13 +1495,25 @@ void platform_pump_events(void)
 		case SDL_EVENT_GAMEPAD_ADDED:
 			SDL_OpenGamepad(event.gdevice.which);
 			break;
+#ifdef HALO_WEB
+		case SDL_EVENT_GAMEPAD_REMOVED:
+		{
+			SDL_Gamepad *gamepad = SDL_GetGamepadFromID(event.gdevice.which);
+
+			if (gamepad)
+				SDL_CloseGamepad(gamepad);
+			break;
+		}
+#endif
 		default:
 			break;
 		}
 	}
 	pthread_mutex_unlock(&input_lock);
 	looked_at_clipboard = TRUE;
+	#ifndef HALO_WEB
 	platform_invite_clipboard(look_at_clipboard);
+	#endif
 }
 
 void platform_menus_set_active(BOOL active)
@@ -1409,7 +1548,7 @@ int platform_binding_capture_poll(int *input)
 	return result;
 }
 
-#ifndef HALO_ANDROID
+#if !defined(HALO_ANDROID) || defined(HALO_WEB)
 /* ---------- the menus' pointer */
 
 /* While a menu is up the mouse is released, its pointer shows (centered when

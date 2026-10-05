@@ -846,7 +846,11 @@ void rasterizer_debug_triangle(
 /* ---------- prototypes/RASTERIZER_XBOX_DEBUG.C */
 
 void rasterizer_debug_drawing_begin(
-	boolean opaque);
+	boolean opaque
+#ifdef HALO_WEB
+	, long zbias
+#endif
+	);
 void rasterizer_debug_drawing_end(
 	void);
 void _rasterizer_debug_immediate_begin(

@@ -133,6 +133,7 @@ symbols in this file:
 #include "items/garbage.h"
 #include "items/items.h"
 #include "items/projectiles.h"
+#include "game/game_engine.h"
 #include "items/projectiles_callbacks.h"
 #include "items/weapons.h"
 #include "objects.h"

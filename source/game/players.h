@@ -336,6 +336,10 @@ void player_control_permanent_impulse(
 
 void players_initialize(
 	void);
+/* (network_game_manager.c calls it; without a prototype C89 assumes it
+returns int, and WebAssembly traps on the mismatched call) */
+void player_delete(
+	long player_index);
 void players_initialize_for_new_map(
 	void);
 void players_dispose_from_old_map(

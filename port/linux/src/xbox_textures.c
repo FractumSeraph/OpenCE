@@ -592,7 +592,7 @@ static void upload(GLuint texture, GLenum target, const struct xgpu_texture_desc
 	converted = description->compressed && !decode_compressed ? NULL : malloc(largest * sizeof(unsigned long));
 	glBindTexture(target, texture);
 	xgpu_gl_state_invalidate();
-#ifdef HALO_ANDROID
+#if defined(HALO_ANDROID) && !defined(HALO_WEB)
 	/* converted texels are BGRA in memory (32-bit ARGB words); ES takes
 	RGBA */
 	glTexParameteri(target, GL_TEXTURE_SWIZZLE_R, converted ? GL_BLUE : GL_RED);
@@ -630,6 +630,23 @@ static void upload(GLuint texture, GLenum target, const struct xgpu_texture_desc
 				else
 #endif
 				decode_level(description, level, source, palette, converted);
+#ifdef HALO_WEB
+				/* WebGL 2 does not expose texture swizzles.  Convert the Xbox's
+				BGRA byte order to RGBA before uploading instead. */
+				{
+					unsigned long pixel;
+					unsigned long pixels = (unsigned long)width * (unsigned long)height * (unsigned long)depth;
+					unsigned char *rgba = (unsigned char *)converted;
+
+					for (pixel = 0; pixel < pixels; pixel++)
+					{
+						unsigned char blue = rgba[pixel * 4];
+
+						rgba[pixel * 4] = rgba[pixel * 4 + 2];
+						rgba[pixel * 4 + 2] = blue;
+					}
+				}
+#endif
 				if (target == GL_TEXTURE_3D)
 					glTexImage3D(image_target, (GLint)level, GL_RGBA8, width, height, depth, 0, GL_BGRA, GL_UNSIGNED_BYTE, converted);
 				else
@@ -653,6 +670,11 @@ struct texture_entry
 	struct xgpu_texture_description description;
 	unsigned long address, size;
 	unsigned long generation;
+	#ifdef HALO_WEB
+	unsigned long content_hash;
+	unsigned long content_hash_frame;
+	unsigned long content_hash_interval;
+	#endif
 	unsigned long last_used_frame;
 	/* the high-res HUD texture drawn in its place (hud_hires.h), or -1 */
 	long override;
@@ -679,6 +701,34 @@ static struct
 } recent_textures[RECENT_TEXTURE_COUNT];
 static unsigned long texture_drop_serial = 1;
 static unsigned long texture_frame = 0;
+
+#ifdef HALO_WEB
+/* Browser Wasm has no page protection, so it cannot use memory_watch.c's
+fault-driven dirty tracking.  Back off to one content check every eight frames
+for textures that stay unchanged; a changing texture immediately returns to
+checks every frame.  This preserves animated texture updates without hashing
+the full static texture set on every presentation. */
+static unsigned long texture_content_hash(const unsigned char *bytes, unsigned long size)
+{
+	unsigned long hash = 2166136261UL ^ size;
+
+	while (size >= 4)
+	{
+		unsigned long word = (unsigned long)bytes[0] |
+			((unsigned long)bytes[1] << 8) |
+			((unsigned long)bytes[2] << 16) |
+			((unsigned long)bytes[3] << 24);
+
+		hash = (hash ^ word) * 16777619UL;
+		hash = (hash << 5) | (hash >> 27);
+		bytes += 4;
+		size -= 4;
+	}
+	while (size--)
+		hash = (hash ^ *bytes++) * 16777619UL;
+	return hash ? hash : 1;
+}
+#endif
 
 static unsigned long bucket_index(DWORD data, DWORD format_word, DWORD size_word)
 {
@@ -755,6 +805,7 @@ GLuint xgpu_texture_get(const DWORD *resource, const D3DCOLOR *palette, GLenum *
 	unsigned long variant_count = 0;
 	static int no_cache = -1;
 	unsigned long recent = bucket_index(data, format_word, size_word) % RECENT_TEXTURE_COUNT;
+	#ifndef HALO_WEB
 	unsigned long watch_serial = memory_watch_serial();
 
 	if (!palettized && recent_textures[recent].entry && recent_textures[recent].data == data &&
@@ -766,6 +817,7 @@ GLuint xgpu_texture_get(const DWORD *resource, const D3DCOLOR *palette, GLenum *
 		entry->last_used_frame = texture_frame;
 		return texture_entry_result(entry, target, description);
 	}
+	#endif
 
 	for (entry = *bucket; entry; entry = entry->next)
 	{
@@ -806,6 +858,53 @@ GLuint xgpu_texture_get(const DWORD *resource, const D3DCOLOR *palette, GLenum *
 
 	if (no_cache < 0)
 		no_cache = config_boolean("debug.texture_no_cache");
+	#ifdef HALO_WEB
+	if (platform_is_contiguous((void *)entry->address) &&
+		platform_is_contiguous((void *)(entry->address + entry->size - 1)))
+	{
+		BOOL changed = !entry->generation;
+
+		if (changed || no_cache || texture_frame - entry->content_hash_frame >=
+			(entry->content_hash_interval ? entry->content_hash_interval : 1))
+		{
+			unsigned long content_hash;
+
+			content_hash = texture_content_hash((const unsigned char *)entry->address, entry->size);
+
+			entry->content_hash_frame = texture_frame;
+			if (!entry->generation || content_hash != entry->content_hash)
+			{
+				entry->content_hash = content_hash;
+				entry->content_hash_interval = 1;
+				changed = TRUE;
+			}
+			else if (entry->content_hash_interval < 8)
+			{
+				entry->content_hash_interval = entry->content_hash_interval ?
+					entry->content_hash_interval * 2 : 1;
+			}
+		}
+		if (changed || no_cache)
+		{
+			entry->generation = 1;
+			/* (which bitmap is here may have changed with the pixels) */
+			entry->override = -1;
+			if (!palettized && !entry->description.cube_map && entry->description.depth == 1)
+			{
+				unsigned long levels;
+
+				entry->override = hud_hires_override_find(entry->address, entry->description.width,
+					entry->description.height, entry->description.levels > 1 ?
+					xgpu_texture_level_offset(&entry->description, 1) : xgpu_texture_face_size(&entry->description));
+				if (entry->override >= 0 && !hud_hires_override_texture(entry->override, &levels))
+					entry->override = -1;
+			}
+			if (entry->override < 0)
+				upload(entry->texture, entry->target, &entry->description,
+					(const unsigned char *)entry->address, palette);
+		}
+	}
+	#else
 	generation = memory_watch_generation(entry->address, entry->size);
 	if (!entry->generation || generation > entry->generation || no_cache)
 	{
@@ -847,7 +946,9 @@ GLuint xgpu_texture_get(const DWORD *resource, const D3DCOLOR *palette, GLenum *
 			upload(entry->texture, entry->target, &entry->description, (const unsigned char *)entry->address, palette);
 		}
 	}
+	#endif
 	entry->last_used_frame = texture_frame;
+	#ifndef HALO_WEB
 	if (!palettized && !no_cache)
 	{
 		recent_textures[recent].data = data;
@@ -857,6 +958,7 @@ GLuint xgpu_texture_get(const DWORD *resource, const D3DCOLOR *palette, GLenum *
 		recent_textures[recent].watch_serial = watch_serial;
 		recent_textures[recent].drop_serial = texture_drop_serial;
 	}
+	#endif
 	return texture_entry_result(entry, target, description);
 }
 

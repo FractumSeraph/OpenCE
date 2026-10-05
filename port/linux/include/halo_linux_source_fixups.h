@@ -15,7 +15,9 @@ rasterizer_debug.c includes both and passes two arguments. MSVC tolerates
 the mismatch; the definition ignores zbias. Adding the parameter to
 rasterizer.h perturbs MSVC's register allocation elsewhere, so instead every
 declaration and call collapses to the one-parameter form here. */
+#ifndef HALO_WEB
 #define rasterizer_debug_drawing_begin(opaque, ...) (rasterizer_debug_drawing_begin)(opaque)
+#endif
 
 /* frames between the 30 Hz ticks (port/linux/game/render_interpolation.c);
 the platform layer reads the display.interpolation setting */

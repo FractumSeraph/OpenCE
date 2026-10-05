@@ -995,6 +995,34 @@ boolean network_game_server_send_player_joined_info_ingame(
 	return FALSE;
 }
 
+#ifdef HALO_WEB
+/* web: an add-player retry can mean that this client missed the authoritative
+in-game add after loading. Send the existing player back only to that client
+so it can rebuild its local player/camera mapping without duplicating the
+server's player. */
+static boolean network_game_server_resend_player_joined_info_ingame(
+	struct network_game_server *server,
+	struct network_game_server_client_machine *client_machine,
+	struct network_player *player)
+{
+	struct network_machine *machine;
+	struct network_player message;
+	struct network_message *encoded_message;
+
+	machine = network_game_server_get_client_machine(server, client_machine, NULL);
+	message = *player;
+	encoded_message = create_network_game_message(
+		_message_server_add_player_ingame,
+		&message,
+		sizeof(message));
+	if (encoded_message)
+		return network_game_server_send_message_to_machine(server, machine, encoded_message);
+
+	network_event("failed to create a message_server_add_player_ingame recovery message");
+	return FALSE;
+}
+
+#endif
 /* With up to 128 machines, sending the whole settings record (13 KB) to every
 machine on each lobby change would flood the network while a lobby fills, so
 changes are collected and sent at most this often; the server's pregame idle
@@ -2546,6 +2574,42 @@ static boolean network_game_server_handle_message_client_add_player_request_inga
 			&packet_version,
 			_network_game_packet_class_client_ingame))
 		{
+#ifdef HALO_WEB
+			/* web: the machine's player already in the game, asked for again:
+			the client may have missed its in-game add, so send it back to that
+			client alone (the queue below would only ignore the repeat) */
+			{
+				long machine_index;
+				long player_index;
+				struct network_game *game = network_game_server_get_game(server);
+
+				network_game_server_get_client_machine(server, client_machine, &machine_index);
+				if (game && player.machine_index == machine_index)
+				{
+					for (player_index = 0;
+						player_index < MAXIMUM_NUMBER_OF_PLAYERS;
+						player_index++)
+					{
+						struct network_player *existing_player = &game->players[player_index];
+
+						if (network_player_is_valid(existing_player) &&
+							existing_player->machine_index == player.machine_index &&
+							existing_player->controller_index == player.controller_index)
+						{
+							if (!network_game_server_resend_player_joined_info_ingame(
+								server,
+								client_machine,
+								existing_player))
+							{
+								network_event(
+									"server failed to resend an existing in-game player to its client");
+							}
+							return TRUE;
+						}
+					}
+				}
+			}
+#endif
 			network_game_server_queue_client_player(server, client_machine, &player);
 		}
 		else

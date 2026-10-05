@@ -16,10 +16,14 @@ Xbox kernel does.
 
 #include "platform.h"
 
+#ifdef HALO_WEB
+#include <emscripten/heap.h>
+#else
 #include <errno.h>
-#include <string.h>
 #include <sys/mman.h>
 #include <unistd.h>
+#endif
+#include <string.h>
 
 #define PAGE_SIZE_BYTES 0x1000UL
 #define CONTIGUOUS_PAGE_COUNT (PLATFORM_CONTIGUOUS_SIZE / PAGE_SIZE_BYTES)
@@ -31,6 +35,7 @@ static unsigned long block_page_count[CONTIGUOUS_PAGE_COUNT];
 static BOOL arena_reserved = FALSE;
 static pthread_mutex_t arena_lock = PTHREAD_MUTEX_INITIALIZER;
 
+#ifndef HALO_WEB
 static int protection_to_host(DWORD protect)
 {
 	switch (protect & 0xff)
@@ -43,11 +48,21 @@ static int protection_to_host(DWORD protect)
 	default: return PROT_READ | PROT_WRITE;
 	}
 }
+#endif
 
 /* Reserve the window before anything else can map into it. */
 __attribute__((constructor(101)))
 static void contiguous_arena_reserve(void)
 {
+#ifdef HALO_WEB
+	/* WebAssembly has one already-reserved linear address space.  The web
+	link keeps its initial memory above the Xbox window so fixed guest
+	pointers such as 0x803a6000 are immediately usable. */
+	arena_reserved = emscripten_get_heap_size() >=
+		PLATFORM_CONTIGUOUS_BASE + PLATFORM_CONTIGUOUS_SIZE;
+	if (!arena_reserved)
+		platform_log("WebAssembly memory does not cover the Xbox contiguous window");
+#else
 	void *wanted = (void *)PLATFORM_CONTIGUOUS_BASE;
 	void *result = mmap(wanted, PLATFORM_CONTIGUOUS_SIZE, PROT_NONE,
 		MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE | MAP_FIXED_NOREPLACE, -1, 0);
@@ -63,6 +78,7 @@ static void contiguous_arena_reserve(void)
 		platform_log("cannot reserve the Xbox contiguous memory window at %p (%s)",
 			wanted, strerror(errno));
 	}
+#endif
 }
 
 BOOL platform_is_contiguous(const void *address)
@@ -140,6 +156,12 @@ void *platform_contiguous_alloc(unsigned long size, unsigned long alignment,
 
 	address = (void *)(PLATFORM_CONTIGUOUS_BASE + first * PAGE_SIZE_BYTES);
 	memory_watch_forget(address, count * PAGE_SIZE_BYTES);
+#ifdef HALO_WEB
+	/* There is no mmap inside a Wasm linear memory.  Allocation metadata
+	provides the same placement semantics and clearing makes a reused range
+	behave like freshly mapped anonymous pages. */
+	memset(address, 0, count * PAGE_SIZE_BYTES);
+#else
 	/* map fresh zeroed pages over the reservation */
 	if (mmap(address, count * PAGE_SIZE_BYTES, protection_to_host(protect),
 		MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0) != address)
@@ -147,6 +169,7 @@ void *platform_contiguous_alloc(unsigned long size, unsigned long alignment,
 		pthread_mutex_unlock(&arena_lock);
 		return NULL;
 	}
+#endif
 	for (page = first; page < first + count; page++)
 		page_protection[page] = protect;
 	block_page_count[first] = count;
@@ -166,8 +189,12 @@ void platform_contiguous_free(void *address)
 	if (count)
 	{
 		memory_watch_forget(address, count * PAGE_SIZE_BYTES);
+#ifdef HALO_WEB
+		memset(address, 0, count * PAGE_SIZE_BYTES);
+#else
 		mmap(address, count * PAGE_SIZE_BYTES, PROT_NONE,
 			MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE | MAP_FIXED, -1, 0);
+#endif
 		for (page = first; page < first + count; page++)
 			page_protection[page] = 0;
 		block_page_count[first] = 0;
@@ -209,11 +236,13 @@ BOOL WINAPI VirtualProtect(LPVOID address, SIZE_T size, DWORD new_protect, PDWOR
 		*old_protect = platform_is_contiguous(address) ?
 			page_protection[(start - PLATFORM_CONTIGUOUS_BASE) / PAGE_SIZE_BYTES] : PAGE_READWRITE;
 	memory_watch_forget((void *)start, end - start);
+#ifndef HALO_WEB
 	if (mprotect((void *)start, end - start, protection_to_host(new_protect)) != 0)
 	{
 		platform_set_last_error_from_errno(errno);
 		return FALSE;
 	}
+#endif
 	if (platform_is_contiguous((void *)start))
 	{
 		unsigned long page;

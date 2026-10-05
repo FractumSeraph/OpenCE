@@ -61,6 +61,7 @@ Each platform has its own instructions:
 | Linux (32-bit x86 executable, OpenGL 4.5, SDL3) | [port/linux/README.md](port/linux/README.md) |
 | Windows (32-bit x86 executable, OpenGL 4.5, SDL3) | [port/windows/README.md](port/windows/README.md) |
 | Android (arm64 app, OpenGL ES 3, SDL3) | [port/android/README.md](port/android/README.md) |
+| Browser (WebAssembly, WebGL 2, SDL3) | [Browser build](#browser-build) below |
 
 The Linux README also gives the controls, the settings and the multiplayer
 functions. These are almost the same on all platforms.
@@ -95,6 +96,7 @@ To build the game:
 | `ninja linux` | `build/linux/halo` |
 | `ninja windows` (on Windows) | `build/windows/halo.exe` and `SDL3.dll` |
 | `ninja android_apk` | `port/android/app/build/outputs/apk/debug/app-debug.apk` |
+| `ninja web` | `build/web/halo.html`, `halo.js` and `halo.wasm` (needs Emscripten: `configure.py --web-cc PATH`) |
 
 If you enter `ninja` without a target, ninja builds the game for the
 computer that you use.
@@ -138,3 +140,31 @@ To record a new profile:
 The build then plays the main menu and the first minute of each campaign
 level. This procedure continues for approximately 15 minutes. The game
 data must be in `assets/`.
+
+## Browser build
+
+The browser build is the same game and platform layer compiled to
+WebAssembly with Emscripten (`tools/web_build.py`; `HALO_WEB`, which also
+selects the Android OpenGL ES code paths). It comes from the web-halo port
+(github.com/ecumene/web-halo) merged onto this repository, with:
+
+- touch controls for phones and tablets (`port/web/assets/touch`, after Halo
+  Mobile's), aiming through the mouse path (`platform_web_touch_look`);
+- installing as an app (`port/web/manifest.webmanifest`, `port/web/assets/pwa`);
+- online games through a lobby service (`services/signaling`) and WebRTC,
+  and joining native hosts' `halo://join` invites through
+  `services/native-gateway`, which speaks this port's internet-play protocol.
+
+Build it with Emscripten 6:
+
+```
+python configure.py --release --web-cc /path/to/emsdk/upstream/emscripten/emcc
+ninja web
+```
+
+The page needs cross-origin isolation (COOP/COEP headers) and the maps
+beside it in `assets/maps/` (served with byte ranges), or the player chooses
+an Xbox disc image in the browser. `tools/web_serve.py` serves a checkout for
+development. The link refuses WebAssembly signature mismatches
+(`-Wl,--fatal-warnings`): a C function called through a prototype that does
+not match its definition traps in a browser.

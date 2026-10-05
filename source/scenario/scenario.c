@@ -214,9 +214,13 @@ struct memory_status
 
 /* ---------- prototypes */
 
+#ifdef HALO_WEB
+#define _ReadWriteBarrier() __asm__ __volatile__("" ::: "memory")
+#else
 void _ReadWriteBarrier(
 	void);
 #pragma intrinsic(_ReadWriteBarrier)
+#endif
 
 typedef void (*scenario_structure_bsp_connection_proc)(
 	void);

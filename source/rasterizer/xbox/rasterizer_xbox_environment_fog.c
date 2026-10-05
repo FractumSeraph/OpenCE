@@ -137,6 +137,7 @@ symbols in this file:
 #include "rasterizer/rasterizer_geometry.h"
 #include "rasterizer/rasterizer_model_types.h"
 #include "rasterizer/rasterizer_transparent_geometry.h"
+#include "rasterizer/xbox/rasterizer_xbox_draw_primitives.h"
 #include "render/render.h"
 #include "shaders/shader_definitions.h"
 #include "shaders/shaders.h"

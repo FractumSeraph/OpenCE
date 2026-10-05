@@ -131,6 +131,7 @@ VARIADIC_PROTOTYPE_FILES = {
     "source/bungie_net/common/public_key_crypt.c", "source/camera/editor_flying_camera.c",
     "source/game/cheats.c", "source/game/game_engine.c", "source/game/players.c",
     "source/hs/hs.c", "source/interface/hud_nav_points.c",
+    "source/interface/ui_widget_game_data_input_functions.c",
     "source/networking/telnet_console.c", "source/rasterizer/xbox/rasterizer_xbox_errors.c",
     "source/render/render.c",
 }

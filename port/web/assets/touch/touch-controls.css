@@ -1,0 +1,585 @@
+/*
+TOUCH-CONTROLS.CSS
+
+On-screen controls for phones and tablets. The control styles (both layouts
+and the layout editor) come from Halo Mobile's port/web/site/style.css
+(https://github.com/OMG-Guest/Halo-Mobile, CC0); the touch-mode screen, the
+in-game menu and the portrait hint at the end are this port's own.
+*/
+
+/* ---------- touch controls
+
+Laid out like the original Xbox controller (the Controller S): A, B, X and Y
+as green, red, blue and yellow translucent gems in a diamond, the white and
+black buttons below them, the L and R triggers above each side, back and
+start between the thumbs, a round d-pad under the left thumb, and the left
+stick where the left thumb lands. */
+
+.touch-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  touch-action: none;
+  --edge-left: env(safe-area-inset-left);
+  --edge-right: env(safe-area-inset-right);
+  --edge-bottom: env(safe-area-inset-bottom);
+  --face: 56px;
+  --gap: 5px;
+  /* the controller's charcoal body */
+  --body: rgba(28, 30, 28, 0.5);
+  --rim: rgba(160, 170, 160, 0.45);
+}
+
+body.has-controller .touch-layer { display: none; }
+
+.touch-button {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(235, 240, 235, 0.95);
+  background: var(--body);
+  border: 1.5px solid var(--rim);
+  -webkit-user-select: none;
+  user-select: none;
+  font-family: "Arial Black", "Helvetica Neue", Arial, sans-serif;
+  transition: transform 0.06s, filter 0.06s;
+}
+
+.touch-button.pressed { transform: scale(0.92); filter: brightness(1.45); }
+
+.touch-button .glyph { font-weight: 900; line-height: 1; }
+.touch-button .caption {
+  position: absolute;
+  top: 100%;
+  margin-top: 3px;
+  font: 700 9px/1 -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.6);
+  white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+}
+
+/* A, B, X and Y: domed translucent gems, their letters embossed */
+.touch-button.face {
+  width: var(--face);
+  height: var(--face);
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.35);
+  box-shadow: inset 0 -6px 10px rgba(0, 0, 0, 0.35), inset 0 5px 8px rgba(255, 255, 255, 0.35),
+    0 3px 6px rgba(0, 0, 0, 0.45);
+  --diamond-right: calc(46px + var(--edge-right));
+  --diamond-bottom: calc(96px + var(--edge-bottom));
+}
+
+.touch-button.face .glyph {
+  font-size: 22px;
+  color: rgba(255, 255, 255, 0.92);
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.35), 0 1px 1px rgba(255, 255, 255, 0.4);
+}
+
+.face-a { background: radial-gradient(circle at 38% 30%, rgba(160, 235, 120, 0.85), rgba(40, 150, 40, 0.72) 60%, rgba(15, 80, 20, 0.8)); }
+.face-b { background: radial-gradient(circle at 38% 30%, rgba(255, 150, 150, 0.85), rgba(210, 30, 35, 0.72) 60%, rgba(110, 10, 15, 0.8)); }
+.face-x { background: radial-gradient(circle at 38% 30%, rgba(150, 200, 255, 0.85), rgba(30, 90, 210, 0.72) 60%, rgba(10, 40, 120, 0.8)); }
+.face-y { background: radial-gradient(circle at 38% 30%, rgba(255, 240, 150, 0.9), rgba(235, 190, 20, 0.75) 60%, rgba(140, 100, 0, 0.8)); }
+.face-y .glyph { color: rgba(70, 50, 0, 0.85); text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5); }
+
+.face-a { right: calc(var(--diamond-right) + var(--face) + var(--gap)); bottom: var(--diamond-bottom); }
+.face-b { right: var(--diamond-right); bottom: calc(var(--diamond-bottom) + var(--face) + var(--gap)); }
+.face-x { right: calc(var(--diamond-right) + 2 * (var(--face) + var(--gap))); bottom: calc(var(--diamond-bottom) + var(--face) + var(--gap)); }
+.face-y { right: calc(var(--diamond-right) + var(--face) + var(--gap)); bottom: calc(var(--diamond-bottom) + 2 * (var(--face) + var(--gap))); }
+
+/* white and black: smaller gems below the diamond, towards the edge */
+.touch-button.duo {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  bottom: calc(22px + var(--edge-bottom));
+  box-shadow: inset 0 -5px 8px rgba(0, 0, 0, 0.35), inset 0 4px 6px rgba(255, 255, 255, 0.3), 0 3px 6px rgba(0, 0, 0, 0.45);
+}
+
+.duo-white {
+  right: calc(76px + var(--edge-right));
+  background: radial-gradient(circle at 38% 30%, rgba(255, 255, 255, 0.95), rgba(215, 220, 215, 0.85) 60%, rgba(150, 155, 150, 0.85));
+  border-color: rgba(255, 255, 255, 0.7);
+}
+
+.duo-black {
+  right: calc(24px + var(--edge-right));
+  background: radial-gradient(circle at 38% 30%, rgba(110, 110, 110, 0.95), rgba(30, 30, 30, 0.9) 60%, rgba(5, 5, 5, 0.9));
+  border-color: rgba(150, 150, 150, 0.6);
+}
+
+/* the triggers: the controller's curved L and R above each side */
+.touch-button.trigger {
+  width: 96px;
+  height: 52px;
+  top: calc(56px + env(safe-area-inset-top));
+  background: linear-gradient(180deg, rgba(90, 95, 90, 0.6), rgba(30, 32, 30, 0.6));
+}
+
+.touch-button.trigger .glyph { font-size: 22px; }
+.touch-button.trigger.left-side { left: calc(26px + var(--edge-left)); border-radius: 30px 14px 10px 22px; }
+.touch-button.trigger.right-side { right: calc(26px + var(--edge-right)); border-radius: 14px 30px 22px 10px; }
+
+/* the stick clicks: pressing a thumbstick, which a touch screen cannot do */
+.touch-button.stick-click {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(60, 64, 60, 0.6) 35%, rgba(25, 27, 25, 0.6) 36%);
+}
+
+.touch-button.left-click { left: calc(200px + var(--edge-left)); bottom: calc(var(--edge-bottom) + 176px); }
+.touch-button.right-click { right: calc(236px + var(--edge-right)); bottom: calc(var(--edge-bottom) + 176px); }
+
+/* back and start: the small black buttons between the thumbs */
+.touch-button.system {
+  width: 54px;
+  height: 26px;
+  border-radius: 13px;
+  bottom: calc(24px + var(--edge-bottom));
+  background: rgba(15, 15, 15, 0.65);
+}
+
+.touch-button.system .glyph { font: 800 9px/1 -apple-system, BlinkMacSystemFont, Roboto, sans-serif; letter-spacing: 0.08em; }
+.touch-button.back { left: calc(50% - 62px); }
+.touch-button.start { left: calc(50% + 8px); }
+
+/* the d-pad: a round plate with a cross, each arm a button */
+.touch-dpad {
+  position: absolute;
+  left: calc(190px + var(--edge-left));
+  bottom: calc(var(--edge-bottom) + 14px);
+  width: 124px;
+  height: 124px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, rgba(80, 84, 80, 0.5), rgba(25, 27, 25, 0.55));
+  border: 1.5px solid var(--rim);
+}
+
+.touch-dpad .touch-button {
+  width: 38px;
+  height: 36px;
+  border-radius: 4px;
+  background: rgba(20, 21, 20, 0.7);
+  border-color: rgba(120, 125, 120, 0.4);
+}
+
+/* the arms meet at the centre without overlapping (the plate is 124 wide,
+its border inside) */
+.touch-dpad .up { left: 42px; top: 7px; }
+.touch-dpad .down { left: 42px; top: 79px; }
+.touch-dpad .left { left: 7px; top: 43px; width: 35px; height: 36px; }
+.touch-dpad .right { left: 80px; top: 43px; width: 35px; height: 36px; }
+
+.touch-dpad .touch-button::after {
+  content: "";
+  width: 0;
+  height: 0;
+  border: 6px solid transparent;
+}
+
+.touch-dpad .up::after { border-bottom-color: rgba(220, 225, 220, 0.8); transform: translateY(-3px); }
+.touch-dpad .down::after { border-top-color: rgba(220, 225, 220, 0.8); transform: translateY(3px); }
+.touch-dpad .left::after { border-right-color: rgba(220, 225, 220, 0.8); transform: translateX(-3px); }
+.touch-dpad .right::after { border-left-color: rgba(220, 225, 220, 0.8); transform: translateX(3px); }
+
+/* the left stick: a concave black thumbstick where the thumb lands */
+.touch-stick {
+  position: absolute;
+  width: 128px;
+  height: 128px;
+  border-radius: 50%;
+  border: 1.5px solid var(--rim);
+  background: radial-gradient(circle, rgba(28, 30, 28, 0.2) 0%, rgba(28, 30, 28, 0.5) 100%);
+  left: calc(34px + var(--edge-left));
+  bottom: calc(46px + var(--edge-bottom));
+  pointer-events: none;
+  opacity: 0.65;
+  transition: opacity 0.1s;
+}
+
+.touch-stick.active { opacity: 1; }
+
+.touch-knob {
+  position: absolute;
+  left: 32px;
+  top: 32px;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%, rgba(18, 18, 18, 0.95) 38%, rgba(55, 58, 55, 0.95) 40%,
+    rgba(30, 32, 30, 0.95) 70%);
+  border: 1.5px solid rgba(140, 145, 140, 0.6);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.55);
+}
+
+/* smaller phones in landscape */
+@media (max-height: 380px) {
+  .touch-layer { --face: 50px; }
+  .touch-button.face { --diamond-bottom: calc(86px + var(--edge-bottom)); }
+  .touch-button.trigger { top: calc(46px + env(safe-area-inset-top)); height: 46px; width: 86px; }
+  .touch-button.left-click, .touch-button.right-click { bottom: calc(var(--edge-bottom) + 158px); }
+  .touch-button.right-click { right: calc(210px + var(--edge-right)); }
+}
+
+/* ---------- touch controls: the modern layout
+
+As in a modern mobile shooter: a large fire button under the right thumb,
+which also aims while held, the actions around it as white line icons on dark
+glass, a second fire button for the left thumb, pause and score at the top,
+and a floating stick anywhere on the left half. Sizes are in --u, which
+shrinks on small phones. */
+
+.touch-layer.modern { --u: 1px; }
+
+.touch-layer.modern .touch-button {
+  width: calc(54 * var(--u));
+  height: calc(54 * var(--u));
+  border-radius: 50%;
+  background: rgba(8, 10, 14, 0.36);
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  color: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  font-family: -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+}
+
+.touch-layer.modern .touch-button.pressed {
+  transform: scale(0.92);
+  filter: none;
+  background: rgba(255, 255, 255, 0.88);
+  color: rgba(10, 12, 16, 0.95);
+  border-color: #fff;
+}
+
+.touch-layer.modern .touch-button .glyph { display: flex; width: 52%; height: 52%; }
+.touch-layer.modern .touch-button .glyph svg { width: 100%; height: 100%; }
+
+.touch-layer.modern .touch-button .caption {
+  margin-top: calc(2 * var(--u));
+  font-size: calc(8 * var(--u));
+  color: rgba(255, 255, 255, 0.75);
+}
+
+/* the Xbox button each one is, for the menus */
+.touch-layer.modern .badge {
+  position: absolute;
+  top: calc(-4 * var(--u));
+  right: calc(-4 * var(--u));
+  width: calc(17 * var(--u));
+  height: calc(17 * var(--u));
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 800 calc(10 * var(--u))/1 -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+}
+
+.touch-layer.modern .badge-a { background: #2f9a2f; }
+.touch-layer.modern .badge-b { background: #c8262c; }
+.touch-layer.modern .badge-x { background: #2860c8; }
+.touch-layer.modern .badge-y { background: #d8a800; color: #2a2000; }
+
+/* right thumb */
+.touch-layer.modern .m-fire {
+  width: calc(86 * var(--u));
+  height: calc(86 * var(--u));
+  right: calc(40 * var(--u) + var(--edge-right));
+  bottom: calc(96 * var(--u) + var(--edge-bottom));
+  border-width: 2.5px;
+  background: rgba(8, 10, 14, 0.42);
+}
+
+.touch-layer.modern .m-fire .glyph { width: 46%; height: 46%; }
+
+.touch-layer.modern .m-zoom { right: calc(146 * var(--u) + var(--edge-right)); bottom: calc(168 * var(--u) + var(--edge-bottom)); }
+.touch-layer.modern .m-melee { right: calc(150 * var(--u) + var(--edge-right)); bottom: calc(86 * var(--u) + var(--edge-bottom)); }
+.touch-layer.modern .m-reload {
+  width: calc(50 * var(--u));
+  height: calc(50 * var(--u));
+  right: calc(58 * var(--u) + var(--edge-right));
+  bottom: calc(206 * var(--u) + var(--edge-bottom));
+}
+.touch-layer.modern .m-jump {
+  width: calc(60 * var(--u));
+  height: calc(60 * var(--u));
+  right: calc(22 * var(--u) + var(--edge-right));
+  bottom: calc(14 * var(--u) + var(--edge-bottom));
+}
+.touch-layer.modern .m-crouch { right: calc(104 * var(--u) + var(--edge-right)); bottom: calc(14 * var(--u) + var(--edge-bottom)); }
+.touch-layer.modern .m-grenade {
+  width: calc(50 * var(--u));
+  height: calc(50 * var(--u));
+  right: calc(142 * var(--u) + var(--edge-right));
+  bottom: calc(246 * var(--u) + var(--edge-bottom));
+}
+.touch-layer.modern .m-grenade-type {
+  width: calc(40 * var(--u));
+  height: calc(40 * var(--u));
+  right: calc(214 * var(--u) + var(--edge-right));
+  bottom: calc(262 * var(--u) + var(--edge-bottom));
+}
+.touch-layer.modern .m-light {
+  width: calc(40 * var(--u));
+  height: calc(40 * var(--u));
+  right: calc(22 * var(--u) + var(--edge-right));
+  bottom: calc(276 * var(--u) + var(--edge-bottom));
+}
+
+/* weapon swap: a wide pill beside crouch, as a weapon slot */
+.touch-layer.modern .m-swap {
+  width: calc(76 * var(--u));
+  height: calc(42 * var(--u));
+  border-radius: calc(21 * var(--u));
+  right: calc(178 * var(--u) + var(--edge-right));
+  bottom: calc(20 * var(--u) + var(--edge-bottom));
+}
+.touch-layer.modern .m-swap .glyph { width: 34%; height: 62%; }
+
+/* left thumb: a second fire button above the stick */
+.touch-layer.modern .m-fire2 {
+  width: calc(60 * var(--u));
+  height: calc(60 * var(--u));
+  left: calc(36 * var(--u) + var(--edge-left));
+  bottom: calc(212 * var(--u) + var(--edge-bottom));
+}
+
+/* pause and score in the top corners */
+.touch-layer.modern .m-top {
+  width: calc(44 * var(--u));
+  height: calc(32 * var(--u));
+  border-radius: calc(16 * var(--u));
+  top: calc(8 * var(--u) + env(safe-area-inset-top));
+}
+.touch-layer.modern .m-top .glyph { width: 40%; height: 56%; }
+.touch-layer.modern .m-top .caption { display: none; }
+.touch-layer.modern .m-score { left: calc(50% - 52 * var(--u)); }
+.touch-layer.modern .m-pause { left: calc(50% + 8 * var(--u)); }
+
+/* the stick: a ring of glass that appears where the thumb lands */
+.touch-layer.modern .touch-stick {
+  width: 120px;
+  height: 120px;
+  left: calc(56 * var(--u) + var(--edge-left));
+  bottom: calc(40 * var(--u) + var(--edge-bottom));
+  border: 2px solid rgba(255, 255, 255, 0.45);
+  background: rgba(8, 10, 14, 0.22);
+  opacity: 0.7;
+}
+
+.touch-layer.modern .touch-knob {
+  left: 34px;
+  top: 34px;
+  width: 52px;
+  height: 52px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+@media (max-height: 400px) {
+  .touch-layer.modern { --u: 0.88px; }
+}
+
+@media (max-height: 340px) {
+  .touch-layer.modern { --u: 0.76px; }
+}
+
+
+/* ---------- the touch layout editor */
+
+.layout-editor {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: radial-gradient(ellipse at 50% 40%, rgba(40, 55, 80, 0.55), rgba(5, 6, 9, 0.9));
+  touch-action: none;
+}
+body.playing .layout-editor { background: rgba(5, 6, 9, 0.45); }
+.layout-editor .touch-layer { display: block !important; }
+.layout-editor .touch-stick { pointer-events: auto; opacity: 0.9; }
+.layout-editor [data-control] { cursor: grab; }
+.layout-editor .editing { outline: 2px dashed #7fd1ff; outline-offset: 4px; }
+.touch-dpad.editing { border-radius: 50%; }
+.editor-bar {
+  position: absolute;
+  z-index: 40;
+  left: 50%;
+  top: calc(8px + env(safe-area-inset-top));
+  transform: translateX(-50%);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  max-width: min(94vw, 720px);
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(14, 17, 23, 0.92);
+  border: 1px solid var(--panel-edge);
+  color: var(--text);
+  font-size: 13px;
+}
+.editor-bar label { display: flex; align-items: center; gap: 6px; }
+.editor-bar input[type=range] { width: 110px; }
+.editor-hint { color: var(--muted); }
+/* the layout is for the screen held sideways */
+@media (orientation: portrait) {
+  .layout-editor::before {
+    content: "Turn your device sideways to edit the layout.";
+    position: absolute;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    text-align: center;
+    background: rgba(5, 6, 9, 0.95);
+    color: var(--text);
+    font-size: 17px;
+  }
+}
+
+/* ---------- touch mode: the game fills the screen (this port's shell)
+
+Phones cannot always make a page element fullscreen (iPhone Safari), so
+touch mode lays the game area over the whole viewport itself, like the
+shell's own fullscreen rules. */
+
+.touch-layer,
+.layout-editor,
+.touch-menu {
+  --text: #e7eef7;
+  --muted: #9aa3b5;
+  --panel-edge: rgba(127, 209, 255, 0.35);
+}
+
+.touch-layer { display: none; }
+body.halo-touch-mode .touch-layer { display: block; }
+body.halo-touch-mode.has-controller .touch-layer { display: none; }
+
+body.halo-touch-mode { overflow: hidden; overscroll-behavior: none; }
+body.halo-touch-mode #game-area {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  margin: 0;
+  padding: 0;
+  width: 100vw;
+  height: 100dvh;
+  max-width: none;
+  background: #000;
+  touch-action: none;
+}
+body.halo-touch-mode #game-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  margin: 0;
+  transform: none;
+}
+body.halo-touch-mode canvas.emscripten.ready {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  box-shadow: none;
+  clip-path: none;
+}
+body.halo-touch-mode #game-frame footer,
+body.halo-touch-mode #player-sidebar,
+body.halo-touch-mode #duke-legend { display: none; }
+
+/* the menu button and its panel */
+.touch-menu-button {
+  position: fixed;
+  z-index: 1003;
+  top: calc(8px + env(safe-area-inset-top));
+  left: calc(8px + env(safe-area-inset-left));
+  width: 40px;
+  height: 34px;
+  padding: 6px 9px;
+  border-radius: 10px;
+  border: 1.5px solid rgba(255, 255, 255, 0.45);
+  background: rgba(8, 10, 14, 0.4);
+  color: rgba(255, 255, 255, 0.9);
+  display: none;
+}
+.touch-menu-button svg { width: 100%; height: 100%; display: block; }
+body.halo-touch-mode .touch-menu-button { display: block; }
+
+.touch-menu {
+  position: fixed;
+  inset: 0;
+  z-index: 1005;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(5, 6, 9, 0.78);
+  color: var(--text);
+  font: 15px/1.4 -apple-system, BlinkMacSystemFont, Roboto, "Segoe UI", sans-serif;
+}
+.touch-menu[hidden] { display: none; }
+.touch-menu .panel {
+  width: min(92vw, 420px);
+  max-height: 92dvh;
+  overflow: auto;
+  padding: 16px 18px;
+  border-radius: 14px;
+  border: 1px solid var(--panel-edge);
+  background: rgba(14, 17, 23, 0.96);
+  display: grid;
+  gap: 12px;
+}
+.touch-menu h2 { margin: 0; font-size: 17px; letter-spacing: 0.06em; text-transform: uppercase; color: #79d1ff; }
+.touch-menu label { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.touch-menu select,
+.touch-menu input[type=range] { flex: 1; max-width: 220px; }
+.touch-menu select { min-height: 34px; border-radius: 8px; border: 1px solid var(--panel-edge); background: #0e1117; color: var(--text); padding: 0 8px; }
+.touch-menu .row { display: flex; flex-wrap: wrap; gap: 8px; }
+.touch-menu .small { color: var(--muted); font-size: 12.5px; margin: 0; }
+
+.touch-ui-button,
+.editor-bar button {
+  min-height: 36px;
+  padding: 6px 14px;
+  border-radius: 9px;
+  border: 1px solid var(--panel-edge);
+  background: rgba(45, 155, 222, 0.16);
+  color: var(--text);
+  font: 600 14px/1 -apple-system, BlinkMacSystemFont, Roboto, "Segoe UI", sans-serif;
+}
+.touch-ui-button.primary,
+.editor-bar button.primary { background: #1f7fc0; border-color: #59b8f5; color: #fff; }
+
+/* the layout is for the screen held sideways */
+.touch-rotate-hint { display: none; }
+@media (orientation: portrait) {
+  body.halo-touch-mode .touch-rotate-hint {
+    position: fixed;
+    inset: 0;
+    z-index: 1004;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    text-align: center;
+    background: rgba(5, 6, 9, 0.94);
+    color: #e7eef7;
+    font: 600 18px/1.4 -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+  }
+}
+
+/* the shell's footer button that turns touch mode on */
+#touch-mode-toggle[hidden] { display: none; }

@@ -37,6 +37,10 @@ symbols in this file:
 #include "main.h"
 #include "rasterizer/xbox/rasterizer_xbox.h"
 
+#ifdef HALO_WEB
+void platform_web_initialize(void);
+#endif
+
 /* ---------- prototypes */
 
 static void fuck_code_in_the_eye(
@@ -101,9 +105,20 @@ shell_idle(
 	return;
 }
 
+#ifdef HALO_WEB
+int main(
+	int argc,
+	char **argv)
+#else
 int main(
 	void)
+#endif
 {
+#ifdef HALO_WEB
+	(void)argc;
+	(void)argv;
+	platform_web_initialize();
+#endif
 	fuck_code_in_the_eye();
 	rasterizer_preinitialize__fill_you_up_with_the_devils_cock();
 	physical_memory_allocate();

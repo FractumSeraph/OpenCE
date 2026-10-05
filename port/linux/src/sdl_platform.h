@@ -59,7 +59,7 @@ struct platform_keystroke
 BOOL platform_sdl_initialize(void);
 /* creates the window and makes its OpenGL context current on this thread */
 BOOL platform_video_initialize(unsigned long width, unsigned long height);
-#ifndef HALO_ANDROID
+#if !defined(HALO_ANDROID) || defined(HALO_WEB)
 BOOL platform_screen_mode(long *width, long *height);
 #endif
 /* Video Setup's resolutions (port/linux/game/menu_tags.c), in pixels: the
@@ -76,6 +76,13 @@ void platform_video_drawable_size(int *width, int *height);
 just written it (the main thread's) */
 void platform_display_apply(void);
 void platform_video_swap(void);
+#ifdef HALO_WEB
+/* Browser performance meter: the main-loop callback brackets one sample;
+platform_video_swap counts frames produced inside it. */
+void platform_web_frame_begin(void);
+void platform_web_frame_end(void);
+void platform_web_frame_stopped(long connection);
+#endif
 /* frames between the 30 Hz ticks at the display's refresh rate, unless
 display.interpolation is false (port/linux/game/render_interpolation.c) */
 int halo_interpolation_enabled(void);
@@ -85,7 +92,7 @@ void platform_mouse_capture(BOOL capture);
 void platform_pump_events(void);
 /* a snapshot of the input state; consume_motion resets the mouse deltas */
 void platform_input_read(struct platform_input_state *state, BOOL consume_motion);
-#ifndef HALO_ANDROID
+#if !defined(HALO_ANDROID) || defined(HALO_WEB)
 /* the pointer in the menus (d3d8_gl.c, halo_ui_pointer_update) */
 struct platform_ui_pointer
 {

@@ -77,6 +77,7 @@ symbols in this file:
 #include "cseries/cseries.h"
 
 #include "game/game_engine_place.h"
+#include "game/game_engine.h"
 #include "game/game_engine_slayer.h"
 #include "game/players.h"
 #include "memory/data.h"
@@ -85,6 +86,7 @@ symbols in this file:
 #include "text/text_group.h"
 #include "text/unicode.h"
 #include "units/units.h"
+
 
 /* ---------- constants */
 

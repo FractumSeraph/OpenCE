@@ -118,6 +118,9 @@ void main_set_game_connection_to_film_playback(
 short main_get_current_solo_level(
 	void);
 
+boolean main_campaign_in_progress(
+	void);
+
 char const *main_get_solo_level_name(
 	short level);
 

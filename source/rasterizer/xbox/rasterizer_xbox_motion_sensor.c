@@ -74,7 +74,7 @@ void rasterizer_set_target_as_texture(
 	long target,
 	boolean filtered);
 
-void rasterizer_set_texture_bitmap_data(
+boolean rasterizer_set_texture_bitmap_data(
 	short stage,
 	struct bitmap_data const *bitmap);
 

@@ -1,0 +1,102 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "halo-web-signaling",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-29",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    // Safe-by-default deployment settings. The exact public game origin is
+    // allowed alongside the two deterministic local-development origins.
+    "ENVIRONMENT": "production",
+    "ALLOWED_ORIGINS": "https://halo-web.otherness-bugs.workers.dev,https://mitchellhynes.com,http://127.0.0.1:8765,http://localhost:8765",
+    "ALLOW_NO_ORIGIN": "false",
+    "PUBLIC_GAME_URL": "https://mitchellhynes.com/halo",
+    "ROOM_TTL_SECONDS": "21600",
+    "SESSION_TTL_SECONDS": "30",
+    "TURN_TTL_SECONDS": "3600",
+    "TURNSTILE_HOSTNAMES": "halo-web.otherness-bugs.workers.dev,mitchellhynes.com",
+    "CLOUDFLARE_ACCOUNT_ID": "bea51ed443abd5b18e9e56723daa7a79",
+    "TURN_ACTOR_HOURLY_EGRESS_CAP_BYTES": "1000000000",
+    "TURN_GLOBAL_DAILY_EGRESS_CAP_BYTES": "10000000000",
+    "DEFAULT_ROOM_CAPACITY": "128",
+    "MAX_ROOM_CAPACITY": "128",
+    "NATIVE_GATEWAY_CONTROL_URL": "https://d2u8lg7djmkct8.cloudfront.net/v1/sessions"
+    // NATIVE_GATEWAY_SECRET is a Wrangler secret shared with the isolated
+    // native gateway through encrypted AWS SSM Parameter Store.
+  },
+  "triggers": {
+    "crons": ["*/5 * * * *"]
+  },
+  "kv_namespaces": [
+    {
+      "binding": "HALO_ABUSE",
+      "id": "39abc5d59c85450e82f75b2abe3e3afa"
+    }
+  ],
+  "analytics_engine_datasets": [
+    {
+      "binding": "TURN_EVENTS",
+      "dataset": "halo_turn_events"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "ROOMS",
+        "class_name": "SignalingRoom"
+      },
+      {
+        "name": "PRESENCE",
+        "class_name": "PlayerPresence"
+      }
+    ]
+  },
+  "ratelimits": [
+    {
+      "name": "ROOM_CREATE_LIMITER",
+      "namespace_id": "41001",
+      "simple": {
+        "limit": 20,
+        "period": 60
+      }
+    },
+    {
+      "name": "SESSION_CREATE_LIMITER",
+      "namespace_id": "41002",
+      "simple": {
+        "limit": 512,
+        "period": 60
+      }
+    },
+    {
+      "name": "TURN_ISSUE_LIMITER",
+      "namespace_id": "41003",
+      "simple": {
+        "limit": 30,
+        "period": 60
+      }
+    }
+  ],
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["SignalingRoom"]
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": ["PlayerPresence"]
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "redact_query_string": true,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 0.01
+    }
+  }
+}

@@ -3065,6 +3065,39 @@ boolean network_game_client_join_first_available_game(
 	return FALSE;
 }
 
+#ifdef HALO_WEB
+/* web: whether the server's authoritative game record has acknowledged one of
+this machine's local players.  Successfully writing an add-player request is
+not the same thing: a pregame request can cross the server's transition into
+the match and be ignored there.  Browser invite flow uses this acknowledgement
+to retry with the correct pregame/ingame message instead of leaving the
+machine connected as an observer. */
+boolean network_game_client_has_local_player(
+	struct network_game_client *client,
+	short local_player_index)
+{
+	long player_index;
+
+	if (!client || local_player_index < 0 ||
+		local_player_index >= MAXIMUM_NUMBER_OF_LOCAL_PLAYERS)
+	{
+		return FALSE;
+	}
+	for (player_index = 0; player_index < MAXIMUM_NUMBER_OF_PLAYERS; player_index++)
+	{
+		struct network_player *player = &client->game.players[player_index];
+
+		if (network_player_is_valid(player) &&
+			player->machine_index == (char)client->machine_index &&
+			player->controller_index == (char)local_player_index)
+		{
+			return TRUE;
+		}
+	}
+	return FALSE;
+}
+
+#endif
 /* ... and puts this machine's players on a team (a team game needs both
 teams), as the pregame screen's team choice does; NONE: the other team from
 another machine's player */

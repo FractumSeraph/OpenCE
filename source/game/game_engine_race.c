@@ -106,6 +106,7 @@ symbols in this file:
 #include "cseries/errors.h"
 #include "game_engine_place.h"
 #include "game_engine_race.h"
+#include "game/game_engine.h"
 #include "game_globals.h"
 #include "players.h"
 #include "objects/objects.h"
@@ -115,6 +116,7 @@ symbols in this file:
 #include "text/text_group.h"
 #include "text/unicode.h"
 #include "units/units.h"
+
 
 /* ---------- constants */
 

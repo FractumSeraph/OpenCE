@@ -1,0 +1,13 @@
+{
+  "name": "halo-web-hosting",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "check": "npm run stage && wrangler deploy --dry-run --outdir .wrangler/dry-run",
+    "deploy": "npm run stage && wrangler deploy",
+    "stage": "python3 ../../tools/web_stage_cloudflare.py"
+  },
+  "devDependencies": {
+    "wrangler": "4.143.0"
+  }
+}

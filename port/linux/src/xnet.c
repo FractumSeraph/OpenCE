@@ -50,6 +50,10 @@ alone peers reach.
 #include "port_config.h"
 #include "p2p.h"
 
+#ifdef HALO_WEB
+#include "../../web/src/web_loopback_net.h"
+#endif
+
 #include <stdlib.h>
 #include <string.h>
 
@@ -1057,6 +1061,11 @@ INT WSAAPI XNetXnAddrToInAddr(const XNADDR *address, const XNKID *key_identifier
 
 	(void)key_identifier;
 	/* an internet play peer's XNADDR carries its identifier */
+#ifdef HALO_WEB
+	if (web_net_peer_address(address->abEnet, &peer))
+		result->s_addr = peer;
+	else
+#endif
 	if (p2p_peer_address(address->abEnet, &peer))
 		result->s_addr = peer;
 	else
@@ -1082,7 +1091,11 @@ DWORD WSAAPI XNetGetTitleXnAddr(XNADDR *address)
 	memset(address, 0, sizeof(*address));
 	address->bSizeOfStruct = sizeof(*address);
 	address->ina.s_addr = ip;
+#ifdef HALO_WEB
+	web_net_local_identifier(address->abEnet, sizeof(address->abEnet));
+#else
 	memcpy(address->abEnet, p2p_identifier(), sizeof(address->abEnet));
+#endif
 	return ip ? (XNET_GET_XNADDR_ETHERNET | XNET_GET_XNADDR_DHCP) : XNET_GET_XNADDR_ETHERNET;
 }
 

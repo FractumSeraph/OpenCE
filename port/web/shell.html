@@ -1,0 +1,3119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <meta name="halo-signaling-url" content=".">
+  <meta name="halo-build-id" content="web-multiplayer-v1">
+  <!-- installable as an app (assets/pwa/install.js) -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0b0d12">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Halo">
+  <link rel="apple-touch-icon" href="assets/pwa/icon-180.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="assets/pwa/icon-192.png">
+    <script>
+      /* Relative URLs need the page to be addressed as a directory: a reverse
+         proxy that exposes this folder as https://example.com/halo (without a
+         trailing slash) would otherwise resolve halo.js against the parent. */
+      (function () {
+        var path = location.pathname;
+        if (!/\/$/.test(path) && !/\.[A-Za-z0-9]+$/.test(path)) {
+          location.replace(path + "/" + location.search + location.hash);
+        }
+      })();
+    </script>
+    <script src="coi-serviceworker.js"></script>
+    <link rel="stylesheet" href="assets/touch/touch-controls.css">
+    <!-- before the game starts: the touch controls' virtual controller must
+         be in navigator.getGamepads() when SDL looks for controllers -->
+    <script src="assets/touch/touch-controls.js"></script>
+    <link rel="stylesheet" href="assets/pwa/install.css">
+    <script src="assets/pwa/install.js"></script>
+    <title>Halo: Combat Evolved</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #050807;
+      color: #e9f3ee;
+    }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+    body {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      background:
+        radial-gradient(circle at 50% -20%, rgba(78, 126, 104, .26), transparent 48%),
+        #050807;
+    }
+    header, footer {
+      display: flex;
+      align-items: center;
+      gap: .8rem;
+      min-height: 2.55rem;
+      padding: .42rem clamp(.65rem, 2vw, 1.15rem);
+      background: rgba(7, 13, 11, .9);
+      border-color: rgba(151, 189, 169, .16);
+      z-index: 2;
+    }
+    header { border-bottom: 1px solid rgba(151, 189, 169, .16); }
+    footer { border-top: 1px solid rgba(151, 189, 169, .16); }
+    .brand {
+      appearance: none;
+      border: 0;
+      border-radius: 0;
+      padding: 0;
+      background: transparent;
+      font-size: .76rem;
+      font-weight: 700;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+      white-space: nowrap;
+      cursor: default;
+    }
+    .brand:hover, .brand:focus-visible { background: transparent; }
+    #status { color: #aebdb5; font-size: .78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #isolation-warning { color: #ffd892; }
+    .spacer { flex: 1; }
+    button {
+      appearance: none;
+      border: 1px solid rgba(181, 219, 198, .28);
+      border-radius: .35rem;
+      padding: .43rem .72rem;
+      color: inherit;
+      background: rgba(115, 155, 134, .15);
+      font: inherit;
+      cursor: pointer;
+    }
+    button:hover { background: rgba(142, 189, 163, .25); }
+    button:focus-visible, input:focus-visible {
+      outline: 2px solid #78c8ff;
+      outline-offset: 2px;
+    }
+    button.primary {
+      border-color: rgba(91, 184, 255, .72);
+      background: rgba(20, 119, 190, .72);
+      font-weight: 700;
+    }
+    button.primary:hover { background: rgba(29, 139, 219, .9); }
+    button:disabled { cursor: wait; opacity: .55; }
+    #online[data-state="waiting"] { color: #bfe2ff; }
+    #online[data-state="connected"] {
+      border-color: rgba(91, 221, 153, .55);
+      color: #bff5d4;
+    }
+    main { position: relative; min-height: 0; display: grid; place-items: center; overflow: hidden; }
+    canvas.emscripten {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      display: block;
+      width: 640px;
+      height: 480px;
+      border: 0;
+      outline: 0;
+      background: #000;
+      object-fit: contain;
+      transform: translate(-50%, -50%) scaleY(-1);
+    }
+    canvas.emscripten.ready {
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      transform: scaleY(-1);
+    }
+    #loading {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      translate: -50% -50%;
+      width: min(26rem, calc(100% - 3rem));
+      padding: 1rem;
+      border: 1px solid rgba(151, 189, 169, .2);
+      border-radius: .6rem;
+      background: rgba(5, 9, 7, .88);
+      box-shadow: 0 1rem 4rem rgba(0, 0, 0, .5);
+      text-align: center;
+      pointer-events: none;
+    }
+    #diagnostics-overlay {
+      position: absolute;
+      inset: clamp(.75rem, 3vw, 2rem);
+      z-index: 8;
+      display: grid;
+      grid-template-rows: auto auto minmax(0, 1fr) auto;
+      width: min(50rem, calc(100% - 1.5rem));
+      max-height: min(36rem, calc(100% - 1.5rem));
+      margin: auto;
+      padding: 1rem;
+      border: 1px solid rgba(151, 189, 169, .28);
+      border-radius: .75rem;
+      background: rgba(4, 10, 8, .96);
+      box-shadow: 0 1.5rem 5rem rgba(0, 0, 0, .75);
+    }
+    .diagnostics-heading { display: flex; align-items: center; gap: 1rem; }
+    .diagnostics-heading h2 { margin: 0; font-size: 1rem; }
+    .diagnostics-stats {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: .65rem;
+      margin: .85rem 0;
+    }
+    .diagnostic-stat {
+      display: grid;
+      gap: .2rem;
+      min-width: 0;
+      padding: .65rem .75rem;
+      border: 1px solid rgba(151, 189, 169, .15);
+      border-radius: .45rem;
+      background: rgba(111, 153, 131, .08);
+    }
+    .diagnostic-stat span { color: #82958b; font-size: .67rem; letter-spacing: .08em; text-transform: uppercase; }
+    .diagnostic-stat output { overflow: hidden; color: #bde0cd; font: .73rem/1.25 ui-monospace, SFMono-Regular, Menlo, monospace; text-overflow: ellipsis; white-space: nowrap; }
+    #diagnostics {
+      min-height: 8rem;
+      margin: 0;
+      padding: .8rem;
+      overflow: auto;
+      color: #ffb9a8;
+      border: 1px solid rgba(255, 185, 168, .12);
+      border-radius: .45rem;
+      background: rgba(0, 0, 0, .32);
+      font: .7rem/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+      text-align: left;
+      white-space: pre-wrap;
+      user-select: text;
+    }
+    #diagnostics:empty::before { content: "No runtime messages."; color: #718078; }
+    .diagnostics-shortcut { margin: .65rem 0 0; color: #64736b; font-size: .68rem; text-align: right; }
+    progress { width: 100%; height: .4rem; margin-top: .8rem; accent-color: #81b796; }
+    footer {
+      position: relative;
+      justify-content: center;
+      color: #89978f;
+      font-size: .76rem;
+    }
+    .game-controls { display: flex; align-items: center; gap: .45rem; }
+    .game-settings-menu { position: relative; }
+    .game-settings-menu > summary { cursor: pointer; list-style: none; }
+    .game-settings-menu > summary::-webkit-details-marker { display: none; }
+    .game-settings-panel {
+      position: absolute;
+      left: 0;
+      bottom: calc(100% + .55rem);
+      z-index: 20;
+      width: min(19rem, calc(100vw - 1.5rem));
+      padding: .75rem;
+      border: 1px solid rgba(91, 184, 255, .38);
+      border-radius: .5rem;
+      background: rgba(2, 15, 30, .97);
+      box-shadow: 0 .8rem 2.4rem rgba(0, 0, 0, .55);
+      text-align: left;
+    }
+    .game-settings-option { display: flex; align-items: center; gap: .55rem; color: #d6eaf5; font-size: .76rem; font-weight: 700; }
+    .game-settings-option input { accent-color: #55bfff; }
+    .game-settings-panel p { margin: .45rem 0 0 1.45rem; color: #7594a7; font-size: .65rem; line-height: 1.35; }
+    .control-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: .42rem;
+      min-height: 2.1rem;
+      padding: .35rem .62rem;
+      border-color: rgba(181, 219, 198, .2);
+      background: rgba(115, 155, 134, .1);
+      font-size: .76rem;
+    }
+    .control-button:hover,
+    .control-button:active,
+    .control-button:focus-visible,
+    .game-settings-menu[open] > summary {
+      color: #edf8ff;
+      border-color: rgba(91, 184, 255, .62);
+      background: rgba(20, 119, 190, .32);
+    }
+    .control-button svg { width: 1rem; height: 1rem; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.7; }
+    #mute.is-muted .sound-wave,
+    #mute:not(.is-muted) .mute-mark { display: none; }
+    .icon-only { width: 2.1rem; padding: .35rem; }
+    #footer-hint { position: absolute; right: clamp(.65rem, 2vw, 1.15rem); }
+    dialog {
+      position: relative;
+      width: min(72rem, calc(100% - 2rem));
+      height: min(46rem, calc(100% - 2rem));
+      max-height: calc(100% - 2rem);
+      padding: 0;
+      overflow: hidden;
+      color: #edf7f2;
+      border: 1px solid rgba(130, 196, 238, .4);
+      border-radius: .8rem;
+      background: rgba(6, 15, 20, .97);
+      box-shadow: 0 1.5rem 5rem rgba(0, 0, 0, .72);
+    }
+    dialog::backdrop {
+      background: rgba(0, 4, 7, .72);
+      backdrop-filter: blur(5px);
+    }
+    .online-card {
+      display: grid;
+      grid-template-columns: minmax(18rem, 21rem) minmax(0, 1fr);
+      min-height: 100%;
+    }
+    .online-flow {
+      position: relative;
+      min-width: 0;
+      padding: 1.25rem 1.35rem 1rem;
+      overflow: auto;
+    }
+    .online-heading {
+      display: flex;
+      align-items: flex-start;
+      gap: 1rem;
+    }
+    .online-heading h2 { margin: 0; font-size: 1.32rem; }
+    .online-heading p { margin: .3rem 0 0; color: #9baeb7; font-size: .8rem; line-height: 1.4; }
+    .icon-button { margin-left: auto; padding: .25rem .5rem; background: transparent; }
+    .online-dialog-close { position: absolute; top: 1.05rem; right: 1.05rem; z-index: 2; margin: 0; }
+    .online-status {
+      margin: .8rem 0 0;
+      padding: .6rem .72rem;
+      border: 1px solid rgba(130, 196, 238, .2);
+      border-radius: .5rem;
+      background: rgba(62, 122, 153, .1);
+      color: #c8dbe4;
+      font-size: .84rem;
+      line-height: 1.45;
+    }
+    .online-status[data-tone="error"] {
+      border-color: rgba(255, 137, 116, .38);
+      background: rgba(133, 43, 31, .18);
+      color: #ffc7bb;
+    }
+    .online-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+    .online-stack { display: grid; gap: .7rem; }
+    .profile-panel {
+      display: flex;
+      flex-direction: column;
+      gap: .9rem;
+      min-width: 0;
+      padding: 1.25rem;
+      overflow: hidden auto;
+      border-right: 1px solid rgba(130, 196, 238, .22);
+      background:
+        linear-gradient(180deg, rgba(29, 73, 92, .34), rgba(6, 18, 24, .88)),
+        radial-gradient(circle at 50% 35%, rgba(76, 144, 174, .28), transparent 50%);
+    }
+    .profile-kicker {
+      color: #80b8d4;
+      font: 700 .67rem/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+    .spartan-preview {
+      position: relative;
+      display: grid;
+      grid-template-rows: minmax(0, 1fr) auto;
+      min-height: 0;
+      height: 22.5rem;
+      margin: 0;
+      isolation: isolate;
+    }
+    .spartan-preview::before {
+      content: "";
+      position: absolute;
+      left: 50%;
+      bottom: 2.2rem;
+      z-index: -1;
+      width: 80%;
+      height: 1.15rem;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, .72);
+      filter: blur(.5rem);
+      translate: -50% 0;
+    }
+    .spartan-image {
+      display: block;
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+      object-fit: contain;
+      object-position: 50% 100%;
+      filter: drop-shadow(0 .9rem 1.2rem rgba(0, 0, 0, .55));
+    }
+    .spartan-preview figcaption {
+      min-width: 0;
+      overflow: hidden;
+      color: #dff3ff;
+      font-weight: 700;
+      text-align: center;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .profile-name { display: grid; gap: .3rem; }
+    .profile-name label, .style-legend { color: #9db0ba; font-size: .72rem; }
+    .profile-name input {
+      width: 100%;
+      min-width: 0;
+      padding: .52rem .6rem;
+      border: 1px solid rgba(181, 219, 230, .27);
+      border-radius: .4rem;
+      color: #edf7f2;
+      background: #0b1a20;
+      font: inherit;
+    }
+    #online-style-options { min-width: 0; margin: 0; padding: 0; border: 0; }
+    .style-legend { margin: 0 0 .3rem; padding: 0; }
+    .style-choices { display: grid; grid-template-columns: repeat(9, 1fr); gap: .36rem; }
+    .style-choice { position: relative; display: grid; place-items: center; min-width: 0; height: 1.65rem; cursor: pointer; }
+    .style-choice input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+    .style-swatch {
+      width: 1.12rem;
+      height: 1.12rem;
+      border: 1px solid rgba(255, 255, 255, .32);
+      border-radius: 50%;
+      background: var(--player-color, #78986a);
+      box-shadow: 0 0 0 0 rgba(146, 205, 172, .7);
+      transition: box-shadow .12s ease, transform .12s ease;
+    }
+    .style-choice input:checked + .style-swatch { box-shadow: 0 0 0 2px #07100c, 0 0 0 4px #a6d4bb; transform: scale(.9); }
+    .style-choice input:focus-visible + .style-swatch { outline: 2px solid #78c8ff; outline-offset: 3px; }
+    .style-choice:has(input:disabled) { cursor: not-allowed; opacity: .5; }
+    [data-style="white"] { --player-color: #d9ddd8; }
+    [data-style="black"] { --player-color: #252927; }
+    [data-style="red"] { --player-color: #b54237; }
+    [data-style="blue"] { --player-color: #3d66b3; }
+    [data-style="sage"] { --player-color: #7e8f68; }
+    [data-style="yellow"] { --player-color: #d9b83e; }
+    [data-style="lime"] { --player-color: #83b94b; }
+    [data-style="pink"] { --player-color: #d76e9c; }
+    [data-style="purple"] { --player-color: #7957aa; }
+    [data-style="cyan"] { --player-color: #51bdc3; }
+    [data-style="cornflower"] { --player-color: #7489c2; }
+    [data-style="orange"] { --player-color: #cf742d; }
+    [data-style="teal"] { --player-color: #35877f; }
+    [data-style="forest"] { --player-color: #3f6b42; }
+    [data-style="brown"] { --player-color: #71513b; }
+    [data-style="tan"] { --player-color: #b39a6d; }
+    [data-style="maroon"] { --player-color: #733643; }
+    [data-style="rose"] { --player-color: #ae6170; }
+    .wizard-steps {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: .35rem;
+      margin: 1rem 0 .8rem;
+      padding: 0;
+      list-style: none;
+    }
+    .wizard-step {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: .35rem;
+      min-width: 0;
+      color: #718690;
+      font-size: .7rem;
+    }
+    .wizard-step::before {
+      content: attr(data-number);
+      display: grid;
+      place-items: center;
+      width: 1.25rem;
+      height: 1.25rem;
+      border: 1px solid rgba(130, 196, 238, .25);
+      border-radius: 50%;
+      font: 700 .65rem/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .wizard-step[aria-current="step"] { color: #d9effa; }
+    .wizard-step[aria-current="step"]::before { border-color: #59b9f5; background: rgba(20, 119, 190, .52); }
+    .wizard-step[data-complete="true"] { color: #95cdb0; }
+    .wizard-step[data-complete="true"]::before { content: "✓"; border-color: #5ecb91; }
+    .host-setup {
+      min-height: 0;
+      padding: .85rem;
+      border: 1px solid rgba(130, 196, 238, .18);
+      border-radius: .65rem;
+      background: rgba(20, 51, 68, .18);
+    }
+    .host-setup-title {
+      margin: 0;
+      color: #dcecf4;
+      font-size: .88rem;
+      font-weight: 700;
+    }
+    .host-field { display: grid; gap: .3rem; min-width: 0; }
+    .host-field label { color: #9db0ba; font-size: .75rem; }
+    .host-field select {
+      min-width: 0;
+      width: 100%;
+      padding: .58rem .65rem;
+      border: 1px solid rgba(181, 219, 230, .27);
+      border-radius: .4rem;
+      color: #edf7f2;
+      background: #0b1a20;
+      font: inherit;
+    }
+    .picker-select { position: absolute; width: 1px !important; height: 1px; padding: 0 !important; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0 !important; }
+    .choice-grid {
+      display: grid;
+      gap: .55rem;
+      margin-top: .65rem;
+    }
+    .map-choice-grid { grid-template-columns: repeat(auto-fit, minmax(7.75rem, 1fr)); }
+    .mode-choice-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .visual-choice {
+      position: relative;
+      min-width: 0;
+      cursor: pointer;
+    }
+    .visual-choice > input {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .visual-choice-card {
+      display: grid;
+      min-width: 0;
+      height: 100%;
+      overflow: hidden;
+      border: 1px solid rgba(131, 180, 204, .22);
+      border-radius: .48rem;
+      background: rgba(6, 18, 25, .72);
+      transition: border-color .12s ease, background .12s ease, transform .12s ease;
+    }
+    .visual-choice:hover .visual-choice-card { border-color: rgba(104, 194, 244, .56); background: rgba(15, 50, 69, .75); }
+    .visual-choice > input:checked + .visual-choice-card,
+    .visual-choice[data-selected="true"] .visual-choice-card {
+      border-color: #5ac0fb;
+      background: rgba(21, 86, 124, .52);
+      box-shadow: 0 0 0 1px rgba(90, 192, 251, .25), inset 0 0 1.3rem rgba(42, 154, 219, .12);
+    }
+    .visual-choice > input:focus-visible + .visual-choice-card { outline: 2px solid #a8ddff; outline-offset: 2px; }
+    .visual-choice:has(input:disabled) { cursor: wait; opacity: .52; }
+    .map-choice-card { grid-template-rows: 4.7rem auto; }
+    .map-choice-card img {
+      width: 100%;
+      height: 4.7rem;
+      object-fit: cover;
+      object-position: center;
+      background: #071118;
+    }
+    .choice-label {
+      align-self: center;
+      min-width: 0;
+      padding: .42rem .5rem;
+      overflow: hidden;
+      color: #d8e8ef;
+      font-size: .7rem;
+      font-weight: 650;
+      line-height: 1.15;
+      text-align: center;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .mode-choice-card {
+      grid-template-columns: 3.25rem minmax(0, 1fr);
+      align-items: center;
+      min-height: 4.35rem;
+      padding: .45rem .55rem;
+    }
+    .mode-choice-card img { width: 2.8rem; height: 2.8rem; object-fit: contain; }
+    .mode-choice-card .choice-label { padding: .25rem; text-align: left; white-space: normal; }
+    .wizard-actions { display: flex; justify-content: flex-end; gap: .5rem; margin-top: .7rem; }
+    .advanced-settings {
+      margin-top: .7rem;
+      border: 1px solid rgba(91, 184, 255, .2);
+      border-radius: .45rem;
+      background: rgba(4, 24, 42, .42);
+    }
+    .advanced-settings > summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: .6rem;
+      padding: .58rem .65rem;
+      color: #b9d9eb;
+      cursor: pointer;
+      font-size: .76rem;
+      font-weight: 700;
+      list-style: none;
+    }
+    .advanced-settings > summary::-webkit-details-marker { display: none; }
+    .advanced-settings > summary::after { color: #67c9ff; content: "+"; font-size: 1rem; }
+    .advanced-settings[open] > summary::after { content: "−"; }
+    .advanced-settings-optional { color: #718fa1; font-size: .62rem; font-weight: 500; }
+    .advanced-settings-body { display: grid; gap: .65rem; padding: 0 .65rem .7rem; }
+    .advanced-toggle,
+    .advanced-check {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      color: #bdd2de;
+      font-size: .72rem;
+    }
+    .advanced-toggle { padding-bottom: .55rem; border-bottom: 1px solid rgba(91, 184, 255, .14); }
+    .advanced-toggle input,
+    .advanced-check input { accent-color: #55bfff; }
+    .advanced-fields {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: .55rem;
+      margin: 0;
+      padding: 0;
+      border: 0;
+    }
+    .advanced-fields:disabled { opacity: .42; }
+    .advanced-number { display: grid; gap: .28rem; color: #8eabba; font-size: .64rem; }
+    .advanced-number input {
+      min-width: 0;
+      width: 100%;
+      padding: .42rem .5rem;
+      border: 1px solid rgba(112, 190, 235, .25);
+      border-radius: .3rem;
+      color: #e7f5fc;
+      background: rgba(0, 8, 16, .5);
+      font: .74rem/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .advanced-checks { display: grid; grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .42rem .7rem; }
+    .join-direct { margin-top: .7rem; color: #8fa1aa; font-size: .76rem; }
+    .join-direct summary { width: fit-content; cursor: pointer; }
+    #online-wizard:has(#online-setup[hidden]) #online-wizard-steps { display: none; }
+    .join-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .5rem; margin-top: .6rem; }
+    .join-row input, #invite-link {
+      min-width: 0;
+      width: 100%;
+      padding: .58rem .65rem;
+      border: 1px solid rgba(181, 219, 230, .27);
+      border-radius: .4rem;
+      color: #edf7f2;
+      background: rgba(0, 0, 0, .27);
+      font: .82rem/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .invite-label { color: #9db0ba; font-size: .78rem; }
+    #online-detail { margin: .75rem 0 0; color: #80949e; font-size: .7rem; line-height: 1.4; }
+    .profile-join-action {
+      display: grid;
+      gap: .7rem;
+      margin-top: auto;
+      padding-top: .9rem;
+      border-top: 1px solid rgba(130, 196, 238, .18);
+      text-align: center;
+    }
+    .profile-join-action button { width: 100%; min-height: 2.7rem; }
+    .human-verification {
+      width: 100%;
+      display: grid;
+      gap: .42rem;
+      margin-top: auto;
+    }
+    .turnstile-slot {
+      position: relative;
+      z-index: 0;
+      width: 100%;
+      min-height: 0;
+      display: grid;
+      overflow: hidden;
+      place-items: center;
+    }
+    .human-verification[data-state="ready"] .turnstile-slot {
+      height: 0;
+      pointer-events: none;
+    }
+    .verification-feedback {
+      min-height: 1.8rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: .55rem;
+      padding: .34rem .55rem;
+      border: 1px solid rgba(76, 171, 226, .2);
+      border-radius: .35rem;
+      background: rgba(4, 28, 48, .54);
+    }
+    .verification-status {
+      display: inline-flex;
+      align-items: center;
+      gap: .38rem;
+      color: rgba(188, 218, 237, .84);
+      font-size: .72rem;
+      letter-spacing: .04em;
+    }
+    .verification-status::before {
+      content: "";
+      width: .55rem;
+      height: .55rem;
+      flex: 0 0 auto;
+      border: 1px solid rgba(91, 190, 248, .32);
+      border-top-color: #67c9ff;
+      border-radius: 50%;
+      animation: verification-spin .8s linear infinite;
+    }
+    .human-verification[data-state="ready"] .verification-feedback {
+      border-color: rgba(104, 213, 154, .28);
+      background: rgba(7, 54, 38, .42);
+    }
+    .human-verification[data-state="ready"] .verification-status { color: #a7e6c1; }
+    .human-verification[data-state="ready"] .verification-status::before {
+      content: "✓";
+      width: auto;
+      height: auto;
+      border: 0;
+      color: #70d99d;
+      font-size: .82rem;
+      line-height: 1;
+      animation: none;
+    }
+    .human-verification[data-state="error"] .verification-feedback {
+      border-color: rgba(255, 177, 94, .34);
+      background: rgba(66, 35, 8, .45);
+    }
+    .human-verification[data-state="error"] .verification-status { color: #ffd4a4; }
+    .human-verification[data-state="error"] .verification-status::before {
+      content: "!";
+      width: auto;
+      height: auto;
+      border: 0;
+      color: #ffbd73;
+      font-weight: 800;
+      animation: none;
+    }
+    .verification-retry {
+      min-height: 1.7rem;
+      padding: .24rem .58rem;
+      border-color: rgba(255, 195, 127, .4);
+      color: #ffe1bf;
+      font-size: .68rem;
+      white-space: nowrap;
+    }
+    @keyframes verification-spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) {
+      .verification-status::before { animation: none; }
+    }
+    #online-join-summary { margin: 0; color: #adbec6; font-size: .82rem; line-height: 1.45; }
+    #online-dialog[data-view="join"] {
+      width: min(21rem, calc(100% - 1.4rem));
+      height: min(45rem, calc(100% - 1.4rem));
+    }
+    #online-dialog[data-view="join"] .online-card { grid-template-columns: 1fr; }
+    #online-dialog[data-view="join"] .online-flow { display: none; }
+    #online-dialog[data-view="join"] .profile-panel {
+      display: flex;
+      padding: 1.1rem;
+      overflow: hidden auto;
+      border-right: 0;
+      border-bottom: 0;
+    }
+    #online-dialog[data-view="join"] .profile-join-action {
+      position: sticky;
+      bottom: -.1rem;
+      z-index: 2;
+      padding-bottom: .15rem;
+      background: linear-gradient(180deg, rgba(2, 13, 31, 0), rgba(2, 13, 31, .98) 28%);
+    }
+    #online-dialog[data-view="join"] .spartan-preview { height: 20rem; }
+    #player-sidebar {
+      position: absolute;
+      left: .75rem;
+      top: .75rem;
+      z-index: 5;
+      width: min(16rem, calc(100% - 1.5rem));
+      max-height: calc(100% - 1.5rem);
+      overflow: auto;
+      overscroll-behavior: contain;
+      border: 1px solid rgba(132, 196, 164, .25);
+      border-radius: .6rem;
+      background: rgba(5, 13, 10, .88);
+      box-shadow: 0 .8rem 2.2rem rgba(0, 0, 0, .42);
+      backdrop-filter: blur(9px);
+    }
+    .sidebar-launch {
+      display: grid;
+      gap: .4rem;
+      padding: .65rem;
+      background: linear-gradient(135deg, rgba(35, 91, 68, .3), rgba(8, 22, 17, .08));
+    }
+    .sidebar-kicker {
+      color: #8eaa9b;
+      font-size: .61rem;
+      font-weight: 700;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+    .live-player-count {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: .32rem;
+      width: fit-content;
+      color: rgba(151, 194, 218, .66);
+      font: 600 .56rem/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: .055em;
+      text-transform: uppercase;
+    }
+    .live-player-count::before {
+      width: .34rem;
+      height: .34rem;
+      border-radius: 50%;
+      background: rgba(88, 201, 153, .72);
+      box-shadow: 0 0 .45rem rgba(88, 201, 153, .36);
+      content: "";
+    }
+    .live-player-count-item + .live-player-count-item::before {
+      margin-right: .32rem;
+      color: rgba(151, 194, 218, .32);
+      content: "·";
+    }
+    #online {
+      width: 100%;
+      min-height: 2.55rem;
+      border-color: rgba(91, 184, 255, .58);
+      background: rgba(20, 119, 190, .62);
+      font-weight: 750;
+      text-align: center;
+    }
+    #online:hover { background: rgba(29, 139, 219, .82); }
+    #online[data-state="waiting"] { color: #d6edff; }
+    #online[data-state="connected"] {
+      border-color: rgba(91, 221, 153, .55);
+      color: #d5f8e2;
+      background: rgba(37, 122, 78, .48);
+    }
+    #player-sidebar[data-online-active="false"] .sidebar-roster { display: none; }
+    .player-sidebar-heading { display: flex; align-items: center; min-height: 2.35rem; padding: .5rem .65rem; }
+    .player-sidebar-heading h2 { margin: 0; font-size: .78rem; }
+    #player-count {
+      display: grid;
+      place-items: center;
+      min-width: 3.5rem;
+      height: 1.25rem;
+      margin-left: .42rem;
+      padding: 0 .3rem;
+      border-radius: 999px;
+      color: #bde8cf;
+      background: rgba(58, 152, 99, .25);
+      font: 700 .65rem/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    #player-sidebar-toggle { display: none; min-width: 2.25rem; min-height: 2.25rem; margin-left: auto; padding: .2rem .35rem; border: 0; background: transparent; }
+    #player-list { display: grid; gap: .18rem; max-height: 18rem; margin: 0; padding: 0 .4rem .45rem; overflow: auto; list-style: none; }
+    #player-list li, .player-card { display: flex; align-items: center; gap: .48rem; min-width: 0; padding: .4rem .35rem; border-radius: .35rem; color: #d9e9e0; font-size: .73rem; }
+    #player-list li:hover, .player-card:hover { background: rgba(123, 177, 148, .08); }
+    .player-swatch, .player-avatar { flex: 0 0 auto; width: .72rem; height: .72rem; border: 1px solid rgba(255, 255, 255, .25); border-radius: 50%; background: var(--player-color, #78986a); }
+    .player-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .player-you, .player-role { margin-left: auto; color: #718a7e; font-size: .62rem; text-transform: uppercase; }
+    #player-empty { margin: 0; padding: 0 .75rem .7rem; color: #708078; font-size: .7rem; }
+    .sidebar-invite {
+      display: grid;
+      gap: .42rem;
+      padding: .65rem;
+      border-top: 1px solid rgba(132, 196, 164, .2);
+      background: rgba(20, 54, 40, .16);
+    }
+    .sidebar-invite-label { color: #86a895; font-size: .62rem; letter-spacing: .08em; text-transform: uppercase; }
+    .sidebar-invite-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .4rem; }
+    #player-sidebar #invite-link { min-width: 0; padding: .45rem .5rem; font-size: .67rem; }
+    .sidebar-invite-row button { width: 4.8rem; min-width: 0; padding: .38rem .52rem; font-size: .67rem; white-space: nowrap; }
+    .sidebar-copy-status { margin: 0; color: #b8cbc1; font-size: .65rem; line-height: 1.35; }
+    #online-leave-host { width: 100%; padding: .34rem .48rem; color: #9eb0a6; background: transparent; font-size: .67rem; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+    [hidden] { display: none !important; }
+
+    /* Halo CE browser shell ------------------------------------------------ */
+    :root {
+      --halo-ink: #020713;
+      --halo-panel: rgba(3, 15, 31, .9);
+      --halo-panel-soft: rgba(5, 25, 48, .72);
+      --halo-line: rgba(31, 157, 255, .48);
+      --halo-line-strong: #18a8ff;
+      --halo-glow: #70c9ff;
+      --halo-text: #e5f4ff;
+      --halo-muted: #7395ae;
+      background: var(--halo-ink);
+      color: var(--halo-text);
+      font-family: "Arial Narrow", "Avenir Next Condensed", "Segoe UI", sans-serif;
+    }
+    body {
+      display: block;
+      position: relative;
+      isolation: isolate;
+      background:
+        linear-gradient(90deg, rgba(1, 8, 21, .8), rgba(0, 13, 31, .28) 48%, rgba(0, 8, 20, .68)),
+        linear-gradient(180deg, rgba(1, 7, 18, .2), rgba(1, 8, 20, .72)),
+        url("assets/ui/shell/halo-ce-ring-menu.jpg") center / cover fixed no-repeat,
+        var(--halo-ink);
+    }
+    body::before,
+    body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+    }
+    body::before {
+      z-index: -1;
+      background:
+        radial-gradient(circle at 50% 46%, rgba(0, 77, 143, .12), transparent 38%),
+        linear-gradient(90deg, rgba(0, 7, 18, .34), transparent 23%, transparent 77%, rgba(0, 7, 18, .34));
+    }
+    body::after {
+      z-index: 30;
+      opacity: .14;
+      background: repeating-linear-gradient(180deg, rgba(104, 195, 255, .08) 0 1px, transparent 1px 4px);
+      mix-blend-mode: screen;
+    }
+    header {
+      position: absolute;
+      top: .75rem;
+      right: .75rem;
+      z-index: 7;
+      min-height: 0;
+      padding: .34rem .55rem;
+      border: 1px solid rgba(24, 168, 255, .28);
+      background: rgba(2, 14, 30, .76);
+      box-shadow: 0 .65rem 2rem rgba(0, 0, 0, .34);
+      clip-path: polygon(.45rem 0, 100% 0, 100% calc(100% - .45rem), calc(100% - .45rem) 100%, 0 100%, 0 .45rem);
+      backdrop-filter: blur(8px);
+    }
+    .brand {
+      color: #dff4ff;
+      font-size: .72rem;
+      letter-spacing: .24em;
+      text-shadow: 0 0 .8rem rgba(65, 179, 255, .38);
+    }
+    #status, footer { color: #7998ad; }
+    button {
+      border-color: var(--halo-line);
+      border-radius: .16rem;
+      color: var(--halo-text);
+      background: linear-gradient(180deg, rgba(11, 52, 83, .76), rgba(4, 22, 43, .86));
+      box-shadow: inset 0 0 1rem rgba(22, 135, 210, .07);
+      letter-spacing: .025em;
+    }
+    button:hover {
+      border-color: rgba(87, 196, 255, .82);
+      background: linear-gradient(180deg, rgba(15, 76, 119, .88), rgba(5, 34, 65, .94));
+      box-shadow: inset 0 0 1rem rgba(32, 159, 237, .16), 0 0 .7rem rgba(27, 152, 232, .12);
+    }
+    button.primary {
+      border-color: rgba(81, 193, 255, .88);
+      background: linear-gradient(180deg, rgba(8, 111, 183, .92), rgba(2, 61, 111, .94));
+      box-shadow: inset 0 0 1.2rem rgba(85, 202, 255, .17), 0 0 .8rem rgba(24, 155, 245, .13);
+    }
+    button.primary:hover { background: linear-gradient(180deg, rgba(16, 142, 224, .96), rgba(3, 82, 145, .98)); }
+    main {
+      position: absolute;
+      inset: 0;
+      isolation: isolate;
+      background:
+        linear-gradient(90deg, rgba(1, 7, 18, .24), transparent 22%, transparent 78%, rgba(1, 7, 18, .24)),
+        radial-gradient(circle at 58% 50%, rgba(5, 39, 73, .18), transparent 44%);
+    }
+    #game-frame {
+      position: absolute;
+      left: calc(50% + 7.5rem);
+      top: 50%;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: .65rem;
+      width: min(74vw, 80rem, calc(177.7778dvh - 9rem));
+      max-width: calc(100% - 20rem);
+      max-height: calc(100% - 1.5rem);
+      transform: translate(-50%, -50%);
+    }
+    #game-frame canvas.emscripten {
+      position: relative;
+      inset: auto;
+      left: auto;
+      top: auto;
+      z-index: 1;
+      max-width: 100%;
+      background: #041020;
+      transform: scaleY(-1);
+    }
+    #game-frame canvas.emscripten.ready {
+      inset: auto;
+      left: auto;
+      top: auto;
+      width: 100%;
+      height: auto;
+      max-width: 100%;
+      max-height: none;
+      aspect-ratio: 16 / 9;
+      background: #02050b;
+      transform: scaleY(-1);
+    }
+    #campaign-loading {
+      position: absolute;
+      left: 50%;
+      bottom: 3.4rem;
+      z-index: 4;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: .35rem .8rem;
+      width: min(24rem, calc(100% - 2rem));
+      padding: .62rem .75rem;
+      border: 1px solid rgba(255, 255, 255, .2);
+      color: #fff;
+      background: rgba(0, 0, 0, .9);
+      box-shadow: 0 .6rem 2rem rgba(0, 0, 0, .45);
+      font-size: .72rem;
+      line-height: 1.25;
+      pointer-events: none;
+      translate: -50% 0;
+    }
+    #campaign-loading[hidden] { display: none; }
+    #campaign-loading-label {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    #campaign-loading-percent {
+      color: rgba(255, 255, 255, .72);
+      font-variant-numeric: tabular-nums;
+    }
+    #campaign-loading progress {
+      grid-column: 1 / -1;
+      width: 100%;
+      height: 2px;
+      margin: 0;
+      border: 0;
+      accent-color: #fff;
+      background: rgba(255, 255, 255, .18);
+    }
+    #campaign-loading progress::-webkit-progress-bar { background: rgba(255, 255, 255, .18); }
+    #campaign-loading progress::-webkit-progress-value { background: #fff; box-shadow: none; }
+    #campaign-loading progress::-moz-progress-bar { background: #fff; }
+    #game-frame footer {
+      position: relative;
+      z-index: 2;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      align-items: center;
+      gap: .75rem;
+      width: 100%;
+      min-height: 2.1rem;
+      padding: 0 .15rem;
+      border: 0;
+      background: transparent;
+      box-shadow: none;
+    }
+    #footer-hint {
+      position: static;
+      max-width: none;
+      margin-left: 0;
+      overflow: hidden;
+      text-align: right;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .site-credit {
+      min-width: 0;
+      overflow: hidden;
+      color: #5f8199;
+      font-size: .74rem;
+      letter-spacing: .025em;
+      text-align: center;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .site-credit a,
+    #about-open {
+      min-height: 0;
+      padding: 0;
+      border: 0;
+      color: #78bfe7;
+      background: transparent;
+      box-shadow: none;
+      font-size: inherit;
+      letter-spacing: inherit;
+      text-decoration: underline;
+      text-underline-offset: .18em;
+    }
+    .site-credit a:hover,
+    #about-open:hover { color: #c6ecff; background: transparent; box-shadow: none; }
+    #isolation-warning {
+      position: absolute;
+      left: .15rem;
+      bottom: calc(100% + .35rem);
+    }
+    #game-area:fullscreen #game-frame {
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      max-width: 100%;
+      max-height: 100%;
+      transform: none;
+    }
+    #game-area:fullscreen canvas.emscripten.ready {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+      box-shadow: none;
+      clip-path: none;
+    }
+    #game-area:fullscreen #game-frame footer {
+      display: none;
+    }
+    #game-area:fullscreen #campaign-loading { bottom: 1.25rem; }
+    #game-area:fullscreen #player-sidebar,
+    #game-area:fullscreen #duke-legend { display: none; }
+
+    #duke-legend {
+      position: absolute;
+      left: .75rem;
+      bottom: .75rem;
+      z-index: 5;
+      display: grid;
+      justify-items: center;
+      gap: .55rem;
+      width: 17rem;
+      padding: .65rem .72rem .72rem;
+      border: 1px solid rgba(34, 151, 220, .3);
+      background: rgba(2, 15, 30, .74);
+      box-shadow: 0 .65rem 2rem rgba(0, 0, 0, .34);
+      clip-path: polygon(.55rem 0, 100% 0, 100% calc(100% - .55rem), calc(100% - .55rem) 100%, 0 100%, 0 .55rem);
+      backdrop-filter: blur(8px);
+    }
+    .duke-figure { display: grid; justify-items: center; margin: 0; }
+    .duke-controller {
+      display: block;
+      width: 10.5rem;
+      height: auto;
+      filter: drop-shadow(0 .65rem .75rem rgba(0, 0, 0, .5));
+    }
+    .duke-bindings {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: .28rem .7rem;
+      width: 100%;
+      margin: 0;
+    }
+    .duke-binding { display: flex; align-items: baseline; gap: .28rem; min-width: 0; }
+    .duke-binding dt, .duke-binding dd { margin: 0; }
+    .duke-binding dt {
+      flex: 0 0 auto;
+      color: #73c8f5;
+      font-size: .7rem;
+      font-weight: 760;
+      letter-spacing: .045em;
+      text-transform: uppercase;
+    }
+    .duke-binding dd {
+      overflow: hidden;
+      color: #c4d8e5;
+      font-size: .72rem;
+      letter-spacing: .02em;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    #about-dialog {
+      width: min(29rem, calc(100% - 1.4rem));
+      height: fit-content;
+      min-height: 0;
+      max-height: calc(100% - 1.4rem);
+      block-size: fit-content;
+      padding: 0;
+      overflow: hidden;
+    }
+    .about-card {
+      position: relative;
+      display: grid;
+      grid-template-columns: 4.2rem minmax(0, 1fr);
+      gap: .9rem;
+      align-items: start;
+      padding: 1.1rem 1.15rem;
+    }
+    .about-jester {
+      display: block;
+      width: 3.8rem;
+      height: auto;
+      margin-top: .1rem;
+      filter: drop-shadow(0 .45rem .7rem rgba(0, 0, 0, .42));
+      transform: rotate(-2deg);
+    }
+    .about-copy { min-width: 0; }
+    .about-copy h2 {
+      margin: 0 2rem .45rem 0;
+      color: #bfe8ff;
+      font-size: .9rem;
+      font-weight: 650;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+    .about-copy ul { display: grid; gap: .48rem; margin: 0; padding-left: 1rem; }
+    .about-copy li { color: #9cb4c4; font-size: .76rem; line-height: 1.45; }
+    .about-copy a { color: #71c8f6; text-underline-offset: .16em; }
+    .about-copy a:hover { color: #c9eeff; }
+    .about-support { list-style: none; margin-left: -1rem; }
+    #about-close { position: absolute; top: .62rem; right: .62rem; z-index: 1; }
+
+    #loading {
+      inset: 0;
+      z-index: 20;
+      display: grid;
+      width: auto;
+      padding: clamp(1rem, 4vw, 3rem);
+      overflow: hidden;
+      border: 0;
+      border-radius: 0;
+      box-shadow: none;
+      place-items: center;
+      translate: none;
+      background:
+        linear-gradient(90deg, rgba(1, 8, 24, .7), rgba(1, 14, 34, .46) 53%, rgba(0, 7, 20, .64)),
+        linear-gradient(180deg, rgba(0, 7, 20, .12), rgba(0, 7, 20, .52)),
+        url("assets/ui/shell/halo-ce-ring-menu.jpg") center / cover no-repeat,
+        #020713;
+    }
+    #loading::before,
+    #loading::after {
+      content: "";
+      position: absolute;
+      pointer-events: none;
+    }
+    #loading::before {
+      inset: 0;
+      opacity: .08;
+      background: repeating-linear-gradient(180deg, rgba(83, 188, 255, .12) 0 1px, transparent 1px 4px);
+    }
+    #loading::after {
+      display: none;
+    }
+    .loading-panel {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: 2.4rem minmax(0, 1fr);
+      grid-template-rows: 1rem 1.25rem .3rem;
+      column-gap: .9rem;
+      row-gap: .28rem;
+      align-items: center;
+      width: min(20rem, calc(100vw - 2rem));
+      height: 5.25rem;
+      padding: .95rem 1.1rem;
+      overflow: hidden;
+      border: 1px solid rgba(37, 166, 247, .38);
+      background:
+        linear-gradient(180deg, rgba(7, 30, 57, .82), rgba(2, 13, 31, .92)),
+        repeating-linear-gradient(90deg, rgba(67, 172, 237, .04) 0 1px, transparent 1px 24px);
+      box-shadow: inset 0 0 1.8rem rgba(0, 113, 189, .08), 0 .8rem 2.5rem rgba(0, 0, 0, .48);
+      clip-path: polygon(.65rem 0, calc(100% - .65rem) 0, 100% .65rem, 100% calc(100% - .65rem), calc(100% - .65rem) 100%, .65rem 100%, 0 calc(100% - .65rem), 0 .65rem);
+    }
+    .loading-subtitle {
+      grid-column: 2;
+      grid-row: 1;
+      align-self: end;
+      color: #77b9df;
+      font-size: .57rem;
+      font-weight: 700;
+      letter-spacing: .2em;
+      text-transform: uppercase;
+    }
+    .loading-orbit {
+      position: relative;
+      grid-column: 1;
+      grid-row: 1 / 4;
+      width: 2.25rem;
+      height: 2.25rem;
+      margin: 0;
+      border: 1px solid rgba(68, 188, 255, .22);
+      border-radius: 50%;
+      box-shadow: inset 0 0 1.2rem rgba(29, 159, 235, .09), 0 0 1.2rem rgba(29, 159, 235, .08);
+    }
+    .loading-orbit::before,
+    .loading-orbit::after {
+      content: "";
+      position: absolute;
+      border-radius: 50%;
+    }
+    .loading-orbit::before {
+      inset: .38rem;
+      border: 2px solid transparent;
+      border-top-color: #70d3ff;
+      border-right-color: rgba(40, 167, 244, .62);
+      animation: halo-orbit 1.15s linear infinite;
+      filter: drop-shadow(0 0 .32rem #1da9f7);
+    }
+    .loading-orbit::after {
+      left: 50%;
+      top: 50%;
+      width: .42rem;
+      height: .42rem;
+      background: #a6e4ff;
+      box-shadow: 0 0 .75rem #36b9ff;
+      translate: -50% -50%;
+    }
+    @keyframes halo-orbit { to { rotate: 1turn; } }
+    #loading-label {
+      grid-column: 2;
+      grid-row: 2;
+      min-width: 0;
+      min-height: 0;
+      margin: 0;
+      overflow: hidden;
+      color: #d4efff;
+      font-size: .72rem;
+      letter-spacing: .025em;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    #loading progress {
+      grid-column: 2;
+      grid-row: 3;
+      width: 100%;
+      height: .26rem;
+      margin: 0;
+      overflow: hidden;
+      border: 0;
+      border-radius: 0;
+      accent-color: #1dacff;
+      background: rgba(55, 154, 216, .13);
+    }
+    #loading progress[hidden] {
+      display: block !important;
+      visibility: hidden;
+    }
+    progress::-webkit-progress-bar { background: rgba(55, 154, 216, .13); }
+    progress::-webkit-progress-value { background: linear-gradient(90deg, #076fbc, #70d9ff); box-shadow: 0 0 .6rem rgba(72, 195, 255, .65); }
+    progress::-moz-progress-bar { background: linear-gradient(90deg, #076fbc, #70d9ff); }
+
+    #xiso-dialog {
+      width: min(26rem, calc(100% - 1.25rem));
+      height: min(19rem, calc(100% - 1.25rem));
+      min-height: 0;
+      max-height: calc(100% - 2rem);
+      padding: 0;
+      overflow: auto;
+    }
+    .xiso-card {
+      display: grid;
+      gap: .72rem;
+      padding: clamp(1rem, 3vw, 1.35rem);
+    }
+    .xiso-card h1 {
+      margin: 0;
+      color: #e4f4ff;
+      font-size: clamp(1.15rem, 4vw, 1.4rem);
+      line-height: 1.1;
+    }
+    .xiso-card p { margin: 0; color: #aac0ce; font-size: .75rem; line-height: 1.45; }
+    .xiso-card a { color: #79d1ff; text-underline-offset: .16em; }
+    .xiso-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
+    #xiso-file { position: fixed; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+    #xiso-progress {
+      width: 100%;
+      height: .36rem;
+      border: 0;
+      accent-color: #39bfff;
+    }
+    #xiso-progress[hidden] { display: none; }
+    #xiso-status { min-height: 1.3rem; color: #bcd4e3; }
+    #xiso-status[data-state="error"] { color: #ffd0c7; }
+    #xiso-status[data-state="ready"] { color: #a8f1ca; }
+
+    #diagnostics-overlay,
+    dialog {
+      border-color: rgba(41, 167, 246, .66);
+      border-radius: .18rem;
+      background:
+        linear-gradient(180deg, rgba(5, 25, 48, .98), rgba(2, 11, 27, .99)),
+        repeating-linear-gradient(180deg, rgba(84, 185, 244, .04) 0 1px, transparent 1px 4px);
+      box-shadow: inset 0 0 2.5rem rgba(12, 108, 177, .08), 0 1.5rem 5rem rgba(0, 0, 0, .76), 0 0 1.4rem rgba(10, 129, 215, .12);
+      clip-path: polygon(1rem 0, calc(100% - 1rem) 0, 100% 1rem, 100% calc(100% - 1rem), calc(100% - 1rem) 100%, 1rem 100%, 0 calc(100% - 1rem), 0 1rem);
+    }
+    dialog::backdrop { background: rgba(0, 6, 17, .78); backdrop-filter: blur(7px) saturate(.75); }
+    .profile-panel {
+      border-color: rgba(29, 153, 232, .35);
+      background:
+        radial-gradient(circle at 50% 33%, rgba(16, 107, 171, .24), transparent 45%),
+        repeating-linear-gradient(90deg, rgba(63, 158, 220, .045) 0 1px, transparent 1px 24px),
+        linear-gradient(180deg, rgba(5, 29, 54, .88), rgba(2, 13, 31, .96));
+    }
+    .profile-kicker, .host-setup-title, .online-heading h2 { color: #65c2ff; letter-spacing: .06em; text-transform: uppercase; }
+    .online-heading h2 { font-weight: 600; text-shadow: 0 0 .7rem rgba(45, 169, 246, .25); }
+    .online-heading p, #online-detail, .join-direct, .profile-name label, .style-legend { color: var(--halo-muted); }
+    .host-setup {
+      border-color: rgba(31, 151, 231, .3);
+      border-radius: .18rem;
+      background: rgba(1, 15, 33, .68);
+    }
+    .visual-choice-card {
+      border-color: rgba(40, 143, 209, .32);
+      border-radius: .1rem;
+      background: rgba(1, 12, 28, .86);
+    }
+    .visual-choice:hover .visual-choice-card { border-color: rgba(91, 199, 255, .74); background: rgba(4, 38, 72, .88); }
+    .visual-choice > input:checked + .visual-choice-card,
+    .visual-choice[data-selected="true"] .visual-choice-card {
+      border-color: #42c2ff;
+      background: rgba(5, 52, 93, .82);
+      box-shadow: inset 0 0 1.35rem rgba(33, 164, 237, .13), 0 0 .65rem rgba(35, 166, 240, .18);
+    }
+    .wizard-step { color: #53768f; text-transform: uppercase; letter-spacing: .08em; }
+    .wizard-step[aria-current="step"] { color: #d9f3ff; }
+    .wizard-step[aria-current="step"]::before { border-color: #59c9ff; background: rgba(6, 95, 158, .72); box-shadow: 0 0 .7rem rgba(43, 177, 247, .35); }
+    .wizard-step[data-complete="true"] { color: #78b5d8; }
+    .wizard-step[data-complete="true"]::before { border-color: #53b9ee; }
+    .profile-name input, .host-field select, .join-row input, #invite-link {
+      border-color: rgba(45, 157, 226, .4);
+      border-radius: .12rem;
+      background: rgba(0, 9, 24, .8);
+    }
+    #player-sidebar {
+      border-color: rgba(35, 164, 243, .52);
+      border-radius: .14rem;
+      background:
+        linear-gradient(180deg, rgba(4, 25, 47, .94), rgba(1, 12, 28, .95)),
+        repeating-linear-gradient(180deg, rgba(72, 172, 231, .04) 0 1px, transparent 1px 4px);
+      box-shadow: inset 0 0 1.7rem rgba(17, 109, 176, .07), 0 .8rem 2.4rem rgba(0, 0, 0, .55), 0 0 1rem rgba(14, 119, 193, .11);
+      clip-path: polygon(.75rem 0, 100% 0, 100% calc(100% - .75rem), calc(100% - .75rem) 100%, 0 100%, 0 .75rem);
+      backdrop-filter: blur(12px) saturate(.8);
+    }
+    .sidebar-launch { background: linear-gradient(135deg, rgba(8, 76, 125, .42), rgba(2, 18, 38, .16)); }
+    .sidebar-kicker, .sidebar-invite-label { color: #68bdec; letter-spacing: .16em; }
+    #online { border-color: rgba(62, 184, 249, .78); background: linear-gradient(180deg, rgba(8, 102, 171, .84), rgba(3, 53, 99, .9)); text-transform: uppercase; letter-spacing: .08em; }
+    #online:hover { background: linear-gradient(180deg, rgba(17, 139, 218, .94), rgba(4, 73, 130, .96)); }
+    #online[data-state="connected"] { border-color: rgba(80, 198, 255, .72); color: #d9f4ff; background: rgba(5, 77, 128, .72); }
+    #player-count { color: #cceeff; background: rgba(14, 105, 167, .34); }
+    .player-you, .player-role { color: #6289a2; }
+    .sidebar-invite { border-color: rgba(32, 151, 225, .28); background: rgba(3, 36, 67, .35); }
+    .sidebar-copy-status { color: #a7d5ed; }
+    .control-button {
+      border-color: rgba(45, 155, 222, .36);
+      background: rgba(3, 25, 48, .72);
+    }
+    #focus[data-state="locked"] { border-color: rgba(89, 202, 255, .72); color: #cceeff; background: rgba(5, 79, 130, .72); }
+    #focus[data-state="pending"] { cursor: progress; color: #8bc9ec; }
+    #footer-hint { color: #68869b; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .loading-orbit::before { animation-duration: 2.5s; }
+    }
+    @media (max-width: 860px) {
+      #game-frame {
+        left: 50%;
+        width: min(calc(100% - 1.5rem), calc(177.7778dvh - 7rem));
+        max-width: calc(100% - 1.5rem);
+      }
+      dialog { height: auto; overflow: auto; }
+      .online-card { grid-template-columns: 1fr; min-height: 0; }
+      .profile-panel {
+        display: grid;
+        grid-template-columns: 10rem minmax(0, 1fr);
+        grid-template-rows: auto auto 1fr;
+        padding: 1rem 1.2rem;
+        overflow: visible;
+        border-right: 0;
+        border-bottom: 1px solid rgba(130, 196, 238, .22);
+      }
+      .profile-kicker { grid-column: 1 / -1; }
+      .spartan-preview { grid-row: 2 / 4; height: 13rem; }
+      .profile-name, #online-style-options { align-self: end; }
+      .online-flow { overflow: visible; }
+      .map-choice-grid { grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr)); }
+    }
+    @media (max-width: 600px) {
+      header { top: .45rem; right: .45rem; padding: .28rem .42rem; }
+      #loading { padding: .65rem; }
+      .loading-panel { width: min(20rem, calc(100vw - 1.3rem)); }
+      #game-frame { gap: .42rem; }
+      #game-frame footer {
+        grid-template-columns: auto minmax(0, 1fr);
+        grid-template-areas: "controls hint" "credit credit";
+        gap: .18rem .45rem;
+        min-height: 1.95rem;
+        padding: 0;
+      }
+      .game-controls { grid-area: controls; }
+      .site-credit { grid-area: credit; }
+      #footer-hint { grid-area: hint; }
+      #footer-hint { max-width: 45%; font-size: .58rem; }
+      .brand { letter-spacing: .08em; }
+      #status { display: none; }
+      dialog { width: calc(100% - 1rem); max-height: calc(100% - 1rem); }
+      .profile-panel { display: flex; padding: .9rem; }
+      .spartan-preview { height: 15rem; }
+      .online-flow { padding: 1rem .85rem; }
+      .mode-choice-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .mode-choice-card { grid-template-columns: 2.7rem minmax(0, 1fr); }
+      .mode-choice-card img { width: 2.35rem; height: 2.35rem; }
+      .advanced-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .game-settings-menu > summary { width: 1.95rem; padding: .28rem; }
+      .game-settings-menu > summary span { display: none; }
+      .diagnostics-stats { grid-template-columns: 1fr; }
+      #player-sidebar { width: min(16rem, calc(100% - 1.5rem)); }
+      #player-sidebar[data-collapsed="true"] #player-list,
+      #player-sidebar[data-collapsed="true"] #player-empty { display: none; }
+      #player-sidebar-toggle { display: inline-flex; }
+      #duke-legend { left: .45rem; bottom: .45rem; width: min(18rem, calc(100% - .9rem)); }
+      .duke-controller { width: 8rem; }
+      .duke-bindings { gap: .2rem .45rem; }
+      .duke-binding dt { font-size: .62rem; }
+      .duke-binding dd { font-size: .65rem; }
+    }
+    @media (max-width: 520px) {
+      .game-controls { gap: .28rem; }
+      .control-button { gap: .28rem; min-height: 1.95rem; padding: .28rem .4rem; font-size: .68rem; }
+      #footer-hint {
+        max-width: 38%;
+        font-size: .55rem;
+        line-height: 1.2;
+        white-space: normal;
+      }
+      .about-card { grid-template-columns: 3.2rem minmax(0, 1fr); gap: .7rem; padding: .9rem; }
+      .about-jester { width: 2.9rem; }
+    }
+  </style>
+</head>
+<body>
+  <header hidden>
+    <button id="diagnostics-secret" class="brand" type="button">Halo CE · Web</button>
+    <span id="status">Preparing runtime…</span>
+  </header>
+  <main id="game-area">
+    <section id="game-frame" aria-label="Halo game screen">
+      <canvas class="emscripten" id="canvas" width="1280" height="720"
+              tabindex="-1" aria-label="Halo game display"
+              oncontextmenu="event.preventDefault()"></canvas>
+      <div id="campaign-loading" role="status" aria-live="polite" hidden>
+        <span id="campaign-loading-label">Loading campaign…</span>
+        <span id="campaign-loading-percent">0%</span>
+        <progress id="campaign-loading-progress" value="0" max="100"></progress>
+      </div>
+      <footer>
+        <div class="game-controls" aria-label="Game controls">
+          <button id="mute" class="control-button is-muted" type="button" aria-pressed="true" aria-label="Unmute game">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M11 5 6.5 9H3v6h3.5l4.5 4V5Z"></path><path class="sound-wave" d="M15 9.5a4 4 0 0 1 0 5"></path><path class="sound-wave" d="M18 7a7.5 7.5 0 0 1 0 10"></path><path class="mute-mark" d="m16 10 5 5m0-5-5 5"></path></svg>
+            <span id="mute-label">Muted</span>
+          </button>
+          <button id="focus" class="control-button" type="button" aria-pressed="false" data-state="unlocked">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v3m0 12v3M3 12h3m12 0h3"></path><circle cx="12" cy="12" r="4.5"></circle></svg>
+            <span id="focus-label">Focus game</span>
+          </button>
+          <button id="fullscreen" class="control-button icon-only" type="button" aria-label="Enter fullscreen" title="Fullscreen">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8 3H3v5m13-5h5v5M8 21H3v-5m13 5h5v-5"></path></svg>
+          </button>
+          <details id="game-settings-menu" class="game-settings-menu">
+            <summary class="control-button" aria-label="Game settings">
+              <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.08A1.7 1.7 0 0 0 8.97 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.03H3v-4h.08A1.7 1.7 0 0 0 4.6 8.97a1.7 1.7 0 0 0-.34-1.88l-.06-.06L7.03 4.2l.06.06a1.7 1.7 0 0 0 1.88.34A1.7 1.7 0 0 0 10 3.08V3h4v.08a1.7 1.7 0 0 0 1.03 1.52 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06a1.7 1.7 0 0 0-.34 1.88A1.7 1.7 0 0 0 20.92 10H21v4h-.08A1.7 1.7 0 0 0 19.4 15Z"></path></svg>
+              <span>Game settings</span>
+            </summary>
+            <div class="game-settings-panel">
+              <label class="game-settings-option"><input id="disable-player-magnetism" type="checkbox"> Disable aim magnetism</label>
+              <p id="player-magnetism-note">Automatically off for keyboard and mouse, and on for a controller.</p>
+            </div>
+          </details>
+        </div>
+        <span class="site-credit">Made by <a href="https://mitchellhynes.com/" target="_blank" rel="noopener noreferrer">Mitchell Hynes</a>. <button id="about-open" type="button">Learn more</button></span>
+        <span id="footer-hint" class="hint">Click the game or Focus game to capture the mouse</span>
+        <span id="isolation-warning"></span>
+        <button id="logs" type="button" hidden>Diagnostics</button>
+      </footer>
+    </section>
+    <aside id="duke-legend" aria-label="Duke controller keyboard mapping">
+      <figure class="duke-figure">
+        <img class="duke-controller" src="assets/ui/shell/xbox-duke-controller.png"
+             alt="Black original Xbox Duke controller">
+      </figure>
+      <dl class="duke-bindings">
+        <div class="duke-binding" aria-label="A button - Space">
+          <dt>A</dt>
+          <dd>- Space</dd>
+        </div>
+        <div class="duke-binding" aria-label="B button - F">
+          <dt>B</dt>
+          <dd>- F</dd>
+        </div>
+        <div class="duke-binding" aria-label="X button - E or R"><dt>X</dt><dd>- E / R</dd></div>
+        <div class="duke-binding" aria-label="Y button - Tab or mouse wheel"><dt>Y</dt><dd>- Tab / Wheel</dd></div>
+        <div class="duke-binding" aria-label="White button - Q"><dt>White</dt><dd>- Q</dd></div>
+        <div class="duke-binding" aria-label="Black button - X"><dt>Black</dt><dd>- X</dd></div>
+        <div class="duke-binding" aria-label="Left trigger - G or right mouse button"><dt>LT</dt><dd>- G / RMB</dd></div>
+        <div class="duke-binding" aria-label="Right trigger - left mouse button"><dt>RT</dt><dd>- LMB</dd></div>
+        <div class="duke-binding" aria-label="Move - W A S D"><dt>Move</dt><dd>- WASD</dd></div>
+        <div class="duke-binding" aria-label="Aim - mouse"><dt>Aim</dt><dd>- Mouse</dd></div>
+        <div class="duke-binding" aria-label="Left stick click - C"><dt>L3</dt><dd>- C</dd></div>
+        <div class="duke-binding" aria-label="Right stick click - Z or middle mouse button"><dt>R3</dt><dd>- Z / MMB</dd></div>
+        <div class="duke-binding" aria-label="Directional pad - arrow keys"><dt>D-pad</dt><dd>- Arrows</dd></div>
+        <div class="duke-binding" aria-label="Start - Escape"><dt>Start</dt><dd>- Esc</dd></div>
+        <div class="duke-binding" aria-label="Back - F1"><dt>Back</dt><dd>- F1</dd></div>
+      </dl>
+    </aside>
+    <aside id="player-sidebar" aria-label="Online multiplayer" data-online-active="false">
+      <div class="sidebar-launch">
+        <span class="sidebar-kicker">Online multiplayer</span>
+        <button id="online" type="button" data-state="offline">Play online</button>
+        <div id="live-player-count" class="live-player-count" aria-live="polite" hidden>
+          <output id="live-player-online" class="live-player-count-item">0 players online</output>
+          <output id="live-player-campaign" class="live-player-count-item">0 players in campaign</output>
+          <output id="live-player-today" class="live-player-count-item">0 players today</output>
+        </div>
+      </div>
+      <section id="player-session" class="sidebar-roster" aria-labelledby="player-sidebar-title">
+        <div class="player-sidebar-heading">
+          <h2 id="player-sidebar-title">Players</h2>
+          <output id="player-count" aria-label="Players in room: 0 of 128">0/128</output>
+          <button id="player-sidebar-toggle" type="button" aria-expanded="true" aria-controls="player-session" aria-label="Collapse player list">⌃</button>
+        </div>
+        <ul id="player-list" aria-live="polite"></ul>
+        <p id="player-empty">Waiting for friends…</p>
+      </section>
+      <section id="online-invite" class="sidebar-invite" aria-label="Invite friends" hidden>
+        <span class="sidebar-invite-label">Invite a friend</span>
+        <div class="sidebar-invite-row">
+          <label class="sr-only" for="invite-link">Invite link</label>
+          <input id="invite-link" type="text" readonly aria-label="Invite link">
+          <button id="invite-copy" class="primary" type="button" aria-live="polite">Copy link</button>
+        </div>
+        <p id="invite-copy-status" class="sidebar-copy-status" role="status" hidden></p>
+        <button id="online-leave-host" type="button">Close room</button>
+      </section>
+    </aside>
+    <section id="loading" aria-live="polite" aria-busy="true">
+      <div class="loading-panel">
+        <div class="loading-subtitle">Halo CE · Web</div>
+        <div class="loading-orbit" aria-hidden="true"></div>
+        <div id="loading-label">Downloading WebAssembly…</div>
+        <progress id="progress" value="0" max="100" hidden></progress>
+      </div>
+    </section>
+    <section id="diagnostics-overlay" role="dialog" aria-modal="true"
+             aria-labelledby="diagnostics-title" hidden>
+      <div class="diagnostics-heading">
+        <h2 id="diagnostics-title">Diagnostics</h2>
+        <button id="diagnostics-close" class="icon-button" type="button" aria-label="Close diagnostics">✕</button>
+      </div>
+      <div id="diagnostics-stats" class="diagnostics-stats">
+        <div class="diagnostic-stat">
+          <span>Performance</span>
+          <output id="perf-stats">Measuring…</output>
+        </div>
+        <div class="diagnostic-stat">
+          <span>Memory</span>
+          <output id="memory-stats">Measuring…</output>
+        </div>
+      </div>
+      <pre id="diagnostics" aria-live="polite"></pre>
+      <p class="diagnostics-shortcut">⌘/Ctrl + Shift + L</p>
+    </section>
+  </main>
+  <dialog id="xiso-dialog" aria-labelledby="xiso-title" aria-describedby="xiso-description" tabindex="-1">
+    <section class="xiso-card">
+      <h1 id="xiso-title">Choose your Halo XISO</h1>
+      <p id="xiso-description">To comply with copyright law and respect the original Halo CE decompilation team, this website does not provide Halo game data. Choose an XISO made from your own Xbox copy of <cite>Halo: Combat Evolved</cite>.</p>
+      <p>Need help making one? Visit <a href="https://discord.gg/DQRgPUq6B8" target="_blank" rel="noopener noreferrer">discord.gg/DQRgPUq6B8</a> for instructions on ripping your own disc.</p>
+      <input id="xiso-file" type="file" accept=".iso,.xiso,application/octet-stream" aria-label="Choose Halo XISO">
+      <div class="xiso-actions">
+        <button id="xiso-choose" class="primary" type="button">Choose XISO</button>
+        <span id="xiso-file-name" aria-live="polite"></span>
+      </div>
+      <progress id="xiso-progress" value="0" max="1" hidden></progress>
+      <p id="xiso-status" role="status" aria-live="polite">Waiting for your disc image.</p>
+    </section>
+  </dialog>
+  <dialog id="about-dialog" aria-labelledby="about-title">
+    <article class="about-card">
+      <button id="about-close" class="icon-button" type="button" aria-label="Close">✕</button>
+      <img class="about-jester" src="assets/ui/shell/mitchell-jester-card.svg"
+           alt="Red Joker card from mitchellhynes.com">
+      <div class="about-copy">
+        <h2 id="about-title">About this web build</h2>
+        <ul>
+          <li>Built from the decompilation work in
+            <a href="https://github.com/bnunu/halo-ce-universal" target="_blank" rel="noopener noreferrer">bnunu/halo-ce-universal</a>
+            and
+            <a href="https://github.com/cybersecurity/halo-ce-universal" target="_blank" rel="noopener noreferrer">cybersecurity/halo-ce-universal</a>.
+          </li>
+          <li>This web version is independently hosted and maintained by <a href="https://mitchellhynes.com/" target="_blank" rel="noopener noreferrer">Mitchell Hynes</a>. Those projects and contributors are not affiliated with or responsible for this website.</li>
+        </ul>
+      </div>
+    </article>
+  </dialog>
+  <dialog id="online-dialog" aria-label="Play with friends">
+    <div class="online-card">
+      <button id="online-close" class="icon-button online-dialog-close" type="button" aria-label="Close">✕</button>
+      <section id="online-profile" class="profile-panel" aria-label="Player profile">
+        <div class="profile-kicker">Your Spartan</div>
+        <figure id="online-profile-preview" class="spartan-preview" data-style="sage">
+          <img id="online-spartan-image" class="spartan-image"
+               src="assets/ui/spartan/sage.png" alt="Your customized Halo Spartan">
+          <figcaption id="online-profile-preview-name">Player</figcaption>
+        </figure>
+        <div class="profile-name">
+          <label for="online-player-name">Your name <span aria-hidden="true">· 11 characters</span></label>
+          <input id="online-player-name" name="player-name" type="text" maxlength="11"
+                 autocomplete="nickname" spellcheck="false" placeholder="Player">
+        </div>
+        <fieldset id="online-style-options">
+          <legend class="style-legend">Armor</legend>
+          <div class="style-choices">
+            <label class="style-choice" data-style="white" title="White"><input type="radio" name="player-style" value="white"><span class="style-swatch"></span><span class="sr-only">White</span></label>
+            <label class="style-choice" data-style="black" title="Black"><input type="radio" name="player-style" value="black"><span class="style-swatch"></span><span class="sr-only">Black</span></label>
+            <label class="style-choice" data-style="red" title="Red"><input type="radio" name="player-style" value="red"><span class="style-swatch"></span><span class="sr-only">Red</span></label>
+            <label class="style-choice" data-style="blue" title="Blue"><input type="radio" name="player-style" value="blue"><span class="style-swatch"></span><span class="sr-only">Blue</span></label>
+            <label class="style-choice" data-style="sage" title="Sage"><input type="radio" name="player-style" value="sage" checked><span class="style-swatch"></span><span class="sr-only">Sage</span></label>
+            <label class="style-choice" data-style="yellow" title="Yellow"><input type="radio" name="player-style" value="yellow"><span class="style-swatch"></span><span class="sr-only">Yellow</span></label>
+            <label class="style-choice" data-style="lime" title="Lime"><input type="radio" name="player-style" value="lime"><span class="style-swatch"></span><span class="sr-only">Lime</span></label>
+            <label class="style-choice" data-style="pink" title="Pink"><input type="radio" name="player-style" value="pink"><span class="style-swatch"></span><span class="sr-only">Pink</span></label>
+            <label class="style-choice" data-style="purple" title="Purple"><input type="radio" name="player-style" value="purple"><span class="style-swatch"></span><span class="sr-only">Purple</span></label>
+            <label class="style-choice" data-style="cyan" title="Cyan"><input type="radio" name="player-style" value="cyan"><span class="style-swatch"></span><span class="sr-only">Cyan</span></label>
+            <label class="style-choice" data-style="cornflower" title="Cornflower"><input type="radio" name="player-style" value="cornflower"><span class="style-swatch"></span><span class="sr-only">Cornflower</span></label>
+            <label class="style-choice" data-style="orange" title="Orange"><input type="radio" name="player-style" value="orange"><span class="style-swatch"></span><span class="sr-only">Orange</span></label>
+            <label class="style-choice" data-style="teal" title="Teal"><input type="radio" name="player-style" value="teal"><span class="style-swatch"></span><span class="sr-only">Teal</span></label>
+            <label class="style-choice" data-style="forest" title="Forest"><input type="radio" name="player-style" value="forest"><span class="style-swatch"></span><span class="sr-only">Forest</span></label>
+            <label class="style-choice" data-style="brown" title="Brown"><input type="radio" name="player-style" value="brown"><span class="style-swatch"></span><span class="sr-only">Brown</span></label>
+            <label class="style-choice" data-style="tan" title="Tan"><input type="radio" name="player-style" value="tan"><span class="style-swatch"></span><span class="sr-only">Tan</span></label>
+            <label class="style-choice" data-style="maroon" title="Maroon"><input type="radio" name="player-style" value="maroon"><span class="style-swatch"></span><span class="sr-only">Maroon</span></label>
+            <label class="style-choice" data-style="rose" title="Rose"><input type="radio" name="player-style" value="rose"><span class="style-swatch"></span><span class="sr-only">Rose</span></label>
+          </div>
+        </fieldset>
+        <div id="online-human-verification" class="human-verification" data-state="loading">
+          <div id="online-turnstile" class="turnstile-slot" aria-label="Human verification"></div>
+          <div class="verification-feedback">
+            <span id="online-verification-status" class="verification-status" role="status">Checking that you're human…</span>
+            <button id="online-verification-retry" class="verification-retry" type="button" hidden>Try again</button>
+          </div>
+        </div>
+        <div id="online-join-confirm" class="profile-join-action" hidden>
+          <div id="online-join-status" class="online-status" role="status" hidden></div>
+          <p id="online-join-summary">Choose your name and armor, then join your friend.</p>
+          <button id="online-join-profile" class="primary" type="button">Join game</button>
+        </div>
+      </section>
+      <section class="online-flow">
+        <div class="online-heading">
+          <div>
+            <h2 id="online-title">Play with friends</h2>
+            <p id="online-description">Pick a map and mode, then send the invite link to your friends.</p>
+          </div>
+        </div>
+        <div id="online-status" class="online-status" role="status" hidden></div>
+        <div id="online-wizard">
+          <ol id="online-wizard-steps" class="wizard-steps" aria-label="Create a game">
+            <li id="online-wizard-map" class="wizard-step" data-number="1" data-step="map" aria-current="step">Map</li>
+            <li id="online-wizard-mode" class="wizard-step" data-number="2" data-step="mode">Mode</li>
+          </ol>
+          <div id="online-setup" class="online-stack">
+            <form id="online-host-form" class="online-stack host-setup">
+              <section id="online-step-map">
+                <p id="online-map-title" class="host-setup-title">Choose a map</p>
+                <div id="online-map-options" class="choice-grid map-choice-grid" role="radiogroup" aria-labelledby="online-map-title">
+                  <label class="visual-choice" data-picker-option><input type="radio" name="halo-map-choice" value="0" checked><span class="visual-choice-card map-choice-card"><img src="assets/ui/maps/battle-creek.png" alt=""><span class="choice-label">Battle Creek</span></span></label>
+                  <label class="visual-choice" data-picker-option><input type="radio" name="halo-map-choice" value="1"><span class="visual-choice-card map-choice-card"><img src="assets/ui/maps/sidewinder.png" alt=""><span class="choice-label">Sidewinder</span></span></label>
+                  <label class="visual-choice" data-picker-option><input type="radio" name="halo-map-choice" value="2"><span class="visual-choice-card map-choice-card"><img src="assets/ui/maps/damnation.png" alt=""><span class="choice-label">Damnation</span></span></label>
+                  <label class="visual-choice" data-picker-option><input type="radio" name="halo-map-choice" value="3"><span class="visual-choice-card map-choice-card"><img src="assets/ui/maps/rat-race.png" alt=""><span class="choice-label">Rat Race</span></span></label>
+                  <label class="visual-choice" data-picker-option><input type="radio" name="halo-map-choice" value="4"><span class="visual-choice-card map-choice-card"><img src="assets/ui/maps/prisoner.png" alt=""><span class="choice-label">Prisoner</span></span></label>
+                  <label class="visual-choice" data-picker-option><input type="radio" name="halo-map-choice" value="5"><span class="visual-choice-card map-choice-card"><img src="assets/ui/maps/hang-em-high.png" alt=""><span class="choice-label">Hang 'Em High</span></span></label>
+                  <label class="visual-choice" data-picker-option><input type="radio" name="halo-map-choice" value="6"><span class="visual-choice-card map-choice-card"><img src="assets/ui/maps/chill-out.png" alt=""><span class="choice-label">Chill Out</span></span></label>
+                  <label class="visual-choice" data-picker-option><input type="radio" name="halo-map-choice" value="7"><span class="visual-choice-card map-choice-card"><img src="assets/ui/maps/derelict.png" alt=""><span class="choice-label">Derelict</span></span></label>
+                  <label class="visual-choice" data-picker-option><input type="radio" name="halo-map-choice" value="8"><span class="visual-choice-card map-choice-card"><img src="assets/ui/maps/boarding-action.png" alt=""><span class="choice-label">Boarding Action</span></span></label>
+                  <label class="visual-choice" data-picker-option><input type="radio" name="halo-map-choice" value="9"><span class="visual-choice-card map-choice-card"><img src="assets/ui/maps/blood-gulch.png" alt=""><span class="choice-label">Blood Gulch</span></span></label>
+                  <label class="visual-choice" data-picker-option><input type="radio" name="halo-map-choice" value="10"><span class="visual-choice-card map-choice-card"><img src="assets/ui/maps/wizard.png" alt=""><span class="choice-label">Wizard</span></span></label>
+                  <label class="visual-choice" data-picker-option><input type="radio" name="halo-map-choice" value="11"><span class="visual-choice-card map-choice-card"><img src="assets/ui/maps/chiron-tl-34.png" alt=""><span class="choice-label">Chiron TL-34</span></span></label>
+                  <label class="visual-choice" data-picker-option><input type="radio" name="halo-map-choice" value="12"><span class="visual-choice-card map-choice-card"><img src="assets/ui/maps/longest.png" alt=""><span class="choice-label">Longest</span></span></label>
+                </div>
+                <label class="sr-only" for="online-map">Selected map</label>
+                <select id="online-map" class="picker-select" name="map" tabindex="-1" aria-hidden="true">
+                  <option value="0">Battle Creek</option>
+                  <option value="1">Sidewinder</option>
+                  <option value="2">Damnation</option>
+                  <option value="3">Rat Race</option>
+                  <option value="4">Prisoner</option>
+                  <option value="5">Hang 'Em High</option>
+                  <option value="6">Chill Out</option>
+                  <option value="7">Derelict</option>
+                  <option value="8">Boarding Action</option>
+                  <option value="9">Blood Gulch</option>
+                  <option value="10">Wizard</option>
+                  <option value="11">Chiron TL-34</option>
+                  <option value="12">Longest</option>
+                </select>
+                <div class="wizard-actions">
+                  <button id="online-map-next" class="primary" type="button">Next</button>
+                </div>
+              </section>
+              <section id="online-step-mode" hidden>
+                <p id="online-mode-title" class="host-setup-title">Choose a mode</p>
+                <div id="online-mode-options" class="choice-grid mode-choice-grid" role="radiogroup" aria-labelledby="online-mode-title">
+                  <label class="visual-choice" data-picker-option><input type="radio" name="halo-mode-choice" value="0" checked><span class="visual-choice-card mode-choice-card"><img src="assets/ui/modes/slayer.png" alt=""><span class="choice-label">Slayer</span></span></label>
+                  <label class="visual-choice" data-picker-option><input type="radio" name="halo-mode-choice" value="1"><span class="visual-choice-card mode-choice-card"><img src="assets/ui/modes/team-slayer.png" alt=""><span class="choice-label">Team Slayer</span></span></label>
+                  <label class="visual-choice" data-picker-option><input type="radio" name="halo-mode-choice" value="2"><span class="visual-choice-card mode-choice-card"><img src="assets/ui/modes/capture-the-flag.png" alt=""><span class="choice-label">Capture the Flag</span></span></label>
+                  <label class="visual-choice" data-picker-option><input type="radio" name="halo-mode-choice" value="3"><span class="visual-choice-card mode-choice-card"><img src="assets/ui/modes/oddball.png" alt=""><span class="choice-label">Oddball</span></span></label>
+                  <label class="visual-choice" data-picker-option><input type="radio" name="halo-mode-choice" value="4"><span class="visual-choice-card mode-choice-card"><img src="assets/ui/modes/king-of-the-hill.png" alt=""><span class="choice-label">King of the Hill</span></span></label>
+                  <label class="visual-choice" data-picker-option><input type="radio" name="halo-mode-choice" value="5"><span class="visual-choice-card mode-choice-card"><img src="assets/ui/modes/race.png" alt=""><span class="choice-label">Race</span></span></label>
+                </div>
+                <label class="sr-only" for="online-mode">Selected mode</label>
+                <select id="online-mode" class="picker-select" name="mode" tabindex="-1" aria-hidden="true">
+                  <option value="0">Slayer</option>
+                  <option value="1">Team Slayer</option>
+                  <option value="2">Capture the Flag</option>
+                  <option value="3">Oddball</option>
+                  <option value="4">King of the Hill</option>
+                  <option value="5">Race</option>
+                </select>
+                <details class="advanced-settings">
+                  <summary><span>Advanced settings</span><span class="advanced-settings-optional">Optional · stock rules by default</span></summary>
+                  <div class="advanced-settings-body">
+                    <label class="advanced-toggle"><input id="online-advanced-enabled" type="checkbox"> Customize this game</label>
+                    <fieldset id="online-advanced-fields" class="advanced-fields" disabled>
+                      <label class="advanced-number">Score to win<input id="online-score-to-win" type="number" min="1" max="1000" step="1" value="15"></label>
+                      <label class="advanced-number">Respawn (sec)<input id="online-respawn-seconds" type="number" min="0" max="30" step="1" value="0"></label>
+                      <label class="advanced-number">Lives (0 = ∞)<input id="online-lives" type="number" min="0" max="99" step="1" value="0"></label>
+                      <label class="advanced-number">Health %<input id="online-health-percent" type="number" min="25" max="400" step="25" value="100"></label>
+                      <div class="advanced-checks">
+                        <label class="advanced-check"><input id="online-shields" type="checkbox" checked> Shields</label>
+                        <label class="advanced-check"><input id="online-other-players-on-radar" type="checkbox" checked> Players on radar</label>
+                        <label class="advanced-check"><input id="online-infinite-grenades" type="checkbox"> Infinite grenades</label>
+                        <label class="advanced-check"><input id="online-invisible-players" type="checkbox"> Invisible players</label>
+                      </div>
+                    </fieldset>
+                  </div>
+                </details>
+                <div class="wizard-actions">
+                  <button id="online-mode-back" type="button">Back</button>
+                  <button id="online-host" class="primary" type="submit">Create link</button>
+                </div>
+              </section>
+            </form>
+            <details class="join-direct">
+              <summary>Have an invite link?</summary>
+              <form id="online-join-form" class="join-row">
+                <input id="online-code" type="text" autocomplete="off" spellcheck="false"
+                       aria-label="Invite link or code" placeholder="Paste a mitchellhynes.com or halo:// link">
+                <button id="online-join" type="submit">Continue</button>
+              </form>
+            </details>
+          </div>
+          <div id="online-progress" class="online-actions" hidden>
+            <button id="online-cancel" type="button">Cancel</button>
+          </div>
+        </div>
+        <p id="online-detail">Private invite room · gameplay connects peer-to-peer when possible</p>
+      </section>
+    </div>
+  </dialog>
+  <script>
+    const canvas = document.getElementById("canvas");
+    const gameArea = document.getElementById("game-area");
+    const statusElement = document.getElementById("status");
+    const loadingElement = document.getElementById("loading");
+    const loadingLabel = document.getElementById("loading-label");
+    const progressElement = document.getElementById("progress");
+    const campaignLoadingElement = document.getElementById("campaign-loading");
+    const campaignLoadingLabel = document.getElementById("campaign-loading-label");
+    const campaignLoadingPercent = document.getElementById("campaign-loading-percent");
+    const campaignLoadingProgress = document.getElementById("campaign-loading-progress");
+    const isolationWarning = document.getElementById("isolation-warning");
+    const diagnosticsElement = document.getElementById("diagnostics");
+    const diagnosticsOverlay = document.getElementById("diagnostics-overlay");
+    const performanceElement = document.getElementById("perf-stats");
+    const memoryElement = document.getElementById("memory-stats");
+    const muteButton = document.getElementById("mute");
+    const muteLabel = document.getElementById("mute-label");
+    const focusButton = document.getElementById("focus");
+    const focusLabel = document.getElementById("focus-label");
+    const fullscreenButton = document.getElementById("fullscreen");
+    const footerHint = document.getElementById("footer-hint");
+    const aboutButton = document.getElementById("about-open");
+    const aboutDialog = document.getElementById("about-dialog");
+    const aboutCloseButton = document.getElementById("about-close");
+    const xisoDialog = document.getElementById("xiso-dialog");
+    const xisoFileInput = document.getElementById("xiso-file");
+    const xisoChooseButton = document.getElementById("xiso-choose");
+    const xisoFileName = document.getElementById("xiso-file-name");
+    const xisoProgress = document.getElementById("xiso-progress");
+    const xisoStatus = document.getElementById("xiso-status");
+    const onlineDialog = document.getElementById("online-dialog");
+    const gameSettingsMenu = document.getElementById("game-settings-menu");
+    const disablePlayerMagnetism = document.getElementById("disable-player-magnetism");
+    const playerMagnetismNote = document.getElementById("player-magnetism-note");
+    const GAME_SETTINGS_STORAGE_KEY = "halo.web.game-settings.v1";
+    let audioMuted = true;
+    let performancePrevious = null;
+    let secretClickCount = 0;
+    let secretClickTimer = 0;
+    let gamePresented = false;
+    let presentationWaitToken = 0;
+    let presentationFrameRequest = 0;
+    let pointerLockPending = false;
+    let pointerLockTimer = 0;
+    let controllerSummary = "";
+    const telemetrySessionId = crypto.randomUUID();
+    const telemetrySamples = [];
+    const telemetryStartedAt = performance.now();
+    let telemetryLastFlush = telemetryStartedAt;
+    let runtimeStage = "page";
+    let haloRuntimeReady = false;
+    let runtimeGpuClass = "unknown";
+    let runtimeRole = "offline";
+    let runtimeConnection = "unknown";
+    let runtimeFirstFailureSent = false;
+    let runtimeCapabilities = null;
+    let runtimeMapLoad = null;
+    let runtimeOnlineState = null;
+    let runtimeClientState = null;
+    let audioResumeAttempt = 0;
+    let audioTelemetryState = "";
+    let audioTelemetryPreviousCallbacks = 0;
+    let audioTelemetryPreviousLateCallbacks = 0;
+    let connectedControllerCount = 0;
+    let gamepadDiscoveryFailed = false;
+    let playerMagnetismManual = false;
+    let playerInputMode = "keyboard-mouse";
+    let releaseXisoDependency = null;
+    let xisoInstallActive = false;
+    const runtimeMapNames = [
+      "a10", "a30", "a50", "b30", "b40", "c10", "c20", "c40", "d20", "d40",
+      "beavercreek", "bloodgulch", "boardingaction", "carousel", "chillout", "damnation",
+      "hangemhigh", "longest", "prisoner", "putput", "ratrace", "sidewinder", "ui", "wizard",
+    ];
+    const campaignMissions = [
+      ["a10", "The Pillar of Autumn"],
+      ["a30", "Halo"],
+      ["a50", "The Truth and Reconciliation"],
+      ["b30", "The Silent Cartographer"],
+      ["b40", "Assault on the Control Room"],
+      ["c10", "343 Guilty Spark"],
+      ["c20", "The Library"],
+      ["c40", "Two Betrayals"],
+      ["d20", "Keyes"],
+      ["d40", "The Maw"],
+    ];
+    let campaignLoad = null;
+    const performanceMinimumWindow = 750;
+    const performanceMaximumWindow = 2500;
+
+    function showXisoGate(message = "Waiting for your disc image.") {
+      xisoStatus.dataset.state = "waiting";
+      xisoStatus.textContent = message;
+      if (!xisoDialog.open) xisoDialog.showModal();
+      try { xisoDialog.focus({ preventScroll: true }); } catch (_error) { xisoDialog.focus(); }
+    }
+
+    function finishXisoGate() {
+      if (!releaseXisoDependency) return;
+      const release = releaseXisoDependency;
+      releaseXisoDependency = null;
+      if (xisoDialog.open) xisoDialog.close();
+      setStatus("Starting Halo…");
+      release();
+    }
+
+    async function beginXisoGate() {
+      addRunDependency("halo-xiso");
+      let released = false;
+      releaseXisoDependency = () => {
+        if (released) return;
+        released = true;
+        removeRunDependency("halo-xiso");
+      };
+      try {
+        /* Self-hosted: when this server provides the maps, nobody needs to
+           choose a disc image. */
+        try {
+          const served = await fetch("assets/maps/ui.map", { method: "HEAD", cache: "no-store" });
+          if (served.ok) {
+            finishXisoGate();
+            return;
+          }
+        } catch (_error) {
+          /* Fall back to a locally installed XISO. */
+        }
+        if (!globalThis.HaloXiso) {
+          throw new Error("The local XISO reader did not load.");
+        }
+        if (await globalThis.HaloXiso.isInstalled()) {
+          finishXisoGate();
+          return;
+        }
+        showXisoGate();
+      } catch (error) {
+        showXisoGate(error && error.message ? error.message : "Local game storage is unavailable.");
+        xisoStatus.dataset.state = "error";
+      }
+    }
+
+    async function installSelectedXiso(file) {
+      if (!file || xisoInstallActive || !globalThis.HaloXiso) return;
+      xisoInstallActive = true;
+      xisoChooseButton.disabled = true;
+      xisoChooseButton.textContent = "Reading XISO…";
+      xisoFileName.textContent = file.name;
+      xisoProgress.hidden = true;
+      xisoStatus.dataset.state = "working";
+      try {
+        await globalThis.HaloXiso.install(file, progress => {
+          if (progress.phase === "catalog") {
+            xisoStatus.textContent = progress.message;
+            return;
+          }
+          if (progress.phase === "copy") {
+            xisoProgress.hidden = false;
+            xisoProgress.max = progress.totalBytes;
+            xisoProgress.value = progress.completedBytes;
+            const percent = Math.floor(progress.completedBytes * 100 / progress.totalBytes);
+            xisoStatus.textContent = `Preparing local game data… ${percent}% · ${progress.name}`;
+          }
+        });
+        xisoStatus.dataset.state = "ready";
+        xisoStatus.textContent = "Game data is ready. Starting Halo…";
+        finishXisoGate();
+      } catch (error) {
+        xisoStatus.dataset.state = "error";
+        xisoStatus.textContent = error && error.message
+          ? error.message
+          : "That XISO could not be read. Choose your Halo Xbox disc image and try again.";
+        xisoChooseButton.disabled = false;
+        xisoChooseButton.textContent = "Choose another XISO";
+        xisoFileInput.value = "";
+      } finally {
+        xisoInstallActive = false;
+      }
+    }
+
+    xisoChooseButton.addEventListener("click", () => xisoFileInput.click());
+    xisoFileInput.addEventListener("change", () => installSelectedXiso(xisoFileInput.files[0]));
+    xisoDialog.addEventListener("cancel", event => event.preventDefault());
+    xisoDialog.addEventListener("close", () => {
+      if (releaseXisoDependency) showXisoGate("Choose your Halo XISO to continue.");
+    });
+    function percentile(values, fraction) {
+      const sorted = [...values].sort((left, right) => left - right);
+      return sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * fraction) - 1))];
+    }
+
+    function memoryBytes() {
+      const js = performance.memory && Number.isFinite(performance.memory.usedJSHeapSize)
+        ? performance.memory.usedJSHeapSize : 0;
+      const wasm = haloRuntimeReady && typeof Module !== "undefined" &&
+        typeof Module._platform_web_profile_memory_bytes === "function"
+        ? Module._platform_web_profile_memory_bytes()
+        : (typeof Module !== "undefined" && Module.HEAPU8 && Module.HEAPU8.buffer
+          ? Module.HEAPU8.buffer.byteLength : 0);
+      return Math.max(0, js) + Math.max(0, wasm);
+    }
+
+    function telemetryBuildId() {
+      const meta = document.querySelector('meta[name="halo-build-id"]');
+      return meta && meta.content ? meta.content : "unknown";
+    }
+
+    function moduleMetric(name, fallback = -1) {
+      if (!haloRuntimeReady) return fallback;
+      const fn = typeof Module !== "undefined" && Module[name];
+      if (typeof fn !== "function") return fallback;
+      try {
+        const value = Number(fn());
+        return Number.isFinite(value) ? value : fallback;
+      } catch (_error) {
+        return fallback;
+      }
+    }
+
+    function classifyRenderer(value) {
+      const renderer = String(value || "").toLowerCase();
+      if (/swiftshader|llvmpipe|software raster|software renderer/u.test(renderer)) return "software";
+      if (/nvidia|geforce/u.test(renderer)) return "nvidia";
+      if (/\bamd\b|radeon/u.test(renderer)) return "amd";
+      if (/\bintel\b/u.test(renderer)) return "intel";
+      if (/apple|metal/u.test(renderer)) return "apple";
+      if (/qualcomm|adreno/u.test(renderer)) return "qualcomm";
+      if (/\barm\b|mali/u.test(renderer)) return "arm";
+      return renderer ? "other" : "unknown";
+    }
+
+    function detectWebglCapability() {
+      try {
+        const probe = document.createElement("canvas");
+        for (const name of ["webgl2", "webgl"]) {
+          const context = probe.getContext(name);
+          if (!context) continue;
+          const extension = context.getExtension("WEBGL_lose_context");
+          if (extension) extension.loseContext();
+          return name;
+        }
+      } catch (_error) {
+        // Capability telemetry must never interfere with startup.
+      }
+      return "unavailable";
+    }
+
+    function runtimeCapabilitySnapshot() {
+      if (runtimeCapabilities) return runtimeCapabilities;
+      runtimeCapabilities = Object.freeze({
+        isolation: self.crossOriginIsolated === true ? "isolated" : "not-isolated",
+        sharedMemory: typeof SharedArrayBuffer === "function" ? "available" : "unavailable",
+        webgl: detectWebglCapability(),
+        gamepadApi: typeof navigator.getGamepads === "function" ? "available" : "unavailable",
+        hardwareConcurrency: Number.isFinite(navigator.hardwareConcurrency)
+          ? navigator.hardwareConcurrency : 0,
+        deviceMemoryGb: Number.isFinite(navigator.deviceMemory) ? navigator.deviceMemory : 0,
+      });
+      return runtimeCapabilities;
+    }
+
+    function normalizeTelemetryError(value) {
+      return String(value || "unknown error")
+        .toLowerCase()
+        .replace(/\b(?:https?|blob|file):\/\/\S+/gu, "<url>")
+        .replace(/\b(?:chrome|moz|safari|ms-browser)-extension:\/\/\S+/gu, "<extension>")
+        .replace(/\b(?:0x)?[0-9a-f]{8,}\b/gu, "<id>")
+        .replace(/\b\d+(?:[.:]\d+)*\b/gu, "#")
+        .replace(/\s+/gu, " ")
+        .trim()
+        .slice(0, 320);
+    }
+
+    function telemetryHash(value) {
+      let first = 0x811c9dc5;
+      let second = 0x9e3779b1;
+      for (let index = 0; index < value.length; index++) {
+        const code = value.charCodeAt(index);
+        first = Math.imul(first ^ code, 0x01000193);
+        second = Math.imul(second ^ code, 0x85ebca6b);
+      }
+      return `${(first >>> 0).toString(16).padStart(8, "0")}${
+        (second >>> 0).toString(16).padStart(8, "0")}`;
+    }
+
+    function classifyRuntimeError(value) {
+      const message = normalizeTelemetryError(value);
+      if (/out of memory|cannot enlarge memory|webassembly\.memory|memory access out of bounds|allocation failed/u.test(message)) return "wasm-memory";
+      if (/sharedarraybuffer|cross.origin|atomics|pthread|emscripten_proxy_async/u.test(message)) return "threading";
+      if (/getgamepads|gamepad|joystick/u.test(message)) return "gamepad";
+      if (/webgl|gl_invalid|graphics context|renderer/u.test(message)) return "graphics";
+      if (/audiocontext|audio worklet|audio device|scriptprocessor/u.test(message)) return "audio";
+      if (/failed to fetch|networkerror|load failed|network request/u.test(message)) return "network";
+      if (/securityerror|not allowed|permission denied/u.test(message)) return "permission";
+      if (/runtimeerror|unreachable|abort/u.test(message)) return "wasm-runtime";
+      if (/typeerror|is not a function|cannot read propert/u.test(message)) return "javascript-type";
+      return "unknown";
+    }
+
+    function telemetryTopFrame(source) {
+      for (const line of String(source || "").split("\n")) {
+        const match = line.match(/^\s*at\s+(?:async\s+)?([A-Za-z_$][\w$.:~-]*)/u) ||
+          line.match(/^\s*([A-Za-z_$][\w$.:~-]*)@/u);
+        if (match) return match[1].slice(0, 64);
+      }
+      return "none";
+    }
+
+    function sendRuntimeTelemetry(event, stage = runtimeStage, details = {}) {
+      if (true /* self-hosted: telemetry disabled */) return;
+      const capabilities = runtimeCapabilitySnapshot();
+      const payload = JSON.stringify({
+        sessionId: telemetrySessionId,
+        buildId: telemetryBuildId(),
+        event,
+        stage: String(stage || "unknown").slice(0, 32),
+        gpuClass: runtimeGpuClass,
+        role: runtimeRole,
+        connection: runtimeConnection,
+        elapsedMs: performance.now() - telemetryStartedAt,
+        loops: moduleMetric("_platform_web_profile_loops", 0),
+        swaps: moduleMetric("_platform_web_profile_swaps", 0),
+        memoryBytes: memoryBytes(),
+        controllerCount: connectedControllerCount,
+        mapIndex: Number.isFinite(details.mapIndex) ? details.mapIndex : moduleMetric("_platform_web_map_load_index"),
+        clientState: Number.isFinite(details.clientState) ? details.clientState : moduleMetric("_platform_web_online_get_client_state"),
+        onlineState: Number.isFinite(details.onlineState) ? details.onlineState : moduleMetric("_platform_web_online_get_state"),
+        viewportWidth: innerWidth,
+        viewportHeight: innerHeight,
+        dpr: devicePixelRatio || 1,
+        errorCategory: details.errorCategory || "none",
+        errorFingerprint: details.errorFingerprint || "none",
+        errorTopFrame: details.errorTopFrame || "none",
+        visibility: ["visible", "hidden", "prerender"].includes(document.visibilityState)
+          ? document.visibilityState : "unknown",
+        isolation: capabilities.isolation,
+        sharedMemory: capabilities.sharedMemory,
+        webgl: capabilities.webgl,
+        gamepadApi: capabilities.gamepadApi,
+        hardwareConcurrency: capabilities.hardwareConcurrency,
+        deviceMemoryGb: capabilities.deviceMemoryGb,
+        platform: navigator.userAgentData && navigator.userAgentData.platform
+          ? navigator.userAgentData.platform : (navigator.platform || "unknown"),
+        mobile: Boolean(navigator.userAgentData && navigator.userAgentData.mobile),
+      });
+      try {
+        if (typeof navigator.sendBeacon === "function" &&
+            navigator.sendBeacon("/v1/telemetry/runtime", new Blob([payload], { type: "application/json" }))) {
+          return;
+        }
+      } catch (_error) {
+        // A blocked beacon should never interfere with the game.
+      }
+      fetch("/v1/telemetry/runtime", {
+        method: "POST", body: payload, headers: { "Content-Type": "application/json" }, keepalive: true,
+      }).catch(() => {});
+    }
+
+    function sendRuntimeFailure(event, reason, source = "") {
+      if (runtimeFirstFailureSent) return;
+      runtimeFirstFailureSent = true;
+      const message = reason && reason.message ? reason.message : String(reason || "unknown error");
+      const name = reason && reason.name ? reason.name : "Error";
+      const normalized = normalizeTelemetryError(`${name}: ${message}`);
+      sendRuntimeTelemetry(event, runtimeStage, {
+        errorCategory: classifyRuntimeError(normalized),
+        errorFingerprint: telemetryHash(`${normalized}|${telemetryTopFrame(source)}`),
+        errorTopFrame: telemetryTopFrame(source),
+      });
+    }
+
+    window.HaloTelemetry = Object.freeze({
+      event(event, stage, details) {
+        sendRuntimeTelemetry(event, stage, details || {});
+      },
+      presence() {
+        return {
+          campaign: moduleMetric("_platform_web_campaign_active", 0) > 0,
+          sessionId: telemetrySessionId,
+        };
+      },
+      setContext(context) {
+        if (context && ["offline", "host", "guest", "unknown"].includes(context.role)) {
+          runtimeRole = context.role;
+        }
+        if (context && ["direct", "relay", "unknown"].includes(context.connection)) {
+          runtimeConnection = context.connection;
+        }
+      },
+    });
+
+    function updateRuntimeTelemetry() {
+      const now = performance.now();
+      const onlineState = moduleMetric("_platform_web_online_get_state");
+      const clientState = moduleMetric("_platform_web_online_get_client_state");
+      if (onlineState !== runtimeOnlineState || clientState !== runtimeClientState) {
+        runtimeOnlineState = onlineState;
+        runtimeClientState = clientState;
+        if (onlineState >= 0 || clientState >= 0) {
+          sendRuntimeTelemetry("online_state", `online-${onlineState}`, { onlineState, clientState });
+        }
+      }
+
+      const progress = moduleMetric("_platform_web_map_load_progress");
+      const mapIndex = moduleMetric("_platform_web_map_load_index");
+      if (progress >= 0 && mapIndex >= 0 && mapIndex < runtimeMapNames.length) {
+        if (!runtimeMapLoad || runtimeMapLoad.index !== mapIndex) {
+          runtimeMapLoad = { index: mapIndex, startedAt: now, slow: false, stalled: false };
+          sendRuntimeTelemetry("map_load_started", runtimeMapNames[mapIndex], { mapIndex, clientState });
+        }
+        const elapsed = now - runtimeMapLoad.startedAt;
+        if (!runtimeMapLoad.slow && elapsed >= 10_000) {
+          runtimeMapLoad.slow = true;
+          sendRuntimeTelemetry("map_load_slow", runtimeMapNames[mapIndex], { mapIndex, clientState });
+        }
+        if (!runtimeMapLoad.stalled && elapsed >= 30_000) {
+          runtimeMapLoad.stalled = true;
+          sendRuntimeTelemetry("map_load_stalled", runtimeMapNames[mapIndex], { mapIndex, clientState });
+        }
+      } else if (runtimeMapLoad) {
+        sendRuntimeTelemetry("map_load_completed", runtimeMapNames[runtimeMapLoad.index], {
+          mapIndex: runtimeMapLoad.index,
+          clientState,
+        });
+        runtimeMapLoad = null;
+      }
+    }
+
+    sendRuntimeTelemetry("page_loaded", "page");
+    window.setTimeout(() => {
+      if (!gamePresented) sendRuntimeTelemetry("startup_slow", runtimeStage);
+    }, 15_000);
+    window.setTimeout(() => {
+      if (gamePresented) return;
+      sendRuntimeTelemetry("startup_stalled", runtimeStage);
+      if (runtimeGpuClass !== "software") {
+        loadingLabel.textContent = "Still starting… reload the page if this does not finish.";
+      }
+    }, 45_000);
+
+    function flushPerformanceTelemetry() {
+      if (!telemetrySamples.length || true /* self-hosted: telemetry disabled */) return;
+      const samples = telemetrySamples.splice(0);
+      const fps = samples.map(sample => sample.fps);
+      const cpu = samples.map(sample => sample.cpu);
+      const now = performance.now();
+      const meta = document.querySelector('meta[name="halo-build-id"]');
+      const audioCallbacks = moduleMetric("_platform_web_audio_callback_count", 0);
+      const audioLateCallbacks = moduleMetric("_platform_web_audio_late_callback_count", 0);
+      const audioContext = browserAudioContext();
+      const payload = JSON.stringify({
+        sessionId: telemetrySessionId,
+        buildId: meta && meta.content ? meta.content : "unknown",
+        sampleCount: samples.length,
+        durationMs: now - telemetryLastFlush,
+        avgFps: fps.reduce((sum, value) => sum + value, 0) / fps.length,
+        minFps: Math.min(...fps),
+        p95Fps: percentile(fps, .95),
+        avgCpuMs: cpu.reduce((sum, value) => sum + value, 0) / cpu.length,
+        p95CpuMs: percentile(cpu, .95),
+        memoryBytes: memoryBytes(),
+        viewportWidth: innerWidth,
+        viewportHeight: innerHeight,
+        dpr: devicePixelRatio || 1,
+        audioState: audioContext ? audioContext.state : "unavailable",
+        audioCallbacks: Math.max(0, audioCallbacks - audioTelemetryPreviousCallbacks),
+        audioLateCallbacks: Math.max(0, audioLateCallbacks - audioTelemetryPreviousLateCallbacks),
+        audioMaximumGapMs: moduleMetric("_platform_web_audio_maximum_callback_gap_ms", 0),
+        platform: navigator.userAgentData && navigator.userAgentData.platform
+          ? navigator.userAgentData.platform : (navigator.platform || "unknown"),
+        mobile: Boolean(navigator.userAgentData && navigator.userAgentData.mobile),
+      });
+      telemetryLastFlush = now;
+      audioTelemetryPreviousCallbacks = audioCallbacks;
+      audioTelemetryPreviousLateCallbacks = audioLateCallbacks;
+      if (!navigator.sendBeacon("/v1/telemetry/performance", new Blob([payload], { type: "application/json" }))) {
+        fetch("/v1/telemetry/performance", {
+          method: "POST", body: payload, headers: { "Content-Type": "application/json" }, keepalive: true,
+        }).catch(() => {});
+      }
+    }
+
+    function sendCampaignTelemetry(load, outcome) {
+      if (!load || true /* self-hosted: telemetry disabled */) return;
+      const now = performance.now();
+      const meta = document.querySelector('meta[name="halo-build-id"]');
+      const payload = JSON.stringify({
+        sessionId: telemetrySessionId,
+        loadId: load.id,
+        buildId: meta && meta.content ? meta.content : "unknown",
+        map: load.map,
+        outcome,
+        durationMs: now - load.startedAt,
+        downloadMs: (load.prepareStartedAt || now) - load.startedAt,
+        prepareMs: load.prepareStartedAt ? now - load.prepareStartedAt : 0,
+        maxProgress: load.maxProgress,
+        sampleCount: load.sampleCount,
+        longestStallMs: load.longestStallMs,
+        memoryBytes: memoryBytes(),
+        viewportWidth: innerWidth,
+        viewportHeight: innerHeight,
+        dpr: devicePixelRatio || 1,
+        platform: navigator.userAgentData && navigator.userAgentData.platform
+          ? navigator.userAgentData.platform : (navigator.platform || "unknown"),
+        mobile: Boolean(navigator.userAgentData && navigator.userAgentData.mobile),
+        connection: navigator.connection && navigator.connection.effectiveType
+          ? navigator.connection.effectiveType : "unknown",
+      });
+      if (!navigator.sendBeacon("/v1/telemetry/campaign", new Blob([payload], { type: "application/json" }))) {
+        fetch("/v1/telemetry/campaign", {
+          method: "POST", body: payload, headers: { "Content-Type": "application/json" }, keepalive: true,
+        }).catch(() => {});
+      }
+    }
+
+    function finishCampaignLoad(outcome) {
+      if (!campaignLoad) return;
+      const finished = campaignLoad;
+      campaignLoad = null;
+      campaignLoadingElement.hidden = true;
+      sendCampaignTelemetry(finished, outcome);
+    }
+
+    function updateCampaignLoading() {
+      const progressFunction = typeof Module !== "undefined" &&
+        Module._platform_web_campaign_load_progress;
+      const indexFunction = typeof Module !== "undefined" &&
+        Module._platform_web_campaign_load_index;
+      if (typeof progressFunction !== "function" || typeof indexFunction !== "function") return;
+
+      const now = performance.now();
+      const progress = progressFunction();
+      if (Number.isFinite(progress) && progress >= 0) {
+        const index = indexFunction();
+        if (index < 0 || index >= campaignMissions.length) return;
+        const mission = campaignMissions[index];
+        if (!campaignLoad || campaignLoad.map !== mission[0]) {
+          if (campaignLoad) finishCampaignLoad("superseded");
+          campaignLoad = {
+            id: crypto.randomUUID(),
+            map: mission[0],
+            title: mission[1],
+            startedAt: now,
+            prepareStartedAt: 0,
+            lastProgressAt: now,
+            lastProgress: 0,
+            longestStallMs: 0,
+            maxProgress: 0,
+            sampleCount: 0,
+            swapBaseline: 0,
+          };
+        }
+        const bounded = Math.max(0, Math.min(1, progress));
+        campaignLoad.sampleCount++;
+        campaignLoad.maxProgress = Math.max(campaignLoad.maxProgress, bounded);
+        if (bounded > campaignLoad.lastProgress + .001) {
+          campaignLoad.lastProgress = bounded;
+          campaignLoad.lastProgressAt = now;
+        }
+        campaignLoad.longestStallMs = Math.max(
+          campaignLoad.longestStallMs, now - campaignLoad.lastProgressAt);
+        campaignLoad.prepareStartedAt = 0;
+        const percent = Math.round(bounded * 100);
+        const slow = now - campaignLoad.lastProgressAt >= 10_000;
+        campaignLoadingLabel.textContent = slow
+          ? `Still downloading ${campaignLoad.title}…`
+          : `Downloading ${campaignLoad.title}…`;
+        campaignLoadingPercent.textContent = `${percent}%`;
+        campaignLoadingProgress.value = percent;
+        campaignLoadingProgress.hidden = false;
+        campaignLoadingElement.hidden = false;
+        return;
+      }
+
+      if (!campaignLoad) return;
+      const swaps = typeof Module._platform_web_profile_swaps === "function"
+        ? Module._platform_web_profile_swaps() : 0;
+      if (!campaignLoad.prepareStartedAt) {
+        campaignLoad.prepareStartedAt = now;
+        campaignLoad.swapBaseline = swaps;
+        campaignLoadingLabel.textContent = `Preparing ${campaignLoad.title}…`;
+        campaignLoadingPercent.textContent = "";
+        campaignLoadingProgress.hidden = true;
+        campaignLoadingElement.hidden = false;
+        return;
+      }
+      if (swaps - campaignLoad.swapBaseline >= 2 && now - campaignLoad.prepareStartedAt >= 140) {
+        finishCampaignLoad("completed");
+      } else if (now - campaignLoad.prepareStartedAt >= 10_000) {
+        campaignLoadingLabel.textContent = `Still preparing ${campaignLoad.title}…`;
+      }
+    }
+
+    function browserAudioContext() {
+      const sdl = typeof Module !== "undefined" && Module.SDL3;
+      const context = sdl && sdl.audioContext;
+      return context && typeof context.resume === "function" ? context : null;
+    }
+
+    function reportAudioState(state) {
+      if (!state || state === audioTelemetryState) return;
+      audioTelemetryState = state;
+      if (state === "running") sendRuntimeTelemetry("audio_running", "audio-running");
+      else if (state === "suspended") sendRuntimeTelemetry("audio_suspended", "audio-suspended");
+      else if (state === "blocked") sendRuntimeTelemetry("audio_blocked", "audio-blocked");
+    }
+
+    function refreshAudioState() {
+      if (audioMuted) return;
+      const context = browserAudioContext();
+      if (!context) return;
+      if (context.state === "running") {
+        muteLabel.textContent = "Sound on";
+        muteButton.setAttribute("aria-label", "Mute game");
+        reportAudioState("running");
+      } else if (context.state === "closed") {
+        muteLabel.textContent = "Audio unavailable";
+        muteButton.setAttribute("aria-label", "Retry game audio");
+        reportAudioState("blocked");
+      } else {
+        muteLabel.textContent = "Resume sound";
+        muteButton.setAttribute("aria-label", "Resume game audio");
+        reportAudioState("suspended");
+      }
+    }
+
+    function resumeBrowserAudio() {
+      if (audioMuted) return;
+      const context = browserAudioContext();
+      if (!context) return;
+      if (context.state === "running") {
+        refreshAudioState();
+        return;
+      }
+
+      const attempt = ++audioResumeAttempt;
+      muteLabel.textContent = "Starting audio…";
+      muteButton.setAttribute("aria-label", "Starting game audio");
+      let request;
+      try {
+        request = context.resume();
+      } catch (error) {
+        diagnostic(`Audio resume failed: ${error && error.message ? error.message : error}`);
+        muteLabel.textContent = "Retry sound";
+        muteButton.setAttribute("aria-label", "Retry game audio");
+        reportAudioState("blocked");
+        return;
+      }
+      Promise.resolve(request).then(() => {
+        if (attempt !== audioResumeAttempt || audioMuted) return;
+        if (context.state === "running") {
+          refreshAudioState();
+        } else {
+          muteLabel.textContent = "Retry sound";
+          muteButton.setAttribute("aria-label", "Retry game audio");
+          reportAudioState("blocked");
+        }
+      }).catch(error => {
+        if (attempt !== audioResumeAttempt || audioMuted) return;
+        diagnostic(`Audio resume failed: ${error && error.message ? error.message : error}`);
+        muteLabel.textContent = "Retry sound";
+        muteButton.setAttribute("aria-label", "Retry game audio");
+        reportAudioState("blocked");
+      });
+    }
+
+    function applyMute() {
+      if (audioMuted) audioResumeAttempt++;
+      muteLabel.textContent = audioMuted ? "Muted" : "Sound on";
+      muteButton.setAttribute("aria-pressed", String(audioMuted));
+      muteButton.setAttribute("aria-label", audioMuted ? "Unmute game" : "Mute game");
+      muteButton.classList.toggle("is-muted", audioMuted);
+      if (typeof Module !== "undefined" && typeof Module._platform_web_set_muted === "function") {
+        Module._platform_web_set_muted(audioMuted ? 1 : 0);
+      }
+      if (!audioMuted) refreshAudioState();
+    }
+
+    function applyPlayerMagnetism() {
+      const enabled = !disablePlayerMagnetism.checked;
+      if (typeof Module !== "undefined" &&
+          typeof Module._platform_web_set_player_magnetism_enabled === "function") {
+        Module._platform_web_set_player_magnetism_enabled(enabled ? 1 : 0);
+      }
+    }
+
+    try {
+      const savedGameSettings = JSON.parse(localStorage.getItem(GAME_SETTINGS_STORAGE_KEY));
+      // Settings saved by the earlier on/off UI necessarily came from a
+      // player click, so treat them as manual even without the newer marker.
+      playerMagnetismManual = !!(savedGameSettings &&
+        Object.prototype.hasOwnProperty.call(savedGameSettings, "disablePlayerMagnetism"));
+      disablePlayerMagnetism.checked = playerMagnetismManual ?
+        !!savedGameSettings.disablePlayerMagnetism : true;
+    } catch (error) {
+      playerMagnetismManual = false;
+      disablePlayerMagnetism.checked = true;
+    }
+    function updatePlayerMagnetismNote() {
+      if (playerMagnetismManual) {
+        playerMagnetismNote.textContent = "Manual preference saved on this device. Automatic input switching is off.";
+      } else {
+        playerMagnetismNote.textContent = playerInputMode === "controller" ?
+          "Controller active · aim magnetism is on." :
+          "Keyboard and mouse active · aim magnetism is off.";
+      }
+    }
+    function setAutomaticInputMode(mode) {
+      if (playerMagnetismManual || mode === playerInputMode) return;
+      playerInputMode = mode;
+      disablePlayerMagnetism.checked = mode !== "controller";
+      updatePlayerMagnetismNote();
+      applyPlayerMagnetism();
+    }
+    updatePlayerMagnetismNote();
+    disablePlayerMagnetism.addEventListener("change", () => {
+      playerMagnetismManual = true;
+      try {
+        localStorage.setItem(GAME_SETTINGS_STORAGE_KEY, JSON.stringify({
+          disablePlayerMagnetism: disablePlayerMagnetism.checked,
+          playerMagnetismManual: true,
+        }));
+      } catch (error) {
+        // Storage can be unavailable in strict private browsing; the manual
+        // preference still remains fixed for this page load.
+      }
+      updatePlayerMagnetismNote();
+      applyPlayerMagnetism();
+    });
+    ["keydown", "keyup", "keypress"].forEach(type => {
+      gameSettingsMenu.addEventListener(type, event => event.stopPropagation());
+    });
+    document.addEventListener("pointerdown", event => {
+      if (gameSettingsMenu.open && !gameSettingsMenu.contains(event.target)) {
+        gameSettingsMenu.removeAttribute("open");
+      }
+    });
+
+    function formatBytes(value) {
+      if (!Number.isFinite(value) || value < 0) return "Unavailable";
+      const units = ["B", "KB", "MB", "GB"];
+      let amount = value;
+      let unit = 0;
+      while (amount >= 1024 && unit < units.length - 1) {
+        amount /= 1024;
+        unit++;
+      }
+      return `${amount.toFixed(unit > 1 ? 1 : 0)} ${units[unit]}`;
+    }
+
+    function updateMemory() {
+      const values = [];
+      if (performance.memory && Number.isFinite(performance.memory.usedJSHeapSize)) {
+        values.push(`JS ${formatBytes(performance.memory.usedJSHeapSize)}`);
+      }
+      if (typeof Module !== "undefined" &&
+          typeof Module._platform_web_profile_memory_bytes === "function") {
+        values.push(`WASM ${formatBytes(Module._platform_web_profile_memory_bytes())}`);
+      } else if (typeof Module !== "undefined" && Module.HEAPU8 && Module.HEAPU8.buffer) {
+        values.push(`WASM ${formatBytes(Module.HEAPU8.buffer.byteLength)}`);
+      }
+      memoryElement.textContent = values.length ? values.join(" · ") : "Unavailable in this browser";
+    }
+
+    function updatePerformance() {
+      const functions = [
+        Module._platform_web_profile_loops,
+        Module._platform_web_profile_stops,
+        Module._platform_web_profile_stop_connection,
+        Module._platform_web_profile_callback_total,
+      ];
+      if (functions.some(fn => typeof fn !== "function")) return;
+      const sample = {
+        time: performance.now(),
+        loops: functions[0](),
+        stops: functions[1](),
+        stopConnection: functions[2](),
+        callbackTotal: functions[3](),
+      };
+      const stopped = sample.stops ? ` · stopped (${sample.stopConnection})` : "";
+      if (!performancePrevious) {
+        performancePrevious = sample;
+        performanceElement.textContent = `Measuring…${stopped}`;
+        return;
+      }
+
+      const elapsed = sample.time - performancePrevious.time;
+      if (!Number.isFinite(elapsed) || elapsed <= 0 || elapsed > performanceMaximumWindow) {
+        performancePrevious = sample;
+        performanceElement.textContent = `Measuring…${stopped}`;
+        return;
+      }
+      if (elapsed < performanceMinimumWindow) return;
+
+      const loops = sample.loops - performancePrevious.loops;
+      const callbackTotal = sample.callbackTotal - performancePrevious.callbackTotal;
+      const stops = sample.stops - performancePrevious.stops;
+      if (!Number.isFinite(loops) || !Number.isFinite(callbackTotal) ||
+          loops < 0 || callbackTotal < 0 || stops < 0) {
+        performancePrevious = sample;
+        performanceElement.textContent = `Measuring…${stopped}`;
+        return;
+      }
+
+      performancePrevious = sample;
+      if (!loops) {
+        performanceElement.textContent = `Working…${stopped}`;
+        return;
+      }
+
+      const framesPerSecond = loops * 1000 / elapsed;
+      const average = callbackTotal / loops;
+      if (!Number.isFinite(framesPerSecond) || !Number.isFinite(average)) {
+        performanceElement.textContent = `Measuring…${stopped}`;
+        return;
+      }
+      performanceElement.textContent =
+        `${framesPerSecond.toFixed(1)} FPS · ${average.toFixed(1)} ms CPU${stopped}`;
+      refreshAudioState();
+      telemetrySamples.push({ cpu: average, fps: framesPerSecond });
+      if (telemetrySamples.length >= 60 || performance.now() - telemetryLastFlush >= 60_000) {
+        flushPerformanceTelemetry();
+      }
+      updateMemory();
+    }
+
+    document.addEventListener("visibilitychange", () => {
+      performancePrevious = null;
+      performanceElement.textContent = document.hidden ? "Paused" : "Measuring…";
+      if (document.hidden) flushPerformanceTelemetry();
+      if (!document.hidden) updatePerformance();
+    });
+    window.addEventListener("pagehide", flushPerformanceTelemetry);
+    window.addEventListener("pagehide", () => finishCampaignLoad("abandoned"));
+
+    function diagnostic(text) {
+      if (!text) return;
+      diagnosticsElement.textContent += `${text}\n`;
+    }
+
+    function focusCanvas() {
+      try {
+        canvas.focus({ preventScroll: true });
+      } catch (_error) {
+        canvas.focus();
+      }
+    }
+
+    function updatePointerLockUi(message) {
+      const locked = document.pointerLockElement === canvas;
+      if (locked) pointerLockPending = false;
+      window.clearTimeout(pointerLockTimer);
+      focusButton.dataset.state = locked ? "locked" : (pointerLockPending ? "pending" : "unlocked");
+      focusButton.setAttribute("aria-pressed", String(locked));
+      focusButton.setAttribute("aria-busy", String(pointerLockPending));
+      focusButton.disabled = pointerLockPending;
+      focusLabel.textContent = locked ? "Mouse captured" : (pointerLockPending ? "Capturing…" : "Focus game");
+      footerHint.textContent = message || (controllerSummary
+        ? (locked
+          ? `${controllerSummary} · mouse captured`
+          : `${controllerSummary} · mouse capture optional`)
+        : (locked
+          ? "Mouse captured · press Esc to release"
+          : "Click the game or Focus game to capture the mouse"));
+    }
+
+    function connectedGamepads() {
+      try {
+        if (typeof navigator.getGamepads !== "function") return [];
+        return Array.from(navigator.getGamepads() || [])
+          .filter(gamepad => gamepad && gamepad.connected);
+      } catch (error) {
+        if (!gamepadDiscoveryFailed) {
+          gamepadDiscoveryFailed = true;
+          diagnostic(`Controller discovery unavailable: ${error && error.message ? error.message : error}`);
+          sendRuntimeTelemetry("controller_unavailable", "gamepad-api");
+        }
+        return [];
+      }
+    }
+
+    function refreshControllerStatus() {
+      const pads = connectedGamepads();
+      if (pads.length !== connectedControllerCount) {
+        connectedControllerCount = pads.length;
+        if (pads.length) sendRuntimeTelemetry("controller_connected", "gamepad-api");
+      }
+      if (!pads.length) {
+        controllerSummary = "";
+        if (playerInputMode === "controller") setAutomaticInputMode("keyboard-mouse");
+      } else if (pads.length === 1) {
+        const name = pads[0].id ? pads[0].id.split("(")[0].trim() : "Controller";
+        controllerSummary = `${name || "Controller"} ready · Player 1`;
+      } else {
+        controllerSummary = `${Math.min(pads.length, 4)} controllers detected`;
+      }
+      if (pads.some(gamepad =>
+        Array.from(gamepad.buttons || []).some(button => button && (button.pressed || button.value > .5)) ||
+        Array.from(gamepad.axes || []).some(axis => Math.abs(axis) > .35))) {
+        setAutomaticInputMode("controller");
+      }
+      updatePointerLockUi();
+    }
+
+    function reportPointerLockFailure(error) {
+      if (!pointerLockPending && document.pointerLockElement !== canvas) return;
+      const detail = error && error.message ? error.message : String(error || "request was blocked");
+      pointerLockPending = false;
+      diagnostic(`Pointer lock unavailable: ${detail}`);
+      updatePointerLockUi("Mouse capture was blocked — click the game and try again");
+    }
+
+    function captureGameInput() {
+      focusCanvas();
+      if (document.pointerLockElement === canvas) {
+        updatePointerLockUi();
+        return;
+      }
+      if (typeof canvas.requestPointerLock !== "function") {
+        updatePointerLockUi("Mouse capture is unavailable in this browser · keyboard and controller still work");
+        return;
+      }
+
+      pointerLockPending = true;
+      updatePointerLockUi();
+      pointerLockTimer = window.setTimeout(() => {
+        if (pointerLockPending && document.pointerLockElement !== canvas) {
+          pointerLockPending = false;
+          updatePointerLockUi("Click the game once, then try Focus game again");
+        }
+      }, 1600);
+      try {
+        const request = canvas.requestPointerLock();
+        if (request && typeof request.catch === "function") {
+          request.catch(reportPointerLockFailure);
+        }
+      } catch (error) {
+        reportPointerLockFailure(error);
+      }
+    }
+
+    function setDiagnosticsOpen(open) {
+      diagnosticsOverlay.hidden = !open;
+      if (open) {
+        updatePerformance();
+        updateMemory();
+        document.getElementById("diagnostics-close").focus();
+      } else {
+        focusCanvas();
+      }
+    }
+
+    if (!crossOriginIsolated) {
+      isolationWarning.textContent = "This page needs COOP/COEP headers for threaded WebAssembly.";
+    }
+
+    canvas.addEventListener("webglcontextlost", event => {
+      event.preventDefault();
+      sendRuntimeTelemetry("webgl_context_lost", "renderer");
+      presentationWaitToken++;
+      gamePresented = false;
+      gameArea.dataset.presented = "false";
+      statusElement.textContent = "WebGL context lost — reload the page to continue.";
+      loadingLabel.textContent = "WebGL context lost — reload the page to continue.";
+      loadingElement.hidden = false;
+      loadingElement.setAttribute("aria-busy", "false");
+    });
+
+    focusButton.addEventListener("click", captureGameInput);
+    document.addEventListener("pointerlockchange", () => updatePointerLockUi());
+    document.addEventListener("pointerlockerror", () => {
+      if (pointerLockPending) reportPointerLockFailure(new Error("the browser rejected the request"));
+    });
+    document.getElementById("logs").addEventListener("click", () => {
+      setDiagnosticsOpen(diagnosticsOverlay.hidden);
+    });
+    document.getElementById("diagnostics-close").addEventListener("click", () => {
+      setDiagnosticsOpen(false);
+    });
+    aboutButton.addEventListener("click", () => {
+      aboutDialog.showModal();
+      aboutCloseButton.focus();
+    });
+    aboutCloseButton.addEventListener("click", () => aboutDialog.close());
+    aboutDialog.addEventListener("close", () => aboutButton.focus());
+    ["keydown", "keyup", "keypress"].forEach(type => {
+      aboutDialog.addEventListener(type, event => event.stopPropagation());
+    });
+    document.getElementById("diagnostics-secret").addEventListener("click", () => {
+      secretClickCount++;
+      window.clearTimeout(secretClickTimer);
+      if (secretClickCount >= 3) {
+        secretClickCount = 0;
+        setDiagnosticsOpen(true);
+        return;
+      }
+      secretClickTimer = window.setTimeout(() => { secretClickCount = 0; }, 700);
+    });
+    canvas.addEventListener("pointerdown", () => {
+      setAutomaticInputMode("keyboard-mouse");
+      focusCanvas();
+      if (!audioMuted) resumeBrowserAudio();
+    });
+    canvas.addEventListener("mousemove", event => {
+      if (document.pointerLockElement === canvas && (event.movementX || event.movementY)) {
+        setAutomaticInputMode("keyboard-mouse");
+      }
+    });
+
+    function webUiOwnsKeyboardFocus() {
+      const active = document.activeElement;
+      if (!diagnosticsOverlay.hidden || onlineDialog.open || aboutDialog.open ||
+          xisoDialog.open || gameSettingsMenu.open) return true;
+      return active && active !== canvas && typeof active.matches === "function" &&
+        active.matches("input, select, textarea, button, summary, [contenteditable='true']");
+    }
+
+    document.addEventListener("keydown", event => {
+      const gameOwnsKeyboard = document.pointerLockElement === canvas || document.activeElement === canvas;
+      if (gameOwnsKeyboard && !webUiOwnsKeyboardFocus()) {
+        setAutomaticInputMode("keyboard-mouse");
+      }
+      if (event.key === "Tab" && gameOwnsKeyboard && !webUiOwnsKeyboardFocus()) {
+        // Keep Tab available to SDL/Halo (weapon switch) while suppressing the
+        // browser's default focus traversal. Do not stop propagation here.
+        event.preventDefault();
+      } else if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === "l") {
+        event.preventDefault();
+        setDiagnosticsOpen(diagnosticsOverlay.hidden);
+      } else if (event.key === "Escape" && !diagnosticsOverlay.hidden) {
+        event.preventDefault();
+        setDiagnosticsOpen(false);
+      }
+    });
+    muteButton.addEventListener("click", () => {
+      const context = browserAudioContext();
+      if (!audioMuted && context && context.state !== "running") {
+        resumeBrowserAudio();
+        return;
+      }
+      audioMuted = !audioMuted;
+      applyMute();
+      if (!audioMuted) resumeBrowserAudio();
+    });
+
+    async function lockFullscreenMovementKeys() {
+      if (!navigator.keyboard || typeof navigator.keyboard.lock !== "function") return;
+      try {
+        // Locking the physical movement keys also captures Ctrl+W/S/D/A,
+        // preventing browser shortcuts while JavaScript fullscreen is active.
+        await navigator.keyboard.lock(["KeyW", "KeyA", "KeyS", "KeyD"]);
+        diagnostic("Fullscreen keyboard lock enabled for movement keys.");
+      } catch (error) {
+        diagnostic(`Fullscreen keyboard lock unavailable: ${error && error.message ? error.message : error}`);
+      }
+    }
+
+    function unlockFullscreenKeyboard() {
+      if (!navigator.keyboard || typeof navigator.keyboard.unlock !== "function") return;
+      try {
+        navigator.keyboard.unlock();
+      } catch (error) {
+        diagnostic(`Fullscreen keyboard unlock failed: ${error && error.message ? error.message : error}`);
+      }
+    }
+
+    fullscreenButton.addEventListener("click", () => {
+      focusCanvas();
+      try {
+        const request = document.fullscreenElement && document.exitFullscreen ?
+          document.exitFullscreen() :
+          (gameArea.requestFullscreen ? gameArea.requestFullscreen() : null);
+        if (request && typeof request.catch === "function") {
+          request.catch(error => diagnostic(`Fullscreen unavailable: ${error.message}`));
+        }
+      } catch (error) {
+        diagnostic(`Fullscreen unavailable: ${error.message}`);
+      }
+    });
+    document.addEventListener("fullscreenchange", () => {
+      const expanded = document.fullscreenElement === document.getElementById("game-area");
+      if (expanded) lockFullscreenMovementKeys();
+      else unlockFullscreenKeyboard();
+      fullscreenButton.setAttribute("aria-label", expanded ? "Exit fullscreen" : "Enter fullscreen");
+      fullscreenButton.title = expanded ? "Exit fullscreen" : "Fullscreen";
+    });
+    window.addEventListener("gamepadconnected", event => {
+      setAutomaticInputMode("controller");
+      refreshControllerStatus(event);
+    });
+    window.addEventListener("gamepaddisconnected", refreshControllerStatus);
+    window.addEventListener("focus", refreshControllerStatus);
+    window.setInterval(refreshControllerStatus, 250);
+    document.getElementById("player-sidebar-toggle").addEventListener("click", event => {
+      const sidebar = document.getElementById("player-sidebar");
+      const collapsed = sidebar.dataset.collapsed !== "true";
+      sidebar.dataset.collapsed = String(collapsed);
+      event.currentTarget.setAttribute("aria-expanded", String(!collapsed));
+      event.currentTarget.setAttribute("aria-label", collapsed ? "Expand player list" : "Collapse player list");
+      event.currentTarget.textContent = collapsed ? "⌄" : "⌃";
+    });
+    refreshControllerStatus();
+
+    function revealPresentedGame(token) {
+      if (gamePresented || token !== presentationWaitToken) return;
+      gamePresented = true;
+      runtimeStage = "presented";
+      sendRuntimeTelemetry("game_presented", runtimeStage);
+      gameArea.dataset.presented = "true";
+      canvas.classList.add("ready");
+      statusElement.textContent = "Running";
+      loadingElement.hidden = true;
+      loadingElement.setAttribute("aria-busy", "false");
+      progressElement.hidden = true;
+      updatePointerLockUi();
+    }
+
+    function waitForPresentedGame() {
+      if (gamePresented || presentationFrameRequest) return;
+      const token = ++presentationWaitToken;
+      let baseline = null;
+      let candidateAt = 0;
+
+      const poll = now => {
+        presentationFrameRequest = 0;
+        if (gamePresented || token !== presentationWaitToken) return;
+        if (!haloRuntimeReady) {
+          presentationFrameRequest = window.requestAnimationFrame(poll);
+          return;
+        }
+        const loops = typeof Module !== "undefined" && Module._platform_web_profile_loops;
+        const swaps = typeof Module !== "undefined" && Module._platform_web_profile_swaps;
+        if (typeof loops !== "function" || typeof swaps !== "function") {
+          presentationFrameRequest = window.requestAnimationFrame(poll);
+          return;
+        }
+
+        const sample = { loops: loops(), swaps: swaps() };
+        if (!baseline || sample.loops < baseline.loops || sample.swaps < baseline.swaps) {
+          baseline = sample;
+          candidateAt = 0;
+        } else {
+          const completedLoops = sample.loops - baseline.loops;
+          const submittedFrames = sample.swaps - baseline.swaps;
+          if (completedLoops > 0 && submittedFrames > 0 && !candidateAt) candidateAt = now;
+          if (candidateAt && completedLoops >= 4 && submittedFrames >= 2 && now - candidateAt >= 140) {
+            revealPresentedGame(token);
+            return;
+          }
+        }
+        presentationFrameRequest = window.requestAnimationFrame(poll);
+      };
+
+      loadingElement.hidden = false;
+      loadingElement.setAttribute("aria-busy", "true");
+      presentationFrameRequest = window.requestAnimationFrame(poll);
+    }
+
+    function cancelPresentedGameWait() {
+      presentationWaitToken++;
+      if (presentationFrameRequest) window.cancelAnimationFrame(presentationFrameRequest);
+      presentationFrameRequest = 0;
+    }
+
+    function setStatus(text) {
+      if (!text) {
+        if (gamePresented) {
+          statusElement.textContent = "Running";
+          return;
+        }
+        runtimeStage = "calibrating";
+        statusElement.textContent = "Starting display…";
+        loadingLabel.textContent = "Calibrating ring interface…";
+        progressElement.hidden = true;
+        waitForPresentedGame();
+        return;
+      }
+
+      if (/^Preparing files/u.test(text)) runtimeStage = "dependencies";
+      else if (/^Starting Halo/u.test(text)) runtimeStage = "runtime";
+      else if (/^(Could not start:|Aborted:)/iu.test(text)) runtimeStage = "failed";
+      else runtimeStage = "loading";
+      statusElement.textContent = text;
+      if (gamePresented && !/^Could not start:/i.test(text)) return;
+      loadingLabel.textContent = runtimeGpuClass === "software" && runtimeStage !== "failed"
+        ? "Graphics acceleration appears to be off — enable it in your browser settings."
+        : text;
+      loadingElement.hidden = false;
+      loadingElement.setAttribute("aria-busy", "true");
+      if (/^(Could not start:|Aborted:)/i.test(text)) {
+        cancelPresentedGameWait();
+        loadingElement.setAttribute("aria-busy", "false");
+      }
+      const match = text.match(/([^(]+)\((\d+(?:\.\d+)?)\/(\d+)\)/);
+      if (match) {
+        progressElement.hidden = false;
+        progressElement.value = Number(match[2]);
+        progressElement.max = Number(match[3]);
+      } else {
+        progressElement.hidden = true;
+      }
+    }
+
+    var Module = {
+      canvas,
+      preRun: [beginXisoGate],
+      print: (...args) => {
+        const line = args.join(" ");
+        const performancePrefix = "HALO_PERF:";
+        if (line.startsWith(performancePrefix)) {
+          performanceElement.textContent = line.slice(performancePrefix.length);
+        } else {
+          console.log(...args);
+        }
+      },
+      printErr: (...args) => {
+        console.error(...args);
+        const line = args.join(" ");
+        diagnostic(line);
+        if (line.startsWith("halo-linux: OpenGL ")) {
+          runtimeGpuClass = classifyRenderer(line);
+          runtimeStage = "renderer";
+          sendRuntimeTelemetry("renderer_ready", runtimeStage);
+          canvas.classList.add("ready");
+          loadingLabel.textContent = runtimeGpuClass === "software"
+            ? "Graphics acceleration appears to be off — enable it in your browser settings."
+            : "Starting renderer…";
+          waitForPresentedGame();
+        }
+      },
+      setStatus,
+      totalDependencies: 0,
+      monitorRunDependencies(left) {
+        this.totalDependencies = Math.max(this.totalDependencies, left);
+        setStatus(left
+          ? `Preparing files… (${this.totalDependencies - left}/${this.totalDependencies})`
+          : "Starting Halo…");
+      },
+      onRuntimeInitialized() {
+        haloRuntimeReady = true;
+        runtimeStage = "runtime-initialized";
+        sendRuntimeTelemetry("runtime_initialized", runtimeStage);
+        applyMute();
+        applyPlayerMagnetism();
+        if (window.HaloOnline) {
+          window.HaloOnline.runtimeReady();
+        }
+        updatePerformance();
+        window.setInterval(updatePerformance, 1000);
+        updateCampaignLoading();
+        window.setInterval(updateCampaignLoading, 200);
+        updateRuntimeTelemetry();
+        window.setInterval(updateRuntimeTelemetry, 250);
+        setStatus("Starting Halo…");
+        waitForPresentedGame();
+      },
+      onAbort(reason) {
+        diagnostic(`abort: ${reason}`);
+        sendRuntimeFailure("runtime_abort", reason);
+        setStatus(`Aborted: ${reason || "the runtime stopped"}`);
+      },
+    };
+
+    function isPointerLockFailure(message) {
+      // Chromium sometimes rejects a pointer-lock request with this generic
+      // text instead of naming Pointer Lock. It is non-fatal to SDL/Halo.
+      return /pointer lock/i.test(message) ||
+        message.includes("If you see this error we have a bug. Please report this bug to chromium.");
+    }
+
+    function isBrowserExtensionFailure(message, source) {
+      const detail = `${message || ""}\n${source || ""}`;
+      return /\b(?:chrome|moz|safari|safari-web|ms-browser)-extension:\/\//i.test(detail) ||
+        /webkit-masked-url:\/\//i.test(detail) ||
+        /metamask/i.test(detail);
+    }
+
+    window.addEventListener("error", event => {
+      const message = event.message || "see the browser console";
+      const source = event.error && event.error.stack ? event.error.stack : event.filename;
+      if (isPointerLockFailure(message)) {
+        event.preventDefault();
+        return;
+      }
+      if (isBrowserExtensionFailure(message, source)) {
+        diagnostic(`ignored browser extension error: ${source || message}`);
+        event.preventDefault();
+        return;
+      }
+      diagnostic(source || message);
+      sendRuntimeFailure("runtime_error", event.error || message, source);
+      setStatus(`Could not start: ${message}`);
+    });
+    window.addEventListener("unhandledrejection", event => {
+      const message = event.reason && event.reason.message ? event.reason.message : String(event.reason);
+      const source = event.reason && event.reason.stack ? event.reason.stack : "";
+      if (isPointerLockFailure(message)) {
+        event.preventDefault();
+        return;
+      }
+      if (isBrowserExtensionFailure(message, source)) {
+        diagnostic(`ignored browser extension rejection: ${source || message}`);
+        event.preventDefault();
+        return;
+      }
+      diagnostic(source || message);
+      sendRuntimeFailure("runtime_error", event.reason || message, source);
+      setStatus(`Could not start: ${message}`);
+    });
+  </script>
+  {{{ SCRIPT }}}
+</body>
+</html>

@@ -19,6 +19,51 @@ renderer can protect the pages again before the kernel writes them.
 
 #include "platform.h"
 
+#ifdef HALO_WEB
+
+/* Browsers do not expose mprotect or synchronous fault handlers.  WebGL
+uploads therefore use an always-changing generation and bypass the large
+vertex mirror (d3d8_gl.c).  This is deliberately conservative: resources
+are uploaded again rather than ever rendering stale guest memory. */
+static volatile unsigned long current_generation = 1;
+
+void memory_watch_initialize(void)
+{
+}
+
+void memory_watch_protect(unsigned long address, unsigned long size)
+{
+	(void)address;
+	(void)size;
+}
+
+unsigned long memory_watch_generation(unsigned long address, unsigned long size)
+{
+	(void)address;
+	return size ? __sync_add_and_fetch(&current_generation, 1) : 0;
+}
+
+unsigned long memory_watch_serial(void)
+{
+	return __sync_add_and_fetch(&current_generation, 1);
+}
+
+void memory_watch_prepare_write(void *address, unsigned long size)
+{
+	(void)address;
+	if (size)
+		__sync_add_and_fetch(&current_generation, 1);
+}
+
+void memory_watch_forget(void *address, unsigned long size)
+{
+	(void)address;
+	if (size)
+		__sync_add_and_fetch(&current_generation, 1);
+}
+
+#else
+
 #include <execinfo.h>
 #include <signal.h>
 #include <stdio.h>
@@ -223,3 +268,5 @@ void memory_watch_forget(void *address, unsigned long size)
 		page_generation[page] = __sync_add_and_fetch(&current_generation, 1);
 	}
 }
+
+#endif

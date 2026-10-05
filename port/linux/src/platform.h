@@ -40,6 +40,9 @@ void platform_unimplemented(const char *name);
 
 #define PLATFORM_UNIMPLEMENTED() platform_unimplemented(__func__)
 
+/* Change the software mixer's master mute state without stopping its clock. */
+void platform_audio_set_muted(BOOL muted);
+
 /* ---------- errors */
 
 /* translate errno into a Win32 error code and store it as GetLastError() */

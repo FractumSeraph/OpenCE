@@ -169,6 +169,7 @@ struct game_options;
 #include "physics/point_physics.h"
 #include "rasterizer/common/rasterizer_common.h"
 #include "rasterizer/rasterizer.h"
+#include "rasterizer/common/rasterizer_common.h"
 #include "render/render.h"
 #include "saved games/game_state.h"
 #include "saved games/saved_game_files.h"
@@ -233,6 +234,9 @@ typedef char verify_game_runtime_globals_difficulty_offset[
 /* ---------- globals */
 
 static struct game_runtime_globals_prefix *game_globals = NULL;
+#ifdef HALO_WEB
+static char web_map_loading_name[32];
+#endif
 extern struct game_variant game_variant_global;
 extern struct data_array *player_data;
 /* port: the PC options the game plays by (game_set_game_variant_options) */
@@ -684,11 +688,26 @@ boolean game_map_loading_in_progress(
 {
 	struct game_runtime_globals_prefix *globals = game_globals;
 
+	if (!globals)
+	{
+		if (progress)
+			*progress = 0.0f;
+		return FALSE;
+	}
+
 	if (progress)
 		*progress = globals->loading_progress;
 
 	return globals->map_load_in_progress;
 }
+
+#ifdef HALO_WEB
+const char *game_map_loading_name(
+	void)
+{
+	return web_map_loading_name;
+}
+#endif
 
 void game_unload(
 	void)
@@ -811,6 +830,11 @@ void game_precache_new_map(
 		{
 			struct game_runtime_globals_prefix *globals = game_globals;
 
+#ifdef HALO_WEB
+			csstrncpy(web_map_loading_name, tag_name_strip_path(map_name),
+				NUMBEROF(web_map_loading_name) - 1);
+			web_map_loading_name[NUMBEROF(web_map_loading_name) - 1] = '\0';
+#endif
 			globals->map_load_in_progress = TRUE;
 			globals->loading_progress = 0.0f;
 			match_assert(
