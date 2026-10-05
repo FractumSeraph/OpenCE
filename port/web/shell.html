@@ -1476,6 +1476,70 @@
       .about-card { grid-template-columns: 3.2rem minmax(0, 1fr); gap: .7rem; padding: .9rem; }
       .about-jester { width: 2.9rem; }
     }
+    /* Small screens: the side panels must never cover the game or its
+       buttons. Narrow (portrait) screens stack them above and below the
+       game and scroll; short (landscape) screens keep the online panel in
+       a column beside the game. The keyboard legend only shows where it
+       fits, and never on touch-only devices (it maps keys). */
+    @media (pointer: coarse) and (hover: none) {
+      #duke-legend { display: none; }
+    }
+    @media (max-width: 860px) and (orientation: portrait), (max-width: 860px) and (min-height: 561px) {
+      body:not(.halo-touch-mode) #game-area:not(:fullscreen) {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: .6rem;
+        padding: .6rem .5rem calc(.6rem + env(safe-area-inset-bottom));
+        overflow-x: hidden;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+      }
+      body:not(.halo-touch-mode) #game-area:not(:fullscreen) > #player-sidebar,
+      body:not(.halo-touch-mode) #game-area:not(:fullscreen) > #game-frame,
+      body:not(.halo-touch-mode) #game-area:not(:fullscreen) > #duke-legend {
+        position: relative;
+        inset: auto;
+        flex: 0 0 auto;
+        max-height: none;
+        transform: none;
+      }
+      body:not(.halo-touch-mode) #game-area:not(:fullscreen) > #player-sidebar {
+        order: -1;
+        width: min(30rem, 100%);
+      }
+      body:not(.halo-touch-mode) #game-area:not(:fullscreen) > #game-frame {
+        width: 100%;
+        max-width: 100%;
+      }
+      body:not(.halo-touch-mode) #game-area:not(:fullscreen) > #duke-legend {
+        width: min(20rem, 100%);
+      }
+    }
+    @media (max-height: 560px) and (orientation: landscape) {
+      #duke-legend { display: none; }
+      body:not(.halo-touch-mode) #game-area:not(:fullscreen) > #player-sidebar {
+        left: .5rem;
+        top: .5rem;
+        width: 12.5rem;
+        max-height: calc(100% - 1rem);
+      }
+      body:not(.halo-touch-mode) #game-area:not(:fullscreen) > #game-frame {
+        left: calc(50% + 6.5rem);
+        gap: .35rem;
+        width: min(calc(100% - 14rem), calc(177.7778dvh - 5.5rem));
+        max-width: calc(100% - 14rem);
+        max-height: calc(100% - 1rem);
+      }
+      body:not(.halo-touch-mode) #game-frame footer {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas: "controls";
+        min-height: 0;
+      }
+      body:not(.halo-touch-mode) #game-frame .game-controls { flex-wrap: wrap; }
+      body:not(.halo-touch-mode) #game-frame .site-credit,
+      body:not(.halo-touch-mode) #game-frame #footer-hint { display: none; }
+    }
   </style>
 </head>
 <body>
