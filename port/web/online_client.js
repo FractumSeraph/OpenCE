@@ -15,6 +15,10 @@
   var HEARTBEAT_MILLISECONDS = 40000;
   var PRESENCE_POLL_MILLISECONDS = 30000;
   var GAME_POLL_MILLISECONDS = 200;
+  /* the in-game server browser (src/web_public_games.c) */
+  var PUBLIC_GAMES_TICK_MILLISECONDS = 500;
+  var PUBLIC_GAMES_FETCH_MILLISECONDS = 5000;
+  var PUBLIC_GAMES_RETRY_MILLISECONDS = 30000;
   var TURNSTILE_RENDER_ATTEMPTS = 80;
   var HOST_SETTINGS_STORAGE_KEY = "halo.web.host-settings.v1";
   var PLAYER_PROFILE_STORAGE_KEY = "halo.web.player-profile.v1";
@@ -268,6 +272,83 @@
     document.addEventListener("visibilitychange", function() {
       if (!document.hidden) refreshLivePlayerCount();
     });
+  }
+
+  /* Join Game > Server Browser: native hosts list public games on internet
+     play's MQTT brokers, which a page cannot reach. While the in-game
+     browser is open, fetch them from this site's server (which subscribes
+     for us: server/public-games.mjs) and hand each listing to the game as
+     it came; the game checks its signature (p2p_lobby.c). */
+  function startPublicGamesPolling() {
+    var lastFetch = 0;
+    var fetching = false;
+    var nextDelay = PUBLIC_GAMES_FETCH_MILLISECONDS;
+
+    function heapBytes() {
+      /* (the current view: the memory may have grown) */
+      var memory = typeof wasmMemory !== "undefined" ? wasmMemory : null;
+      return new Uint8Array(memory ? memory.buffer : global.Module.HEAPU8.buffer);
+    }
+
+    function deliver(games) {
+      var buffer = wasmFunction("web_public_games_buffer")() >>> 0;
+      var capacity = wasmFunction("web_public_games_buffer_size")();
+      var heard = wasmFunction("web_public_games_heard");
+      for (var index = 0; index < games.length; index++) {
+        var game = games[index];
+        if (!game || !/^[0-9a-f]{32}$/.test(game.slot) || typeof game.payload !== "string") continue;
+        var payload;
+        try {
+          payload = Uint8Array.from(global.atob(game.payload), function(c) { return c.charCodeAt(0); });
+        } catch (error) {
+          continue;
+        }
+        if (!payload.length || 32 + payload.length > capacity) continue;
+        var heap = heapBytes();
+        for (var i = 0; i < 32; i++) heap[buffer + i] = game.slot.charCodeAt(i);
+        heap.set(payload, buffer + 32);
+        heard(payload.length, game.retained ? 1 : 0);
+      }
+    }
+
+    function tick() {
+      if (!session.runtimeReady || !global.Module ||
+          typeof global.Module._web_public_games_browsing !== "function") return;
+      if (!global.Module._web_public_games_browsing()) {
+        lastFetch = 0;
+        nextDelay = PUBLIC_GAMES_FETCH_MILLISECONDS;
+        return;
+      }
+      global.Module._web_public_games_update();
+      if (fetching || (lastFetch && Date.now() - lastFetch < nextDelay)) return;
+      fetching = true;
+      lastFetch = Date.now();
+      fetch(apiBase() + "/v1/public-games", { credentials: "omit", cache: "no-store" })
+        .then(function(response) {
+          if (!response.ok) throw new Error("HTTP " + response.status);
+          return response.json();
+        })
+        .then(function(result) {
+          nextDelay = PUBLIC_GAMES_FETCH_MILLISECONDS;
+          if (result && result.v === 1 && Array.isArray(result.games) &&
+              global.Module._web_public_games_browsing()) {
+            deliver(result.games);
+          }
+        })
+        .catch(function() {
+          /* (a server without the server browser, or offline: try again later) */
+          nextDelay = PUBLIC_GAMES_RETRY_MILLISECONDS;
+        })
+        .finally(function() { fetching = false; });
+    }
+
+    global.setInterval(function() {
+      try {
+        tick();
+      } catch (error) {
+        /* the runtime is still starting, or has stopped */
+      }
+    }, PUBLIC_GAMES_TICK_MILLISECONDS);
   }
 
   function buildId() {
@@ -2274,6 +2355,7 @@
     renderRoster();
     setBusy(false);
     startPresencePolling();
+    startPublicGamesPolling();
     session.pendingInvite = takeInviteFromLocation();
     if (session.pendingInvite) {
       showDialog();

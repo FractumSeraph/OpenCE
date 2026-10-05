@@ -3065,6 +3065,18 @@ static struct
 	unsigned long failed_time;
 } lobby_browser;
 
+/* whether the server browser can join its games: internet play's (p2p.c), or
+in the browser build the page's (port/web/src/web_public_games.c: through the
+native gateway, without p2p.c's thread) */
+static boolean lobby_browser_online(void)
+{
+#ifdef HALO_WEB
+	return TRUE;
+#else
+	return config_boolean("network.online");
+#endif
+}
+
 static void lobby_browser_begin(void)
 {
 	lobby_browser.count = 0;
@@ -3270,7 +3282,7 @@ static void lobby_browser_update(struct widget_instance *list)
 	{
 		wchar_t name[P2P_LISTING_NAME_SIZE + 1];
 
-		if (!config_boolean("network.online"))
+		if (!lobby_browser_online())
 			usnprintf(text, NUMBEROF(text) - 1, L"Internet play is off (Settings)");
 		else if (!config_boolean("network.public_lobby"))
 			usnprintf(text, NUMBEROF(text) - 1, L"The server browser is off (network.public_lobby)");
@@ -3374,8 +3386,13 @@ static boolean lobby_browser_select(struct widget_instance *widget, short contro
 	if (index >= lobby_browser.count)
 		return campaign_fail();
 	game = &lobby_browser.games[index];
-	if (!game->open || !config_boolean("network.online") || !p2p_join_invite(game->invite))
+	if (!game->open || !lobby_browser_online() || !p2p_join_invite(game->invite))
 		return campaign_fail();
+#ifdef HALO_WEB
+	/* (the page joins it and shows its lobby: nothing to wait for here) */
+	ui_play_audio_feedback_sound(SOUND_FORWARD);
+	return TRUE;
+#endif
 	csmemcpy(lobby_browser.identifier, game->identifier, sizeof(lobby_browser.identifier));
 	csmemcpy(lobby_browser.name, game->name, sizeof(lobby_browser.name));
 	lobby_browser.joining = TRUE;

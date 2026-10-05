@@ -2325,10 +2325,18 @@ static int join_invite(const char *text)
 	return 1;
 }
 
+#ifdef HALO_WEB
+/* (the browser build's internet play is the page's: port/web/src/web_public_games.c) */
+int web_join_invite(const char *text);
+#endif
+
 int p2p_join_invite(const char *text)
 {
 	int result;
 
+#ifdef HALO_WEB
+	return web_join_invite(text);
+#endif
 	p2p_identifier();
 	pthread_mutex_lock(&p2p_lock);
 	result = join_invite(text);
