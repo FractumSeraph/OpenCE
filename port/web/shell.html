@@ -1016,6 +1016,19 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+    /* (its own row, under the buttons) */
+    .site-credit {
+      grid-column: 1 / -1;
+      min-width: 0;
+      margin: 0;
+      color: #5f8199;
+      font-size: .7rem;
+      letter-spacing: .025em;
+      line-height: 1.35;
+      text-align: center;
+    }
+    .site-credit a { color: #78bfe7; text-underline-offset: .18em; }
+    .site-credit a:hover { color: #c6ecff; }
     #isolation-warning {
       position: absolute;
       left: .15rem;
@@ -1468,6 +1481,7 @@
         min-height: 0;
       }
       body:not(.halo-touch-mode) #game-frame .game-controls { flex-wrap: wrap; }
+      body:not(.halo-touch-mode) #game-frame .site-credit,
       body:not(.halo-touch-mode) #game-frame #footer-hint { display: none; }
     }
   </style>
@@ -1512,6 +1526,7 @@
           </details>
         </div>
         <span id="footer-hint" class="hint">Click the game or Focus game to capture the mouse</span>
+        <p class="site-credit">Hosted by <a href="https://fractumseraph.net/" target="_blank" rel="noopener noreferrer">FractumSeraph</a>. Built on <a href="https://github.com/OpenCommunityEdition/OpenCE" target="_blank" rel="noopener noreferrer">OpenCE</a> and <a href="https://github.com/ecumene/web-halo" target="_blank" rel="noopener noreferrer">web-halo</a>, with touch controls from <a href="https://github.com/OMG-Guest/Halo-Mobile" target="_blank" rel="noopener noreferrer">Halo Mobile</a>.</p>
         <span id="isolation-warning"></span>
         <button id="logs" type="button" hidden>Diagnostics</button>
       </footer>
