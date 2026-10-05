@@ -348,6 +348,7 @@ symbols in this file:
 #include "integer_math.h"
 #include "main/main_runtime.h"
 #include "input.h"
+#include "input/input_abstraction.h"
 #include "shell.h"
 #include "event_manager.h"
 #include "telnet_console.h"
@@ -366,6 +367,7 @@ symbols in this file:
 #include "interface/hud_definitions.h"
 #include "interface/attract_mode.h"
 #include "interface/interface.h"
+#include "interface/marketing_and_strategic_business_development.h"
 #include "interface/terminal.h"
 #include "saved games/player_profile.h"
 #include "saved games/game_state.h"
@@ -387,6 +389,17 @@ symbols in this file:
 #include "text/draw_string.h"
 #include "text/font_group.h"
 #include "tag_files/files.h"
+
+#ifdef HALO_WEB
+#include <emscripten/emscripten.h>
+#include "../../port/web/src/web_online_ui.h"
+
+/* Browser performance meter (port/linux/src/sdl_platform.c). */
+void platform_web_frame_begin(void);
+void platform_web_frame_end(void);
+void platform_web_frame_stopped(long connection);
+void platform_log(const char *format, ...);
+#endif
 
 /* ---------- constants */
 
@@ -1265,6 +1278,17 @@ short main_get_current_solo_level(
 	void)
 {
 	return main_get_solo_level_from_name(main_globals.soloplayer_map_name);
+}
+
+boolean main_campaign_in_progress(
+	void)
+{
+	/* The browser may query presence after WebAssembly is instantiated but
+	 * before game_time_globals exists. Keep this accessor safe during that
+	 * startup window instead of calling game_in_progress(), which asserts. */
+	return !main_globals.main_menu_scenario_loaded &&
+		main_globals.connection == _game_connection_local &&
+		main_get_current_solo_level() != NONE;
 }
 
 char const *main_get_solo_level_name(
@@ -2856,6 +2880,18 @@ void halt_and_catch_fire(
 	struct rasterizer_frame_begin_parameters frame_parameters;
 	struct rasterizer_window_begin_parameters window_parameters;
 
+#ifdef HALO_WEB
+	platform_log("web halt: %s", error_get());
+
+	// A fatal error can arrive inside Emscripten's proxied main-loop callback.
+	// The native halt loop below never returns, so its presents cannot complete
+	// in that environment and instead become an unbounded CPU/swap loop.
+	// Stop future callbacks and terminate this web runtime; native builds retain
+	// the original on-screen halt behavior.
+	emscripten_cancel_main_loop();
+	emscripten_force_exit(EXIT_FAILURE);
+#endif
+
 	if (!global_screenshot_count.halt_recursion_lock)
 	{
 		scenario = global_scenario_try_and_get();
@@ -3084,31 +3120,11 @@ void main_game_render(
 	return;
 }
 
-void main_loop(
+static boolean main_loop_iteration(
 	void)
 {
 	boolean render_frame;
 	long connection;
-
-	if (!game_in_editor())
-	{
-		csstrncpy(main_globals.soloplayer_map_name, "levels\\b30\\b30", NUMBEROF(main_globals.soloplayer_map_name)-1);
-		main_globals.soloplayer_map_name[NUMBEROF(main_globals.soloplayer_map_name)-1] = '\0';
-	}
-
-	main_globals.want_to_be_at_main_menu = !game_in_editor();
-	main_globals.switch_to_structure_bsp_index = NONE;
-	main_globals.halt_time_scale = TRUE;
-
-	console_initialize();
-	debug_keys_initialize();
-	game_initialize();
-	console_startup();
-	main_setup_connection();
-	main_initialize_time();
-
-	while (TRUE)
-	{
 		if (!game_in_editor())
 		{
 			if (main_globals.switch_to_structure_bsp_index!=NONE)
@@ -3212,6 +3228,11 @@ void main_loop(
 			/* automated system link tests (port/linux/game/network_test.c) */
 			network_test_update(main_globals.main_menu_scenario_loaded, main_globals.seconds_elapsed);
 #endif
+#ifdef HALO_WEB
+			/* Invite links request menu changes from the browser thread through an
+			atomic mailbox; all game state is changed here on Halo's thread. */
+			web_online_ui_update(main_globals.main_menu_scenario_loaded, main_globals.seconds_elapsed);
+#endif
 			connection = main_globals.connection;
 			if (connection==_game_connection_network_client)
 			{
@@ -3239,7 +3260,7 @@ void main_loop(
 			}
 			else if (connection==_game_connection_film_playback)
 			{
-				break;
+				return FALSE;
 			}
 
 			main_update_time();
@@ -3335,12 +3356,61 @@ void main_loop(
 			main_reset_time();
 			main_globals.halt_time_scale = TRUE;
 		}
+	return TRUE;
+}
+
+#ifdef HALO_WEB
+static void main_loop_web_iteration(
+	void *unused)
+{
+	boolean keep_running;
+
+	(void)unused;
+	platform_web_frame_begin();
+	keep_running = main_loop_iteration();
+	platform_web_frame_end();
+	if (!keep_running)
+	{
+		platform_web_frame_stopped((long)main_globals.connection);
+		platform_log("web main loop stopped (connection %ld)", (long)main_globals.connection);
+		emscripten_cancel_main_loop();
+		error(_error_silent, "end of saved film");
+		main_exit();
+	}
+}
+#endif
+
+void main_loop(
+	void)
+{
+	if (!game_in_editor())
+	{
+		csstrncpy(main_globals.soloplayer_map_name, "levels\\b30\\b30", NUMBEROF(main_globals.soloplayer_map_name)-1);
+		main_globals.soloplayer_map_name[NUMBEROF(main_globals.soloplayer_map_name)-1] = '\0';
 	}
 
+	main_globals.want_to_be_at_main_menu = !game_in_editor();
+	main_globals.switch_to_structure_bsp_index = NONE;
+	main_globals.halt_time_scale = TRUE;
+
+	console_initialize();
+	debug_keys_initialize();
+	game_initialize();
+	console_startup();
+	main_setup_connection();
+	main_initialize_time();
+
+#ifdef HALO_WEB
+	/* Let the worker return to its event loop after each frame.  That is when
+	an implicit-swap OffscreenCanvas publishes its WebGL drawing buffer.  A
+	zero-rate Emscripten loop follows requestAnimationFrame. */
+	emscripten_set_main_loop_arg(main_loop_web_iteration, NULL, 0, 1);
+#else
+	while (main_loop_iteration())
+		;
 	error(_error_silent, "end of saved film");
 	main_exit();
-
-	return;
+#endif
 }
 
 /* ---------- private code */

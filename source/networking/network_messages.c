@@ -644,6 +644,9 @@ void network_event(
 	va_start(arguments, format);
 	_vsnprintf(temporary, NUMBEROF(temporary) - 1, format, arguments);
 	va_end(arguments);
+	#ifdef HALO_WEB
+	fprintf(stderr, "halo-net: %s\n", temporary);
+	#endif
 
 	error(3, temporary);
 

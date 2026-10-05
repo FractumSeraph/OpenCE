@@ -2442,7 +2442,6 @@ void object_compute_node_matrices(
 		{
 			model_get_node_orientations(model, node_orientations);
 		}
-
 		if (object_definition->object.animation_graph.index!=NONE)
 		{
 			short overlay_index;
@@ -2511,7 +2510,6 @@ void object_compute_node_matrices(
 		{
 			object_type_preprocess_node_orientations(object_index, node_orientations);
 		}
-
 		if (object->object.animation.interpolation_frame_count>0)
 		{
 			match_assert("c:\\halo\\SOURCE\\objects\\objects.c", 2777, !TEST_FLAG(_object_mask_cannot_interpolate, object->object.type));

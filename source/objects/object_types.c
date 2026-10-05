@@ -225,10 +225,6 @@ void weapon_delete(
 	long object_index);
 boolean weapon_update(
 	long object_index);
-void weapon_preprocess_node_orientations(
-	long object_index,
-	struct real_orientation *node_orientations);
-
 void equipment_place(
 	long object_index,
 	struct scenario_object_datum *scenario_object);

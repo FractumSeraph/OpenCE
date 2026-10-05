@@ -24,6 +24,7 @@ symbols in this file:
 
 #include "cseries.h"
 #include "bungie_net/common/random_numbers.h"
+#include <time.h>
 
 /* ---------- constants */
 

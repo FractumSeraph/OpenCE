@@ -313,7 +313,6 @@ void error(
 			vsprintf(string, format, argument_list);
 			va_end(argument_list);
 			csstrcat(string, "\r\n");
-
 			if (priority != _error_log)
 			{
 				terminal_printf(global_real_argb_white, "%s", string);

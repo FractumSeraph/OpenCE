@@ -158,6 +158,8 @@ void props_initialize(
 	void);
 void props_initialize_for_new_map(
 	void);
+void props_dispose_from_old_map(
+	void);
 void props_dispose(
 	void);
 void prop_delete(

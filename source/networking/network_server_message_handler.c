@@ -476,7 +476,7 @@ struct message_client_settings_request
 
 struct message_client_game_start_request
 {
-	long countdown_time;
+	short request_type;
 };
 
 struct message_client_graceful_game_exit_pregame
@@ -850,6 +850,34 @@ boolean network_game_server_send_player_joined_info_ingame(
 	network_event("failed to create a message_server_add_player_ingame message");
 	return FALSE;
 }
+
+#ifdef HALO_LINUX
+/* An add-player retry can mean that this client missed the authoritative
+in-game add after loading. Send the existing player back only to that client
+so it can rebuild its local player/camera mapping without duplicating the
+server's player. */
+static boolean network_game_server_resend_player_joined_info_ingame(
+	struct network_game_server *server,
+	struct network_game_server_client_machine *client_machine,
+	struct network_player *player)
+{
+	struct network_machine *machine;
+	struct network_player message;
+	struct network_message *encoded_message;
+
+	machine = network_game_server_get_client_machine(server, client_machine, NULL);
+	message = *player;
+	encoded_message = create_network_game_message(
+		_message_server_add_player_ingame,
+		&message,
+		sizeof(message));
+	if (encoded_message)
+		return network_game_server_send_message_to_machine(server, machine, encoded_message);
+
+	network_event("failed to create a message_server_add_player_ingame recovery message");
+	return FALSE;
+}
+#endif
 
 #ifdef HALO_LINUX
 /* With up to 128 machines, sending the whole settings record (13 KB) to every
@@ -2096,7 +2124,7 @@ static boolean network_game_server_handle_message_client_game_start_request(
 	if (network_game_server_get_state(server, NULL) == _network_game_server_state_pregame)
 	{
 		struct message_client_game_start_request game_start_request;
-		short packet_type = _message_client_player_settings_request;
+		short packet_type = _message_client_game_start_request;
 		short packet_version = NETWORK_GAME_MESSAGE_VERSION;
 
 		message_size -= sizeof(word);
@@ -2108,7 +2136,7 @@ static boolean network_game_server_handle_message_client_game_start_request(
 			&packet_version,
 			_network_game_packet_class_client_pregame))
 		{
-			network_game_server_update_countdown(server, game_start_request.countdown_time);
+			network_game_server_update_countdown(server, game_start_request.request_type);
 		}
 		else
 		{
@@ -2277,6 +2305,40 @@ static boolean network_game_server_handle_message_client_add_player_request_inga
 			&packet_version,
 			_network_game_packet_class_client_ingame))
 		{
+#ifdef HALO_LINUX
+			long machine_index;
+			long player_index;
+			struct network_game *game = network_game_server_get_game(server);
+
+			network_game_server_get_client_machine(server, client_machine, &machine_index);
+			if (player.machine_index != machine_index)
+			{
+				network_event(
+					"client machine tried to add an in-game player with a non-matching machine identifier");
+				return TRUE;
+			}
+			for (player_index = 0;
+				player_index < MAXIMUM_NUMBER_OF_PLAYERS;
+				player_index++)
+			{
+				struct network_player *existing_player = &game->players[player_index];
+
+				if (network_player_is_valid(existing_player) &&
+					existing_player->machine_index == player.machine_index &&
+					existing_player->controller_index == player.controller_index)
+				{
+					if (!network_game_server_resend_player_joined_info_ingame(
+						server,
+						client_machine,
+						existing_player))
+					{
+						network_event(
+							"server failed to resend an existing in-game player to its client");
+					}
+					return TRUE;
+				}
+			}
+#endif
 			network_game_server_queue_player_for_addition(server, &player);
 		}
 		else

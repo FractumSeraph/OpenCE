@@ -2018,11 +2018,13 @@ static boolean weapon_state_interruptable(
 }
 
 void weapon_preprocess_node_orientations(
-	long weapon_index)
+	long weapon_index,
+	struct real_orientation *node_orientations)
 {
 	struct weapon_datum *weapon = weapon_get(weapon_index);
 	struct weapon_definition *weapon_definition = weapon_definition_get(weapon->definition_index);
 	struct animation_graph *animation_graph = animation_graph_definition_get(weapon_definition->object.animation_graph.index);
+	(void)node_orientations;
 
 	if (animation_graph->weapon_animations.count)
 		TAG_BLOCK_GET_ELEMENT(&animation_graph->weapon_animations, 0, struct animation_graph_weapon_animations);

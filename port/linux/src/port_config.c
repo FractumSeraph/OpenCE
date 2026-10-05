@@ -211,7 +211,7 @@ static const struct config_setting config_settings[] =
 
 #define NUMBER_OF_CONFIG_SETTINGS (sizeof(config_settings) / sizeof(config_settings[0]))
 
-#ifdef HALO_ANDROID
+#if defined(HALO_ANDROID) && !defined(HALO_WEB)
 #define CONFIG_PLATFORM _platform_android
 #else
 #define CONFIG_PLATFORM _platform_desktop
@@ -233,7 +233,9 @@ static pthread_mutex_t config_lock = PTHREAD_MUTEX_INITIALIZER;
 
 static void config_path(char *path, size_t size)
 {
-#ifdef HALO_ANDROID
+#ifdef HALO_WEB
+	snprintf(path, size, "/storage/config.toml");
+#elif defined(HALO_ANDROID)
 	/* the data folder, which the app names (port/android/host/host_main.c) */
 	const char *root = getenv("HALO_DATA_ROOT");
 
@@ -361,7 +363,7 @@ static void config_append_setting(struct config_text *text, const struct config_
 		if (*line)
 			line++;
 	}
-#ifndef HALO_ANDROID
+#if !defined(HALO_ANDROID) || defined(HALO_WEB)
 	/* (Android apps have no environment to set) */
 	switch (setting->environment_style)
 	{
@@ -388,7 +390,7 @@ static char *config_default_text(void)
 	char section[32] = "";
 	size_t index;
 
-#ifdef HALO_ANDROID
+#if defined(HALO_ANDROID) && !defined(HALO_WEB)
 	config_append(&text,
 		"# Halo settings\n"
 		"#\n"

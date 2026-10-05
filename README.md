@@ -1,5 +1,10 @@
 # Halo: Combat Evolved for Linux, Windows and Android
 
+> This repository is the source-only home of the independently hosted browser
+> version at [mitchellhynes.com/halo](https://mitchellhynes.com/halo). It does
+> not include proprietary Halo game data, generated web builds, deployment
+> secrets, or local agent/workspace material. CI enforces those boundaries.
+
 This project is a port of the Halo: Combat Evolved decompilation to Linux,
 Windows and Android. The decompilation is of the Xbox build 2342
 (`cachebeta.exe`, SHA-256
@@ -36,9 +41,10 @@ an older build from that page.
 
 ## Game data
 
-The port does not include the game data. Download an Xbox disc image
-(`.xiso` or `.iso`) of Halo: Combat Evolved. All versions of the game
-operate.
+The port does not include the game data. Make an Xbox disc image (`.xiso` or
+`.iso`) from your own copy of Halo: Combat Evolved. All versions of the game
+operate. For disc-ripping instructions, visit
+[discord.gg/DQRgPUq6B8](https://discord.gg/DQRgPUq6B8).
 
 On Linux and Windows:
 
@@ -54,6 +60,57 @@ On Android:
 3. Start the app and select the folder in the folder picker. The app
    copies the data. Refer to [port/android/README.md](port/android/README.md).
 
+### Play in a browser (experimental)
+
+The public multiplayer build is available at
+[mitchellhynes.com/halo](https://mitchellhynes.com/halo).
+To comply with copyright law and respect the original Halo CE decompilation team, the site
+does not host or transmit Halo game data. On first use, choose an XISO made from
+your own Xbox copy. The browser validates it locally, copies only the required
+maps to origin-private storage in small chunks, and then reads those local files
+on demand. The XISO never leaves your device.
+
+To play with friends:
+
+1. Select **Play online**, choose the map and mode, then create a private lobby.
+2. Copy the invite link and send the same link to up to 127 friends.
+3. Each friend opens the link and Halo joins the lobby automatically. The host
+   starts the game when everyone is ready.
+
+Current Windows and Linux builds also create native
+`halo://join/<capability>` invites. The browser's **Join game** box accepts
+that exact link, so one Windows/Linux host can invite browser, Windows, and
+Linux players with a single capability. Native players open it normally;
+browser players paste it into the website after choosing their name and armor
+color. The isolated gateway under
+[`services/native-gateway`](services/native-gateway/README.md) speaks the
+current upstream `hceu/3` protocol without exposing a general UDP proxy.
+
+Audio starts muted. Everyone needs a current desktop browser with WebGL 2,
+WebAssembly threads, WebRTC, and cross-origin isolation support.
+
+The signaling Worker deploys from GitHub Actions after its tests pass. Generated
+browser executables and game data are deliberately excluded from Git history;
+the executable is built by the deployment pipeline and each player supplies
+their own local game data. See
+[docs/telemetry.md](docs/telemetry.md) for performance and TURN operations.
+
+### Build the browser version on macOS
+
+Install Ninja and an [Emscripten SDK](https://emscripten.org/docs/getting_started/downloads.html).
+The launcher finds `emcc` on `PATH`, or an SDK installed at `build/emsdk`.
+Then run this from the repository root:
+
+```sh
+python3 tools/web_run.py --iso "$HOME/Downloads/Halo.iso"
+```
+
+The first run extracts the disc's `maps/` folder, builds the WebAssembly game,
+starts the required local server, and opens Halo in the default browser. After
+that, `python3 tools/web_run.py` is enough. Press Control-C in Terminal to stop
+the server. Chrome is recommended; the browser must support WebGL 2, WebAssembly
+threads, and cross-origin isolation.
+
 ## Platforms
 
 Each platform has its own instructions:
@@ -63,6 +120,7 @@ Each platform has its own instructions:
 | Linux (32-bit x86 executable, OpenGL 4.5, SDL3) | [port/linux/README.md](port/linux/README.md) |
 | Windows (32-bit x86 executable, OpenGL 4.5, SDL3) | [port/windows/README.md](port/windows/README.md) |
 | Android (arm64 app, OpenGL ES 3, SDL3) | [port/android/README.md](port/android/README.md) |
+| Browser (WebAssembly, WebGL 2, SDL3; experimental) | See "Play in a browser" above |
 
 The Linux README also gives the controls, the settings and the multiplayer
 functions. These are almost the same on all platforms.
@@ -73,8 +131,10 @@ The game can play system link games on a local network and on the internet:
 
 - A system link game can have up to 128 players on up to 128 machines.
 - Linux, Windows and Android machines can play in the same game.
-- An invite link lets a machine join a game on the internet. No server of
-  this project is necessary.
+- The browser build supports one host and up to 127 friends per reusable private
+  invite link. The Cloudflare service exchanges connection metadata; gameplay
+  travels directly between each friend and the host when their networks permit it.
+- Native builds can use an invite link without a server from this project.
 - The default netcode is new. Each machine moves its own player at once,
   and the host makes the decisions for the game. Refer to
   [port/linux/NETCODE.md](port/linux/NETCODE.md).
@@ -97,6 +157,7 @@ To build the game:
 | `ninja linux` | `build/linux/halo` |
 | `ninja windows` (on Windows) | `build/windows/halo.exe` and `SDL3.dll` |
 | `ninja android_apk` | `port/android/app/build/outputs/apk/debug/app-debug.apk` |
+| `ninja web` | `build/web/halo.html`, served with `python3 tools/web_serve.py` |
 
 If you enter `ninja` without a target, ninja builds the game for the
 computer that you use.

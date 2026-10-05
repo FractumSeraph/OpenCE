@@ -32,6 +32,8 @@ char data_002db040[] = "$Header: /usr/people/sam/tiff/libtiff/RCS/tif_read.c,v 1
  */
 #include "tiffioP.h"
 
+extern void debug_free(void *pointer, const char *file, long line);
+
 static int TIFFSeek(
 	TIFF *tif,
 	u_int row,

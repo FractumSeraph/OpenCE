@@ -364,6 +364,14 @@ void display_assert(
 	boolean fatal)
 {
 #ifdef HALO_RELEASE
+	#ifdef HALO_WEB
+	if (fatal)
+	{
+		fprintf(stderr, "halo-web assertion in %s,#%ld: %s\n",
+			file ? file : "<unknown>", line,
+			information ? information : "<no reason given>");
+	}
+	#endif
 	/* release builds skip assertions (cseries.h), including the ones
 	written out as display_assert followed by system_exit(-1), which then
 	returns (cseries_windows.c) */

@@ -1,0 +1,60 @@
+/*
+INSTALL.CSS
+
+The "Install app" button and the how-to sheets for iPhone and Android. The
+sheet styles come from Halo Mobile's port/web/site/style.css
+(https://github.com/OMG-Guest/Halo-Mobile, CC0).
+*/
+
+.install-sheet {
+  --text: #e7eef7;
+  --muted: #9aa3b5;
+  --accent: #79d1ff;
+  --panel-edge: rgba(127, 209, 255, 0.35);
+  position: fixed;
+  z-index: 2000;
+  left: 50%;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  width: min(92vw, 460px);
+  max-height: calc(100% - 32px);
+  overflow: auto;
+  padding: 18px 20px 20px;
+  background: rgba(9, 15, 25, 0.97);
+  border: 1px solid var(--panel-edge);
+  border-radius: 8px;
+  box-shadow: 0 -10px 50px rgba(0, 0, 0, 0.6), 0 0 24px rgba(95, 200, 255, 0.12);
+  color: var(--text);
+  text-align: left;
+  font: 15px/1.45 -apple-system, BlinkMacSystemFont, Roboto, "Segoe UI", sans-serif;
+}
+.install-sheet[hidden] { display: none; }
+.install-sheet h2 { margin: 0 0 12px; font-size: 18px; color: var(--accent); letter-spacing: 0.04em; }
+.install-sheet .small { color: var(--muted); font-size: 13px; margin: 6px 0 0; }
+.install-sheet button {
+  width: 100%;
+  margin-top: 12px;
+  min-height: 40px;
+  border-radius: 9px;
+  border: 1px solid #59b8f5;
+  background: #1f7fc0;
+  color: #fff;
+  font: 600 15px/1 -apple-system, BlinkMacSystemFont, Roboto, "Segoe UI", sans-serif;
+}
+.install-sheet .steps { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 14px; }
+.install-sheet .steps li { display: flex; align-items: center; gap: 12px; font-size: 15px; }
+.install-sheet .step-icon {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid rgba(127, 209, 255, 0.5);
+  background: rgba(20, 40, 60, 0.8);
+  color: var(--accent);
+}
+.install-sheet .step-icon svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+#install-app[hidden] { display: none; }

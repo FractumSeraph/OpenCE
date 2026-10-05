@@ -146,7 +146,7 @@ double pow(
 	double x,
 	double y);
 
-void rasterizer_set_texture(
+union point2d *rasterizer_set_texture(
 	short stage,
 	short bitmap_type,
 	short bitmap_index,

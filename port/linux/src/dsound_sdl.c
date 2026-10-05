@@ -41,6 +41,11 @@ skips opening a device (port_config.c).
 #include <time.h>
 #include <unistd.h>
 
+#ifdef HALO_WEB
+#include <emscripten/emscripten.h>
+#include <stdatomic.h>
+#endif
+
 #define OUTPUT_RATE 48000
 #define OUTPUT_CHANNELS 2
 #define MAXIMUM_STREAM_PACKETS 64
@@ -113,7 +118,21 @@ static struct
 	float distance_factor;
 } listener = { { 0, 0, 0 }, { 0, 0, 1 }, { 0, 1, 0 }, 1.0f, 1.0f };
 
+static float configured_master_volume = 1.0f;
 static float master_volume = 1.0f;
+#ifdef HALO_WEB
+static BOOL master_muted = TRUE;
+#else
+static BOOL master_muted = FALSE;
+#endif
+
+void platform_audio_set_muted(BOOL muted)
+{
+	pthread_mutex_lock(&mixer_lock);
+	master_muted = muted;
+	master_volume = master_muted ? 0.0f : configured_master_volume;
+	pthread_mutex_unlock(&mixer_lock);
+}
 
 static float gain_from_millibels(LONG millibels)
 {
@@ -430,12 +449,66 @@ static void mix(float *output, unsigned long frames)
 static SDL_AudioStream *audio_stream;
 static BOOL audio_started = FALSE;
 
+#ifdef HALO_WEB
+static _Atomic unsigned long web_audio_callback_count;
+static _Atomic unsigned long web_audio_late_callback_count;
+static _Atomic unsigned long web_audio_last_callback_ms;
+static _Atomic unsigned long web_audio_maximum_callback_gap_ms;
+
+static void web_audio_record_callback(int additional_amount)
+{
+	unsigned long now = (unsigned long)emscripten_get_now();
+	unsigned long previous = atomic_exchange_explicit(
+		&web_audio_last_callback_ms, now, memory_order_relaxed);
+	unsigned long frames = additional_amount > 0 ?
+		(unsigned long)additional_amount / (OUTPUT_CHANNELS * sizeof(float)) : 0;
+	unsigned long expected = frames ? (frames * 1000) / OUTPUT_RATE : 0;
+	unsigned long late_threshold = expected * 2;
+
+	if (late_threshold < 50)
+		late_threshold = 50;
+	atomic_fetch_add_explicit(&web_audio_callback_count, 1, memory_order_relaxed);
+	if (previous)
+	{
+		unsigned long gap = now - previous;
+		unsigned long maximum = atomic_load_explicit(
+			&web_audio_maximum_callback_gap_ms, memory_order_relaxed);
+
+		if (gap > late_threshold)
+			atomic_fetch_add_explicit(&web_audio_late_callback_count, 1, memory_order_relaxed);
+		while (gap > maximum && !atomic_compare_exchange_weak_explicit(
+			&web_audio_maximum_callback_gap_ms, &maximum, gap,
+			memory_order_relaxed, memory_order_relaxed))
+		{
+		}
+	}
+}
+
+EMSCRIPTEN_KEEPALIVE unsigned long platform_web_audio_callback_count(void)
+{
+	return atomic_load_explicit(&web_audio_callback_count, memory_order_relaxed);
+}
+
+EMSCRIPTEN_KEEPALIVE unsigned long platform_web_audio_late_callback_count(void)
+{
+	return atomic_load_explicit(&web_audio_late_callback_count, memory_order_relaxed);
+}
+
+EMSCRIPTEN_KEEPALIVE unsigned long platform_web_audio_maximum_callback_gap_ms(void)
+{
+	return atomic_load_explicit(&web_audio_maximum_callback_gap_ms, memory_order_relaxed);
+}
+#endif
+
 static void SDLCALL audio_callback(void *userdata, SDL_AudioStream *stream, int additional_amount, int total_amount)
 {
 	float buffer[MIX_CHUNK_FRAMES * OUTPUT_CHANNELS];
 
 	(void)userdata;
 	(void)total_amount;
+#ifdef HALO_WEB
+	web_audio_record_callback(additional_amount);
+#endif
 	while (additional_amount > 0)
 	{
 		unsigned long frames = (unsigned long)additional_amount / (OUTPUT_CHANNELS * sizeof(float));
@@ -479,14 +552,22 @@ static void audio_start(void)
 	if (audio_started)
 		return;
 	audio_started = TRUE;
-	master_volume = (float)config_real("audio.volume");
+	configured_master_volume = (float)config_real("audio.volume");
+	master_volume = master_muted ? 0.0f : configured_master_volume;
 
 	if (config_boolean("audio.enabled") && platform_sdl_initialize())
 	{
 		spec.format = SDL_AUDIO_F32;
 		spec.channels = OUTPUT_CHANNELS;
 		spec.freq = OUTPUT_RATE;
+		/* SDL's Emscripten backend intentionally doubles its default sample
+		 * frames because browser main-thread scheduling needs more headroom.
+		 * Keep the lower-latency override for native builds only: on the web it
+		 * cut the effective buffer to 1024 frames and caused audible underruns
+		 * in browsers such as Brave Flatpak. */
+#ifndef HALO_WEB
 		SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, "512");
+#endif
 		audio_stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, audio_callback, NULL);
 		if (audio_stream)
 		{

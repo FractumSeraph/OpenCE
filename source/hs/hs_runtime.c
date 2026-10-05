@@ -481,6 +481,22 @@ static long hs_object_name_to_object_list(
 	short object_name_index);
 static long hs_object_to_object_list(
 	long object_index);
+#ifdef HALO_WEB
+/* Wasm validates indirect-call signatures. The Xbox ABI passed this four-byte
+ * union in a register, so its callback table could use long (*)(long) for
+ * union-valued helpers. Keep that table ABI with scalar web adapters. */
+static long hs_long_to_boolean_web(long value);
+static long hs_short_to_boolean_web(long value);
+static long hs_string_to_boolean_web(long value);
+static long hs_data_to_void_web(long value);
+static long hs_short_to_real_web(long value);
+static long hs_long_to_real_web(long value);
+static long hs_enum_to_real_web(long value);
+static long hs_real_to_short_web(long value);
+static long hs_real_to_long_web(long value);
+static long hs_long_to_short_web(long value);
+static long hs_object_name_to_object_list_web(long value);
+#endif
 static boolean hs_object_type_can_cast(
 	short actual_type,
 	short desired_type);
@@ -594,6 +610,19 @@ static hs_inspection_procedure hs_type_inspectors[NUMBER_OF_HS_TYPES] =
 	NULL,
 	NULL,
 };
+#ifdef HALO_WEB
+#define hs_long_to_boolean hs_long_to_boolean_web
+#define hs_short_to_boolean hs_short_to_boolean_web
+#define hs_string_to_boolean hs_string_to_boolean_web
+#define hs_data_to_void hs_data_to_void_web
+#define hs_short_to_real hs_short_to_real_web
+#define hs_long_to_real hs_long_to_real_web
+#define hs_enum_to_real hs_enum_to_real_web
+#define hs_real_to_short hs_real_to_short_web
+#define hs_real_to_long hs_real_to_long_web
+#define hs_long_to_short hs_long_to_short_web
+#define hs_object_name_to_object_list hs_object_name_to_object_list_web
+#endif
 hs_typecasting_procedure typecasting_procedures[NUMBER_OF_HS_TYPES][NUMBER_OF_HS_TYPES] =
 {
 	{ NULL }, /* unparsed */
@@ -681,6 +710,19 @@ hs_typecasting_procedure typecasting_procedures[NUMBER_OF_HS_TYPES][NUMBER_OF_HS
 		hs_object_name_to_object_list, hs_object_name_to_object_list,
 	},
 };
+#ifdef HALO_WEB
+#undef hs_long_to_boolean
+#undef hs_short_to_boolean
+#undef hs_string_to_boolean
+#undef hs_data_to_void
+#undef hs_short_to_real
+#undef hs_long_to_real
+#undef hs_enum_to_real
+#undef hs_real_to_short
+#undef hs_real_to_long
+#undef hs_long_to_short
+#undef hs_object_name_to_object_list
+#endif
 static struct hs_runtime_globals hs_runtime_globals;
 
 /* per-type fallbacks used when an external global has no backing address */
@@ -1647,6 +1689,50 @@ static long hs_object_to_object_list(
 
 	return object_list_index;
 }
+
+#ifdef HALO_WEB
+#define DEFINE_HS_UNION_CAST_ADAPTER(function) \
+	static long function##_web(long raw_value) \
+	{ \
+		union hs_conversion_result value; \
+		value.long_integer = raw_value; \
+		value = function(value); \
+		return value.long_integer; \
+	}
+
+DEFINE_HS_UNION_CAST_ADAPTER(hs_long_to_boolean)
+DEFINE_HS_UNION_CAST_ADAPTER(hs_short_to_boolean)
+DEFINE_HS_UNION_CAST_ADAPTER(hs_string_to_boolean)
+DEFINE_HS_UNION_CAST_ADAPTER(hs_data_to_void)
+DEFINE_HS_UNION_CAST_ADAPTER(hs_short_to_real)
+DEFINE_HS_UNION_CAST_ADAPTER(hs_long_to_real)
+DEFINE_HS_UNION_CAST_ADAPTER(hs_enum_to_real)
+DEFINE_HS_UNION_CAST_ADAPTER(hs_real_to_short)
+
+#undef DEFINE_HS_UNION_CAST_ADAPTER
+
+static long hs_real_to_long_web(
+	long raw_value)
+{
+	union hs_conversion_result value;
+	value.long_integer = raw_value;
+	return hs_real_to_long(value);
+}
+
+static long hs_long_to_short_web(
+	long raw_value)
+{
+	union hs_conversion_result value;
+	value.long_integer = raw_value;
+	return hs_long_to_short(value);
+}
+
+static long hs_object_name_to_object_list_web(
+	long object_name_index)
+{
+	return hs_object_name_to_object_list((short)object_name_index);
+}
+#endif
 
 static boolean hs_object_type_can_cast(
 	short actual_type,

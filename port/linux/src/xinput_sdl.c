@@ -121,6 +121,21 @@ int halo_linux_mouse_look(short gamepad_index, float *yaw, float *pitch)
 	return TRUE;
 }
 
+#ifdef HALO_WEB
+#include <emscripten/emscripten.h>
+
+/* Touch aiming (port/web/touch_controls.js): a finger dragged across the
+screen turns the view exactly as the mouse does, in pixels of relative
+motion. Called on the page's main thread. */
+EMSCRIPTEN_KEEPALIVE void platform_web_touch_look(float dx, float dy)
+{
+	pthread_mutex_lock(&mouse_lock);
+	mouse_pending_x += dx;
+	mouse_pending_y += dy;
+	pthread_mutex_unlock(&mouse_lock);
+}
+#endif
+
 /* collects the motion the game has not asked for yet; motion that nobody
 consumes for a few polls (menus, cutscenes) is dropped so it cannot jerk
 the view later */
@@ -176,14 +191,21 @@ static void keyboard_gamepad(const struct platform_input_state *input, XINPUT_GA
 	if (k[SDL_SCANCODE_RIGHT]) pad->wButtons |= XINPUT_GAMEPAD_DPAD_RIGHT;
 	if (k[SDL_SCANCODE_ESCAPE]) pad->wButtons |= XINPUT_GAMEPAD_START;
 	if (k[SDL_SCANCODE_F1]) pad->wButtons |= XINPUT_GAMEPAD_BACK;
+#ifdef HALO_WEB
+	/* Control plus a movement key is a browser shortcut (Ctrl+W closes the
+	 * tab, Ctrl+S opens Save, and Ctrl+D bookmarks). Keep web crouch on C so
+	 * ordinary tab play cannot accidentally leave the game. */
+	if (k[SDL_SCANCODE_C]) pad->wButtons |= XINPUT_GAMEPAD_LEFT_THUMB;
+#else
 	if (k[SDL_SCANCODE_LCTRL] || k[SDL_SCANCODE_C]) pad->wButtons |= XINPUT_GAMEPAD_LEFT_THUMB;
+#endif
 	if (k[SDL_SCANCODE_Z] || (mouse && m[SDL_BUTTON_MIDDLE])) pad->wButtons |= XINPUT_GAMEPAD_RIGHT_THUMB;
 
 	pad->bAnalogButtons[XINPUT_GAMEPAD_A] |= analog(k[SDL_SCANCODE_SPACE] || k[SDL_SCANCODE_RETURN] ||
 		k[SDL_SCANCODE_KP_ENTER]);
 	pad->bAnalogButtons[XINPUT_GAMEPAD_B] |= analog(k[SDL_SCANCODE_F] || k[SDL_SCANCODE_BACKSPACE] ||
 		(mouse && m[SDL_BUTTON_X1]));
-#ifdef HALO_ANDROID
+	#if defined(HALO_ANDROID) && !defined(HALO_WEB)
 	/* the system back key (gesture or button) backs out of menus */
 	pad->bAnalogButtons[XINPUT_GAMEPAD_B] |= analog(k[SDL_SCANCODE_AC_BACK]);
 #endif
@@ -290,7 +312,7 @@ static int sdl_gamepads(SDL_Gamepad *gamepads[PORT_COUNT])
 	ids = SDL_GetGamepads(&count);
 	if (!ids)
 		return 0;
-#ifdef HALO_ANDROID
+	#if defined(HALO_ANDROID) && !defined(HALO_WEB)
 	{
 		/* Android can list input devices with a few gamepad buttons (the
 		emulator's keyboard, some phones' key devices) as generic gamepads:
@@ -416,6 +438,11 @@ static DWORD connected_gamepads(void)
 	return mask;
 }
 
+static int gamepad_index_for_port(int port)
+{
+	return port;
+}
+
 BOOL WINAPI XGetDeviceChanges(PXPP_DEVICE_TYPE device_type, PDWORD insertions, PDWORD removals)
 {
 	*insertions = 0;
@@ -483,6 +510,7 @@ DWORD WINAPI XInputGetState(HANDLE device, PXINPUT_STATE state)
 {
 	int port = controller_port(device);
 	SDL_Gamepad *gamepads[PORT_COUNT];
+	int gamepad_index;
 	int count;
 
 	memset(state, 0, sizeof(*state));
@@ -503,9 +531,11 @@ DWORD WINAPI XInputGetState(HANDLE device, PXINPUT_STATE state)
 			sdl_gamepad_state(gamepads[0], &state->Gamepad);
 		test_input_gamepad(&state->Gamepad);
 	}
-	else if (port < count)
+	else
 	{
-		sdl_gamepad_state(gamepads[port], &state->Gamepad);
+		gamepad_index = gamepad_index_for_port(port);
+		if (gamepad_index >= 0 && gamepad_index < count)
+			sdl_gamepad_state(gamepads[gamepad_index], &state->Gamepad);
 	}
 
 	if (memcmp(&state->Gamepad, &controllers[port].previous, sizeof(state->Gamepad)))
@@ -521,6 +551,7 @@ DWORD WINAPI XInputSetState(HANDLE device, PXINPUT_FEEDBACK feedback)
 {
 	int port = controller_port(device);
 	SDL_Gamepad *gamepads[PORT_COUNT];
+	int gamepad_index;
 	int count;
 
 	if (!feedback)
@@ -529,11 +560,12 @@ DWORD WINAPI XInputSetState(HANDLE device, PXINPUT_FEEDBACK feedback)
 	if (port < 0)
 		return ERROR_DEVICE_NOT_CONNECTED;
 	count = sdl_gamepads(gamepads);
-	if (port < count)
+	gamepad_index = gamepad_index_for_port(port);
+	if (gamepad_index >= 0 && gamepad_index < count)
 	{
 		/* the game refreshes the motors every frame; rumble a little longer
 		than that so they do not stutter */
-		SDL_RumbleGamepad(gamepads[port], feedback->Rumble.wLeftMotorSpeed,
+		SDL_RumbleGamepad(gamepads[gamepad_index], feedback->Rumble.wLeftMotorSpeed,
 			feedback->Rumble.wRightMotorSpeed, 100);
 	}
 	return ERROR_SUCCESS;

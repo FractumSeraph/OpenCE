@@ -910,7 +910,13 @@ symbols in this file:
 #include "cseries.h"
 #include "bungie_net/network/transport.h"
 #include "bungie_net/network/transport_endpoint_winsock.h"
+#include "game/game_engine.h"
 #include "interface/player_ui.h"
+#include "interface/ui_widget.h"
+#include "main/main.h"
+#include "networking/network_game_globals.h"
+#include "networking/network_server_manager.h"
+#include "saved games/saved_game_files.h"
 #include "saved games/player_profile.h"
 #include "interface/ui_widget_definitions.h"
 
@@ -1031,16 +1037,7 @@ void game_engine_playlist_next(
 	long);
 void network_game_set_quickstart_local(
 	void);
-void game_connection_set(
-	long);
 void main_menu_switch_to_single_player(
-	void);
-void network_game_server_open_game(
-	void *server);
-void network_game_server_pause_countdown(
-	void *server,
-	boolean pause);
-void *global_network_game_server_get(
 	void);
 boolean xbox_demos_available(
 	void);
@@ -1050,14 +1047,8 @@ void ui_widgets_pop_stack(
 	short local_player_index);
 boolean ui_main_menu_music_active(
 	void);
-void main_set_difficulty(
-	word difficulty);
-void main_set_map_name(
-	char *map_name);
 void main_defer_map_map_change(
 	void);
-void *widget_free(
-	void *pointer);
 boolean create_global_network_game_client(
 	void);
 boolean create_global_network_game_server(
@@ -1085,21 +1076,14 @@ boolean virtual_keyboard_launch(
 	void *text,
 	long maximum_length,
 	long keyboard_type);
-void network_game_client_local_player_quit(
-	word controller_index);
 struct widget_instance *widget_instance_get_topmost_parent(
 	struct widget_instance *widget);
-struct widget_instance *widget_instance_get_nth_child(
-	struct widget_instance *widget,
-	long n);
 void display_error(
 	short error_code,
 	short local_player_index,
 	boolean modal,
 	boolean pause_game_time);
 char *main_get_map_name(
-	void);
-void *global_network_game_client_get(
 	void);
 void *network_game_client_get_game(
 	void *client);
@@ -1120,8 +1104,6 @@ boolean network_game_client_initiate_join_game(
 	void *server,
 	struct network_game_join_descriptor *join_descriptor,
 	struct transport_address *address);
-void *network_game_get_game(
-	void);
 short network_game_client_get_local_machine_index(
 	void);
 boolean network_game_client_update_local_player_data(
@@ -1141,9 +1123,6 @@ void playlist_profiles_enumerate_available_to_local_player_index(
 	long *profile_indices);
 boolean saved_game_file_retrieve_last_used_multiplayer_variant_directory(
 	char *directory_path);
-long saved_game_file_find_profile_index_for_directory_path(
-	char *directory_path,
-	short profile_type);
 extern byte cached_variant_profile[0x144];
 static boolean new_campaign_chosen(
 	struct widget_instance *widget,
@@ -1167,12 +1146,6 @@ wchar_t *ustrncpy(
 	wchar_t *destination,
 	wchar_t const *source,
 	long count);
-void *ui_widget_realloc(
-	void *pointer,
-	word size,
-	char *file,
-	long line);
-
 extern byte cached_player_profile[0x9C];
 
 long playlist_profile_new(
@@ -1180,8 +1153,6 @@ long playlist_profile_new(
 	wchar_t *name);
 boolean saved_game_file_get_path_to_enclosing_directory(
 	long profile_index,
-	char *directory_path);
-void saved_game_file_remember_last_used_multiplayer_variant_directory(
 	char *directory_path);
 struct game_variant_data *build_game_variant_slayer(
 	struct game_variant_data *variant);
@@ -5727,17 +5698,9 @@ static boolean multiplayer_level_select(
 	return TRUE;
 }
 
-struct playlist_profile_data
-{
-	byte data[0x68];
-};
-
-struct playlist_profile_data *game_engine_get_variant_by_name(
-	struct playlist_profile_data *result,
-	char *name);
 boolean playlist_profile_get(
 	long profile_index,
-	struct playlist_profile_data *profile);
+	struct game_variant *profile);
 boolean saved_game_file_get_path_to_enclosing_directory(
 	long profile_index,
 	char *directory_path);
@@ -5747,11 +5710,11 @@ static boolean multiplayer_profile_set_for_game(
 	struct event_record *event,
 	boolean *widget_deleted)
 {
-	struct playlist_profile_data profile;
+	struct game_variant profile;
 	char variant_name[128];
-	struct playlist_profile_data automation_profile;
-	struct playlist_profile_data empty_profile;
-	struct playlist_profile_data temporary_profile;
+	struct game_variant automation_profile;
+	struct game_variant empty_profile;
+	struct game_variant temporary_profile;
 	char directory_path[256];
 	struct widget_instance *profile_select_screen;
 	struct widget_instance *profile_list;

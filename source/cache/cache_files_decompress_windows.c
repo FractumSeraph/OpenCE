@@ -1394,7 +1394,6 @@ static void cache_copy_issue_write_internal(
 		size,
 		self->current_write_offset,
 		write_buffer_index);
-
 	self->current_write_offset += size;
 	self->write_bytes_left -= size;
 
@@ -1422,7 +1421,6 @@ static void cache_copy_initialize_read_data(
 
 	cache_copy_issue_read_raw(self, &self->header, sizeof(self->header), 0);
 	cache_copy_block_on_raw_read(self);
-
 	cache_file_header_verify(&self->header, "blah", TRUE);
 
 	self->read_bytes_left -= sizeof(self->header);
@@ -1572,7 +1570,6 @@ static void cache_copy_run_decompression(
 				zlib_stream->avail_in = FILE_BLOCK_SIZE;
 				zlib_stream->next_in = cache_copy_get_read_buffer(self, self->current_request);
 				self->current_read_sequence_count = 1;
-
 				match_assert(
 					"c:\\halo\\SOURCE\\cache\\cache_files_decompress_windows.c",
 					1163,
@@ -1608,7 +1605,6 @@ static void cache_copy_run_decompression(
 			decompressor_timer_start(_decompressor_timer_zlib_during_write_file);
 
 		zlib_result = inflate(zlib_stream, 0);
-
 		decompressor_timer_stop(_decompressor_timer_zlib);
 		if (self->write_requests_pending > 1)
 			decompressor_timer_stop(_decompressor_timer_zlib_during_write_file);

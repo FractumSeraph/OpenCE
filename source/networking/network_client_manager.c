@@ -2565,13 +2565,13 @@ static boolean network_game_client_process_incoming_messages(
 static void network_game_client_update_precache_status(
 	struct network_game_client *client)
 {
-	long now = system_milliseconds();
+	unsigned long now = system_milliseconds();
 
-	if (now > client->last_precache_time + 1000)
+	if (now - (unsigned long)client->last_precache_time > 1000)
 	{
 		char *map_name = main_get_multiplayer_map_name();
 
-		client->last_precache_time = now;
+		client->last_precache_time = (long)now;
 
 		if (cache_files_give_time_to_precache(map_name))
 		{
@@ -3015,6 +3015,37 @@ boolean network_game_client_join_first_available_game(
 				return FALSE;
 			network_game_generate_join_game_token(join_parameters.join_token);
 			return network_game_client_initiate_join_game(client, game, &join_parameters, &address);
+		}
+	}
+	return FALSE;
+}
+
+/* Whether the server's authoritative game record has acknowledged one of
+this machine's local players.  Successfully writing an add-player request is
+not the same thing: a pregame request can cross the server's transition into
+the match and be ignored there.  Browser invite flow uses this acknowledgement
+to retry with the correct pregame/ingame message instead of leaving the
+machine connected as an observer. */
+boolean network_game_client_has_local_player(
+	struct network_game_client *client,
+	short local_player_index)
+{
+	long player_index;
+
+	if (!client || local_player_index < 0 ||
+		local_player_index >= MAXIMUM_NUMBER_OF_LOCAL_PLAYERS)
+	{
+		return FALSE;
+	}
+	for (player_index = 0; player_index < MAXIMUM_NUMBER_OF_PLAYERS; player_index++)
+	{
+		struct network_player *player = &client->game.players[player_index];
+
+		if (network_player_is_valid(player) &&
+			player->machine_index == (char)client->machine_index &&
+			player->controller_index == (char)local_player_index)
+		{
+			return TRUE;
 		}
 	}
 	return FALSE;

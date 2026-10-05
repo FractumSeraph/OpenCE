@@ -8,6 +8,10 @@ RANDOM_MATH.H
 
 /* ---------- prototypes/RANDOM_MATH.C */
 
+void random_math_initialize(
+	void);
+void random_math_dispose(
+	void);
 unsigned long get_random_seed(
 	void);
 

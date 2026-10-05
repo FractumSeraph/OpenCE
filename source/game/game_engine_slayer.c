@@ -77,6 +77,7 @@ symbols in this file:
 #include "cseries/cseries.h"
 
 #include "game/game_engine_place.h"
+#include "game/game_engine_runtime.h"
 #include "game/game_engine_slayer.h"
 #include "game/players.h"
 #include "memory/data.h"
@@ -85,6 +86,11 @@ symbols in this file:
 #include "text/text_group.h"
 #include "text/unicode.h"
 #include "units/units.h"
+
+void game_show_score_extended(
+	long player_index,
+	long score,
+	long team_index);
 
 /* ---------- constants */
 

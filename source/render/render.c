@@ -76,6 +76,7 @@ symbols in this file:
 #include "game.h"
 #include "game_engine.h"
 #include "interface/first_person_weapons.h"
+#include "interface/interface.h"
 #include "editor_stubs.h"
 #include "render_debug.h"
 #include "objects/object_lights_rendering.h"

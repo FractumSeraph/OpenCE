@@ -1082,14 +1082,13 @@ exit:
 void countdown_timer_update(
 	struct countdown_timer *timer)
 {
-	long update_time = system_milliseconds();
+	unsigned long update_time = system_milliseconds();
+	unsigned long elapsed_time = update_time - timer->last_update_time;
 
-	if (update_time > (long)timer->last_update_time)
+	if (elapsed_time)
 	{
-		long elapsed_time = update_time - timer->last_update_time;
-
-		if (elapsed_time < timer->time_remaining)
-			timer->time_remaining -= elapsed_time;
+		if (elapsed_time < (unsigned long)timer->time_remaining)
+			timer->time_remaining -= (long)elapsed_time;
 		else
 			timer->time_remaining = 0;
 	}
@@ -1104,14 +1103,12 @@ long countdown_timer_get_time_remaining(
 {
 	long time_remaining;
 	unsigned long update_time = system_milliseconds();
-	unsigned long last_update_time = timer->last_update_time;
+	unsigned long elapsed_time = update_time - timer->last_update_time;
 
-	if ((long)update_time > (long)last_update_time)
+	if (elapsed_time)
 	{
-		long elapsed_time = update_time - last_update_time;
-
-		if (elapsed_time < timer->time_remaining)
-			timer->time_remaining -= elapsed_time;
+		if (elapsed_time < (unsigned long)timer->time_remaining)
+			timer->time_remaining -= (long)elapsed_time;
 		else
 			timer->time_remaining = 0;
 	}
@@ -1157,14 +1154,12 @@ void countdown_timer_decrement(
 	long adjustment)
 {
 	unsigned long update_time = system_milliseconds();
-	unsigned long last_update_time = timer->last_update_time;
+	unsigned long elapsed_time = update_time - timer->last_update_time;
 
-	if ((long)update_time > (long)last_update_time)
+	if (elapsed_time)
 	{
-		long elapsed_time = update_time - last_update_time;
-
-		if (elapsed_time < timer->time_remaining)
-			timer->time_remaining -= elapsed_time;
+		if (elapsed_time < (unsigned long)timer->time_remaining)
+			timer->time_remaining -= (long)elapsed_time;
 		else
 			timer->time_remaining = 0;
 	}
@@ -3296,11 +3291,9 @@ static boolean network_game_server_idle_postgame_tasks(
 {
 	unsigned long now = system_milliseconds();
 	boolean success = TRUE;
-	unsigned long keep_alive_deadline =
-		(unsigned long)server->time_of_last_keep_alive +
-		5UL * MILLISECONDS_PER_SECOND;
 
-	if (now > keep_alive_deadline)
+	if (now - (unsigned long)server->time_of_last_keep_alive >
+		5UL * MILLISECONDS_PER_SECOND)
 	{
 		struct message_server_postgame_keep_alive message_packet = { 0 };
 		struct network_message *message;
@@ -3355,7 +3348,7 @@ static boolean network_game_server_have_all_machines_have_precached(
 static boolean network_game_server_idle_pregame_tasks(
 	struct network_game_server *server)
 {
-	long now = (long)system_milliseconds();
+	unsigned long now = system_milliseconds();
 	boolean success = TRUE;
 
 	if (server->sent_start_game_message == FALSE)
@@ -3404,8 +3397,8 @@ static boolean network_game_server_idle_pregame_tasks(
 				if ((success = network_game_server_start_network_game(server)) != TRUE)
 					network_event("network_game_server_start_network_game() failed");
 			}
-			else if ((long)((unsigned long)now -
-				(unsigned long)server->countdown_state.last_countdown_message_time) >
+			else if (now -
+				(unsigned long)server->countdown_state.last_countdown_message_time >
 				MILLISECONDS_PER_SECOND)
 			{
 				send_countdown_update = TRUE;
@@ -3439,7 +3432,7 @@ static boolean network_game_server_idle_pregame_tasks(
 				{
 					if (network_game_server_send_message_to_all_machines(server, message))
 					{
-						server->countdown_state.last_countdown_message_time = now;
+						server->countdown_state.last_countdown_message_time = (long)now;
 					}
 					else
 					{
@@ -3451,11 +3444,8 @@ static boolean network_game_server_idle_pregame_tasks(
 		}
 		else
 		{
-			long keep_alive_deadline = (long)(
-				(unsigned long)server->time_of_last_keep_alive +
-				5UL * MILLISECONDS_PER_SECOND);
-
-			if (now > keep_alive_deadline)
+			if (now - (unsigned long)server->time_of_last_keep_alive >
+				5UL * MILLISECONDS_PER_SECOND)
 			{
 				struct message_server_pregame_keep_alive message_packet = { 0 };
 				struct network_message *message;
@@ -3466,7 +3456,7 @@ static boolean network_game_server_idle_pregame_tasks(
 					sizeof(message_packet));
 				network_game_server_send_message_to_all_machines(server, message);
 
-				server->time_of_last_keep_alive = now;
+				server->time_of_last_keep_alive = (long)now;
 			}
 		}
 	}
@@ -3477,7 +3467,7 @@ static boolean network_game_server_idle_pregame_tasks(
 		client drops a connection it hears nothing on for 15 seconds, less than
 		the wait for the others: keep their connections alive (a client in game
 		ignores a pregame keep-alive) */
-		if ((unsigned long)now - server->time_of_last_keep_alive >
+		if (now - (unsigned long)server->time_of_last_keep_alive >
 			5UL * MILLISECONDS_PER_SECOND)
 		{
 			struct message_server_pregame_keep_alive message_packet = { 0 };
@@ -3492,7 +3482,7 @@ static boolean network_game_server_idle_pregame_tasks(
 				network_game_server_send_message_to_all_machines(server, message);
 			}
 
-			server->time_of_last_keep_alive = now;
+			server->time_of_last_keep_alive = (long)now;
 		}
 #endif
 		if (system_milliseconds() - server->time_of_first_client_loading_completion >=

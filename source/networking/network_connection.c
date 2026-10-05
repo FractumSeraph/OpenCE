@@ -1622,21 +1622,23 @@ boolean network_connection_idle(
 {
 	byte buffer[DATAGRAM_MAXIMUM_SIZE + sizeof(unsigned long)];
 	unsigned long current_time = system_milliseconds();
+	unsigned long elapsed_time;
 	boolean success = TRUE;
 
 	match_assert(
 		"c:\\halo\\SOURCE\\networking\\network_connection.c",
 		0x21D,
 		connection);
+	elapsed_time = current_time - connection->last_keep_alive_time;
 
 	SET_FLAG(connection->flags, _connection_going_stale_bit, FALSE);
 	if (timeout)
 	{
-		if (current_time > connection->last_keep_alive_time + MILLISECONDS_PER_SECOND * 5)
+		if (elapsed_time > 5UL * MILLISECONDS_PER_SECOND)
 		{
 			SET_FLAG(connection->flags, _connection_going_stale_bit, TRUE);
 		}
-		if (current_time > connection->last_keep_alive_time + timeout)
+		if (elapsed_time > (unsigned long)timeout)
 		{
 			if (global_connection_dont_timeout)
 			{

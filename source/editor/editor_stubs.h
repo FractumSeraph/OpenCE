@@ -10,7 +10,10 @@ EDITOR_STUBS.H
 
 void editor_render(void);
 boolean game_in_editor(void);
-boolean editor_preprocess_rendered_object(void);
+struct render_lighting;
+boolean editor_preprocess_rendered_object(
+	long object_index,
+	struct render_lighting const *lighting);
 boolean editor_should_exit(void);
 void editor_initialize(void);
 void editor_dispose(void);

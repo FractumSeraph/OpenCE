@@ -145,6 +145,7 @@ symbols in this file:
 #include "cseries.h"
 #include "cseries/profile.h"
 #include "vehicles.h"
+#include "math/matrix_math.h"
 #include "math/real_math.h"
 #include "game/game_globals.h"
 #include "game/players.h"
@@ -164,6 +165,10 @@ symbols in this file:
 #include "structures/structure_bsp_definitions.h"
 #include "units/unit_definitions.h"
 #include "units/vehicle_definitions.h"
+
+void matrix3x3_rotation_to_quaternion(
+	real_matrix3x3 const *matrix,
+	real_quaternion *quaternion);
 
 /* ---------- constants */
 

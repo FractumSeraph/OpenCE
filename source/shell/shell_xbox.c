@@ -36,12 +36,16 @@ symbols in this file:
 #include "physical_memory_map.h"
 #include "main.h"
 
+#ifdef HALO_WEB
+void platform_web_initialize(void);
+#endif
+
 /* ---------- prototypes */
 
 void fuck_code_in_the_eye(
 	void);
 
-void rasterizer_preinitialize__fill_you_up_with_the_devils_cock(
+boolean rasterizer_preinitialize__fill_you_up_with_the_devils_cock(
 	void);
 
 /* ---------- globals */
@@ -103,9 +107,20 @@ shell_idle(
 	return;
 }
 
+#ifdef HALO_WEB
+int main(
+	int argc,
+	char **argv)
+#else
 int main(
 	void)
+#endif
 {
+#ifdef HALO_WEB
+	(void)argc;
+	(void)argv;
+	platform_web_initialize();
+#endif
 	fuck_code_in_the_eye();
 	rasterizer_preinitialize__fill_you_up_with_the_devils_cock();
 	physical_memory_allocate();

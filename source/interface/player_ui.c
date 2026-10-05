@@ -154,6 +154,7 @@ symbols in this file:
 #include "interface/hud_messaging.h"
 #include "memory/data.h"
 #include "networking/network_game_globals.h"
+#include "networking/network_server_manager.h"
 #include "saved games/player_profile.h"
 #include "saved games/playlist_profile.h"
 #include "saved games/saved_game_files.h"
@@ -599,12 +600,27 @@ long player_ui_get_player1_last_used_profile_index(
 void player_ui_fast_setup_network_server(
 	void)
 {
+	struct game_variant default_variant;
+
 	ui_widgets_close_all();
 	dispose_global_network_game_server();
 	dispose_global_network_game_client();
 	game_connection_set(_game_connection_local);
+#ifndef HALO_WEB
 	main_set_multiplayer_map_name("");
+#else
+	/* The native empty-name reset synchronously ends any background map
+	precache.  In a browser that can block the game thread for minutes while a
+	large FetchFS map finishes downloading/decompressing.  The connected
+	pregame widget selects its default map below, so preserve the last name
+	until that happens instead of stalling invite-link hosting. */
+#endif
 	player_ui_globals.multiplayer_variant_specified = FALSE;
+	/* Fast setup bypasses the profile-select screen which normally supplies a
+	game engine.  Give the playlist and server a playable default; callers can
+	still replace it through the ordinary variant-selection API. */
+	game_engine_get_variant_by_name(&default_variant, "slayer");
+	player_ui_set_game_variant(&default_variant);
 	if (ui_widget_load_by_name_or_tag(
 		"ui\\shell\\main_menu\\multiplayer_type_select\\connected\\pregame\\connected_pregame_screen",
 		NONE,
@@ -636,6 +652,152 @@ void player_ui_fast_setup_network_server(
 		"failed to load network pregame screen... maybe you ran this from some place other than the game shell UI?");
 	main_goto_main_menu();
 	return;
+}
+
+static boolean player_ui_configure_network_server_game_internal(
+	long multiplayer_level_index,
+	long game_mode_index,
+	boolean advanced_settings,
+	long score_to_win,
+	long respawn_seconds,
+	long lives,
+	long health_percent,
+	boolean infinite_grenades,
+	boolean shields,
+	boolean invisible_players,
+	boolean other_players_on_radar)
+{
+	static char const *const multiplayer_levels[] =
+	{
+		"levels\\test\\beavercreek\\beavercreek",
+		"levels\\test\\sidewinder\\sidewinder",
+		"levels\\test\\damnation\\damnation",
+		"levels\\test\\ratrace\\ratrace",
+		"levels\\test\\prisoner\\prisoner",
+		"levels\\test\\hangemhigh\\hangemhigh",
+		"levels\\test\\chillout\\chillout",
+		"levels\\test\\carousel\\carousel",
+		"levels\\test\\boardingaction\\boardingaction",
+		"levels\\test\\bloodgulch\\bloodgulch",
+		"levels\\test\\wizard\\wizard",
+		"levels\\test\\putput\\putput",
+		"levels\\test\\longest\\longest",
+	};
+	static char const *const game_modes[] =
+	{
+		"slayer",
+		"team_slayer",
+		"ctf",
+		"oddball",
+		"king",
+		"race",
+	};
+	struct network_game_server *server;
+	struct game_variant variant;
+	char const *map_name;
+	char const *variant_name;
+
+	/* This is also a defensive boundary for non-browser callers.  The browser
+	export rejects bad indices before posting its request, but a corrupted or
+	stale mailbox must still result in a real playable game rather than an
+	arbitrary path or an all-zero variant. */
+	if (multiplayer_level_index < 0 ||
+		multiplayer_level_index >= (long)(sizeof(multiplayer_levels) / sizeof(multiplayer_levels[0])))
+	{
+		multiplayer_level_index = 0;
+	}
+	if (game_mode_index < 0 ||
+		game_mode_index >= (long)(sizeof(game_modes) / sizeof(game_modes[0])))
+	{
+		game_mode_index = 0;
+	}
+
+	server = global_network_game_server_get();
+	if (!server)
+		return FALSE;
+
+	map_name = multiplayer_levels[multiplayer_level_index];
+	variant_name = game_modes[game_mode_index];
+	main_set_multiplayer_map_name(map_name);
+	game_engine_override_map_name(map_name);
+	network_game_server_change_map_name(server, map_name);
+	game_engine_get_variant_by_name(&variant, variant_name);
+	if (advanced_settings)
+	{
+		/* Browser custom games are deliberately applied to the stock variant,
+		so every field which is not exposed here keeps the original Halo preset.
+		The public advanced entry point validates all values before this helper. */
+		variant.universal_variant.score_to_win = score_to_win;
+		variant.universal_variant.respawn_time = respawn_seconds * TICKS_PER_SECOND;
+		variant.universal_variant.lives = lives;
+		variant.universal_variant.health = (real)health_percent / 100.0f;
+		SET_FLAG(
+			variant.universal_variant.flags,
+			_game_variant_infinite_grenades_bit,
+			infinite_grenades);
+		SET_FLAG(
+			variant.universal_variant.flags,
+			_game_variant_no_shields_bit,
+			!shields);
+		SET_FLAG(
+			variant.universal_variant.flags,
+			_game_variant_always_invisible_bit,
+			invisible_players);
+		SET_FLAG(
+			variant.universal_variant.flags,
+			_game_variant_draw_object_in_motion_sensor_bit,
+			other_players_on_radar);
+		game_engine_variant_cleanup(&variant);
+	}
+	player_ui_set_game_variant(&variant);
+	network_game_server_change_game_variant(server, &variant);
+	return TRUE;
+}
+
+boolean player_ui_configure_network_server_game(
+	long multiplayer_level_index,
+	long game_mode_index)
+{
+	return player_ui_configure_network_server_game_internal(
+		multiplayer_level_index,
+		game_mode_index,
+		FALSE,
+		0, 0, 0, 0,
+		FALSE, FALSE, FALSE, FALSE);
+}
+
+boolean player_ui_configure_network_server_game_advanced(
+	long multiplayer_level_index,
+	long game_mode_index,
+	long score_to_win,
+	long respawn_seconds,
+	long lives,
+	long health_percent,
+	boolean infinite_grenades,
+	boolean shields,
+	boolean invisible_players,
+	boolean other_players_on_radar)
+{
+	if (score_to_win < 1 || score_to_win > 1000 ||
+		respawn_seconds < 0 || respawn_seconds > 30 ||
+		lives < 0 || lives > 99 ||
+		health_percent < 25 || health_percent > 400)
+	{
+		return FALSE;
+	}
+
+	return player_ui_configure_network_server_game_internal(
+		multiplayer_level_index,
+		game_mode_index,
+		TRUE,
+		score_to_win,
+		respawn_seconds,
+		lives,
+		health_percent,
+		!!infinite_grenades,
+		!!shields,
+		!!invisible_players,
+		!!other_players_on_radar);
 }
 
 boolean player_ui_edit_profile_is_default_profile(

@@ -79,7 +79,7 @@ parser.add_argument(
 parser.add_argument(
     "--release",
     action="store_true",
-    help="release builds of the native ports (Linux, Windows, Android): assertions are not checked",
+    help="release builds of the native ports (Linux, Windows, Android, Web): assertions and debug data are omitted",
 )
 parser.add_argument(
     "--lto",
@@ -120,6 +120,11 @@ parser.add_argument(
     "--android-guest-cc",
     type=str,
     help="clang with the arm64_32 target for the Android guest (default: clang)",
+)
+parser.add_argument(
+    "--web-cc",
+    type=str,
+    help="Emscripten compiler for `ninja web` (default: build/emsdk's emcc, then emcc on PATH)",
 )
 if not is_windows():
     parser.add_argument(
@@ -187,6 +192,7 @@ sln.port_pgo = args.pgo
 sln.port_pgo_profile = args.pgo_profile
 sln.android_ndk = args.android_ndk
 sln.android_guest_cc = args.android_guest_cc
+sln.web_cc = args.web_cc
 if not is_windows():
     sln.wrapper = args.wrapper
 

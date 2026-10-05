@@ -399,8 +399,13 @@ static void CALLBACK cache_file_read_io_completion_routine(
 	unsigned long error_code,
 	unsigned long bytes_transferred,
 	OVERLAPPED *overlapped);
+#ifdef HALO_WEB
+static DWORD WINAPI cache_file_windows_thread_proc(
+	void *context);
+#else
 static void cache_file_windows_thread_proc(
 	void);
+#endif
 static void cache_file_windows_thread_create(
 	void);
 static struct cache_file_request *cache_request_get(
@@ -823,12 +828,14 @@ short cache_files_precache_map_status(
 	real *progress)
 {
 	short status;
+	short copy_status;
 
 	match_assert(
 		"c:\\halo\\SOURCE\\cache\\cache_files_windows.c",
 		984,
 		cache_file_globals.copy_in_progress);
-	switch (cache_copy_get_status(progress))
+	copy_status = cache_copy_get_status(progress);
+	switch (copy_status)
 	{
 		case _cache_copy_bad_file_failure:
 		case _cache_copy_read_failure:
@@ -1071,9 +1078,17 @@ static void CALLBACK cache_file_read_io_completion_routine(
 	return;
 }
 
+#ifdef HALO_WEB
+static DWORD WINAPI cache_file_windows_thread_proc(
+	void *context)
+#else
 static void cache_file_windows_thread_proc(
 	void)
+#endif
 {
+#ifdef HALO_WEB
+	(void)context;
+#endif
 	while (TRUE)
 	{
 		while (WaitForSingleObjectEx(
@@ -1126,7 +1141,11 @@ static void cache_file_windows_thread_proc(
 		}
 	}
 
+#ifdef HALO_WEB
+	return ERROR_SUCCESS;
+#else
 	return;
+#endif
 }
 
 static void cache_file_windows_thread_create(
