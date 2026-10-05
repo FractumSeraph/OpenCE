@@ -87,14 +87,14 @@ assert.match(shell, /<dt>A<\/dt>[\s\S]*?<dd>- Space<\/dd>[\s\S]*?<dt>B<\/dt>[\s\
   'the high-resolution Duke legend must document the complete keyboard mapping');
 assert.doesNotMatch(shell, /<figcaption>Duke<\/figcaption>/,
   'the controller image must not carry a redundant Duke caption');
-assert.match(shell, /Made by[\s\S]*mitchellhynes\.com[\s\S]*Mitchell Hynes[\s\S]*id="about-open"[\s\S]*Learn more/,
-  'the under-screen row must include the compact creator credit');
-assert.match(shell, /id="about-dialog"[\s\S]*mitchell-jester-card\.svg[\s\S]*github\.com\/bnunu\/halo-ce-universal[\s\S]*github\.com\/cybersecurity\/halo-ce-universal[\s\S]*independently hosted[\s\S]*mitchellhynes\.com[\s\S]*responsible for this website/,
-  'Learn more must disclose sources, independence, and the Joker card');
+assert.match(shell, /class="site-credit">Hosted by[\s\S]*FractumSeraph[\s\S]*github\.com\/OpenCommunityEdition\/OpenCE[\s\S]*github\.com\/ecumene\/web-halo[\s\S]*github\.com\/OMG-Guest\/Halo-Mobile/,
+  'the under-screen row must credit the host and the projects the build comes from');
+assert.doesNotMatch(shell, /id="about-dialog"|mitchell-jester-card/,
+  'the removed About dialog must not come back');
 assert.doesNotMatch(shell, /ko-fi|kofi-support|Buy me a coffee/i,
   'the site must not include Ko-fi links or promotional copy');
-assert.match(shell, /onlineDialog\.open \|\| aboutDialog\.open/,
-  'the creator dialog must own keyboard focus instead of controlling Halo');
+assert.match(shell, /onlineDialog\.open \|\|/,
+  'an open dialog must own keyboard focus instead of controlling Halo');
 assert.match(shell, /addEventListener\("pointerlockchange"/);
 assert.match(shell, /addEventListener\("pointerlockerror"/);
 
@@ -136,10 +136,13 @@ assert.match(connectedGamepads[0], /first pad shares port 0 with the keyboard/);
 assert.doesNotMatch(connectedGamepads[0], /HALO_WEB/,
   'web must not shift the first physical controller away from player one');
 assert.match(xinput,
-  /if \(count > 0\)\s+sdl_gamepad_state\(gamepads\[0\], &state->Gamepad\);/,
+  /if \(port_gamepad\(gamepads, count, 0\)\)\s+sdl_gamepad_state\(gamepads\[0\], &state->Gamepad\);/,
   'the first physical controller must merge into Halo player one');
-assert.match(xinput,
-  /#ifdef HALO_WEB[\s\S]*?if \(k\[SDL_SCANCODE_C\]\) pad->wButtons \|= XINPUT_GAMEPAD_LEFT_THUMB;[\s\S]*?#else[\s\S]*?SDL_SCANCODE_LCTRL/,
+/* (OpenCE's keys are settings: the browser's default crouch key is C alone) */
+const portConfig = fs.readFileSync(
+  path.join(webDirectory, '..', 'linux', 'src', 'port_config.c'), 'utf8');
+assert.match(portConfig,
+  /#ifdef HALO_WEB[\s\S]*?\{ "controls\.crouch", _config_string, "\\"C\\""[\s\S]*?#else[\s\S]*?\{ "controls\.crouch", _config_string, "\\"Left Ctrl, C\\""/,
   'web crouch must use C without exposing Ctrl movement shortcuts');
 assert.match(shell,
   /function lockFullscreenMovementKeys\(\)[\s\S]*?navigator\.keyboard\.lock\(\["KeyW", "KeyA", "KeyS", "KeyD"\]\)[\s\S]*?fullscreenchange[\s\S]*?lockFullscreenMovementKeys\(\)/,
