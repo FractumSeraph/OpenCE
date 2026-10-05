@@ -210,15 +210,31 @@ public/                                   game files and maps (what browsers dow
 server/                                   server, bundled Node.js, lobby runtime, gateway
 data/                                     created at first start: lobby state, secrets,
                                           certificate. Delete it to reset.
+logs/                                     the autostart task's and updates' logs
+backups/                                  what the last updates replaced (update.ps1)
 ```
 
 ## Updating
 
-Download the newest kit and copy its contents over this folder. Your
-`config.json`, `data/` and maps are not in the kit, so they are kept. Then
-restart the server (on Windows with the autostart task:
-`server\windows\restart.ps1`, as administrator). Players get the new game
-on their next page load.
+**On Windows**, in an administrator PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File server\windows\update.ps1
+```
+
+It downloads the newest kit (`halo-server.zip`, Windows and Linux), stops
+the server, moves what it replaces to `backups\<time>\` (it keeps the newest
+three), puts the new kit in and starts the server again. If the server does
+not answer afterwards, it puts the backup back. Kept as they are:
+`config.json`, `data\`, `logs\`, the maps, and lobby artwork you replaced.
+`-ServerOnly` keeps this folder's game files and updates only the server;
+`-Kit <zip or URL>` installs another kit. What happened goes to
+`logs\update.log`. Players get the new game on their next page load.
+
+**Anywhere else**, download the newest kit and copy its contents over this
+folder (your `config.json`, `data/` and maps are not in the kit, so they are
+kept), then restart the server. [HOSTING-VPS.md](HOSTING-VPS.md) has the
+commands for a Linux VPS.
 
 ## Building it yourself
 

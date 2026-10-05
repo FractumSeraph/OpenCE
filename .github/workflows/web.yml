@@ -175,6 +175,11 @@ jobs:
           path: dist
           merge-multiple: true
 
+      # one kit for both: the folder then runs on either, as one copied
+      # between them must (update.ps1 installs this one)
+      - name: Windows + Linux kit
+        run: python3 tools/selfhost_package.py --merge dist/halo-server-windows-x64.zip dist/halo-server-linux-x64.zip --output dist/halo-server.zip
+
       - name: Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -182,7 +187,8 @@ jobs:
         run: |
           notes="The browser version (WebAssembly) of $GITHUB_SHA, from $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID.
 
-          - halo-server-windows-x64.zip / halo-server-linux-x64.zip: everything to host it (the game, its server, the lobby service for online play, the gateway for native halo://join links, Node.js). Unzip, put the game's Xbox .map files in halo-server/public/assets/maps, and start it; see README.md inside.
+          - halo-server.zip: everything to host it, for Windows and Linux x64 in one folder (the game, its server, the lobby service for online play, the gateway for native halo://join links, Node.js). Unzip, put the game's Xbox .map files in halo-server/public/assets/maps, and start it; see README.md inside. An existing folder updates itself with server\windows\update.ps1.
+          - halo-server-windows-x64.zip / halo-server-linux-x64.zip: the same for one platform (smaller).
           - halo-web.zip: the game alone, to serve from any web server (no online play without the lobby service); see README.txt inside.
 
           No game data is included."
@@ -193,4 +199,4 @@ jobs:
           else
             gh release create web-latest --title "Browser build (latest)" --notes "$notes" --latest=false
           fi
-          gh release upload web-latest dist/halo-web.zip dist/halo-server-linux-x64.zip dist/halo-server-windows-x64.zip --clobber
+          gh release upload web-latest dist/halo-server.zip dist/halo-web.zip dist/halo-server-linux-x64.zip dist/halo-server-windows-x64.zip --clobber

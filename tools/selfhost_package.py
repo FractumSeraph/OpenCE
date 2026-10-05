@@ -104,16 +104,66 @@ def write_zip(stage: Path, output: Path, platform: str) -> int:
     return count
 
 
+def merge(windows_zip: Path, linux_zip: Path, output: Path) -> int:
+    """One kit for both: what either has, so the folder runs on Windows and
+    Linux x64 alike (as a folder copied between them must)."""
+    windows, linux = zipfile.ZipFile(windows_zip), zipfile.ZipFile(linux_zip)
+    entries: dict[str, tuple[zipfile.ZipFile, zipfile.ZipInfo]] = {}
+    for info in windows.infolist():
+        if not info.is_dir():
+            entries[info.filename] = (windows, info)
+    for info in linux.infolist():
+        if info.is_dir():
+            continue
+        name = info.filename
+        if name not in entries:
+            entries[name] = (linux, info)
+            continue
+        ours = windows.read(name)
+        theirs = linux.read(info)
+        if ours == theirs:
+            continue
+        if ours.replace(b"\r\n", b"\n") == theirs.replace(b"\r\n", b"\n"):
+            # (a Windows checkout's line endings: either works; take Linux's)
+            entries[name] = (linux, info)
+        elif name.endswith("/node_modules/workerd/bin/workerd"):
+            # npm's install puts Linux's engine here too, for the workerd
+            # command alone; Miniflare finds each platform's engine in its
+            # own package. The script the Windows install keeps runs on both.
+            continue
+        elif name.endswith("/node_modules/.package-lock.json"):
+            # (npm's record of what it installed: not read at run time)
+            continue
+        else:
+            sys.exit(f"the kits differ in {name}; cannot merge them")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
+        for name in sorted(entries):
+            source, info = entries[name]
+            archive.writestr(info, source.read(info))
+    print(f"Merged {windows_zip.name} and {linux_zip.name}: {output} "
+          f"({len(entries)} files, {output.stat().st_size / 1e6:.1f} MB)")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--platform", required=True, choices=sorted(PLATFORMS))
-    parser.add_argument("--site", type=Path, required=True, help="halo-web.zip (tools/web_package.py)")
-    parser.add_argument("--signaling", type=Path, required=True, help="the lobby service bundle (index.js)")
-    parser.add_argument("--gateway", type=Path, required=True, help="the native gateway executable")
-    parser.add_argument("--node", type=Path, required=True, help="the Node.js executable")
-    parser.add_argument("--node-license", type=Path, required=True, help="Node.js's LICENSE")
+    parser.add_argument("--merge", nargs=2, type=Path, metavar=("WINDOWS_KIT", "LINUX_KIT"),
+                        help="instead: one kit for Windows and Linux from the two (dist/halo-server.zip)")
+    parser.add_argument("--platform", choices=sorted(PLATFORMS))
+    parser.add_argument("--site", type=Path, help="halo-web.zip (tools/web_package.py)")
+    parser.add_argument("--signaling", type=Path, help="the lobby service bundle (index.js)")
+    parser.add_argument("--gateway", type=Path, help="the native gateway executable")
+    parser.add_argument("--node", type=Path, help="the Node.js executable")
+    parser.add_argument("--node-license", type=Path, help="Node.js's LICENSE")
     parser.add_argument("--output", type=Path)
     arguments = parser.parse_args()
+    if arguments.merge:
+        return merge(*arguments.merge, arguments.output or REPOSITORY / "dist" / "halo-server.zip")
+    missing = [name for name in ("platform", "site", "signaling", "gateway", "node", "node_license")
+               if getattr(arguments, name) is None]
+    if missing:
+        parser.error("needs --" + ", --".join(name.replace("_", "-") for name in missing))
     platform = arguments.platform
     suffix = PLATFORMS[platform]
     output = arguments.output or REPOSITORY / "dist" / f"halo-server-{platform}.zip"
