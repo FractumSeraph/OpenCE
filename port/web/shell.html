@@ -1016,31 +1016,6 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .site-credit {
-      min-width: 0;
-      overflow: hidden;
-      color: #5f8199;
-      font-size: .74rem;
-      letter-spacing: .025em;
-      text-align: center;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .site-credit a,
-    #about-open {
-      min-height: 0;
-      padding: 0;
-      border: 0;
-      color: #78bfe7;
-      background: transparent;
-      box-shadow: none;
-      font-size: inherit;
-      letter-spacing: inherit;
-      text-decoration: underline;
-      text-underline-offset: .18em;
-    }
-    .site-credit a:hover,
-    #about-open:hover { color: #c6ecff; background: transparent; box-shadow: none; }
     #isolation-warning {
       position: absolute;
       left: .15rem;
@@ -1118,47 +1093,6 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-
-    #about-dialog {
-      width: min(29rem, calc(100% - 1.4rem));
-      height: fit-content;
-      min-height: 0;
-      max-height: calc(100% - 1.4rem);
-      block-size: fit-content;
-      padding: 0;
-      overflow: hidden;
-    }
-    .about-card {
-      position: relative;
-      display: grid;
-      grid-template-columns: 4.2rem minmax(0, 1fr);
-      gap: .9rem;
-      align-items: start;
-      padding: 1.1rem 1.15rem;
-    }
-    .about-jester {
-      display: block;
-      width: 3.8rem;
-      height: auto;
-      margin-top: .1rem;
-      filter: drop-shadow(0 .45rem .7rem rgba(0, 0, 0, .42));
-      transform: rotate(-2deg);
-    }
-    .about-copy { min-width: 0; }
-    .about-copy h2 {
-      margin: 0 2rem .45rem 0;
-      color: #bfe8ff;
-      font-size: .9rem;
-      font-weight: 650;
-      letter-spacing: .06em;
-      text-transform: uppercase;
-    }
-    .about-copy ul { display: grid; gap: .48rem; margin: 0; padding-left: 1rem; }
-    .about-copy li { color: #9cb4c4; font-size: .76rem; line-height: 1.45; }
-    .about-copy a { color: #71c8f6; text-underline-offset: .16em; }
-    .about-copy a:hover { color: #c9eeff; }
-    .about-support { list-style: none; margin-left: -1rem; }
-    #about-close { position: absolute; top: .62rem; right: .62rem; z-index: 1; }
 
     #loading {
       inset: 0;
@@ -1432,13 +1366,12 @@
       #game-frame { gap: .42rem; }
       #game-frame footer {
         grid-template-columns: auto minmax(0, 1fr);
-        grid-template-areas: "controls hint" "credit credit";
+        grid-template-areas: "controls hint";
         gap: .18rem .45rem;
         min-height: 1.95rem;
         padding: 0;
       }
       .game-controls { grid-area: controls; }
-      .site-credit { grid-area: credit; }
       #footer-hint { grid-area: hint; }
       #footer-hint { max-width: 45%; font-size: .58rem; }
       .brand { letter-spacing: .08em; }
@@ -1473,8 +1406,6 @@
         line-height: 1.2;
         white-space: normal;
       }
-      .about-card { grid-template-columns: 3.2rem minmax(0, 1fr); gap: .7rem; padding: .9rem; }
-      .about-jester { width: 2.9rem; }
     }
     /* Small screens: the side panels must never cover the game or its
        buttons. Narrow (portrait) screens stack them above and below the
@@ -1537,7 +1468,6 @@
         min-height: 0;
       }
       body:not(.halo-touch-mode) #game-frame .game-controls { flex-wrap: wrap; }
-      body:not(.halo-touch-mode) #game-frame .site-credit,
       body:not(.halo-touch-mode) #game-frame #footer-hint { display: none; }
     }
   </style>
@@ -1581,7 +1511,6 @@
             </div>
           </details>
         </div>
-        <span class="site-credit">Made by <a href="https://mitchellhynes.com/" target="_blank" rel="noopener noreferrer">Mitchell Hynes</a>. <button id="about-open" type="button">Learn more</button></span>
         <span id="footer-hint" class="hint">Click the game or Focus game to capture the mouse</span>
         <span id="isolation-warning"></span>
         <button id="logs" type="button" hidden>Diagnostics</button>
@@ -1687,24 +1616,6 @@
       <progress id="xiso-progress" value="0" max="1" hidden></progress>
       <p id="xiso-status" role="status" aria-live="polite">Waiting for your disc image.</p>
     </section>
-  </dialog>
-  <dialog id="about-dialog" aria-labelledby="about-title">
-    <article class="about-card">
-      <button id="about-close" class="icon-button" type="button" aria-label="Close">✕</button>
-      <img class="about-jester" src="assets/ui/shell/mitchell-jester-card.svg"
-           alt="Red Joker card from mitchellhynes.com">
-      <div class="about-copy">
-        <h2 id="about-title">About this web build</h2>
-        <ul>
-          <li>Built from the decompilation work in
-            <a href="https://github.com/bnunu/halo-ce-universal" target="_blank" rel="noopener noreferrer">bnunu/halo-ce-universal</a>
-            and
-            <a href="https://github.com/cybersecurity/halo-ce-universal" target="_blank" rel="noopener noreferrer">cybersecurity/halo-ce-universal</a>.
-          </li>
-          <li>This web version is independently hosted and maintained by <a href="https://mitchellhynes.com/" target="_blank" rel="noopener noreferrer">Mitchell Hynes</a>. Those projects and contributors are not affiliated with or responsible for this website.</li>
-        </ul>
-      </div>
-    </article>
   </dialog>
   <dialog id="online-dialog" aria-label="Play with friends">
     <div class="online-card">
@@ -1856,7 +1767,7 @@
               <summary>Have an invite link?</summary>
               <form id="online-join-form" class="join-row">
                 <input id="online-code" type="text" autocomplete="off" spellcheck="false"
-                       aria-label="Invite link or code" placeholder="Paste a mitchellhynes.com or halo:// link">
+                       aria-label="Invite link or code" placeholder="Paste an invite link or a halo:// link">
                 <button id="online-join" type="submit">Continue</button>
               </form>
             </details>
@@ -1891,9 +1802,6 @@
     const focusLabel = document.getElementById("focus-label");
     const fullscreenButton = document.getElementById("fullscreen");
     const footerHint = document.getElementById("footer-hint");
-    const aboutButton = document.getElementById("about-open");
-    const aboutDialog = document.getElementById("about-dialog");
-    const aboutCloseButton = document.getElementById("about-close");
     const xisoDialog = document.getElementById("xiso-dialog");
     const xisoFileInput = document.getElementById("xiso-file");
     const xisoChooseButton = document.getElementById("xiso-choose");
@@ -2847,15 +2755,6 @@
     document.getElementById("diagnostics-close").addEventListener("click", () => {
       setDiagnosticsOpen(false);
     });
-    aboutButton.addEventListener("click", () => {
-      aboutDialog.showModal();
-      aboutCloseButton.focus();
-    });
-    aboutCloseButton.addEventListener("click", () => aboutDialog.close());
-    aboutDialog.addEventListener("close", () => aboutButton.focus());
-    ["keydown", "keyup", "keypress"].forEach(type => {
-      aboutDialog.addEventListener(type, event => event.stopPropagation());
-    });
     document.getElementById("diagnostics-secret").addEventListener("click", () => {
       secretClickCount++;
       window.clearTimeout(secretClickTimer);
@@ -2879,7 +2778,7 @@
 
     function webUiOwnsKeyboardFocus() {
       const active = document.activeElement;
-      if (!diagnosticsOverlay.hidden || onlineDialog.open || aboutDialog.open ||
+      if (!diagnosticsOverlay.hidden || onlineDialog.open ||
           xisoDialog.open || gameSettingsMenu.open) return true;
       return active && active !== canvas && typeof active.matches === "function" &&
         active.matches("input, select, textarea, button, summary, [contenteditable='true']");
