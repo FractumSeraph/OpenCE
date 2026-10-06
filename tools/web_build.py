@@ -28,6 +28,9 @@ from .linux_build import (
     MUSL_MATH_DIR,
     TOML_DIR,
     XDK_INCLUDE,
+    ZLIB_DEFINES,
+    ZLIB_DIR,
+    ZLIB_SOURCES,
     compile_launcher,
     game_defines_and_includes,
     game_sources,
@@ -268,6 +271,7 @@ def generate_web_build(n: Writer, sln: Any) -> None:
             f"-I{EXPAT_DIR}",
             f"-I{KCP_DIR}",
             f"-I{MONOCYPHER_DIR}",
+            f"-I{ZLIB_DIR}",
             "-Isource",
             "-Isource/cseries",
             sdk_flags,
@@ -310,6 +314,10 @@ def generate_web_build(n: Writer, sln: Any) -> None:
         add_object(source, platform_cflags)
     add_object(TOML_DIR / "tomlc17.c", f"{abi_flags} -std=gnu11 -w")
     # the menus' XML parser (menu_files.c)
+    # the port's zlib (zlib_prefixed.h: what inflates the maps and the menus'
+    # and HUD's PNGs), built as linux_build.py builds it
+    for name in ZLIB_SOURCES:
+        add_object(ZLIB_DIR / name, " ".join([abi_flags, "-std=gnu11", *ZLIB_DEFINES, "-w"]))
     for name in EXPAT_SOURCES:
         add_object(EXPAT_DIR / name, f"{abi_flags} -std=gnu11 -I{EXPAT_DIR} -w")
     add_object(KCP_DIR / "ikcp.c", f"{abi_flags} -std=gnu11 -w")
