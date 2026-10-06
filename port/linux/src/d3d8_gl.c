@@ -178,7 +178,9 @@ static int anti_aliasing(void)
 
 static void screen_mode_choose(long *width, float scale[2])
 {
-#ifdef HALO_ANDROID
+	/* (the browser as the desktop: the page's canvas is its window,
+	platform_screen_mode in sdl_platform.c) */
+#if defined(HALO_ANDROID) && !defined(HALO_WEB)
 	/* display.screen_width, or 0 for the display's shape, which the app
 	passes (port/android/host/host_main.c) */
 	const char *display = getenv("HALO_DISPLAY_WIDTH");
@@ -1657,10 +1659,12 @@ HRESULT WINAPI Direct3D_CreateDevice(UINT adapter, D3DDEVTYPE device_type, void 
 			device.presentation = *presentation_parameters;
 		width = device.presentation.BackBufferWidth ? device.presentation.BackBufferWidth : 640;
 		height = device.presentation.BackBufferHeight ? device.presentation.BackBufferHeight : 480;
-#ifdef HALO_ANDROID
+#if defined(HALO_ANDROID) && !defined(HALO_WEB)
 		d3d8_surface_initialize(&device.back_buffer, D3DFMT_LIN_A8R8G8B8, width, height);
 		d3d8_surface_initialize(&device.depth_buffer, D3DFMT_LIN_D24S8, width, height);
 #else
+		/* (the browser too: its page resizes the canvas, so its screen's
+		width changes as the desktop's does) */
 		/* room for the widest screen, which F11 can switch to (the screen's
 		width, above) */
 		d3d8_surface_initialize(&device.back_buffer, D3DFMT_LIN_A8R8G8B8, SCREEN_MAXIMUM_WIDTH, height);
@@ -1814,7 +1818,7 @@ long halo_screen_commit(void)
 		screen_width = width;
 		screen_scale[0] = scale[0];
 		screen_scale[1] = scale[1];
-#ifndef HALO_ANDROID
+#if !defined(HALO_ANDROID) || defined(HALO_WEB)
 		if (device.created)
 		{
 			device.presentation.BackBufferWidth = (UINT)width;

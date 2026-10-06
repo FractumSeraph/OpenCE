@@ -691,6 +691,54 @@ int platform_window_sizes(long *widths, long *heights, int maximum)
 	return 0;
 }
 
+#ifdef HALO_WEB
+/* The browser draws as the desktop does (d3d8_gl.c's screen_mode_choose):
+the canvas's shape and its pixels. The page sizes the canvas to the game's
+box on the page, in as many pixels as the player's resolution setting asks
+for (shell.html: platform_web_set_canvas_size). */
+BOOL platform_screen_mode(long *width, long *height)
+{
+	int pixel_width = 0, pixel_height = 0;
+
+	if (!platform_window)
+		return FALSE;
+	SDL_GetWindowSizeInPixels(platform_window, &pixel_width, &pixel_height);
+	if (pixel_width <= 0 || pixel_height <= 0)
+		return FALSE;
+	*width = pixel_width;
+	*height = pixel_height;
+	return TRUE;
+}
+
+/* the canvas size the page asks for, taken up on the game's thread (which
+owns the canvas) as each frame begins: platform_web_frame_begin */
+static volatile int web_canvas_width, web_canvas_height;
+
+EMSCRIPTEN_KEEPALIVE void platform_web_set_canvas_size(int width, int height)
+{
+	/* (480 lines at least, and no more than the GPU's targets need) */
+	if (width < 320 || height < 240 || width > 7680 || height > 4320)
+		return;
+	__atomic_store_n(&web_canvas_width, width, __ATOMIC_RELAXED);
+	__atomic_store_n(&web_canvas_height, height, __ATOMIC_RELEASE);
+}
+
+static void web_canvas_size_apply(void)
+{
+	int height = __atomic_load_n(&web_canvas_height, __ATOMIC_ACQUIRE);
+	int width = __atomic_load_n(&web_canvas_width, __ATOMIC_RELAXED);
+	int current_width = 0, current_height = 0;
+
+	if (!platform_window || width <= 0 || height <= 0)
+		return;
+	SDL_GetWindowSizeInPixels(platform_window, &current_width, &current_height);
+	/* (the screen's new shape and resolution follow between frames:
+	halo_screen_commit) */
+	if (current_width != width || current_height != height)
+		SDL_SetWindowSize(platform_window, width, height);
+}
+#endif
+
 #endif
 #ifndef HALO_ANDROID
 /* the window's size (platform_window_size_setting), as the window was made
@@ -881,6 +929,7 @@ static Uint64 frame_interval_ns(void)
 #ifdef HALO_WEB
 void platform_web_frame_begin(void)
 {
+	web_canvas_size_apply();
 	web_frame_meter.starts++;
 	web_frame_meter.callback_start = emscripten_get_now();
 }

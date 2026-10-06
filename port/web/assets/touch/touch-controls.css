@@ -486,11 +486,17 @@ body.halo-touch-mode #game-frame {
   margin: 0;
   transform: none;
 }
-body.halo-touch-mode canvas.emscripten.ready {
+/* (the whole screen, whatever its shape: the page's 16:9 game box,
+#game-frame canvas.emscripten.ready, would cut a wider phone's picture off;
+the game draws the screen's shape, shell.html's canvas size) */
+body.halo-touch-mode canvas.emscripten.ready,
+body.halo-touch-mode #game-frame canvas.emscripten.ready {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
+  max-height: none;
+  aspect-ratio: auto;
   border: 0;
   box-shadow: none;
   clip-path: none;

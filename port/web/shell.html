@@ -216,6 +216,18 @@
     }
     .game-settings-option { display: flex; align-items: center; gap: .55rem; color: #d6eaf5; font-size: .76rem; font-weight: 700; }
     .game-settings-option input { accent-color: #55bfff; }
+    .game-settings-select { justify-content: space-between; margin-top: .55rem; }
+    .game-settings-panel #resolution-note { margin-left: 0; }
+    .game-settings-select select {
+      min-height: 1.8rem;
+      padding: .15rem .35rem;
+      border: 1px solid rgba(45, 157, 226, .4);
+      border-radius: .12rem;
+      color: #d6eaf5;
+      background: rgba(0, 9, 24, .9);
+      font: inherit;
+      font-weight: 600;
+    }
     .game-settings-panel p { margin: .45rem 0 0 1.45rem; color: #7594a7; font-size: .65rem; line-height: 1.35; }
     .control-button {
       display: inline-flex;
@@ -1537,6 +1549,16 @@
             <div class="game-settings-panel">
               <label class="game-settings-option"><input id="disable-player-magnetism" type="checkbox"> Disable aim magnetism</label>
               <p id="player-magnetism-note">Automatically off for keyboard and mouse, and on for a controller.</p>
+              <label class="game-settings-option game-settings-select">Resolution
+                <select id="resolution-setting">
+                  <option value="auto">Automatic</option>
+                  <option value="screen">Screen (sharpest)</option>
+                  <option value="1080">1080p</option>
+                  <option value="720">720p</option>
+                  <option value="480">480p (original)</option>
+                </select>
+              </label>
+              <p id="resolution-note">Lower is faster on slow devices. Automatic: up to 1080p, 720p on phones.</p>
             </div>
           </details>
         </div>
@@ -2785,6 +2807,62 @@
     document.getElementById("logs").addEventListener("click", () => {
       setDiagnosticsOpen(diagnosticsOverlay.hidden);
     });
+    // The canvas's pixels: the shape of its box on the page (the game draws
+    // that wide: widescreen, platform_screen_mode), in as many pixels as the
+    // resolution setting asks for (the game draws at that resolution, the
+    // browser scales it to the box). Remembered on this device.
+    {
+      const resolutionSelect = document.getElementById("resolution-setting");
+      const touchOnly = window.matchMedia("(pointer: coarse) and (hover: none)").matches;
+      let resolution = "auto";
+      try { resolution = localStorage.getItem("halo-resolution") || "auto"; } catch (_error) { /* private mode */ }
+      if (![...resolutionSelect.options].some(option => option.value === resolution)) resolution = "auto";
+      resolutionSelect.value = resolution;
+      let appliedSize = "";
+
+      const canvasPixels = () => {
+        const box = canvas.getBoundingClientRect();
+        if (box.width < 2 || box.height < 2) return null;
+        const ratio = window.devicePixelRatio || 1;
+        let width = box.width * ratio;
+        let height = box.height * ratio;
+        // the lines asked for: exactly (1080p, 720p, 480p), or the box's at
+        // most (Automatic: up to 1080, 720 on a phone; Screen: no limit)
+        const lines = { auto: touchOnly ? 720 : 1080, screen: Infinity }[resolution] || Number(resolution);
+        if (resolution !== "auto" && resolution !== "screen") {
+          width = width * lines / height;
+          height = lines;
+        } else if (height > lines) {
+          width = width * lines / height;
+          height = lines;
+        }
+        // (the game's 480 lines at least)
+        if (height < 480) {
+          width = width * 480 / height;
+          height = 480;
+        }
+        return [Math.round(width), Math.round(height)];
+      };
+      const applyCanvasSize = () => {
+        const setSize = window.Module && window.Module._platform_web_set_canvas_size;
+        if (typeof setSize !== "function" || !canvas.classList.contains("ready")) return;
+        const size = canvasPixels();
+        if (!size || size.join("x") === appliedSize) return;
+        appliedSize = size.join("x");
+        setSize(size[0], size[1]);
+      };
+      if (window.ResizeObserver) new ResizeObserver(applyCanvasSize).observe(canvas);
+      window.addEventListener("resize", applyCanvasSize);
+      document.addEventListener("fullscreenchange", applyCanvasSize);
+      // (also once the game runs, and when the page's zoom changes the ratio)
+      window.setInterval(applyCanvasSize, 1000);
+      resolutionSelect.addEventListener("change", () => {
+        resolution = resolutionSelect.value;
+        try { localStorage.setItem("halo-resolution", resolution); } catch (_error) { /* private mode */ }
+        appliedSize = "";
+        applyCanvasSize();
+      });
+    }
     // The keyboard legend: shown until closed, and remembered on this device.
     {
       const legendToggle = document.getElementById("legend-toggle");
