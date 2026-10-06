@@ -915,20 +915,29 @@
         linear-gradient(90deg, rgba(1, 7, 18, .24), transparent 22%, transparent 78%, rgba(1, 7, 18, .24)),
         radial-gradient(circle at 58% 50%, rgba(5, 39, 73, .18), transparent 44%);
     }
+    /* The game takes the whole window but its button rows; the side panels
+       (#player-sidebar, #duke-legend) float over its left edge, mostly the
+       4:3 picture's black bars, and step aside while the mouse is captured. */
     #game-frame {
       position: absolute;
-      left: calc(50% + 7.5rem);
+      left: 50%;
       top: 50%;
       z-index: 1;
       display: flex;
       flex-direction: column;
       align-items: stretch;
       gap: .65rem;
-      width: min(74vw, 80rem, calc(177.7778dvh - 9rem));
-      max-width: calc(100% - 20rem);
+      width: min(calc(100% - 1.5rem), calc(177.7778dvh - 10.75rem));
+      max-width: calc(100% - 1.5rem);
       max-height: calc(100% - 1.5rem);
       transform: translate(-50%, -50%);
     }
+    #player-sidebar, #duke-legend { transition: opacity .2s ease; }
+    /* (above the game's button rows, which now start at the window's edge) */
+    #game-area #duke-legend { bottom: 5rem; }
+    body.mouse-captured #player-sidebar,
+    body.mouse-captured #duke-legend { opacity: 0; pointer-events: none; }
+    body[data-legend="closed"] #duke-legend { display: none; }
     #game-frame canvas.emscripten {
       position: relative;
       inset: auto;
@@ -1074,6 +1083,8 @@
       clip-path: polygon(.55rem 0, 100% 0, 100% calc(100% - .55rem), calc(100% - .55rem) 100%, 0 100%, 0 .55rem);
       backdrop-filter: blur(8px);
     }
+    #duke-legend-close { position: absolute; top: .35rem; right: .35rem; z-index: 1; }
+    #legend-toggle[aria-pressed="true"] { border-color: rgba(89, 202, 255, .72); color: #cceeff; }
     .duke-figure { display: grid; justify-items: center; margin: 0; }
     .duke-controller {
       display: block;
@@ -1426,7 +1437,7 @@
        a column beside the game. The keyboard legend only shows where it
        fits, and never on touch-only devices (it maps keys). */
     @media (pointer: coarse) and (hover: none) {
-      #duke-legend { display: none; }
+      #duke-legend, #legend-toggle { display: none; }
     }
     @media (max-width: 860px) and (orientation: portrait), (max-width: 860px) and (min-height: 561px) {
       body:not(.halo-touch-mode) #game-area:not(:fullscreen) {
@@ -1511,6 +1522,10 @@
             <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v3m0 12v3M3 12h3m12 0h3"></path><circle cx="12" cy="12" r="4.5"></circle></svg>
             <span id="focus-label">Focus game</span>
           </button>
+          <button id="legend-toggle" class="control-button" type="button" aria-pressed="true" aria-controls="duke-legend" title="Show or hide the keyboard keys">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="2"></rect><path d="M6 10h1m3 0h1m3 0h1m3 0h1M6 14h1m3 0h4m3 0h1"></path></svg>
+            <span>Keys</span>
+          </button>
           <button id="fullscreen" class="control-button icon-only" type="button" aria-label="Enter fullscreen" title="Fullscreen">
             <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8 3H3v5m13-5h5v5M8 21H3v-5m13 5h5v-5"></path></svg>
           </button>
@@ -1532,6 +1547,7 @@
       </footer>
     </section>
     <aside id="duke-legend" aria-label="Duke controller keyboard mapping">
+      <button id="duke-legend-close" class="icon-button" type="button" aria-label="Hide the keys (the Keys button shows them again)" title="Hide">✕</button>
       <figure class="duke-figure">
         <img class="duke-controller" src="assets/ui/shell/xbox-duke-controller.png"
              alt="Black original Xbox Duke controller">
@@ -2642,6 +2658,8 @@
     function updatePointerLockUi(message) {
       const locked = document.pointerLockElement === canvas;
       if (locked) pointerLockPending = false;
+      // (the side panels step aside while the mouse plays the game)
+      document.body.classList.toggle("mouse-captured", locked);
       window.clearTimeout(pointerLockTimer);
       focusButton.dataset.state = locked ? "locked" : (pointerLockPending ? "pending" : "unlocked");
       focusButton.setAttribute("aria-pressed", String(locked));
@@ -2767,6 +2785,22 @@
     document.getElementById("logs").addEventListener("click", () => {
       setDiagnosticsOpen(diagnosticsOverlay.hidden);
     });
+    // The keyboard legend: shown until closed, and remembered on this device.
+    {
+      const legendToggle = document.getElementById("legend-toggle");
+      const setLegendOpen = (open, remember) => {
+        document.body.dataset.legend = open ? "open" : "closed";
+        legendToggle.setAttribute("aria-pressed", String(open));
+        if (remember) {
+          try { localStorage.setItem("halo-legend", open ? "open" : "closed"); } catch (_error) { /* private mode */ }
+        }
+      };
+      let saved = null;
+      try { saved = localStorage.getItem("halo-legend"); } catch (_error) { /* private mode */ }
+      setLegendOpen(saved !== "closed", false);
+      legendToggle.addEventListener("click", () => setLegendOpen(document.body.dataset.legend === "closed", true));
+      document.getElementById("duke-legend-close").addEventListener("click", () => setLegendOpen(false, true));
+    }
     document.getElementById("diagnostics-close").addEventListener("click", () => {
       setDiagnosticsOpen(false);
     });
