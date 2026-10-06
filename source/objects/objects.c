@@ -31,6 +31,7 @@ OBJECTS.C
 #include "game/players.h"
 #include "items/weapons.h"
 #include "main/console.h"
+#include "interface/terminal.h"
 #include "math/periodic_functions.h"
 #include "memory/memory_pool.h"
 #include "models/model_animation_definitions.h"
@@ -4100,7 +4101,10 @@ void objects_garbage_collection(
 					}
 
 					sprintf(tempbuffer, "garbage collection %scritical (%s)", status, warningbuf);
-					console_printf(FALSE, "%s", tempbuffer);
+					/* (port: chatter, shown as config.toml's game.console_log says:
+					many enemies keep it coming, over the whole screen) */
+					if (terminal_shows(_terminal_message_chatter))
+						console_printf(FALSE, "%s", tempbuffer);
 					error(_error_log, "%s", tempbuffer);
 					update_time = TRUE;
 				}
@@ -4139,7 +4143,9 @@ void objects_garbage_collection(
 								char tempbuffer[512];
 
 								sprintf(tempbuffer, "removing objects: %s", released_resultbuf);
-								console_printf(FALSE, "%s", tempbuffer);
+								/* (port: chatter, shown as config.toml's game.console_log says) */
+								if (terminal_shows(_terminal_message_chatter))
+									console_printf(FALSE, "%s", tempbuffer);
 								error(_error_log, "%s", tempbuffer);
 							}
 
