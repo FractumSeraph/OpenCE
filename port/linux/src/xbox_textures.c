@@ -1101,7 +1101,7 @@ GLuint xgpu_texture_get(const DWORD *resource, const D3DCOLOR *palette, GLenum *
 			}
 			if (entry->override < 0)
 				upload(entry->texture, entry->target, &entry->description,
-					(const unsigned char *)entry->address, palette);
+					(const unsigned char *)entry->address, palette, custom_edition_texels_order(entry->address));
 		}
 	}
 	#else

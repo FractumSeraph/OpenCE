@@ -94,6 +94,11 @@ may run, as it takes 23 MB of the address space. */
 __attribute__((constructor(102)))
 static void custom_edition_tag_cache_reserve(void)
 {
+#ifdef HALO_WEB
+	/* (not in the browser yet: its allocator hands out the linear memory
+	from the bottom up, so nothing keeps the cache's addresses free; the
+	game then lists no Custom Edition maps) */
+#else
 	void *wanted = (void *)CUSTOM_EDITION_TAG_CACHE_ADDRESS;
 	void *result;
 
@@ -112,6 +117,7 @@ static void custom_edition_tag_cache_reserve(void)
 		platform_log("cannot reserve the Custom Edition tag cache at %p (%s): Custom Edition maps cannot run",
 			wanted, strerror(errno));
 	}
+#endif
 }
 
 void *halo_custom_edition_tag_cache(void)
