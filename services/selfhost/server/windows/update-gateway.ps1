@@ -1,5 +1,5 @@
 # Replaces the native gateway binaries with new ones while the "Halo Web
-# Server" task is stopped, then starts it again. Run as administrator:
+# Server" task is stopped, then starts it again. Run it as the account the server runs as (or as administrator for a server installed with -AsSystem):
 #
 #   powershell -ExecutionPolicy Bypass -File update-gateway.ps1 -From <folder>
 #
