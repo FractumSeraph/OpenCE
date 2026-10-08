@@ -1064,6 +1064,8 @@
       card.className = "visual-choice-card map-choice-card";
       picture.className = "custom-map-picture";
       picture.textContent = "Custom Edition";
+      /* (its file's name, for its picture: customMapPictures) */
+      picture.dataset.customMap = String(map.level || "").split("\\").pop();
       name.className = "choice-label";
       name.textContent = map.name;
       card.appendChild(picture);
@@ -1087,11 +1089,37 @@
     syncHostPickerCards();
   }
 
+  /* A map's picture: <name>.bmp beside it in the server's custom_maps folder,
+   * the one OpenCE's menus show too (the server lists the folder:
+   * assets/custom_maps/index.json). */
+  function customMapPictures() {
+    if (!global.fetch || !elements.mapOptions) return;
+    global.fetch("assets/custom_maps/index.json", { cache: "no-store" })
+      .then(function(response) { return response.ok ? response.json() : []; })
+      .then(function(files) {
+        var pictures = {};
+        (Array.isArray(files) ? files : []).forEach(function(file) {
+          if (typeof file === "string" && /\.bmp$/i.test(file)) pictures[file.slice(0, -4).toLowerCase()] = file;
+        });
+        Array.prototype.forEach.call(elements.mapOptions.querySelectorAll("[data-custom-map]"), function(picture) {
+          var file = pictures[picture.dataset.customMap.toLowerCase()];
+          if (!file) return;
+          var image = global.document.createElement("img");
+          image.src = "assets/custom_maps/" + encodeURIComponent(file);
+          image.alt = "";
+          image.loading = "lazy";
+          picture.replaceWith(image);
+        });
+      })
+      .catch(function() { /* (no pictures: the cards keep their label) */ });
+  }
+
   global.haloOnlineCustomMaps = function(maps) {
     customMaps = (Array.isArray(maps) ? maps : []).filter(function(map) {
       return map && typeof map.name === "string" && map.name.trim();
     }).slice(0, MAXIMUM_CUSTOM_MAPS);
     addCustomMapChoices();
+    customMapPictures();
   };
 
   function saveHostSettings(settings) {

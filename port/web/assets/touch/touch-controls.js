@@ -624,6 +624,8 @@ controls while it is connected.
           </select></label>
         <label>Look speed <input type="range" min="0.4" max="3.5" step="0.1" data-sensitivity></label>
         <p class="small" data-sensitivity-value>Look speed ${percent}%</p>
+        <label data-resolution-row hidden>Resolution
+          <select data-resolution></select></label>
         <div class="row">
           <button type="button" class="touch-ui-button" data-edit>Edit layout</button>
           <button type="button" class="touch-ui-button" data-online>Play online…</button>
@@ -650,6 +652,19 @@ controls while it is connected.
       sensitivityValue.textContent = `Look speed ${Math.round(settings.sensitivity / 1.4 * 100)}%`;
       saveSettings();
     };
+    // the page's own Resolution setting (shell.html's Game settings, which
+    // touch mode hides): the same choices, and choosing one sets it there
+    const pageResolution = document.getElementById("resolution-setting");
+    if (pageResolution) {
+      const resolution = menu.querySelector("[data-resolution]");
+      for (const option of pageResolution.options) resolution.add(new Option(option.textContent, option.value));
+      resolution.value = pageResolution.value;
+      resolution.onchange = () => {
+        pageResolution.value = resolution.value;
+        pageResolution.dispatchEvent(new Event("change", { bubbles: true }));
+      };
+      menu.querySelector("[data-resolution-row]").hidden = false;
+    }
     menu.querySelector("[data-edit]").onclick = () => {
       closeMenu();
       openEditor();

@@ -748,17 +748,18 @@ static boolean player_ui_configure_network_server_game_internal(
 	arbitrary path or an all-zero variant. */
 	map_name = NULL;
 #ifdef HALO_WEB
-	/* after the Xbox's levels, the Custom Edition multiplayer maps sorted by
-	name (port/web/src/web_online_ui.c, publish_custom_maps) */
+	/* after the Xbox's levels, a Custom Edition multiplayer map, by the level
+	name the page chose it by (port/web/src/web_online_ui.c: the list the
+	page has, which a later scan of the maps folders may have reordered) */
 	if (multiplayer_level_index >= (long)(sizeof(multiplayer_levels) / sizeof(multiplayer_levels[0])))
 	{
-		extern short custom_edition_maps_display_index_of(boolean campaign, short index);
-		extern char const *custom_edition_maps_level_name(short display_index);
-		long custom_index = multiplayer_level_index - (long)(sizeof(multiplayer_levels) / sizeof(multiplayer_levels[0]));
+		extern char const *web_online_custom_map_level(long index);
+		extern short custom_edition_maps_display_index(char const *level_name);
 
-		if (custom_index < 0x7fff)
-			map_name = custom_edition_maps_level_name(custom_edition_maps_display_index_of(FALSE, (short)custom_index));
-		if (!map_name)
+		map_name = web_online_custom_map_level(
+			multiplayer_level_index - (long)(sizeof(multiplayer_levels) / sizeof(multiplayer_levels[0])));
+		/* (this machine has it) */
+		if (!map_name || custom_edition_maps_display_index(map_name) == NONE)
 			return FALSE;
 	}
 #endif

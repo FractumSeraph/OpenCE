@@ -548,6 +548,7 @@ body.halo-touch-mode .touch-menu-button { display: block; }
 }
 .touch-menu h2 { margin: 0; font-size: 17px; letter-spacing: 0.06em; text-transform: uppercase; color: #79d1ff; }
 .touch-menu label { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.touch-menu label[hidden] { display: none; }
 .touch-menu select,
 .touch-menu input[type=range] { flex: 1; max-width: 220px; }
 .touch-menu select { min-height: 34px; border-radius: 8px; border: 1px solid var(--panel-edge); background: #0e1117; color: var(--text); padding: 0 8px; }

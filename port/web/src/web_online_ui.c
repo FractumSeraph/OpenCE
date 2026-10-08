@@ -178,19 +178,32 @@ static int host_map_index_valid(int map_index)
 	return map_index >= 0 && map_index < count && map_index <= 0xff;
 }
 
+/* the Custom Edition maps the page was told of, by their level names
+(custom_maps\<name>): the page's map index past the Xbox's levels picks
+one, whatever order a later scan of the maps folders lists them in */
+enum { MAXIMUM_CUSTOM_MAPS = 0xff + 1 - _web_online_multiplayer_level_count, LEVEL_BYTES = 64, NAME_BYTES = 192 };
+static char custom_map_levels[MAXIMUM_CUSTOM_MAPS][LEVEL_BYTES];
+
+/* (source/interface/player_ui.c) */
+const char *web_online_custom_map_level(long index)
+{
+	if (index < 0 || index >= atomic_load_explicit(&web_online_custom_map_count, memory_order_acquire))
+		return NULL;
+	return custom_map_levels[index];
+}
+
 /* Tells the page (online_client.js, haloOnlineCustomMaps) the Custom Edition
 multiplayer maps, sorted by name as the game lists them: each one's level
 name and display name. Once, with the main menu: the maps are in the
 server's custom_maps folder, which a session does not see change. */
 static void publish_custom_maps(void)
 {
-	enum { MAXIMUM_LISTED = 0xff + 1 - _web_online_multiplayer_level_count, NAME_BYTES = 192 };
-	static const char *levels[MAXIMUM_LISTED];
-	static char names[MAXIMUM_LISTED][NAME_BYTES];
-	static const char *name_pointers[MAXIMUM_LISTED];
+	static const char *levels[MAXIMUM_CUSTOM_MAPS];
+	static char names[MAXIMUM_CUSTOM_MAPS][NAME_BYTES];
+	static const char *name_pointers[MAXIMUM_CUSTOM_MAPS];
 	int count = custom_edition_maps_count(0), index, listed = 0;
 
-	for (index = 0; index < count && listed < MAXIMUM_LISTED; index++)
+	for (index = 0; index < count && listed < MAXIMUM_CUSTOM_MAPS; index++)
 	{
 		short display_index = custom_edition_maps_display_index_of(0, (short)index);
 		const char *level = custom_edition_maps_level_name(display_index);
@@ -198,9 +211,8 @@ static void publish_custom_maps(void)
 		char *out = names[listed];
 		int length = 0;
 
-		/* (the page's indices must stay the game's: none skipped) */
-		if (!level || !name)
-			break;
+		if (!level || !name || strlen(level) >= LEVEL_BYTES)
+			continue;
 		/* (UTF-16 to UTF-8: the names are the files', of the BMP) */
 		for (; *name && length < NAME_BYTES - 4; name++)
 		{
@@ -221,7 +233,8 @@ static void publish_custom_maps(void)
 			}
 		}
 		out[length] = '\0';
-		levels[listed] = level;
+		strcpy(custom_map_levels[listed], level);
+		levels[listed] = custom_map_levels[listed];
 		name_pointers[listed] = out;
 		listed++;
 	}

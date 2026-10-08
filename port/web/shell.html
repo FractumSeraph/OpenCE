@@ -217,8 +217,10 @@
     .game-settings-option { display: flex; align-items: center; gap: .55rem; color: #d6eaf5; font-size: .76rem; font-weight: 700; }
     .game-settings-option input { accent-color: #55bfff; }
     .game-settings-select { justify-content: space-between; margin-top: .55rem; }
-    .game-settings-panel #resolution-note { margin-left: 0; }
-    .game-settings-select select {
+    .game-settings-panel #resolution-note,
+    .game-settings-panel #map-cache-note { margin-left: 0; }
+    .game-settings-select select,
+    .map-cache-clear {
       min-height: 1.8rem;
       padding: .15rem .35rem;
       border: 1px solid rgba(45, 157, 226, .4);
@@ -1570,6 +1572,11 @@
                 </select>
               </label>
               <p id="resolution-note">Lower is faster on slow devices. Automatic: up to 1080p, 720p on phones.</p>
+              <div class="game-settings-option game-settings-select">
+                <span id="map-cache-size">Maps kept on this device</span>
+                <button id="map-cache-clear" type="button" class="map-cache-clear">Clear</button>
+              </div>
+              <p id="map-cache-note">Maps played before load from this device, without a download.</p>
             </div>
           </details>
         </div>
@@ -2872,6 +2879,39 @@
         try { localStorage.setItem("halo-resolution", resolution); } catch (_error) { /* private mode */ }
         appliedSize = "";
         applyCanvasSize();
+      });
+    }
+    // The maps kept on this device (fetch_path_normalization.js keeps what
+    // the game downloads): how much, and clearing them. Shown when the game
+    // settings open.
+    {
+      const MAP_CACHE = "halo-maps-v1";
+      const sizeText = document.getElementById("map-cache-size");
+      const clearButton = document.getElementById("map-cache-clear");
+      const settingsMenu = document.getElementById("game-settings-menu");
+      const showSize = async () => {
+        if (!window.caches) {
+          sizeText.textContent = "Maps are not kept in this browser";
+          clearButton.hidden = true;
+          return;
+        }
+        let bytes = 0;
+        try {
+          const cache = await caches.open(MAP_CACHE);
+          for (const request of await cache.keys()) {
+            if (!request.url.includes("halo-piece=")) continue;
+            const response = await cache.match(request);
+            bytes += Number(response && response.headers.get("Content-Length")) || 0;
+          }
+        } catch (_error) { /* storage blocked */ }
+        sizeText.textContent = bytes ? `Maps kept on this device: ${(bytes / 1048576).toFixed(0)} MB` :
+          "No maps kept on this device yet";
+        clearButton.disabled = !bytes;
+      };
+      settingsMenu.addEventListener("toggle", () => { if (settingsMenu.open) showSize(); });
+      clearButton.addEventListener("click", async () => {
+        try { await caches.delete(MAP_CACHE); } catch (_error) { /* storage blocked */ }
+        showSize();
       });
     }
     // The keyboard legend: shown until closed, and remembered on this device.

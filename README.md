@@ -56,7 +56,8 @@ OpenCE's own CI.
 - **Touch controls** for phones and tablets (`port/web/assets/touch`, after
   [Halo Mobile](https://github.com/OMG-Guest/Halo-Mobile)): a floating stick,
   aiming by dragging, every button, two layouts (modern or original Xbox
-  controller) and an on-screen editor. A connected gamepad hides them.
+  controller), an on-screen editor, and the page's resolution choice in their
+  menu. A connected gamepad hides them.
 - **Installing as an app** (PWA): `port/web/manifest.webmanifest`,
   `port/web/assets/pwa`, and `coi-serviceworker.js`, which also provides the
   cross-origin isolation that threads need.
@@ -70,7 +71,13 @@ OpenCE's own CI.
   `public/assets/custom_maps` (the server lists the folder for the game,
   `web_platform.c` mounts it), the "Play online" panel hosts them after the
   Xbox levels, and the Custom Edition tag cache's fixed addresses are kept
-  free of the browser's allocator (`xbox_memory.c`).
+  free of the browser's allocator (`xbox_memory.c`). A map's `<name>.bmp`
+  beside it is its picture on the panel's card, as in the game's menus.
+- **Maps kept in the browser** (`fetch_path_normalization.js`): the pieces of
+  the maps a player has loaded stay in the browser's Cache Storage, by each
+  file's version (its ETag), so a map loads without a download the next time
+  and even when the server cannot be reached; Game settings shows how much
+  is kept and can clear it.
 
 ### Added: online services
 
