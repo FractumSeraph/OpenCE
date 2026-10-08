@@ -34,6 +34,8 @@ short custom_edition_maps_count(unsigned char campaign);
 short custom_edition_maps_display_index_of(unsigned char campaign, short index);
 const char *custom_edition_maps_level_name(short display_index);
 unsigned short *custom_edition_maps_name(short display_index);
+/* ui_widget.h */
+unsigned char filesystem_check_thread_is_active(void);
 void player_ui_clear_multiplayer_joins(void);
 void player_ui_clear_multiplayer_variant(void);
 void player_ui_fast_setup_network_server(void);
@@ -763,7 +765,10 @@ void web_online_ui_update(int main_menu_loaded, float seconds)
 		config_write_boolean("input.mouse_aim_assist", requested_magnetism);
 	}
 
-	if (main_menu_loaded && !custom_maps_published)
+	/* (once the start-up's saved game enumeration is over: it walks folders
+	with the same find_files state as the maps folders' scan, on its own
+	thread, and a scan beside it stops short, listing only some maps) */
+	if (main_menu_loaded && !custom_maps_published && !filesystem_check_thread_is_active())
 	{
 		custom_maps_published = 1;
 		publish_custom_maps();
