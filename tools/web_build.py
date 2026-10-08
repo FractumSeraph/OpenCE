@@ -96,9 +96,12 @@ PLATFORM_FLAGS = [
 
 # A browser build has no self-updater (the page is always the current build)
 # and no UPnP (a browser cannot open router ports; online play goes through
-# WebRTC). The xiso unit is empty when the HALO_ANDROID data-import path is
-# selected, so leaving it in is harmless.
+# WebRTC). posix_trace_marker.c keeps a Linux GPU driver's open() of the
+# kernel's trace marker (SteamOS), which a browser has neither of. The xiso
+# unit is empty when the HALO_ANDROID data-import path is selected, so leaving
+# it in is harmless.
 WEB_EXCLUDED_PLATFORM_SOURCES = {
+    "posix_trace_marker.c",
     "posix_update.c",
     "posix_upnp.c",
     "updater.c",
