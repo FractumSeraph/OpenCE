@@ -65,6 +65,12 @@ OpenCE's own CI.
   signed listings from internet play's brokers, the game checks the
   signatures (`p2p_lobby.c`), and choosing one joins it through the native
   gateway. (The relay is part of the self-hosting server: `public-games.mjs`.)
+- **Halo Custom Edition maps** in the browser, with OpenCE's Custom Edition
+  support: the site serves them, with Custom Edition's resource maps, from
+  `public/assets/custom_maps` (the server lists the folder for the game,
+  `web_platform.c` mounts it), the "Play online" panel hosts them after the
+  Xbox levels, and the Custom Edition tag cache's fixed addresses are kept
+  free of the browser's allocator (`xbox_memory.c`).
 
 ### Added: online services
 
@@ -101,7 +107,8 @@ OpenCE's own CI.
     audio, and browser defaults for some settings (for example crouch on `C`);
   - **networking** (`posix_net.c`, `xnet.c`, `p2p.c`): sockets through the
     browser layer, and invites handed to the page;
-  - **menus** (`menu_functions.c`): the server browser joins through the page;
+  - **menus** (`menu_functions.c`, `player_ui.c`): the server browser joins
+    through the page, and the page's hosting takes a Custom Edition map;
   - **game code** (`source/`): a player re-sent to a browser client that
     missed it (`network_server_message_handler.c`,
     `network_client_manager.c`), a fatal error ending the browser runtime

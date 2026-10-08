@@ -15,12 +15,13 @@
       ? String(resource)
       : resource && resource.url;
     let isMapRequest = false;
+    let isCustomMapRequest = false;
 
     if (originalUrl) {
       const normalizedUrl = new URL(originalUrl, scope.location.href);
       const canonicalPath = normalizedUrl.pathname.replace(
-        /\/assets\/maps\/{2,}/g,
-        "/assets/maps/"
+        /\/assets\/(custom_)?maps\/{2,}/g,
+        (_, custom) => `/assets/${custom || ""}maps/`
       );
       if (canonicalPath !== normalizedUrl.pathname) {
         normalizedUrl.pathname = canonicalPath;
@@ -29,6 +30,8 @@
           : normalizedUrl.href;
       }
       isMapRequest = canonicalPath.includes("/assets/maps/");
+      /* (Custom Edition maps: no XISO fallback, as no XISO has them) */
+      isCustomMapRequest = canonicalPath.includes("/assets/custom_maps/");
     }
 
     const method = String(
@@ -54,7 +57,7 @@
      * memory-heavy and unreliable for the large campaign maps. Advertise the
      * capability FetchFS is about to use; every range response is still checked
      * normally by fetch before its bytes are consumed. */
-    if (isMapRequest && method === "HEAD" && response.ok &&
+    if ((isMapRequest || isCustomMapRequest) && method === "HEAD" && response.ok &&
         response.headers.has("Content-Length") &&
         !response.headers.has("Accept-Ranges")) {
       const headers = new Headers(response.headers);

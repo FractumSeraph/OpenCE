@@ -474,10 +474,36 @@ function resolveStatic(urlPath) {
   return null;
 }
 
+// The Halo Custom Edition maps in public/assets/custom_maps (with Custom
+// Edition's bitmaps.map, sounds.map and loc.map, and each map's optional .txt
+// and .bmp): the game cannot list a folder on the server, so it reads this.
+function serveCustomMapList(req, res) {
+  let names = [];
+  try {
+    names = fs.readdirSync(path.join(PUBLIC_DIR, "assets", "custom_maps"), { withFileTypes: true })
+      .filter((entry) => entry.isFile() && /^[^/\\]{1,100}\.(map|txt|bmp)$/i.test(entry.name))
+      .map((entry) => entry.name)
+      .sort();
+  } catch {
+    // No folder: no Custom Edition maps.
+  }
+  const body = Buffer.from(JSON.stringify(names));
+  isolationHeaders(res);
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Content-Length", body.length);
+  res.writeHead(200);
+  res.end(req.method === "HEAD" ? undefined : body);
+}
+
 function serveStatic(req, res, config) {
   const url = new URL(req.url, "http://localhost");
   if (req.method !== "GET" && req.method !== "HEAD") {
     res.writeHead(405, { Allow: "GET, HEAD" }).end();
+    return;
+  }
+  if (/\/assets\/custom_maps\/index\.json$/.test(url.pathname)) {
+    serveCustomMapList(req, res);
     return;
   }
   const found = resolveStatic(url.pathname);

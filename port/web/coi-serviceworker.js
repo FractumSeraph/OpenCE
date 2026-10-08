@@ -9,7 +9,7 @@
  *   reloads the page only when isolation was actually missing.
  *
  * Map streaming, the lobby service and the native gateway (…/assets/maps/,
- * …/v1/…) and other origins are never touched, so large byte-range reads
+ * …/assets/custom_maps/, …/v1/…) and other origins are never touched, so large byte-range reads
  * and WebSockets go straight to the network. */
 (function bootstrapServiceWorker(scope) {
   "use strict";
@@ -48,7 +48,7 @@
     if (request.cache === "only-if-cached" && request.mode !== "same-origin") return;
     const url = new URL(request.url);
     if (url.origin !== self.location.origin) return;
-    if (/\/assets\/maps\/|\/v1\//.test(url.pathname)) return;
+    if (/\/assets\/(custom_)?maps\/|\/v1\//.test(url.pathname)) return;
 
     event.respondWith(fetch(request).then(response => {
       if (response.type === "opaque" || response.headers.has("Cross-Origin-Embedder-Policy")) {

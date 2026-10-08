@@ -161,6 +161,7 @@ try {
             }
         }
         New-Item -ItemType Directory -Force (Join-Path $Root "public\assets\maps") | Out-Null
+        New-Item -ItemType Directory -Force (Join-Path $Root "public\assets\custom_maps") | Out-Null
     }
     foreach ($item in $topItems) {
         $from = Join-Path $new $item

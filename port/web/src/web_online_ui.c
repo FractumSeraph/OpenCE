@@ -29,6 +29,11 @@ struct network_game_server *global_network_game_server_get(void);
 struct network_game_client *global_network_game_client_get(void);
 unsigned char create_global_network_game_client(void);
 void network_game_accept_remote_connections(unsigned char accept_remote_connections);
+/* custom_edition_maps.h (boolean and short as scalars, wchar_t 16-bit) */
+short custom_edition_maps_count(unsigned char campaign);
+short custom_edition_maps_display_index_of(unsigned char campaign, short index);
+const char *custom_edition_maps_level_name(short display_index);
+unsigned short *custom_edition_maps_name(short display_index);
 void player_ui_clear_multiplayer_joins(void);
 void player_ui_clear_multiplayer_variant(void);
 void player_ui_fast_setup_network_server(void);
@@ -125,6 +130,10 @@ static atomic_int web_online_transport_state = ATOMIC_VAR_INIT(_web_online_trans
 static atomic_uint web_online_customization_sequence = ATOMIC_VAR_INIT(0);
 static atomic_int web_online_requested_color = ATOMIC_VAR_INIT(0);
 static atomic_int web_online_requested_name[WEB_ONLINE_PLAYER_NAME_CHARACTERS];
+/* the Custom Edition multiplayer maps the page offers after the Xbox's
+levels, as map indices from _web_online_multiplayer_level_count on
+(publish_custom_maps) */
+static atomic_int web_online_custom_map_count = ATOMIC_VAR_INIT(0);
 static unsigned int web_online_applied_customization_sequence;
 
 static struct
@@ -159,6 +168,79 @@ static void publish_error(int error)
 	atomic_store_explicit(&web_online_public_error, error, memory_order_release);
 }
 
+/* the map indices the page can host: the Xbox's levels, then the Custom
+Edition multiplayer maps (up to the request's 8 bits) */
+static int host_map_index_valid(int map_index)
+{
+	int count = _web_online_multiplayer_level_count +
+		atomic_load_explicit(&web_online_custom_map_count, memory_order_acquire);
+
+	return map_index >= 0 && map_index < count && map_index <= 0xff;
+}
+
+/* Tells the page (online_client.js, haloOnlineCustomMaps) the Custom Edition
+multiplayer maps, sorted by name as the game lists them: each one's level
+name and display name. Once, with the main menu: the maps are in the
+server's custom_maps folder, which a session does not see change. */
+static void publish_custom_maps(void)
+{
+	enum { MAXIMUM_LISTED = 0xff + 1 - _web_online_multiplayer_level_count, NAME_BYTES = 192 };
+	static const char *levels[MAXIMUM_LISTED];
+	static char names[MAXIMUM_LISTED][NAME_BYTES];
+	static const char *name_pointers[MAXIMUM_LISTED];
+	int count = custom_edition_maps_count(0), index, listed = 0;
+
+	for (index = 0; index < count && listed < MAXIMUM_LISTED; index++)
+	{
+		short display_index = custom_edition_maps_display_index_of(0, (short)index);
+		const char *level = custom_edition_maps_level_name(display_index);
+		const unsigned short *name = custom_edition_maps_name(display_index);
+		char *out = names[listed];
+		int length = 0;
+
+		/* (the page's indices must stay the game's: none skipped) */
+		if (!level || !name)
+			break;
+		/* (UTF-16 to UTF-8: the names are the files', of the BMP) */
+		for (; *name && length < NAME_BYTES - 4; name++)
+		{
+			unsigned short c = *name;
+
+			if (c < 0x80)
+				out[length++] = (char)c;
+			else if (c < 0x800)
+			{
+				out[length++] = (char)(0xc0 | (c >> 6));
+				out[length++] = (char)(0x80 | (c & 0x3f));
+			}
+			else if (c < 0xd800 || c > 0xdfff)
+			{
+				out[length++] = (char)(0xe0 | (c >> 12));
+				out[length++] = (char)(0x80 | ((c >> 6) & 0x3f));
+				out[length++] = (char)(0x80 | (c & 0x3f));
+			}
+		}
+		out[length] = '\0';
+		levels[listed] = level;
+		name_pointers[listed] = out;
+		listed++;
+	}
+	MAIN_THREAD_EM_ASM({
+		const maps = [];
+		for (let index = 0; index < $2; index++)
+		{
+			maps.push({
+				level: UTF8ToString(HEAPU32[($0 >> 2) + index]),
+				name: UTF8ToString(HEAPU32[($1 >> 2) + index])
+			});
+		}
+		if (typeof globalThis.haloOnlineCustomMaps === "function")
+			globalThis.haloOnlineCustomMaps(maps);
+	}, levels, name_pointers, listed);
+	atomic_store_explicit(&web_online_custom_map_count, listed, memory_order_release);
+	platform_log("web online: %d Custom Edition multiplayer maps to host", listed);
+}
+
 static int pack_request(int command, int map_index, int mode_index)
 {
 	return (command & WEB_ONLINE_REQUEST_COMMAND_MASK) |
@@ -183,7 +265,7 @@ EMSCRIPTEN_KEEPALIVE int platform_web_online_host_configured(
 	int map_index,
 	int mode_index)
 {
-	if (map_index < 0 || map_index >= _web_online_multiplayer_level_count ||
+	if (!host_map_index_valid(map_index) ||
 		mode_index < 0 || mode_index >= _web_online_game_mode_count)
 	{
 		return 0;
@@ -204,7 +286,7 @@ EMSCRIPTEN_KEEPALIVE int platform_web_online_host_advanced_configured(
 	int health_percent,
 	int rules)
 {
-	if (map_index < 0 || map_index >= _web_online_multiplayer_level_count ||
+	if (!host_map_index_valid(map_index) ||
 		mode_index < 0 || mode_index >= _web_online_game_mode_count ||
 		score_to_win < 1 || score_to_win > 1000 ||
 		respawn_seconds < 0 || respawn_seconds > 30 ||
@@ -643,6 +725,7 @@ static void update_join(float seconds)
 void web_online_ui_update(int main_menu_loaded, float seconds)
 {
 	static int applied_magnetism = -1;
+	static int custom_maps_published;
 	int requested_magnetism;
 	int request = atomic_exchange_explicit(
 		&web_online_requested_request,
@@ -665,6 +748,12 @@ void web_online_ui_update(int main_menu_loaded, float seconds)
 	{
 		applied_magnetism = requested_magnetism;
 		config_write_boolean("input.mouse_aim_assist", requested_magnetism);
+	}
+
+	if (main_menu_loaded && !custom_maps_published)
+	{
+		custom_maps_published = 1;
+		publish_custom_maps();
 	}
 
 	/* Browser calls only publish atomics.  Apply the selected identity here,

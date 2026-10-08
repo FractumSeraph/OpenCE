@@ -746,8 +746,24 @@ static boolean player_ui_configure_network_server_game_internal(
 	export rejects bad indices before posting its request, but a corrupted or
 	stale mailbox must still result in a real playable game rather than an
 	arbitrary path or an all-zero variant. */
-	if (multiplayer_level_index < 0 ||
-		multiplayer_level_index >= (long)(sizeof(multiplayer_levels) / sizeof(multiplayer_levels[0])))
+	map_name = NULL;
+#ifdef HALO_WEB
+	/* after the Xbox's levels, the Custom Edition multiplayer maps sorted by
+	name (port/web/src/web_online_ui.c, publish_custom_maps) */
+	if (multiplayer_level_index >= (long)(sizeof(multiplayer_levels) / sizeof(multiplayer_levels[0])))
+	{
+		extern short custom_edition_maps_display_index_of(boolean campaign, short index);
+		extern char const *custom_edition_maps_level_name(short display_index);
+		long custom_index = multiplayer_level_index - (long)(sizeof(multiplayer_levels) / sizeof(multiplayer_levels[0]));
+
+		if (custom_index < 0x7fff)
+			map_name = custom_edition_maps_level_name(custom_edition_maps_display_index_of(FALSE, (short)custom_index));
+		if (!map_name)
+			return FALSE;
+	}
+#endif
+	if (!map_name && (multiplayer_level_index < 0 ||
+		multiplayer_level_index >= (long)(sizeof(multiplayer_levels) / sizeof(multiplayer_levels[0]))))
 	{
 		multiplayer_level_index = 0;
 	}
@@ -761,7 +777,8 @@ static boolean player_ui_configure_network_server_game_internal(
 	if (!server)
 		return FALSE;
 
-	map_name = multiplayer_levels[multiplayer_level_index];
+	if (!map_name)
+		map_name = multiplayer_levels[multiplayer_level_index];
 	variant_name = game_modes[game_mode_index];
 	main_set_multiplayer_map_name(map_name);
 	game_engine_override_map_name(map_name);

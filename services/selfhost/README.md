@@ -148,6 +148,23 @@ hangemhigh longest prisoner putput ratrace sidewinder wizard (multiplayer)
 If `ui.map` is missing, the page falls back to asking each player for their
 own XISO.
 
+### Halo Custom Edition maps
+
+Custom Edition maps (Coldsnap, Extinction, Halo PC's Ice Fields, Death Island
+and so on) are served from **`public/assets/custom_maps/`**, beside `maps/`.
+Put there the maps, and the three resource maps every Custom Edition map
+needs, from a Halo Custom Edition install's `maps` folder: `bitmaps.map`,
+`sounds.map` and `loc.map`. A map's optional `<name>.txt` (its description)
+and `<name>.bmp` (its picture in the game's menus) can go beside it. Players
+download nothing themselves: the game reads what it needs from the server,
+as it does the Xbox maps.
+
+The game's menus list them as CUSTOM MULTIPLAYER (and CUSTOM SINGLEPLAYER)
+maps, the "Play online" panel offers the multiplayer ones after the Xbox
+levels, and the in-game server browser can join native OpenCE games on any
+of them the server has. A map added while the server runs shows up the next
+time a player loads the page. Updates (`update.ps1`) leave the folder alone.
+
 The lobby artwork in `public/assets/ui/` is placeholder art. Replace any image
 with your own, keeping the same file name.
 

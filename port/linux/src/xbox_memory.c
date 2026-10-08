@@ -24,6 +24,9 @@ Halo Custom Edition maps need the window their tag data is linked to,
 
 #ifdef HALO_WEB
 #include <emscripten/heap.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <unistd.h>
 #else
 #include <errno.h>
 #include <sys/mman.h>
@@ -95,9 +98,28 @@ __attribute__((constructor(102)))
 static void custom_edition_tag_cache_reserve(void)
 {
 #ifdef HALO_WEB
-	/* (not in the browser yet: its allocator hands out the linear memory
-	from the bottom up, so nothing keeps the cache's addresses free; the
-	game then lists no Custom Edition maps) */
+	/* The browser has no mmap: the allocator (dlmalloc) takes the linear
+	memory from the bottom up with sbrk. The cache's addresses are kept from
+	it by moving the break past them, after one allocation that fills what
+	lies below and is freed again, so that the memory below the cache stays
+	the allocator's. Always, as the setting can be read only later (from
+	/storage, mounted by platform_web_initialize). The pages are touched only
+	when a Custom Edition map loads. */
+	uintptr_t start = CUSTOM_EDITION_TAG_CACHE_ADDRESS;
+	uintptr_t end = start + CUSTOM_EDITION_TAG_CACHE_BYTES;
+	uintptr_t brk = (uintptr_t)sbrk(0);
+	void *below = NULL;
+
+	/* (room for the allocator's own rounding up) */
+	if (brk + 0x200000 < start)
+		below = malloc(start - brk - 0x200000);
+	brk = (uintptr_t)sbrk(0);
+	if (brk <= start && sbrk((intptr_t)(end - brk)) != (void *)-1)
+		custom_edition_tag_cache = (void *)start;
+	else
+		platform_log("cannot keep the Custom Edition tag cache at %p free (the heap is at %p): Custom Edition maps cannot run",
+			(void *)start, (void *)brk);
+	free(below);
 #else
 	void *wanted = (void *)CUSTOM_EDITION_TAG_CACHE_ADDRESS;
 	void *result;

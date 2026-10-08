@@ -1033,6 +1033,67 @@
     syncHostPickerCards();
   }
 
+  /* The Custom Edition multiplayer maps the game found in the server's
+   * custom_maps folder (src/web_online_ui.c, publish_custom_maps), offered
+   * after the Xbox's 13 levels with the map indices the game takes. */
+  var XBOX_MAP_COUNT = 13;
+  var MAXIMUM_CUSTOM_MAPS = 256 - XBOX_MAP_COUNT;
+  var customMaps = [];
+
+  function addCustomMapChoices() {
+    var document = global.document;
+    if (!document || !elements.map || !elements.mapOptions || !customMaps.length) return;
+    customMaps.forEach(function(map, index) {
+      var value = String(XBOX_MAP_COUNT + index);
+      if (selectHasIndex(elements.map, value)) return;
+      var option = document.createElement("option");
+      option.value = value;
+      option.textContent = map.name;
+      elements.map.appendChild(option);
+
+      var label = document.createElement("label");
+      var input = document.createElement("input");
+      var card = document.createElement("span");
+      var picture = document.createElement("span");
+      var name = document.createElement("span");
+      label.className = "visual-choice";
+      label.setAttribute("data-picker-option", "");
+      input.type = "radio";
+      input.name = "halo-map-choice";
+      input.value = value;
+      card.className = "visual-choice-card map-choice-card";
+      picture.className = "custom-map-picture";
+      picture.textContent = "Custom Edition";
+      name.className = "choice-label";
+      name.textContent = map.name;
+      card.appendChild(picture);
+      card.appendChild(name);
+      label.appendChild(input);
+      label.appendChild(card);
+      elements.mapOptions.appendChild(label);
+    });
+    LAST_MAP_INDEX = XBOX_MAP_COUNT - 1 + customMaps.length;
+    /* (a saved Custom Edition map could not be chosen before the list came) */
+    if (!session.active) {
+      try {
+        var saved = JSON.parse(global.localStorage.getItem(HOST_SETTINGS_STORAGE_KEY));
+        if (saved && saved.mapIndex >= XBOX_MAP_COUNT && selectHasIndex(elements.map, saved.mapIndex)) {
+          elements.map.value = String(saved.mapIndex);
+        }
+      } catch (error) {
+        /* (blocked storage: the choice stays) */
+      }
+    }
+    syncHostPickerCards();
+  }
+
+  global.haloOnlineCustomMaps = function(maps) {
+    customMaps = (Array.isArray(maps) ? maps : []).filter(function(map) {
+      return map && typeof map.name === "string" && map.name.trim();
+    }).slice(0, MAXIMUM_CUSTOM_MAPS);
+    addCustomMapChoices();
+  };
+
   function saveHostSettings(settings) {
     try {
       var saved = {
@@ -2350,6 +2411,7 @@
   function initialize() {
     collectElements();
     restoreHostSettings();
+    addCustomMapChoices();
     restorePlayerProfile();
     attachEvents();
     renderRoster();

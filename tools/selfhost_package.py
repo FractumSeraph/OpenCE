@@ -173,6 +173,7 @@ def main() -> int:
         copy_selfhost(stage)
         copy_site(arguments.site, stage / "public")
         (stage / "public" / "assets" / "maps").mkdir(parents=True, exist_ok=True)
+        (stage / "public" / "assets" / "custom_maps").mkdir(parents=True, exist_ok=True)
         server = stage / "server"
         (server / "signaling").mkdir(parents=True)
         shutil.copy2(arguments.signaling, server / "signaling" / "index.js")

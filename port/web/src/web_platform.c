@@ -92,6 +92,62 @@ EMSCRIPTEN_KEEPALIVE int platform_web_campaign_active(void)
 	return platform_web_campaign_load_index() >= 0 || main_campaign_in_progress();
 }
 
+/* Halo Custom Edition maps (d:\custom_maps\, custom_edition_cache.h): the
+files of the server's custom_maps folder, beside maps, which the server lists
+in its index.json (services/selfhost/server/server.mjs), as FetchFS cannot
+list a folder. Smaller pieces than the Xbox maps': a Custom Edition map's
+game reads are scattered through it and bitmaps.map and sounds.map, which
+are hundreds of megabytes, and every piece read stays in memory. */
+static void web_custom_maps_mount(void)
+{
+	backend_t custom_maps;
+	char *url;
+	char *list;
+	char *name;
+	char *next;
+
+	url = (char *)EM_ASM_PTR({
+		return stringToNewUTF8(new URL("assets/custom_maps", scriptDirectory).href);
+	});
+	list = (char *)EM_ASM_PTR({
+		try
+		{
+			const request = new XMLHttpRequest();
+			request.open("GET", UTF8ToString($0) + "/index.json", false);
+			request.send();
+			const names = request.status === 200 ? JSON.parse(request.responseText) : [];
+			return stringToNewUTF8(Array.isArray(names) ?
+				names.filter(name => typeof name === "string").join(String.fromCharCode(10)) : "");
+		}
+		catch (error)
+		{
+			return stringToNewUTF8("");
+		}
+	}, url);
+	custom_maps = wasmfs_create_fetch_backend(url, 4 * 1024 * 1024);
+	if (wasmfs_create_directory("/assets/custom_maps", 0555, custom_maps) != 0 && errno != EEXIST)
+		platform_log("web: cannot mount the Custom Edition maps");
+	for (name = list; name && *name; name = next)
+	{
+		char path[160];
+		int descriptor;
+
+		next = strchr(name, '\n');
+		if (next)
+			*next++ = '\0';
+		else
+			next = name + strlen(name);
+		if (!*name || strlen(name) > 100 || strchr(name, '/') || strchr(name, '\\') || !strcmp(name, ".."))
+			continue;
+		snprintf(path, sizeof(path), "/assets/custom_maps/%s", name);
+		descriptor = wasmfs_create_file(path, 0444, custom_maps);
+		if (descriptor >= 0)
+			close(descriptor);
+	}
+	free(list);
+	free(url);
+}
+
 void platform_web_initialize(void)
 {
 	backend_t root = wasmfs_get_backend_by_path("/");
@@ -137,6 +193,8 @@ void platform_web_initialize(void)
 		if (descriptor >= 0)
 			close(descriptor);
 	}
+
+	web_custom_maps_mount();
 
 	/* Origin-private storage persists configuration, cache files, profiles
 	and saves without asking the browser to hold them in linear memory. */
