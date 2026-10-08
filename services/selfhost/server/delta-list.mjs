@@ -9,10 +9,14 @@
 //   GET <anything>/v1/delta/legacy.sig  document and Ed25519 signature,
 //                                       byte for byte (the game checks them:
 //                                       port/web/src/web_delta.c)
+//   GET <anything>/v1/delta/games       the site's live games (its /v1/games),
+//                                       for the in-game Server Browser
+//                                       (port/web/src/web_delta_list.c)
 
 const LEGACY_SECONDS = 300;
+const GAMES_SECONDS = 15;
 const TIMEOUT_MILLISECONDS = 10000;
-const MAXIMUM_BYTES = 65536;
+const MAXIMUM_BYTES = 1048576;
 
 export class DeltaList {
   constructor(baseUrl, log) {
@@ -55,15 +59,21 @@ export class DeltaList {
   // the request's route (server.mjs's api.rest, after "v1/"), answered;
   // false when it is not one of these
   handle(rest, req, res) {
-    if (rest !== "delta/legacy" && rest !== "delta/legacy.sig") return false;
+    const paths = {
+      "delta/legacy": ["/v1/delta/legacy", LEGACY_SECONDS],
+      "delta/legacy.sig": ["/v1/delta/legacy.sig", LEGACY_SECONDS],
+      "delta/games": ["/v1/games", GAMES_SECONDS],
+    };
+    if (!Object.hasOwn(paths, rest)) return false;
     if (req.method !== "GET") {
       res.writeHead(405, { "Content-Type": "text/plain" }).end("GET only\n");
       return true;
     }
-    this.get(`/v1/${rest}`, LEGACY_SECONDS).then((answer) => {
+    const [path, seconds] = paths[rest];
+    this.get(path, seconds).then((answer) => {
       res.writeHead(answer.status, {
         "Content-Type": answer.type,
-        "Cache-Control": `public, max-age=${LEGACY_SECONDS}`,
+        "Cache-Control": `public, max-age=${seconds}`,
       });
       res.end(answer.body);
     });

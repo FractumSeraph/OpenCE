@@ -3434,15 +3434,23 @@ static short lobby_browser_valid_games(struct p2p_listing *games, short count)
 	return written;
 }
 
+#ifdef HALO_WEB
+/* the browser's: Delta List, ChupathingyCE's game list
+(port/web/src/web_delta_list.c) */
+#include "../../web/src/web_delta_list.h"
+#endif
+
 /* the public games found: internet play's (p2p_lobby.c) and, in the browser,
-first, those other browsers host (port/web/src/web_public_games.c) */
+first, those other browsers host (port/web/src/web_public_games.c), and
+last, those only ChupathingyCE's game list has (web_delta_list.c) */
 static short lobby_browser_games_found(void)
 {
 #ifdef HALO_WEB
 	extern int web_public_rooms_games(struct p2p_listing *games, int maximum_count);
 	short count = (short)web_public_rooms_games(lobby_browser.games, LOBBY_BROWSER_GAMES);
 
-	return (short)(count + p2p_lobby_games(lobby_browser.games + count, LOBBY_BROWSER_GAMES - count));
+	count = (short)(count + p2p_lobby_games(lobby_browser.games + count, LOBBY_BROWSER_GAMES - count));
+	return (short)web_delta_list_add_games(lobby_browser.games, count, LOBBY_BROWSER_GAMES);
 #else
 	return (short)p2p_lobby_games(lobby_browser.games, LOBBY_BROWSER_GAMES);
 #endif
@@ -3540,7 +3548,24 @@ static void lobby_browser_update(struct widget_instance *list)
 		game = &lobby_browser.games[index];
 		text_to_wide(game->name, text, ROW_TEXT_LENGTH);
 		text_set(named(row, "server_item_server_name", 0), text);
+#ifdef HALO_WEB
+		/* (a ChupathingyCE host lists a Custom Edition map as <file>@ce:
+		shown "<file> CE") */
+		{
+			size_t length = strlen(game->map);
+
+			if (length > 3 && !_stricmp(game->map + length - 3, "@ce"))
+			{
+				text_to_wide(game->map, text, (short)MIN(ROW_TEXT_LENGTH, (short)length - 2));
+				usnprintf(text + ustrlen(text), ROW_TEXT_LENGTH - 1 - (short)ustrlen(text), L" CE");
+				text[ROW_TEXT_LENGTH - 1] = 0;
+			}
+			else
+				map_display_name(game->map, text);
+		}
+#else
 		map_display_name(game->map, text);
+#endif
 		text_set(named(row, "server_item_map", 0), text);
 		text_set(named(row, "server_item_type", 0), game_type_name(game->engine_type));
 		usnprintf(text, ROW_TEXT_LENGTH - 1, L"%d/%d", game->player_count, game->maximum_player_count);
@@ -3558,7 +3583,12 @@ static void lobby_browser_update(struct widget_instance *list)
 			if (lock)
 				lock->animation.current_frame_index = 1;
 		}
+#ifdef HALO_WEB
+		/* (a dedicated server's game, as Delta List says) */
+		visible_set(named(row, "server_item_dedicated", 0), web_delta_list_dedicated(game->invite) != 0);
+#else
 		visible_set(named(row, "server_item_dedicated", 0), FALSE);
+#endif
 		visible_set(named(row, "server_item_classic", 0), FALSE);
 	}
 	/* joining: once the host is reached, its game joined (by an A press, on
@@ -3632,16 +3662,45 @@ static void lobby_browser_update(struct widget_instance *list)
 			wchar_t gametype[P2P_LISTING_GAMETYPE_SIZE + 1];
 
 			text_to_wide(game->gametype, gametype, NUMBEROF(gametype));
+#ifdef HALO_WEB
+			/* (and the score to win, as Delta List says) */
+			{
+				wchar_t score[16];
+				int score_limit = web_delta_list_score_limit(game->invite);
+
+				score[0] = 0;
+				if (score_limit > 0)
+					usnprintf(score, NUMBEROF(score) - 1, L" to %d", score_limit);
+				usnprintf(text, NUMBEROF(text) - 1, L"%s%s: %d %s of %d%s%s", gametype[0] ? gametype :
+					game_type_name(game->engine_type), score, game->player_count,
+					game->player_count == 1 ? L"player" : L"players", game->maximum_player_count,
+					!game->open ? L", full or starting" : game->in_progress ? L", under way" : L"",
+					game->locked ? L", password" : L"");
+			}
+#else
 			usnprintf(text, NUMBEROF(text) - 1, L"%s: %d %s of %d%s%s", gametype, game->player_count,
 				game->player_count == 1 ? L"player" : L"players", game->maximum_player_count,
 				!game->open ? L", full or starting" : game->in_progress ? L", under way" : L"",
 				game->locked ? L", password" : L"");
+#endif
 		}
 		else
 			text[0] = 0;
 		text[NUMBEROF(text) - 1] = 0;
 		text_set(named(list, "ticker_player_info", 0), text);
+#ifdef HALO_WEB
+		/* (its host and who is playing, as Delta List says: as much as the
+		line shows) */
+		if (!lobby_browser.joining && lobby_browser.count && chosen < lobby_browser.count)
+		{
+			web_delta_list_detail_text(lobby_browser.games[chosen].invite, (unsigned short *)text, NUMBEROF(text), 60);
+			text_set(named(list, "ticker_rules_info", 0), text);
+		}
+		else
+			text_set(named(list, "ticker_rules_info", 0), L"");
+#else
 		text_set(named(list, "ticker_rules_info", 0), L"");
+#endif
 	}
 	if (stats)
 	{

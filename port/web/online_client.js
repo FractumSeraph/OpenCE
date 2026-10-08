@@ -406,6 +406,60 @@
           }
         })
         .catch(function() { /* (a lobby service without the list) */ });
+      /* (and ChupathingyCE's game list, Delta List: the host's platform,
+       * dedicated servers, who is playing, and the games only it has) */
+      fetch(apiBase() + "/v1/delta/games", { credentials: "omit", cache: "no-store" })
+        .then(function(response) { return response.ok ? response.json() : null; })
+        .then(function(result) {
+          if (result && Array.isArray(result.games) && global.Module._web_public_games_browsing()) {
+            deliverDeltaGames(result.games);
+          }
+        })
+        .catch(function() { /* (a server without Delta List) */ });
+    }
+
+    /* Delta List's games to the game (port/web/src/web_delta_list.c): each
+       one's texts, ended by a zero each (who is playing: each name ended by
+       a 0x1E), then its numbers */
+    var DELTA_PLATFORMS = ["unknown", "pc_windows", "pc_macos", "pc_linux", "android", "steam_deck", "xbox",
+      "xbox360", "wiiu", "switch"];
+    var DELTA_HOSTINGS = { player: 1, dedicated: 2, official: 3 };
+    var DELTA_PROTOCOLS = { delta: 1, opence: 2 };
+
+    function deliverDeltaGames(games) {
+      var buffer = wasmFunction("web_delta_games_buffer")() >>> 0;
+      var capacity = wasmFunction("web_delta_games_buffer_size")();
+      var add = wasmFunction("web_delta_games_add");
+      var encoder = new TextEncoder();
+      var text = function(value, most) { return String(value == null ? "" : value).slice(0, most); };
+      var number = function(value) { return Number.isFinite(Number(value)) ? Math.trunc(Number(value)) : 0; };
+      wasmFunction("web_delta_games_begin")();
+      for (var index = 0; index < games.length && index < 128; index++) {
+        var game = games[index];
+        if (!game || typeof game.invite !== "string" || !/^[0-9a-f]{64}$/i.test(game.invite) ||
+            game.verified === false) continue;
+        var roster = Array.isArray(game.roster) ? game.roster : [];
+        var names = roster.map(function(player) {
+          return text(player && player.name, 24).replace(/[\u0000-\u001f]/g, "") + "\u001e";
+        }).join("");
+        var bytes = encoder.encode([game.invite, text(game.name, 64), text(game.map, 128),
+          text(game.gametype, 48), names].join("\u0000") + "\u0000");
+        if (bytes.length > capacity) {
+          /* (too many names: who is playing left out) */
+          bytes = encoder.encode([game.invite, text(game.name, 64), text(game.map, 128),
+            text(game.gametype, 48), ""].join("\u0000") + "\u0000");
+          if (bytes.length > capacity) continue;
+          roster = [];
+        }
+        var memory = typeof wasmMemory !== "undefined" ? wasmMemory : null;
+        new Uint8Array(memory ? memory.buffer : global.Module.HEAPU8.buffer).set(bytes, buffer);
+        var platform = DELTA_PLATFORMS.indexOf(game.platform);
+        add(number(game.engine), number(game.players), number(game.maximum_players), game.open ? 1 : 0,
+          game.in_progress ? 1 : 0, game.teams ? 1 : 0, number(game.version), number(game.score_limit),
+          game.platform ? platform : -1, DELTA_HOSTINGS[game.hosting] || 0, DELTA_PROTOCOLS[game.protocol] || 0,
+          roster.length);
+      }
+      wasmFunction("web_delta_games_end")();
     }
 
     function deliverRooms(games) {
