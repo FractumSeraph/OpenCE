@@ -9,6 +9,8 @@
 //   <anything>/native-gateway/v1/... native-game gateway (halo://join links)
 //   <anything>/v1/public-games       the in-game server browser's public games
 //                                    (public-games.mjs)
+//   <anything>/v1/delta/...          ChupathingyCE's game list, asked for the
+//                                    page (delta-list.mjs)
 //
 // Settings live in ../config.json (created with defaults on first start).
 // Runtime state (lobby storage, generated secrets, TLS certificate) lives in
@@ -29,6 +31,7 @@ import { Log, LogLevel, Miniflare } from "miniflare";
 import selfsigned from "selfsigned";
 
 import { PublicGames } from "./public-games.mjs";
+import { DeltaList } from "./delta-list.mjs";
 
 const SERVER_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(SERVER_DIR, "..");
@@ -67,6 +70,10 @@ const DEFAULT_CONFIG = {
     enabled: true,
     brokers: ["opence.milenko.org:1883", "broker.emqx.io:1883", "broker.hivemq.com:1883", "test.mosquitto.org:1883"],
   },
+  // Delta, ChupathingyCE's game list (delta-list.mjs): the page's requests to
+  // it go through this server, which has no CORS to work around. Empty url
+  // or enabled false: none (the game then plays with its built-in numbers).
+  delta: { enabled: true, url: "https://halo.milenko.org" },
   // optional page-view analytics: an Umami instance's tracker script (e.g.
   // "https://umami.example.com/script.js") and the site's website ID in it.
   // Empty = none. (It must send Access-Control-Allow-Origin, as Umami does:
@@ -700,7 +707,7 @@ function redirectToHttps(req, res, config) {
   return true;
 }
 
-function makeHandlers(config, lobby, gateway, publicGames) {
+function makeHandlers(config, lobby, gateway, publicGames, deltaList) {
   const portFor = (target) => (target === "gateway" ? gateway && gateway.port : lobby && lobby.port);
   const request = (req, res) => {
     if (process.env.HALO_LOG_REQUESTS) {
@@ -723,6 +730,15 @@ function makeHandlers(config, lobby, gateway, publicGames) {
         }
         res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
         res.end(JSON.stringify(publicGames.list()));
+        return;
+      }
+      if (api.target === "lobby" && api.rest.startsWith("delta/")) {
+        if (!deltaList) {
+          res.writeHead(503, { "Content-Type": "text/plain" }).end("the game list is off on this server\n");
+          return;
+        }
+        if (deltaList.handle(api.rest.replace(/\?.*$/, ""), req, res)) return;
+        res.writeHead(404, { "Content-Type": "text/plain" }).end("not found\n");
         return;
       }
       const port = portFor(api.target);
@@ -790,7 +806,8 @@ async function main() {
   const gateway = await startGateway(config, secrets);
   const lobby = await startLobby(config, secrets, gateway);
   const publicGames = config.publicGames.enabled ? new PublicGames(config.publicGames.brokers, log) : null;
-  const { request, upgrade } = makeHandlers(config, lobby, gateway, publicGames);
+  const deltaList = config.delta.enabled && config.delta.url ? new DeltaList(config.delta.url, log) : null;
+  const { request, upgrade } = makeHandlers(config, lobby, gateway, publicGames, deltaList);
   const servers = [];
   const urls = [];
   const hosts = ["localhost", ...localAddresses()];

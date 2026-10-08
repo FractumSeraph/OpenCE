@@ -98,6 +98,17 @@ enum
 
 static const char signature_label[] = "hceu-lobby-1";
 
+/* the listings shown: this machine's network version's */
+#ifdef HALO_WEB
+/* web: Delta's join range (port/web/src/web_delta.c), as ChupathingyCE's
+browsers: every version back to the newest breaking one */
+int delta_legacy_minimum(void);
+int delta_legacy_maximum(void);
+#define LISTING_VERSION_PLAYS(version) ((version) >= delta_legacy_minimum() && (version) <= delta_legacy_maximum())
+#else
+#define LISTING_VERSION_PLAYS(version) ((version) == HALO_PORT_NETWORK_VERSION)
+#endif
+
 /* (p2p.h's sizes of a locked listing's are p2p_internal.h's) */
 typedef char check_listing_sizes[P2P_LISTING_SIGNING_KEY_SIZE == P2P_KEY_SIZE &&
 	P2P_LISTING_KEY_HASH_SIZE == P2P_KEY_HASH_SIZE && P2P_LISTING_SEALED_TOKEN_SIZE == P2P_SEALED_TOKEN_SIZE ? 1 : -1];
@@ -662,7 +673,7 @@ static void update_browsing(void)
 		int good;
 
 		memmove(lobby.queue, lobby.queue + 1, sizeof(*lobby.queue) * (size_t)(--lobby.queue_count));
-		if (!listing_read(queued.payload, queued.size, &listing) || listing.version != HALO_PORT_NETWORK_VERSION ||
+		if (!listing_read(queued.payload, queued.size, &listing) || !LISTING_VERSION_PLAYS(listing.version) ||
 			!signing_key_hash(listing.key, key_hash) || memcmp(key_hash, queued.key_hash, P2P_KEY_HASH_SIZE))
 		{
 			continue;

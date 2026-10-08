@@ -3072,6 +3072,8 @@ boolean network_game_client_advertised_game_compatible(
 	unsigned int ours = HALO_PORT_NETWORK_VERSION;
 	unsigned int theirs;
 	boolean distributed;
+	boolean plays;
+	boolean newer;
 	char message[400];
 
 	if (game_index < 0 || game_index >= MAXIMUM_NETWORK_ADVERTISED_GAMES)
@@ -3079,18 +3081,32 @@ boolean network_game_client_advertised_game_compatible(
 	theirs = network_game_client_advertised_versions[game_index].version;
 	distributed = (network_game_client_advertised_versions[game_index].flags &
 		HALO_PORT_ADVERTISED_DISTRIBUTED_FLAG) != 0;
-	if (theirs == ours && distributed)
+#ifdef HALO_WEB
+	/* web: Delta's join range (port/web/src/web_delta.c), as ChupathingyCE's
+	clients: every version back to the newest breaking one */
+	{
+		int delta_legacy_minimum(void);
+		int delta_legacy_maximum(void);
+
+		plays = theirs >= (unsigned int)delta_legacy_minimum() && theirs <= (unsigned int)delta_legacy_maximum();
+		newer = theirs > (unsigned int)delta_legacy_maximum();
+	}
+#else
+	plays = theirs == ours;
+	newer = theirs > ours;
+#endif
+	if (plays && distributed)
 	{
 		network_event("joining a host of network version %u", theirs);
 		return TRUE;
 	}
-	if (theirs == ours)
+	if (plays)
 	{
 		csprintf(message,
 			"The host is using the lockstep network code, which this version no longer has.\n\n"
 			"Ask the host to update the game.");
 	}
-	else if (theirs > ours)
+	else if (newer)
 	{
 		csprintf(message,
 			"The host is using a newer version of the network code than you.\n\n"

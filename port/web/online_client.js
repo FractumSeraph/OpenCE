@@ -280,6 +280,60 @@
      browser is open, fetch them from this site's server (which subscribes
      for us: server/public-games.mjs) and hand each listing to the game as
      it came; the game checks its signature (p2p_lobby.c). */
+  /* Delta's signed legacy table (ChupathingyCE's network family:
+     port/web/src/web_delta.c): its document and Ed25519 signature, from
+     this site's server (which asks halo.milenko.org, whose API has no CORS:
+     server/delta-list.mjs) or, failing that, from GitHub, at start and every
+     four hours. The game checks the signature and takes the table only if
+     it is newer than its own; nothing here is trusted. */
+  var DELTA_TABLE_REFRESH_MILLISECONDS = 4 * 60 * 60 * 1000;
+  var DELTA_TABLE_RETRY_MILLISECONDS = 30 * 60 * 1000;
+  var DELTA_TABLE_GITHUB =
+    "https://raw.githubusercontent.com/ChupathingyCE/chupathingyce/delta-table/legacy.json";
+
+  function startDeltaLegacyTable() {
+    function bytes(url) {
+      return fetch(url, { credentials: "omit", cache: "no-store" }).then(function(response) {
+        if (!response.ok) throw new Error("HTTP " + response.status);
+        return response.arrayBuffer();
+      }).then(function(buffer) { return new Uint8Array(buffer); });
+    }
+
+    /* the document at url and its signature (url.sig), handed to the game
+       as one signed table: the signature's hex digits, a line feed, the
+       document's bytes */
+    function offer(url, fromGithub) {
+      return Promise.all([bytes(url), bytes(url + ".sig")]).then(function(parts) {
+        var document = parts[0];
+        var signature = String.fromCharCode.apply(null, parts[1]).trim();
+        if (!/^[0-9a-fA-F]{128}$/.test(signature)) throw new Error("not a signature");
+        var size = 129 + document.length;
+        if (size > wasmFunction("web_delta_table_buffer_size")()) throw new Error("too large");
+        var buffer = wasmFunction("web_delta_table_buffer")() >>> 0;
+        var memory = typeof wasmMemory !== "undefined" ? wasmMemory : null;
+        var heap = new Uint8Array(memory ? memory.buffer : global.Module.HEAPU8.buffer);
+        for (var index = 0; index < 128; index++) heap[buffer + index] = signature.charCodeAt(index);
+        heap[buffer + 128] = 10;
+        heap.set(document, buffer + 129);
+        if (wasmFunction("web_delta_offer_table")(size, fromGithub ? 1 : 0) < 0) throw new Error("dropped");
+      });
+    }
+
+    function refresh() {
+      if (!session.runtimeReady || !global.Module ||
+          typeof global.Module._web_delta_offer_table !== "function") {
+        global.setTimeout(refresh, 2000);
+        return;
+      }
+      offer(apiBase() + "/v1/delta/legacy", false)
+        .catch(function() { return offer(DELTA_TABLE_GITHUB, true); })
+        .then(function() { global.setTimeout(refresh, DELTA_TABLE_REFRESH_MILLISECONDS); },
+          function() { global.setTimeout(refresh, DELTA_TABLE_RETRY_MILLISECONDS); });
+    }
+
+    refresh();
+  }
+
   function startPublicGamesPolling() {
     var lastFetch = 0;
     var fetching = false;
@@ -2642,6 +2696,7 @@
     setBusy(false);
     startPresencePolling();
     startPublicGamesPolling();
+    startDeltaLegacyTable();
     session.pendingInvite = takeInviteFromLocation();
     if (session.pendingInvite) {
       showDialog();
