@@ -2491,6 +2491,14 @@ int p2p_invite_link(char *link, int size)
 {
 	int hosting;
 
+#ifdef HALO_WEB
+	/* (the page's invite to its room for this game: web_online_ui.c) */
+	{
+		extern int web_online_invite_link(char *link, int size);
+
+		return web_online_invite_link(link, size);
+	}
+#endif
 	pthread_mutex_lock(&p2p_lock);
 	hosting = p2p.hosting && p2p.has_token;
 	snprintf(link, (size_t)size, "%s", hosting ? p2p.invite : "");
@@ -2511,6 +2519,18 @@ void p2p_set_game_player_counts(int count, int maximum)
 	p2p.game_player_maximum = maximum;
 	pthread_mutex_unlock(&p2p_lock);
 }
+
+#ifdef HALO_WEB
+/* (the hosted game's players and its most, for the browser's own list of
+public games: port/web/src/web_online_ui.c) */
+void p2p_web_game_player_counts(int *count, int *maximum)
+{
+	pthread_mutex_lock(&p2p_lock);
+	*count = p2p.game_player_count;
+	*maximum = p2p.game_player_maximum;
+	pthread_mutex_unlock(&p2p_lock);
+}
+#endif
 
 /* ---------- UPnP (posix_upnp.c): the router forwards a port here */
 

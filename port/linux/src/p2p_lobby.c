@@ -878,3 +878,25 @@ void p2p_lobby_mark_failed(const unsigned char *identifier)
 		memcpy(lobby.failed[lobby.failed_count++], identifier, P2P_IDENTIFIER_SIZE);
 	pthread_mutex_unlock(&p2p_lock);
 }
+
+#ifdef HALO_WEB
+/* The hosted game as its server last told it (p2p_set_game_listing,
+p2p_set_hosting_public and _password), for the browser's own list of public
+games (port/web/src/web_online_ui.c), which it is listed on instead of
+internet play's. The texts are P2P_LISTING_*_SIZE + 1 long. */
+void p2p_lobby_web_listing(char *name, char *map, char *gametype, int *open, int *in_progress, int *has_teams,
+	int *public, int *has_password)
+{
+	pthread_mutex_lock(&p2p_lock);
+	memcpy(name, lobby.name, sizeof(lobby.name));
+	memcpy(map, lobby.map, sizeof(lobby.map));
+	memcpy(gametype, lobby.gametype, sizeof(lobby.gametype));
+	*open = (lobby.flags & _listing_open) != 0;
+	*in_progress = (lobby.flags & _listing_in_progress) != 0;
+	*has_teams = (lobby.flags & _listing_has_teams) != 0;
+	*public = lobby.public;
+	*has_password = lobby.has_password;
+	pthread_mutex_unlock(&p2p_lock);
+}
+#endif
+

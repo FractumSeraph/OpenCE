@@ -34,13 +34,24 @@ Players need a current desktop Chrome, Edge or Firefox.
 
 ## Play together
 
-1. One player selects **Play online**, picks a map and mode, and creates a
-   lobby (up to 128 players).
-2. They copy the invite link and send it to everyone else.
-3. Friends open the link, or paste it into **Join game**. The host starts the
-   match when everyone is ready.
+Everything happens in Halo's own **Multiplayer** menu:
 
-The **Join game** box accepts:
+1. One player picks **Create Game → Internet** (or **LAN**), then a map and the
+   Server Setup options, and **Start Game** (up to 128 players). The page
+   opens a room for that game: its invite link shows beside the game (with
+   **Copy link**) and on Server Setup's INVITE LINK row.
+2. Friends join with that link, or, for an **Internet** game whose
+   **LISTING** is **PUBLIC**, from **Join Game → Server Browser**, where it is
+   listed first, above the native games. A browser-hosted game cannot have a
+   password; leave it PRIVATE to keep it to invited friends.
+3. The host starts the match when everyone is ready. Backing out of the game,
+   or **Close room** beside it, ends the room and takes the game off the list.
+
+The **Play online** button beside the game sets your name and armor colour,
+joins an invite link, and has a **Quick game** section that starts a lobby on
+a map and mode picked right there.
+
+The invite box (**Have an invite link?**) accepts:
 
 - invite links from this server;
 - invite links from another copy of this folder running under a different
@@ -51,12 +62,15 @@ The **Join game** box accepts:
 Gameplay traffic goes directly between each player and the host's browser
 (WebRTC). Only the lobby handshake goes through this server.
 
-**Public games:** in the game, **Multiplayer → Join Game → Server Browser**
-lists the public games hosted with the Windows/Linux builds of OpenCE.
-Choosing one joins it through the native gateway, like a `halo://join`
-link. This server fetches the list from internet play's brokers
-(`server/public-games.mjs`, only while someone has the browser open). The
-game checks each listing's signature itself.
+**Native public games:** the in-game **Server Browser** also lists the public
+games hosted with the Windows/Linux builds of OpenCE. Choosing one joins it
+through the native gateway, like a `halo://join` link. This server fetches the
+list from internet play's brokers (`server/public-games.mjs`, only while
+someone has the browser open). The game checks each listing's signature
+itself. The browser-hosted public games come from the lobby service
+(`/v1/public-rooms`, `services/signaling`): a host's page sends its game's
+listing over its room's connection, and a listing lapses within 90 seconds
+of its host leaving.
 
 **Keep the game visible while you play, especially the host.** Browsers
 pause background tabs, and after about a minute in the background the game
@@ -107,7 +121,8 @@ themselves:
 - **The ☰ button (top left):** choose the **Modern** layout or the
   **Original Xbox controller** layout, change the look speed, **Edit layout**
   (drag any control to move it, pick one to resize it, set the opacity),
-  or open **Play online** for lobbies and invite links.
+  the **Resolution**, or open **Play online** for your name, armor and
+  invite links (games are made in Halo's own Multiplayer menu).
 
 These settings are saved on each device. Connecting a Bluetooth or USB
 controller hides the touch controls while it is connected. On a tablet or
@@ -163,10 +178,18 @@ download nothing themselves: the game reads what it needs from the server,
 as it does the Xbox maps.
 
 The game's menus list them as CUSTOM MULTIPLAYER (and CUSTOM SINGLEPLAYER)
-maps, the "Play online" panel offers the multiplayer ones after the Xbox
-levels, and the in-game server browser can join native OpenCE games on any
-of them the server has. A map added while the server runs shows up the next
-time a player loads the page. Updates (`update.ps1`) leave the folder alone.
+maps (Create Game's map list has them, with their pictures), the Play online
+panel's Quick game offers the multiplayer ones after the Xbox levels (with
+a Find a map box), and the in-game server browser can join native OpenCE
+games on any of them the server has. A map added while the server runs
+shows up the next time a player loads the page. Updates (`update.ps1`)
+leave the folder alone.
+
+The server lists the folder for the game at `assets/custom_maps/index.json`
+(each file's name, size and version), so the game reads only each map's
+header to list it, in 256 KB pieces (about 35 MB for a hundred maps on a
+player's first visit, nothing after: the browser keeps them). A static web
+host without this server needs that file made beside the maps.
 
 The lobby artwork in `public/assets/ui/` is placeholder art. Replace any image
 with your own, keeping the same file name.

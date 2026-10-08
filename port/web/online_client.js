@@ -341,6 +341,38 @@
           nextDelay = PUBLIC_GAMES_RETRY_MILLISECONDS;
         })
         .finally(function() { fetching = false; });
+      /* (and the games other browsers host as PUBLIC: the lobby service's
+       * list, this build's only, which can join them) */
+      fetch(apiBase() + "/v1/public-rooms?build=" + encodeURIComponent(buildId()),
+        { credentials: "omit", cache: "no-store" })
+        .then(function(response) { return response.ok ? response.json() : null; })
+        .then(function(result) {
+          if (result && Array.isArray(result.games) && global.Module._web_public_games_browsing()) {
+            deliverRooms(result.games);
+          }
+        })
+        .catch(function() { /* (a lobby service without the list) */ });
+    }
+
+    function deliverRooms(games) {
+      var buffer = wasmFunction("web_public_rooms_buffer")() >>> 0;
+      var capacity = wasmFunction("web_public_rooms_buffer_size")();
+      var add = wasmFunction("web_public_rooms_add");
+      var encoder = new TextEncoder();
+      session.publicRooms = new Map();
+      wasmFunction("web_public_rooms_begin")();
+      games.forEach(function(game) {
+        if (!game || typeof game.roomId !== "string" || typeof game.code !== "string" ||
+            game.roomId === (session.room && session.room.id)) return;
+        var text = encoder.encode([game.roomId, game.name, game.map, game.gametype].map(function(part) {
+          return String(part || "").replace(/\0/g, "");
+        }).join("\0") + "\0");
+        if (text.length > capacity) return;
+        heapBytes().set(text, buffer);
+        session.publicRooms.set(game.roomId, game.code);
+        add(game.players | 0, game.maximum | 0, game.open ? 1 : 0, game.inProgress ? 1 : 0, game.hasTeams ? 1 : 0);
+      });
+      wasmFunction("web_public_rooms_end")();
     }
 
     global.setInterval(function() {
@@ -539,6 +571,16 @@
         "Use Try again to restart human verification." :
         "One moment — human verification is still finishing.");
     }
+    var token = humanVerification.token;
+    humanVerification.token = null;
+    return token;
+  }
+
+  /* (a token if human verification has one ready, else none: a room the
+   * game's menus ask for cannot wait on the widget; a lobby service that
+   * requires verification then refuses it, and fail() shows why) */
+  function consumeTurnstileIfReady(action) {
+    if (!turnstileSiteKey() || humanVerification.action !== action || !humanVerification.token) return null;
     var token = humanVerification.token;
     humanVerification.token = null;
     return token;
@@ -1176,7 +1218,7 @@
     renderTurnstile("create_room");
     setStatus("");
     elements.description.textContent =
-      "Pick a map and mode, then send the invite link to your friends.";
+      "Host and join from Halo's own Multiplayer menu, or start a quick game here.";
   }
 
   function showProgress() {
@@ -2051,6 +2093,141 @@
     }
   }
 
+  /* The game's own menus made a server (Multiplayer > Create Game:
+   * src/web_online_ui.c, web_online_game_hosting): a room for it, as host()
+   * opens, but the game keeps the server and lobby it made (host() has the
+   * game make its own), and nothing is asked: the invite shows beside the
+   * game and in Server Setup (web_online_invite_set). Backing out of the
+   * game's lobby ends the room (pollGame: IDLE). */
+  async function hostFromGame(options) {
+    if (!session.runtimeReady) return;
+    if (session.active && session.role === "host" && session.fromGame && session.inviteUrl) {
+      /* (another Create Game while its room is open: the same room) */
+      sendInviteToGame();
+      return;
+    }
+    if (session.active) {
+      /* (a room this browser was in: left, without the reset of the game a
+       * leave asks for, which would end the server just made) */
+      session.gameCommandIssued = false;
+      await leave(false);
+    }
+    var operation = ++session.operationGeneration;
+    session.active = true;
+    session.role = "host";
+    session.fromGame = true;
+    session.hostSettings = null;
+    session.closing = false;
+    syncTelemetryContext();
+    renderRoster();
+    setHeader("Opening room…", "waiting");
+    try {
+      var roomRequest = {
+        protocolVersion: PROTOCOL_VERSION,
+        buildId: buildId(),
+        capacity: ROOM_CAPACITY,
+        identifier: localIdentifier(),
+      };
+      var turnstileToken = consumeTurnstileIfReady("create_room");
+      if (turnstileToken) roomRequest.turnstileToken = turnstileToken;
+      var result = await fetchJson("/v1/rooms", {
+        method: "POST",
+        body: JSON.stringify(roomRequest),
+      });
+      requireCurrentOperation(operation);
+      validateRoomResponse({ v: result.v, room: result.room, session: result.host && result.host.session });
+      session.room = result.room;
+      session.roomTicket = result.host.ticket;
+      session.selfPeerId = result.host.session.peerId;
+      updateLocalRoster();
+      session.inviteCode = result.invite && result.invite.code;
+      if (!session.inviteCode) throw new Error("The room did not return an invite.");
+      session.inviteUrl = makeInviteUrl(session.inviteCode);
+      session.iceServers = Array.isArray(result.iceServers) ? result.iceServers : [];
+      configureTransport(session.iceServers);
+      await openSocket(result.host.session.websocketUrl, operation);
+      requireCurrentOperation(operation);
+      sendInviteToGame();
+      showInvite();
+      session.hostWasReady = true;
+      session.gameCommandIssued = true;
+      startGamePolling();
+      setHeader("Waiting for friends", "waiting");
+    } catch (error) {
+      if (operation === session.operationGeneration && (!error || !error.haloCanceled)) {
+        /* (the game keeps its server: a LAN game of this browser alone) */
+        session.gameCommandIssued = false;
+        fail(error);
+      }
+    }
+  }
+
+  /* A game of the menus' own, PUBLIC in Server Setup: its listing, to the
+   * lobby service's list of public games (GET /v1/public-rooms, which other
+   * browsers' in-game Server Browser shows), when the game changes it and
+   * every 30 seconds (or the listing lapses); no longer public: taken off. The
+   * room's guest ticket comes with it, proving the invite the list gives. */
+  var LISTING_REFRESH_MILLISECONDS = 30000;
+
+  function syncListing() {
+    if (!session.fromGame || !session.socket || session.socket.readyState !== 1 || !session.inviteCode) return;
+    var changes;
+    try {
+      changes = wasmFunction("web_online_listing_changes")();
+    } catch (error) {
+      return;
+    }
+    var now = Date.now();
+    if (changes === session.listingChanges &&
+        (!session.listingSent || now - session.listingSentAt < LISTING_REFRESH_MILLISECONDS)) return;
+    var game;
+    try {
+      var buffer = wasmFunction("web_online_listing_buffer")() >>> 0;
+      var memory = typeof wasmMemory !== "undefined" ? wasmMemory : null;
+      var heap = new Uint8Array(memory ? memory.buffer : global.Module.HEAPU8.buffer);
+      var end = buffer;
+      while (heap[end] && end - buffer < 1024) end++;
+      game = JSON.parse(new TextDecoder().decode(heap.slice(buffer, end)));
+    } catch (error) {
+      return;
+    }
+    session.listingChanges = changes;
+    var listed = !!(game && game.listed);
+    if (!listed && !session.listingSent) return;
+    session.listingSentAt = now;
+    session.listingSent = listed;
+    try {
+      sendSocket({
+        v: PROTOCOL_VERSION,
+        type: "listing",
+        guestTicket: session.inviteCode.slice(session.inviteCode.indexOf(".") + 1),
+        listing: listed ? {
+          name: String(game.name || ""), map: String(game.map || ""), gametype: String(game.gametype || ""),
+          players: game.players | 0, maximum: game.maximum | 0,
+          open: !!game.open, inProgress: !!game.inProgress, hasTeams: !!game.hasTeams,
+        } : null,
+      });
+    } catch (error) {
+      /* (the socket closing: the listing lapses) */
+    }
+  }
+
+  /* the room's invite link, to the game (Server Setup shows it, and copies
+   * it: p2p_invite_link) */
+  function sendInviteToGame() {
+    try {
+      var bytes = new TextEncoder().encode(session.inviteUrl || "");
+      var buffer = wasmFunction("web_online_invite_buffer")() >>> 0;
+      var capacity = wasmFunction("web_online_invite_buffer_size")();
+      if (!bytes.length || bytes.length > capacity) return;
+      var memory = typeof wasmMemory !== "undefined" ? wasmMemory : null;
+      new Uint8Array(memory ? memory.buffer : global.Module.HEAPU8.buffer).set(bytes, buffer);
+      wasmFunction("web_online_invite_set")(bytes.length);
+    } catch (error) {
+      /* (an older game: the page alone shows the invite) */
+    }
+  }
+
   async function join(value, turnstileToken) {
     if (!session.runtimeReady) {
       showDialog();
@@ -2148,6 +2325,7 @@
     }
     if (session.role === "host") {
       if (state === GAME_STATE.HOSTING) {
+        syncListing();
         if (!session.hostWasReady) showInvite();
         session.hostWasReady = true;
         setHeader(session.connectedPeerCount ?
@@ -2190,6 +2368,10 @@
     session.apiBaseOverride = null;
     session.active = false;
     session.role = null;
+    session.fromGame = false;
+    session.listingChanges = -1;
+    session.listingSent = false;
+    session.listingSentAt = 0;
     session.room = null;
     session.roomTicket = null;
     session.inviteCode = null;
@@ -2483,6 +2665,14 @@
       }
     },
     host: host,
+    hostFromGame: hostFromGame,
+    /* a browser's public game chosen in the in-game Server Browser
+     * (src/web_public_games.c): its room, joined as an invite to it is */
+    joinPublicRoom: function(roomId) {
+      var code = session.publicRooms && session.publicRooms.get(roomId);
+      if (!code) return Promise.resolve();
+      return join(makeInviteUrl(code)).catch(fail);
+    },
     join: join,
     leave: function() { return leave(true); },
   });

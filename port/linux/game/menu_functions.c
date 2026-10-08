@@ -2401,7 +2401,20 @@ static boolean multiplayer_host(struct widget_instance *widget, struct event_rec
 	multiplayer.game_private = !config_boolean("network.host_public");
 	p2p_set_hosting_public(multiplayer.mode == _multiplayer_mode_host_internet && !multiplayer.game_private);
 	multiplayer.cooperative_maximum_players_set = FALSE;
+#ifdef HALO_WEB
+	/* (in the browser the server is reached through a room of the page's,
+	which this opens: port/web/src/web_online_ui.c) */
+	{
+		extern void web_online_game_hosting(int internet);
+		boolean hosted = ui_widget_port_host(widget, event, widget_deleted);
+
+		if (hosted && global_network_game_server_get())
+			web_online_game_hosting(multiplayer.mode == _multiplayer_mode_host_internet);
+		return hosted;
+	}
+#else
 	return ui_widget_port_host(widget, event, widget_deleted);
+#endif
 }
 
 /* ---- the map list (the Map screen's): its chooser's SINGLEPLAYER levels,
@@ -2874,12 +2887,18 @@ static void server_settings_update(struct widget_instance *list)
 			NUMBEROF(maximum_players) - 1);
 	wide_to_text(multiplayer.game_name, text, sizeof(text));
 	text_field_show(named(list, "server_name_value", 0), text, text_field_editing(row));
+#ifdef HALO_WEB
+	/* (a LAN game and an INTERNET one alike: the page's room, its invite) */
+	if (!p2p_invite_link(text, sizeof(text)))
+		snprintf(text, sizeof(text), "OPENING A ROOM...");
+#else
 	if (multiplayer.mode != _multiplayer_mode_host_internet)
 		snprintf(text, sizeof(text), "NONE: A LAN GAME");
 	else if (!config_boolean("network.online"))
 		snprintf(text, sizeof(text), "INTERNET PLAY IS OFF (SETTINGS)");
 	else if (!p2p_invite_link(text, sizeof(text)))
 		snprintf(text, sizeof(text), "MADE WHEN THE GAME STARTS");
+#endif
 	text_field_show(named(list, "invite_value", 0), text, FALSE);
 	{
 		wchar_t type[ROW_TEXT_LENGTH];
@@ -2946,8 +2965,15 @@ static void server_settings_update(struct widget_instance *list)
 	}
 	/* LISTING (an internet game's): PUBLIC, listed in everyone's server
 	browser, or PRIVATE, for this game. Its help is its choice's */
+#ifdef HALO_WEB
+	/* (the browser's public games are the lobby service's list, not internet
+	play's: web_online_ui.c) */
+	visible_set(named(list, "op_listing", 0), multiplayer.mode == _multiplayer_mode_host_internet &&
+		config_boolean("network.public_lobby"));
+#else
 	visible_set(named(list, "op_listing", 0), multiplayer.mode == _multiplayer_mode_host_internet &&
 		config_boolean("network.online") && config_boolean("network.public_lobby"));
+#endif
 	if ((spinner = named(list, "listing_spinner", 0)) != NULL && named(list, "op_listing", 0)->visible)
 	{
 		boolean public = spinner->parameters.list.selected_index == 0;
@@ -2960,8 +2986,13 @@ static void server_settings_update(struct widget_instance *list)
 	}
 	/* PASSWORD (a PUBLIC internet game's): its stars, NONE if it has none */
 	row = named(list, "op_password", 0);
+#ifdef HALO_WEB
+	/* (a browser's room has no password to ask for: its invite is the key) */
+	visible_set(row, FALSE);
+#else
 	visible_set(row, named(list, "op_listing", 0) && named(list, "op_listing", 0)->visible &&
 		!server_settings_private());
+#endif
 	if (row && !row->visible && text_field_editing(row))
 		text_field_end(FALSE);
 	if (row && row->visible)
@@ -3042,6 +3073,15 @@ static boolean server_start(void)
 	}
 	else if (!gametype_setup_apply())
 		return campaign_fail();
+#ifdef HALO_WEB
+	/* (its settings final: a PUBLIC game is listed from now on, as internet
+	play lists its games once the lobby opens: web_online_ui.c) */
+	{
+		extern void web_online_game_started(void);
+
+		web_online_game_started();
+	}
+#endif
 	return global_network_game_server_get() != NULL;
 }
 
@@ -3394,6 +3434,20 @@ static short lobby_browser_valid_games(struct p2p_listing *games, short count)
 	return written;
 }
 
+/* the public games found: internet play's (p2p_lobby.c) and, in the browser,
+first, those other browsers host (port/web/src/web_public_games.c) */
+static short lobby_browser_games_found(void)
+{
+#ifdef HALO_WEB
+	extern int web_public_rooms_games(struct p2p_listing *games, int maximum_count);
+	short count = (short)web_public_rooms_games(lobby_browser.games, LOBBY_BROWSER_GAMES);
+
+	return (short)(count + p2p_lobby_games(lobby_browser.games + count, LOBBY_BROWSER_GAMES - count));
+#else
+	return (short)p2p_lobby_games(lobby_browser.games, LOBBY_BROWSER_GAMES);
+#endif
+}
+
 /* the game being joined, once its host is reached (the client's game from
 it), else NULL */
 static struct advertised_game *lobby_browser_joined_game(void)
@@ -3443,8 +3497,7 @@ static void lobby_browser_update(struct widget_instance *list)
 	unsigned long now = system_milliseconds();
 	short chosen;
 
-	lobby_browser.count = lobby_browser_valid_games(lobby_browser.games,
-		(short)p2p_lobby_games(lobby_browser.games, LOBBY_BROWSER_GAMES));
+	lobby_browser.count = lobby_browser_valid_games(lobby_browser.games, lobby_browser_games_found());
 	if (focused == BROWSER_ROWS - 1 && lobby_browser.first + BROWSER_ROWS < lobby_browser.count)
 	{
 		lobby_browser.first++;
@@ -4291,7 +4344,12 @@ static void lobby_update(struct widget_instance *list)
 		{
 			size_t length = ustrlen(text);
 
+#ifdef HALO_WEB
+			/* (a page copies only when clicked: its Copy link, beside the game) */
+			usnprintf(text + length, NUMBEROF(text) - 1 - length, L"\r\n\r\nInvite friends: Copy link,\r\nbeside the game");
+#else
 			usnprintf(text + length, NUMBEROF(text) - 1 - length, L"\r\n\r\nInvite link copied:\r\npaste it to friends");
+#endif
 		}
 		text_set_length(named(description, "lobby_game_data", 0), text, LOBBY_TEXT_LENGTH);
 	}

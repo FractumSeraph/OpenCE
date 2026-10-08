@@ -619,6 +619,12 @@
     .advanced-checks { display: grid; grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .42rem .7rem; }
     .join-direct { margin-top: .7rem; color: #8fa1aa; font-size: .76rem; }
     .join-direct summary { width: fit-content; cursor: pointer; }
+    .online-howto { display: grid; gap: .45rem; color: #c9dbe4; font-size: .82rem; line-height: 1.45; }
+    .online-howto p { margin: 0; }
+    .online-howto strong { color: #65c2ff; }
+    .quick-host > summary { width: fit-content; margin-top: .3rem; color: #8fa1aa; font-size: .76rem; cursor: pointer; }
+    /* (the wizard's steps: the quick game's, shown with it) */
+    #online-wizard:not(:has(#online-quick-host[open])) #online-wizard-steps { display: none; }
     #online-wizard:has(#online-setup[hidden]) #online-wizard-steps { display: none; }
     .join-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .5rem; margin-top: .6rem; }
     .join-row input, #invite-link {
@@ -1765,6 +1771,15 @@
             <li id="online-wizard-mode" class="wizard-step" data-number="2" data-step="mode">Mode</li>
           </ol>
           <div id="online-setup" class="online-stack">
+            <!-- (hosting is the game's own: Create Game opens a room for the
+                 game it makes, online_client.js hostFromGame; the quick game
+                 below is the page's own way, kept for a fast start) -->
+            <div class="online-howto">
+              <p><strong>Host a game:</strong> in Halo, <em>Multiplayer › Create Game</em> (Internet or LAN). Your invite link shows beside the game, and a public Internet game is listed in everyone's Server Browser.</p>
+              <p><strong>Join a game:</strong> <em>Multiplayer › Join Game › Server Browser</em>, or open a friend's invite link.</p>
+            </div>
+            <details id="online-quick-host" class="quick-host">
+              <summary>Quick game: pick a map and mode here</summary>
             <form id="online-host-form" class="online-stack host-setup">
               <section id="online-step-map">
                 <p id="online-map-title" class="host-setup-title">Choose a map</p>
@@ -1847,6 +1862,7 @@
                 </div>
               </section>
             </form>
+            </details>
             <details class="join-direct">
               <summary>Have an invite link?</summary>
               <form id="online-join-form" class="join-row">

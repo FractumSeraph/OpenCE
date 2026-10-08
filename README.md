@@ -46,9 +46,19 @@ OpenCE's own CI.
   (`web_loopback_net.c`), the page's hosting and invite flow
   (`web_online_ui.c`), the in-game server browser (`web_public_games.c`), and
   UPnP stubs (`web_upnp.c`).
+- **Hosting from the game's own menus:** in the browser, Multiplayer > Create
+  Game (Internet or LAN) opens a room of the page's for the server the menus
+  made (`web_online_game_hosting`, `online_client.js` `hostFromGame`): its
+  invite link shows beside the game and on Server Setup's INVITE LINK row.
+  An Internet game whose LISTING is PUBLIC is listed, once its lobby opens,
+  on the lobby service's list of public games (`GET /v1/public-rooms`; the
+  host's page sends the game's listing over its room's connection), which
+  the in-game Server Browser shows first; choosing one joins its room
+  (`web_public_games.c`). A browser game has no password row.
 - **The page** (`port/web/shell.html`, `online_client.js`,
-  `library_web_transport.js`): loading screen, a "Play online" panel to host a
-  lobby and share an invite link (up to 128 players), and joining invites from
+  `library_web_transport.js`): loading screen, a "Play online" panel for the
+  player's name and armor, a quick game (a map and mode picked there, up to
+  128 players), and joining invites from
   any copy of the site, on any domain, or a native `halo://join` link. Without
   server-hosted maps, players can load the maps from their own Xbox disc image
   (`xiso.js`). The layout keeps its panels off the game on phones in either
@@ -69,10 +79,12 @@ OpenCE's own CI.
 - **Halo Custom Edition maps** in the browser, with OpenCE's Custom Edition
   support: the site serves them, with Custom Edition's resource maps, from
   `public/assets/custom_maps` (the server lists the folder for the game,
-  `web_platform.c` mounts it), the "Play online" panel hosts them after the
-  Xbox levels, and the Custom Edition tag cache's fixed addresses are kept
+  `web_platform.c` mounts it), Create Game's map list and the page's quick
+  game host them, and the Custom Edition tag cache's fixed addresses are kept
   free of the browser's allocator (`xbox_memory.c`). A map's `<name>.bmp`
-  beside it is its picture on the panel's card, as in the game's menus.
+  beside it is its picture, in the game's menus and on the quick game's
+  card. The server's `custom_maps/index.json` gives each file's size and
+  version, so listing a hundred maps or more reads only their headers.
 - **Maps kept in the browser** (`fetch_path_normalization.js`): the pieces of
   the maps a player has loaded stay in the browser's Cache Storage, by each
   file's version (its ETag), so a map loads without a download the next time
@@ -83,7 +95,11 @@ OpenCE's own CI.
 
 - **`services/signaling`**: the lobby service for browser games (a Cloudflare
   Worker: rooms, invite tickets and WebRTC signalling; the self-hosting server
-  runs it locally in Miniflare).
+  runs it locally in Miniflare), with a list of browser-hosted public games
+  (`GET /v1/public-rooms`): a host sends its game's listing on its room's
+  connection with the room's guest ticket, the room checks it and hands it
+  to the global presence object, and a listing lapses 90 seconds after its
+  last refresh or at once when its host leaves.
 - **`services/native-gateway`**: lets a browser join a native host's
   `halo://join` invite. It speaks OpenCE's internet-play protocol (`hceu/3`
   over the MQTT brokers, then the encrypted UDP tunnel), with OpenCE's own
@@ -112,10 +128,14 @@ OpenCE's own CI.
   - **platform** (`sdl_platform.c`, `xinput_sdl.c`, `dsound_sdl.c`,
     `port_config.c`): the frame driven by the browser, touch aiming, browser
     audio, and browser defaults for some settings (for example crouch on `C`);
-  - **networking** (`posix_net.c`, `xnet.c`, `p2p.c`): sockets through the
-    browser layer, and invites handed to the page;
-  - **menus** (`menu_functions.c`, `player_ui.c`): the server browser joins
-    through the page, and the page's hosting takes a Custom Edition map;
+  - **networking** (`posix_net.c`, `xnet.c`, `p2p.c`, `p2p_lobby.c`): sockets
+    through the browser layer, invites handed to the page, the page's room's
+    invite as the hosted game's, and the hosted game's listing read for the
+    page;
+  - **menus** (`menu_functions.c`, `player_ui.c`): Create Game opens a page
+    room, Server Setup shows its invite and LISTING (no PASSWORD), the server
+    browser lists browser games first and joins through the page, and the
+    page's hosting takes a Custom Edition map;
   - **game code** (`source/`): a player re-sent to a browser client that
     missed it (`network_server_message_handler.c`,
     `network_client_manager.c`), a fatal error ending the browser runtime

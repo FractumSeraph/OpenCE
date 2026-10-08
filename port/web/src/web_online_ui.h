@@ -114,4 +114,14 @@ int platform_web_online_get_transport_state(void);
 /* Called on Halo's game thread once per frame. */
 void web_online_ui_update(int main_menu_loaded, float seconds);
 
+/* Called on Halo's game thread when the game's own menus have made a server
+(Multiplayer > Create Game, menu_functions.c): the page opens a room for it
+(online_client.js, HaloOnline.hostFromGame), whose invite link
+web_online_invite_link then gives; backing out of the game ends the room.
+`internet`: Create Game > INTERNET (else LAN). */
+void web_online_game_hosting(int internet);
+/* The page's invite link to the game this browser hosts (p2p_invite_link
+in the browser), or FALSE while there is none. */
+int web_online_invite_link(char *link, int size);
+
 #endif /* HALO_WEB_ONLINE_UI_H */

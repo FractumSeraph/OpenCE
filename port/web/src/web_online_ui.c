@@ -5,6 +5,7 @@
 
 #include <emscripten/emscripten.h>
 #include <stdatomic.h>
+#include <stdio.h>
 #include <string.h>
 
 /* This browser adapter is compiled as platform code, so it must not include
@@ -158,6 +159,13 @@ static struct
 	int host_rules;
 	float seconds;
 	float player_retry_seconds;
+	/* a game the game's own menus made (web_online_game_hosting): INTERNET
+	or LAN; its listing's timer (update_listing) */
+	int from_menus;
+	int internet;
+	float listing_seconds;
+	/* its lobby is open: Server Setup's Start Game (web_online_game_started) */
+	int lobby_open;
 } web_online;
 
 static void publish_state(int state)
@@ -178,6 +186,114 @@ static int host_map_index_valid(int map_index)
 		atomic_load_explicit(&web_online_custom_map_count, memory_order_acquire);
 
 	return map_index >= 0 && map_index < count && map_index <= 0xff;
+}
+
+/* The invite link the page made for the room of the game this browser hosts:
+the page writes it into web_online_invite_buffer and publishes its length
+(the game thread reads it; a link is written once a room) */
+enum { INVITE_BYTES = 512 };
+static char web_online_invite[INVITE_BYTES];
+static atomic_int web_online_invite_length = ATOMIC_VAR_INIT(0);
+
+EMSCRIPTEN_KEEPALIVE char *web_online_invite_buffer(void)
+{
+	return web_online_invite;
+}
+
+EMSCRIPTEN_KEEPALIVE int web_online_invite_buffer_size(void)
+{
+	return INVITE_BYTES - 1;
+}
+
+/* the link's length, once written (0: none) */
+EMSCRIPTEN_KEEPALIVE void web_online_invite_set(int length)
+{
+	if (length < 0 || length >= INVITE_BYTES)
+		length = 0;
+	web_online_invite[length] = '\0';
+	atomic_store_explicit(&web_online_invite_length, length, memory_order_release);
+}
+
+int web_online_invite_link(char *link, int size)
+{
+	int length = atomic_load_explicit(&web_online_invite_length, memory_order_acquire);
+
+	if (!link || size <= 0)
+		return 0;
+	link[0] = '\0';
+	if (!length || !web_online.command)
+		return 0;
+	snprintf(link, (size_t)size, "%.*s", length, web_online_invite);
+	return 1;
+}
+
+/* The listing of the game this browser hosts from the game's menus, as
+JSON, for the page to give the lobby service's list of public games (GET
+/v1/public-rooms; online_client.js, sendListing): written by the game thread
+(update_listing), its sequence counted up after each change */
+enum { LISTING_BYTES = 1024 };
+static char web_online_listing[LISTING_BYTES];
+static atomic_int web_online_listing_sequence = ATOMIC_VAR_INIT(0);
+
+EMSCRIPTEN_KEEPALIVE char *web_online_listing_buffer(void)
+{
+	return web_online_listing;
+}
+
+EMSCRIPTEN_KEEPALIVE int web_online_listing_changes(void)
+{
+	return atomic_load_explicit(&web_online_listing_sequence, memory_order_acquire);
+}
+
+/* p2p_lobby.c, p2p.c (the browser's) */
+void p2p_lobby_web_listing(char *name, char *map, char *gametype, int *open, int *in_progress, int *has_teams,
+	int *public, int *has_password);
+void p2p_web_game_player_counts(int *count, int *maximum);
+
+/* (text for JSON: quotes and backslashes escaped, control characters out) */
+static int json_text(char *out, int size, const char *text)
+{
+	int length = 0;
+
+	for (; *text && length < size - 3; text++)
+	{
+		unsigned char c = (unsigned char)*text;
+
+		if (c < 0x20 || c == 0x7f)
+			continue;
+		if (c == '"' || c == '\\')
+			out[length++] = '\\';
+		out[length++] = (char)c;
+	}
+	out[length] = '\0';
+	return length;
+}
+
+static void update_listing(void)
+{
+	char name[64], map[64], gametype[64];
+	char name_json[160], map_json[160], gametype_json[160];
+	char listing[LISTING_BYTES];
+	int open, in_progress, has_teams, public, has_password, players, maximum;
+
+	p2p_lobby_web_listing(name, map, gametype, &open, &in_progress, &has_teams, &public, &has_password);
+	p2p_web_game_player_counts(&players, &maximum);
+	json_text(name_json, sizeof(name_json), name);
+	json_text(map_json, sizeof(map_json), map);
+	json_text(gametype_json, sizeof(gametype_json), gametype);
+	/* (listed: an INTERNET game Server Setup made PUBLIC, without a password,
+	which the browsers' rooms cannot ask for, once its lobby is open) */
+	snprintf(listing, sizeof(listing),
+		"{\"listed\":%s,\"name\":\"%s\",\"map\":\"%s\",\"gametype\":\"%s\",\"players\":%d,\"maximum\":%d,"
+		"\"open\":%s,\"inProgress\":%s,\"hasTeams\":%s}",
+		web_online.internet && web_online.lobby_open && public && !has_password && map[0] ? "true" : "false",
+		name_json, map_json, gametype_json, players < 0 ? 0 : players > 255 ? 255 : players,
+		maximum < 0 ? 0 : maximum > 255 ? 255 : maximum,
+		open ? "true" : "false", in_progress ? "true" : "false", has_teams ? "true" : "false");
+	if (!strcmp(listing, web_online_listing))
+		return;
+	memcpy(web_online_listing, listing, sizeof(listing));
+	atomic_fetch_add_explicit(&web_online_listing_sequence, 1, memory_order_release);
 }
 
 /* the Custom Edition maps the page was told of, by their level names
@@ -493,6 +609,8 @@ static void reset_owned_game(void)
 static void clear_session(void)
 {
 	memset(&web_online, 0, sizeof(web_online));
+	/* (its room's invite goes with it) */
+	atomic_store_explicit(&web_online_invite_length, 0, memory_order_release);
 }
 
 static void fail_session(int error)
@@ -585,6 +703,36 @@ static void setup_host(void)
 	publish_state(_web_online_state_hosting);
 }
 
+void web_online_game_hosting(int internet)
+{
+	platform_log("web online: the game's menus made a %s game: opening a room for it", internet ? "INTERNET" : "LAN");
+	/* (this server is the session's: update_host ends it, and the room, when
+	the player backs out; the menus already have the player in) */
+	clear_session();
+	web_online.command = _web_online_command_host;
+	web_online.setup = WEB_TRUE;
+	web_online.player_added = WEB_TRUE;
+	web_online.from_menus = WEB_TRUE;
+	web_online.internet = internet ? WEB_TRUE : WEB_FALSE;
+	/* (another game's listing is not this one's) */
+	web_online_listing[0] = '\0';
+	update_listing();
+	publish_error(_web_online_error_none);
+	publish_state(_web_online_state_hosting);
+	MAIN_THREAD_ASYNC_EM_ASM({
+		if (globalThis.HaloOnline && typeof globalThis.HaloOnline.hostFromGame === "function")
+			globalThis.HaloOnline.hostFromGame({ internet: !!$0 });
+	}, internet);
+}
+
+void web_online_game_started(void)
+{
+	if (!web_online.from_menus)
+		return;
+	web_online.lobby_open = WEB_TRUE;
+	update_listing();
+}
+
 static void setup_join(void)
 {
 	platform_log("web online: opening join client");
@@ -645,6 +793,12 @@ static void update_host(float seconds)
 	web_online.seconds += seconds;
 	if (web_online.seconds >= 0.5f)
 		add_primary_player_when_ready(client, seconds);
+	/* (a game of the menus' own: its listing, now and then) */
+	if (web_online.from_menus && (web_online.listing_seconds += seconds) >= 1.0f)
+	{
+		web_online.listing_seconds = 0.0f;
+		update_listing();
+	}
 	publish_state(_web_online_state_hosting);
 }
 
