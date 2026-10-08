@@ -1,5 +1,7 @@
 # Restarts the "Halo Web Server" scheduled task, so that changes to
-# config.json or the server's files take effect. Run as administrator:
+# config.json or the server's files take effect. Run it as the account the
+# server runs as (install-autostart.ps1), or as administrator for a server
+# installed with -AsSystem:
 #
 #   powershell -ExecutionPolicy Bypass -File restart.ps1
 #

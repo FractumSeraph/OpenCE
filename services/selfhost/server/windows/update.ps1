@@ -1,5 +1,7 @@
 # Updates this Halo folder to a newer kit: the game, its server, the lobby
-# service, the gateway and Node.js. Run as administrator:
+# service, the gateway and Node.js. Run it as the account the server runs as
+# (install-autostart.ps1), or as administrator for a server installed with
+# -AsSystem:
 #
 #   powershell -ExecutionPolicy Bypass -File update.ps1
 #       the newest kit (halo-server.zip, Windows and Linux) from the fork's

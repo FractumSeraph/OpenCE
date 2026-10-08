@@ -69,24 +69,24 @@ Troubleshooting: run the server with the environment variable
 
 ## Start automatically with Windows
 
-`server\windows\install-autostart.ps1` (run as administrator) adds a
+`server\windows\install-autostart.ps1` (run once as administrator) adds a
 scheduled task, **Halo Web Server**, that starts the server at boot before
 anyone logs in, restarts it if it stops, and logs to `logs\halo-server.log`.
+It runs as the account that installed it, without storing its password, so
+that account can restart and update the server later without administrator
+rights (`-AsSystem` runs it as SYSTEM instead, which then needs an
+administrator for each restart and update).
 `server\windows\uninstall-autostart.ps1` removes it. After moving this folder,
 run the installer again.
 
 While the task runs, don't also start `Start Halo (Windows).bat`: the ports
-are already in use. To stop or start it by hand, open an administrator
-PowerShell and run `Stop-ScheduledTask "Halo Web Server"` or
-`Start-ScheduledTask "Halo Web Server"`.
+are already in use. To stop or start it by hand, run
+`Stop-ScheduledTask "Halo Web Server"` or `Start-ScheduledTask "Halo Web Server"`
+in PowerShell.
 
 After changing `config.json` or the files in `server\`, restart it with
-`server\windows\restart.ps1` (as administrator). It also ends a server
-process left holding the ports, and logs to `logs\restart.log`.
-
-After changing `config.json` or the files in `server`, restart it with
-`serverwindowsestart.ps1` (as administrator). It also ends a server
-process left holding the ports, and logs to `logsestart.log`.
+`server\windows\restart.ps1`. It also ends a server process left holding the
+ports, and logs to `logs\restart.log`.
 
 ## Phones and tablets (touch controls)
 
@@ -233,7 +233,8 @@ backups/                                  what the last updates replaced (update
 
 ## Updating
 
-**On Windows**, in an administrator PowerShell:
+**On Windows**, in PowerShell (as administrator only for a server installed
+with `-AsSystem`):
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File server\windows\update.ps1
