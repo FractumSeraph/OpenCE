@@ -29,6 +29,11 @@ New-Item -ItemType File -Force (Join-Path $root "data\stop-request") | Out-Null
 for ($i = 0; $i -lt 30 -and (Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue); $i++) {
     Start-Sleep -Milliseconds 500
 }
+# (and for the server to end, which ends the task: a task still running
+# ignores the start below)
+for ($i = 0; $i -lt 40 -and (Get-ScheduledTask -TaskName $taskName).State -eq "Running"; $i++) {
+    Start-Sleep -Milliseconds 500
+}
 Stop-ScheduledTask -TaskName $taskName
 $ours = Get-CimInstance Win32_Process | Where-Object {
     ($_.Name -eq "node.exe" -or $_.Name -like "halo-native-gateway*" -or $_.Name -eq "workerd.exe") -and
@@ -44,6 +49,10 @@ for ($i = 0; $i -lt 30 -and (Get-NetTCPConnection -LocalPort $port -State Listen
 Start-ScheduledTask -TaskName $taskName
 for ($i = 0; $i -lt 60; $i++) {
     Start-Sleep -Seconds 1
+    # (a start the task ignored, as a task still ending does: again)
+    if ($i -in 5, 15, 30 -and (Get-ScheduledTask -TaskName $taskName).State -ne "Running") {
+        Start-ScheduledTask -TaskName $taskName
+    }
     try {
         $response = Invoke-WebRequest -UseBasicParsing -TimeoutSec 3 "http://localhost:$port/"
         if ($response.StatusCode -eq 200) { Note "restarted: http://localhost:$port/ answers"; exit 0 }

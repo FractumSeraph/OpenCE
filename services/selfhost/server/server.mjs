@@ -818,8 +818,14 @@ async function main() {
   for (const url of urls) console.log("    " + url);
   console.log("\n  Press Ctrl+C to stop.\n");
 
+  let stopping = false;
   const shutdown = async () => {
+    if (stopping) return;
+    stopping = true;
     log("server", "stopping");
+    // (gone in 5 s even if the lobby's workerd is slow to close: the
+    // scripts that restart the server wait for this process to end)
+    setTimeout(() => process.exit(0), 5000).unref();
     for (const server of servers) server.close();
     if (gateway) {
       gateway.stopping = true;
