@@ -579,7 +579,8 @@ static void validate_block_extent(
 		tag_validate_refuse(validation, "has %ld elements", block->count);
 		return;
 	}
-	if (field->maximum > 0 && block->count > field->maximum)
+	if (field->maximum > 0 && block->count > field->maximum &&
+		!(tag_validate_globals.custom_edition && TEST_FLAG(field->flags, _tag_schema_tool_maximum_bit)))
 	{
 		tag_validate_correct(validation, "has %ld elements, more than the game's %ld: cut to %ld",
 			block->count, field->maximum, field->maximum);
@@ -1353,6 +1354,20 @@ void tag_validate_refuse(
 	va_start(arguments, format);
 	validation_message(validation, "cannot be played", format, arguments);
 	va_end(arguments);
+
+	return;
+}
+
+void tag_validate_non_negative(
+	struct tag_validation *validation,
+	char const *name,
+	real *value)
+{
+	if (!(*value >= 0.0f))
+	{
+		tag_validate_correct(validation, "has a %s of %f: 0", name, *value);
+		*value = 0.0f;
+	}
 
 	return;
 }
