@@ -22,6 +22,13 @@ if (-not (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue)) 
     Note "no '$taskName' task (install it with install-autostart.ps1)"
     exit 1
 }
+# (the server stops itself on this file, however it was started: the
+# processes of a task run as an account cannot always be ended from that
+# account's other sessions)
+New-Item -ItemType File -Force (Join-Path $root "data\stop-request") | Out-Null
+for ($i = 0; $i -lt 30 -and (Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue); $i++) {
+    Start-Sleep -Milliseconds 500
+}
 Stop-ScheduledTask -TaskName $taskName
 $ours = Get-CimInstance Win32_Process | Where-Object {
     ($_.Name -eq "node.exe" -or $_.Name -like "halo-native-gateway*" -or $_.Name -eq "workerd.exe") -and

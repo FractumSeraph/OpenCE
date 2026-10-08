@@ -16,6 +16,11 @@ if (-not $present) { throw "No gateway binaries in $From" }
 
 $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
 if ($task) {
+    # (the server stops itself, and its gateway, on this file: restart.ps1)
+    New-Item -ItemType File -Force (Join-Path $PSScriptRoot "..\..\data\stop-request") | Out-Null
+    for ($i = 0; $i -lt 30 -and (Get-Process halo-native-gateway-win32-x64 -ErrorAction SilentlyContinue); $i++) {
+        Start-Sleep -Milliseconds 500
+    }
     Stop-ScheduledTask -TaskName $taskName
     # the gateway exits with the server; give Windows a moment to release the file
     for ($i = 0; $i -lt 20 -and (Get-Process halo-native-gateway-win32-x64 -ErrorAction SilentlyContinue); $i++) {

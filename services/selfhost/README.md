@@ -85,8 +85,11 @@ are already in use. To stop or start it by hand, run
 in PowerShell.
 
 After changing `config.json` or the files in `server\`, restart it with
-`server\windows\restart.ps1`. It also ends a server process left holding the
-ports, and logs to `logs\restart.log`.
+`server\windows\restart.ps1`. It asks the server to stop by creating
+`data\stop-request` (the server stops itself within a second, with its
+gateway and lobby), also ends a server process left holding the ports, and
+logs to `logs\restart.log`. Creating that file stops the server however it
+was started.
 
 ## Phones and tablets (touch controls)
 

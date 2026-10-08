@@ -34,13 +34,15 @@ const SERVER_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(SERVER_DIR, "..");
 const PUBLIC_DIR = path.join(ROOT, "public");
 const DATA_DIR = path.join(ROOT, "data");
+// (made to stop the server: main)
+const STOP_FILE = path.join(DATA_DIR, "stop-request");
 const CONFIG_FILE = path.join(ROOT, "config.json");
 
 const GATEWAY_PLACEHOLDER_URL = "wss://halo-native-gateway.invalid/v1/connect";
 
 const DEFAULT_CONFIG = {
-  http: { enabled: true, port: 8765, bind: "0.0.0.0" },
-  https: { enabled: true, port: 8443, bind: "0.0.0.0", certFile: "", keyFile: "" },
+  http: { enabled: true, port: 8765, bind: "::" },
+  https: { enabled: true, port: 8443, bind: "::", certFile: "", keyFile: "" },
   trustProxyHeaders: true,
   lobby: {
     enabled: true,
@@ -736,15 +738,24 @@ function makeHandlers(config, lobby, gateway, publicGames) {
   return { request, upgrade };
 }
 
+// "::" listens on IPv6 and IPv4 both (a reverse proxy that tries a name's
+// IPv6 address first then reaches it at once); a machine without IPv6 gets
+// IPv4 alone.
 function listen(server, port, bind, label) {
   return new Promise((resolve, reject) => {
-    server.once("error", (error) => {
-      if (error.code === "EADDRINUSE") {
+    const failed = (error) => {
+      if (bind === "::" && ["EAFNOSUPPORT", "EADDRNOTAVAIL", "EINVAL"].includes(error.code)) {
+        log("server", `${label}: no IPv6 here (${error.code}); listening on IPv4 only`);
+        bind = "0.0.0.0";
+        server.once("error", failed);
+        server.listen(port, bind, resolve);
+      } else if (error.code === "EADDRINUSE") {
         reject(new Error(`${label} port ${port} is already in use; change it in config.json`));
       } else {
         reject(error);
       }
-    });
+    };
+    server.once("error", failed);
     server.listen(port, bind, resolve);
   });
 }
@@ -753,6 +764,8 @@ function listen(server, port, bind, label) {
 
 async function main() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
+  // (a stop asked for before this start is not for it)
+  try { fs.unlinkSync(STOP_FILE); } catch {}
   const config = loadConfig();
   const secrets = loadSecrets();
 
@@ -806,6 +819,16 @@ async function main() {
   };
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
+  // A stop asked for by a file (server/windows restart.ps1 and update.ps1):
+  // whoever can change this folder can stop the server, however it was
+  // started (a Windows task's processes cannot always be ended from outside
+  // its session).
+  setInterval(() => {
+    if (!fs.existsSync(STOP_FILE)) return;
+    try { fs.unlinkSync(STOP_FILE); } catch {}
+    log("server", `asked to stop (${path.relative(ROOT, STOP_FILE)})`);
+    shutdown();
+  }, 1000).unref();
 }
 
 main().catch((error) => {

@@ -54,6 +54,14 @@ $gameItems = @("index.html", "halo.html", "halo.js", "halo.wasm", "coi-servicewo
 $topItems = @("README.md", "HOSTING-VPS.md", "Start Halo (Windows).bat", "start-halo.sh")
 
 function Stop-Halo {
+    # (the server stops itself on this file, however it was started: the
+    # processes of a task run as an account cannot always be ended from that
+    # account's other sessions)
+    New-Item -ItemType Directory -Force (Join-Path $Root "data") | Out-Null
+    New-Item -ItemType File -Force (Join-Path $Root "data\stop-request") | Out-Null
+    for ($i = 0; $i -lt 30 -and (Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue); $i++) {
+        Start-Sleep -Milliseconds 500
+    }
     if ($task) { Stop-ScheduledTask -TaskName $taskName }
     # (stopping the task can leave its node.exe holding the ports: only ours)
     Get-CimInstance Win32_Process | Where-Object {
