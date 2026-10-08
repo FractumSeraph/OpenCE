@@ -157,7 +157,7 @@ assert.match(shell,
   /controllerSummary[\s\S]*?mouse capture optional/,
   'a controller must remain usable without mouse capture');
 assert.match(dsound,
-  /#ifndef HALO_WEB\s*SDL_SetHint\(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, "512"\);\s*#endif/,
+  /#ifndef HALO_WEB\s*#ifdef HALO_ANDROID[\s\S]*?SDL_SetHint\(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, "1024"\);\s*#else\s*SDL_SetHint\(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, "512"\);\s*#endif\s*#endif/,
   'web audio must keep SDL Emscripten\'s larger browser-safe default buffer');
 assert.match(dsound,
   /web_audio_record_callback[\s\S]*?platform_web_audio_callback_count[\s\S]*?platform_web_audio_late_callback_count[\s\S]*?platform_web_audio_maximum_callback_gap_ms/,
