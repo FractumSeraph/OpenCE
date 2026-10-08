@@ -164,6 +164,7 @@
     elements.map = byId("online-map");
     elements.mode = byId("online-mode");
     elements.mapOptions = byId("online-map-options");
+    elements.mapSearch = byId("online-map-search");
     elements.modeOptions = byId("online-mode-options");
     elements.advancedEnabled = byId("online-advanced-enabled");
     elements.advancedFields = byId("online-advanced-fields");
@@ -1075,6 +1076,7 @@
       elements.mapOptions.appendChild(label);
     });
     LAST_MAP_INDEX = XBOX_MAP_COUNT - 1 + customMaps.length;
+    if (elements.mapSearch) elements.mapSearch.hidden = false;
     /* (a saved Custom Edition map could not be chosen before the list came) */
     if (!session.active) {
       try {
@@ -1099,7 +1101,9 @@
       .then(function(files) {
         var pictures = {};
         (Array.isArray(files) ? files : []).forEach(function(file) {
-          if (typeof file === "string" && /\.bmp$/i.test(file)) pictures[file.slice(0, -4).toLowerCase()] = file;
+          /* (each a name, or its name with its size and version) */
+          var name = typeof file === "string" ? file : file && file.name;
+          if (typeof name === "string" && /\.bmp$/i.test(name)) pictures[name.slice(0, -4).toLowerCase()] = name;
         });
         Array.prototype.forEach.call(elements.mapOptions.querySelectorAll("[data-custom-map]"), function(picture) {
           var file = pictures[picture.dataset.customMap.toLowerCase()];
@@ -2318,6 +2322,16 @@
       elements.playerSidebar.addEventListener(type, containDialogKeyboardEvent);
     });
     attachPickerEvents(elements.mapOptions, "halo-map-choice", elements.map);
+    /* (Find a map: the cards whose name has what is typed) */
+    if (elements.mapSearch) {
+      elements.mapSearch.addEventListener("input", function() {
+        var wanted = elements.mapSearch.value.trim().toLowerCase();
+        Array.prototype.forEach.call(elements.mapOptions.querySelectorAll("[data-picker-option]"), function(card) {
+          var name = card.querySelector(".choice-label");
+          card.hidden = !!wanted && !(name && name.textContent.toLowerCase().indexOf(wanted) >= 0);
+        });
+      });
+    }
     attachPickerEvents(
       elements.modeOptions,
       "halo-mode-choice",

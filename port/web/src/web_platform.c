@@ -97,7 +97,11 @@ files of the server's custom_maps folder, beside maps, which the server lists
 in its index.json (services/selfhost/server/server.mjs), as FetchFS cannot
 list a folder. Smaller pieces than the Xbox maps': a Custom Edition map's
 game reads are scattered through it and bitmaps.map and sounds.map, which
-are hundreds of megabytes, and every piece read stays in memory. */
+are hundreds of megabytes, and every piece read stays in memory; and the
+game lists the maps by reading each one's 2 KB header, which costs a whole
+piece of each of what can be a hundred maps or more. */
+#define CUSTOM_MAP_PIECE_BYTES (256 * 1024)
+
 static void web_custom_maps_mount(void)
 {
 	backend_t custom_maps;
@@ -115,16 +119,18 @@ static void web_custom_maps_mount(void)
 			const request = new XMLHttpRequest();
 			request.open("GET", UTF8ToString($0) + "/index.json", false);
 			request.send();
-			const names = request.status === 200 ? JSON.parse(request.responseText) : [];
-			return stringToNewUTF8(Array.isArray(names) ?
-				names.filter(name => typeof name === "string").join(String.fromCharCode(10)) : "");
+			const files = request.status === 200 ? JSON.parse(request.responseText) : [];
+			/* (each a name, or its name with its size and version) */
+			return stringToNewUTF8(Array.isArray(files) ? files
+				.map(file => typeof file === "string" ? file : file && file.name)
+				.filter(name => typeof name === "string").join(String.fromCharCode(10)) : "");
 		}
 		catch (error)
 		{
 			return stringToNewUTF8("");
 		}
 	}, url);
-	custom_maps = wasmfs_create_fetch_backend(url, 4 * 1024 * 1024);
+	custom_maps = wasmfs_create_fetch_backend(url, CUSTOM_MAP_PIECE_BYTES);
 	if (wasmfs_create_directory("/assets/custom_maps", 0555, custom_maps) != 0 && errno != EEXIST)
 		platform_log("web: cannot mount the Custom Edition maps");
 	for (name = list; name && *name; name = next)

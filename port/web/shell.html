@@ -477,6 +477,18 @@
       margin-top: .65rem;
     }
     .map-choice-grid { grid-template-columns: repeat(auto-fit, minmax(7.75rem, 1fr)); }
+    .map-search {
+      box-sizing: border-box;
+      width: 100%;
+      margin-top: .55rem;
+      padding: .5rem .65rem;
+      border: 1px solid rgba(181, 219, 230, .27);
+      border-radius: .4rem;
+      color: #edf7f2;
+      background: #0b1a20;
+      font: inherit;
+    }
+    .map-search[hidden], [data-picker-option][hidden] { display: none; }
     .mode-choice-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .visual-choice {
       position: relative;
@@ -1756,6 +1768,7 @@
             <form id="online-host-form" class="online-stack host-setup">
               <section id="online-step-map">
                 <p id="online-map-title" class="host-setup-title">Choose a map</p>
+                <input id="online-map-search" class="map-search" type="search" placeholder="Find a map" aria-label="Find a map" autocomplete="off" hidden>
                 <div id="online-map-options" class="choice-grid map-choice-grid" role="radiogroup" aria-labelledby="online-map-title">
                   <label class="visual-choice" data-picker-option><input type="radio" name="halo-map-choice" value="0" checked><span class="visual-choice-card map-choice-card"><img src="assets/ui/maps/battle-creek.png" alt=""><span class="choice-label">Battle Creek</span></span></label>
                   <label class="visual-choice" data-picker-option><input type="radio" name="halo-map-choice" value="1"><span class="visual-choice-card map-choice-card"><img src="assets/ui/maps/sidewinder.png" alt=""><span class="choice-label">Sidewinder</span></span></label>
@@ -2885,7 +2898,7 @@
     // the game downloads): how much, and clearing them. Shown when the game
     // settings open.
     {
-      const MAP_CACHE = "halo-maps-v1";
+      const MAP_CACHE = "halo-maps-v2";
       const sizeText = document.getElementById("map-cache-size");
       const clearButton = document.getElementById("map-cache-clear");
       const settingsMenu = document.getElementById("game-settings-menu");

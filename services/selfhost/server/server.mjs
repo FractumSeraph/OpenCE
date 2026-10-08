@@ -479,17 +479,28 @@ function resolveStatic(urlPath) {
 // The Halo Custom Edition maps in public/assets/custom_maps (with Custom
 // Edition's bitmaps.map, sounds.map and loc.map, and each map's optional .txt
 // and .bmp): the game cannot list a folder on the server, so it reads this.
+// Each file's size and ETag (serveStatic's) come with it, so that the game
+// need not ask for each one's size before it lists them (the page's fetch
+// shim answers from this).
 function serveCustomMapList(req, res) {
-  let names = [];
+  let files = [];
   try {
-    names = fs.readdirSync(path.join(PUBLIC_DIR, "assets", "custom_maps"), { withFileTypes: true })
+    const folder = path.join(PUBLIC_DIR, "assets", "custom_maps");
+    files = fs.readdirSync(folder, { withFileTypes: true })
       .filter((entry) => entry.isFile() && /^[^/\\]{1,100}\.(map|txt|bmp)$/i.test(entry.name))
-      .map((entry) => entry.name)
-      .sort();
+      .map((entry) => {
+        const stat = fs.statSync(path.join(folder, entry.name));
+        return {
+          name: entry.name,
+          size: stat.size,
+          etag: `"${stat.size.toString(16)}-${Math.floor(stat.mtimeMs).toString(16)}"`,
+        };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
   } catch {
     // No folder: no Custom Edition maps.
   }
-  const body = Buffer.from(JSON.stringify(names));
+  const body = Buffer.from(JSON.stringify(files));
   isolationHeaders(res);
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.setHeader("Cache-Control", "no-cache");

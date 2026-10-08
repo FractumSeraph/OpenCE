@@ -19,22 +19,29 @@
    * replaced on the server is downloaded again and the old one's pieces are
    * dropped. If the server cannot be reached, a map kept here still loads.
    * shell.html's Game settings show how much is kept and can clear it. */
-  const MAP_CACHE = "halo-maps-v1";
+  const MAP_CACHE = "halo-maps-v2";
   const mapVersions = new Map();
   const VERSION_SUFFIX = "?halo-version";
   const cacheStorage = () => {
     try { return scope.caches || null; } catch (_error) { return null; }
   };
+  /* (v1 kept Custom Edition maps in 4 MB pieces, which v2's 256 KB reads
+   * never ask for again) */
+  if (cacheStorage()) cacheStorage().delete("halo-maps-v1").catch(() => {});
   const pieceKey = (path, version, range) => scope.location.origin + path +
     "?halo-piece=" + encodeURIComponent(version) + "&range=" + encodeURIComponent(range || "all");
 
-  async function rememberVersion(path, response) {
+  function rememberVersion(path, response) {
     const length = response.headers.get("Content-Range")
       ? response.headers.get("Content-Range").split("/")[1]
       : response.headers.get("Content-Length");
     const version = response.headers.get("ETag") ||
       (response.headers.get("Last-Modified") || "") + "/" + (length || "");
-    if (!length || version === "/") return;
+    if (!length || version === "/") return Promise.resolve();
+    return keepVersion(path, version, length);
+  }
+
+  async function keepVersion(path, version, length) {
     mapVersions.set(path, version);
     const storage = cacheStorage();
     if (!storage) return;
@@ -55,6 +62,24 @@
     } catch (_error) {
       /* (no room, or storage blocked: maps are simply downloaded each time) */
     }
+  }
+
+  /* The server's list of the Custom Edition maps (assets/custom_maps/
+   * index.json, services/selfhost/server/server.mjs) gives each file's size
+   * and version: FetchFS's HEAD of each is answered from it, one request
+   * where the game's listing of the maps would make one per map. */
+  let customMapIndex = null;
+  function customMapEntry(path) {
+    if (!customMapIndex) {
+      const url = scope.location.origin + path.replace(/[^/]*$/, "index.json");
+      customMapIndex = nativeFetch(url, { cache: "no-store" })
+        .then(response => response.ok ? response.json() : [])
+        .then(files => new Map((Array.isArray(files) ? files : [])
+          .filter(file => file && typeof file.name === "string" && Number.isFinite(file.size) && file.etag)
+          .map(file => [file.name, file])))
+        .catch(() => { customMapIndex = null; return new Map(); });
+    }
+    return customMapIndex.then(entries => entries.get(decodeURIComponent(path.split("/").pop())) || null);
   }
 
   /* the size of a map kept here, for FetchFS when the server is unreachable */
@@ -138,6 +163,14 @@
     if (mapPath && method === "GET") {
       const kept = await cachedPiece(mapPath, range);
       if (kept) return kept;
+    }
+    if (isCustomMapRequest && method === "HEAD") {
+      const entry = await customMapEntry(mapPath);
+      if (entry) {
+        await keepVersion(mapPath, entry.etag, entry.size);
+        return new Response(null, { status: 200, headers: {
+          "Content-Length": String(entry.size), "Accept-Ranges": "bytes", "ETag": entry.etag } });
+      }
     }
 
     /* Self-hosted: maps served by this server (for example modified maps)
