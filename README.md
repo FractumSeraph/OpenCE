@@ -90,6 +90,14 @@ OpenCE's own CI.
   file's version (its ETag), so a map loads without a download the next time
   and even when the server cannot be reached; Game settings shows how much
   is kept and can clear it.
+- **ChupathingyCE's Delta** (`port/web/src/delta`, and its README): the
+  browser joins hosts of OpenCE network versions 11 to 24 as ChupathingyCE's
+  builds do, checks their signed legacy table, shows their game list's
+  details in the Server Browser (`web_delta_list.c`), shakes hands with
+  their hosts over Delta Peer (their `delta_peer.c` and `delta_wire.c`, as
+  they are; `web_delta_peer.c`), leaves a Custom Edition game whose map file
+  is not the host's, and reports the games it joins to halo.milenko.org
+  (`web_delta_stats.c`, Play online's *Stats on halo.milenko.org*).
 
 ### Added: online services
 
@@ -107,7 +115,9 @@ OpenCE's own CI.
 - **`services/selfhost`**: the self-hosting server the kits run. One Node.js
   process serves the game (with byte ranges and the isolation headers), runs
   the lobby service in Miniflare, starts the gateway, relays the server
-  browser's public games (`public-games.mjs`), and can add Umami analytics.
+  browser's public games (`public-games.mjs`), asks ChupathingyCE's game
+  list for the page (`delta-list.mjs`), hashes the Custom Edition maps for
+  Delta's map check (`map-hashes.mjs`), and can add Umami analytics.
   It works under any domain or sub-path, and comes with launchers, a Windows
   autostart task and a VPS guide. `tools/selfhost_package.py` builds the
   kits.
@@ -130,15 +140,17 @@ OpenCE's own CI.
     audio, and browser defaults for some settings (for example crouch on `C`);
   - **networking** (`posix_net.c`, `xnet.c`, `p2p.c`, `p2p_lobby.c`): sockets
     through the browser layer, invites handed to the page, the page's room's
-    invite as the hosted game's, and the hosted game's listing read for the
-    page;
+    invite as the hosted game's, the hosted game's listing read for the
+    page, and Delta's version range in the listings shown;
   - **menus** (`menu_functions.c`, `player_ui.c`): Create Game opens a page
     room, Server Setup shows its invite and LISTING (no PASSWORD), the server
-    browser lists browser games first and joins through the page, and the
-    page's hosting takes a Custom Edition map;
+    browser lists browser games first and joins through the page, shows
+    Delta List's details, and the page's hosting takes a Custom Edition map;
   - **game code** (`source/`): a player re-sent to a browser client that
     missed it (`network_server_message_handler.c`,
-    `network_client_manager.c`), a fatal error ending the browser runtime
+    `network_client_manager.c`), Delta's join range and Delta Peer's client
+    hooks (`network_client_manager.c`), a joined game's report for Delta
+    Stats (`game_engine.c`), a fatal error ending the browser runtime
     instead of looping (`main.c`), and small fixes in the cache, saved-game
     and rasterizer code.
 - **Outside `HALO_WEB`**, changes that do not alter what the game does:

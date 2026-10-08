@@ -32,6 +32,7 @@ import selfsigned from "selfsigned";
 
 import { PublicGames } from "./public-games.mjs";
 import { DeltaList } from "./delta-list.mjs";
+import { MapHashes } from "./map-hashes.mjs";
 
 const SERVER_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(SERVER_DIR, "..");
@@ -488,20 +489,27 @@ function resolveStatic(urlPath) {
 // and .bmp): the game cannot list a folder on the server, so it reads this.
 // Each file's size and ETag (serveStatic's) come with it, so that the game
 // need not ask for each one's size before it lists them (the page's fetch
-// shim answers from this).
+// shim answers from this), and a map's BLAKE2b-256 once it is known
+// (map-hashes.mjs: Delta's map identity).
+const CUSTOM_MAPS_DIR = path.join(PUBLIC_DIR, "assets", "custom_maps");
+let mapHashes = null;
+
 function serveCustomMapList(req, res) {
   let files = [];
   try {
-    const folder = path.join(PUBLIC_DIR, "assets", "custom_maps");
+    const folder = CUSTOM_MAPS_DIR;
     files = fs.readdirSync(folder, { withFileTypes: true })
       .filter((entry) => entry.isFile() && /^[^/\\]{1,100}\.(map|txt|bmp)$/i.test(entry.name))
       .map((entry) => {
         const stat = fs.statSync(path.join(folder, entry.name));
-        return {
+        const file = {
           name: entry.name,
           size: stat.size,
           etag: `"${stat.size.toString(16)}-${Math.floor(stat.mtimeMs).toString(16)}"`,
         };
+        const hash = mapHashes && mapHashes.get(entry.name, stat);
+        if (hash) file.blake2b = hash;
+        return file;
       })
       .sort((a, b) => a.name.localeCompare(b.name));
   } catch {
@@ -737,7 +745,7 @@ function makeHandlers(config, lobby, gateway, publicGames, deltaList) {
           res.writeHead(503, { "Content-Type": "text/plain" }).end("the game list is off on this server\n");
           return;
         }
-        if (deltaList.handle(api.rest.replace(/\?.*$/, ""), req, res)) return;
+        if (deltaList.handle(api.rest.replace(/\?.*$/, ""), req, res, clientIp(req, config))) return;
         res.writeHead(404, { "Content-Type": "text/plain" }).end("not found\n");
         return;
       }
@@ -807,6 +815,8 @@ async function main() {
   const lobby = await startLobby(config, secrets, gateway);
   const publicGames = config.publicGames.enabled ? new PublicGames(config.publicGames.brokers, log) : null;
   const deltaList = config.delta.enabled && config.delta.url ? new DeltaList(config.delta.url, log) : null;
+  mapHashes = new MapHashes(CUSTOM_MAPS_DIR, path.join(DATA_DIR, "custom-map-hashes.json"), log);
+  mapHashes.scan();
   const { request, upgrade } = makeHandlers(config, lobby, gateway, publicGames, deltaList);
   const servers = [];
   const urls = [];

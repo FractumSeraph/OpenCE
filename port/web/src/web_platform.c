@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <unistd.h>
 
 /* Keep the browser platform unit on host libc headers. These two game-side
@@ -102,6 +103,72 @@ game lists the maps by reading each one's 2 KB header, which costs a whole
 piece of each of what can be a hundred maps or more. */
 #define CUSTOM_MAP_PIECE_BYTES (256 * 1024)
 
+/* each map's size and BLAKE2b-256, as the server's index.json says (the
+server hashes them once: map-hashes.mjs), for Delta's map identity
+(web_delta_peer.c): the browser has not the whole file to hash */
+#define MAXIMUM_CUSTOM_MAP_IDENTITIES 1024
+
+static struct
+{
+	char name[104];
+	unsigned long long size;
+	unsigned char hash[32];
+} custom_map_identities[MAXIMUM_CUSTOM_MAP_IDENTITIES];
+static int custom_map_identity_count;
+
+static int identity_hex_digit(char c)
+{
+	if (c >= '0' && c <= '9')
+		return c - '0';
+	if (c >= 'a' && c <= 'f')
+		return c - 'a' + 10;
+	return -1;
+}
+
+static void custom_map_identity_add(const char *name, const char *size_text, const char *hash_text)
+{
+	unsigned char hash[32];
+	char *end;
+	unsigned long long size = strtoull(size_text, &end, 10);
+	int index;
+
+	if (!*size_text || *end || strlen(hash_text) != 64 || strlen(name) >= sizeof(custom_map_identities[0].name) ||
+		custom_map_identity_count >= MAXIMUM_CUSTOM_MAP_IDENTITIES)
+	{
+		return;
+	}
+	for (index = 0; index < 32; index++)
+	{
+		int high = identity_hex_digit(hash_text[2 * index]), low = identity_hex_digit(hash_text[2 * index + 1]);
+
+		if (high < 0 || low < 0)
+			return;
+		hash[index] = (unsigned char)(high << 4 | low);
+	}
+	snprintf(custom_map_identities[custom_map_identity_count].name, sizeof(custom_map_identities[0].name), "%s", name);
+	custom_map_identities[custom_map_identity_count].size = size;
+	memcpy(custom_map_identities[custom_map_identity_count].hash, hash, sizeof(hash));
+	custom_map_identity_count++;
+}
+
+/* a custom_maps file's size and hash (its name: "coldsnap.map", any case):
+1 if the server said them, else 0 */
+int web_custom_map_identity(const char *file_name, unsigned long long *size, unsigned char *hash)
+{
+	int index;
+
+	for (index = 0; index < custom_map_identity_count; index++)
+	{
+		if (!strcasecmp(custom_map_identities[index].name, file_name))
+		{
+			*size = custom_map_identities[index].size;
+			memcpy(hash, custom_map_identities[index].hash, 32);
+			return 1;
+		}
+	}
+	return 0;
+}
+
 static void web_custom_maps_mount(void)
 {
 	backend_t custom_maps;
@@ -120,10 +187,17 @@ static void web_custom_maps_mount(void)
 			request.open("GET", UTF8ToString($0) + "/index.json", false);
 			request.send();
 			const files = request.status === 200 ? JSON.parse(request.responseText) : [];
-			/* (each a name, or its name with its size and version) */
+			/* (each a name, or its name with its size and version, and a map's
+			BLAKE2b-256 once the server has made it: one a line, name, size
+			and hash between tabs) */
+			const text = value => typeof value === "string" || typeof value === "number" ? String(value) : "";
 			return stringToNewUTF8(Array.isArray(files) ? files
-				.map(file => typeof file === "string" ? file : file && file.name)
-				.filter(name => typeof name === "string").join(String.fromCharCode(10)) : "");
+				.map(file => typeof file === "string" ? { name: file } : file || {})
+				.filter(file => typeof file.name === "string" && file.name.indexOf(String.fromCharCode(9)) < 0 &&
+					file.name.indexOf(String.fromCharCode(10)) < 0)
+				.map(file => [file.name, text(file.size), /^[0-9a-f]{64}$/.test(file.blake2b) ? file.blake2b : ""]
+					.join(String.fromCharCode(9)))
+				.join(String.fromCharCode(10)) : "");
 		}
 		catch (error)
 		{
@@ -136,6 +210,7 @@ static void web_custom_maps_mount(void)
 	for (name = list; name && *name; name = next)
 	{
 		char path[160];
+		char *size_text, *hash_text;
 		int descriptor;
 
 		next = strchr(name, '\n');
@@ -143,6 +218,14 @@ static void web_custom_maps_mount(void)
 			*next++ = '\0';
 		else
 			next = name + strlen(name);
+		size_text = strchr(name, '\t');
+		hash_text = size_text ? strchr(size_text + 1, '\t') : NULL;
+		if (size_text)
+			*size_text++ = '\0';
+		if (hash_text)
+			*hash_text++ = '\0';
+		if (size_text && hash_text)
+			custom_map_identity_add(name, size_text, hash_text);
 		if (!*name || strlen(name) > 100 || strchr(name, '/') || strchr(name, '\\') || !strcmp(name, ".."))
 			continue;
 		snprintf(path, sizeof(path), "/assets/custom_maps/%s", name);

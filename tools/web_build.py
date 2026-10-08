@@ -310,6 +310,10 @@ def generate_web_build(n: Writer, sln: Any) -> None:
             source,
             posix_cflags if source.name == "web_loopback_net.c" else platform_cflags,
         )
+    # Delta Peer's wire format and sessions, ChupathingyCE's code as it is
+    # (port/web/src/delta/README.md): plain C, no platform
+    for source in sorted((WEB_DIR / "src" / "delta").glob("*.c")):
+        add_object(source, f"{abi_flags} -std=gnu11 -I{WEB_DIR}/src/delta -I{MONOCYPHER_DIR}")
 
     # the high-res HUD's textures, the menus' titles, fonts and XML menus
     # (port/assets; port/linux/src/hud_hires.c), generated as C data

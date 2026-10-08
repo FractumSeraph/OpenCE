@@ -811,6 +811,15 @@ struct network_game_client network_game_client_dont_use_directly;
 boolean allow_out_of_sync = FALSE;
 boolean network_game_client_dont_use_directly_in_use = FALSE;
 
+#ifdef HALO_WEB
+/* web: Delta Peer's client (port/web/src/web_delta_peer.c, ChupathingyCE's
+network family): the joined game's advertisement's flags, whose
+DELTA_ADVERTISED_FLAG says its host speaks it (0 for the host's own game) */
+static byte network_game_client_joined_flags;
+static void network_game_client_delta_frame(struct network_game_client *client);
+void web_delta_peer_stop(void);
+#endif
+
 /* ---------- public code */
 
 /* transport_network_available asks the system for its interfaces
@@ -912,6 +921,9 @@ void network_game_client_dispose(
 		network_game_client_dont_use_directly_in_use = FALSE;
 	}
 
+#ifdef HALO_WEB
+	web_delta_peer_stop();
+#endif
 	network_event("network client disposed");
 
 	return;
@@ -1249,6 +1261,10 @@ boolean network_game_client_idle(
 			!"unknown client state");
 		break;
 	}
+
+#ifdef HALO_WEB
+	network_game_client_delta_frame(client);
+#endif
 
 	return success;
 }
@@ -2034,6 +2050,16 @@ boolean network_game_client_initiate_join_game(
 	client->join_in_progress = TRUE;
 	client->connect_process = 0;
 	client->connection_attempt_time = system_milliseconds();
+#ifdef HALO_WEB
+	/* (an advertised game's flags; the host's own game, joined through
+	127.0.0.1, is no advertised one) */
+	{
+		long game_index = game - client->available_games;
+
+		network_game_client_joined_flags = game_index >= 0 && game_index < MAXIMUM_NETWORK_ADVERTISED_GAMES ?
+			network_game_client_advertised_versions[game_index].flags : 0;
+	}
+#endif
 
 	csmemcpy(
 		&client->join_parameters,
@@ -3251,3 +3277,62 @@ boolean network_game_client_set_team(
 	return success;
 }
 
+
+#ifdef HALO_WEB
+/* web: Delta Peer's view of the joined game (port/web/src/web_delta_peer.c,
+as ChupathingyCE's network_game_client_delta_frame): whether this client is
+in another machine's game, the host's address (as the game's sockets have
+it: the native gateway's virtual address), whether its advertisement has
+Delta's flag, this machine's index and each player's machine. Nothing of the
+game changes here, and the game never waits for Delta; a dedicated server's
+notices for this player go to the HUD */
+#include "../../port/web/src/delta/delta.h"
+
+void web_delta_peer_client_frame(int joined, unsigned int host_ipv4, int host_speaks_delta, int machine_index,
+	const signed char *player_machines);
+int web_delta_peer_take_notice(unsigned short *text, int size);
+void hud_print_message(short local_player_index, wchar_t const *message_text);
+
+static void network_game_client_delta_frame(
+	struct network_game_client *client)
+{
+	/* (Delta Peer reads DELTA_PEER_MAXIMUM_PLAYERS, 128) */
+	static signed char player_machines[128];
+	boolean joined = (client->state == _network_game_client_state_pregame ||
+		client->state == _network_game_client_state_ingame ||
+		client->state == _network_game_client_state_postgame) &&
+		client->connection && !global_network_game_server_get();
+	unsigned int host = 0;
+	long index;
+	wchar_t notice[128];
+
+	/* (this machine hosting: no Delta of its own) */
+	if (global_network_game_server_get())
+		return;
+	if (joined)
+	{
+		struct transport_address reliable, unreliable;
+
+		csmemset(&reliable, 0, sizeof(reliable));
+		csmemset(&unreliable, 0, sizeof(unreliable));
+		network_connection_get_address(client->connection, &reliable, &unreliable);
+		/* (as a socket address's s_addr: its bytes in network order) */
+		host = (unsigned int)reliable.address.ipv4_address;
+		host = host >> 24 | (host >> 8 & 0xFF00) | (host << 8 & 0xFF0000) | host << 24;
+	}
+	for (index = 0; index < 128; index++)
+	{
+		player_machines[index] = (signed char)(joined && index < MAXIMUM_NUMBER_OF_PLAYERS &&
+			network_player_is_valid(&client->game.players[index]) ?
+			client->game.players[index].machine_index : -1);
+	}
+	web_delta_peer_client_frame(joined && host, host,
+		(network_game_client_joined_flags & DELTA_ADVERTISED_FLAG) != 0, network_game_client_get_machine_index(client),
+		player_machines);
+	if (client->state == _network_game_client_state_ingame &&
+		web_delta_peer_take_notice((unsigned short *)notice, NUMBEROF(notice)))
+	{
+		hud_print_message(0, notice);
+	}
+}
+#endif

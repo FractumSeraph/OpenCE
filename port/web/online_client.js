@@ -334,6 +334,219 @@
     refresh();
   }
 
+  /* Delta Stats and Link (ChupathingyCE's game list, halo.milenko.org; its
+     API at /api): this browser's player key, 32 random bytes kept here
+     (like their builds' game_list_player.key), from which the site works out
+     a public player ID; the key goes to the site alone, through this site's
+     server (server/delta-list.mjs: the site has no CORS). Uses:
+     - a game joined through an invite (a ChupathingyCE or OpenCE host): its
+       report (the game's: game_engine.c, web_delta_stats.c) and then the
+       local players' lines confirmed with the key, while the player shares
+       their results (the panel's checkbox; on by default, as theirs is);
+     - Link profile: a short code the player types at halo.milenko.org/connect,
+       signed in, which links this browser's key to their profile there. */
+  var DELTA_KEY_STORAGE_KEY = "halo.web.delta-player-key.v1";
+  var DELTA_SHARE_STORAGE_KEY = "halo.web.delta-share.v1";
+  var DELTA_PROFILE_STORAGE_KEY = "halo.web.delta-profile.v1";
+  var DELTA_CLAIM_DELAY_MILLISECONDS = 4000;
+  var DELTA_CLAIM_INTERVAL_MILLISECONDS = 8000;
+  var DELTA_CLAIM_ATTEMPTS = 8;
+  var DELTA_REPORT_ATTEMPTS = 4;
+  var DELTA_CONNECT_POLL_MILLISECONDS = 3000;
+
+  function storageGet(name) {
+    try { return global.localStorage.getItem(name); } catch (error) { return null; }
+  }
+
+  function storageSet(name, value) {
+    try { global.localStorage.setItem(name, value); } catch (error) { /* (private window) */ }
+  }
+
+  function deltaPlayerKey() {
+    var key = storageGet(DELTA_KEY_STORAGE_KEY);
+    if (key && /^[0-9a-f]{64}$/.test(key)) return key;
+    var bytes = new Uint8Array(32);
+    global.crypto.getRandomValues(bytes);
+    key = Array.from(bytes, function(byte) { return (byte + 256).toString(16).slice(1); }).join("");
+    storageSet(DELTA_KEY_STORAGE_KEY, key);
+    return key;
+  }
+
+  function deltaShares() {
+    return storageGet(DELTA_SHARE_STORAGE_KEY) !== "0";
+  }
+
+  /* a POST to the site through this site's server: its status and text */
+  function deltaPost(path, body) {
+    return fetch(apiBase() + "/v1/delta/" + path, {
+      method: "POST",
+      credentials: "omit",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).then(function(response) {
+      return response.text().then(function(text) { return { status: response.status, text: text.trim() }; });
+    });
+  }
+
+  function deltaLog(text) {
+    if (global.console) global.console.log("Delta Stats: " + text);
+  }
+
+  /* the game's report of a game it joined as a client (web_delta_stats.c) */
+  function deltaGameReport(reportText, namesText) {
+    var invite = session.nativeInvite;
+    var report, names;
+    if (!invite || !deltaShares()) return;
+    try {
+      report = JSON.parse(reportText);
+      names = JSON.parse(namesText);
+    } catch (error) {
+      deltaLog("the game's report could not be read");
+      return;
+    }
+    if (!report || !Array.isArray(report.players) || !report.players.length) return;
+    var body = Object.assign({ key: deltaPlayerKey(), platform: "unknown", invite: invite }, report);
+    var attempt = 0;
+    (function send() {
+      deltaPost("client_report", body).then(function(answer) {
+        if (answer.status === 200) deltaLog("the joined game's report was taken (" + answer.text + ")");
+        else if ((answer.status === 429 || answer.status >= 500) && ++attempt < DELTA_REPORT_ATTEMPTS) {
+          global.setTimeout(send, DELTA_CLAIM_INTERVAL_MILLISECONDS);
+        } else deltaLog("the joined game's report was not taken (" + answer.status + " " + answer.text + ")");
+      }, function() {
+        if (++attempt < DELTA_REPORT_ATTEMPTS) global.setTimeout(send, DELTA_CLAIM_INTERVAL_MILLISECONDS);
+      });
+    })();
+    /* each local player's line confirmed, once the host (or this report)
+       has the game on the site: a 404 until then */
+    (Array.isArray(names) ? names : []).slice(0, 4).forEach(function(name) {
+      var tries = 0;
+      function claim() {
+        deltaPost("claim", { invite: invite, key: deltaPlayerKey(), platform: "unknown", name: String(name) })
+          .then(function(answer) {
+            if (answer.status === 200) deltaLog(name + "'s line confirmed (" + answer.text + ")");
+            else if ((answer.status === 404 || answer.status === 429 || answer.status >= 500) &&
+                ++tries < DELTA_CLAIM_ATTEMPTS) global.setTimeout(claim, DELTA_CLAIM_INTERVAL_MILLISECONDS);
+            else deltaLog(name + "'s line was not confirmed (" + answer.status + " " + answer.text + ")");
+          }, function() {
+            if (++tries < DELTA_CLAIM_ATTEMPTS) global.setTimeout(claim, DELTA_CLAIM_INTERVAL_MILLISECONDS);
+          });
+      }
+      global.setTimeout(claim, DELTA_CLAIM_DELAY_MILLISECONDS);
+    });
+  }
+
+  /* the panel's Delta part: the share checkbox and Link profile */
+  function startDeltaProfile() {
+    var share = byId("online-delta-share");
+    var linkButton = byId("online-delta-link");
+    var statusText = byId("online-delta-status");
+    var confirmRow = byId("online-delta-confirm");
+    var question = byId("online-delta-question");
+    var yes = byId("online-delta-yes");
+    var no = byId("online-delta-no");
+    var linking = { token: null, timer: 0, serial: 0 };
+    if (!share || !linkButton || !statusText) return;
+
+    function linked() {
+      var handle = storageGet(DELTA_PROFILE_STORAGE_KEY);
+      statusText.textContent = handle ? "Linked to " + handle + "." : "";
+      linkButton.textContent = handle ? "Link again" : "Link my profile";
+    }
+
+    function stop(message) {
+      global.clearTimeout(linking.timer);
+      linking.token = null;
+      linking.serial++;
+      if (confirmRow) confirmRow.hidden = true;
+      linkButton.disabled = false;
+      if (message != null) statusText.textContent = message;
+    }
+
+    /* the site's answer to the code's status: pending, confirm <handle>
+       [previous], connected <handle>, declined, expired */
+    function poll(serial) {
+      if (serial !== linking.serial || !linking.token) return;
+      deltaPost("connect/status", { token: linking.token }).then(function(answer) {
+        if (serial !== linking.serial) return;
+        var words = answer.text.split(/\s+/);
+        if (answer.status === 200 && words[0] === "confirm" && words[1]) {
+          if (question) {
+            question.textContent = "Link this browser to " + words[1] +
+              (words[2] ? " (now linked to " + words[2] + ")" : "") + "?";
+          }
+          if (confirmRow) confirmRow.hidden = false;
+          return;
+        }
+        if (answer.status === 200 && words[0] === "connected" && words[1]) {
+          storageSet(DELTA_PROFILE_STORAGE_KEY, words[1]);
+          stop(null);
+          linked();
+          return;
+        }
+        if (answer.status === 200 && (words[0] === "declined" || words[0] === "expired")) {
+          stop(words[0] === "declined" ? "Not linked." : "The code expired. Ask for a new one.");
+          return;
+        }
+        linking.timer = global.setTimeout(function() { poll(serial); }, DELTA_CONNECT_POLL_MILLISECONDS);
+      }, function() {
+        linking.timer = global.setTimeout(function() { poll(serial); }, DELTA_CONNECT_POLL_MILLISECONDS);
+      });
+    }
+
+    function answer(accept) {
+      var serial = linking.serial;
+      if (!linking.token) return;
+      if (confirmRow) confirmRow.hidden = true;
+      deltaPost("connect/confirm", { token: linking.token, accept: accept }).then(function(result) {
+        if (serial !== linking.serial) return;
+        var words = result.text.split(/\s+/);
+        if (result.status === 200 && words[0] === "connected" && words[1]) {
+          storageSet(DELTA_PROFILE_STORAGE_KEY, words[1]);
+          stop(null);
+          linked();
+        } else stop(words[0] === "declined" ? "Not linked." : "The link did not go through (" + result.text + ").");
+      }, function() { stop("halo.milenko.org could not be reached."); });
+    }
+
+    share.checked = deltaShares();
+    share.addEventListener("change", function() { storageSet(DELTA_SHARE_STORAGE_KEY, share.checked ? "1" : "0"); });
+    linkButton.addEventListener("click", function() {
+      var profile = readPlayerProfile();
+      stop("Asking halo.milenko.org for a code…");
+      linkButton.disabled = true;
+      var serial = linking.serial;
+      deltaPost("connect/start", { key: deltaPlayerKey(), name: profile && profile.name ? profile.name : "" })
+        .then(function(result) {
+          if (serial !== linking.serial) return;
+          /* "ok <code> <seconds> <token>" */
+          var words = result.text.split(/\s+/);
+          if (result.status !== 200 || words[0] !== "ok" || !words[1] || !words[3]) {
+            stop("No code: " + (result.text || "HTTP " + result.status) + ".");
+            return;
+          }
+          linking.token = words[3];
+          linkButton.disabled = false;
+          statusText.textContent = "";
+          statusText.append("Your code is ");
+          var code = document.createElement("strong");
+          code.textContent = words[1];
+          statusText.append(code, ". Sign in at ");
+          var page = document.createElement("a");
+          page.href = "https://halo.milenko.org/connect";
+          page.target = "_blank";
+          page.rel = "noopener";
+          page.textContent = "halo.milenko.org/connect";
+          statusText.append(page, " and type it there (good for " + Math.round(Number(words[2]) / 60) + " minutes).");
+          linking.timer = global.setTimeout(function() { poll(serial); }, DELTA_CONNECT_POLL_MILLISECONDS);
+        }, function() { stop("halo.milenko.org could not be reached."); });
+    });
+    if (yes) yes.addEventListener("click", function() { answer(true); });
+    if (no) no.addEventListener("click", function() { answer(false); });
+    linked();
+  }
+
   function startPublicGamesPolling() {
     var lastFetch = 0;
     var fetching = false;
@@ -2027,6 +2240,8 @@
     await transport().setLocalIdentifier(descriptor.localIdentifier);
     session.room = { id: "native" };
     session.roomTicket = null;
+    /* (the invite's digits: the joined game's, for Delta Stats) */
+    session.nativeInvite = invite.code.slice("halo://join/".length);
     session.selfPeerId = "native-self-" + descriptor.localIdentifier;
     session.connectionPath = "gateway";
     syncTelemetryContext();
@@ -2474,6 +2689,7 @@
 
   function resetSessionState() {
     session.apiBaseOverride = null;
+    session.nativeInvite = null;
     session.active = false;
     session.role = null;
     session.fromGame = false;
@@ -2751,6 +2967,7 @@
     startPresencePolling();
     startPublicGamesPolling();
     startDeltaLegacyTable();
+    startDeltaProfile();
     session.pendingInvite = takeInviteFromLocation();
     if (session.pendingInvite) {
       showDialog();
@@ -2784,6 +3001,8 @@
     },
     join: join,
     leave: function() { return leave(true); },
+    /* a joined game's report (src/web_delta_stats.c) */
+    deltaGameReport: deltaGameReport,
   });
 
   if (document.readyState === "loading") {

@@ -619,6 +619,11 @@
     .advanced-checks { display: grid; grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .42rem .7rem; }
     .join-direct { margin-top: .7rem; color: #8fa1aa; font-size: .76rem; }
     .join-direct summary { width: fit-content; cursor: pointer; }
+    .delta-profile { display: grid; gap: .4rem; margin-top: .5rem; line-height: 1.45; }
+    .delta-profile p { margin: 0; }
+    .delta-profile a { color: #65c2ff; }
+    .delta-profile .join-row { grid-template-columns: auto auto auto; justify-content: start; margin-top: 0; }
+    .delta-status:empty { display: none; }
     .online-howto { display: grid; gap: .45rem; color: #c9dbe4; font-size: .82rem; line-height: 1.45; }
     .online-howto p { margin: 0; }
     .online-howto strong { color: #65c2ff; }
@@ -1870,6 +1875,22 @@
                        aria-label="Invite link or code" placeholder="Paste an invite link or a halo:// link">
                 <button id="online-join" type="submit">Continue</button>
               </form>
+            </details>
+            <details id="online-delta" class="join-direct">
+              <summary>Stats on halo.milenko.org</summary>
+              <div class="delta-profile">
+                <p>Games you join on public servers can count on <a href="https://halo.milenko.org" target="_blank" rel="noopener">halo.milenko.org</a>, ChupathingyCE's game list: your name, score and kills there, under a key kept in this browser.</p>
+                <label class="advanced-check"><input id="online-delta-share" type="checkbox" checked> Share my results from games I join</label>
+                <div class="join-row">
+                  <button id="online-delta-link" type="button">Link my profile</button>
+                </div>
+                <p id="online-delta-status" class="delta-status" role="status"></p>
+                <div id="online-delta-confirm" class="join-row" hidden>
+                  <span id="online-delta-question"></span>
+                  <button id="online-delta-yes" class="primary" type="button">Link</button>
+                  <button id="online-delta-no" type="button">No</button>
+                </div>
+              </div>
             </details>
           </div>
           <div id="online-progress" class="online-actions" hidden>

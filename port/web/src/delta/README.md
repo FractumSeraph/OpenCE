@@ -9,19 +9,46 @@ when the other side does not speak it. The browser build speaks the parts
 below. All of it is browser-only (`port/web`, or inside `#ifdef HALO_WEB`):
 the native builds stay exactly OpenCE's.
 
+| Part | In the browser |
+| --- | --- |
+| The legacy number | Joins hosts of network versions 11 to 24, as their builds do (OpenCE: its own version only). |
+| The signed legacy table | Fetched and checked (Ed25519); its kill switch obeyed. |
+| Delta List | The in-game Server Browser shows each game's host (DEDICATED, LINUX, DELTA / OPENCE), who is playing and the score to win, and lists the games only their site has. |
+| Delta Peer | A client of their hosts: the handshake, its platform key (platform "unknown": their registry has no browser), the Custom Edition map's identity (size and BLAKE2b-256 hash), a dedicated server's notices on the HUD. |
+| Delta Stats | A game joined through an invite reported, and the player's lines confirmed with this browser's player key (the player can turn it off). |
+| Delta Link | Link profile: a code typed at halo.milenko.org/connect links this browser's key to a profile there. |
+
+Not done: hosting with Delta (a browser's games are its own rooms, which
+native builds cannot join), the `profile` capability (no player ID is
+shared in games), signing in as a server's moderator, chat, event logs.
+
 ## What is here
 
 | File | From | What it is |
 | --- | --- | --- |
 | `delta.h` | their `port/linux/include/delta.h` | Delta's numbers: the capability and platform registries, the compatibility table of OpenCE's network versions (`DELTA_LEGACY_VERSIONS`). Changed: `DELTA_WIRE` and the calls marked "web" at the end. |
 | `delta_key.h` | their `port/linux/src/delta_key.h`, as it is | The Ed25519 public keys a signed legacy table must be signed with. |
+| `delta_wire.c`, `.h` | theirs, as they are | Delta Peer's wire format: every message encoded and decoded, as hostile input. |
+| `delta_peer.c`, `.h` | theirs, as they are | Delta Peer's sessions (no sockets, no platform). |
 | `../web_delta.c` | their `port/linux/src/delta.c`, adapted | The legacy number in use, and the signed legacy table: checked, cached in the save root, its kill switch. |
+| `../web_delta_peer.c` | their `port/linux/src/delta_peer_game.c`, the client's part | One session over a socket of the game's Winsock layer; the map identity check; notices. |
+| `../web_delta_list.c` | (ours) | Delta List's games for the Server Browser (`menu_functions.c`). |
+| `../web_delta_stats.c` | (ours) | A joined game's report (`game_engine.c`, HALO_WEB) to the page. |
 
 Taken from their commit `b78e6cfa` (October 8, 2026). The archive
 (`S:\WebHalo\archive\git\ChupathingyCE-chupathingyce.git`) keeps their whole
 history; to see what changed in a file since:
 `git -C build\opence-web fetch S:\WebHalo\archive\git\ChupathingyCE-chupathingyce.git main:refs/remotes/chupa/main`,
-then `git -C build\opence-web diff b78e6cfa chupa/main -- port/linux/include/delta.h`.
+then `git -C build\opence-web diff b78e6cfa chupa/main -- port/linux/src/delta_peer.c`.
+A new message type or capability there is ignored by this copy (Delta's
+rule) until the file is copied again.
+
+The hooks in shared files, all under `HALO_WEB`: `network_client_manager.c`
+(the join range; Delta Peer's frame, its stop, the joined game's
+advertisement flags, notices to the HUD), `p2p_lobby.c` (the listings'
+range), `menu_functions.c` (the Server Browser's Delta List), `game_engine.c`
+(the joined game's report) and `main.c` (its frame). If OpenCE changes those
+places, keep the hooks.
 
 ## The join range (the legacy number)
 
@@ -38,7 +65,8 @@ games of versions 11 to 24 (24 being this build's own).
 in `DELTA_LEGACY_VERSIONS` until someone adds one, and until then the
 browser joins its own version alone, exactly as OpenCE does. Add the row
 (additive or breaking, as ChupathingyCE's `delta.h` has it once their
-automation has classified the raise) to bring the range back.
+automation has classified the raise) to bring the range back. The nightly
+update says so (`CHECK: Delta`).
 
 ## The signed legacy table
 
@@ -48,7 +76,8 @@ and on GitHub (`delta-table` branch). Its rows are by *wire* (the revision of
 the game protocol a build speaks); the browser build's wire, `opence-web`,
 has no row, so the table never changes its numbers. What the browser takes
 from it is its **kill switch** (`disabled_capabilities`: a Delta capability
-found unsafe, which this build then never uses) and its serial.
+found unsafe, which this build then never uses) and its serial, which Delta
+Peer passes on to hosts with an older one (as theirs do).
 
 The page (`online_client.js`, `startDeltaLegacyTable`) fetches it at start
 and every four hours through this site's server
@@ -58,4 +87,58 @@ checks its size, then its signature, then reads it with a strict parser, and
 takes it only when its serial is newer. The log says
 `Delta: legacy table N from Delta List: ...`.
 
-Test: `build\tools\smoke\delta.mjs http://localhost:8767/`.
+## Delta List
+
+While the in-game Server Browser is open the page reads the site's live
+games (`/v1/delta/games`, this server's copy of their `/v1/games`, kept 15
+seconds) and hands them to `web_delta_list.c`. By each game's invite token,
+the Server Browser shows the score to win; below the rows, the host
+(`DEDICATED, LINUX, DELTA`, `WINDOWS HOST, DELTA`, `OPENCE`) and who is
+playing; the dedicated icon; and a ChupathingyCE host's `<map>@ce` as
+`<map> CE`. Games only the site lists come after the listings, joined by
+their invite like any.
+
+## Delta Peer
+
+A browser that joins a host whose advertisement has Delta's flag says HELLO
+to its port 5160 through the native gateway's tunnel (which carries any
+port) and the host answers WELCOME; no answer in 4 seconds is the legacy
+protocol alone. The game never waits for it. The log says `Delta Peer: the
+host speaks Delta (build ChupathingyCE 0.7.1d, pc_linux, ...); capabilities
+0x413, agreed 0x411`.
+
+**Map identity.** A ChupathingyCE host says its Custom Edition map's file
+size and BLAKE2b-256 hash. The browser cannot hash a map it has not
+downloaded whole, so the site's server hashes each one once, in the
+background (`services/selfhost/server/map-hashes.mjs`, about five minutes for
+130 maps; kept in `data\custom-map-hashes.json` by name, size and time) and
+lists the hash in `custom_maps/index.json`. A browser whose copy differs
+from the host's leaves the game and says so; one the site has not hashed
+yet is not checked.
+
+## Delta Stats and Link
+
+The page keeps a player key (32 random bytes, in the browser's storage:
+clearing the site's data makes a new one) from which the site works out a
+public player ID. A few seconds after a game the browser joined through an
+invite ends, the game hands its report (as this machine has it: the host's
+statistics, which every client is sent) to the page, which sends it
+(`/v1/client_report`) and then confirms the local players' lines
+(`/v1/claim`), while the player shares their results (Play online, *Stats
+on halo.milenko.org*; on by default, as their builds' setting is). The site
+confirms a line only from the address the host had the player at: for a
+browser, the native gateway's, which is why this server sends these over
+IPv4. All browser players of one site share that address.
+
+*Link my profile* asks the site for a code (`/v1/connect/start`), which the
+player types at halo.milenko.org/connect while signed in; the page asks
+whether to link to that profile and confirms it.
+
+## Tests
+
+`build\tools\smoke\delta.mjs http://localhost:8767/` checks the legacy
+table; `--join` then joins an empty ChupathingyCE dedicated server through
+the site's gateway and checks the handshake (`--join <invite>` joins that
+game: one on a Custom Edition map checks the map identity too). The site
+needs a native gateway for `--join` (the staging copy's config can turn one
+on, on UDP ports apart from the live one's).

@@ -5144,6 +5144,215 @@ void game_engine_load_stage(
 	return;
 }
 
+#ifdef HALO_WEB
+/* web: Delta Stats, a joined game's report (ChupathingyCE's game list,
+halo.milenko.org; port/web/src/delta/README.md). A few seconds after a game
+this browser joined as a client ends (the host's last statistics in), its
+carnage report as this machine has it (the host's statistics and scores,
+which every client is sent), as their builds' client reports have it
+(their game_engine_report_lines and game_stats.c), to the page
+(port/web/src/web_delta_stats.c), which sends it with the player's key if
+the game was joined through an invite and the player shares their results,
+and then confirms the local players' lines. Medals, weapons and sprees are
+not worked out here: each line says so ("feed_incomplete"). Nothing in the
+game changes. */
+#include <stdarg.h>
+#include <stdio.h>
+
+struct network_game *network_game_client_get_game(struct network_game_client *client);
+void web_delta_stats_report(char const *report, char const *names);
+
+enum
+{
+	WEB_REPORT_DELAY_MILLISECONDS = 3000,
+	WEB_REPORT_SIZE = 32768,
+	WEB_REPORT_LINE_SIZE = 640,
+};
+
+/* text appended to a report as far as its size: the length then */
+static long web_report_append(
+	char *text,
+	long size,
+	long used,
+	char const *format,
+	...)
+{
+	va_list arguments;
+	int written;
+
+	if (used >= size - 1)
+		return used;
+	va_start(arguments, format);
+	written = vsnprintf(text + used, (size_t)(size - used), format, arguments);
+	va_end(arguments);
+	if (written < 0)
+		return used;
+	return used + written < size - 1 ? used + written : size - 1;
+}
+
+/* a name (the game's 16-bit characters) as a JSON string, appended */
+static long web_report_name(
+	char *text,
+	long size,
+	long used,
+	wchar_t const *name,
+	long length)
+{
+	long index;
+
+	used = web_report_append(text, size, used, "\"");
+	for (index = 0; index < length && name[index]; index++)
+	{
+		unsigned long code = (unsigned short)name[index];
+
+		if (code == '"' || code == '\\')
+			used = web_report_append(text, size, used, "\\%c", (char)code);
+		else if (code < 0x20)
+			used = web_report_append(text, size, used, "\\u%04lx", code);
+		else if (code < 0x80)
+			used = web_report_append(text, size, used, "%c", (char)code);
+		else if (code < 0x800)
+			used = web_report_append(text, size, used, "%c%c", (char)(0xC0 | code >> 6), (char)(0x80 | (code & 0x3F)));
+		else
+		{
+			used = web_report_append(text, size, used, "%c%c%c", (char)(0xE0 | code >> 12),
+				(char)(0x80 | (code >> 6 & 0x3F)), (char)(0x80 | (code & 0x3F)));
+		}
+	}
+	return web_report_append(text, size, used, "\"");
+}
+
+static void game_engine_web_client_report(
+	void)
+{
+	static struct statistic_buffer ranking[MULTIPLAYER_MAXIMUM_PLAYERS];
+	static char report[WEB_REPORT_SIZE];
+	static char names[512];
+	struct network_game_client *client = global_network_game_client_get();
+	struct network_game *game = client ? network_game_client_get_game(client) : NULL;
+	boolean teams = global_variant.universal_variant.teams;
+	long count = populate_statistic_buffer(ranking, _postgame_statistic_ranking, FALSE);
+	long used = 0, names_used = 0;
+	long index;
+	struct data_iterator iterator;
+	struct player_datum *player;
+	struct player_datum *reporter = NULL;
+
+	if (!game || count <= 0)
+		return;
+	used = web_report_append(report, sizeof(report), used,
+		"{\"teams\": %d, \"duration\": %ld, \"team_scores\": [%ld, %ld], \"players\": [", teams ? 1 : 0,
+		(long)(game_time_get() / TICKS_PER_SECOND), teams ? game_engine_get_team_score(0) : 0L,
+		teams ? game_engine_get_team_score(1) : 0L);
+	for (index = 0; index < count && used < (long)sizeof(report) - WEB_REPORT_LINE_SIZE; index++)
+	{
+		struct game_statistics const *statistics;
+		short flag_grabs = 0, flag_returns = 0, flag_scores = 0, ball_time = 0, ball_carrier_kills = 0;
+		short hill_time = 0, laps = 0;
+
+		player = player_get(ranking[index].player_index);
+		statistics = &player->statistics;
+		switch (global_variant.game_engine_index)
+		{
+		case game_engine_ctf:
+			flag_grabs = statistics->multiplayer_statistics.ctf_statistics.flag_grabs;
+			flag_returns = statistics->multiplayer_statistics.ctf_statistics.flag_returns;
+			flag_scores = statistics->multiplayer_statistics.ctf_statistics.flag_scores;
+			break;
+		case game_engine_oddball:
+			ball_time = statistics->multiplayer_statistics.oddball_statistics.time_with_the_ball;
+			ball_carrier_kills = statistics->multiplayer_statistics.oddball_statistics.ball_carrier_kills;
+			break;
+		case game_engine_king:
+			hill_time = statistics->multiplayer_statistics.king_statistics.time_on_hill;
+			break;
+		case game_engine_race:
+			laps = statistics->multiplayer_statistics.race_statistics.laps;
+			break;
+		}
+		used = web_report_append(report, sizeof(report), used, "%s{\"name\": ", index ? ", " : "");
+		used = web_report_name(report, sizeof(report), used, player->name, NUMBEROF(player->name));
+		used = web_report_append(report, sizeof(report), used,
+			", \"team\": %d, \"place\": %ld, \"score\": %ld, \"kills\": %d, \"assists\": %d, \"deaths\": %d, "
+			"\"betrayals\": %d, \"suicides\": %d, \"shots_fired\": %ld, \"shots_hit\": %ld, \"multikills\": %d, "
+			"\"color\": %d, \"flag_grabs\": %d, \"flag_returns\": %d, \"flag_scores\": %d, \"ball_time\": %d, "
+			"\"ball_carrier_kills\": %d, \"hill_time\": %d, \"laps\": %d, \"feed_incomplete\": true}",
+			(int)player->team_index, (long)((ranking[index].place & 0x7FFFFFFF) + 1),
+			game_engine && game_engine->get_player_score ? (long)game_engine->get_player_score(ranking[index].player_index,
+				FALSE) : 0L,
+			statistics->kills[0], statistics->assists[0], statistics->deaths, statistics->friendly_fire_kills,
+			statistics->suicides, (long)statistics->shots_fired, (long)statistics->shots_hit, statistics->multiple_kills,
+			(int)player->network_player_data.primary_color_index, flag_grabs, flag_returns, flag_scores, ball_time,
+			ball_carrier_kills, hill_time, laps);
+	}
+	/* the local players: who reports (the first), and whose lines to
+	confirm */
+	names_used = web_report_append(names, sizeof(names), names_used, "[");
+	data_iterator_new(&iterator, player_data);
+	while ((player = (struct player_datum *)data_iterator_next(&iterator)) != NULL)
+	{
+		if (player->local_player_index == NONE)
+			continue;
+		if (!reporter)
+			reporter = player;
+		else
+			names_used = web_report_append(names, sizeof(names), names_used, ", ");
+		names_used = web_report_name(names, sizeof(names), names_used, player->name, NUMBEROF(player->name));
+	}
+	web_report_append(names, sizeof(names), names_used, "]");
+	if (!reporter)
+		return;
+	used = web_report_append(report, sizeof(report), used, "], \"map\": \"");
+	for (index = 0; game->map.name[index] && index < (long)sizeof(game->map.name); index++)
+	{
+		char c = game->map.name[index];
+
+		used = web_report_append(report, sizeof(report), used, c == '\\' ? "\\\\" : c == '"' ? "\\\"" : "%c",
+			c >= 0x20 && c < 0x7F ? c : '?');
+	}
+	used = web_report_append(report, sizeof(report), used,
+		"\", \"engine\": %d, \"score_limit\": %d, \"host\": ", (int)global_variant.game_engine_index,
+		(int)global_variant.universal_variant.score_to_win);
+	used = web_report_name(report, sizeof(report), used, game->name, NUMBEROF(game->name));
+	used = web_report_append(report, sizeof(report), used, ", \"reporter\": ");
+	used = web_report_name(report, sizeof(report), used, reporter->name, NUMBEROF(reporter->name));
+	used = web_report_append(report, sizeof(report), used,
+		", \"build\": \"OpenCE web\", \"network_version\": %d, \"sources\": {\"statistics\": \"synced\", "
+		"\"team_scores\": \"synced\"}}", HALO_PORT_NETWORK_VERSION);
+	if (used >= (long)sizeof(report) - 1)
+		return;
+	web_delta_stats_report(report, names);
+}
+
+/* each frame (main.c): the joined game's report, once it is over */
+void game_engine_web_report_update(
+	void)
+{
+	static boolean over_seen = FALSE;
+	static boolean reported = FALSE;
+	static unsigned long over_time;
+	boolean over = game_connection() == _game_connection_network_client && game_engine_running() &&
+		!game_engine_can_score();
+
+	if (!over)
+	{
+		over_seen = FALSE;
+		reported = FALSE;
+		return;
+	}
+	if (!over_seen)
+	{
+		over_seen = TRUE;
+		over_time = system_milliseconds();
+	}
+	if (!reported && system_milliseconds() - over_time >= WEB_REPORT_DELAY_MILLISECONDS)
+	{
+		reported = TRUE;
+		game_engine_web_client_report();
+	}
+}
+#endif
+
 void game_engine_end_game(
 	void)
 {

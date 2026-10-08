@@ -72,6 +72,22 @@ itself. The browser-hosted public games come from the lobby service
 listing over its room's connection, and a listing lapses within 90 seconds
 of its host leaving.
 
+**ChupathingyCE (Delta):** the browser also speaks the parts of
+[Delta](https://halo.milenko.org/delta), ChupathingyCE's network family, that
+a player needs (`port/web/src/delta/README.md`): it joins hosts of OpenCE
+network versions 11 to 24 as their builds do; the Server Browser shows what
+their game list (halo.milenko.org) says of each game (the host's platform,
+dedicated servers, who is playing); it shakes hands with their hosts (Delta
+Peer) and leaves a Custom Edition game whose map file is not the host's;
+and a game joined through an invite counts on halo.milenko.org (Play
+online, *Stats on halo.milenko.org*: the player can turn it off, and link
+their profile there). Their site has no CORS, so this server asks it for
+the page (`server/delta-list.mjs`, `/v1/delta/...`), and it hashes the
+Custom Edition maps once for the map check (`server/map-hashes.mjs`, in the
+background, about five minutes for 130 maps; kept in
+`data\custom-map-hashes.json`). `delta.enabled: false` in `config.json`
+turns the site's part off.
+
 **Keep the game visible while you play, especially the host.** Browsers
 pause background tabs, and after about a minute in the background the game
 times out and the match ends ("A networking error has occurred"). A window
@@ -186,7 +202,8 @@ shows up the next time a player loads the page. Updates (`update.ps1`)
 leave the folder alone.
 
 The server lists the folder for the game at `assets/custom_maps/index.json`
-(each file's name, size and version), so the game reads only each map's
+(each file's name, size and version, and a map's BLAKE2b-256 hash once the
+server has made it: Delta's map check), so the game reads only each map's
 header to list it, in 256 KB pieces (about 35 MB for a hundred maps on a
 player's first visit, nothing after: the browser keeps them). A static web
 host without this server needs that file made beside the maps.
@@ -242,6 +259,7 @@ proxies do this by default.
 | `iceServers` | STUN/TURN servers handed to players. |
 | `nativeGateway.*` | Native-invite gateway: enable/disable, public IP, UDP port range. |
 | `publicGames.enabled` / `publicGames.brokers` | The in-game server browser's list of public games, and the MQTT brokers it comes from. |
+| `delta.enabled` / `delta.url` | ChupathingyCE's game list (`https://halo.milenko.org`), which this server asks for the page: the signed legacy table, its live games for the Server Browser, and a player's stats and Link profile. `false` or empty: none (the game then plays with its built-in numbers). |
 | `analytics.umamiScriptUrl` / `analytics.umamiWebsiteId` | Optional Umami page-view tracking: the tracker script's URL and the website ID. Added to the page when served; leave empty for none. |
 
 ## Folder layout
@@ -252,7 +270,8 @@ config.json                               settings
 public/                                   game files and maps (what browsers download)
 server/                                   server, bundled Node.js, lobby runtime, gateway
 data/                                     created at first start: lobby state, secrets,
-                                          certificate. Delete it to reset.
+                                          certificate, the Custom Edition maps' hashes.
+                                          Delete it to reset.
 logs/                                     the autostart task's and updates' logs
 backups/                                  what the last updates replaced (update.ps1)
 ```

@@ -3457,6 +3457,12 @@ static boolean main_loop_iteration(
 			/* Invite links request menu changes from the browser thread through an
 			atomic mailbox; all game state is changed here on Halo's thread. */
 			web_online_ui_update(main_globals.main_menu_scenario_loaded, main_globals.seconds_elapsed);
+			/* Delta Stats: a joined game's report (game_engine.c) */
+			{
+				void game_engine_web_report_update(void);
+
+				game_engine_web_report_update();
+			}
 #endif
 			connection = main_globals.connection;
 			if (connection==_game_connection_network_client)
