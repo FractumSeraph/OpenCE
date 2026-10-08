@@ -82,7 +82,9 @@ version, which the Xbox left 0: `cache_files_map_version`; a host that sends
 versions of this port do (`levels\test\<name>\<name>`) and the file is in
 `custom_maps`. The
 error's text is wrapped to its dialog, in the menus' smaller font when it
-would not fit; `debug.txt` has the details.
+would not fit; `debug.txt` has the details. When the maps' torrent index
+has the map, it is downloaded instead, from other players and seed boxes,
+and the join tried again once it is there: [map_torrents.md](map_torrents.md).
 
 A Custom Edition campaign map has no next level: winning it ends the game
 as the campaign's last level does (alone) or plays it again (network

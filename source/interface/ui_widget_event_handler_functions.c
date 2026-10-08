@@ -6060,6 +6060,11 @@ boolean ui_widget_port_browse(
 	return global_network_game_client_get() || network_game_server_list_initialize(widget, event, widget_deleted);
 }
 
+/* port: whether the advertised game's Custom Edition map is being
+downloaded first (port/linux/game/menu_functions.c), the join to wait */
+boolean ui_widget_port_join_map_fetch(
+	void *advertised_game);
+
 /* joining a found game (as network_game_join_game_from_server_list), then
 the lobby (by name) in place of the widget's screen */
 boolean ui_widget_port_join(
@@ -6086,6 +6091,12 @@ boolean ui_widget_port_join(
 	{
 		return FALSE;
 	}
+	/* port: a Custom Edition map this machine lacks (or has another version
+	of) is downloaded first, from other players and seed boxes
+	(port/linux/game/menu_functions.c, port/linux/src/map_torrents.c): the
+	join is tried again once it is there */
+	if (ui_widget_port_join_map_fetch(server))
+		return FALSE;
 	transport_client_start(server + 0x18, server + 8, server, 0x141E, &address);
 	if (!address.address.long_words[0] || !address.port)
 	{

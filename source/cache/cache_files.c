@@ -1076,8 +1076,22 @@ boolean cache_files_map_present(
 		return TRUE;
 	if (custom_edition_level_name(map_name))
 	{
+		int map_torrents_fetch(const char *level_name, unsigned long version, const char *files);
+		char files[256];
+
 		if (custom_edition_cache_present(map_name, version, message, sizeof(message)))
 			return TRUE;
+		/* port: what is missing downloaded, if the maps' torrent index has
+		it (port/linux/src/map_torrents.c; the host changed map after this
+		machine joined, say: the join from the browser downloads first): the
+		player told to join again once it is there */
+		if (custom_edition_cache_files_missing(map_name, version, files, sizeof(files)) > 0 &&
+			map_torrents_fetch(map_name, version, files))
+		{
+			snprintf(message, sizeof(message),
+				"The host's map %.64s is being downloaded (Join Game shows how it goes). Join again when it is there.",
+				name);
+		}
 	}
 	else
 	{

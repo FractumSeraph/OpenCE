@@ -672,6 +672,71 @@ boolean custom_edition_cache_present(
 	return TRUE;
 }
 
+/* appends a file name to a comma-separated list */
+static void file_list_add(
+	char *names,
+	long names_size,
+	char const *name)
+{
+	long length = (long)strlen(names);
+
+	snprintf(names + length, (size_t)(names_size - length), "%s%s", length ? "," : "", name);
+}
+
+short custom_edition_cache_files_missing(
+	char const *level_name,
+	unsigned long checksum,
+	char *names,
+	long names_size)
+{
+	char const *name = tag_name_strip_path(level_name);
+	char path[MAP_PATH_SIZE];
+	char file_name[MAP_PATH_SIZE];
+	struct custom_edition_file file;
+	struct cache_file_identity identity;
+	boolean map_ok = FALSE;
+	short count = 0;
+	short type;
+
+	names[0] = 0;
+	if (!halo_custom_edition_tag_cache())
+		return -1;
+	/* the map: absent, not a Custom Edition cache, or another version */
+	if (custom_edition_map_path(level_name, path) && custom_edition_file_open(&file, path))
+	{
+		map_ok = cache_file_identify(&file.source, &identity) == _cache_file_status_ok &&
+			identity.format == _cache_file_format_custom_edition_cache &&
+			(!checksum || identity.checksum == checksum);
+		custom_edition_file_close(&file);
+	}
+	if (!map_ok)
+	{
+		snprintf(file_name, sizeof(file_name), "%s%s", name, MAP_FILE_EXTENSION);
+		file_list_add(names, names_size, file_name);
+		count++;
+	}
+	/* the resource maps, in no maps folder */
+	for (type = _resource_map_bitmaps; type < NUMBER_OF_RESOURCE_MAP_TYPES; type++)
+	{
+		char const *resource_name = resource_map_type_describe((enum resource_map_type)type);
+		short folder;
+
+		for (folder = 0; folder < NUMBER_OF_MAPS_FOLDERS; folder++)
+		{
+			if (maps_folder_has(maps_folder(folder), resource_name, MAP_FILE_EXTENSION, path))
+				break;
+		}
+		if (folder == NUMBER_OF_MAPS_FOLDERS)
+		{
+			snprintf(file_name, sizeof(file_name), "%s%s", resource_name, MAP_FILE_EXTENSION);
+			file_list_add(names, names_size, file_name);
+			count++;
+		}
+	}
+
+	return count;
+}
+
 boolean custom_edition_cache_playable(
 	char const *level_name)
 {

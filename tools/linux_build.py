@@ -568,5 +568,8 @@ def generate_linux_build(n: Writer, sln: Any) -> None:
     brokers = build_dir / "brokers.txt"
     n.rule(name="linux_copy", command="cp $in $out", description="LINUX COPY $out")
     n.build(outputs=brokers, rule="linux_copy", inputs=Path("port/assets/network/brokers.txt"))
-    n.build(outputs="linux", rule="phony", inputs=[output, brokers, validator])
+    # the Custom Edition maps' torrents, a file beside the game (maps.torrent_index)
+    map_torrents = build_dir / "map_torrents.txt"
+    n.build(outputs=map_torrents, rule="linux_copy", inputs=Path("port/assets/network/map_torrents.txt"))
+    n.build(outputs="linux", rule="phony", inputs=[output, brokers, map_torrents, validator])
     n.newline()

@@ -601,7 +601,11 @@ def generate_android_build(n: Writer, sln: Any) -> None:
     # config.toml (port/android/host/host_main.c)
     staged_brokers = assets_dir / "brokers.txt"
     n.build(outputs=staged_brokers, rule="android_copy", inputs=Path("port/assets/network/brokers.txt"))
-    n.build(outputs="android", rule="phony", inputs=[libmain, staged_sdl, staged_image, staged_brokers])
+    # the Custom Edition maps' torrents, likewise (maps.torrent_index)
+    staged_map_torrents = assets_dir / "map_torrents.txt"
+    n.build(outputs=staged_map_torrents, rule="android_copy", inputs=Path("port/assets/network/map_torrents.txt"))
+    n.build(outputs="android", rule="phony",
+            inputs=[libmain, staged_sdl, staged_image, staged_brokers, staged_map_torrents])
 
     apk = PORT_DIR / "app" / "build" / "outputs" / "apk" / "debug" / "app-debug.apk"
     sdl_android_mouse_listener = SDL_DIR / SDL_ANDROID_MOUSE_LISTENER
@@ -613,7 +617,8 @@ def generate_android_build(n: Writer, sln: Any) -> None:
         description="ANDROID GRADLE $out",
         pool="console",
     )
-    n.build(outputs=apk, rule="android_gradle", inputs=[libmain, staged_sdl, staged_image, staged_brokers],
+    n.build(outputs=apk, rule="android_gradle",
+            inputs=[libmain, staged_sdl, staged_image, staged_brokers, staged_map_torrents],
             implicit=[sdl_android_mouse_listener])
     n.build(outputs="android_apk", rule="phony", inputs=apk)
     n.newline()

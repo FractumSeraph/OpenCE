@@ -343,6 +343,38 @@ static const struct config_setting config_settings[] =
 		"The Discord application internet play invites go through while the\n"
 		"Discord desktop client runs; empty for none." },
 
+	{ "maps.torrents", _config_boolean, "true", "HALO_MAP_TORRENTS", _environment_value, _platform_all,
+		"Download a Custom Edition map this machine lacks when joining a game\n"
+		"on it, from other players and seed boxes (BitTorrent), when the index\n"
+		"of the maps' torrents (torrent_index) has it; false never downloads." },
+	{ "maps.seed", _config_string, "\"host\"", "HALO_MAP_SEED", _environment_value, _platform_all,
+		"Seed the Custom Edition map this machine's network game is on, for\n"
+		"the players joining it: \"host\" while hosting, \"all\" also while\n"
+		"joined, \"off\" never." },
+	{ "maps.upload_limit", _config_integer, "512", "HALO_MAP_UPLOAD_LIMIT", _environment_value, _platform_all,
+		"The most the seeding sends, in KB a second, however many players are\n"
+		"downloading, so that the game's own traffic comes first; 0 for no\n"
+		"limit." },
+	{ "maps.download_limit", _config_integer, "0", "HALO_MAP_DOWNLOAD_LIMIT", _environment_value, _platform_all,
+		"The most a map download takes, in KB a second; 0 for no limit." },
+	{ "maps.torrent_port", _config_integer, "0", "HALO_MAP_TORRENT_PORT", _environment_value, _platform_all,
+		"The TCP port other players' downloads connect to, and the UDP port\n"
+		"the DHT uses; 0 picks one. A fixed one can be forwarded on the\n"
+		"router, so that players behind other routers can reach this machine." },
+	{ "maps.dht", _config_boolean, "true", "HALO_MAP_DHT", _environment_value, _platform_all,
+		"Find a map's peers through the DHT (the mainline one, no server of\n"
+		"this project's); false finds them only through the trackers." },
+	{ "maps.trackers", _config_string, "\"\"", "HALO_MAP_TRACKERS", _environment_value, _platform_all,
+		"Comma-separated trackers every map's torrent is announced to\n"
+		"(udp://host:port/announce or http://host/announce); empty for none." },
+	{ "maps.web_seeds", _config_string, "\"\"", "HALO_MAP_WEB_SEEDS", _environment_value, _platform_all,
+		"Comma-separated http:// URLs of folders holding the maps' files under\n"
+		"their names, which a download also takes pieces from; empty for none." },
+	{ "maps.torrent_index", _config_string, "\"map_torrents.txt\"", "HALO_MAP_TORRENT_INDEX", _environment_value,
+		_platform_all,
+		"The index of the maps' torrents (tools/map_torrents.py), beside this\n"
+		"file unless a full path: port/assets/network/map_torrents.txt, which\n"
+		"the builds put there." },
 	{ "update.auto", _config_boolean, "true", "HALO_UPDATE_AUTO", _environment_value, _platform_all,
 		"Look for a new version when the game starts, and offer to update to it;\n"
 		"false never looks (the game's \"Do not ask again\" writes false here)." },

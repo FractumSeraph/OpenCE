@@ -96,6 +96,18 @@ boolean custom_edition_cache_present(
 	unsigned long checksum,
 	char *message,
 	long message_size);
+/* The files this machine lacks to play the level as a network game's
+client (custom_edition_cache_present's conditions): its map, when absent,
+not a Custom Edition cache or not the host's version (`checksum`; 0 for
+any), and each resource map absent, as file names ("<name>.map,bitmaps.map")
+in `names` (`names_size` characters). Returns how many, 0 when nothing is
+missing, or -1 when Custom Edition maps cannot run at all. The map torrents
+(port/linux/src/map_torrents.c) download what is named. */
+short custom_edition_cache_files_missing(
+	char const *level_name,
+	unsigned long checksum,
+	char *names,
+	long names_size);
 
 /* Whether the file `file_name` (custom_maps\<file_name>.map) is a Custom
 Edition cache of a campaign map (a solo scenario, played alone or as

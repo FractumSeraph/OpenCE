@@ -115,6 +115,8 @@ def main() -> int:
     # Android's APK has its own copy)
     if args.platform != "android":
         shutil.copy2(ROOT / "port/assets/network/brokers.txt", dist / "brokers.txt")
+        # the Custom Edition maps' torrents, likewise (maps.torrent_index)
+        shutil.copy2(ROOT / "port/assets/network/map_torrents.txt", dist / "map_torrents.txt")
     return 0
 
 

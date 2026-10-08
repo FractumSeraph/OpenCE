@@ -2201,6 +2201,21 @@ void platform_clipboard_set(char const *text);
 void platform_text_field(int typing);
 int config_boolean(char const *name);
 void ui_widget_port_post_button(short controller_index, short button_index);
+/* the map torrents (port/linux/src/map_torrents.c) */
+int map_torrents_fetch(char const *level_name, unsigned long version, char const *files);
+int map_torrents_fetching(char *status, int size);
+int map_torrents_take_ready(char *level_name, int size);
+
+/* a Custom Edition map being downloaded before its game is joined
+(ui_widget_port_join_map_fetch, map_fetch_update) */
+static struct
+{
+	boolean pending;
+	/* the game's host (its XNADDR's abEnet) */
+	unsigned char identifier[6];
+	/* whose press is posted again once the map is there */
+	short controller;
+} map_fetch;
 
 static wchar_t const *const engine_names[] = { L"", L"CTF", L"SLAYER", L"ODDBALL", L"KING OF THE HILL", L"RACE" };
 static short const maximum_players[] = { 2, 4, 8, 12, 16, 24, 32, 48, 64, 96, 128 };
@@ -3160,6 +3175,7 @@ static void browser_focus(struct widget_instance *list)
 /* (the server browser's: below) */
 static void lobby_browser_begin(void);
 static void lobby_browser_update(struct widget_instance *list);
+static void map_fetch_update(struct widget_instance *list);
 static boolean lobby_browser_select(struct widget_instance *widget, short controller, short row,
 	boolean *widget_deleted);
 
@@ -3433,6 +3449,7 @@ static void lobby_browser_update(struct widget_instance *list)
 
 	lobby_browser.count = lobby_browser_valid_games(lobby_browser.games,
 		(short)p2p_lobby_games(lobby_browser.games, LOBBY_BROWSER_GAMES));
+	map_fetch_update(list);
 	if (focused == BROWSER_ROWS - 1 && lobby_browser.first + BROWSER_ROWS < lobby_browser.count)
 	{
 		lobby_browser.first++;
@@ -3542,7 +3559,11 @@ static void lobby_browser_update(struct widget_instance *list)
 	{
 		wchar_t name[P2P_LISTING_NAME_SIZE + 1];
 
-		if (!config_boolean("network.online"))
+		char status[256];
+
+		if (map_torrents_fetching(status, sizeof(status)))
+			text_to_wide(status, text, (short)NUMBEROF(text));
+		else if (!config_boolean("network.online"))
 			usnprintf(text, NUMBEROF(text) - 1, L"Internet play is off (Settings)");
 		else if (!config_boolean("network.public_lobby"))
 			usnprintf(text, NUMBEROF(text) - 1, L"The server browser is off (network.public_lobby)");
@@ -3612,6 +3633,7 @@ static boolean lobby_browser_join(struct p2p_listing const *game, short controll
 	lobby_browser.ready = FALSE;
 	lobby_browser.join_time = system_milliseconds();
 	lobby_browser.controller = controller;
+	map_fetch.controller = controller;
 	ui_play_audio_feedback_sound(SOUND_FORWARD);
 	return TRUE;
 }
@@ -3781,6 +3803,71 @@ static boolean password_screen_edit(struct widget_instance *row, boolean *widget
 /* "gamespy screen update": the games' rows (name, map, gametype, players),
 the one chosen's line, the counts over the titles (the PC version's: its
 players, page, servers) */
+/* ---- a Custom Edition map downloaded before joining (the map torrents,
+port/linux/src/map_torrents.c): the join (ui_widget_port_join) waits for
+the map, and is posted again (an A press on the game's row) once it is
+there (map_fetch, declared with the browser's state) */
+
+boolean ui_widget_port_join_map_fetch(void *advertised_game)
+{
+	struct advertised_game *game = advertised_game;
+	char files[256];
+
+	if (!custom_edition_level_name(game->map_name))
+		return FALSE;
+	if (custom_edition_cache_files_missing(game->map_name, (unsigned long)game->map_version, files, sizeof(files)) <= 0)
+		return FALSE;
+	if (!map_torrents_fetch(game->map_name, (unsigned long)game->map_version, files))
+		return FALSE;
+	csmemcpy(map_fetch.identifier, game->xnaddr + 2, sizeof(map_fetch.identifier));
+	map_fetch.pending = TRUE;
+	/* (the server browser's join, which reached the host: not pressed
+	again until the map is there) */
+	lobby_browser.joining = lobby_browser.ready = FALSE;
+	platform_log("menus: joining %s waits for its map's download", game->map_name);
+	return TRUE;
+}
+
+/* the download done: the game's row focused and its join posted, if it is
+still listed */
+static void map_fetch_update(struct widget_instance *list)
+{
+	char level_name[0x80];
+	short index;
+
+	if (!map_fetch.pending || !map_torrents_take_ready(level_name, sizeof(level_name)))
+		return;
+	map_fetch.pending = FALSE;
+	if (multiplayer.mode == _multiplayer_mode_server_browser)
+	{
+		for (index = 0; index < lobby_browser.count; index++)
+		{
+			if (!csmemcmp(lobby_browser.games[index].identifier, map_fetch.identifier, sizeof(map_fetch.identifier)))
+			{
+				if (index < lobby_browser.first || index >= lobby_browser.first + BROWSER_ROWS)
+					lobby_browser.first = index;
+				lobby_browser_focus_row(list, (short)(index - lobby_browser.first));
+				ui_widget_port_post_button(map_fetch.controller, BUTTON_A);
+				return;
+			}
+		}
+	}
+	else
+	{
+		for (index = 0; index < multiplayer.game_count; index++)
+		{
+			if (!csmemcmp(multiplayer.games[index]->xnaddr + 2, map_fetch.identifier, sizeof(map_fetch.identifier)))
+			{
+				multiplayer.game_chosen = index;
+				lobby_browser_focus_row(list, index);
+				ui_widget_port_post_button(map_fetch.controller, BUTTON_A);
+				return;
+			}
+		}
+	}
+	platform_log("menus: the map %s is there, but its game is no longer listed", level_name);
+}
+
 static void browser_update(struct widget_instance *list)
 {
 	struct widget_instance *row;
@@ -3793,6 +3880,7 @@ static void browser_update(struct widget_instance *list)
 		return;
 	}
 	browser_games_read();
+	map_fetch_update(list);
 	if (focused != NONE && focused < multiplayer.game_count)
 		multiplayer.game_chosen = focused;
 	for (row = list->child; row; row = row->next)
@@ -3823,8 +3911,12 @@ static void browser_update(struct widget_instance *list)
 	{
 		wchar_t text[ROW_TEXT_LENGTH * 2];
 
+		char status[256];
+
 		if (multiplayer.mode == _multiplayer_mode_server_browser)
 			text[0] = 0;
+		else if (map_torrents_fetching(status, sizeof(status)))
+			text_to_wide(status, text, (short)NUMBEROF(text));
 		else if (!multiplayer.game_count)
 		{
 			usnprintf(text, NUMBEROF(text) - 1, L"%s", multiplayer.mode == _multiplayer_mode_direct_link ?
@@ -3894,6 +3986,8 @@ static boolean browser_join(struct widget_instance *widget, short controller, bo
 		return campaign_fail();
 	if (!multiplayer_player(controller))
 		return FALSE;
+	/* (the controller whose press is posted again once a map downloaded) */
+	map_fetch.controller = controller;
 	return ui_widget_port_join(widget, multiplayer.games[multiplayer.game_chosen], LOBBY_NAME, widget_deleted);
 }
 
