@@ -4,3 +4,4 @@ node_modules/
 .wrangler/
 coverage/
 worker-startup*.cpuprofile
+bundle/

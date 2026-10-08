@@ -262,6 +262,44 @@ The Worker validates the origin before forwarding the upgrade to the room
 Durable Object. The query credential is deliberately short-lived and
 single-use. Application logs record only the URL path, never its query string.
 
+### List the public browser games
+
+```http
+GET /v1/public-rooms?build=:buildId
+```
+
+The games browser hosts list as public (the game's in-game Server Browser
+shows them), most players first, with each one's invite code: public by
+intent, so a request without an `Origin` (a page's same-origin GET) is
+answered, and one with an `Origin` is held to `ALLOWED_ORIGINS` as elsewhere.
+`build` keeps the games of that build, which are the only ones its players
+can join.
+
+```json
+{
+  "v": 1,
+  "games": [
+    {
+      "roomId": "7VQS-D96P-8WHA-Q3TC_...",
+      "code": "7VQS-D96P-8WHA-Q3TC_....guest-ticket",
+      "buildId": "selfhost-...",
+      "name": "Friday night",
+      "map": "bloodgulch",
+      "gametype": "Slayer",
+      "players": 3,
+      "maximum": 16,
+      "open": true,
+      "inProgress": false,
+      "hasTeams": false
+    }
+  ]
+}
+```
+
+A listing comes from the room's host (the `listing` message below), lapses
+90 seconds after its last refresh, and goes at once when its host's socket
+closes or the room ends.
+
 ## WebSocket protocol
 
 Messages are UTF-8 JSON text. Binary frames and text frames above 65,536
@@ -407,6 +445,24 @@ Trickle ICE candidates (send `candidate: null` for end-of-candidates):
       "sdpMLineIndex": 0,
       "usernameFragment": "optional"
     }
+  }
+}
+```
+
+The host lists its game as public (`GET /v1/public-rooms`), or with
+`listing: null` no longer, sending the room's guest ticket (its invite code's
+second half), which the room checks before listing it with that invite.
+Only the host may send it (`LISTING_FORBIDDEN` otherwise); the browser sends
+it when the game changes and every 30 seconds:
+
+```json
+{
+  "v": 1,
+  "type": "listing",
+  "guestTicket": "...",
+  "listing": {
+    "name": "Friday night", "map": "bloodgulch", "gametype": "Slayer",
+    "players": 3, "maximum": 16, "open": true, "inProgress": false, "hasTeams": false
   }
 }
 ```

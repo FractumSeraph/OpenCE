@@ -1,6 +1,16 @@
 import { DurableObject } from "cloudflare:workers";
+import type { GameListing } from "./protocol";
 
 const PRESENCE_LEASE_MILLISECONDS = 150_000;
+const PUBLIC_GAME_LEASE_MILLISECONDS = 90_000;
+
+/** a public game: its host's listing, and how to join it */
+export interface PublicGame extends GameListing {
+  buildId: string;
+  /** the room's invite code (roomId.guestTicket), as an invite link has it */
+  code: string;
+  roomId: string;
+}
 const PRESENCE_KEY_PATTERN = /^[A-Za-z0-9_-]{4,128}:[A-Za-z0-9_-]{4,96}$/u;
 const PLAYER_ID_PATTERN = /^[0-9a-f]{32}$/u;
 const SESSION_ID_PATTERN =
@@ -48,7 +58,57 @@ export class PlayerPresence extends DurableObject<Env> {
         player_id TEXT NOT NULL,
         PRIMARY KEY(day, player_id)
       );
+
+      CREATE TABLE IF NOT EXISTS public_games (
+        room_id TEXT PRIMARY KEY,
+        listing TEXT NOT NULL,
+        expires_at INTEGER NOT NULL
+      );
     `);
+  }
+
+  /**
+   * A room's public game (its host's listing with the room's invite code
+   * and build), or (null) none any more. Only SignalingRoom writes these,
+   * having checked that the host sent it with the room's own guest ticket.
+   * A listing lapses unless its host sends it again (online_client.js, every
+   * 30 seconds), so a lost host leaves no game behind.
+   */
+  async listGame(roomId: string, game: PublicGame | null, now: number): Promise<void> {
+    if (typeof roomId !== "string" || roomId.length > 128 || !Number.isFinite(now)) {
+      throw new Error("Invalid public game.");
+    }
+    if (game === null) {
+      this.ctx.storage.sql.exec("DELETE FROM public_games WHERE room_id = ?", roomId);
+      return;
+    }
+    this.removeExpired(now);
+    this.ctx.storage.sql.exec(
+      `INSERT INTO public_games (room_id, listing, expires_at) VALUES (?, ?, ?)
+       ON CONFLICT(room_id) DO UPDATE SET listing = excluded.listing, expires_at = excluded.expires_at`,
+      roomId,
+      JSON.stringify(game),
+      now + PUBLIC_GAME_LEASE_MILLISECONDS,
+    );
+  }
+
+  /** the public games, the most players first (GET /v1/public-rooms) */
+  async publicGames(now: number): Promise<PublicGame[]> {
+    if (!Number.isFinite(now)) {
+      throw new Error("Invalid presence time.");
+    }
+    this.removeExpired(now);
+    const games: PublicGame[] = [];
+    for (const row of this.ctx.storage.sql.exec<{ listing: string }>(
+      "SELECT listing FROM public_games ORDER BY room_id LIMIT 512",
+    )) {
+      try {
+        games.push(JSON.parse(row.listing) as PublicGame);
+      } catch {
+        // A row this version cannot read: left to lapse.
+      }
+    }
+    return games.sort((a, b) => b.players - a.players || a.name.localeCompare(b.name));
   }
 
   async connected(connectionKey: string, now: number): Promise<void> {
@@ -163,6 +223,10 @@ export class PlayerPresence extends DurableObject<Env> {
     );
     this.ctx.storage.sql.exec(
       "DELETE FROM campaign_sessions WHERE expires_at <= ?",
+      now,
+    );
+    this.ctx.storage.sql.exec(
+      "DELETE FROM public_games WHERE expires_at <= ?",
       now,
     );
   }

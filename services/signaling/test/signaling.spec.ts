@@ -432,6 +432,68 @@ describe("signaling API", () => {
     host.socket.close(1000, "test complete");
   });
 
+  it("lists a host's public game with its invite, and only the host's", async () => {
+    const publicRooms = async (): Promise<Array<Record<string, unknown>>> => {
+      const response = await exports.default.fetch(
+        new Request(`${API_ORIGIN}/v1/public-rooms?build=${BUILD_ID}`, { headers: { Origin: GAME_ORIGIN } }),
+      );
+      expect(response.status).toBe(200);
+      expect(response.headers.get("Access-Control-Allow-Origin")).toBe(GAME_ORIGIN);
+      return (await response.json<{ games: Array<Record<string, unknown>> }>()).games;
+    };
+    const until = async (check: () => Promise<boolean>): Promise<void> => {
+      for (let attempt = 0; attempt < 40; attempt += 1) {
+        if (await check()) {
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      throw new Error("Timed out waiting for the public list.");
+    };
+    const room = await createRoom("0a0b0c0d0e0f", 8);
+    const guestTicket = room.invite.code.slice(room.invite.code.indexOf(".") + 1);
+    const host = await connectSession(room.host.session.websocketUrl);
+    const listing = {
+      gametype: "Slayer", hasTeams: false, inProgress: false, map: "bloodgulch",
+      maximum: 16, name: "Test Game\u0007", open: true, players: 1,
+    };
+    const ours = async (): Promise<Record<string, unknown> | undefined> =>
+      (await publicRooms()).find((game) => game.roomId === room.room.id);
+
+    // (another ticket: not this room's invite, so not listed)
+    host.socket.send(JSON.stringify({ guestTicket: room.host.ticket, listing, type: "listing", v: 1 }));
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(await ours()).toBeUndefined();
+
+    host.socket.send(JSON.stringify({ guestTicket, listing, type: "listing", v: 1 }));
+    await until(async () => (await ours()) !== undefined);
+    expect(await ours()).toMatchObject({
+      buildId: BUILD_ID, code: room.invite.code, map: "bloodgulch", name: "Test Game", players: 1,
+    });
+    const otherBuild = await exports.default.fetch(
+      new Request(`${API_ORIGIN}/v1/public-rooms?build=another`, { headers: { Origin: GAME_ORIGIN } }),
+    );
+    expect((await otherBuild.json<{ games: unknown[] }>()).games
+      .some((game) => (game as Record<string, unknown>).roomId === room.room.id)).toBe(false);
+
+    // (a guest cannot list the room's game)
+    const guestBody = await (await createGuestSession(room)).json<CreateSessionResponse>();
+    const guest = await connectSession(guestBody.session.websocketUrl);
+    const refused = nextMessage(guest.socket, "error");
+    guest.socket.send(JSON.stringify({ guestTicket, listing, type: "listing", v: 1 }));
+    expect(await refused).toMatchObject({ code: "LISTING_FORBIDDEN" });
+
+    host.socket.send(JSON.stringify({ guestTicket, listing: null, type: "listing", v: 1 }));
+    await until(async () => (await ours()) === undefined);
+
+    // (and its host leaving takes it off the list)
+    host.socket.send(JSON.stringify({ guestTicket, listing, type: "listing", v: 1 }));
+    await until(async () => (await ours()) !== undefined);
+    host.socket.close(1000, "test complete");
+    await until(async () => (await ours()) === undefined);
+    guest.socket.close(1000, "test complete");
+  });
+
   it("validates stock player profiles and broadcasts an all-player roster", async () => {
     expect(PLAYER_STYLES).toHaveLength(18);
     expect(parsePlayerProfile({ name: "TestSpartan", style: "rose" })).toEqual({

@@ -824,6 +824,19 @@ async function route(request: Request, env: RuntimeEnv): Promise<Response> {
     return adminResponse;
   }
 
+  if (request.method === "GET" && url.pathname === "/v1/public-rooms") {
+    // The browser games their hosts list as PUBLIC (the game's in-game Server
+    // Browser shows them beside the native ones: online_client.js). A build's
+    // players can only join its own build's rooms: ?build= keeps those. Public
+    // by intent: a page's GET from its own origin carries no Origin, and one
+    // that does is held to ALLOWED_ORIGINS as everywhere else.
+    const listOrigin = request.headers.has("Origin") ? allowedOrigin(request, env) : null;
+    const build = url.searchParams.get("build");
+    const games = (await env.PRESENCE.getByName("global").publicGames(Date.now()))
+      .filter((game) => build === null || game.buildId === build);
+    return withCors(jsonResponse({ games, v: SIGNALING_PROTOCOL_VERSION }), listOrigin);
+  }
+
   const origin = allowedOrigin(request, env);
   if (request.method === "GET" && url.pathname === "/v1/presence") {
     const summary = await env.PRESENCE.getByName("global").summary(Date.now());

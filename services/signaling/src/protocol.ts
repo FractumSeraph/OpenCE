@@ -123,10 +123,34 @@ export type IceCandidateSignal = {
 
 export type WebRtcSignal = IceCandidateSignal | SessionDescriptionSignal;
 
+/**
+ * A public game's listing, as its host's game gives it (the browser's
+ * in-game Server Setup, LISTING: PUBLIC). The host's room forwards it, with
+ * the room's invite code, to the public list (GET /v1/public-rooms).
+ */
+export interface GameListing {
+  gametype: string;
+  hasTeams: boolean;
+  inProgress: boolean;
+  map: string;
+  maximum: number;
+  name: string;
+  open: boolean;
+  players: number;
+}
+
 export type ClientMessage =
   | {
       nonce?: string;
       type: "ping";
+      v: typeof SIGNALING_PROTOCOL_VERSION;
+    }
+  | {
+      /** the room's guest ticket (its invite's second half), proving the
+       * listing's invite; null listing: no longer listed */
+      guestTicket: string;
+      listing: GameListing | null;
+      type: "listing";
       v: typeof SIGNALING_PROTOCOL_VERSION;
     }
   | {
@@ -356,6 +380,44 @@ function parseCandidateSignal(value: Record<string, unknown>): WebRtcSignal | nu
   };
 }
 
+/** a listing's text: printable, without control characters, cut short */
+function listingText(value: unknown, maximum: number): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const text = value.replace(/[\u0000-\u001f\u007f]/gu, "").trim().slice(0, maximum);
+  return text;
+}
+
+export function parseGameListing(value: unknown): GameListing | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  const name = listingText(value.name, 32);
+  const map = listingText(value.map, 64);
+  const gametype = listingText(value.gametype, 32);
+  const counts = [value.players, value.maximum];
+  if (
+    name === null || map === null || gametype === null || !map ||
+    !counts.every((count) => typeof count === "number" && Number.isInteger(count) && count >= 0 && count <= 255) ||
+    typeof value.open !== "boolean" ||
+    typeof value.inProgress !== "boolean" ||
+    typeof value.hasTeams !== "boolean"
+  ) {
+    return null;
+  }
+  return {
+    gametype,
+    hasTeams: value.hasTeams,
+    inProgress: value.inProgress,
+    map,
+    maximum: value.maximum as number,
+    name,
+    open: value.open,
+    players: value.players as number,
+  };
+}
+
 export function parseClientMessage(value: unknown): ValidationResult<ClientMessage> {
   if (!isRecord(value) || !isProtocolVersion(value.v)) {
     return { ok: false, message: "Invalid signaling envelope." };
@@ -375,6 +437,26 @@ export function parseClientMessage(value: unknown): ValidationResult<ClientMessa
         type: "ping",
         v: SIGNALING_PROTOCOL_VERSION,
       },
+    };
+  }
+
+  if (value.type === "listing") {
+    if (typeof value.guestTicket !== "string" || !TOKEN_PATTERN.test(value.guestTicket)) {
+      return { ok: false, message: "Listing ticket is invalid." };
+    }
+    if (value.listing === null) {
+      return {
+        ok: true,
+        value: { guestTicket: value.guestTicket, listing: null, type: "listing", v: SIGNALING_PROTOCOL_VERSION },
+      };
+    }
+    const listing = parseGameListing(value.listing);
+    if (listing === null) {
+      return { ok: false, message: "Game listing is invalid." };
+    }
+    return {
+      ok: true,
+      value: { guestTicket: value.guestTicket, listing, type: "listing", v: SIGNALING_PROTOCOL_VERSION },
     };
   }
 

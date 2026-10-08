@@ -14,9 +14,11 @@ import {
   TOKEN_PATTERN,
   parseClientMessage,
   parsePlayerProfile,
+  type GameListing,
   type PeerRole,
   type PlayerProfile,
 } from "./protocol";
+import type { PublicGame } from "./presence";
 
 interface RoomRow extends Record<string, SqlStorageValue> {
   build_id: string;
@@ -543,6 +545,22 @@ export class SignalingRoom extends DurableObject<Env> {
       return;
     }
 
+    if (message.type === "listing") {
+      if (sender.role !== "host") {
+        this.sendError(socket, "LISTING_FORBIDDEN", "Only the host lists its game.");
+        return;
+      }
+      void this.listGame(message.guestTicket, message.listing).catch((error) => {
+        console.error(
+          JSON.stringify({
+            error: error instanceof Error ? error.message : String(error),
+            message: "failed to list the room's game",
+          }),
+        );
+      });
+      return;
+    }
+
     if (message.type === "profile") {
       sender.profile = message.profile;
       try {
@@ -642,6 +660,9 @@ export class SignalingRoom extends DurableObject<Env> {
     const room = this.getRoom();
     if (room !== null) {
       this.updatePresence(room.room_id, attachment.peerId, false);
+      if (attachment.role === "host") {
+        this.unlistGame();
+      }
     }
     try {
       socket.serializeAttachment(attachment);
@@ -773,12 +794,51 @@ export class SignalingRoom extends DurableObject<Env> {
     return undefined;
   }
 
+  /**
+   * The host's public game (GET /v1/public-rooms), with the room's invite
+   * code, which the host proves by sending the room's guest ticket; or
+   * (null) no longer listed.
+   */
+  private async listGame(guestTicket: string, listing: GameListing | null): Promise<void> {
+    const room = this.getRoom();
+    if (room === null) {
+      return;
+    }
+    const presence = this.env.PRESENCE.getByName("global");
+    if (listing === null) {
+      await presence.listGame(room.room_id, null, Date.now());
+      return;
+    }
+    if (!hashesMatch(await hashToken(guestTicket), room.guest_ticket_hash)) {
+      return;
+    }
+    const game: PublicGame = {
+      ...listing,
+      buildId: room.build_id,
+      code: `${room.room_id}.${guestTicket}`,
+      roomId: room.room_id,
+    };
+    await presence.listGame(room.room_id, game, Date.now());
+  }
+
+  /** (the room's game, no longer public: its host left, or the room ended) */
+  private unlistGame(): void {
+    const room = this.getRoom();
+    if (room === null) {
+      return;
+    }
+    void this.env.PRESENCE.getByName("global").listGame(room.room_id, null, Date.now()).catch(() => {
+      // The listing lapses on its own (PUBLIC_GAME_LEASE_MILLISECONDS).
+    });
+  }
+
   private async expireRoom(): Promise<void> {
     const room = this.getRoom();
     if (room !== null) {
       for (const { attachment } of this.connections()) {
         this.updatePresence(room.room_id, attachment.peerId, false);
       }
+      this.unlistGame();
     }
     for (const socket of this.ctx.getWebSockets()) {
       try {
