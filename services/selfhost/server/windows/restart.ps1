@@ -53,6 +53,17 @@ for ($i = 0; $i -lt 60; $i++) {
     if ($i -in 5, 15, 30 -and (Get-ScheduledTask -TaskName $taskName).State -ne "Running") {
         Start-ScheduledTask -TaskName $taskName
     }
+    # (a task that still says it runs the old server, ending slowly, and
+    # no answer: stopped, which ends its processes, and started again)
+    elseif ($i -in 20, 40 -and (Get-ScheduledTask -TaskName $taskName).State -eq "Running") {
+        $answers = $false
+        try { $answers = (Invoke-WebRequest -UseBasicParsing -TimeoutSec 3 "http://localhost:$port/").StatusCode -eq 200 } catch {}
+        if (-not $answers) {
+            Stop-ScheduledTask -TaskName $taskName
+            Start-Sleep -Seconds 2
+            Start-ScheduledTask -TaskName $taskName
+        }
+    }
     try {
         $response = Invoke-WebRequest -UseBasicParsing -TimeoutSec 3 "http://localhost:$port/"
         if ($response.StatusCode -eq 200) { Note "restarted: http://localhost:$port/ answers"; exit 0 }
