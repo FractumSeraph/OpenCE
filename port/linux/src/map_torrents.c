@@ -58,7 +58,7 @@ web seeds and DHT of the [maps] settings, and stopped with the game.
 
 struct index_entry
 {
-	/* into index.names */
+	/* into torrent_maps_index.names */
 	unsigned long name;
 	unsigned long checksum;
 	unsigned long long size;
@@ -74,7 +74,7 @@ static struct
 	char *names;
 	unsigned long names_size;
 	char path[1024];
-} index;
+} torrent_maps_index;
 
 static int same_name(const char *a, const char *b)
 {
@@ -117,25 +117,25 @@ static void index_load(void)
 	int capacity = 0;
 	int number = 0;
 
-	if (index.loaded)
+	if (torrent_maps_index.loaded)
 		return;
-	index.loaded = 1;
-	index_path(index.path, sizeof(index.path));
-	file = config_file_read(index.path, &file_size);
+	torrent_maps_index.loaded = 1;
+	index_path(torrent_maps_index.path, sizeof(torrent_maps_index.path));
+	file = config_file_read(torrent_maps_index.path, &file_size);
 	if (!file)
 	{
-		platform_log("map torrents: the index %s cannot be read (maps.torrent_index)", index.path);
+		platform_log("map torrents: the index %s cannot be read (maps.torrent_index)", torrent_maps_index.path);
 		return;
 	}
 	if (strncmp(file, INDEX_FORMAT, strlen(INDEX_FORMAT)))
 	{
-		platform_log("map torrents: %s is not a map torrent index (its first line is not \"%s\")", index.path,
-			INDEX_FORMAT);
+		platform_log("map torrents: %s is not a map torrent index (its first line is not \"%s\")",
+			torrent_maps_index.path, INDEX_FORMAT);
 		free(file);
 		return;
 	}
-	index.names = malloc(file_size + 1);
-	if (!index.names)
+	torrent_maps_index.names = malloc(file_size + 1);
+	if (!torrent_maps_index.names)
 	{
 		free(file);
 		return;
@@ -169,37 +169,38 @@ static void index_load(void)
 		}
 		if (field < 5 || strchr(fields[4], '\t') || strlen(fields[4]) != 40)
 		{
-			platform_log("map torrents: %s line %d is not an entry (left out)", index.path, number);
+			platform_log("map torrents: %s line %d is not an entry (left out)", torrent_maps_index.path, number);
 			continue;
 		}
-		if (index.count == capacity)
+		if (torrent_maps_index.count == capacity)
 		{
 			struct index_entry *grown;
 
 			capacity = capacity ? capacity * 2 : 1024;
-			grown = realloc(index.entries, (size_t)capacity * sizeof(*grown));
+			grown = realloc(torrent_maps_index.entries, (size_t)capacity * sizeof(*grown));
 			if (!grown)
 				break;
-			index.entries = grown;
+			torrent_maps_index.entries = grown;
 		}
-		entry = &index.entries[index.count];
+		entry = &torrent_maps_index.entries[torrent_maps_index.count];
 		name_length = strlen(fields[0]);
-		entry->name = index.names_size;
-		memcpy(index.names + index.names_size, fields[0], name_length + 1);
-		index.names_size += (unsigned long)name_length + 1;
+		entry->name = torrent_maps_index.names_size;
+		memcpy(torrent_maps_index.names + torrent_maps_index.names_size, fields[0], name_length + 1);
+		torrent_maps_index.names_size += (unsigned long)name_length + 1;
 		entry->checksum = strtoul(fields[1], NULL, 16);
 		entry->size = strtoull(fields[2], NULL, 10);
 		entry->piece_length = strtoul(fields[3], NULL, 10);
 		memcpy(entry->info_hash, fields[4], 41);
 		if (!name_length || !entry->size || !entry->piece_length)
 		{
-			platform_log("map torrents: %s line %d has a bad size or piece length (left out)", index.path, number);
+			platform_log("map torrents: %s line %d has a bad size or piece length (left out)",
+				torrent_maps_index.path, number);
 			continue;
 		}
-		index.count++;
+		torrent_maps_index.count++;
 	}
 	free(file);
-	platform_log("map torrents: %d maps indexed in %s", index.count, index.path);
+	platform_log("map torrents: %d maps indexed in %s", torrent_maps_index.count, torrent_maps_index.path);
 }
 
 /* the entry of the file named, of the checksum (0: any) */
@@ -208,11 +209,11 @@ static const struct index_entry *index_find(const char *file_name, unsigned long
 	int which;
 
 	index_load();
-	for (which = 0; which < index.count; which++)
+	for (which = 0; which < torrent_maps_index.count; which++)
 	{
-		const struct index_entry *entry = &index.entries[which];
+		const struct index_entry *entry = &torrent_maps_index.entries[which];
 
-		if (same_name(index.names + entry->name, file_name) && (!checksum || entry->checksum == checksum ||
+		if (same_name(torrent_maps_index.names + entry->name, file_name) && (!checksum || entry->checksum == checksum ||
 			!entry->checksum))
 		{
 			return entry;
@@ -444,16 +445,16 @@ int map_torrents_fetch(const char *level_name, unsigned long version, const char
 		const struct index_entry *entry = wanted[which].entry;
 		int handle;
 
-		snprintf(path, sizeof(path), "%s%s", folder, index.names + entry->name);
-		handle = torrent_add(entry->info_hash, index.names + entry->name, entry->size, entry->piece_length, path, 0,
-			error, sizeof(error));
+		snprintf(path, sizeof(path), "%s%s", folder, torrent_maps_index.names + entry->name);
+		handle = torrent_add(entry->info_hash, torrent_maps_index.names + entry->name, entry->size, entry->piece_length,
+			path, 0, error, sizeof(error));
 		if (handle < 0)
 		{
 			platform_log("map torrents: %s could not be added: %s", wanted[which].name, error);
 			fetch_stop();
 			return 0;
 		}
-		snprintf(fetch.files[which].name, sizeof(fetch.files[which].name), "%s", index.names + entry->name);
+		snprintf(fetch.files[which].name, sizeof(fetch.files[which].name), "%s", torrent_maps_index.names + entry->name);
 		fetch.files[which].handle = handle;
 		fetch.count++;
 	}
@@ -757,8 +758,8 @@ static void seed_poll(void)
 		}
 		if (!engine_start())
 			return;
-		handle = torrent_add(entry->info_hash, index.names + entry->name, entry->size, entry->piece_length, path, 1,
-			error, sizeof(error));
+		handle = torrent_add(entry->info_hash, torrent_maps_index.names + entry->name, entry->size, entry->piece_length,
+			path, 1, error, sizeof(error));
 		if (handle < 0)
 		{
 			platform_log("map torrents: %s is not seeded: %s", file_name, error);
