@@ -43,8 +43,8 @@ The settings, in `config.toml`:
 | `maps.download_limit` | `0` | KB a second a download takes at most; `0` for no limit. |
 | `maps.torrent_port` | `0` | The TCP port peers connect to, and the DHT's UDP port; `0` picks one. Forward a fixed one on the router to be reachable from behind other routers. |
 | `maps.dht` | `true` | Find peers through the mainline DHT. |
-| `maps.trackers` | `""` | Comma-separated `udp://` and `http://` trackers to announce to. |
-| `maps.web_seeds` | `""` | Comma-separated `http://` folders holding the maps by file name, downloaded from too. |
+| `maps.trackers` | the archive's tracker | Comma-separated `udp://` and `http://` trackers to announce to. |
+| `maps.web_seeds` | the archive's web seed | Comma-separated `http://` folders holding the maps by file name, downloaded from too. |
 | `maps.torrent_index` | `"map_torrents.txt"` | The index of the maps' torrents, beside `config.toml`. |
 
 A machine behind a router that forwards nothing can still download (it
@@ -99,7 +99,18 @@ any BitTorrent client with that folder as the save path, and let it check
 them (the names in the torrents are the files' names). The DHT finds the
 seed box; a tracker in `maps.trackers`, or a web seed (a plain HTTP server
 with the maps in a folder), makes it found at once. The archive's own seed
-box, tracker and web seed are to be announced with the feature.
+box, tracker and web seed are these, and the settings' defaults:
+
+- tracker: `udp://halovps.fractumseraph.net:6969/announce` and
+  `http://halovps.fractumseraph.net:6969/announce` (opentracker, taking only
+  the index's torrents);
+- web seed: `http://halomaps.fractumseraph.net/maps/` (every map of the
+  index under its file name; plain HTTP, as the client has no TLS);
+- seed box: the same machine's Transmission, seeding all of them; the
+  `.torrent` files are in `http://halomaps.fractumseraph.net/torrents/`.
+
+A web seed's file names are percent-encoded in its URLs (some 600 maps'
+names have spaces, brackets or letters beyond ASCII).
 
 ## How it works in the game
 
@@ -111,7 +122,12 @@ box, tracker and web seed are to be announced with the feature.
   anything is missing and the index has it all, `map_torrents_fetch` starts
   the downloads and the join waits; the browser (LAN, Direct Link or the
   server browser) shows the status line, and once every file is in place
-  `map_fetch_update` focuses the game's row and posts the join again. A
+  `map_fetch_update` focuses the game's row and posts the join again. The
+  map is looked for in the index by its name and the host's version; a host
+  whose version is none of the index's (a build that sends another kind of
+  checksum) gets the index's map of that name, when this machine has no
+  map of that name at all (one it has is that host's other version, which
+  a download cannot change). A
   game no longer listed by then is logged. A download that fails shows why
   for a while. Leaving the browser leaves the download running; it is let
   go of only when the game quits (what came stays for next time).

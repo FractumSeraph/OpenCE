@@ -1051,7 +1051,26 @@ void torrent_web_seeds_tick(struct torrent *torrent)
 			size_t length = strlen(url);
 
 			if (url[length - 1] == '/')
-				snprintf(file_url, sizeof(file_url), "%s%s", url, torrent->name);
+			{
+				/* (the name percent-encoded: some 600 maps' names have
+				spaces, brackets or letters beyond ASCII) */
+				const unsigned char *name = (const unsigned char *)torrent->name;
+				int used = snprintf(file_url, sizeof(file_url), "%s", url);
+
+				for (; *name && used < (int)sizeof(file_url) - 4; name++)
+				{
+					if ((*name >= 'A' && *name <= 'Z') || (*name >= 'a' && *name <= 'z') ||
+						(*name >= '0' && *name <= '9') || strchr("-._~", *name))
+					{
+						file_url[used++] = (char)*name;
+					}
+					else
+					{
+						used += snprintf(file_url + used, sizeof(file_url) - used, "%%%02X", *name);
+					}
+				}
+				file_url[used] = 0;
+			}
 			else
 				snprintf(file_url, sizeof(file_url), "%s", url);
 			if (!torrent_url_parse(file_url, host, sizeof(host), &port, path, sizeof(path)))

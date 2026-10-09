@@ -425,6 +425,28 @@ int map_torrents_fetch(const char *level_name, unsigned long version, const char
 			/* (the map is the host's version; a resource map any) */
 			checksum = same_name(wanted[count].name, map_file) ? version : 0;
 			wanted[count].entry = index_find(wanted[count].name, checksum);
+			if (!wanted[count].entry && checksum)
+			{
+				char path[1024];
+
+				/* A host whose version is not one of the index's (a build
+				that tells another checksum, or none of these): the map of
+				that name, when there is none here; one here is that host's
+				other version, which downloading cannot change. */
+				if (map_file_path(wanted[count].name, path, sizeof(path)))
+				{
+					platform_log("map torrents: %s (checksum %08lX) is not in the index, and %s is here: not downloaded",
+						wanted[count].name, checksum, wanted[count].name);
+					return 0;
+				}
+				wanted[count].entry = index_find(wanted[count].name, 0);
+				if (wanted[count].entry)
+				{
+					platform_log("map torrents: %s (checksum %08lX) is not in the index: downloading the index's %s "
+						"(checksum %08lX) by its name", wanted[count].name, checksum, wanted[count].name,
+						wanted[count].entry->checksum);
+				}
+			}
 			if (!wanted[count].entry)
 			{
 				platform_log("map torrents: %s (checksum %08lX) is not in the index: not downloaded", wanted[count].name,

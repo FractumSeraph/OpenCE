@@ -78,6 +78,9 @@ static short transport_server_terminate(void)
 	CHECK(closed == 1 && slept == EXPECTED_SLEEP, "transport terminated before cleanup/required legacy grace");
 	terminated++; note('T'); return 0;
 }
+/* (the fork's map torrents: the hosted map no longer seeded; nothing of the
+teardown's order) */
+static void map_torrents_playing(const char *level_name, unsigned long version, int hosting) { }
 static void p2p_set_game_player_counts(int count, int maximum)
 {
 	struct network_game_server empty = { 0 };

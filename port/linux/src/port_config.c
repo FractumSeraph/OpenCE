@@ -426,12 +426,17 @@ static const struct config_setting config_settings[] =
 	{ "maps.dht", _config_boolean, "true", "HALO_MAP_DHT", _environment_value, _platform_all,
 		"Find a map's peers through the DHT (the mainline one, no server of\n"
 		"this project's); false finds them only through the trackers." },
-	{ "maps.trackers", _config_string, "\"\"", "HALO_MAP_TRACKERS", _environment_value, _platform_all,
+	{ "maps.trackers", _config_string,
+		"\"udp://halovps.fractumseraph.net:6969/announce,http://halovps.fractumseraph.net:6969/announce\"",
+		"HALO_MAP_TRACKERS", _environment_value, _platform_all,
 		"Comma-separated trackers every map's torrent is announced to\n"
-		"(udp://host:port/announce or http://host/announce); empty for none." },
-	{ "maps.web_seeds", _config_string, "\"\"", "HALO_MAP_WEB_SEEDS", _environment_value, _platform_all,
+		"(udp://host:port/announce or http://host/announce); empty for none.\n"
+		"The default is the map archive's own (docs/map_torrents.md)." },
+	{ "maps.web_seeds", _config_string, "\"http://halomaps.fractumseraph.net/maps/\"", "HALO_MAP_WEB_SEEDS",
+		_environment_value, _platform_all,
 		"Comma-separated http:// URLs of folders holding the maps' files under\n"
-		"their names, which a download also takes pieces from; empty for none." },
+		"their names, which a download also takes pieces from; empty for none.\n"
+		"The default is the map archive's own (docs/map_torrents.md)." },
 	{ "maps.torrent_index", _config_string, "\"map_torrents.txt\"", "HALO_MAP_TORRENT_INDEX", _environment_value,
 		_platform_all,
 		"The index of the maps' torrents (tools/map_torrents.py), beside this\n"
