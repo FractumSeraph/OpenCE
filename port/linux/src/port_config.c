@@ -37,9 +37,9 @@ enum config_environment
 	/* the variable's text is the value ("0", "false", "no" and "off" are
 	false for a boolean) */
 	_environment_value,
-	/* the variable being set at all makes it true */
+	/* the variable being set (not empty, "0", "false", "no" or "off") makes it true */
 	_environment_set_is_true,
-	/* the variable being set at all makes it false */
+	/* the variable being set (not empty, "0", "false", "no" or "off") makes it false */
 	_environment_set_is_false,
 };
 
@@ -59,6 +59,7 @@ struct config_setting
 	enum config_type type;
 	/* as it is written in the file */
 	const char *default_value;
+	/* NULL: none, for a setting the Android app reads from the file itself */
 	const char *environment;
 	enum config_environment environment_style;
 	unsigned platforms;
@@ -253,6 +254,8 @@ static const struct config_setting config_settings[] =
 		"Showing the scores (the controller's Back)." },
 	{ "controls.pause", _config_string, "\"Escape\"", "HALO_KEY_PAUSE", _environment_value, _platform_all,
 		"The pause menu (the controller's Start)." },
+	{ "controls.screenshot", _config_string, "\"F10\"", "HALO_KEY_SCREENSHOT", _environment_value, _platform_all,
+		"Save a PNG screenshot beside maps/ (press once per capture)." },
 	{ "controls.push_to_talk", _config_string, "\"V\"", "HALO_KEY_PUSH_TO_TALK", _environment_value, _platform_all,
 		"Voice chat: talk while it is held (audio.voice_chat \"push_to_talk\")." },
 
@@ -266,6 +269,12 @@ static const struct config_setting config_settings[] =
 	{ "game.language", _config_string, "\"\"", "HALO_LANGUAGE", _environment_value, _platform_all,
 		"The language the game asks the Xbox for: \"ja\", \"de\", \"fr\", \"es\" or \"it\";\n"
 		"empty for English. The game data decides what is translated." },
+	{ "game.enhanced_animations", _config_boolean, "true", "HALO_ENHANCED_ANIMATIONS", _environment_value, _platform_all,
+		"The player bipeds' grenade throws keep their legs moving (crouched,\n"
+		"in the air and in a vehicle's seat too), riders' hands leave the grips\n"
+		"to throw and reload, and a player turns with the aim while throwing;\n"
+		"false: the original animations, which freeze the legs and stand a\n"
+		"rider up." },
 	{ "game.custom_edition", _config_boolean, "true", "HALO_CUSTOM_EDITION", _environment_value, _platform_all,
 		"Load and run Halo Custom Edition maps (not those that need OpenSauce):\n"
 		"put them and Custom Edition's bitmaps.map, sounds.map and loc.map in\n"
@@ -539,6 +548,11 @@ static const struct config_setting config_settings[] =
 	{ "debug.sample_seconds", _config_real, "0.0", "HALO_SAMPLE", _environment_value, _platform_android,
 		"Log where every game thread is this often, in seconds (read by the\n"
 		"app, port/android/host/host_debug.c); 0 never." },
+	{ "debug.memory_watch", _config_boolean, "true", NULL, _environment_value, _platform_android,
+		"Notice the game's writes to cached textures and vertices by page\n"
+		"protection; false compares page contents once a frame instead, which is\n"
+		"slower. Under ARM translation (the x86 emulator) the app always compares\n"
+		"contents. Read by the app from the file (port/android/host/host_main.c)." },
 };
 
 #define NUMBER_OF_CONFIG_SETTINGS (sizeof(config_settings) / sizeof(config_settings[0]))
@@ -851,6 +865,13 @@ static int config_text_is_false(const char *text)
 	return !strcmp(lower, "0") || !strcmp(lower, "false") || !strcmp(lower, "no") || !strcmp(lower, "off");
 }
 
+/* whether a variable that only has to be set (_environment_set_is_true or
+_environment_set_is_false) is: empty, "0", "false", "no" or "off" is not */
+static int config_environment_set(const char *text)
+{
+	return text[0] && !config_text_is_false(text);
+}
+
 static void config_set_from_text(struct config_value *value, enum config_type type, const char *text)
 {
 	switch (type)
@@ -1030,9 +1051,9 @@ static void config_load(void)
 	for (index = 0; index < NUMBER_OF_CONFIG_SETTINGS; index++)
 	{
 		const struct config_setting *setting = &config_settings[index];
-		const char *environment = getenv(setting->environment);
+		const char *environment = setting->environment ? getenv(setting->environment) : NULL;
 
-		if (!environment)
+		if (!environment || (setting->environment_style != _environment_value && !config_environment_set(environment)))
 			continue;
 		switch (setting->environment_style)
 		{

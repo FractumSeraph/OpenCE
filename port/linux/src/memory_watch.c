@@ -268,5 +268,10 @@ void memory_watch_forget(void *address, unsigned long size)
 		page_generation[page] = __sync_add_and_fetch(&current_generation, 1);
 	}
 }
-
 #endif
+
+/* page protection (and the web build's generations) see each write at once:
+nothing to do per frame */
+void memory_watch_begin_frame(void)
+{
+}
