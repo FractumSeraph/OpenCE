@@ -116,8 +116,16 @@ def main() -> int:
     launcher = os.environ.get("CI_COMPILER_LAUNCHER")
     if launcher:
         configure += ["--compiler-launcher", launcher]
-    # a release is VERSION's, and nothing else is one
-    if release_build() and version() != base_version():
+    # a fork's release (FractumSeraph/OpenCE: every push to its main, the
+    # workflow's HALO_FORK_RELEASE): VERSION's with -fs.<run number>, five
+    # digits, which the updater orders by its suffix (updater_newer); a
+    # release's build, whose updater looks for newer ones in the fork's
+    # releases (HALO_UPDATE_REPOSITORY)
+    if os.environ.get("HALO_FORK_RELEASE") == "1" and os.environ.get("GITHUB_RUN_NUMBER", "").isdigit():
+        os.environ["HALO_VERSION"] = f"{base_version()}-fs.{int(os.environ['GITHUB_RUN_NUMBER']):05d}"
+        os.environ["HALO_RELEASE_BUILD"] = "1"
+    # a release is VERSION's (or a fork's, as above), and nothing else is one
+    if release_build() and version() != base_version() and not version().startswith(f"{base_version()}-fs."):
         print(f"error: a release build of {version()}, but VERSION is {base_version()}", file=sys.stderr)
         return 1
     print(f"version {version()}{' (a release)' if release_build() else ''}", flush=True)
@@ -212,7 +220,7 @@ def alpine_build(platform: str, config: str) -> int:
     with CCACHE_DIR in the checkout)"""
     environment = []
     for name in ("CI_COMPILER_LAUNCHER", "CCACHE_DIR", "CCACHE_BASEDIR", "CCACHE_MAXSIZE", "HALO_VERSION",
-                 "HALO_RELEASE_BUILD", "HALO_UPDATE_REPOSITORY"):
+                 "HALO_RELEASE_BUILD", "HALO_UPDATE_REPOSITORY", "HALO_FORK_RELEASE", "GITHUB_RUN_NUMBER"):
         value = os.environ.get(name)
         if not value:
             continue

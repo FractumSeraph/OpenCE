@@ -67,6 +67,9 @@ env:
   # (empty unless started with a version: VERSION's -dev, tools/version.py)
   HALO_VERSION: ${{ inputs.version }}
   HALO_RELEASE_BUILD: ${{ inputs.release && '1' || '0' }}
+  # (a fork's: every push to its main is a release, published by the
+  # release job below; tools/ci_build.py makes its version)
+  HALO_FORK_RELEASE: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository != 'ChupathingyCE/chupathingyce' && '1' || '' }}
   CI_COMPILER_LAUNCHER: ccache
   CCACHE_DIR: ${{ github.workspace }}/.ccache
   CCACHE_BASEDIR: ${{ github.workspace }}
@@ -593,3 +596,55 @@ jobs:
           name: chupathingyce-macos-release
           path: chupathingyce-macos-release.tar
           retention-days: 3
+
+  release:
+    # A fork's own releases (FractumSeraph/OpenCE): every push to its main
+    # that builds on every platform is published as v<VERSION>-fs.<run>,
+    # marked latest, with the files the self-updaters ask for
+    # (chupathingyce-<platform>-<config>.zip; port/linux/src/updater.c,
+    # Updater.java) and the dedicated servers; the newest five are kept.
+    # ChupathingyCE's own releases come from its release workflows instead.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository != 'ChupathingyCE/chupathingyce'
+    needs: [linux, linux64, server, android, windows, windows64, macos]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: VERSION
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="$(cat VERSION)-fs.$(printf '%05d' "$GITHUB_RUN_NUMBER")"
+          mkdir release
+          for dir in artifacts/*/; do
+            name=$(basename "$dir")
+            case "$name" in
+              chupathingyce-build-info|chupathingyce-server-container*) continue ;;
+              chupathingyce-android-debug-testkey) zipname=chupathingyce-android-debug ;;
+              chupathingyce-android-release-unsigned) zipname=chupathingyce-android-release ;;
+              *) zipname=$name ;;
+            esac
+            # (macOS's builds come as a tar, keeping the application's links)
+            if ls "$dir"/*.tar >/dev/null 2>&1; then
+              mkdir -p "unpacked/$name" && tar -C "unpacked/$name" -xf "$dir"/*.tar && dir="unpacked/$name/$name/"
+            fi
+            (cd "$dir" && zip -qry "$GITHUB_WORKSPACE/release/$zipname.zip" .)
+          done
+          ls -l release
+          {
+            echo "Built from $GITHUB_SHA on $GITHUB_REF_NAME (version $version)."
+            echo
+            echo "The release builds are for playing; the debug builds stop at the first failed assertion."
+          } > notes.txt
+          gh release create "v$version" release/*.zip --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "$version" --notes-file notes.txt --latest
+          # (the newest five of these kept)
+          gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName,createdAt \
+            --jq '[.[] | select(.tagName | contains("-fs."))] | sort_by(.createdAt) | reverse | .[5:] | .[].tagName' |
+            while read -r tag; do gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag; done
