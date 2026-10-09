@@ -75,6 +75,14 @@ export class MapHashes {
     return null;
   }
 
+  // resolves once every map asked for so far is hashed (static-site.mjs,
+  // which writes the list once)
+  settled() {
+    if (!this.queue.length) return Promise.resolve();
+    this.worker?.ref();
+    return new Promise((resolve) => (this.waiting ||= []).push(resolve));
+  }
+
   next() {
     if (this.busy || !this.queue.length) return;
     if (!this.worker) {
@@ -108,6 +116,12 @@ export class MapHashes {
     if (!this.queue.length && this.hashing) {
       this.hashing = false;
       this.log("maps", "the Custom Edition maps are hashed");
+    }
+    if (!this.queue.length && this.waiting) {
+      clearTimeout(this.saveTimer);
+      this.save();
+      this.worker?.unref();
+      for (const resolve of this.waiting.splice(0)) resolve();
     }
     this.next();
   }

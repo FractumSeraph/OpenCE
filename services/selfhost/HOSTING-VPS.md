@@ -261,8 +261,16 @@ with the password prompt, use the page in Safari instead, or leave this off.
 
 ## Updating the game later
 
-Download the newest kit and copy it over the old one. Your `config.json`,
-`data/` and maps are not in the kit, so they stay as they are:
+`update-halo.sh` does it all: it downloads the newest kit, stops the
+service, puts the kit in, starts it again, and puts the previous version
+back if the server does not answer. Your `config.json`, `data/` and maps
+are not in the kit, so they stay as they are:
+
+```bash
+sudo /opt/halo/update-halo.sh
+```
+
+By hand, the same without the safety net:
 
 ```bash
 curl -fL -o /tmp/halo.zip https://github.com/FractumSeraph/OpenCE/releases/download/web-latest/halo-server-linux-x64.zip

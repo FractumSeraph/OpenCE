@@ -248,6 +248,10 @@ proxies do this by default.
   ]
   ```
 
+The page can also live on a web host of its own (a seedbox's web space,
+shared hosting) with only the services on a small VPS:
+[HOSTING-STATIC.md](HOSTING-STATIC.md).
+
 ## Settings (`config.json`)
 
 | Setting | Meaning |
@@ -262,6 +266,7 @@ proxies do this by default.
 | `publicGames.enabled` / `publicGames.brokers` | The in-game server browser's list of public games, and the MQTT brokers it comes from. |
 | `delta.enabled` / `delta.url` | ChupathingyCE's game list (`https://halo.milenko.org`), which this server asks for the page: the signed legacy table, its live games for the Server Browser, and a player's stats and Link profile. `false` or empty: none (the game then plays with its built-in numbers). |
 | `analytics.umamiScriptUrl` / `analytics.umamiWebsiteId` | Optional Umami page-view tracking: the tracker script's URL and the website ID. Added to the page when served; leave empty for none. |
+| `cors.allowedOrigins` | Other sites whose page may use this server's server-browser list and Delta relay, e.g. `["https://halo.example.com"]` when the page is on a web host of its own and this server runs only the services ([HOSTING-STATIC.md](HOSTING-STATIC.md)). Empty: this server's own pages only. |
 
 ## Folder layout
 
@@ -294,6 +299,9 @@ not answer afterwards, it puts the backup back. Kept as they are:
 `-ServerOnly` keeps this folder's game files and updates only the server;
 `-Kit <zip or URL>` installs another kit. What happened goes to
 `logs\update.log`. Players get the new game on their next page load.
+
+**On a Linux server** run as a service (HOSTING-VPS.md), `sudo ./update-halo.sh`
+does the same, putting the previous version back if the server does not answer.
 
 **Anywhere else**, download the newest kit and copy its contents over this
 folder (your `config.json`, `data/` and maps are not in the kit, so they are
