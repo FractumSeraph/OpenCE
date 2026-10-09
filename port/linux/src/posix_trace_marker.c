@@ -28,9 +28,27 @@ Built with the host ABI.
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/syscall.h>
+#include <unistd.h>
 
 typedef int (*open_function)(const char *path, int flags, ...);
 typedef int (*openat_function)(int directory, const char *path, int flags, ...);
+
+/* the system's own open, where there is no next one to call (a static
+program); none where the system has no such call */
+static int open_direct(int directory, const char *path, int flags, mode_t mode)
+{
+#ifdef SYS_openat
+	return (int)syscall(SYS_openat, directory, path, flags, mode);
+#else
+	(void)directory;
+	(void)path;
+	(void)flags;
+	(void)mode;
+	errno = ENOSYS;
+	return -1;
+#endif
+}
 
 static int refused(const char *path)
 {
@@ -72,6 +90,10 @@ opened without a mode has) */
 			return -1; \
 		if (!real) \
 			real = (open_function)dlsym(RTLD_NEXT, #name); \
+		/* (a static program, ChupathingyCE's dedicated server, has no next \
+		open to find: the system's call itself) */ \
+		if (!real) \
+			return open_direct(AT_FDCWD, path, flags, mode); \
 		return real(path, flags, mode); \
 	}
 
@@ -85,6 +107,8 @@ opened without a mode has) */
 			return -1; \
 		if (!real) \
 			real = (openat_function)dlsym(RTLD_NEXT, #name); \
+		if (!real) \
+			return open_direct(directory, path, flags, mode); \
 		return real(directory, path, flags, mode); \
 	}
 

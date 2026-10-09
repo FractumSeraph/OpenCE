@@ -1105,7 +1105,7 @@ void WINAPI D3DDevice_BlockUntilVerticalBlank(void)
 
 /* ---------- GL helpers */
 
-#ifdef HALO_ANDROID
+#if defined(HALO_ANDROID) || defined(__APPLE__)
 static void gl_check_errors(const char *where);
 #else
 #define gl_check_errors(where) ((void)0)
