@@ -359,6 +359,8 @@ shrinks on small phones. */
 .touch-layer.modern .m-top .caption { display: none; }
 .touch-layer.modern .m-score { left: calc(50% - 52 * var(--u)); }
 .touch-layer.modern .m-pause { left: calc(50% + 8 * var(--u)); }
+.touch-layer.modern .m-talk { left: calc(50% + 68 * var(--u)); }
+.touch-layer.modern .m-talk.pressed { background: rgba(80, 200, 120, .55); }
 
 /* the stick: a ring of glass that appears where the thumb lands */
 .touch-layer.modern .touch-stick {

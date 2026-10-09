@@ -3198,9 +3198,23 @@
       }
     }
 
+    /* (the automated tests: ?halo-env=NAME=value,... sets the game's
+       settings that have an environment variable, from a short list: voice
+       chat's test tone, and its mode; port/linux/src/port_config.c) */
+    function setTestEnvironment() {
+      const allowed = new Set(["HALO_VOICE_TEST", "HALO_VOICE_CHAT"]);
+      const wanted = new URLSearchParams(location.search).get("halo-env") || "";
+      for (const pair of wanted.split(",")) {
+        const at = pair.indexOf("=");
+        const name = at > 0 ? pair.slice(0, at) : "";
+        const value = pair.slice(at + 1);
+        if (allowed.has(name) && /^[A-Za-z0-9_.]{1,32}$/.test(value)) ENV[name] = value;
+      }
+    }
+
     var Module = {
       canvas,
-      preRun: [beginXisoGate],
+      preRun: [setTestEnvironment, beginXisoGate],
       print: (...args) => {
         const line = args.join(" ");
         const performancePrefix = "HALO_PERF:";

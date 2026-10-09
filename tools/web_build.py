@@ -35,6 +35,8 @@ from .linux_build import (
     game_defines_and_includes,
     game_sources,
     musl_math_sources,
+    opus_cflags,
+    opus_sources,
     xdk_headers,
 )
 from .ninja_syntax import Writer
@@ -338,6 +340,10 @@ def generate_web_build(n: Writer, sln: Any) -> None:
     for name in EXPAT_SOURCES:
         add_object(EXPAT_DIR / name, f"{abi_flags} -std=gnu11 -I{EXPAT_DIR} -w")
     add_object(KCP_DIR / "ikcp.c", f"{abi_flags} -std=gnu11 -w")
+    # voice chat's codec (port/third_party/opus; network_voice.c), built as
+    # linux_build.py builds it
+    for source in opus_sources():
+        add_object(source, opus_cflags(abi_flags))
     # public games' listing signatures (p2p_crypto.c)
     for name in ("monocypher.c", "monocypher-ed25519.c"):
         add_object(MONOCYPHER_DIR / name, f"{abi_flags} -std=gnu11 -w")

@@ -198,6 +198,7 @@ controls while it is connected.
     swap: '<path d="M4 8h14M14 4l4 4-4 4"/><path d="M20 16H6M10 12l-4 4 4 4"/>',
     light: '<path d="M4 9h7l5-4v14l-5-4H4z"/><path d="M19 8l2-1M19 12h3M19 16l2 1"/>',
     pause: '<path d="M9 5v14M15 5v14"/>',
+    talk: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',
     score: '<path d="M4 20v-7h5v7M9.5 20V5h5v15M15 20v-4h5v4"/>',
   };
 
@@ -243,6 +244,8 @@ controls while it is connected.
       ["white", { icon: "light" }, BUTTON.LEFT_SHOULDER, "m m-light", "Light"],
       ["back", { icon: "score" }, BUTTON.BACK, "m m-top m-score", "Score"],
       ["start", { icon: "pause" }, BUTTON.START, "m m-top m-pause", "Pause"],
+      // voice chat's push to talk (controls.push_to_talk: V), held
+      ["talk", { icon: "talk" }, null, "m m-top m-talk", "Talk"],
     ],
   };
 
@@ -331,8 +334,18 @@ controls while it is connected.
       for (const [id, count] of buttonState) {
         if (count > 0) down.add(controls[id].button);
       }
-      for (const { button } of Object.values(controls)) setButton(button, down.has(button));
+      for (const { button } of Object.values(controls)) if (button !== null) setButton(button, down.has(button));
+      talk((buttonState.get("talk") || 0) > 0);
       for (const id in controls) controls[id].element.classList.toggle("pressed", (buttonState.get(id) || 0) > 0);
+    }
+
+    // voice chat's push to talk: its key (controls.push_to_talk, V) held
+    // while the Talk button is, as a keyboard's (SDL reads the window's keys)
+    let talking = false;
+    function talk(down) {
+      if (down === talking) return;
+      talking = down;
+      global.dispatchEvent(new KeyboardEvent(down ? "keydown" : "keyup", { key: "v", code: "KeyV", bubbles: true }));
     }
 
     const STICK_RADIUS = 56;

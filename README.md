@@ -90,6 +90,13 @@ OpenCE's own CI.
   file's version (its ETag), so a map loads without a download the next time
   and even when the server cannot be reached; Game settings shows how much
   is kept and can clear it.
+- **Voice chat in the browser** (OpenCE's: `network_voice.c`,
+  `voice_audio.c`, Opus): the web build compiles Opus as the Linux build
+  does, the microphone opens through SDL (the browser asks the player the
+  first time; HTTPS only), voices travel over the browser's game
+  connections like the game's own traffic, to other browsers and to native
+  hosts, and the touch controls have a Talk button (push to talk: it holds
+  V). The scoreboard's pointer (muting a player) works with a mouse.
 - **No map torrents in the browser:** the native ports download missing
   Custom Edition maps over BitTorrent (docs/map_torrents.md), but a page has
   no TCP or UDP sockets, so the web build leaves the client out
