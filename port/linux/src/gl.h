@@ -51,6 +51,8 @@ this list to generate the guest's entry points */
 	X(glStencilOp) \
 	X(glStencilMask) \
 	X(glBlendFunc) \
+	X(glBlendFuncSeparate) \
+	X(glIsEnabled) \
 	X(glBlendEquation) \
 	X(glBlendColor) \
 	X(glCullFace) \
@@ -98,7 +100,6 @@ this list to generate the guest's entry points */
 	X(glBufferData) \
 	X(glBufferSubData) \
 	X(glCopyBufferSubData) \
-	X(glMemoryBarrier) \
 	X(glBindBufferBase) \
 	X(glBindBufferRange) \
 	X(glGenVertexArrays) \
@@ -118,6 +119,7 @@ this list to generate the guest's entry points */
 	X(glGetShaderiv) \
 	X(glGetShaderInfoLog) \
 	X(glDeleteShader) \
+	X(glDeleteProgram) \
 	X(glCreateProgram) \
 	X(glAttachShader) \
 	X(glBindAttribLocation) \
@@ -160,6 +162,8 @@ this list to generate the guest's entry points */
 	X(glStencilOp) \
 	X(glStencilMask) \
 	X(glBlendFunc) \
+	X(glBlendFuncSeparate) \
+	X(glIsEnabled) \
 	X(glBlendEquation) \
 	X(glBlendColor) \
 	X(glCullFace) \
@@ -208,6 +212,7 @@ this list to generate the guest's entry points */
 	X(glBufferSubData) \
 	X(glBufferStorage) \
 	X(glMapBufferRange) \
+	X(glUnmapBuffer) \
 	X(glBindBufferBase) \
 	X(glGenVertexArrays) \
 	X(glBindVertexArray) \
@@ -232,6 +237,7 @@ this list to generate the guest's entry points */
 	X(glGetShaderiv) \
 	X(glGetShaderInfoLog) \
 	X(glDeleteShader) \
+	X(glDeleteProgram) \
 	X(glCreateProgram) \
 	X(glAttachShader) \
 	X(glBindAttribLocation) \
@@ -285,6 +291,8 @@ pointers, sees the declarations without these aliases */
 #define glStencilOp halo_glStencilOp
 #define glStencilMask halo_glStencilMask
 #define glBlendFunc halo_glBlendFunc
+#define glBlendFuncSeparate halo_glBlendFuncSeparate
+#define glIsEnabled halo_glIsEnabled
 #define glBlendEquation halo_glBlendEquation
 #define glBlendColor halo_glBlendColor
 #define glCullFace halo_glCullFace
@@ -332,7 +340,6 @@ pointers, sees the declarations without these aliases */
 #define glBufferData halo_glBufferData
 #define glBufferSubData halo_glBufferSubData
 #define glCopyBufferSubData halo_glCopyBufferSubData
-#define glMemoryBarrier halo_glMemoryBarrier
 #define glBindBufferBase halo_glBindBufferBase
 #define glBindBufferRange halo_glBindBufferRange
 #define glGenVertexArrays halo_glGenVertexArrays
@@ -352,6 +359,7 @@ pointers, sees the declarations without these aliases */
 #define glGetShaderiv halo_glGetShaderiv
 #define glGetShaderInfoLog halo_glGetShaderInfoLog
 #define glDeleteShader halo_glDeleteShader
+#define glDeleteProgram halo_glDeleteProgram
 #define glCreateProgram halo_glCreateProgram
 #define glAttachShader halo_glAttachShader
 #define glBindAttribLocation halo_glBindAttribLocation
@@ -392,6 +400,8 @@ pointers, sees the declarations without these aliases */
 #define glStencilOp halo_glStencilOp
 #define glStencilMask halo_glStencilMask
 #define glBlendFunc halo_glBlendFunc
+#define glBlendFuncSeparate halo_glBlendFuncSeparate
+#define glIsEnabled halo_glIsEnabled
 #define glBlendEquation halo_glBlendEquation
 #define glBlendColor halo_glBlendColor
 #define glCullFace halo_glCullFace
@@ -440,6 +450,7 @@ pointers, sees the declarations without these aliases */
 #define glBufferSubData halo_glBufferSubData
 #define glBufferStorage halo_glBufferStorage
 #define glMapBufferRange halo_glMapBufferRange
+#define glUnmapBuffer halo_glUnmapBuffer
 #define glBindBufferBase halo_glBindBufferBase
 #define glGenVertexArrays halo_glGenVertexArrays
 #define glBindVertexArray halo_glBindVertexArray
@@ -464,6 +475,7 @@ pointers, sees the declarations without these aliases */
 #define glGetShaderiv halo_glGetShaderiv
 #define glGetShaderInfoLog halo_glGetShaderInfoLog
 #define glDeleteShader halo_glDeleteShader
+#define glDeleteProgram halo_glDeleteProgram
 #define glCreateProgram halo_glCreateProgram
 #define glAttachShader halo_glAttachShader
 #define glBindAttribLocation halo_glBindAttribLocation

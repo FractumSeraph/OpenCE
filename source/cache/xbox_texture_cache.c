@@ -120,17 +120,14 @@ symbols in this file:
 #include "tag_files/tag_groups.h"
 #include "text/draw_string.h"
 #include <xtl.h>
-#include "custom_edition_cache.h" /* port: port/linux/game/custom_edition_cache.c */
 
 /* ---------- constants */
 
-typedef char verify_xbox_texture_cache_size[
-	HALO_PORT_TEXTURE_CACHE_SIZE == HALO_PORT_TEXTURE_CACHE_PAGE_COUNT * 0x4000 ? 1 : -1];
-
 enum
 {
-	/* port: the native builds' larger cache (halo_port_capacity.h) */
-	XBOX_TEXTURE_CACHE_PAGE_COUNT = HALO_PORT_TEXTURE_CACHE_PAGE_COUNT,
+	/* (the native builds' size: halo_port_capacity.h; the Xbox's 0x580
+	pages, 0x1600000 bytes) */
+	XBOX_TEXTURE_CACHE_PAGE_COUNT = HALO_PORT_TEXTURE_CACHE_SIZE >> 14,
 	XBOX_TEXTURE_CACHE_PAGE_SIZE_BITS = 14,
 	XBOX_TEXTURE_CACHE_PAGE_SIZE = 1 << XBOX_TEXTURE_CACHE_PAGE_SIZE_BITS,
 	XBOX_TEXTURE_CACHE_STEAL_GUARD_SIZE = 0x104000,
@@ -225,6 +222,7 @@ typedef char verify_xbox_texture_cache_textures_offset[
 	offsetof(
 		struct xbox_texture_cache_globals,
 		textures) == 0 ? 1 : -1];
+#ifndef HALO_64BIT
 typedef char verify_xbox_texture_cache_base_address_offset[
 	offsetof(
 		struct xbox_texture_cache_globals,
@@ -239,6 +237,7 @@ typedef char verify_xbox_texture_cache_stolen_memory_offset[
 		stolen_memory) == 0xC ? 1 : -1];
 typedef char verify_xbox_texture_cache_globals_size[
 	sizeof(struct xbox_texture_cache_globals) == 0x10 ? 1 : -1];
+#endif
 typedef char verify_xbox_texture_cache_texture_loaded_offset[
 	offsetof(
 		struct xbox_texture_cache_texture,
@@ -251,12 +250,14 @@ typedef char verify_xbox_texture_cache_texture_bitmap_offset[
 	offsetof(
 		struct xbox_texture_cache_texture,
 		bitmap) == 0x8 ? 1 : -1];
+#ifndef HALO_64BIT
 typedef char verify_xbox_texture_cache_texture_hardware_format_offset[
 	offsetof(
 		struct xbox_texture_cache_texture,
 		hardware_format) == 0xC ? 1 : -1];
 typedef char verify_xbox_texture_cache_texture_size[
 	sizeof(struct xbox_texture_cache_texture) == 0x20 ? 1 : -1];
+#endif
 /* ---------- prototypes */
 
 static boolean texture_cache_locked_block_proc(
@@ -380,14 +381,14 @@ void texture_cache_bitmap_new(
 		!TEST_FLAG(bitmap->flags, _bitmap_cached_bit));
 	SET_FLAG(bitmap->flags, _bitmap_cached_bit, TRUE);
 	bitmap->cache_block_index = NONE;
-	bitmap->base_address = NULL;
-	bitmap->hardware_format = NULL;
+	bitmap->base_address = XBOX_NULL;
+	bitmap->hardware_format = XBOX_NULL;
 	bitmap_group = bitmap_group_get(bitmap_tag_index);
 	bitmap->pixels_offset += bitmap_group->pixel_data.file_offset;
 	bitmap->pixels_size = bitmap_get_pixel_data_size(bitmap);
 	bitmap->tag_index = bitmap_tag_index;
-	bitmap->base_address = NULL;
-	bitmap->hardware_format = NULL;
+	bitmap->base_address = XBOX_NULL;
+	bitmap->hardware_format = XBOX_NULL;
 	bitmap->cache_block_index = NONE;
 
 	return;
@@ -409,7 +410,7 @@ void texture_cache_bitmap_delete(
 		}
 		SET_FLAG(bitmap->flags, _bitmap_cached_bit, FALSE);
 		bitmap->cache_block_index = NONE;
-		bitmap->base_address = NULL;
+		bitmap->base_address = XBOX_NULL;
 	}
 
 	return;
@@ -589,7 +590,7 @@ static void texture_cache_delete_block_proc(
 		0x187,
 		texture->bitmap->cache_block_index==block_index);
 	texture->bitmap->cache_block_index = NONE;
-	texture->bitmap->base_address = NULL;
+	texture->bitmap->base_address = XBOX_NULL;
 	datum_delete(
 		xbox_texture_cache_globals.textures,
 		block_index);
@@ -621,10 +622,23 @@ static void texture_cache_initialize_hardware_format(
 			(2 << D3DFORMAT_DIMENSION_SHIFT) |
 			D3DFORMAT_BORDERSOURCE_COLOR |
 			D3DFORMAT_DMACHANNEL_A;
+		/* port: (the pitch in whole steps, a Halo PC map's rounded up:
+		texture_cache_bitmap_valid) */
 		texture->Size =
-			((bitmap_mipmap_get_row_pitch(bitmap, 0) / D3DTEXTURE_PITCH_ALIGNMENT - 1) << D3DSIZE_PITCH_SHIFT) |
+			(((bitmap_mipmap_get_row_pitch(bitmap, 0) + D3DTEXTURE_PITCH_ALIGNMENT - 1) / D3DTEXTURE_PITCH_ALIGNMENT - 1) <<
+				D3DSIZE_PITCH_SHIFT) |
 			((bitmap->height - 1) << D3DSIZE_HEIGHT_SHIFT) |
 			(bitmap->width - 1);
+#ifdef HALO_CUSTOM_EDITION
+		/* port: a Custom Edition map's linear bitmap has its rows as Halo PC
+		lays them out, a row's texels after the last's, whatever the pitch */
+		{
+			extern boolean cache_file_tags_are_ce(void);
+
+			if (cache_file_tags_are_ce())
+				texture->Common |= D3DCOMMON_PORT_PC_LAYOUT;
+		}
+#endif
 	}
 	else
 	{
@@ -639,8 +653,45 @@ static void texture_cache_initialize_hardware_format(
 			D3DFORMAT_BORDERSOURCE_COLOR |
 			D3DFORMAT_DMACHANNEL_A;
 		texture->Size = 0;
+#ifdef HALO_CUSTOM_EDITION
+		/* port: a Custom Edition map's bitmap has its pixels as Halo PC lays
+		them out: uploaded as they are, not rearranged as the Xbox's */
+		{
+			extern boolean cache_file_tags_are_ce(void);
+
+			if (cache_file_tags_are_ce())
+				texture->Common |= D3DCOMMON_PORT_PC_LAYOUT;
+		}
+#endif
 	}
-	IDirect3DBaseTexture8_Register(texture, bitmap->base_address);
+#ifdef HALO_CUSTOM_EDITION
+	/* port: a Custom Edition map's HUD meter, its channels Halo PC's
+	(port/linux/game/ce_hud.c) */
+	{
+		extern boolean ce_hud_bitmap_is_meter(void const *bitmap);
+
+		if (ce_hud_bitmap_is_meter(bitmap))
+			texture->Common |= D3DCOMMON_PORT_PC_METER;
+	}
+	/* port: a Custom Edition map's bitmap in MCC's high-quality compression,
+	made DXT5's format: its blocks BC7's (port/linux/game/ce_repairs.c) */
+	{
+		extern boolean cache_file_tags_are_ce(void);
+		extern boolean ce_bitmap_is_bc7(void const *bitmap);
+
+		if (!TEST_FLAG(bitmap->flags, _bitmap_linear_bit) && cache_file_tags_are_ce() && ce_bitmap_is_bc7(bitmap))
+			texture->Format = (texture->Format & ~D3DFORMAT_FORMAT_MASK) | (D3DFMT_PORT_BC7 << D3DFORMAT_FORMAT_SHIFT);
+	}
+	/* port: a Custom Edition map's model multipurpose map, its channels
+	Halo PC's (port/linux/game/ce_models.c) */
+	{
+		extern boolean ce_models_bitmap_is_multipurpose(void const *bitmap);
+
+		if (ce_models_bitmap_is_multipurpose(bitmap))
+			texture->Common |= D3DCOMMON_PORT_PC_MULTIPURPOSE;
+	}
+#endif
+	IDirect3DBaseTexture8_Register(texture, xbox_pointer(bitmap->base_address));
 
 	return;
 }
@@ -690,7 +741,12 @@ void texture_cache_new(
 	xbox_texture_cache_globals.textures = data_new(
 		"xbox texture",
 		XBOX_TEXTURE_CACHE_PAGE_COUNT,
+#ifdef HALO_64BIT
+		/* the entry holds a native bitmap pointer */
+		MAX(XBOX_TEXTURE_CACHE_ENTRY_SIZE, sizeof(struct xbox_texture_cache_texture)));
+#else
 		XBOX_TEXTURE_CACHE_ENTRY_SIZE);
+#endif
 	match_vassert(
 		"c:\\halo\\SOURCE\\cache\\xbox_texture_cache.c",
 		98,
@@ -764,17 +820,26 @@ static boolean texture_cache_bitmap_valid(
 			bitmap_d3d_format_tables[linear ? _bitmap_d3d_format_table_linear : _bitmap_d3d_format_table_regular][bitmap->format]!=NONE &&
 			compressed_flag==compressed_format;
 	}
-	/* port: a Custom Edition map's linear rows need not be whole steps of the
-	pitch: they are padded to them as its pixels load
-	(port/linux/game/custom_edition_bitmaps.c) */
 	if (valid && linear)
 	{
 		long row_pitch = bitmap_mipmap_get_row_pitch(bitmap, 0);
 		long steps = (row_pitch+D3DTEXTURE_PITCH_ALIGNMENT-1)/D3DTEXTURE_PITCH_ALIGNMENT;
+		boolean any_pitch = FALSE;
 
+#ifdef HALO_CUSTOM_EDITION
+		/* port: a Custom Edition map's linear rows need not be whole steps
+		of the pitch: Halo PC's are a row's texels long, and are read so
+		(texture_cache_initialize_hardware_format). Sanctuary's kill icons
+		were never drawn (OpenCE's build-147 found them: xshxdex98) */
+		{
+			extern boolean cache_file_tags_are_ce(void);
+
+			any_pitch = cache_file_tags_are_ce();
+		}
+#endif
 		valid =
 			row_pitch>0 &&
-			(row_pitch%D3DTEXTURE_PITCH_ALIGNMENT==0 || custom_edition_cache_tags_loaded()) &&
+			(row_pitch%D3DTEXTURE_PITCH_ALIGNMENT==0 || any_pitch) &&
 			steps<=(long)((D3DSIZE_PITCH_MASK>>D3DSIZE_PITCH_SHIFT)+1);
 	}
 	if (!valid && !reported)
@@ -820,7 +885,11 @@ static boolean texture_cache_start_loading_bitmap(
 		struct xbox_texture_cache_texture *texture;
 
 		base_address = xbox_texture_cache_globals.base_address +
+#ifdef HALO_64BIT
+			lruv_block_get_address(
+#else
 			(unsigned long)lruv_block_get_address(
+#endif
 				xbox_texture_cache_globals.cache,
 				cache_block_index);
 		new_texture_index = datum_new_at_index(
@@ -834,7 +903,7 @@ static boolean texture_cache_start_loading_bitmap(
 			431,
 			new_texture_index==cache_block_index);
 		bitmap->cache_block_index = cache_block_index;
-		bitmap->base_address = base_address;
+		bitmap->base_address = xbox_address(base_address);
 		texture->bitmap = bitmap;
 		texture_cache_initialize_hardware_format(bitmap, &texture->hardware_format);
 		texture->read_request_handle = cache_file_read(
@@ -1057,7 +1126,7 @@ void *_texture_cache_bitmap_get_hardware_format(
 	}
 	else
 	{
-		hardware_format = bitmap->hardware_format;
+		hardware_format = xbox_pointer(bitmap->hardware_format);
 	}
 
 	if (block && !hardware_format)

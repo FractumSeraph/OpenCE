@@ -83,9 +83,10 @@ symbols in this file:
 #include "shaders/shaders.h"
 #include "rasterizer/rasterizer_console_vars.h"
 #include "rasterizer/rasterizer_model_types.h"
-/* port: model tags and static enclosure recognition at map initialization. */
 #include "cache/cache_files.h"
-#include "rasterizer/rasterizer_transparent_geometry.h"
+#include "items/equipment_definitions.h"
+#include <float.h>
+#include <xtl.h>
 
 /* ---------- constants */
 
@@ -224,13 +225,18 @@ struct render_sort_filth
 	short part_index;
 	word pad;
 };
+#ifndef HALO_64BIT
 
 typedef char verify_render_model_effect_size[sizeof(struct render_model_effect) == 0x28 ? 1 : -1];
 typedef char verify_rasterizer_model_begin_parameters_size[sizeof(struct rasterizer_model_begin_parameters) == 0xCC ? 1 : -1];
+#endif
 
 /* ---------- prototypes */
 
 #include "rasterizer/rasterizer_models.h"
+#ifdef HALO_64BIT
+#include "rasterizer/rasterizer_model_types.h"
+#endif
 
 static void render_model_parts(
 	struct model const *model,
@@ -464,85 +470,78 @@ static void render_model_parts(
 
 /* ---------- public code */
 
-/* port: a pickup's energy inside its two-sided glass shell is drawn before
-the shell with the engine's own part links (render_model_parts), as Halo CE
-Restored's tags link them, so that the centroid sort cannot put it after the
-glass; models with links of their own, skinned ones and those with other
-transparent parts are left as they are */
-static void model_geometry_fix_transparent_part_links(
-	struct model const *model, struct model_geometry *geometry)
+static boolean model_rigid_render_radius(
+	struct model const *model,
+	real_point3d const *center,
+	real *radius)
 {
-	short i, glass = NONE, energy = NONE, transparent_count = 0;
-	struct model_geometry_part *parts = geometry->parts.address;
-
-	if (model->nodes.count != 1 || geometry->parts.count < 2 ||
-		geometry->parts.count > MAXIMUM_PARTS_PER_MODEL_GEOMETRY || !parts)
+	struct model_node const *root;
+	real maximum_squared = 0.0f;
+	long geometry_index, vertex_count = 0;
+	if (model->nodes.count != 1 || !model->nodes.address ||
+		model->geometries.count <= 0 || model->geometries.count > MAXIMUM_GEOMETRIES_PER_MODEL ||
+		!model->geometries.address) return FALSE;
+	root = TAG_BLOCK_GET_ELEMENT(&model->nodes, 0, struct model_node);
+	/* Include every LOD/permutation. A one-node model has a fixed mesh in
+	 * root-node space; skeletal animation needs a different bounds policy. */
+	for (geometry_index = 0; geometry_index < model->geometries.count; ++geometry_index)
 	{
-		return;
-	}
-	for (i = 0; i < geometry->parts.count; ++i)
-	{
-		struct shader *shader;
-		struct model_shader_reference const *reference;
-
-		if (parts[i].flags || parts[i].previous_part_index != NONE || parts[i].next_part_index != NONE ||
-			!VALID_INDEX(parts[i].shader_index, model->shaders.count))
+		struct model_geometry const *geometry = TAG_BLOCK_GET_ELEMENT(&model->geometries, geometry_index, struct model_geometry);
+		long part_index;
+		if (geometry->parts.count < 0 || geometry->parts.count > MAXIMUM_PARTS_PER_MODEL_GEOMETRY ||
+			(geometry->parts.count && !geometry->parts.address)) return FALSE;
+		for (part_index = 0; part_index < geometry->parts.count; ++part_index)
 		{
-			return;
-		}
-		reference = TAG_BLOCK_GET_ELEMENT(&model->shaders, parts[i].shader_index, struct model_shader_reference);
-		shader = shader_definition_get(reference->shader.index);
-		if (shader_type_is_transparent(shader->base.type))
-		{
-			++transparent_count;
-			if (shader->base.type == _shader_type_transparent_glass)
+			struct model_geometry_part const *part = TAG_BLOCK_GET_ELEMENT(&geometry->parts, part_index, struct model_geometry_part);
+			struct vertex_buffer const *buffer = &part->vertex_buffer;
+			byte *vertices = NULL;
+			long stride, i;
+			boolean valid = TRUE;
+			if (TEST_FLAG(part->flags, _model_geometry_part_stripped_bit)) continue;
+			if (TEST_FLAG(part->flags, _model_geometry_part_local_nodes_bit) || !buffer->hardware_format || buffer->offset ||
+				buffer->count <= 0 || buffer->count > MAXIMUM_VERTICES_PER_MODEL_GEOMETRY_PART ||
+				(buffer->type != _rasterizer_vertex_type_model_compressed && buffer->type != _rasterizer_vertex_type_model_uncompressed)) return FALSE;
+			stride = rasterizer_geometry_get_vertex_size(buffer->type);
+			IDirect3DVertexBuffer8_Lock(XBOX_POINTER(IDirect3DVertexBuffer8, buffer->hardware_format), 0, 0, &vertices, D3DLOCK_READONLY);
+			if (!vertices) valid = FALSE;
+			for (i = 0; valid && i < buffer->count; ++i)
 			{
-				glass = i;
+				real_point3d point;
+				real squared;
+				matrix4x3_transform_point(&root->runtime_default_inverse_matrix,
+					(real_point3d const *)(vertices + i * stride), &point);
+				squared = distance_squared3d(&point, center);
+				if (!(squared >= 0.0f && squared < FLT_MAX)) valid = FALSE;
+				else maximum_squared = MAX(maximum_squared, squared);
 			}
-			else if (shader->base.type == _shader_type_transparent_generic)
-			{
-				energy = i;
-			}
+			IDirect3DVertexBuffer8_Unlock(XBOX_POINTER(IDirect3DVertexBuffer8, buffer->hardware_format));
+			if (!valid) return FALSE;
+			vertex_count += buffer->count;
 		}
 	}
-	if (transparent_count == 2 && glass != NONE && energy != NONE &&
-		rasterizer_transparent_geometry_is_enclosure(
-			shader_definition_get(TAG_BLOCK_GET_ELEMENT(&model->shaders, parts[glass].shader_index, struct model_shader_reference)->shader.index),
-			&parts[glass].vertex_buffer, &parts[glass].triangle_buffer,
-			shader_definition_get(TAG_BLOCK_GET_ELEMENT(&model->shaders, parts[energy].shader_index, struct model_shader_reference)->shader.index),
-			&parts[energy].vertex_buffer))
-	{
-		/* (a link to part zero is none: with the glass part zero, the two
-		parts, which have no links of their own, change places) */
-		if (glass == 0)
-		{
-			struct model_geometry_part swap = parts[glass];
-			parts[glass] = parts[energy];
-			parts[energy] = swap;
-			glass = energy;
-			energy = 0;
-		}
-		parts[energy].next_part_index = (char)glass;
-		parts[glass].previous_part_index = (char)energy;
-	}
+	if (!vertex_count) return FALSE;
+	/* Round outward so the extremal vertex stays inside the sphere. */
+	*radius = nextafterf(sqrtf(maximum_squared), FLT_MAX);
+	return TRUE;
 }
 
-/* port: the links of every model the map loaded (at its start: the meshes
-do not change, and the next map's tags are loaded afresh) */
-void models_fix_transparent_part_links(void)
+void models_fix_powerup_render_bounds(void)
 {
 	struct tag_iterator iterator;
 	long index;
-
-	tag_iterator_new(&iterator, MODELS_GROUP_TAG);
+	tag_iterator_new(&iterator, EQUIPMENT_DEFINITION_TAG);
 	while ((index = tag_iterator_next(&iterator)) != NONE)
 	{
-		struct model *model = model_definition_get(index);
-		long geometry;
-		for (geometry = 0; geometry < model->geometries.count; ++geometry)
+		struct equipment_definition *equipment = equipment_definition_get(index);
+		real radius;
+		if ((equipment->equipment.powerup_type == _equipment_powerup_overshield ||
+			equipment->equipment.powerup_type == _equipment_powerup_active_camouflage) &&
+			equipment->object.model.index != NONE && equipment->object.animation_graph.index == NONE &&
+			model_rigid_render_radius(model_definition_get(equipment->object.model.index), &equipment->object.bounding_offset, &radius) &&
+			radius > equipment->object.render_bounding_radius)
 		{
-			model_geometry_fix_transparent_part_links(model,
-				TAG_BLOCK_GET_ELEMENT(&model->geometries, geometry, struct model_geometry));
+			/* Derived tag data only: leave physics, pickup radius and saves intact. */
+			equipment->object.render_bounding_radius = radius;
 		}
 	}
 }
@@ -1235,7 +1234,17 @@ void render_model(
 		model_parameters.animation.colors = change_colors;
 		model_parameters.animation.values = function_values;
 		model_parameters.skinning.node_matrices = relative_node_matrices;
+#ifdef HALO_CUSTOM_EDITION
+		/* port: no more than the renderer skins (rasterizer_set_model_skinning's
+		RASTERIZER_MAXIMUM_NODES_PER_MODEL). A Custom Edition model may have
+		more nodes, up to the model's maximum (a first-person weapon's, the
+		arms' nodes and its own), whose vertices are checked to be skinned to
+		none past them (port/linux/game/ce_models.c) */
+		model_parameters.skinning.node_matrix_count =
+			MIN(node_count, RASTERIZER_MAXIMUM_NODES_PER_MODEL - 1);
+#else
 		model_parameters.skinning.node_matrix_count = node_count;
+#endif
 		model_parameters.geometry_flags = 0;
 		model_parameters.base_map_scale = model->base_map_scale;
 

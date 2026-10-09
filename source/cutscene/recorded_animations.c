@@ -308,7 +308,7 @@ void recorded_animations_update(
 						&thread->controller,
 						relative_ticks,
 						&thread->event_stream,
-						(byte const *)animation->event_stream.address + animation->event_stream.size);
+						(byte const *)xbox_pointer(animation->event_stream.address) + animation->event_stream.size);
 				}
 				else
 				{
@@ -495,7 +495,7 @@ void recorded_animation_verify(
 	long ticks_left;
 	boolean finished;
 
-	stream = animation->event_stream.address;
+	stream = xbox_pointer(animation->event_stream.address);
 	playback_stream = stream;
 	size = animation->event_stream.size;
 	ticks_left = (word)animation->length_in_ticks;
@@ -742,7 +742,7 @@ static boolean recorded_animation_play_internal(
 						&thread->controller,
 						&thread->event_stream,
 						animation->unit_control_data_version,
-						(byte const *)animation->event_stream.address + animation->event_stream.size);
+						(byte const *)xbox_pointer(animation->event_stream.address) + animation->event_stream.size);
 
 					unit_set_actively_controlled(unit_index, TRUE);
 					SET_FLAG(
@@ -806,7 +806,7 @@ static boolean recorded_animation_playable(
 {
 	struct unit_control_data controller;
 	byte animation_state[0xC];
-	byte *stream = animation->event_stream.address;
+	byte *stream = xbox_pointer(animation->event_stream.address);
 
 	if (animation->version == 0 ||
 		animation->version > RECORDED_ANIMATION_VERSION ||
@@ -830,7 +830,7 @@ static boolean recorded_animation_stream_holds(
 	struct recorded_animation_definition const *animation,
 	byte const *event_stream)
 {
-	byte const *stream = animation->event_stream.address;
+	byte const *stream = xbox_pointer(animation->event_stream.address);
 
 	return stream &&
 		animation->event_stream.size > 0 &&

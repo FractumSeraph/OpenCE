@@ -148,6 +148,9 @@ symbols in this file:
 #include "network_coop.h" /* port: port/linux/game/network_coop.c */
 
 #include <stddef.h>
+#ifdef HALO_64BIT
+#include "memory/data.h"
+#endif
 
 /* ---------- constants */
 
@@ -397,6 +400,7 @@ typedef char hud_message_size_assert[
 	sizeof(struct hud_message_definition) == 0x8C ? 1 : -1];
 typedef char hud_state_message_text_info_size_assert[
 	sizeof(struct hud_state_message_text_info_definition) == 4 ? 1 : -1];
+#ifndef HALO_64BIT
 typedef char hud_state_message_info_size_assert[
 	sizeof(union hud_state_message_info_definition) == 4 ? 1 : -1];
 typedef char hud_state_message_runtime_size_assert[
@@ -409,8 +413,10 @@ typedef char hud_state_message_runtime_valid_offset_assert[
 	offsetof(struct hud_state_message_runtime_definition, valid) == 0x228 ? 1 : -1];
 typedef char hud_state_message_runtime_is_text_flags_offset_assert[
 	offsetof(struct hud_state_message_runtime_definition, is_text_flags) == 0x229 ? 1 : -1];
+#endif
 typedef char hud_messaging_datum_state_message_offset_assert[
 	offsetof(struct hud_messaging_datum_definition, state_message) == 0x230 ? 1 : -1];
+#ifndef HALO_64BIT
 typedef char hud_messaging_datum_leave_first_line_blank_offset_assert[
 	offsetof(struct hud_messaging_datum_definition, leave_first_line_blank) == 0x45E ? 1 : -1];
 typedef char hud_messaging_datum_custom_message_offset_assert[
@@ -433,6 +439,7 @@ typedef char hud_messaging_timer_flash_cutoff_offset_assert[
 	offsetof(struct hud_messaging_globals_definition, timer.flash_cutoff) == 0x119E ? 1 : -1];
 typedef char hud_messaging_timer_enabled_offset_assert[
 	offsetof(struct hud_messaging_globals_definition, timer.enabled) == 0x11A7 ? 1 : -1];
+#endif
 typedef char hud_messaging_parameters_size_assert[
 	sizeof(struct hud_messaging_parameters_definition) == 0x120 ? 1 : -1];
 typedef char hud_messaging_single_player_font_index_offset_assert[
@@ -1685,9 +1692,9 @@ void hud_messaging_update(
 								}
 								else
 								{
-									/* port: help text has no custom icons: this one
-									is left out (the button icons' list is not
-									theirs, and its index is still NONE) */
+									/* Help text has no custom icons. Leave this one out.
+									The button icon list is the wrong list, and its index
+									is still NONE. */
 									static boolean help_custom_icon_reported = FALSE;
 
 									if (!help_custom_icon_reported)
@@ -1888,10 +1895,7 @@ void hud_messaging_update(
 					/* port: the item's text (the map's) is the format: as
 					one only if it takes the count alone, and bounded */
 					if (item_text && ustring_format_takes(item_text, "d"))
-					{
 						usnprintf(formatted, NUMBEROF(formatted), item_text, message->quantity / value_scale);
-						formatted[NUMBEROF(formatted) - 1] = 0;
-					}
 					else
 						ustrncpy_terminated(formatted, item_text, NUMBEROF(formatted));
 					rasterizer_draw_unicode_string(

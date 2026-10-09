@@ -54,6 +54,9 @@ struct tag_iterator
 
 /* ---------- prototypes/CACHE_FILES.C */
 
+void *cache_files_tag_cache(
+	unsigned long *size);
+
 const char *cache_files_map_directory(
 	void);
 
@@ -63,6 +66,8 @@ boolean cache_file_header_verify(
 	boolean fatal);
 boolean cache_files_give_time_to_precache(
 	char const *map_name);
+char const *cache_file_loaded_map_name(
+	void);
 char const *cache_files_build_region(
 	char const *build);
 char const *cache_files_multiplayer_region(
@@ -185,9 +190,6 @@ short cache_file_read(
 	boolean blocking);
 
 unsigned long tag_get_group_tag(long tag_index);
-/* port: whether size bytes at address lie in the tag cache the loaded map's
-tags are in: this build's, or a Custom Edition map's own */
-boolean cache_file_tag_cache_contains(void const *address, long size);
 
 /* ---------- prototypes/XBOX_TEXTURE_CACHE.C */
 

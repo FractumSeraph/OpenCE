@@ -1053,7 +1053,7 @@ static void bsp3d_check(
 	while (stack_count > 0)
 	{
 		struct bsp_walk_entry entry = bsp_walk_stack[--stack_count];
-		struct bsp3d_node *node = (struct bsp3d_node *)bsp->bsp3d.nodes.address + entry.node_index;
+		struct bsp3d_node *node = (struct bsp3d_node *)xbox_pointer(bsp->bsp3d.nodes.address) + entry.node_index;
 		short child_index;
 
 		for (child_index = 0; child_index < NUMBEROF(node->children); child_index++)
@@ -1104,7 +1104,7 @@ static void bsp2d_check(
 	bsp_visited_clear(bsp->bsp2d.nodes.count);
 	for (reference_index = 0; reference_index < bsp->bsp2d_references.count; reference_index++)
 	{
-		struct bsp2d_reference *reference = (struct bsp2d_reference *)bsp->bsp2d_references.address + reference_index;
+		struct bsp2d_reference *reference = (struct bsp2d_reference *)xbox_pointer(bsp->bsp2d_references.address) + reference_index;
 		long stack_count = 0;
 
 		if ((reference->plane_designator & LONG_MAX) >= bsp->bsp3d.planes.count)
@@ -1122,7 +1122,7 @@ static void bsp2d_check(
 		while (stack_count > 0)
 		{
 			struct bsp_walk_entry entry = bsp_walk_stack[--stack_count];
-			struct bsp2d_node *node = (struct bsp2d_node *)bsp->bsp2d.nodes.address + entry.node_index;
+			struct bsp2d_node *node = (struct bsp2d_node *)xbox_pointer(bsp->bsp2d.nodes.address) + entry.node_index;
 			short child_index;
 
 			for (child_index = 0; child_index < NUMBEROF(node->child_indices); child_index++)
@@ -1150,7 +1150,7 @@ static void collision_leaves_check(
 
 	for (leaf_index = 0; leaf_index < bsp->leaves.count; leaf_index++)
 	{
-		struct collision_leaf *leaf = (struct collision_leaf *)bsp->leaves.address + leaf_index;
+		struct collision_leaf *leaf = (struct collision_leaf *)xbox_pointer(bsp->leaves.address) + leaf_index;
 
 		/* (a leaf of none has none's first, NONE) */
 		if (leaf->bsp2d_reference_count < 0 ||
@@ -1182,7 +1182,7 @@ static boolean collision_surfaces_check(
 
 	for (surface_index = 0; surface_index < bsp->surfaces.count; surface_index++)
 	{
-		struct collision_surface *surface = (struct collision_surface *)bsp->surfaces.address + surface_index;
+		struct collision_surface *surface = (struct collision_surface *)xbox_pointer(bsp->surfaces.address) + surface_index;
 		long edge_index = surface->first_edge_index;
 		short edge_count = 0;
 
@@ -1203,7 +1203,7 @@ static boolean collision_surfaces_check(
 					surface_index, MAXIMUM_EDGES_PER_COLLISION_SURFACE);
 				return FALSE;
 			}
-			edge = (struct collision_edge const *)bsp->edges.address + edge_index;
+			edge = (struct collision_edge const *)xbox_pointer(bsp->edges.address) + edge_index;
 			if (edge->surface_indices[0] != surface_index && edge->surface_indices[1] != surface_index)
 			{
 				tag_validate_refuse(validation, "has surface %ld with edge %ld, which is not its", surface_index,
@@ -1224,16 +1224,6 @@ static boolean collision_bsp_graph_check(
 	struct collision_bsp *bsp,
 	boolean structure)
 {
-	/* (the nodes, surfaces and bsp2d references each name a plane, which the
-	game reads by its designator's index whatever it is: with no planes, no
-	value is one, and the bsp cannot be walked) */
-	if (!bsp->bsp3d.planes.count &&
-		(bsp->bsp3d.nodes.count || bsp->surfaces.count || bsp->bsp2d_references.count))
-	{
-		tag_validate_refuse(validation, "has %ld nodes, %ld surfaces and %ld bsp2d references, and no planes",
-			bsp->bsp3d.nodes.count, bsp->surfaces.count, bsp->bsp2d_references.count);
-		return FALSE;
-	}
 	bsp3d_check(validation, bsp);
 	bsp2d_check(validation, bsp);
 	collision_leaves_check(validation, bsp);
@@ -1262,7 +1252,7 @@ static boolean structure_collision_bsp_check(
 static struct collision_bsp *structure_collision_bsp_get(
 	struct structure_bsp *structure_bsp)
 {
-	return structure_bsp->collision_bsp.count ? structure_bsp->collision_bsp.address : NULL;
+	return structure_bsp->collision_bsp.count ? xbox_pointer(structure_bsp->collision_bsp.address) : NULL;
 }
 
 /* a material's vertex buffer: its hardware buffer one of the bsp header's
@@ -1288,16 +1278,9 @@ static void structure_vertex_buffer_check(
 
 	if (!vertices->hardware_format)
 		return;
-	/* (a Custom Edition map's bsp has none: its materials are given theirs as
-	their vertices are compressed, custom_edition_geometry.c) */
-	if (tag_validate_custom_edition(validation))
-	{
-		vertices->hardware_format = NULL;
-		return;
-	}
 	data = lightmap ?
-		tag_validate_index_buffer_data(validation, vertices->hardware_format) :
-		tag_validate_vertex_buffer_data(validation, vertices->hardware_format);
+		tag_validate_index_buffer_data(validation, xbox_pointer(vertices->hardware_format)) :
+		tag_validate_vertex_buffer_data(validation, xbox_pointer(vertices->hardware_format));
 	/* (its type is one of the environment's and its count no more than
 	MAXIMUM_VERTICES_PER_STRUCTURE_MATERIAL: structure_material_check) */
 	if (!data ||
@@ -1305,7 +1288,7 @@ static void structure_vertex_buffer_check(
 	{
 		tag_validate_correct(validation, "lightmap %d's material %d's %svertices (%ld) are not in a buffer of the"
 			" bsp's: none", lightmap_index, material_index, lightmap ? "lightmap " : "", vertices->count);
-		vertices->hardware_format = NULL;
+		vertices->hardware_format = XBOX_NULL;
 	}
 
 	return;
@@ -1324,17 +1307,10 @@ static void structure_material_check(
 	short material_index,
 	long *previous_surface_end)
 {
-	struct structure_surface *surfaces = structure_bsp->surfaces.address;
-	struct structure_lightmap const *lightmap = (struct structure_lightmap const *)structure_bsp->lightmaps.address +
+	struct structure_surface *surfaces = xbox_pointer(structure_bsp->surfaces.address);
+	struct structure_lightmap const *lightmap = (struct structure_lightmap const *)xbox_pointer(structure_bsp->lightmaps.address) +
 		lightmap_index;
-	/* (a Custom Edition map's vertices are uncompressed, and compressed as
-	the bsp loads: custom_edition_geometry.c) */
-	boolean uncompressed = tag_validate_custom_edition(validation);
-	long vertex_data_size = uncompressed ? material->uncompressed_vertex_data.size : material->compressed_vertex_data.size;
-	long vertex_size = uncompressed ? UNCOMPRESSED_ENVIRONMENT_VERTEX_SIZE : COMPRESSED_ENVIRONMENT_VERTEX_SIZE;
-	long lightmap_vertex_size = uncompressed ?
-		UNCOMPRESSED_ENVIRONMENT_LIGHTMAP_VERTEX_SIZE :
-		COMPRESSED_ENVIRONMENT_LIGHTMAP_VERTEX_SIZE;
+	long vertex_data_size = material->compressed_vertex_data.size;
 	long vertex_count;
 	long surface_index;
 	long end;
@@ -1347,14 +1323,6 @@ static void structure_material_check(
 			structure_bsp->surfaces.count);
 		material->first_surface_index = 0;
 		material->surface_count = 0;
-	}
-	/* (a Custom Edition map's tools leave a lightmap vertex type of 0 or 2
-	whatever its vertices are; its vertices are uncompressed, and their types
-	this build's once they are compressed: custom_edition_geometry.c) */
-	if (uncompressed)
-	{
-		material->vertices.type = _rasterizer_vertex_type_environment_uncompressed;
-		material->lightmap_vertices.type = _rasterizer_vertex_type_environment_lightmap_uncompressed;
 	}
 	if (material->vertices.type != _rasterizer_vertex_type_environment_uncompressed &&
 		material->vertices.type != _rasterizer_vertex_type_environment_compressed)
@@ -1375,13 +1343,14 @@ static void structure_material_check(
 	if (material->vertices.count < 0 || material->lightmap_vertices.count < 0 ||
 		material->vertices.count > MAXIMUM_VERTICES_PER_STRUCTURE_MATERIAL ||
 		material->lightmap_vertices.count > MAXIMUM_VERTICES_PER_STRUCTURE_MATERIAL ||
-		material->vertices.count * vertex_size + material->lightmap_vertices.count * lightmap_vertex_size > vertex_data_size)
+		material->vertices.count * COMPRESSED_ENVIRONMENT_VERTEX_SIZE +
+			material->lightmap_vertices.count * COMPRESSED_ENVIRONMENT_LIGHTMAP_VERTEX_SIZE > vertex_data_size)
 	{
 		long fit_count = PIN(material->vertices.count, 0,
-			MIN(vertex_data_size / vertex_size, MAXIMUM_VERTICES_PER_STRUCTURE_MATERIAL));
+			MIN(vertex_data_size / COMPRESSED_ENVIRONMENT_VERTEX_SIZE, MAXIMUM_VERTICES_PER_STRUCTURE_MATERIAL));
 		long fit_lightmap_count = PIN(material->lightmap_vertices.count, 0,
-			MIN((vertex_data_size - fit_count * vertex_size) / lightmap_vertex_size,
-				MAXIMUM_VERTICES_PER_STRUCTURE_MATERIAL));
+			MIN((vertex_data_size - fit_count * COMPRESSED_ENVIRONMENT_VERTEX_SIZE) /
+				COMPRESSED_ENVIRONMENT_LIGHTMAP_VERTEX_SIZE, MAXIMUM_VERTICES_PER_STRUCTURE_MATERIAL));
 
 		tag_validate_correct(validation, "lightmap %d's material %d's %ld vertices and %ld lightmap vertices are not in"
 			" its %ld bytes: %ld and %ld", lightmap_index, material_index, material->vertices.count,
@@ -1396,7 +1365,7 @@ static void structure_material_check(
 	no buffer. The retail maps' lightless materials have one, so this is no
 	correction) */
 	if (!material->lightmap_vertices.count)
-		material->lightmap_vertices.hardware_format = NULL;
+		material->lightmap_vertices.hardware_format = XBOX_NULL;
 
 	/* (its surfaces' vertices: its own, and its lightmap's when it has them
 	or its lightmap a bitmap, which object_lights.c samples them in) */
@@ -1444,7 +1413,7 @@ static void structure_cluster_check(
 	struct structure_cluster_schema *cluster,
 	short cluster_index)
 {
-	long *surface_indices = cluster->surface_indices.address;
+	long *surface_indices = xbox_pointer(cluster->surface_indices.address);
 	long count = cluster->surface_indices.count;
 	long index;
 
@@ -1494,10 +1463,10 @@ static void structure_cluster_check(
 
 		if (surface_indices[index] < 0 || surface_indices[index] >= structure_bsp->lightmaps.count)
 			break;
-		lightmap = (struct structure_lightmap *)structure_bsp->lightmaps.address + surface_indices[index];
+		lightmap = (struct structure_lightmap *)xbox_pointer(structure_bsp->lightmaps.address) + surface_indices[index];
 		if (surface_indices[index + 1] < 0 || surface_indices[index + 1] >= lightmap->materials.count)
 			break;
-		material = (struct structure_material *)lightmap->materials.address + surface_indices[index + 1];
+		material = (struct structure_material *)xbox_pointer(lightmap->materials.address) + surface_indices[index + 1];
 		index += 3;
 		group_end = group_count <= 0 ? index : group_count > count - index ? count : index + group_count;
 		for (; index < group_end; index++)
@@ -1507,7 +1476,7 @@ static void structure_cluster_check(
 
 			if ((unsigned long)surface_index >= (unsigned long)structure_bsp->surfaces.count)
 				continue;
-			surface = (struct structure_surface const *)structure_bsp->surfaces.address + surface_index;
+			surface = (struct structure_surface const *)xbox_pointer(structure_bsp->surfaces.address) + surface_index;
 			if (surface->vertex_indices[0] >= material->vertices.count ||
 				surface->vertex_indices[1] >= material->vertices.count ||
 				surface->vertex_indices[2] >= material->vertices.count)
@@ -1531,8 +1500,8 @@ static boolean structure_detail_object_data_check(
 	void *base)
 {
 	struct structure_detail_object_data *data = base;
-	struct detail_object_cell_definition const *cells = data->cells.address;
-	word const *counts = data->counts.address;
+	struct detail_object_cell_definition const *cells = xbox_pointer(data->cells.address);
+	word const *counts = xbox_pointer(data->counts.address);
 	long cell_index;
 
 	for (cell_index = 0; cell_index < data->cells.count; cell_index++)
@@ -1600,7 +1569,7 @@ static boolean structure_bsp_check(
 
 	for (index = 0; index < structure_bsp->leaves.count; index++)
 	{
-		struct structure_leaf *leaf = (struct structure_leaf *)structure_bsp->leaves.address + index;
+		struct structure_leaf *leaf = (struct structure_leaf *)xbox_pointer(structure_bsp->leaves.address) + index;
 
 		if (leaf->surface_reference_count < 0 ||
 			(leaf->surface_reference_count &&
@@ -1618,7 +1587,7 @@ static boolean structure_bsp_check(
 	for (index = 0; index < structure_bsp->surface_references.count; index++)
 	{
 		struct structure_surface_reference *reference =
-			(struct structure_surface_reference *)structure_bsp->surface_references.address + index;
+			(struct structure_surface_reference *)xbox_pointer(structure_bsp->surface_references.address) + index;
 
 		if (reference->bsp3d_node_index != NONE &&
 			(reference->bsp3d_node_index < 0 || reference->bsp3d_node_index >= collision_bsp->bsp3d.nodes.count))
@@ -1631,7 +1600,7 @@ static boolean structure_bsp_check(
 	for (index = 0; index < structure_bsp->cluster_portals.count; index++)
 	{
 		struct structure_cluster_portal *portal =
-			(struct structure_cluster_portal *)structure_bsp->cluster_portals.address + index;
+			(struct structure_cluster_portal *)xbox_pointer(structure_bsp->cluster_portals.address) + index;
 
 		if (portal->plane_index < 0 || portal->plane_index >= collision_bsp->bsp3d.planes.count)
 		{
@@ -1649,23 +1618,23 @@ static boolean structure_bsp_check(
 		tag_validate_correct(validation, "has %ld breakable surfaces and no surfaces: none",
 			structure_bsp->breakable_surfaces.count);
 		structure_bsp->breakable_surfaces.count = 0;
-		structure_bsp->breakable_surfaces.address = NULL;
+		structure_bsp->breakable_surfaces.address = XBOX_NULL;
 		/* (and its materials' breakable surfaces, checked against the count
 		before, are none) */
 		for (lightmap_index = 0; lightmap_index < structure_bsp->lightmaps.count; lightmap_index++)
 		{
-			struct structure_lightmap *lightmap = (struct structure_lightmap *)structure_bsp->lightmaps.address +
+			struct structure_lightmap *lightmap = (struct structure_lightmap *)xbox_pointer(structure_bsp->lightmaps.address) +
 				lightmap_index;
 			long material_index;
 
 			for (material_index = 0; material_index < lightmap->materials.count; material_index++)
-				((struct structure_material *)lightmap->materials.address + material_index)->breakable_surface_index = NONE;
+				((struct structure_material *)xbox_pointer(lightmap->materials.address) + material_index)->breakable_surface_index = NONE;
 		}
 	}
 	for (index = 0; index < structure_bsp->breakable_surfaces.count; index++)
 	{
 		struct structure_breakable_surface *breakable_surface =
-			(struct structure_breakable_surface *)structure_bsp->breakable_surfaces.address + index;
+			(struct structure_breakable_surface *)xbox_pointer(structure_bsp->breakable_surfaces.address) + index;
 
 		if (breakable_surface->collision_surface_index < 0 || breakable_surface->collision_surface_index >= surface_count)
 		{
@@ -1684,7 +1653,7 @@ static boolean structure_bsp_check(
 
 		for (index = 0; index < structure_bsp->lightmaps.count; index++)
 		{
-			struct structure_lightmap *lightmap = (struct structure_lightmap *)structure_bsp->lightmaps.address + index;
+			struct structure_lightmap *lightmap = (struct structure_lightmap *)xbox_pointer(structure_bsp->lightmaps.address) + index;
 			long material_index;
 
 			if (lightmap->bitmap_index != NONE && (lightmap->bitmap_index < 0 || lightmap->bitmap_index >= bitmap_count))
@@ -1696,7 +1665,7 @@ static boolean structure_bsp_check(
 			for (material_index = 0; material_index < lightmap->materials.count; material_index++)
 			{
 				structure_material_check(validation, structure_bsp,
-					(struct structure_material *)lightmap->materials.address + material_index,
+					(struct structure_material *)xbox_pointer(lightmap->materials.address) + material_index,
 					(short)index, (short)material_index, &previous_surface_end);
 			}
 		}
@@ -1705,7 +1674,7 @@ static boolean structure_bsp_check(
 	for (index = 0; index < structure_bsp->clusters.count; index++)
 	{
 		structure_cluster_check(validation, structure_bsp,
-			(struct structure_cluster_schema *)structure_bsp->clusters.address + index, (short)index);
+			(struct structure_cluster_schema *)xbox_pointer(structure_bsp->clusters.address) + index, (short)index);
 	}
 
 	return TRUE;

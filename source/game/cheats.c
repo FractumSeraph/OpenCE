@@ -67,6 +67,9 @@ symbols in this file:
 #include "scenario/scenario.h"
 #include "tag_files/tag_groups.h"
 #include "units/units.h"
+#ifdef HALO_64BIT
+#include "cseries/errors.h"
+#endif
 
 /* ---------- constants */
 
@@ -418,7 +421,7 @@ static void cheat_objects_from_block(
 	if (block->count > 0 && block->address)
 	{
 		cheat_objects(
-			(struct tag_reference *)block->address,
+			XBOX_POINTER(struct tag_reference, block->address),
 			(short)MIN(block->count, SHORT_MAX));
 	}
 

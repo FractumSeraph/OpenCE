@@ -30,8 +30,9 @@ Without an audio device, a clock thread runs the same mixer into a scratch
 buffer, so streams still drain at their real rate.
 
 audio.volume sets the master volume (default 1.0); audio.reverb = false
-turns the reverb off; audio.enabled = false skips opening a device
-(port_config.c).
+turns the reverb off; audio.resampling = "linear" resamples by linear
+interpolation instead (resampling); audio.enabled = false skips opening a
+device; audio.buffer_frames sets the device's buffer (port_config.c).
 */
 
 #include "platform.h"
@@ -192,6 +193,8 @@ static DSI3DL2LISTENER environment =
 static unsigned long environment_serial;
 /* audio.reverb */
 static BOOL reverb_enabled = TRUE;
+/* audio.resampling = "linear" */
+static BOOL resampling_linear = FALSE;
 
 static float gain_from_millibels(LONG millibels)
 {
@@ -488,7 +491,12 @@ down, a gritty haze above 11 kHz over every 22 kHz voice. A voice
 played faster than the output rate takes its frames (a step over 1) gets the
 low pass narrowed to match, up to RESAMPLER_MAXIMUM_STRETCH times, so it
 does not alias. The frames come from the voice's packets in turn, so the low
-pass reads straight across a packet's end into the next. */
+pass reads straight across a packet's end into the next.
+
+audio.resampling = "linear" interpolates between the two frames around
+the moment instead, as the mixer did before: brighter to some ears, for the
+images it leaves, which the windowed sinc takes out. It is a choice of its
+own: turning the reverb off left the low pass on. */
 
 /* the low pass's one side, RESAMPLER_TABLE_STEPS values a source frame */
 static float resampler_table[RESAMPLER_ZERO_CROSSINGS * RESAMPLER_TABLE_STEPS + 2];
@@ -795,6 +803,15 @@ static void mix_voice(struct sdl_stream *stream, float *output, float *send, uns
 		{
 			/* a voice turned all the way down (out of earshot), and not
 			sending to the reverb, only moves on */
+		}
+		else if (resampling_linear)
+		{
+			const float *a = stream->history[stream->center % RESAMPLER_HISTORY];
+			const float *b = stream->history[(stream->center + 1) % RESAMPLER_HISTORY];
+			float fraction = (float)stream->phase;
+
+			sample_left = a[0] + (b[0] - a[0]) * fraction;
+			sample_right = a[1] + (b[1] - a[1]) * fraction;
 		}
 		else if (scale == 1.0f)
 		{
@@ -1416,7 +1433,7 @@ static void *silent_clock_thread(void *parameter)
 			next.tv_nsec -= 1000000000L;
 			next.tv_sec++;
 		}
-		clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next, NULL);
+		platform_sleep_until(&next);
 	}
 	return NULL;
 }
@@ -1424,6 +1441,8 @@ static void *silent_clock_thread(void *parameter)
 static void audio_start(void)
 {
 	SDL_AudioSpec spec;
+	long buffer_frames;
+	char frames[16];
 
 	if (audio_started)
 		return;
@@ -1431,6 +1450,7 @@ static void audio_start(void)
 	configured_master_volume = (float)config_real("audio.volume");
 	master_volume = master_muted ? 0.0f : configured_master_volume;
 	reverb_enabled = config_boolean("audio.reverb");
+	resampling_linear = !strcmp(config_string("audio.resampling"), "linear");
 	resampler_initialize();
 	resampler_phases_initialize();
 	reverb_initialize();
@@ -1440,28 +1460,20 @@ static void audio_start(void)
 		spec.format = SDL_AUDIO_F32;
 		spec.channels = OUTPUT_CHANNELS;
 		spec.freq = OUTPUT_RATE;
-		/* SDL's Emscripten backend intentionally doubles its default sample
-		 * frames because browser main-thread scheduling needs more headroom.
-		 * Keep the lower-latency override for native builds only: on the web it
-		 * cut the effective buffer to 1024 frames and caused audible underruns
-		 * in browsers such as Brave Flatpak. */
+		/* audio.buffer_frames: the device's buffer (port_config.c) */
+		buffer_frames = config_integer("audio.buffer_frames");
+		if (buffer_frames < 64)
+			buffer_frames = 64;
+		if (buffer_frames > 8192)
+			buffer_frames = 8192;
+		snprintf(frames, sizeof(frames), "%ld", buffer_frames);
+		/* (not in the browser: SDL's Emscripten backend doubles its default
+		frames for the main thread's scheduling, and a smaller buffer there
+		broke up the sound in some browsers) */
 #ifndef HALO_WEB
-#ifdef HALO_ANDROID
-		/* frames per callback: on Android each callback is handed to a thread
-		that can run the guest (host_sdl.c): 512 left it too little time and
-		the menus' music broke up, which 1024 does not (about 21 ms at 48 kHz,
-		11 ms more than 512) */
-		SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, "1024");
-#else
-		SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, "512");
+		SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, frames);
 #endif
-#endif
-		snprintf(audio_device_name, sizeof(audio_device_name), "%s", audio_device_setting());
-		audio_device_read_at = config_changes();
-		audio_stream = SDL_OpenAudioDeviceStream(platform_audio_device(FALSE, audio_device_name), &spec,
-			audio_callback, NULL);
-		if (!audio_stream && strcmp(audio_device_name, "default"))
-			audio_stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, audio_callback, NULL);
+		audio_stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, audio_callback, NULL);
 		if (audio_stream)
 		{
 			SDL_ResumeAudioStreamDevice(audio_stream);
@@ -1530,6 +1542,10 @@ static void stream_complete_head(struct sdl_stream *stream, DWORD status, DWORD 
 	struct voice_packet *entry = &stream->packets[stream->packet_head];
 	XMEDIAPACKET packet = entry->packet;
 
+	/* (one not played to its end, flushed: the cursor was its place, and the
+	mixer may take the next while the lock is let go below) */
+	if (!entry->finished)
+		stream->cursor = 0;
 	packet_release(entry);
 	entry->finished = FALSE;
 	stream->packet_head = (stream->packet_head + 1) % MAXIMUM_STREAM_PACKETS;
@@ -1763,9 +1779,9 @@ VOID WINAPI DirectSoundDoWork(void)
 {
 	static unsigned long volume_read_at = (unsigned long)-1;
 
-	/* (audio.volume and audio.reverb read again when the settings change: on
-	the game's thread, not the mixer's, whose lock the config's file I/O
-	would hold) */
+	/* (audio.volume, audio.reverb and audio.resampling read again when the
+	settings change: on the game's thread, not the mixer's, whose lock the
+	config's file I/O would hold) */
 	if (volume_read_at != config_changes())
 	{
 		volume_read_at = config_changes();
@@ -1773,6 +1789,7 @@ VOID WINAPI DirectSoundDoWork(void)
 		/* (a muted page stays muted: platform_audio_set_muted) */
 		master_volume = master_muted ? 0.0f : configured_master_volume;
 		reverb_enabled = config_boolean("audio.reverb");
+		resampling_linear = !strcmp(config_string("audio.resampling"), "linear");
 	}
 	streams_complete_finished();
 }

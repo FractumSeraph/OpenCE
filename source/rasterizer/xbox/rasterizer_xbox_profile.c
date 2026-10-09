@@ -177,8 +177,10 @@ struct rasterizer_profile_globals
 	const char *profile_names[NUMBER_OF_RASTERIZER_PROFILES];
 };
 
+#ifndef HALO_64BIT
 typedef char rasterizer_profile_globals_size_assert[
 	sizeof(struct rasterizer_profile_globals) == 124 ? 1 : -1];
+#endif
 typedef char rasterizer_profile_globals_window_index_offset_assert[
 	offsetof(struct rasterizer_profile_globals, window_index) == 4 ? 1 : -1];
 typedef char rasterizer_profile_globals_profile_names_offset_assert[
@@ -630,16 +632,9 @@ static void profile_assert(
 		}
 		else
 		{
-			/* BUG (preserved for exact matching): January pushes the same two
-			 * varargs (profile, message) in both branches (target push and
-			 * relocation order; the later /Od build at 0x8004c0 does the same), so
-			 * this format's %s consumes the NONE profile value, not the message.
-			 * A corrected build should pass only message here.
-			 */
 			error(
 				_error_silent,
 				"### PROFILE: %s -- tell Bernie!",
-				profile,
 				message);
 		}
 

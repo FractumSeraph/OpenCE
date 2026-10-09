@@ -95,13 +95,6 @@ enum
 	and so on) */
 
 	MAXIMUM_TAG_SCHEMA_GROUPS_PER_FIELD = 15,
-
-	/* the largest tag cache a map's tags are checked in: a Custom Edition
-	map's (cache_file_formats.h, CUSTOM_EDITION_TAG_CACHE_BYTES) */
-	TAG_VALIDATE_MAXIMUM_TAG_CACHE_SIZE = 0x01700000,
-	/* the file ranges a Custom Edition map's bitmap pixels and sound samples
-	may be in (tag_validate_custom_edition_tags) */
-	MAXIMUM_TAG_VALIDATE_FILE_RANGES = 4,
 };
 
 /* ---------- macros */
@@ -261,15 +254,6 @@ struct tag_schema_group
 	struct tag_schema_definition const *definition;
 };
 
-/* bytes a tag's data in a file may be at: offset to offset + size (a
-Custom Edition map's offsets count in one space of several files:
-custom_edition_cache.c) */
-struct tag_validate_file_range
-{
-	unsigned long offset;
-	unsigned long size;
-};
-
 /* ---------- prototypes/TAG_SCHEMA_*.C */
 
 /* the groups the validator knows: lists of them (each ending with a 0 group
@@ -282,10 +266,6 @@ extern struct tag_schema_group const tag_schema_collision_groups[];
 extern struct tag_schema_group const tag_schema_render_groups[];
 extern struct tag_schema_group const tag_schema_effect_groups[];
 extern struct tag_schema_group const tag_schema_scenario_groups[];
-/* the groups a Custom Edition map's tags are of where they are laid out
-otherwise than this build's, as they are checked (tag_schema_models.c:
-gbxmodels, 'mod2', which the game takes as models, 'mode') */
-extern struct tag_schema_group const tag_schema_custom_edition_groups[];
 
 /* ---------- prototypes/TAG_VALIDATE.C */
 
@@ -296,21 +276,6 @@ boolean tag_validate_tags(
 	void *tag_header,
 	long tag_data_size,
 	long file_length,
-	char const *map_name);
-
-/* the tags of a Custom Edition map, as custom_edition_cache_load loaded and
-custom_edition_cache_convert converted them (loaded_size bytes at
-tag_header, the start of a tag cache of tag_cache_size bytes), whose bitmap
-pixels and sound samples are in file_ranges: FALSE if they cannot be used.
-They are checked as tag_validate_tags checks a map's, but for what Custom
-Edition lays out otherwise (tag_schema_custom_edition_groups; a structure
-bsp's material vertices, uncompressed, tag_validate_custom_edition) */
-boolean tag_validate_custom_edition_tags(
-	void *tag_header,
-	long loaded_size,
-	unsigned long tag_cache_size,
-	struct tag_validate_file_range const *file_ranges,
-	short file_range_count,
 	char const *map_name);
 
 /* a structure bsp just read (size bytes at base, its header there) as tag
@@ -353,19 +318,9 @@ void tag_validate_non_negative(
 	struct tag_validation *validation,
 	char const *name,
 	real *value);
-/* whether size bytes at offset in the map's file are in it (or, for a
-Custom Edition map, in one of the files its offsets count in), as data in a
-file (_tag_schema_file_data) must be */
-boolean tag_validate_file_contains(
-	struct tag_validation *validation,
-	long offset,
-	long size);
-/* the root of the tag being checked (the element a check is on may be one
-of its blocks') */
-void *tag_validate_root(
-	struct tag_validation *validation);
-/* whether the tags being checked are a Custom Edition map's */
-boolean tag_validate_custom_edition(
+/* the map file's length, which data in the file (_tag_schema_file_data)
+lies within */
+long tag_validate_file_length(
 	struct tag_validation *validation);
 /* whether size bytes at address are in the tags (or the bsp) being checked */
 boolean tag_validate_contains(

@@ -314,6 +314,7 @@ struct game_engine
 	long (*did_player_win)(
 		long player_index);
 };
+#ifndef HALO_64BIT
 
 typedef char verify_game_engine_size[sizeof(struct game_engine) == 0x88 ? 1 : -1];
 typedef char verify_game_engine_player_update_each_tick_offset[
@@ -330,6 +331,7 @@ typedef char verify_game_engine_format_message_offset[
 	offsetof(struct game_engine, format_message) == 0x64 ? 1 : -1];
 typedef char verify_game_engine_player_update_offset[
 	offsetof(struct game_engine, player_update) == 0x70 ? 1 : -1];
+#endif
 
 /* port: the most a game type's state for the distributed netcode's clients
 may take (port/linux/game/network_distributed.c's MAXIMUM_GAME_STATE_SIZE,
@@ -345,6 +347,12 @@ struct scenario_object_datum;
 struct tag_block;
 void game_engine_vehicle_placement_begin(
 	void);
+#ifdef HALO_CUSTOM_EDITION
+/* port: whether a Halo PC map's vehicles are chosen by their placements'
+spawn flags in this game, and whether a placement is (game_engine.c) */
+boolean game_engine_ce_vehicles_by_placement(void);
+boolean game_engine_ce_vehicle_placement_allowed(struct scenario_object_datum const *placement);
+#endif
 boolean game_engine_vehicle_placement_allowed(
 	struct scenario_object_datum const *placement,
 	struct tag_block *palette);
@@ -706,4 +714,14 @@ real game_engine_get_damage_multiplier(
 	long damaging_player_index,
 	long damaged_player_index);
 
+#ifdef HALO_64BIT
+long game_engine_did_player_win_default(
+	long player_index);
+
+void game_show_score_extended(
+	long player_index,
+	long score,
+	long team_index);
+
+#endif
 #endif // __GAME_ENGINE_H

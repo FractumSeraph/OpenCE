@@ -49,6 +49,7 @@ alone peers reach.
 #include "posix.h"
 #include "port_config.h"
 #include "p2p.h"
+#include "log_address.h"
 
 #ifdef HALO_WEB
 #include "../../web/src/web_loopback_net.h"
@@ -56,12 +57,25 @@ alone peers reach.
 
 #include <stdlib.h>
 #include <string.h>
+#ifdef HALO_64BIT
+/* (snprintf: the 64-bit Windows build reads no C runtime headers ahead of
+this file, as halo_linux_prefix.h has the others do) */
+#include <stdio.h>
+#endif
 
 /* ---------- address settings */
 
 /* Winsock's, which the SDK headers here leave out */
 #ifndef SO_TYPE
 #define SO_TYPE 0x1008
+#endif
+#ifdef HALO_64BIT
+
+_Static_assert(sizeof(XNADDR) == 12, "XNADDR must be 12 bytes for Halo CE network compatibility");
+_Static_assert(offsetof(XNADDR, bSizeOfStruct) == 0, "bSizeOfStruct offset must be 0");
+_Static_assert(offsetof(XNADDR, bFlags) == 1, "bFlags offset must be 1");
+_Static_assert(offsetof(XNADDR, abEnet) == 2, "abEnet offset must be 2");
+_Static_assert(offsetof(XNADDR, ina) == 8, "ina offset must be 8");
 #endif
 
 enum
@@ -1165,6 +1179,10 @@ INT WSAAPI XNetXnAddrToInAddr(const XNADDR *address, const XNKID *key_identifier
 	unsigned long peer;
 
 	(void)key_identifier;
+#ifdef HALO_64BIT
+	if (!address || !result)
+		return -1;
+#endif
 	/* an internet play peer's XNADDR carries its identifier */
 #ifdef HALO_WEB
 	if (web_net_peer_address(address->abEnet, &peer))
@@ -1172,9 +1190,28 @@ INT WSAAPI XNetXnAddrToInAddr(const XNADDR *address, const XNKID *key_identifier
 	else
 #endif
 	if (p2p_peer_address(address->abEnet, &peer))
+#ifdef HALO_64BIT
+	{
+		char peer_id[16];
+		char peer_addr[LOG_ADDRESS_SIZE];
+		snprintf(peer_id, sizeof(peer_id), "%02x%02x%02x%02x%02x%02x",
+			address->abEnet[0], address->abEnet[1], address->abEnet[2],
+			address->abEnet[3], address->abEnet[4], address->abEnet[5]);
+		log_address_ipv4(peer, 0, peer_addr, sizeof(peer_addr));
+		platform_log("Internet play: resolving peer identifier %s to virtual address %s", peer_id, peer_addr);
+#endif
 		result->s_addr = peer;
+#ifdef HALO_64BIT
+	}
+#endif
 	else
+#ifdef HALO_64BIT
+	{
+#endif
 		*result = address->ina;
+#ifdef HALO_64BIT
+	}
+#endif
 	return 0;
 }
 

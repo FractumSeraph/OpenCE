@@ -1402,7 +1402,7 @@ void vehicle_preprocess_node_orientations(
 
 	if (animation->animations.count>0
 		&& (overlay = unit_animation_get_fitting(graph,
-			((short *)animation->animations.address)[0], model_node_count))!=NULL)
+			((short *)xbox_pointer(animation->animations.address))[0], model_node_count))!=NULL)
 	{
 		aiming_screen_apply(overlay,
 			&animation->steering_screen_bounds, vehicle->vehicle.turn, 0.0f, node_orientations);
@@ -1410,7 +1410,7 @@ void vehicle_preprocess_node_orientations(
 
 	if (animation->animations.count>1
 		&& (overlay = unit_animation_get_fitting(graph,
-			((short *)animation->animations.address)[1], model_node_count))!=NULL)
+			((short *)xbox_pointer(animation->animations.address))[1], model_node_count))!=NULL)
 	{
 		value = (triple_product3d(&vehicle->object.up, &vehicle->object.forward,
 			&vehicle->object.translational_velocity)/definition->unknown2f8+1.0f)*0.5f;
@@ -1421,7 +1421,7 @@ void vehicle_preprocess_node_orientations(
 
 	if (animation->animations.count>2
 		&& (overlay = unit_animation_get_fitting(graph,
-			((short *)animation->animations.address)[2], model_node_count))!=NULL)
+			((short *)xbox_pointer(animation->animations.address))[2], model_node_count))!=NULL)
 	{
 		if (vehicle->vehicle.speed<0.0f)
 			value = 0.5f-vehicle->vehicle.speed/definition->unknown2fc*0.5f;
@@ -1435,7 +1435,7 @@ void vehicle_preprocess_node_orientations(
 
 	if (animation->animations.count>3
 		&& (overlay = unit_animation_get_fitting(graph,
-			((short *)animation->animations.address)[3], model_node_count))!=NULL)
+			((short *)xbox_pointer(animation->animations.address))[3], model_node_count))!=NULL)
 	{
 		value = vehicle_dot_product3d_test(&vehicle->object.translational_velocity, &vehicle->object.forward);
 		value = PIN(value, 0.0f, 1.0f)/(real)fabs(definition->unknown2f8);
@@ -1445,15 +1445,15 @@ void vehicle_preprocess_node_orientations(
 	}
 
 	if (animation->animations.count>4
-		&& VALID_INDEX(((short *)animation->animations.address)[4], graph->animations.count))
+		&& VALID_INDEX(((short *)xbox_pointer(animation->animations.address))[4], graph->animations.count))
 	{
 		TAG_BLOCK_GET_ELEMENT(&graph->animations,
-			((short *)animation->animations.address)[4], struct animation);
+			((short *)xbox_pointer(animation->animations.address))[4], struct animation);
 	}
 
 	if (animation->animations.count>5
 		&& (overlay = unit_animation_get_fitting(graph,
-			((short *)animation->animations.address)[5], model_node_count))!=NULL)
+			((short *)xbox_pointer(animation->animations.address))[5], model_node_count))!=NULL)
 	{
 		if (definition->wheel_circumference>0.0f)
 			value = vehicle->vehicle.wheel/definition->wheel_circumference;

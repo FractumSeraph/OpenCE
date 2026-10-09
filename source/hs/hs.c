@@ -2803,6 +2803,10 @@ symbols in this file:
 #include "math/real_math.h"
 #include "memory/data.h"
 #include "networking/network_game_globals.h"
+#ifdef HALO_CUSTOM_EDITION
+#include "game/game_engine.h"
+#include "halo_map_families.h" /* port: map_is_downloaded */
+#endif
 #include "networking/network_game_manager.h"
 #include "networking/network_server_manager.h"
 #include "network_votekick.h" /* port: port/linux/game/network_votekick.c */
@@ -3155,7 +3159,7 @@ static void evaluator( \
 	struct hs_arguments_string *arguments = (struct hs_arguments_string *)hs_macro_function_evaluate(function_index, thread_index, initialize); \
 	if (arguments) \
 	{ \
-		function(arguments->value); \
+		function(xbox_pointer(arguments->value)); /* an Xbox address */ \
 		hs_return(thread_index, 0); \
 	} \
 	return; \
@@ -3170,7 +3174,7 @@ static void evaluator( \
 	struct hs_arguments_long_string *arguments = (struct hs_arguments_long_string *)hs_macro_function_evaluate(function_index, thread_index, initialize); \
 	if (arguments) \
 	{ \
-		function(arguments->value0, arguments->value1); \
+		function(arguments->value0, xbox_pointer(arguments->value1)); \
 		hs_return(thread_index, 0); \
 	} \
 	return; \
@@ -3185,7 +3189,7 @@ static void evaluator( \
 	struct hs_arguments_long_long_string *arguments = (struct hs_arguments_long_long_string *)hs_macro_function_evaluate(function_index, thread_index, initialize); \
 	if (arguments) \
 	{ \
-		function(arguments->value0, arguments->value1, arguments->value2); \
+		function(arguments->value0, arguments->value1, xbox_pointer(arguments->value2)); \
 		hs_return(thread_index, 0); \
 	} \
 	return; \
@@ -3289,8 +3293,12 @@ union hs_evaluation_argument
 	short short_value;
 	unsigned short unsigned_short_value;
 	boolean boolean_value;
-	char const *string_value;
+	XPTR(char const) string_value; /* script values are 32 bits: an Xbox address */
 };
+
+/* (each argument a script value's 32 bits: a pointer here would make the
+64-bit build read every argument past the first from the wrong place) */
+typedef char hs_evaluation_argument_size_assert[sizeof(union hs_evaluation_argument) == 4 ? 1 : -1];
 
 struct hs_arguments_boolean
 {
@@ -3322,13 +3330,13 @@ struct hs_arguments_long_word
 
 struct hs_arguments_string
 {
-	char const *value;
+	XPTR(char const) value; /* script values are 32 bits: an Xbox address */
 };
 
 struct hs_arguments_long_string
 {
 	long value0;
-	char const *value1;
+	XPTR(char const) value1; /* script values are 32 bits: an Xbox address */
 };
 
 struct hs_arguments_long_long
@@ -3341,7 +3349,7 @@ struct hs_arguments_long_long_string
 {
 	long value0;
 	long value1;
-	char const *value2;
+	XPTR(char const) value2; /* script values are 32 bits: an Xbox address */
 };
 
 struct hs_arguments_short_word
@@ -3354,7 +3362,7 @@ struct hs_arguments_short_word
 struct hs_arguments_long_long_long
 {
 	long value0;
-	char const *value1;
+	XPTR(char const) value1; /* script values are 32 bits: an Xbox address */
 	long value2;
 };
 
@@ -3379,7 +3387,12 @@ typedef void (*hs_token_enumerator)(
 
 struct hs_function_table_storage
 {
-	struct hs_function_definition const *functions[418 + 4];
+#ifdef HALO_CUSTOM_EDITION
+	/* port: and Halo PC's functions the Xbox's have none of (below) */
+	struct hs_function_definition const *functions[418 + 3 + 24];
+#else
+	struct hs_function_definition const *functions[418];
+#endif
 	struct profile_section profile;
 	hs_token_enumerator token_enumerators[18];
 };
@@ -3387,23 +3400,23 @@ struct hs_function_table_storage
 struct hs_arguments_long_string_string
 {
 	long value0;
-	char const *value1;
-	char const *value2;
+	XPTR(char const) value1; /* script values are 32 bits: an Xbox address */
+	XPTR(char const) value2; /* script values are 32 bits: an Xbox address */
 };
 
 struct hs_arguments_long_string_long_string
 {
 	long value0;
-	char const *value1;
+	XPTR(char const) value1; /* script values are 32 bits: an Xbox address */
 	long value2;
-	char const *value3;
+	XPTR(char const) value3; /* script values are 32 bits: an Xbox address */
 };
 
 struct hs_arguments_long_long_string_word
 {
 	long value0;
 	long value1;
-	char const *value2;
+	XPTR(char const) value2; /* script values are 32 bits: an Xbox address */
 	word value3;
 };
 
@@ -3411,7 +3424,7 @@ struct hs_arguments_long_long_long_boolean
 {
 	long value0;
 	long value1;
-	char const *value2;
+	XPTR(char const) value2; /* script values are 32 bits: an Xbox address */
 	boolean value3;
 };
 
@@ -3419,7 +3432,7 @@ struct hs_arguments_long_long_long_boolean_word
 {
 	long value0;
 	long value1;
-	char const *value2;
+	XPTR(char const) value2; /* script values are 32 bits: an Xbox address */
 	boolean value3;
 	byte pad3[3];
 	word value4;
@@ -3662,6 +3675,8 @@ enum
 	_hs_node_refusal_global,
 	_hs_node_refusal_arguments,
 	_hs_node_refusal_damaged,
+	_hs_node_refusal_downloaded_function,
+	_hs_node_refusal_downloaded_global,
 };
 
 /* ---------- globals */
@@ -11626,51 +11641,51 @@ static struct hs_function_definition_with_1_parameter const xbox_set_machine_nam
 	},
 };
 
-/* port: Halo PC's sv_say and sv_end_game, which Custom Edition maps' scripts
-call (lookout_classic's and the Halo Kart maps' sv_say). They go at the end
-of the table: Xbox maps call functions by their place in it, Custom Edition
-maps by name (custom_edition_scripts.c). Every machine runs the scripts */
-
-/* (each machine shows the message to its own players) */
+#ifdef HALO_CUSTOM_EDITION
+/* port: Halo PC's functions that a Custom Edition map's scripts may call and
+the Xbox's engine has none of. A map whose scripts call one did not load
+them, and the game halted ("missing function (you need to recompile
+scripts.)": lookout_classic's and the Halo Kart maps' call sv_say). Each
+machine runs the game's scripts, so a message said reaches every player */
 static void hs_sv_say(
 	char const *message)
 {
 	wchar_t text[128];
 	short local_player_index;
-	long length = 0;
 	long index;
 
-	/* (without '|', which the HUD's text takes with the character after it
-	as one: at the end, the string's terminator) */
-	for (index = 0; message && message[index] && length < NUMBEROF(text) - 1; index++)
-	{
-		if (message[index] != '|')
-		{
-			text[length++] = (unsigned char)message[index];
-		}
-	}
-	text[length] = 0;
+	for (index = 0; message && message[index] && index < NUMBEROF(text) - 1; index++)
+		text[index] = (wchar_t)(unsigned char)message[index];
+	text[index] = 0;
 	for (local_player_index = 0; local_player_index < MAXIMUM_LOCAL_PLAYERS; local_player_index++)
 	{
 		if (local_player_get_player_index(local_player_index) != NONE)
 			hud_print_message(local_player_index, text);
 	}
-
 	return;
 }
 
-/* (the host ends the game, as its time running out does) */
-static void hs_sv_end_game(
+/* (a map's script does not quit the game) */
+static void hs_quit_from_script(
 	void)
 {
-	if (global_network_game_server_get() && game_engine_running())
-		game_engine_end_game();
+	error(_error_silent, "a script called quit (Halo PC's), which does nothing here");
+	return;
+}
 
+/* (sounds are read when they play: predicting one does nothing) */
+static void hs_sound_impulse_predict_evaluate(
+	short function_index,
+	long thread_index,
+	boolean initialize)
+{
+	if (hs_macro_function_evaluate(function_index, thread_index, initialize))
+		hs_return(thread_index, 0);
 	return;
 }
 
 HS_EVALUATE_VOID_STRING(hs_sv_say_evaluate, hs_sv_say)
-HS_EVALUATE_NO_ARGUMENTS(hs_sv_end_game_evaluate, hs_sv_end_game)
+HS_EVALUATE_NO_ARGUMENTS(hs_quit_evaluate, hs_quit_from_script)
 
 static struct hs_function_definition_with_1_parameter const sv_say_definition=
 {
@@ -11687,6 +11702,73 @@ static struct hs_function_definition_with_1_parameter const sv_say_definition=
 	},
 };
 
+static struct hs_function_definition const quit_definition=
+{
+	_hs_type_void,
+	0,
+	"quit",
+	hs_macro_function_parse,
+	hs_quit_evaluate,
+	"Halo PC's: quits the game; from a map's script, does nothing.",
+	NULL,
+	0,
+};
+
+static struct hs_function_definition_with_2_parameters const sound_impulse_predict_definition=
+{
+	{
+		_hs_type_void,
+		0,
+		"sound_impulse_predict",
+		hs_macro_function_parse,
+		hs_sound_impulse_predict_evaluate,
+		"Halo PC's: loads a sound before it plays; does nothing.",
+		NULL,
+		2,
+		{ _hs_type_sound },
+	},
+	{ _hs_type_boolean },
+};
+
+/* port: Halo PC's sv_end_game: a server ends the game, as its time running
+out does (the host's; on another machine, which runs the same script, it
+does nothing) */
+static void hs_sv_end_game(
+	void)
+{
+	if (global_network_game_server_get() && game_engine_running())
+		game_engine_end_game();
+
+	return;
+}
+
+HS_EVALUATE_NO_ARGUMENTS(hs_sv_end_game_evaluate, hs_sv_end_game)
+
+/* port: Halo PC's functions that a map's scripts may call and that do
+nothing here: Gearbox's server commands (a server here is run from the
+game's menus and its own settings, not by a map), and its settings of the
+display, sound and controls (the player's own, in config.toml). A map whose
+scripts call one keeps them; each call does nothing (its arguments not
+evaluated: Halo PC leaves some out) and returns nothing (0, FALSE), and the
+first is logged */
+static void hs_halo_pc_unsupported_evaluate(
+	short function_index,
+	long thread_index,
+	boolean initialize)
+{
+	static unsigned long logged[BIT_VECTOR_SIZE_IN_LONGS(512)];
+
+	if (function_index >= 0 && function_index < 512 && !BIT_VECTOR_TEST_FLAG(logged, function_index))
+	{
+		BIT_VECTOR_SET_FLAG(logged, function_index, TRUE);
+		error(_error_silent, "a script called Halo PC's %s, which does nothing here",
+			hs_function_get(function_index)->name);
+	}
+	hs_return(thread_index, 0);
+
+	return;
+}
+
 static struct hs_function_definition const sv_end_game_definition=
 {
 	_hs_type_void,
@@ -11694,47 +11776,334 @@ static struct hs_function_definition const sv_end_game_definition=
 	"sv_end_game",
 	hs_macro_function_parse,
 	hs_sv_end_game_evaluate,
-	"Halo PC's: the host ends the game.",
+	"Halo PC's: a server ends the game.",
 	NULL,
 	0,
 };
 
-/* port: the sounds of tag files played over the map's, for those making
-them (audio.loose_sounds: port/linux/game/loose_sounds.c), at the console */
-void loose_sounds_reload(void);
-void loose_sounds_enable(boolean enabled);
-
-HS_EVALUATE_NO_ARGUMENTS(hs_loose_sounds_reload_evaluate, loose_sounds_reload)
-HS_EVALUATE_VOID_BOOLEAN(hs_loose_sounds_evaluate, loose_sounds_enable)
-
-static struct hs_function_definition const loose_sounds_reload_definition=
+static struct hs_function_definition const sv_map_next_definition=
 {
 	_hs_type_void,
 	0,
-	"loose_sounds_reload",
+	"sv_map_next",
 	hs_macro_function_parse,
-	hs_loose_sounds_reload_evaluate,
-	"reads the sound tag files under the data root's tags folder again (all sounds stop if any changed).",
+	hs_halo_pc_unsupported_evaluate,
+	"Halo PC's, a server's: begins the next game of its map cycle; does nothing here.",
 	NULL,
 	0,
 };
 
-static struct hs_function_definition_with_1_parameter const loose_sounds_definition=
+static struct hs_function_definition const sv_map_reset_definition=
+{
+	_hs_type_void,
+	0,
+	"sv_map_reset",
+	hs_macro_function_parse,
+	hs_halo_pc_unsupported_evaluate,
+	"Halo PC's, a server's: begins the game again; does nothing here.",
+	NULL,
+	0,
+};
+
+static struct hs_function_definition_with_2_parameters const sv_map_definition=
 {
 	{
 		_hs_type_void,
 		0,
-		"loose_sounds",
+		"sv_map",
 		hs_macro_function_parse,
-		hs_loose_sounds_evaluate,
-		"plays the map's sounds from the tags folder's sound tag files, or (false) from the map, until the map changes.",
+		hs_halo_pc_unsupported_evaluate,
+		"Halo PC's, a server's: begins a game of a map and game type; does nothing here.",
+		NULL,
+		2,
+		{ _hs_type_string },
+	},
+	{ _hs_type_string },
+};
+
+static struct hs_function_definition const sv_mapcycle_begin_definition=
+{
+	_hs_type_void,
+	0,
+	"sv_mapcycle_begin",
+	hs_macro_function_parse,
+	hs_halo_pc_unsupported_evaluate,
+	"Halo PC's, a server's: begins its map cycle; does nothing here.",
+	NULL,
+	0,
+};
+
+static struct hs_function_definition const sv_timelimit_definition=
+{
+	_hs_type_void,
+	0,
+	"sv_timelimit",
+	hs_macro_function_parse,
+	hs_halo_pc_unsupported_evaluate,
+	"Halo PC's, a server's: overrides the game type's time limit; does nothing here.",
+	NULL,
+	0,
+};
+
+static struct hs_function_definition const sv_friendly_fire_definition=
+{
+	_hs_type_void,
+	0,
+	"sv_friendly_fire",
+	hs_macro_function_parse,
+	hs_halo_pc_unsupported_evaluate,
+	"Halo PC's, a server's: overrides the game type's friendly fire; does nothing here.",
+	NULL,
+	0,
+};
+
+static struct hs_function_definition const sv_maxplayers_definition=
+{
+	_hs_type_void,
+	0,
+	"sv_maxplayers",
+	hs_macro_function_parse,
+	hs_halo_pc_unsupported_evaluate,
+	"Halo PC's, a server's: sets the most players; does nothing here.",
+	NULL,
+	0,
+};
+
+static struct hs_function_definition_with_1_parameter const sv_name_definition=
+{
+	{
+		_hs_type_void,
+		0,
+		"sv_name",
+		hs_macro_function_parse,
+		hs_halo_pc_unsupported_evaluate,
+		"Halo PC's, a server's: sets its name; does nothing here.",
+		NULL,
+		1,
+		{ _hs_type_string },
+	},
+};
+
+static struct hs_function_definition_with_1_parameter const sv_password_definition=
+{
+	{
+		_hs_type_void,
+		0,
+		"sv_password",
+		hs_macro_function_parse,
+		hs_halo_pc_unsupported_evaluate,
+		"Halo PC's, a server's: sets its password; does nothing here.",
+		NULL,
+		1,
+		{ _hs_type_string },
+	},
+};
+
+static struct hs_function_definition const sv_motd_definition=
+{
+	_hs_type_void,
+	0,
+	"sv_motd",
+	hs_macro_function_parse,
+	hs_halo_pc_unsupported_evaluate,
+	"Halo PC's, a server's: sets its message of the day; does nothing here.",
+	NULL,
+	0,
+};
+
+static struct hs_function_definition_with_1_parameter const sv_log_note_definition=
+{
+	{
+		_hs_type_void,
+		0,
+		"sv_log_note",
+		hs_macro_function_parse,
+		hs_halo_pc_unsupported_evaluate,
+		"Halo PC's, a server's: leaves a note in its log; does nothing here.",
+		NULL,
+		1,
+		{ _hs_type_string },
+	},
+};
+
+static struct hs_function_definition const sv_players_definition=
+{
+	_hs_type_void,
+	0,
+	"sv_players",
+	hs_macro_function_parse,
+	hs_halo_pc_unsupported_evaluate,
+	"Halo PC's, a server's: lists the players; does nothing here.",
+	NULL,
+	0,
+};
+
+static struct hs_function_definition_with_1_parameter const sv_kick_definition=
+{
+	{
+		_hs_type_void,
+		0,
+		"sv_kick",
+		hs_macro_function_parse,
+		hs_halo_pc_unsupported_evaluate,
+		"Halo PC's, a server's: kicks a player; does nothing here.",
+		NULL,
+		1,
+		{ _hs_type_string },
+	},
+};
+
+static struct hs_function_definition_with_2_parameters const sv_ban_definition=
+{
+	{
+		_hs_type_void,
+		0,
+		"sv_ban",
+		hs_macro_function_parse,
+		hs_halo_pc_unsupported_evaluate,
+		"Halo PC's, a server's: bans a player; does nothing here.",
+		NULL,
+		2,
+		{ _hs_type_string },
+	},
+	{ _hs_type_string },
+};
+
+static struct hs_function_definition const sv_single_flag_force_reset_definition=
+{
+	_hs_type_void,
+	0,
+	"sv_single_flag_force_reset",
+	hs_macro_function_parse,
+	hs_halo_pc_unsupported_evaluate,
+	"Halo PC's, a server's: resets the flag of one flag CTF when its time runs out; does nothing here.",
+	NULL,
+	0,
+};
+
+static struct hs_function_definition_with_2_parameters const rcon_definition=
+{
+	{
+		_hs_type_void,
+		0,
+		"rcon",
+		hs_macro_function_parse,
+		hs_halo_pc_unsupported_evaluate,
+		"Halo PC's, sends a command to a server's console; does nothing here.",
+		NULL,
+		2,
+		{ _hs_type_string },
+	},
+	{ _hs_type_string },
+};
+
+static struct hs_function_definition_with_1_parameter const change_team_definition=
+{
+	{
+		_hs_type_void,
+		0,
+		"change_team",
+		hs_macro_function_parse,
+		hs_halo_pc_unsupported_evaluate,
+		"Halo PC's, changes the local player's team; does nothing here.",
+		NULL,
+		1,
+		{ _hs_type_short_integer },
+	},
+};
+
+static struct hs_function_definition_with_1_parameter const set_gamma_definition=
+{
+	{
+		_hs_type_void,
+		0,
+		"set_gamma",
+		hs_macro_function_parse,
+		hs_halo_pc_unsupported_evaluate,
+		"Halo PC's, sets the gamma; does nothing here.",
+		NULL,
+		1,
+		{ _hs_type_long_integer },
+	},
+};
+
+static struct hs_function_definition_with_2_parameters const player_effect_set_max_vibrate_definition=
+{
+	{
+		_hs_type_void,
+		0,
+		"player_effect_set_max_vibrate",
+		hs_macro_function_parse,
+		hs_halo_pc_unsupported_evaluate,
+		"Halo PC's, sets the most a controller vibrates; does nothing here.",
+		NULL,
+		2,
+		{ _hs_type_real },
+	},
+	{ _hs_type_real },
+};
+
+static struct hs_function_definition_with_1_parameter const thread_sleep_definition=
+{
+	{
+		_hs_type_void,
+		0,
+		"thread_sleep",
+		hs_macro_function_parse,
+		hs_halo_pc_unsupported_evaluate,
+		"Halo PC's, sleeps the game's thread; does nothing here.",
+		NULL,
+		1,
+		{ _hs_type_long_integer },
+	},
+};
+
+static struct hs_function_definition_with_1_parameter const sound_set_env_definition=
+{
+	{
+		_hs_type_void,
+		0,
+		"sound_set_env",
+		hs_macro_function_parse,
+		hs_halo_pc_unsupported_evaluate,
+		"Halo PC's, sets the EAX environment; does nothing here.",
+		NULL,
+		1,
+		{ _hs_type_short_integer },
+	},
+};
+
+static struct hs_function_definition_with_1_parameter const sound_enable_eax_definition=
+{
+	{
+		_hs_type_void,
+		0,
+		"sound_enable_eax",
+		hs_macro_function_parse,
+		hs_halo_pc_unsupported_evaluate,
+		"Halo PC's, turns EAX on or off; does nothing here.",
 		NULL,
 		1,
 		{ _hs_type_boolean },
 	},
 };
 
-long const hs_function_table_count= 418 + 4;
+static struct hs_function_definition const sound_eax_enabled_definition=
+{
+	_hs_type_boolean,
+	0,
+	"sound_eax_enabled",
+	hs_macro_function_parse,
+	hs_halo_pc_unsupported_evaluate,
+	"Halo PC's, whether EAX is on (it is not); does nothing here.",
+	NULL,
+	0,
+};
+
+long const hs_function_table_count= 418 + 3 + 24;
+#else
+long const hs_function_table_count= 418;
+#endif
 
 struct hs_enum_definition const hs_enum_table[]=
 {
@@ -12166,10 +12535,35 @@ struct hs_function_table_storage hs_function_table=
 		&display_scenario_help_definition.definition,
 		&hs_network_game_start_now_definition,
 		&xbox_set_machine_name_definition.definition,
+#ifdef HALO_CUSTOM_EDITION
 		&sv_say_definition.definition,
+		&quit_definition,
+		&sound_impulse_predict_definition.definition,
 		&sv_end_game_definition,
-		&loose_sounds_reload_definition,
-		&loose_sounds_definition.definition,
+		&sv_map_next_definition,
+		&sv_map_reset_definition,
+		&sv_map_definition.definition,
+		&sv_mapcycle_begin_definition,
+		&sv_timelimit_definition,
+		&sv_friendly_fire_definition,
+		&sv_maxplayers_definition,
+		&sv_name_definition.definition,
+		&sv_password_definition.definition,
+		&sv_motd_definition,
+		&sv_log_note_definition.definition,
+		&sv_players_definition,
+		&sv_kick_definition.definition,
+		&sv_ban_definition.definition,
+		&sv_single_flag_force_reset_definition,
+		&rcon_definition.definition,
+		&change_team_definition.definition,
+		&set_gamma_definition.definition,
+		&player_effect_set_max_vibrate_definition.definition,
+		&thread_sleep_definition.definition,
+		&sound_set_env_definition.definition,
+		&sound_enable_eax_definition.definition,
+		&sound_eax_enabled_definition,
+#endif
 	},
 	{
 		"hs_update",
@@ -12667,14 +13061,37 @@ static boolean const hs_function_allowed_in_maps[]=
 	TRUE, /* display_scenario_help */
 	FALSE, /* network_game_start_now: starts a network game */
 	FALSE, /* xbox_set_machine_name: the machine's name */
-
-	/* Halo PC's, for Custom Edition maps */
+#ifdef HALO_CUSTOM_EDITION
+	/* Halo PC's, which Custom Edition maps' scripts call: each shows a message,
+	ends the game as a Halo PC server's script does, or does nothing */
 	TRUE, /* sv_say */
-	TRUE, /* sv_end_game: the host's */
-
-	/* the port's, for those making sounds */
-	FALSE, /* loose_sounds_reload */
-	FALSE, /* loose_sounds */
+	TRUE, /* quit */
+	TRUE, /* sound_impulse_predict */
+	TRUE, /* sv_end_game */
+	TRUE, /* sv_map_next */
+	TRUE, /* sv_map_reset */
+	TRUE, /* sv_map */
+	TRUE, /* sv_mapcycle_begin */
+	TRUE, /* sv_timelimit */
+	TRUE, /* sv_friendly_fire */
+	TRUE, /* sv_maxplayers */
+	TRUE, /* sv_name */
+	TRUE, /* sv_password */
+	TRUE, /* sv_motd */
+	TRUE, /* sv_log_note */
+	TRUE, /* sv_players */
+	TRUE, /* sv_kick */
+	TRUE, /* sv_ban */
+	TRUE, /* sv_single_flag_force_reset */
+	TRUE, /* rcon */
+	TRUE, /* change_team */
+	TRUE, /* set_gamma */
+	TRUE, /* player_effect_set_max_vibrate */
+	TRUE, /* thread_sleep */
+	TRUE, /* sound_set_env */
+	TRUE, /* sound_enable_eax */
+	TRUE, /* sound_eax_enabled */
+#endif
 };
 typedef char verify_hs_function_allowed_in_maps_size[
 	NUMBEROF(hs_function_allowed_in_maps) == NUMBEROF(hs_function_table.functions) ? 1 : -1];
@@ -12761,7 +13178,7 @@ boolean hs_scenario_merge(
 				csstrcpy(file->name, source_file->name);
 				if (tag_data_resize(&file->source, source_file->source.size))
 				{
-					csmemcpy(file->source.address, source_file->source.address, source_file->source.size);
+					csmemcpy(xbox_pointer(file->source.address), xbox_pointer(source_file->source.address), source_file->source.size);
 				}
 				else
 				{
@@ -12789,14 +13206,45 @@ static boolean hs_scenario_syntax_data_valid(
 {
 	long const syntax_data_size =
 		sizeof(struct data_array)+MAXIMUM_HS_SYNTAX_NODES_PER_SCENARIO*sizeof(struct hs_syntax_node);
-	byte const *address = (byte const *)scenario->hs_syntax_data.address;
+	/* (the tag cache the map's tags are in: a Custom Edition map's is its
+	own, cache_files.c) */
+	unsigned long tag_cache_size;
+	byte const *tag_cache = (byte const *)cache_files_tag_cache(&tag_cache_size);
+	byte const *address = (byte const *)xbox_pointer(scenario->hs_syntax_data.address);
 	struct data_array const *data = (struct data_array const *)address;
 
-	/* (in the loaded map's tag cache: this build's, or a Custom Edition
-	map's, cache_file_tag_cache_contains) */
 	if (scenario->hs_syntax_data.size != syntax_data_size ||
-		!cache_file_tag_cache_contains(address, syntax_data_size) ||
-		((unsigned long)address & 3))
+		!tag_cache ||
+		!scenario->hs_syntax_data.address ||
+		address < tag_cache ||
+		address > tag_cache+tag_cache_size-syntax_data_size)
+	{
+		return FALSE;
+	}
+
+#ifdef HALO_CUSTOM_EDITION
+	/* port: a Custom Edition or HaloMD map's array, which Halo PC's tools
+	wrote: after its signature its header is laid out otherwise (its counts
+	are not the Xbox's fields, and do not pass the checks below), and it need
+	not lie at a 4-byte boundary. Its place in the tag cache, its size, its
+	signature and the node count and size it was made with are checked: a
+	node is found by an index below the array's maximum count, so its scripts
+	read nothing outside it. These maps' scripts ran so before the checks
+	below were added (Coldsnap's, for one) */
+	{
+		extern boolean cache_file_tags_are_ce(void);
+
+		if (cache_file_tags_are_ce())
+		{
+			return data->signature == 'd@t@' &&
+				data->maximum_count == MAXIMUM_HS_SYNTAX_NODES_PER_SCENARIO &&
+				data->size == sizeof(struct hs_syntax_node) &&
+				hs_scenario_string_constants_valid(scenario);
+		}
+	}
+#endif
+
+	if (POINTER_BITS(address) & 3)
 	{
 		return FALSE;
 	}
@@ -12821,11 +13269,17 @@ bytes at their end that the console's expressions are written to
 static boolean hs_scenario_string_constants_valid(
 	struct scenario const *scenario)
 {
-	byte const *address = (byte const *)scenario->hs_string_constants.address;
+	unsigned long tag_cache_size;
+	byte const *tag_cache = (byte const *)cache_files_tag_cache(&tag_cache_size);
+	byte const *address = (byte const *)xbox_pointer(scenario->hs_string_constants.address);
 	long size = scenario->hs_string_constants.size;
 
-	return size >= 0x400 &&
-		cache_file_tag_cache_contains(address, size);
+	return tag_cache &&
+		scenario->hs_string_constants.address &&
+		size >= 0x400 &&
+		(unsigned long)size <= tag_cache_size &&
+		address >= tag_cache &&
+		address <= tag_cache+tag_cache_size-size;
 }
 
 /* port: the scenario runs no scripts, its script data not being sound: a
@@ -12866,6 +13320,51 @@ static boolean hs_syntax_node_linked_twice(
 	BIT_VECTOR_SET_FLAG(hs_syntax_nodes_marked, absolute_index, TRUE);
 
 	return twice;
+}
+
+/* port: what a downloaded map's scripts (map_is_downloaded: one a map
+download brought, or game.downloaded_maps names) may not call or set, on top
+of what no map's may (hs_function_allowed_in_maps,
+hs_external_global_settable_by_maps): what changes the player's settings
+(their profile's), other players' games (ending a game for everyone, the
+HUD text every player sees), and the globals that outlive the map (they
+keep their values into the maps played after it, a host's other players'
+among them) */
+static char const *const hs_functions_denied_to_downloaded_maps[]=
+{
+	"player0_look_invert_pitch",
+	"sv_end_game",
+	"sv_say",
+	NULL
+};
+
+static char const *const hs_globals_denied_to_downloaded_maps[]=
+{
+	"cheat_deathless_player",
+	"rider_ejection",
+	"stun_enable",
+	"rasterizer_near_clip_distance",
+	"rasterizer_far_clip_distance",
+	"rasterizer_first_person_weapon_near_clip_distance",
+	"rasterizer_first_person_weapon_far_clip_distance",
+	NULL
+};
+
+/* port: whether the map whose scripts are checked is a downloaded one
+(hs_scenario_functions_check) */
+static boolean hs_scenario_downloaded = FALSE;
+
+static boolean hs_name_listed(
+	char const *name,
+	char const *const *list)
+{
+	for (; name && *list; list++)
+	{
+		if (!csstrcmp(name, *list))
+			return TRUE;
+	}
+
+	return FALSE;
 }
 
 /* port: why a map's script may not have the node (_hs_node_refusal_none if
@@ -12915,6 +13414,8 @@ static short hs_syntax_node_refusal(
 	*name = function->name;
 	if (!hs_function_allowed_in_maps[function_index])
 		return _hs_node_refusal_function;
+	if (hs_scenario_downloaded && hs_name_listed(function->name, hs_functions_denied_to_downloaded_maps))
+		return _hs_node_refusal_downloaded_function;
 
 	if (function->parse == hs_macro_function_parse)
 	{
@@ -12947,7 +13448,11 @@ static short hs_syntax_node_refusal(
 			value as that type) */
 			if (function->parse == hs_macro_function_parse &&
 				argument_count<function->parameter_count &&
+#ifdef HALO_64BIT
+				argument->type != HS_FUNCTION_PARAMETER_TYPE(function, argument_count))
+#else
 				argument->type != function->parameter_types[argument_count])
+#endif
 			{
 				return _hs_node_refusal_damaged;
 			}
@@ -12982,6 +13487,12 @@ static short hs_syntax_node_refusal(
 		{
 			*name = hs_global_external_get(designator & 0x7FFF)->name;
 			return _hs_node_refusal_global;
+		}
+		if ((designator & 0x8000) && hs_scenario_downloaded &&
+			hs_name_listed(hs_global_external_get(designator & 0x7FFF)->name, hs_globals_denied_to_downloaded_maps))
+		{
+			*name = hs_global_external_get(designator & 0x7FFF)->name;
+			return _hs_node_refusal_downloaded_global;
 		}
 	}
 	else if (function_index == _hs_function_wake)
@@ -13092,6 +13603,12 @@ static void hs_scenario_functions_check(
 	short disabled_global_count = 0;
 	char reason[128];
 
+#ifdef HALO_CUSTOM_EDITION
+	/* (a downloaded map's are held to tighter rules: halo_map_families.h) */
+	hs_scenario_downloaded = map_is_downloaded(cache_file_loaded_map_name());
+	if (hs_scenario_downloaded)
+		error(_error_silent, "%s is a downloaded map: its scripts may call and set less", cache_file_loaded_map_name());
+#endif
 	csmemset(hs_syntax_nodes_marked, 0, sizeof(hs_syntax_nodes_marked));
 	for (script_index = 0; script_index<scenario->hs_scripts.count; script_index++)
 	{
@@ -13198,6 +13715,12 @@ static void hs_scenario_functions_check(
 			break;
 		case _hs_node_refusal_global:
 			csprintf(reason, "sets %s, which a map's scripts may not", first_name);
+			break;
+		case _hs_node_refusal_downloaded_function:
+			csprintf(reason, "calls %s, which a downloaded map's scripts may not", first_name);
+			break;
+		case _hs_node_refusal_downloaded_global:
+			csprintf(reason, "sets %s, which a downloaded map's scripts may not", first_name);
 			break;
 		case _hs_node_refusal_arguments:
 			csprintf(reason, "calls %s with arguments it doesn't take", first_name);
@@ -13780,7 +14303,15 @@ static void hs_get_function_parameters_string(
 		for (parameter_index = 0; parameter_index<function->parameter_count; parameter_index++)
 		{
 			csstrcat(result, " <");
+#ifdef HALO_64BIT
+			csstrcat(result, hs_type_names[HS_FUNCTION_PARAMETER_TYPE(function, parameter_index)]);
+#else
+#ifdef HALO_64BIT
+			csstrcat(result, hs_type_names[HS_FUNCTION_PARAMETER_TYPE(function, parameter_index)]);
+#else
 			csstrcat(result, hs_type_names[function->parameter_types[parameter_index]]);
+#endif
+#endif
 			csstrcat(result, ">");
 		}
 	}
@@ -14223,8 +14754,8 @@ HS_EVALUATE_SHORT_FROM_LONG(ai_scripting_nonswarm_count_evaluate, ai_scripting_n
 HS_EVALUATE_SHORT_FROM_LONG(ai_scripting_status_evaluate, ai_scripting_status)
 HS_EVALUATE_SHORT_FROM_UNSIGNED_SHORT(ai_scripting_conversation_line_evaluate, ai_scripting_conversation_line)
 HS_EVALUATE_SHORT_FROM_UNSIGNED_SHORT(ai_scripting_conversation_status_evaluate, ai_scripting_conversation_status)
-HS_EVALUATE_RETURN_SHORT_FROM_ARGUMENTS(vehicle_scripting_load_magic_evaluate, struct hs_arguments_long_long_long, (vehicle_scripting_load_magic(arguments->value0, arguments->value1, arguments->value2)))
-HS_EVALUATE_RETURN_SHORT_FROM_ARGUMENTS(vehicle_scripting_unload_evaluate, struct hs_arguments_long_long, (vehicle_scripting_unload(arguments->value0, (char const *)arguments->value1)))
+HS_EVALUATE_RETURN_SHORT_FROM_ARGUMENTS(vehicle_scripting_load_magic_evaluate, struct hs_arguments_long_long_long, (vehicle_scripting_load_magic(arguments->value0, xbox_pointer(arguments->value1), arguments->value2)))
+HS_EVALUATE_RETURN_SHORT_FROM_ARGUMENTS(vehicle_scripting_unload_evaluate, struct hs_arguments_long_long, (vehicle_scripting_unload(arguments->value0, (char const *)xbox_pointer(arguments->value1))))
 HS_EVALUATE_LONG_FROM_LONG(unit_scripting_unit_riders_evaluate, unit_scripting_unit_riders)
 HS_EVALUATE_LONG_FROM_LONG(unit_scripting_unit_driver_evaluate, unit_scripting_unit_driver)
 HS_EVALUATE_LONG_FROM_LONG(unit_scripting_unit_gunner_evaluate, unit_scripting_unit_gunner)
@@ -14323,11 +14854,11 @@ HS_EVALUATE_VOID_FROM_ARGUMENTS_WITH_REAL(
 HS_EVALUATE_VOID_FROM_ARGUMENTS(
 	hs_object_set_permutation_evaluate,
 	struct hs_arguments_long_string_string,
-	hs_object_set_permutation(arguments->value0, arguments->value1, arguments->value2))
+	hs_object_set_permutation(arguments->value0, xbox_pointer(arguments->value1), xbox_pointer(arguments->value2)))
 HS_EVALUATE_VOID_FROM_ARGUMENTS(
 	hs_effect_new_from_object_marker_evaluate,
 	struct hs_arguments_long_long_string,
-	hs_effect_new_from_object_marker(arguments->value0, arguments->value1, arguments->value2))
+	hs_effect_new_from_object_marker(arguments->value0, arguments->value1, xbox_pointer(arguments->value2)))
 static void hs_objects_can_see_object_evaluate(
 	short function_index,
 	long thread_index,
@@ -14372,7 +14903,7 @@ HS_EVALUATE_VOID_FROM_ARGUMENTS_WITH_REAL(
 	hs_sound_set_gain_evaluate,
 	union hs_evaluation_argument,
 	1,
-	hs_sound_set_gain(arguments[0].string_value, real_argument))
+	hs_sound_set_gain(xbox_pointer(arguments[0].string_value), real_argument))
 static void objects_scripting_set_scale_evaluate(
 	short function_index,
 	long thread_index,
@@ -14394,16 +14925,16 @@ static void objects_scripting_set_scale_evaluate(
 HS_EVALUATE_VOID_FROM_ARGUMENTS(
 	objects_scripting_attach_evaluate,
 	struct hs_arguments_long_string_long_string,
-	objects_scripting_attach(arguments->value0, arguments->value1, arguments->value2, arguments->value3))
+	objects_scripting_attach(arguments->value0, xbox_pointer(arguments->value1), arguments->value2, xbox_pointer(arguments->value3)))
 HS_EVALUATE_VOID_LONG_BOOLEAN(object_beautify_evaluate, object_beautify)
 HS_EVALUATE_VOID_FROM_ARGUMENTS(
 	scenery_animation_start_evaluate,
 	struct hs_arguments_long_long_string,
-	scenery_animation_start(arguments->value0, arguments->value1, arguments->value2))
+	scenery_animation_start(arguments->value0, arguments->value1, xbox_pointer(arguments->value2)))
 HS_EVALUATE_VOID_FROM_ARGUMENTS(
 	scenery_animation_start_at_frame_evaluate,
 	struct hs_arguments_long_long_string_word,
-	scenery_animation_start_at_frame(arguments->value0, arguments->value1, arguments->value2, arguments->value3))
+	scenery_animation_start_at_frame(arguments->value0, arguments->value1, xbox_pointer(arguments->value2), arguments->value3))
 static void unit_scripting_set_maximum_vitality_evaluate(
 	short function_index,
 	long thread_index,
@@ -14624,7 +15155,7 @@ static void debug_sound_classes_set_distances_evaluate(
 		double value1 = arguments->value1;
 		double value2 = arguments->value2;
 
-		debug_sound_classes_set_distances((char const *)arguments->value0, value1, value2);
+		debug_sound_classes_set_distances((char const *)xbox_pointer(arguments->value0), value1, value2);
 		hs_return(thread_index, 0);
 	}
 
@@ -14634,7 +15165,7 @@ HS_EVALUATE_VOID_FROM_ARGUMENTS_WITH_REAL(
 	debug_sound_classes_set_wet_evaluate,
 	union hs_evaluation_argument,
 	1,
-	debug_sound_classes_set_wet((char const *)arguments[0].long_value, real_argument))
+	debug_sound_classes_set_wet((char const *)xbox_pointer(arguments[0].long_value), real_argument))
 static void sound_class_set_gain_evaluate(
 	short function_index,
 	long thread_index,
@@ -14647,7 +15178,7 @@ static void sound_class_set_gain_evaluate(
 	{
 		double value1 = arguments->value1;
 
-		sound_class_set_gain((char const *)arguments->value0, value1, arguments->value2);
+		sound_class_set_gain((char const *)xbox_pointer(arguments->value0), value1, arguments->value2);
 		hs_return(thread_index, 0);
 	}
 
@@ -14866,7 +15397,7 @@ static void hs_sound_get_gain_evaluate(
 	if (arguments)
 	{
 		union hs_real_value result;
-		result.real_value = hs_sound_get_gain(arguments[0].string_value);
+		result.real_value = hs_sound_get_gain(xbox_pointer(arguments[0].string_value));
 		hs_return(thread_index, result.long_value);
 	}
 	return;
@@ -14929,7 +15460,7 @@ HS_EVALUATE_VOID_LONG_BOOLEAN(ai_scripting_allow_dormant_evaluate, ai_scripting_
 HS_EVALUATE_VOID_FROM_ARGUMENTS(director_script_camera_evaluate, struct hs_arguments_boolean, (director_script_camera(arguments->value)))
 HS_EVALUATE_VOID_FROM_ARGUMENTS(scripted_camera_set_absolute_evaluate, struct hs_arguments_short_word, (scripted_camera_set_absolute(arguments->value0, arguments->value1)))
 HS_EVALUATE_VOID_FROM_ARGUMENTS(scripted_camera_set_evaluate, struct hs_arguments_word_word_long, (scripted_camera_set(arguments->value0, arguments->value1, arguments->value2)))
-HS_EVALUATE_VOID_FROM_ARGUMENTS(scripted_camera_set_animation_evaluate, struct hs_arguments_long_string, (scripted_camera_set_animation(arguments->value0, arguments->value1)))
+HS_EVALUATE_VOID_FROM_ARGUMENTS(scripted_camera_set_animation_evaluate, struct hs_arguments_long_string, (scripted_camera_set_animation(arguments->value0, xbox_pointer(arguments->value1))))
 HS_EVALUATE_VOID_LONG(scripted_camera_set_first_person_evaluate, scripted_camera_set_first_person)
 HS_EVALUATE_VOID_LONG(scripted_camera_set_dead_evaluate, scripted_camera_set_dead)
 HS_EVALUATE_VOID_FROM_ARGUMENTS(game_time_set_speed_evaluate, struct hs_arguments_real, (game_time_set_speed(arguments->value)))
@@ -14970,7 +15501,7 @@ static void ai_debug_vocalize_evaluate(
 	union hs_evaluation_argument *arguments = (union hs_evaluation_argument *)hs_macro_function_evaluate(function_index, thread_index, initialize);
 	if (arguments)
 	{
-		ai_debug_vocalize(arguments[0].string_value, arguments[1].string_value);
+		ai_debug_vocalize(xbox_pointer(arguments[0].string_value), xbox_pointer(arguments[1].string_value));
 		hs_return(thread_index, 0);
 	}
 	return;
@@ -14997,7 +15528,7 @@ static void debug_sound_classes_enable_evaluate(
 	union hs_evaluation_argument *arguments = (union hs_evaluation_argument *)hs_macro_function_evaluate(function_index, thread_index, initialize);
 	if (arguments)
 	{
-		debug_sound_classes_enable(arguments[0].string_value, arguments[1].boolean_value);
+		debug_sound_classes_enable(xbox_pointer(arguments[0].string_value), arguments[1].boolean_value);
 		hs_return(thread_index, 0);
 	}
 	return;
@@ -15044,12 +15575,12 @@ HS_EVALUATE_RETURN_BOOLEAN(recorded_animation_play_evaluate, struct hs_arguments
 HS_EVALUATE_RETURN_BOOLEAN(recorded_animation_play_and_delete_evaluate, struct hs_arguments_long_word, (recorded_animation_play_and_delete(arguments->value0, arguments->value1)))
 HS_EVALUATE_RETURN_BOOLEAN(recorded_animation_play_and_hover_evaluate, struct hs_arguments_long_word, (recorded_animation_play_and_hover(arguments->value0, arguments->value1)))
 HS_EVALUATE_RETURN_BOOLEAN(lights_enable_evaluate, struct hs_arguments_boolean, (lights_enable(arguments->value)))
-HS_EVALUATE_RETURN_BOOLEAN(unit_start_user_animation_evaluate, struct hs_arguments_long_long_long_boolean, (unit_start_user_animation(arguments->value0, arguments->value1, arguments->value2, arguments->value3)))
-HS_EVALUATE_RETURN_BOOLEAN(unit_scripting_start_user_animation_list_evaluate, struct hs_arguments_long_long_long_boolean, (unit_scripting_start_user_animation_list(arguments->value0, arguments->value1, arguments->value2, arguments->value3)))
-HS_EVALUATE_RETURN_BOOLEAN(unit_custom_animation_at_frame_evaluate, struct hs_arguments_long_long_long_boolean_word, (unit_custom_animation_at_frame(arguments->value0, arguments->value1, arguments->value2, arguments->value3, arguments->value4)))
+HS_EVALUATE_RETURN_BOOLEAN(unit_start_user_animation_evaluate, struct hs_arguments_long_long_long_boolean, (unit_start_user_animation(arguments->value0, arguments->value1, xbox_pointer(arguments->value2), arguments->value3)))
+HS_EVALUATE_RETURN_BOOLEAN(unit_scripting_start_user_animation_list_evaluate, struct hs_arguments_long_long_long_boolean, (unit_scripting_start_user_animation_list(arguments->value0, arguments->value1, xbox_pointer(arguments->value2), arguments->value3)))
+HS_EVALUATE_RETURN_BOOLEAN(unit_custom_animation_at_frame_evaluate, struct hs_arguments_long_long_long_boolean_word, (unit_custom_animation_at_frame(arguments->value0, arguments->value1, xbox_pointer(arguments->value2), arguments->value3, arguments->value4)))
 HS_EVALUATE_RETURN_BOOLEAN(unit_is_playing_custom_animation_evaluate, struct hs_arguments_long, (unit_is_playing_custom_animation(arguments->value)))
-HS_EVALUATE_RETURN_BOOLEAN(unit_scripting_vehicle_test_seat_list_evaluate, struct hs_arguments_long_long_long, (unit_scripting_vehicle_test_seat_list(arguments->value0, arguments->value1, arguments->value2)))
-HS_EVALUATE_RETURN_BOOLEAN(unit_scripting_vehicle_test_seat_evaluate, struct hs_arguments_long_long_long, (unit_scripting_vehicle_test_seat(arguments->value0, arguments->value1, arguments->value2)))
+HS_EVALUATE_RETURN_BOOLEAN(unit_scripting_vehicle_test_seat_list_evaluate, struct hs_arguments_long_long_long, (unit_scripting_vehicle_test_seat_list(arguments->value0, xbox_pointer(arguments->value1), arguments->value2)))
+HS_EVALUATE_RETURN_BOOLEAN(unit_scripting_vehicle_test_seat_evaluate, struct hs_arguments_long_long_long, (unit_scripting_vehicle_test_seat(arguments->value0, xbox_pointer(arguments->value1), arguments->value2)))
 HS_EVALUATE_RETURN_BOOLEAN(unit_scripting_has_weapon_evaluate, struct hs_arguments_long_long, (unit_scripting_has_weapon(arguments->value0, arguments->value1)))
 HS_EVALUATE_RETURN_BOOLEAN(unit_scripting_has_weapon_readied_evaluate, struct hs_arguments_long_long, (unit_scripting_has_weapon_readied(arguments->value0, arguments->value1)))
 HS_EVALUATE_RETURN_BOOLEAN_NO_ARGUMENTS(unit_solo_player_integrated_night_vision_is_active_evaluate, unit_solo_player_integrated_night_vision_is_active)
@@ -15187,10 +15718,19 @@ boolean hs_scenario_postprocess(
 			MAXIMUM_HS_SCRIPTS_PER_SCENARIO);
 		hs_scenario_scripts_disable(scenario);
 	}
+#ifdef HALO_64BIT
+	hs_syntax_data = (struct data_array *)xbox_pointer(scenario->hs_syntax_data.address);
+	hs_syntax_data->data = xbox_address((char *)hs_syntax_data+sizeof(struct data_array));
+#else
 	hs_syntax_data = (struct data_array *)scenario->hs_syntax_data.address;
 	hs_syntax_data->data = (char *)hs_syntax_data+sizeof(struct data_array);
+#endif
 	if (!recompile && hs_compile_postprocess(&error_message, &error_source))
 	{
+		/* port: in debug.txt, what the map's scripts are */
+		error(_error_silent, "scenario scripts: %ld scripts, %ld globals",
+			scenario->hs_scripts.count,
+			scenario->hs_globals.count);
 		/* port: before the console's expressions are compiled into the
 		same nodes */
 		hs_scenario_functions_check(scenario);
@@ -15203,21 +15743,32 @@ boolean hs_scenario_postprocess(
 	}
 	else
 	{
-		if (recompile)
-			error(0, "recompiling scripts after scenarios were merged.");
-		else if (!error_message)
-			error(0, "an unspecified error occurred loading scripts");
-		else if (!error_source)
-			error(0, "%s", error_message);
-		else
-			error(0, "%s: %s", error_source, error_message);
+		/* port: a Custom Edition map's scripts that do not load are
+		logged, and it plays without them, rather than halting the game
+		(it has no source to compile them from: Halo PC's tools leave none) */
+#ifdef HALO_CUSTOM_EDITION
+		extern boolean cache_file_tags_are_ce(void);
+		short priority = cache_file_tags_are_ce() ? _error_silent : _error_immediate;
+#else
+		short priority = _error_immediate;
+#endif
 
-		/* port: the map's script source is not compiled again. A cache
-		file's blocks can't be resized (tag_block_resize), so the recompile
-		never reset the map's scripts and globals and none ran afterwards
-		either way; and the source is the map's, which the compiler would
-		recurse into as deep as it nests. The nodes go, and none run */
-		error(0, "the scenario's scripts won't run");
+		if (recompile)
+			error(priority, "recompiling scripts after scenarios were merged.");
+		else if (!error_message)
+			error(priority, "an unspecified error occurred loading scripts");
+		else if (!error_source)
+			error(priority, "%s", error_message);
+		else
+			error(priority, "%s: %s", error_source, error_message);
+
+		/* port: the map's script source is not compiled again (a Halo PC
+		map has none). A cache file's blocks can't be resized
+		(tag_block_resize), so the recompile never reset the map's scripts and
+		globals and none ran afterwards either way; and the source is the
+		map's, which the compiler would recurse into as deep as it nests. The
+		nodes go, and none run */
+		error(priority, "the scenario's scripts won't run");
 		data_delete_all(hs_syntax_data);
 		hs_scenario_scripts_disable(scenario);
 		success = FALSE;

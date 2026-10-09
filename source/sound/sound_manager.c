@@ -549,17 +549,22 @@ typedef char verify_sound_source_size[
 	sizeof(struct sound_source) == 0x40 ? 1 : -1];
 typedef char verify_sound_listener_size[
 	sizeof(struct sound_listener) == 0x44 ? 1 : -1];
+#ifndef HALO_64BIT
 typedef char verify_sound_channel_datum_size[
 	sizeof(struct sound_channel_datum) == 0x18 ? 1 : -1];
+#endif
 typedef char verify_sound_channel_summary_size[
 	sizeof(struct sound_channel_summary) == 0x48 ? 1 : -1];
 typedef char verify_platform_sound_channel_properties_size[
 	sizeof(struct platform_sound_channel_properties) == 0x20 ? 1 : -1];
+#ifndef HALO_64BIT
 typedef char verify_sound_datum_size[
 	sizeof(struct sound_datum) == 0xAC ? 1 : -1];
+#endif
 typedef char verify_looping_sound_datum_size[
 	sizeof(struct looping_sound_datum) == 0xE4 ? 1 : -1];
 
+#ifndef HALO_64BIT
 typedef char verify_sound_manager_globals_size[
 	sizeof(struct sound_manager_globals) == 0x178 ? 1 : -1];
 typedef char verify_sound_platform_definition_size[
@@ -568,12 +573,14 @@ typedef char verify_sound_platform_dispose_offset[
 	offsetof(struct sound_platform_definition, dispose) == 0x8 ? 1 : -1];
 typedef char verify_sound_platform_pause_offset[
 	offsetof(struct sound_platform_definition, set_pause) == 0x28 ? 1 : -1];
+#endif
 typedef char verify_sound_manager_paused_offset[
 	offsetof(struct sound_manager_globals, paused) == 0x2 ? 1 : -1];
 typedef char verify_sound_manager_dialog_time_offset[
 	offsetof(
 		struct sound_manager_globals,
 		game_time_when_no_scripted_dialog_will_be_playing) == 0x4 ? 1 : -1];
+#ifndef HALO_64BIT
 typedef char verify_sound_manager_listeners_offset[
 	offsetof(struct sound_manager_globals, listeners) == 0x18 ? 1 : -1];
 typedef char verify_sound_manager_environment_offset[
@@ -581,6 +588,7 @@ typedef char verify_sound_manager_environment_offset[
 typedef char verify_sound_manager_channel_count_offset[
 	offsetof(struct sound_manager_globals, channel_count) == 0x174 ? 1 : -1];
 
+#endif
 /* ---------- prototypes */
 
 static void sound_update_time(
@@ -638,7 +646,6 @@ static long looping_sound_new(
 	long definition_index,
 	long identifier,
 	struct sound_source const *source);
-/* port: report whether instance limiting leaves this voice alive. */
 static boolean sound_set_definition_end(
 	long sound_index);
 static long update_potentially_audible_looping_sound(
@@ -1550,13 +1557,13 @@ static boolean sound_set_definition_end(
 
 		if (channel_index != NONE)
 		{
-			/* port: sound_find_like_channel excludes the current voice. */
-			sound_stop(channel_get(channel_index)->sound_index);
-			return TRUE;
+			long victim_sound_index = channel_get(channel_index)->sound_index;
+			sound_stop(victim_sound_index);
+			return victim_sound_index != sound_index;
 		}
 
-		/* port: no other voice can be preempted; tell the caller this one
-		was retired before it writes to the freed channel. */
+		/* Instance limiting may retire this very voice. Its caller must not
+		   queue another permutation through the now-unowned channel. */
 		sound_stop(sound_index);
 		return FALSE;
 	}
@@ -1615,6 +1622,8 @@ static long update_potentially_audible_looping_sound(
 				sound->track_proc = track_loop_track_sound;
 				sound->fade_stop_time = 0;
 				sound->fade_start_time = 0;
+				sound->fade_interpolation_start = 1.f;
+				sound->fade_interpolation_end = 1.f;
 				sound->next_definition_index = NONE;
 				sound->pitch_range_index =
 					sound_definition_find_pitch_range_by_pitch(
@@ -1638,6 +1647,7 @@ static long update_potentially_audible_looping_sound(
 					TRUE,
 					FALSE);
 				looping_sound->component_sound_count++;
+
 			}
 		}
 	}
@@ -1798,7 +1808,9 @@ static real sound_calculate_fade(
 	long sound_index)
 {
 	struct sound_datum *sound = sound_get(sound_index);
-	real fade = 1.f;
+	/* A completed fade keeps its endpoint. Another query in this frame (or
+	   after a cache delay) must not bring a stopped voice back to full gain. */
+	real fade = sound->fade_interpolation_end;
 
 	if (sound->fade_start_time != sound->fade_stop_time)
 	{
@@ -1870,6 +1882,7 @@ static void sound_start_fade(
 		fade_in_sound_index!=NONE || fade_out_sound_index!=NONE);
 
 	fade_start_time = sound_manager_globals.render_time - 1;
+
 	fade_stop_time = (long)(seconds * 1000.f + fade_start_time);
 	fade_stop_time = MAX(fade_stop_time, sound_manager_globals.render_time);
 
@@ -1908,7 +1921,8 @@ static void sound_start_fade(
 	return;
 }
 
-/* port: retire every owned intro/loop voice when the primary handle changes. */
+/* The primary handle changes on restart and crossfade. Cancellation belongs
+   to the loop and track, including voices still waiting for a cache/channel. */
 static void sound_fade_looping_track_components(
 	long looping_sound_index,
 	short track_index,
@@ -2001,6 +2015,7 @@ static void sound_stop(
 	struct sound_datum *sound = sound_get(sound_index);
 	struct sound_definition *definition =
 		sound_definition_get(sound->definition_index);
+
 
 	if (sound->playing_channel_index != NONE)
 	{
@@ -2470,7 +2485,14 @@ long sound_new_impulse(
 
 	if (sound_manager_globals.initialized && sound_manager_globals.enabled)
 	{
+#ifdef HALO_CUSTOM_EDITION
+		/* (port: 16-bit PCM too, as Halo PC's Ogg Vorbis sounds are decoded:
+		port/linux/game/ce_resources.c) */
+		if ((definition->compression == _sound_compression_xbox_adpcm ||
+				definition->compression == _sound_compression_none) &&
+#else
 		if (definition->compression == _sound_compression_xbox_adpcm &&
+#endif
 			((definition->encoding == _sound_encoding_mono &&
 				definition->sample_rate == 0) ||
 				definition->encoding == _sound_encoding_stereo))
@@ -2548,6 +2570,8 @@ long sound_new_impulse(
 											NONE);
 									sound->fade_stop_time = 0;
 									sound->fade_start_time = 0;
+									sound->fade_interpolation_start = 1.f;
+									sound->fade_interpolation_end = 1.f;
 									sound->loop_track_index = NONE;
 									_sound_cache_sound_request(
 										sound_permutation_get(
@@ -2593,9 +2617,14 @@ long sound_new_impulse(
 		}
 		else
 		{
+			/* (port: which sound, and what it is) */
 			error(
 				_error_silent,
-				"attempt to play a sound that was not a mono 22k compressed sound or a stereo 22k or 44k compressed sound.");
+				"attempt to play a sound that was not a mono 22k compressed sound or a stereo 22k or 44k compressed sound: %s (compression %d, encoding %d, sample rate %d)",
+				tag_get_name(definition_index),
+				definition->compression,
+				definition->encoding,
+				definition->sample_rate);
 		}
 	}
 
@@ -2689,7 +2718,6 @@ boolean sound_refresh_looping(
 
 					if (refresh_state == _looping_sound_refresh_start)
 					{
-						/* port: a restart must retire the old primary and pending components. */
 						if (track->start_sound.index != NONE ||
 							TEST_FLAG(track->flags, _fade_in_at_start_bit))
 						{
@@ -2792,7 +2820,6 @@ boolean sound_refresh_looping(
 					}
 					else if (loop->state != _looping_sound_refresh_stop)
 					{
-						/* port: stopping the loop also stops its other owned components. */
 						if (fade_time != 0.f ||
 							TEST_FLAG(track->flags, _fade_out_at_stop_bit) ||
 							(track->stop_sound.index == NONE &&
@@ -3011,7 +3038,6 @@ static void update_channel_for_looping_sound(
 					(!channel->playing_permutation ||
 						channel->playing_permutation->next_permutation_index == NONE))
 				{
-					/* port: a definition transition can retire its own voice. */
 					if (!sound_set_definition_end(channel->sound_index))
 					{
 						return;
@@ -3118,6 +3144,7 @@ static void process_looping_sounds(
 
 		if (looping_sound->flip_flop != sound_manager_globals.flip_flop)
 		{
+
 			datum_delete(looping_sound_data, looping_sound_index);
 		}
 		else if (looping_sound->state != _looping_sound_refresh_stop)
@@ -3259,6 +3286,31 @@ void sound_dispose_from_old_map(
 	if (looping_sound_data)
 	{
 		data_delete_all(looping_sound_data);
+	}
+
+	/* port: a channel still holding a permutation that no sound owns any
+	longer (a weapon's charging loop, as a network game ended) stopped too,
+	so that its cache count is given back while the map's sounds are still
+	there; else the next map's sound_render finished it against the next
+	map's sound cache (sound_cache_sound_finished: "xbox sound index ... is
+	unused or changed") */
+	if (sound_manager_globals.initialized)
+	{
+		short channel_index;
+
+		for (
+			channel_index = 0;
+			channel_index < sound_manager_globals.channel_count;
+			channel_index++)
+		{
+			struct sound_channel_datum *channel = channel_get(channel_index);
+
+			if (channel->playing_permutation || channel->queued_permutation)
+			{
+				channel_stop(channel_index);
+				channel->sound_index = NONE;
+			}
+		}
 	}
 
 	return;

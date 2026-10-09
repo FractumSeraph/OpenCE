@@ -25,6 +25,16 @@ int p2p_hand_off_invite(void);
 /* joins the game an invite link or code leads to; text may hold other
 words around it. Returns nonzero if it held an invite */
 int p2p_join_invite(const char *text);
+#ifdef HALO_GAME_BROWSER
+/* the invite of the game this machine hosts on the internet (its 44 digits,
+without halo://join/); 0 when it hosts none (browser.c) */
+int p2p_hosting_invite(char *text, int size);
+#ifdef HALO_GAME_BROWSER
+unsigned long p2p_peer_public_address(unsigned long game_address);
+unsigned long p2p_public_address(void);
+int p2p_joined_invite(char *text, int size);
+#endif
+#endif
 
 /* this machine's identifier, which its XNADDR carries (6 bytes) */
 const unsigned char *p2p_identifier(void);
@@ -78,6 +88,10 @@ void p2p_set_hosting_allowed(int allowed);
 /* the invite link of the game this machine hosts (empty, 0: none, or LAN
 only) */
 int p2p_invite_link(char *link, int size);
+/* an invite (a link or a code, or any text holding one) as the log shows
+it: its first digits only, since players post their logs and an invite lets
+anyone join; the dedicated server's log, its operator's, has it whole */
+const char *p2p_invite_log_text(const char *invite, char *text, int size);
 
 /* the hosted game's players and the most it takes, which Discord shows
 (0, 0: not hosting; until the game says, the machines the tunnel reaches
@@ -98,6 +112,9 @@ join from the server browser (its invite link still joins it). Setting or
 changing it makes a new invite, if the old one was listed. It takes a few
 milliseconds (the password's key) */
 void p2p_set_hosting_password(const char *password);
+/* whether a dedicated server hosts: its listing says so, for browsers that
+list dedicated servers apart (the next p2p_set_game_listing publishes it) */
+void p2p_set_hosting_dedicated(int dedicated);
 /* the hosted game's details as listed (printable ASCII is kept; NULL leaves
 one as it was): the game's server calls it as they change (calling it with
 the same again costs little) */
@@ -132,7 +149,7 @@ struct p2p_listing
 	char map[P2P_LISTING_MAP_SIZE + 1];
 	char gametype[P2P_LISTING_GAMETYPE_SIZE + 1];
 	unsigned char player_count, maximum_player_count, engine_type;
-	unsigned char open, in_progress, has_teams;
+	unsigned char open, in_progress, has_teams, dedicated;
 	/* joining it failed this run (p2p_lobby_mark_failed) */
 	unsigned char failed;
 	/* milliseconds, -1 if not known */

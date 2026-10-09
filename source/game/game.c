@@ -182,6 +182,9 @@ struct game_options;
 #include "structures/structures.h"
 #include "units/units.h"
 #include "units/vehicles.h"
+#ifdef HALO_64BIT
+#include "rasterizer/common/rasterizer_common.h"
+#endif
 #include "network_coop.h" /* port: port/linux/game/network_coop.c */
 
 /* network_game_globals.c's */

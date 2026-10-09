@@ -89,7 +89,7 @@ byte *sound_permutation_get_mouth_aperture(
 		800,
 		tick_index>=0 && tick_index<permutation->mouth_data.size);
 
-	return (byte *)permutation->mouth_data.address + tick_index;
+	return (byte *)xbox_pointer(permutation->mouth_data.address) + tick_index;
 }
 
 short sound_definition_find_pitch_range_by_pitch(
@@ -162,13 +162,19 @@ void try_to_reset_permutations(
 	struct sound_pitch_range *range)
 {
 	short permutation_count = range->actual_permutation_count;
-	unsigned long all_permutations_mask = (FLAG(permutation_count) - 1);
+	/* port: the mask of no more permutations than it has bits, and the
+	previous one's bit only if there was one (NONE shifted by 255) */
+	unsigned long all_permutations_mask = permutation_count >= 32 ? 0xFFFFFFFFUL :
+		permutation_count > 0 ? (FLAG(permutation_count) - 1) : 0;
 
 	if ((~range->played_permutation_mask & all_permutations_mask) == 0)
 	{
 		range->played_permutation_mask = 0;
-		if (permutation_count > 1)
-			range->played_permutation_mask = FLAG((byte)range->previous_permutation_index);
+		if (permutation_count > 1 && range->previous_permutation_index >= 0 &&
+			range->previous_permutation_index < 32)
+		{
+			range->played_permutation_mask = FLAG(range->previous_permutation_index);
+		}
 	}
 
 	return;

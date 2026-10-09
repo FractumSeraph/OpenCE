@@ -2102,19 +2102,19 @@ static long tag_index_get(
 		unsigned long group_tag;
 		unsigned long parent_group_tags[2];
 		long tag_index;
-		char *name;
-		void *base_address;
+		XPTR(char) name;
+		XPTR(void) base_address;
 		unsigned long unused[2];
 	};
 	struct tag_header
 	{
-		struct tag_instance *instances;
+		XPTR(struct tag_instance) instances;
 		long scenario_tag_index;
 		unsigned long checksum;
 		long tag_count;
 	};
-	unsigned long low = 0;
-	unsigned long high = (unsigned long)root;
+	__UINTPTR_TYPE__ low = 0;
+	__UINTPTR_TYPE__ high = POINTER_BITS(root);
 	struct tag_header const *header;
 	long index;
 
@@ -2123,7 +2123,7 @@ static long tag_index_get(
 	/* (the region's first byte) */
 	while (low < high)
 	{
-		unsigned long middle = low + (high - low) / 2;
+		__UINTPTR_TYPE__ middle = low + (high - low) / 2;
 
 		if (tag_validate_contains(validation, (void const *)middle, 1))
 			high = middle;
@@ -2133,16 +2133,16 @@ static long tag_index_get(
 	header = (struct tag_header const *)low;
 	if (!tag_validate_contains(validation, header, sizeof(*header)) ||
 		header->tag_count <= 0 || header->tag_count > UNSIGNED_SHORT_MAX ||
-		!tag_validate_contains(validation, header->instances,
+		!tag_validate_contains(validation, xbox_pointer(header->instances),
 			(unsigned long)header->tag_count * sizeof(struct tag_instance)))
 	{
 		return NONE;
 	}
 	for (index = 0; index < header->tag_count; index++)
 	{
-		struct tag_instance const *instance = &header->instances[index];
+		struct tag_instance const *instance = (struct tag_instance const *)xbox_pointer(header->instances) + index;
 
-		if (instance->base_address == root && instance->group_tag == group_tag)
+		if (xbox_pointer(instance->base_address) == root && instance->group_tag == group_tag)
 			return instance->tag_index;
 	}
 
@@ -2177,7 +2177,7 @@ static boolean sound_check(
 	}
 	for (range_index = 0; range_index < definition->pitch_ranges.count; range_index++)
 	{
-		struct sound_pitch_range *range = (struct sound_pitch_range *)definition->pitch_ranges.address + range_index;
+		struct sound_pitch_range *range = (struct sound_pitch_range *)xbox_pointer(definition->pitch_ranges.address) + range_index;
 		long most = MIN(range->permutations.count, MAXIMUM_PLAYED_PERMUTATIONS_PER_PITCH_RANGE);
 		long permutation_index;
 
@@ -2191,7 +2191,7 @@ static boolean sound_check(
 		for (permutation_index = 0; permutation_index < range->permutations.count; permutation_index++)
 		{
 			struct sound_permutation *permutation =
-				(struct sound_permutation *)range->permutations.address + permutation_index;
+				(struct sound_permutation *)xbox_pointer(range->permutations.address) + permutation_index;
 
 			/* (cache_tag_index and runtime_tag_index) */
 			if (tag_validate_tag_get(validation, (long)permutation->unknown2, SOUND_DEFINITION_TAG) != base ||
@@ -2246,7 +2246,7 @@ static boolean bitmap_from_sequence_exists(
 	if (group->sequences.count > 0 && sequence_index >= 0)
 	{
 		struct bitmap_group_sequence *sequence =
-			(struct bitmap_group_sequence *)group->sequences.address + sequence_index % group->sequences.count;
+			(struct bitmap_group_sequence *)xbox_pointer(group->sequences.address) + sequence_index % group->sequences.count;
 
 		if (!tag_validate_contains(validation, sequence, sizeof(*sequence)))
 			return FALSE;
@@ -2260,7 +2260,7 @@ static boolean bitmap_from_sequence_exists(
 			index = 0;
 			if (frame_index < sequence->sprites.count)
 			{
-				struct bitmap_group_sprite *sprite = (struct bitmap_group_sprite *)sequence->sprites.address + frame_index;
+				struct bitmap_group_sprite *sprite = (struct bitmap_group_sprite *)xbox_pointer(sequence->sprites.address) + frame_index;
 
 				if (!tag_validate_contains(validation, sprite, sizeof(*sprite)))
 					return FALSE;
@@ -2291,14 +2291,14 @@ static boolean hud_bitmap_exists(
 	*sprite_exists = FALSE;
 	if (!group || sequence_index < 0 || sequence_index >= group->sequences.count)
 		return FALSE;
-	sequence = (struct bitmap_group_sequence *)group->sequences.address + sequence_index;
+	sequence = (struct bitmap_group_sequence *)xbox_pointer(group->sequences.address) + sequence_index;
 	if (!tag_validate_contains(validation, sequence, sizeof(*sequence)))
 		return FALSE;
 	frame_index &= 0x7FFF;
 	if (sequence->sprites.count > 0)
 	{
 		struct bitmap_group_sprite *sprite =
-			(struct bitmap_group_sprite *)sequence->sprites.address + frame_index % sequence->sprites.count;
+			(struct bitmap_group_sprite *)xbox_pointer(sequence->sprites.address) + frame_index % sequence->sprites.count;
 
 		if (!tag_validate_contains(validation, sprite, sizeof(*sprite)))
 			return FALSE;
@@ -2329,7 +2329,7 @@ static boolean multitexture_overlay_check(
 	for (index = 0; index < overlay->functions.count; index++)
 	{
 		struct multitexture_overlay_hud_element_effector_definition *effector =
-			(struct multitexture_overlay_hud_element_effector_definition *)overlay->functions.address + index;
+			(struct multitexture_overlay_hud_element_effector_definition *)xbox_pointer(overlay->functions.address) + index;
 		short map_index = (short)(effector->destination - _hud_multitexture_overlay_effector_destination_primary_map);
 
 		if ((effector->destination_type == _hud_multitexture_overlay_effector_type_horizontal_offset ||
@@ -2493,7 +2493,7 @@ static boolean hud_message_text_check(
 	void *base)
 {
 	struct hud_message_text_definition *definition = base;
-	wchar_t *text = definition->text_data.address;
+	wchar_t *text = xbox_pointer(definition->text_data.address);
 	long length;
 	long message_index;
 
@@ -2503,7 +2503,7 @@ static boolean hud_message_text_check(
 			definition->text_data.size);
 		definition->text_data.size -= definition->text_data.size % sizeof(wchar_t);
 		if (!definition->text_data.size)
-			definition->text_data.address = NULL;
+			definition->text_data.address = XBOX_NULL;
 	}
 	length = definition->text_data.size / (long)sizeof(wchar_t);
 	if (length && text[length - 1])
@@ -2514,7 +2514,7 @@ static boolean hud_message_text_check(
 	for (message_index = 0; message_index < definition->messages.count; message_index++)
 	{
 		struct hud_state_message_definition *message =
-			(struct hud_state_message_definition *)definition->messages.address + message_index;
+			(struct hud_state_message_definition *)xbox_pointer(definition->messages.address) + message_index;
 		long position = message->text_start_index;
 		short element_index;
 
@@ -2530,7 +2530,7 @@ static boolean hud_message_text_check(
 				message->element_count = (byte)element_index;
 				break;
 			}
-			element = (struct hud_state_message_element *)definition->elements.address + index;
+			element = (struct hud_state_message_element *)xbox_pointer(definition->elements.address) + index;
 			if (element->type == _hud_message_type_icon && element->data >= NUMBER_OF_HUD_ICON_TYPES)
 			{
 				tag_validate_correct(validation, "has element %ld an icon of type %d: 0", index, element->data);
@@ -2571,7 +2571,7 @@ static boolean hud_globals_check(
 		arrow_index < definition->waypoint.arrows.count && definition->waypoint.arrow_bitmap.index != NONE;
 		arrow_index++)
 	{
-		struct hud_waypoint_arrow *arrow = (struct hud_waypoint_arrow *)definition->waypoint.arrows.address + arrow_index;
+		struct hud_waypoint_arrow *arrow = (struct hud_waypoint_arrow *)xbox_pointer(definition->waypoint.arrows.address) + arrow_index;
 		short type;
 
 		for (type = 0; type < NUMBER_OF_WAYPOINT_TYPES; type++)
@@ -2609,7 +2609,7 @@ static boolean font_check(
 
 	for (index = 0; index < font->characters.count; index++)
 	{
-		struct font_character *character = (struct font_character *)font->characters.address + index;
+		struct font_character *character = (struct font_character *)xbox_pointer(font->characters.address) + index;
 		boolean has_pixels = character->bitmap_width > 0 && character->bitmap_height > 0;
 
 		if (character->bitmap_width < -HARDWARE_CHARACTER_CACHE_BORDERS ||
@@ -2639,7 +2639,7 @@ static boolean string_list_entry_check(
 	void *base)
 {
 	struct string_list_entry *entry = base;
-	char *string = entry->string.address;
+	char *string = xbox_pointer(entry->string.address);
 
 	if (entry->string.size && string[entry->string.size - 1])
 	{
@@ -2709,7 +2709,7 @@ static boolean unicode_string_list_entry_check(
 	void *base)
 {
 	struct string_list_entry *entry = base;
-	wchar_t *string = entry->string.address;
+	wchar_t *string = xbox_pointer(entry->string.address);
 	long length;
 
 	if (entry->string.size % sizeof(wchar_t))
@@ -2717,7 +2717,7 @@ static boolean unicode_string_list_entry_check(
 		tag_validate_correct(validation, "has %ld bytes: cut to whole characters", entry->string.size);
 		entry->string.size -= entry->string.size % sizeof(wchar_t);
 		if (!entry->string.size)
-			entry->string.address = NULL;
+			entry->string.address = XBOX_NULL;
 	}
 	length = entry->string.size / (long)sizeof(wchar_t);
 	if (length && string[length - 1])
@@ -2807,7 +2807,7 @@ static struct tag_reference *widget_loaded_reference(
 	short reference_index)
 {
 	if (reference_index < widget->child_widgets.count)
-		return &((struct ui_widget_child_reference *)widget->child_widgets.address + reference_index)->widget_tag;
+		return &((struct ui_widget_child_reference *)xbox_pointer(widget->child_widgets.address) + reference_index)->widget_tag;
 	if (reference_index == widget->child_widgets.count && widget->type == _ui_widget_type_column_list)
 		return &widget->extended_description_widget;
 
@@ -2969,7 +2969,7 @@ static boolean game_globals_check(
 	void *base)
 {
 	struct game_globals *globals = base;
-	struct game_globals_player_control *player_control = globals->player_control.address;
+	struct game_globals_player_control *player_control = xbox_pointer(globals->player_control.address);
 
 	if (!globals->player_control.count || !player_control->look_function.count)
 	{

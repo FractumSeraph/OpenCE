@@ -123,6 +123,9 @@ symbols in this file:
 #include "scenario/scenario.h"
 #include "scenario/scenario_definitions.h"
 #include "units/units.h"
+#ifdef HALO_64BIT
+#include "cseries/errors.h"
+#endif
 #include "network_coop.h" /* port: port/linux/game/network_coop.c */
 
 /* ---------- constants */
@@ -217,6 +220,10 @@ static void hud_update_nav_point_local_player(
 	short local_player_index);
 
 /* ---------- globals */
+#ifdef HALO_64BIT
+
+extern struct hud_globals_definition *hud_globals;
+#endif
 
 static struct hud_nav_point_player_datum *nav_point_data;
 

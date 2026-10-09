@@ -170,6 +170,7 @@ struct player_profile_runtime_globals
 	struct thread_reference *thread;
 	boolean initialized;
 };
+#ifndef HALO_64BIT
 
 typedef char verify_player_profile_thread_offset[
 	offsetof(struct player_profile_runtime_globals, thread) == 0x64 ? 1 : -1];
@@ -177,6 +178,7 @@ typedef char verify_player_profile_initialized_offset[
 	offsetof(struct player_profile_runtime_globals, initialized) == 0x68 ? 1 : -1];
 typedef char verify_player_profile_globals_size[
 	sizeof(struct player_profile_runtime_globals) == 0x6C ? 1 : -1];
+#endif
 
 /* ---------- prototypes */
 
@@ -595,12 +597,17 @@ void player_profile_save_level_completed(
 
 	level = main_get_current_solo_level();
 	difficulty = game_difficulty_level_get();
-	/* port: a level not in the campaign (a Custom Edition map's, played
-	alone or as network co-op) is not the profile's to record */
-	if (level == NONE)
-		return;
 
-	match_assert("c:\\halo\\SOURCE\\saved games\\player_profile.c", 0x19D, (level>=0) && (level<NUMBER_OF_SINGLE_PLAYER_LEVELS) && (difficulty >= 0) && (difficulty < NUMBER_OF_GAME_DIFFICULTY_LEVELS));
+	match_assert("c:\\halo\\SOURCE\\saved games\\player_profile.c", 0x19D, (level==NONE || ((level>=0) && (level<NUMBER_OF_SINGLE_PLAYER_LEVELS))) && (difficulty >= 0) && (difficulty < NUMBER_OF_GAME_DIFFICULTY_LEVELS));
+
+	/* port: a level not in the campaign (a Halo PC map's, whose scripts may
+	end it with game_won) is none of the profile's, whose flags it would
+	write before; its difficulty one of the profile's too */
+	if (level < 0 || level >= NUMBER_OF_SINGLE_PLAYER_LEVELS ||
+		difficulty < 0 || difficulty >= NUMBER_OF_GAME_DIFFICULTY_LEVELS)
+	{
+		return;
+	}
 
 	player_profile_index = player_ui_get_active_player_profile_index(local_player_index);
 

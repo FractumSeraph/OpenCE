@@ -13,8 +13,9 @@ temporary r1, whatever the instruction's temporary register field says.
 
 Xbox vertex programs finish by converting their clip-space position to
 screen space with the viewport constants c[-38] and c[-37], which Direct3D
-maintains. The generated shader inverts that transform to hand OpenGL a
-clip-space position again.
+maintains. The generated shader hands OpenGL the clip-space position from
+before that conversion where it can keep it, and otherwise inverts the
+transform.
 */
 
 #include "xgpu.h"
@@ -333,6 +334,8 @@ static const char shader_prologue[] =
 	/* the #version line comes first, from the context's capabilities */
 	"precision highp float;\n"
 	"precision highp int;\n"
+#elif defined(__APPLE__)
+	"#version 410 core\n"
 #else
 	"#version 450 core\n"
 #endif
@@ -541,8 +544,11 @@ char *nv2a_vertex_shader_to_glsl(const DWORD *instructions, unsigned long instru
 		/* The conversion is screen = clip * c[-38] * rcc(w) + c[-37]; undoing
 		it by multiplying by w again is lossy near the camera plane, where
 		rcc clamps and 1/w rounds differently on each GPU (Mali put vertices
-		of the first-person weapon at the vanishing point). Where the clip
-		position was kept, the same result is computed without dividing. */
+		of the first-person weapon at the vanishing point, and desktop GPUs
+		threw the first-person arms' and weapon's vertices there in a pose
+		that brought them close to the camera: spikes from the screen's edge
+		to its center). Where the clip position was kept, the same result is
+		computed without dividing. */
 		"\tvec4 position;\n"
 		"\tif (clip_captured)\n"
 		"\t\tposition = vec4((clip_position.xyz * c[%d].xyz + (c[%d].xyz + vec3(0.5 + screen_offset, 0.5, 0.0)\n"
@@ -565,9 +571,10 @@ char *nv2a_vertex_shader_to_glsl(const DWORD *instructions, unsigned long instru
 		"\tif (!(abs(position.w) > 0.0))\n"
 		"\t\tposition = vec4(0.0, 0.0, 0.0, -1.0);\n"
 		"\tgl_Position = position;\n"
-#ifdef HALO_ANDROID
+#ifdef HALO_GL_NO_CLIP_CONTROL
 		/* what glClipControl(GL_UPPER_LEFT, GL_ZERO_TO_ONE) does on desktop
-		GL: rows from the top, depth 0..1 */
+		GL 4.5: rows from the top, depth 0..1 (OpenGL ES and macOS's 4.1 have
+		no glClipControl) */
 		"\tgl_Position.y = -gl_Position.y;\n"
 		"\tgl_Position.z = 2.0 * gl_Position.z - gl_Position.w;\n"
 #endif
@@ -582,7 +589,6 @@ char *nv2a_vertex_shader_to_glsl(const DWORD *instructions, unsigned long instru
 		"\txT3 = oT3;\n"
 		"\txFog = oFog.x;\n"
 		"}\n",
-		XGPU_VERTEX_CONSTANT_BIAS - 38, XGPU_VERTEX_CONSTANT_BIAS - 37
-		);
+		XGPU_VERTEX_CONSTANT_BIAS - 38, XGPU_VERTEX_CONSTANT_BIAS - 37);
 	return text.buffer;
 }

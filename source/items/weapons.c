@@ -231,6 +231,12 @@ symbols in this file:
 #include "units/unit_definitions.h"
 #include "units/units.h"
 
+#ifdef HALO_PORT_MAXIMUM_NETWORK_PLAYERS
+#include "bitmaps/bitmap_group.h"
+#include "cache/texture_cache.h"
+#include "effects/contrail_definitions.h"
+#endif
+
 /* port/linux/game/pal_tags.c's */
 short pal_tags_first_person_frames(long graph_index, short animation_index, short frames);
 
@@ -572,6 +578,58 @@ void weapons_dispose(
 	return;
 }
 
+#ifdef HALO_PORT_MAXIMUM_NETWORK_PLAYERS
+/* A trail's first draw requests its bitmap asynchronously and is skipped
+until that read finishes. Warm only the projectile trails of a weapon that
+has been created or readied, before its first shot. Keep ordinary
+streaming nonblocking and leave the original trail tags and lifetime alone. */
+static void weapon_precache_projectile_trails(
+	long definition_index)
+{
+	if (definition_index != NONE)
+	{
+		struct weapon_definition *definition = weapon_definition_get(definition_index);
+		short trigger_index;
+
+		for (trigger_index = 0; trigger_index < definition->weapon.triggers.count; trigger_index++)
+		{
+			struct weapon_trigger_definition *trigger = TAG_BLOCK_GET_ELEMENT(
+				&definition->weapon.triggers, trigger_index, struct weapon_trigger_definition);
+
+			if (trigger->projectile.index != NONE)
+			{
+				struct projectile_definition *projectile = projectile_definition_get(trigger->projectile.index);
+				short attachment_index;
+
+				for (attachment_index = 0; attachment_index < projectile->object.attachments.count; attachment_index++)
+				{
+					struct object_attachment_definition *attachment = TAG_BLOCK_GET_ELEMENT(
+						&projectile->object.attachments, attachment_index, struct object_attachment_definition);
+
+					if (attachment->type.group_tag == CONTRAIL_DEFINITION_TAG && attachment->type.index != NONE)
+					{
+						struct contrail_definition *contrail = contrail_definition_get(attachment->type.index);
+
+						if (contrail->bitmap.index != NONE)
+						{
+							struct bitmap_group *bitmap = bitmap_group_get(contrail->bitmap.index);
+							short bitmap_index;
+
+							for (bitmap_index = 0; bitmap_index < bitmap->bitmaps.count; bitmap_index++)
+							{
+								_texture_cache_bitmap_get_hardware_format(
+									TAG_BLOCK_GET_ELEMENT(&bitmap->bitmaps, bitmap_index, struct bitmap_data),
+									FALSE, TRUE);
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+#endif
+
 void weapon_place(
 	long weapon_index,
 	struct scenario_weapon_datum *scenario_weapon)
@@ -603,6 +661,9 @@ void weapon_ready(
 	struct weapon_datum* weapon = weapon_get(weapon_index);
 	struct weapon_definition *weapon_definition = weapon_definition_get(weapon->definition_index);
 
+#ifdef HALO_PORT_MAXIMUM_NETWORK_PLAYERS
+	weapon_precache_projectile_trails(weapon->definition_index);
+#endif
 	weapon_reset(weapon_index);
 	weapon_set_state(weapon_index, _weapon_state_ready, TRUE);
 	first_person_weapon_message_from_weapon(weapon_index, _first_person_weapon_message_ready);
@@ -814,6 +875,9 @@ boolean weapon_new(
 		trigger->idle_ticks = 127;
 	}
 
+#ifdef HALO_PORT_MAXIMUM_NETWORK_PLAYERS
+	weapon_precache_projectile_trails(weapon->definition_index);
+#endif
 	return TRUE;
 }
 
@@ -1714,6 +1778,17 @@ static struct weapon_trigger *weapon_trigger_get(
 	struct weapon_definition const *weapon_definition = weapon_definition_get(weapon->definition_index);
 
 	match_assert("c:\\halo\\SOURCE\\items\\weapons.c", 1639, trigger_index>=0 && trigger_index<weapon_definition->weapon.triggers.count);
+#ifdef HALO_CUSTOM_EDITION
+	/* port: no slot the datum does not have, in any build (the map checks
+	refuse a weapon with more triggers than it: ce_map_checks.c) */
+	if (trigger_index<0 || trigger_index>=NUMBEROF(weapon->weapon.triggers))
+	{
+		static struct weapon_trigger no_trigger;
+
+		memset(&no_trigger, 0, sizeof(no_trigger));
+		return &no_trigger;
+	}
+#endif
 
 	/* port: no trigger past the weapon's two. The callers skip it. */
 	if (trigger_index<0 || trigger_index>=(short)NUMBEROF(weapon->weapon.triggers))
@@ -1730,7 +1805,34 @@ static struct weapon_magazine *weapon_magazine_get(
 {
 	struct weapon_definition const *weapon_definition = weapon_definition_get(weapon->definition_index);
 
+#ifdef HALO_CUSTOM_EDITION
+	/* port: a Custom Edition or HaloMD map's weapon may have a trigger that
+	charges with no magazine (a HaloMD map's trip mine), whose magazine
+	weapon_update reads as it charges. Halo PC's engine read the slot before
+	the first; this one, for such maps only, reads a full magazine that is
+	never kept (a trigger with none fires without ammunition), and in any
+	build reads no slot the datum does not have (the map checks refuse a
+	weapon with more magazines than it: ce_map_checks.c). An Xbox map's are
+	asserted as they always were */
+	if (magazine_index<0 || magazine_index>=weapon_definition->weapon.magazines.count ||
+		magazine_index>=NUMBEROF(weapon->weapon.magazines))
+	{
+		static struct weapon_magazine no_magazine;
+		extern boolean cache_file_tags_are_ce(void);
+
+		if (!(magazine_index==NONE && cache_file_tags_are_ce()))
+		{
+			match_assert("c:\\halo\\SOURCE\\items\\weapons.c", 1650,
+				magazine_index>=0 && magazine_index<weapon_definition->weapon.magazines.count);
+		}
+		memset(&no_magazine, 0, sizeof(no_magazine));
+		no_magazine.rounds_total = SHORT_MAX;
+		no_magazine.rounds_loaded = SHORT_MAX;
+		return &no_magazine;
+	}
+#else
 	match_assert("c:\\halo\\SOURCE\\items\\weapons.c", 1650, magazine_index>=0 && magazine_index<weapon_definition->weapon.magazines.count);
+#endif
 
 	/* port: no magazine past the weapon's two (a trigger's magazine is the
 	map's). The callers skip it. */
@@ -2519,6 +2621,15 @@ static void trigger_create_projectiles(
 					}
 				}
 			}
+#ifdef HALO_GAME_BROWSER
+			{
+				/* port: Delta Stats' recorder, on the host (port/linux/game/
+				game_events.c): the shots its owner fired, for their accuracy */
+				void game_events_shots(long owner_object_index, long weapon_definition_index, short count);
+
+				game_events_shots(owner_object_index, weapon->definition_index, projectile_count);
+			}
+#endif
 		}
 	}
 

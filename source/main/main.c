@@ -392,7 +392,11 @@ symbols in this file:
 #include "text/draw_string.h"
 #include "text/font_group.h"
 #include "tag_files/files.h"
-#include "custom_edition_cache.h" /* port: custom_edition_level_name */
+#ifdef HALO_64BIT
+#include "input/input_abstraction.h"
+#include "interface/player_ui.h"
+#include "interface/marketing_and_strategic_business_development.h"
+#endif
 
 #ifdef HALO_WEB
 #include <emscripten/emscripten.h>
@@ -587,8 +591,10 @@ struct _main_globals
 typedef char main_hud_globals_font_tag_index_offset_assert[
 	offsetof(struct hud_globals_definition, messaging.single_player_font.index) == 0x54 ? 1 : -1];
 
+#ifndef HALO_64BIT
 typedef char main_globals_size_assert[
 	sizeof(struct _main_globals) == 0x620 ? 1 : -1];
+#endif
 typedef char main_globals_frame_start_milliseconds_offset_assert[
 	offsetof(struct _main_globals, frame_start_milliseconds) == 0x00 ? 1 : -1];
 typedef char main_globals_rasterizer_target_index_offset_assert[
@@ -605,6 +611,7 @@ typedef char main_globals_connection_offset_assert[
 	offsetof(struct _main_globals, connection) == 0x2C ? 1 : -1];
 typedef char main_globals_movie_offset_assert[
 	offsetof(struct _main_globals, movie) == 0x30 ? 1 : -1];
+#ifndef HALO_64BIT
 typedef char main_globals_defer_map_change_offset_assert[
 	offsetof(struct _main_globals, defer_map_change) == 0x45 ? 1 : -1];
 typedef char main_globals_reset_map_offset_assert[
@@ -652,6 +659,7 @@ typedef char main_globals_vblank_flip_deltas_offset_assert[
 typedef char main_globals_vblank_debug_string_offset_assert[
 	offsetof(struct _main_globals, vblank_debug_string) == 0x41C ? 1 : -1];
 
+#endif
 struct game_options
 {
 	unsigned long flags;
@@ -1272,10 +1280,10 @@ short main_get_solo_level_from_name(
 	char lower_name[128] = { 0 };
 	short level;
 
-	/* port: a Custom Edition map (custom_maps\a30) is never one of the
-	campaign's levels, whatever its name holds
-	(port/linux/game/custom_edition_cache.c) */
-	if (custom_edition_level_name(name))
+	/* port: a Halo PC map (name@ce, @pc or @md) is never one of the
+	campaign's levels, whatever its name holds (OpenCE's build-145 found
+	this of its Custom Edition maps) */
+	if (strchr(name, '@'))
 		return NONE;
 	csstrncpy(lower_name, name, NUMBEROF(lower_name) - 1);
 	lower_name[NUMBEROF(lower_name) - 1] = 0;
@@ -1718,101 +1726,25 @@ void main_crash(
 	return;
 }
 
-#ifdef HALO_NATIVE_BUILD_INFO
-/* The original Xbox version string describes the map format, not this port.
-   Keep it on Xbox; native builds name the binary that is actually running. */
-static void main_native_build_label(char *label, size_t capacity)
+/* port: the native build's identity (port/linux/src/build_identity.c), for
+the halt screen */
+static char const *port_build_identity(
+	void)
 {
-	char const *platform;
+	extern char const *build_identity(void);
 
-	#ifdef HALO_ANDROID
-	platform = "Android";
-	#elif defined(HALO_WINDOWS)
-	platform = "Windows";
-	#else
-	platform = "Linux";
-	#endif
-	if (HALO_BUILD_NUMBER > 0)
-		_snprintf(label, capacity - 1, "OpenCE %s | build %d (%s)",
-			platform, HALO_BUILD_NUMBER, HALO_BUILD_FLAVOR);
-	else
-		_snprintf(label, capacity - 1, "OpenCE %s | local build (%s)",
-			platform, HALO_BUILD_FLAVOR);
-	label[capacity - 1] = 0;
+	return build_identity();
 }
-
-/* The 2 KB error buffer keeps recent lines at its end. Put the newest first
-   so the failure is visible even if older messages run off the screen. */
-static char const *main_native_error_tail(char const *messages)
-{
-	enum { MAX_LINES = 8, MAX_LINE_BYTES = 110 };
-	static char recent[MAX_LINES * (MAX_LINE_BYTES + 5) + 1];
-	char const *lines[MAX_LINES];
-	size_t lengths[MAX_LINES];
-	char const *cursor;
-	char const *start;
-	size_t length;
-	size_t copied;
-	size_t used = 0;
-	unsigned int count = 0;
-	unsigned int index;
-
-	for (cursor = messages; *cursor; )
-	{
-		start = cursor;
-		while (*cursor && *cursor != '\r' && *cursor != '\n')
-			cursor++;
-		length = cursor - start;
-		while (*cursor == '\r' || *cursor == '\n')
-			cursor++;
-		if (!length || (length >= sizeof("[...too many errors to print...]") - 1 &&
-			!strncmp(start, "[...too many errors to print...]",
-				sizeof("[...too many errors to print...]") - 1)))
-			continue;
-		if (count == MAX_LINES)
-		{
-			for (index = 1; index < MAX_LINES; index++)
-			{
-				lines[index - 1] = lines[index];
-				lengths[index - 1] = lengths[index];
-			}
-			count--;
-		}
-		lines[count] = start;
-		lengths[count++] = length;
-	}
-	if (!count)
-		return "No recent messages. See debug.txt for details.\r\n";
-	for (index = count; index > 0; index--)
-	{
-		length = lengths[index - 1];
-		copied = length < MAX_LINE_BYTES ? length : MAX_LINE_BYTES;
-		memcpy(recent + used, lines[index - 1], copied);
-		used += copied;
-		if (copied < length)
-		{
-			memcpy(recent + used, "...", 3);
-			used += 3;
-		}
-		recent[used++] = '\r';
-		recent[used++] = '\n';
-	}
-	recent[used] = 0;
-	return recent;
-}
-#endif
 
 void main_print_version(
 	void)
 {
-	#ifdef HALO_NATIVE_BUILD_INFO
-	char label[96];
+	/* port: the native build's identity (port/linux/src/build_identity.c),
+	then the Xbox build the game's code is */
+	extern char const *build_identity(void);
 
-	main_native_build_label(label, sizeof(label));
-	console_printf(FALSE, "%s | compiled %s %s", label, __DATE__, __TIME__);
-	#else
-	console_printf(FALSE, "halobeta xbox 01.01.14.2342 Jan 14 2002 12:49:20");
-	#endif
+	console_printf(FALSE, "%s", build_identity());
+	console_printf(FALSE, "from halobeta xbox 01.01.14.2342 Jan 14 2002 12:49:20");
 	return;
 }
 
@@ -2363,8 +2295,8 @@ static void main_won_map_private(
 	main_globals.want_to_be_at_main_menu = TRUE;
 	main_globals.won_map = FALSE;
 	level = main_get_solo_level_from_name(main_globals.soloplayer_map_name);
-	/* port: a level not in the campaign (a Custom Edition map's) has no next
-	one, rather than the first */
+	/* port: a level not in the campaign (a Halo PC map's) has no next one,
+	rather than the first */
 	level = level == NONE ? NONE : level + 1;
 	if (level >= 10)
 		level = NONE;
@@ -3198,11 +3130,7 @@ void halt_and_catch_fire(
 					NULL,
 					&cursor,
 					-4,
-					#ifdef HALO_NATIVE_BUILD_INFO
-					banner);
-				#else
-					"halobeta xbox 01.01.14.2342 built at: Jan 14 2002 12:49:20");
-				#endif
+					port_build_identity());
 				bounds.y0 = cursor.y - 1;
 				rasterizer_draw_string(
 					&bounds,
@@ -3499,6 +3427,23 @@ static boolean main_loop_iteration(
 
 			main_update_time();
 			process_ui_widgets();
+#ifdef HALO_GAME_BROWSER
+			{
+				/* the dedicated server's director (server/src/dedicated.c); the
+				game list's probe (server/src/probe.c); the game list's confirmed
+				players (port/linux/game/game_list_claims.c) and statistics
+				recorder (port/linux/game/game_stats.c) */
+				void dedicated_server_update(void);
+				void probe_update(void);
+				void game_list_claims_update(void);
+				void game_stats_update(void);
+
+				dedicated_server_update();
+				probe_update();
+				game_list_claims_update();
+				game_stats_update();
+			}
+#endif
 			bink_playback_update();
 
 			/* port: not the Xbox debug keyboard's End and Escape, which stop

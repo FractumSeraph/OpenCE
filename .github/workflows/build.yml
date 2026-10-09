@@ -1,51 +1,120 @@
 name: Build
 
-# Debug and release builds of the native ports (Linux, Windows, Android) for
-# every pushed commit, uploaded as artifacts. tools/ci_build.py does each
-# build; see it for the options.
+# Debug and release builds of the native ports (Linux and Windows, 32- and
+# 64-bit, Android, macOS), and release builds of the dedicated server (Linux
+# x86, x64 and arm64) and its container, for every pushed commit and pull
+# request, uploaded as artifacts: whether a change builds. tools/ci_build.py does each build; see it for the options.
+#
+# These builds are VERSION's -dev, and never look for updates. Releases and
+# nightlies are built here too, by hand or by ChupathingyCE's release
+# workflows (ChupathingyCE/command), which run this workflow on main with a
+# commit and its version (tools/version.py): the builds are that commit's,
+# as that version, and a release's look for newer releases. Those workflows
+# then sign the Android app with ChupathingyCE's key (this repository has no
+# key: the debug app has the runner's debug key, the release app is
+# unsigned) and publish the builds to this repository's Releases. Each run
+# also uploads chupathingyce-build-info: the commit and version it built.
 #
 # Kept cheap:
 # - one job per platform builds both configurations, so its set-up (tools,
 #   downloads, caches) is paid once;
 # - compiles go through ccache, whose cache carries over from run to run, so
-#   a commit only recompiles what it changed; downloads (SDL, musl, Gradle,
-#   the Linux build's system root) are cached too;
+#   a commit only recompiles what it changed; downloads (SDL, musl, Gradle)
+#   are cached too;
 # - a newer push to the same branch cancels a run still going;
 # - pushes that only change documentation do not build;
 # - Windows, whose minutes cost twice Linux's, builds only Windows;
 # - artifacts are kept for three days.
-#
-# A successful build of main is also published as a GitHub release, the
-# newest marked latest, so that
-# https://github.com/<repository>/releases/latest/download/<file> always
-# gives the latest build; the last five are kept.
 on:
   push:
     paths-ignore:
       - "**.md"
+  pull_request:
+    paths-ignore:
+      - "**.md"
   workflow_dispatch:
+    inputs:
+      commit:
+        description: The commit to build (a SHA; empty, the branch's)
+        type: string
+        default: ""
+      version:
+        description: The version (0.5.0b, 0.5.0b-nightly.42; empty, VERSION's -dev)
+        type: string
+        default: ""
+      release:
+        description: A release's build (its updater looks for newer releases; the version must be VERSION's)
+        type: boolean
+        default: false
+      request:
+        description: An ID that the caller finds this run by (in its name)
+        type: string
+        default: ""
 
+# (a run started with a version is named for it, so that the release
+# workflows find their run; the others keep GitHub's name)
+run-name: ${{ inputs.version && format('Build {0} at {1} {2}', inputs.version, inputs.commit, inputs.request) || '' }}
+
+# (a run started by hand is never canceled by a push, and cancels none)
 concurrency:
-  group: build-${{ github.ref }}
+  group: ${{ github.event_name == 'workflow_dispatch' && format('build-dispatch-{0}', github.run_id) || format('build-{0}', github.ref) }}
   cancel-in-progress: true
 
 permissions:
   contents: read
 
 env:
+  # (empty unless started with a version: VERSION's -dev, tools/version.py)
+  HALO_VERSION: ${{ inputs.version }}
+  HALO_RELEASE_BUILD: ${{ inputs.release && '1' || '0' }}
   CI_COMPILER_LAUNCHER: ccache
   CCACHE_DIR: ${{ github.workspace }}/.ccache
   CCACHE_BASEDIR: ${{ github.workspace }}
   CCACHE_MAXSIZE: 1G
 
 jobs:
+  info:
+    # what this run builds: the commit (inputs.commit, else the run's) and
+    # the version, which the release workflows check before they publish
+    # its builds
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit }}
+
+      - name: Build info
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          REQUEST: ${{ inputs.request }}
+        run: |
+          mkdir -p dist/chupathingyce-build-info
+          python3 - > dist/chupathingyce-build-info/build-info.json <<'EOF'
+          import json, os, subprocess
+          from tools.version import release_build, version
+          print(json.dumps({
+              "commit": subprocess.run(["git", "rev-parse", "HEAD"], check=True, capture_output=True,
+                                       text=True).stdout.strip(),
+              "version": version(),
+              "release": release_build(),
+              "event": os.environ["EVENT"],
+              "ref": os.environ["REF"],
+              "request": os.environ["REQUEST"],
+          }, indent=2))
+          EOF
+          cat dist/chupathingyce-build-info/build-info.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chupathingyce-build-info
+          path: dist/chupathingyce-build-info
+          retention-days: 3
+
   linux:
     # Arch Linux has what the build needs as packages: clang 22 (for the
-    # profile-guided optimisation in pgo/), and CMake, pkg-config and
-    # wayland-scanner for the SDL 3 that the portable build brings. The build
-    # links against Debian 11's 32-bit glibc (tools/linux_sysroot.py), not
-    # Arch's, so that it starts on SteamOS and older distributions; Arch's
-    # 32-bit glibc is for the tests.
+    # profile-guided optimisation in pgo/) and 32-bit SDL 3.
     runs-on: ubuntu-24.04
     container: archlinux:latest
     timeout-minutes: 40
@@ -54,21 +123,17 @@ jobs:
         run: |
           printf '\n[multilib]\nInclude = /etc/pacman.d/mirrorlist\n' >> /etc/pacman.conf
           pacman -Syu --noconfirm --needed git zstd python python-pytest ninja ccache \
-            clang lld gcc lib32-glibc lib32-gcc-libs cmake pkgconf wayland
+            clang lld gcc lib32-glibc lib32-gcc-libs lib32-sdl3
 
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit }}
 
       - uses: actions/cache@v4
         with:
           path: .ccache
           key: ccache-linux-${{ github.sha }}
           restore-keys: ccache-linux-
-
-      # the system root and SDL's source, which the build downloads
-      - uses: actions/cache@v4
-        with:
-          path: build/linux/third_party
-          key: linux-third-party-${{ hashFiles('tools/linux_sysroot.py') }}
 
       - name: Debug
         run: python tools/ci_build.py linux debug
@@ -78,7 +143,7 @@ jobs:
 
       - name: Test
         run: |
-          python -m pytest -q tools/test_linux_port.py tools/test_host_watch_hash.py tools/harness
+          python -m pytest -q tools/test_linux_port.py tools/test_touch_menu.py tools/test_server_control.py tools/test_delta.py tools/test_delta_peer.py
           python tools/test_light_storage.py
 
       - name: Compile cache
@@ -86,15 +151,175 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: halo-linux-debug
-          path: dist/halo-linux-debug
+          name: chupathingyce-linux-debug
+          path: dist/chupathingyce-linux-debug
           retention-days: 3
 
       - uses: actions/upload-artifact@v4
         with:
-          name: halo-linux-release
-          path: dist/halo-linux-release
+          name: chupathingyce-linux-release
+          path: dist/chupathingyce-linux-release
           retention-days: 3
+
+  linux64:
+    # The native 64-bit Linux build (ninja linux64), on Arch Linux as the
+    # 32-bit one, with 64-bit SDL 3.
+    runs-on: ubuntu-24.04
+    container: archlinux:latest
+    timeout-minutes: 40
+    steps:
+      - name: Install the toolchain
+        run: |
+          pacman -Syu --noconfirm --needed git zstd python ninja ccache clang lld gcc sdl3
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit }}
+
+      - uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ccache-linux64-${{ github.sha }}
+          restore-keys: ccache-linux64-
+
+      - name: Debug
+        run: python tools/ci_build.py linux64 debug
+
+      - name: Release
+        run: python tools/ci_build.py linux64 release
+
+      - name: Compile cache
+        run: ccache --show-stats
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chupathingyce-linux64-debug
+          path: dist/chupathingyce-linux64-debug
+          retention-days: 3
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chupathingyce-linux64-release
+          path: dist/chupathingyce-linux64-release
+          retention-days: 3
+
+  server:
+    # The dedicated server (tools/server_build.py): one static program for
+    # each architecture, built against musl in Alpine Linux's container of
+    # that architecture (tools/ci_build.py --alpine; x86 on the x86-64
+    # runner, arm64 on GitHub's arm64 one), then started on the runner's
+    # Ubuntu, which it shares nothing with: it prints its version, refuses
+    # to start without a playlist, and stops with a clear error without maps.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86
+            runner: ubuntu-24.04
+          - arch: x64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit }}
+
+      - uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ccache-server-${{ matrix.arch }}-${{ github.sha }}
+          restore-keys: ccache-server-${{ matrix.arch }}-
+
+      # SDL's headers, which configure.py fetches
+      - uses: actions/cache@v4
+        with:
+          path: build/server/third_party
+          key: server-third-party-${{ matrix.arch }}-${{ hashFiles('tools/server_build.py') }}
+
+      - name: Release
+        run: python3 tools/ci_build.py server-${{ matrix.arch }} release --alpine
+
+      - name: Start it
+        run: |
+          smoke="$RUNNER_TEMP/smoke"
+          server="$smoke/chupathingyce-server"
+          mkdir -p "$smoke/data/playlists"
+          cp dist/chupathingyce-server-linux-${{ matrix.arch }}/chupathingyce-server "$server"
+          file "$server"
+          # (a release's download is without its debug information)
+          if file "$server" | grep -q "with debug_info"; then echo "not stripped"; exit 1; fi
+          "$server" --version
+          # no playlist: how to start one, and status 2
+          status=0; "$server" || status=$?
+          test "$status" = 2
+          # a playlist, but no maps: a clear error, and status 1
+          echo "bloodgulch slayer" > "$smoke/data/playlists/test.txt"
+          status=0
+          HALO_DATA_ROOT="$smoke/data" HALO_SAVE_ROOT="$smoke/saves" HALO_DEDICATED=playlists/test.txt \
+            HALO_NET_ONLINE=false HALO_NET_LIST_GAMES=false \
+            timeout 60 "$server" 2> "$smoke/error.txt" || status=$?
+          cat "$smoke/error.txt"
+          test "$status" = 1
+          grep -q "no maps" "$smoke/error.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chupathingyce-server-linux-${{ matrix.arch }}
+          path: dist/chupathingyce-server-linux-${{ matrix.arch }}
+          retention-days: 3
+
+  server-container:
+    # The server's container (server/deploy/Dockerfile) for the three
+    # architectures at once, from the server job's programs, as buildx makes
+    # it (nothing runs while it builds); then each started once, as above
+    # (arm64 emulated). Not pushed anywhere.
+    needs: server
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: chupathingyce-server-linux-*
+          path: artifacts
+
+      - uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build
+        run: |
+          context="$RUNNER_TEMP/context"
+          mkdir -p "$context"
+          cp server/deploy/Dockerfile "$context/"
+          for pair in x86:386 x64:amd64 arm64:arm64; do
+            arch=${pair%%:*}; platform=${pair#*:}
+            mkdir -p "$context/bin/$platform"
+            cp "artifacts/chupathingyce-server-linux-$arch/chupathingyce-server" "$context/bin/$platform/"
+            chmod +x "$context/bin/$platform/chupathingyce-server"
+          done
+          docker buildx build --platform linux/386,linux/amd64,linux/arm64 \
+            --output type=oci,dest="$RUNNER_TEMP/chupathingyce-server.oci.tar" "$context"
+          ls -l "$RUNNER_TEMP/chupathingyce-server.oci.tar"
+
+      - name: Start each
+        run: |
+          for platform in 386 amd64 arm64; do
+            docker buildx build --platform linux/$platform --load -t chupathingyce-server:$platform "$RUNNER_TEMP/context"
+            docker run --rm --platform linux/$platform --cap-drop ALL --security-opt no-new-privileges \
+              chupathingyce-server:$platform --version
+            # (not root)
+            test "$(docker image inspect -f '{{.Config.User}}' chupathingyce-server:$platform)" = 1000:1000
+          done
+          docker image ls chupathingyce-server
 
   android:
     # The runner image has the Android SDK and NDK, a JDK and CMake.
@@ -104,13 +329,20 @@ jobs:
       - name: Install the toolchain
         run: |
           mkdir -p "$RUNNER_TEMP/tools"
+          # (each download checked against the hash it had when it was pinned)
           curl -fsSL -o ninja.zip https://github.com/ninja-build/ninja/releases/download/v1.12.1/ninja-linux.zip
+          curl -fsSL -o ccache.tar.xz https://github.com/ccache/ccache/releases/download/v4.10.2/ccache-4.10.2-linux-x86_64.tar.xz
+          sha256sum -c - <<'EOF'
+          6f98805688d19672bd699fbbfa2c2cf0fc054ac3df1f0e6a47664d963d530255  ninja.zip
+          80cab87bd510eca796467aee8e663c398239e0df1c4800a0b5dff11dca0b4f18  ccache.tar.xz
+          EOF
           unzip -q ninja.zip -d "$RUNNER_TEMP/tools" && rm ninja.zip
-          curl -fsSL https://github.com/ccache/ccache/releases/download/v4.10.2/ccache-4.10.2-linux-x86_64.tar.xz \
-            | tar -xJ -C "$RUNNER_TEMP/tools" --strip-components=1 ccache-4.10.2-linux-x86_64/ccache
+          tar -xJf ccache.tar.xz -C "$RUNNER_TEMP/tools" --strip-components=1 ccache-4.10.2-linux-x86_64/ccache && rm ccache.tar.xz
           echo "$RUNNER_TEMP/tools" >> "$GITHUB_PATH"
 
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit }}
 
       - uses: actions/cache@v4
         with:
@@ -122,7 +354,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: build/android/third_party
-          key: android-third-party-${{ hashFiles('tools/android_build.py', 'port/android/patches/**') }}
+          key: android-third-party-${{ hashFiles('tools/android_build.py') }}
 
       - uses: actions/cache@v4
         with:
@@ -131,30 +363,18 @@ jobs:
             ~/.gradle/wrapper
           key: gradle-${{ hashFiles('port/android/**/*.gradle*', 'port/android/gradle/wrapper/gradle-wrapper.properties') }}
 
-      # the app's signing key, from the ANDROID_KEYSTORE_BASE64 secret (a
-      # keystore, base64) and ANDROID_KEYSTORE_PASSWORD (its password, and
-      # the key's, alias halo): every build signed with it installs over the
-      # one before, as the app's self-updater (Updater.java) needs. Without
-      # them each build is signed with the runner's own debug key.
-      - name: Signing key
-        env:
-          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-        run: |
-          if [ -n "$KEYSTORE" ]; then
-            printf '%s' "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/halo.keystore"
-            echo "HALO_ANDROID_KEYSTORE=$RUNNER_TEMP/halo.keystore" >> "$GITHUB_ENV"
-          else
-            echo "::warning::no ANDROID_KEYSTORE_BASE64 secret: the Android builds cannot update over each other"
-          fi
-
+      # No keystore.properties here (pull requests and forks have no
+      # secrets): the debug app has the runner's own debug key
+      # (chupathingyce-android-debug-testkey.apk), which does not install
+      # over ChupathingyCE's builds, and the release app is unsigned
+      # (chupathingyce-android-release-unsigned.apk). The release workflows
+      # (ChupathingyCE/command) take both from a run of this workflow and
+      # sign them again with ChupathingyCE's key, zipalign and apksigner
+      # (port/android/README.md).
       - name: Debug
-        env:
-          HALO_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: python3 tools/ci_build.py android debug
 
       - name: Release
-        env:
-          HALO_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: python3 tools/ci_build.py android release
 
       - name: Compile cache
@@ -162,14 +382,14 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: halo-android-debug
-          path: dist/halo-android-debug
+          name: chupathingyce-android-debug-testkey
+          path: dist/chupathingyce-android-debug
           retention-days: 3
 
       - uses: actions/upload-artifact@v4
         with:
-          name: halo-android-release
-          path: dist/halo-android-release
+          name: chupathingyce-android-release-unsigned
+          path: dist/chupathingyce-android-release
           retention-days: 3
 
   windows:
@@ -185,14 +405,19 @@ jobs:
         shell: pwsh
         run: |
           Invoke-WebRequest -OutFile ninja.zip https://github.com/ninja-build/ninja/releases/download/v1.12.1/ninja-win.zip
-          Expand-Archive ninja.zip -DestinationPath "$env:RUNNER_TEMP\tools"
           Invoke-WebRequest -OutFile ccache.zip https://github.com/ccache/ccache/releases/download/v4.10.2/ccache-4.10.2-windows-x86_64.zip
+          # (each download checked against the hash it had when it was pinned)
+          if ((Get-FileHash ninja.zip -Algorithm SHA256).Hash -ne "F550FEC705B6D6FF58F2DB3C374C2277A37691678D6ABA463ADCBB129108467A") { throw "ninja.zip: unexpected SHA-256" }
+          if ((Get-FileHash ccache.zip -Algorithm SHA256).Hash -ne "6252F081876A9A9F700FAE13A5AEC5D0D486B28261D7F1F72AC11C7AD9DF4DA9") { throw "ccache.zip: unexpected SHA-256" }
+          Expand-Archive ninja.zip -DestinationPath "$env:RUNNER_TEMP\tools"
           Expand-Archive ccache.zip -DestinationPath $env:RUNNER_TEMP
           Copy-Item "$env:RUNNER_TEMP\ccache-4.10.2-windows-x86_64\ccache.exe" "$env:RUNNER_TEMP\tools"
           Remove-Item ninja.zip, ccache.zip
           "$env:RUNNER_TEMP\tools" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
 
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit }}
 
       - uses: actions/cache@v4
         with:
@@ -220,208 +445,151 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: halo-windows-debug
-          path: dist/halo-windows-debug
+          name: chupathingyce-windows-debug
+          path: dist/chupathingyce-windows-debug
           retention-days: 3
 
       - uses: actions/upload-artifact@v4
         with:
-          name: halo-windows-release
-          path: dist/halo-windows-release
+          name: chupathingyce-windows-release
+          path: dist/chupathingyce-windows-release
           retention-days: 3
 
-      # the PDBs, for crash reports' backtraces (tools/ci_build.py)
+      # (halo.exe's symbols and map, which ChupathingyCE's release keeps
+      # privately for the crash reports; not published)
       - uses: actions/upload-artifact@v4
         with:
-          name: halo-windows-debug-symbols
-          path: dist/halo-windows-debug-symbols
+          name: symbols-windows-debug
+          path: dist/chupathingyce-windows-debug-symbols
           retention-days: 3
 
       - uses: actions/upload-artifact@v4
         with:
-          name: halo-windows-release-symbols
-          path: dist/halo-windows-release-symbols
+          name: symbols-windows-release
+          path: dist/chupathingyce-windows-release-symbols
           retention-days: 3
 
-  release:
-    # The six builds (and the Windows builds' PDBs) as a release, tagged
-    # build-<run number> and marked latest
-    # (every file keeps its name from release to release, for the README's
-    # latest/download links); then all but the newest five build-* releases
-    # go, tags and all. Only for main, and only when every platform built.
-    needs: [linux, android, windows]
-    if: ${{ github.ref == 'refs/heads/main' }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    permissions:
-      contents: write
-    outputs:
-      tag: ${{ steps.publish.outputs.tag }}
-    env:
-      GH_TOKEN: ${{ github.token }}
-      GH_REPO: ${{ github.repository }}
+  windows64:
+    # The native 64-bit Windows build (ninja windows64), on the same runner
+    # image as the 32-bit one, with Visual Studio's x64 libraries.
+    runs-on: windows-2025
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: bash
     steps:
-      - uses: actions/download-artifact@v4
+      - name: Install the toolchain
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -OutFile ninja.zip https://github.com/ninja-build/ninja/releases/download/v1.12.1/ninja-win.zip
+          Invoke-WebRequest -OutFile ccache.zip https://github.com/ccache/ccache/releases/download/v4.10.2/ccache-4.10.2-windows-x86_64.zip
+          # (each download checked against the hash it had when it was pinned)
+          if ((Get-FileHash ninja.zip -Algorithm SHA256).Hash -ne "F550FEC705B6D6FF58F2DB3C374C2277A37691678D6ABA463ADCBB129108467A") { throw "ninja.zip: unexpected SHA-256" }
+          if ((Get-FileHash ccache.zip -Algorithm SHA256).Hash -ne "6252F081876A9A9F700FAE13A5AEC5D0D486B28261D7F1F72AC11C7AD9DF4DA9") { throw "ccache.zip: unexpected SHA-256" }
+          Expand-Archive ninja.zip -DestinationPath "$env:RUNNER_TEMP\tools"
+          Expand-Archive ccache.zip -DestinationPath $env:RUNNER_TEMP
+          Copy-Item "$env:RUNNER_TEMP\ccache-4.10.2-windows-x86_64\ccache.exe" "$env:RUNNER_TEMP\tools"
+          Remove-Item ninja.zip, ccache.zip
+          "$env:RUNNER_TEMP\tools" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+
+      - uses: actions/checkout@v4
         with:
-          pattern: halo-*
-          path: artifacts
+          ref: ${{ inputs.commit }}
+
+      - uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ccache-windows64-${{ github.sha }}
+          restore-keys: ccache-windows64-
+
+      # SDL's development package, which configure.py fetches (the 32-bit
+      # job's: it holds both builds' libraries)
+      - uses: actions/cache@v4
+        with:
+          path: build/windows/third_party
+          key: windows-third-party-${{ hashFiles('tools/windows_build.py') }}
+
+      - name: Debug
+        run: python tools/ci_build.py windows64 debug
+
+      - name: Release
+        run: python tools/ci_build.py windows64 release
+
+      - name: Compile cache
+        run: ccache --show-stats
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chupathingyce-windows64-debug
+          path: dist/chupathingyce-windows64-debug
+          retention-days: 3
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chupathingyce-windows64-release
+          path: dist/chupathingyce-windows64-release
+          retention-days: 3
+
+      # (halo.exe's symbols and map, which ChupathingyCE's release keeps
+      # privately for the crash reports; not published)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: symbols-windows64-debug
+          path: dist/chupathingyce-windows64-debug-symbols
+          retention-days: 3
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: symbols-windows64-release
+          path: dist/chupathingyce-windows64-release-symbols
+          retention-days: 3
+
+  macos:
+    # Apple silicon, with Xcode's clang: the universal application (Apple
+    # silicon and Intel, self-contained: tools/macos_build.py, --portable),
+    # with its own SDL3, built once and cached. The application goes up as
+    # a tar, which keeps its symbolic links and permissions (its signature
+    # needs them).
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - name: Install the toolchain
+        run: brew install ninja ccache
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit }}
+
+      - uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ccache-macos-${{ github.sha }}
+          restore-keys: ccache-macos-
+
+      - uses: actions/cache@v4
+        with:
+          path: build/macos/third_party
+          key: macos-sdl3-${{ hashFiles('tools/android_build.py', 'tools/macos_build.py') }}
+
+      - name: Debug
+        run: python3 tools/ci_build.py macos debug
+
+      - name: Release
+        run: python3 tools/ci_build.py macos release
 
       - name: Package
         run: |
-          mkdir release
-          for build in artifacts/*/; do
-            name="$(basename "$build")"
-            (cd "$build" && zip -qr "$GITHUB_WORKSPACE/release/$name.zip" .)
-          done
-          ls -l release
+          tar -C dist -cf chupathingyce-macos-debug.tar chupathingyce-macos-debug
+          tar -C dist -cf chupathingyce-macos-release.tar chupathingyce-macos-release
 
-      - name: Publish
-        id: publish
-        env:
-          MESSAGE: ${{ github.event.head_commit.message }}
-          COMMIT_URL: ${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          tag="build-$GITHUB_RUN_NUMBER"
-          subject="$(printf '%s' "${MESSAGE:-manual run}" | head -n 1)"
-          printf '%s\n\nCommit: %s\nBuild: %s\n\nThe release builds are for playing; the debug builds stop at the first failed assertion and log it.\n' \
-            "$subject" "$COMMIT_URL" "$RUN_URL" > notes.md
-          gh release create "$tag" release/*.zip --target "$GITHUB_SHA" --latest \
-            --title "Build $GITHUB_RUN_NUMBER (${GITHUB_SHA:0:7})" --notes-file notes.md
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chupathingyce-macos-debug
+          path: chupathingyce-macos-debug.tar
+          retention-days: 3
 
-      # The Windows builds' executables and PDBs to Sentry, which turns the
-      # crash reports of these builds (port/windows/src/win32_crash.c) into
-      # backtraces with function names and lines. Needs the SENTRY_AUTH_TOKEN
-      # secret: an organization auth token of the Sentry organization, which
-      # names the organization and its region itself. The SENTRY_PROJECT
-      # variable can name the project (its slug), else the id in the DSN of
-      # win32_crash.c; SENTRY_ORG and SENTRY_URL (https://de.sentry.io) are
-      # for a personal token instead. A failed upload does not stop the
-      # release.
-      - name: Upload Windows symbols to Sentry
-        continue-on-error: true
-        env:
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT || '4512207917744208' }}
-          ORG: ${{ vars.SENTRY_ORG }}
-          URL: ${{ vars.SENTRY_URL }}
-          SENTRY_CLI_VERSION: 2.46.0
-        run: |
-          if [ -z "$SENTRY_AUTH_TOKEN" ]; then
-            echo "::warning::no SENTRY_AUTH_TOKEN secret: crash reports of this build will have no function names"
-            exit 0
-          fi
-          if [ -n "$ORG" ]; then export SENTRY_ORG="$ORG"; fi
-          if [ -n "$URL" ]; then export SENTRY_URL="$URL"; fi
-          curl -fsSL -o sentry-cli "https://github.com/getsentry/sentry-cli/releases/download/$SENTRY_CLI_VERSION/sentry-cli-Linux-x86_64"
-          chmod +x sentry-cli
-          ./sentry-cli debug-files upload --wait \
-            artifacts/halo-windows-release artifacts/halo-windows-release-symbols \
-            artifacts/halo-windows-debug artifacts/halo-windows-debug-symbols
-
-      - name: Keep the last five
-        run: |
-          gh release list --limit 100 --json tagName,createdAt \
-            --jq '[.[] | select(.tagName | startswith("build-"))] | sort_by(.createdAt) | reverse | .[5:] | .[].tagName' |
-          while read -r tag; do
-            gh release delete "$tag" --cleanup-tag --yes
-          done
-
-  notify:
-    # A Discord embed for the run, to the DISCORD_WEBHOOK secret (nothing
-    # without it): green when every platform built, red when one did not,
-    # with each platform's result, this run's release (main only), and links
-    # to the latest release's builds.
-    needs: [linux, android, windows, release]
-    if: ${{ !cancelled() }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - name: Post to Discord
-        env:
-          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-          LINUX: ${{ needs.linux.result }}
-          ANDROID: ${{ needs.android.result }}
-          WINDOWS: ${{ needs.windows.result }}
-          RELEASE_TAG: ${{ needs.release.outputs.tag }}
-          SERVER: ${{ github.server_url }}
-          REPOSITORY: ${{ github.repository }}
-          BRANCH: ${{ github.ref_name }}
-          SHA: ${{ github.sha }}
-          ACTOR: ${{ github.actor }}
-          MESSAGE: ${{ github.event.head_commit.message }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          COMMIT_URL: ${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}
-        run: |
-          if [ -z "$WEBHOOK" ]; then
-            echo "no DISCORD_WEBHOOK secret: nothing to post"
-            exit 0
-          fi
-          status() {
-            case "$1" in
-              success) echo "✅ Built" ;;
-              failure) echo "❌ Failed" ;;
-              cancelled) echo "⏹️ Cancelled" ;;
-              *) echo "➖ Skipped" ;;
-            esac
-          }
-          if [ "$LINUX" = success ] && [ "$ANDROID" = success ] && [ "$WINDOWS" = success ]; then
-            title="Build succeeded"; color=5763719
-          else
-            title="Build failed"; color=15548997
-          fi
-          latest="$SERVER/$REPOSITORY/releases/latest"
-          downloads="[Linux]($latest/download/halo-linux-release.zip) · [Windows]($latest/download/halo-windows-release.zip) · [Android]($latest/download/halo-android-release.zip) ([all builds]($latest))"
-          if [ -n "$RELEASE_TAG" ]; then
-            release="[$RELEASE_TAG]($SERVER/$REPOSITORY/releases/tag/$RELEASE_TAG)"
-          else
-            release="None (only a successful build of main makes one)"
-          fi
-          subject="$(printf '%s' "${MESSAGE:-manual run}" | head -n 1 | cut -c1-200)"
-          jq -n \
-            --arg title "$title" --argjson color "$color" --arg url "$RUN_URL" \
-            --arg description "[\`${SHA:0:7}\`]($COMMIT_URL) $subject — $ACTOR ($BRANCH)" \
-            --arg release "$release" --arg downloads "$downloads" \
-            --arg linux "$(status "$LINUX")" --arg windows "$(status "$WINDOWS")" --arg android "$(status "$ANDROID")" \
-            --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            '{embeds: [{
-              title: $title, url: $url, color: $color, description: $description, timestamp: $timestamp,
-              fields: [
-                {name: "Linux", value: $linux, inline: true},
-                {name: "Windows", value: $windows, inline: true},
-                {name: "Android", value: $android, inline: true},
-                {name: "Release", value: $release},
-                {name: "Latest release builds", value: $downloads}
-              ]
-            }]}' > payload.json
-          # Discord rate limits webhooks (HTTP 429, with how many seconds to
-          # wait in retry_after): wait and try again, a few times. A post
-          # still limited, or a network or Discord error, is a warning rather
-          # than a failed run; any other answer (a deleted webhook) fails. (At
-          # most 5 tries of 15 seconds and 4 waits of 30: inside the job's 5
-          # minutes.)
-          for attempt in 1 2 3 4 5; do
-            code=$(curl -sS --max-time 15 -o response.json -w '%{http_code}' \
-              -H "Content-Type: application/json" -d @payload.json "$WEBHOOK") || code=000
-            case "$code" in
-              2??)
-                exit 0
-                ;;
-              429)
-                wait=$(jq -r '.retry_after // 5' response.json 2>/dev/null || echo 5)
-                wait=$(awk -v w="$wait" 'BEGIN { w += 0; if (w < 1) w = 1; if (w > 30) w = 30; printf "%d", w + 0.999 }')
-                echo "Discord is rate limiting the webhook; trying again in ${wait}s (attempt $attempt of 5)"
-                ;;
-              000|5??)
-                wait=5
-                echo "Discord answered HTTP $code; trying again in ${wait}s (attempt $attempt of 5)"
-                ;;
-              *)
-                echo "::error::Discord answered HTTP $code: $(cat response.json 2>/dev/null)"
-                exit 1
-                ;;
-            esac
-            [ "$attempt" -lt 5 ] && sleep "$wait"
-          done
-          echo "::warning::The Discord post did not go through after 5 attempts (HTTP $code)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chupathingyce-macos-release
+          path: chupathingyce-macos-release.tar
+          retention-days: 3

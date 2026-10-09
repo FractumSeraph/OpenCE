@@ -394,7 +394,7 @@ static boolean scenario_check_object_names(
 
 	for (name_index = 0; name_index < scenario->object_names.count; name_index++)
 	{
-		struct scenario_object_name *name = (struct scenario_object_name *)scenario->object_names.address + name_index;
+		struct scenario_object_name *name = (struct scenario_object_name *)xbox_pointer(scenario->object_names.address) + name_index;
 		struct tag_block const *placements = NULL;
 
 		if (name->runtime_object_type == NONE && name->runtime_scenario_datum_index == NONE)
@@ -465,7 +465,7 @@ static boolean scenario_check_scripts(
 	void *base)
 {
 	struct scenario *scenario = base;
-	struct data_array const *nodes = scenario->hs_syntax_data.address;
+	struct data_array const *nodes = xbox_pointer(scenario->hs_syntax_data.address);
 	struct hs_syntax_node const *node_data;
 	long walk_count;
 	long index;
@@ -486,14 +486,14 @@ static boolean scenario_check_scripts(
 	memset(hs_nodes_reached, 0, sizeof(hs_nodes_reached));
 	for (index = 0; index < scenario->hs_scripts.count && !error; index++)
 	{
-		struct hs_script const *script = (struct hs_script const *)scenario->hs_scripts.address + index;
+		struct hs_script const *script = (struct hs_script const *)xbox_pointer(scenario->hs_scripts.address) + index;
 
 		if (!hs_node_link(nodes, script->root_expression_index, TRUE))
 			error = "a script's root is not a node, or is another's";
 	}
 	for (index = 0; index < scenario->hs_globals.count && !error; index++)
 	{
-		struct hs_global const *global = (struct hs_global const *)scenario->hs_globals.address + index;
+		struct hs_global const *global = (struct hs_global const *)xbox_pointer(scenario->hs_globals.address) + index;
 
 		if (!hs_node_link(nodes, global->initialization_expression_index, TRUE))
 			error = "a global's root is not a node, or is another's";
@@ -520,14 +520,14 @@ static boolean scenario_check_scripts(
 	}
 	for (index = 0; index < scenario->hs_scripts.count && !error; index++)
 	{
-		long root = ((struct hs_script const *)scenario->hs_scripts.address)[index].root_expression_index;
+		long root = ((struct hs_script const *)xbox_pointer(scenario->hs_scripts.address))[index].root_expression_index;
 
 		if (root != NONE)
 			hs_nodes_to_walk[walk_count++] = (short)root;
 	}
 	for (index = 0; index < scenario->hs_globals.count && !error; index++)
 	{
-		long root = ((struct hs_global const *)scenario->hs_globals.address)[index].initialization_expression_index;
+		long root = ((struct hs_global const *)xbox_pointer(scenario->hs_globals.address))[index].initialization_expression_index;
 
 		if (root != NONE)
 			hs_nodes_to_walk[walk_count++] = (short)root;
@@ -554,18 +554,18 @@ static boolean scenario_check_scripts(
 	{
 		tag_validate_correct(validation, "has scripts whose syntax is damaged (%s): no script runs", error);
 		scenario->hs_syntax_data.size = 0;
-		scenario->hs_syntax_data.address = NULL;
+		scenario->hs_syntax_data.address = XBOX_NULL;
 		scenario->hs_scripts.count = 0;
-		scenario->hs_scripts.address = NULL;
+		scenario->hs_scripts.address = XBOX_NULL;
 		scenario->hs_globals.count = 0;
-		scenario->hs_globals.address = NULL;
+		scenario->hs_globals.address = XBOX_NULL;
 	}
 
 	/* the strings a node names end before the console's bytes (hs.c checks
 	each node's offset is before them) */
 	if (scenario->hs_string_constants.size > HS_STRING_CONSTANTS_CONSOLE_SIZE)
 	{
-		char *strings = scenario->hs_string_constants.address;
+		char *strings = xbox_pointer(scenario->hs_string_constants.address);
 		long end = scenario->hs_string_constants.size - HS_STRING_CONSTANTS_CONSOLE_SIZE - 1;
 
 		if (strings[end])
@@ -619,7 +619,7 @@ game asserts is short or long enough plays as it is) */
 static char const *recorded_animation_decode(
 	struct recorded_animation_definition const *animation)
 {
-	byte const *stream = animation->event_stream.address;
+	byte const *stream = xbox_pointer(animation->event_stream.address);
 	long size = animation->event_stream.size;
 	long offset;
 	short version_index;
@@ -712,7 +712,7 @@ static boolean recorded_animation_check(
 		animation->version = 0;
 		animation->length_in_ticks = 0;
 		animation->event_stream.size = 0;
-		animation->event_stream.address = NULL;
+		animation->event_stream.address = XBOX_NULL;
 	}
 
 	return TRUE;

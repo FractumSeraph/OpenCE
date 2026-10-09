@@ -172,6 +172,10 @@ typedef char weapon_hud_interface_definition_screen_effects_offset_assert[
 	offsetof(struct weapon_hud_interface_definition, screen_effects) == 0xAC ? 1 : -1];
 typedef char weapon_flash_state_definition_size_assert[
 	sizeof(struct weapon_flash_state_definition) == 0x2C ? 1 : -1];
+#ifdef HALO_64BIT
+typedef char hud_absolute_placement_definition_size_assert[
+	sizeof(struct hud_absolute_placement_definition) == 0x24 ? 1 : -1];
+#endif
 typedef char icon_hud_element_definition_size_assert[
 	sizeof(struct icon_hud_element_definition) == 0x10 ? 1 : -1];
 typedef char weapon_hud_interface_definition_size_assert[
@@ -182,9 +186,11 @@ typedef char hud_screen_effect_definition_light_flags_offset_assert[
 	offsetof(struct hud_screen_effect_definition, light_enhancement_flags) == 0x6C ? 1 : -1];
 typedef char hud_screen_effect_definition_desaturation_flags_offset_assert[
 	offsetof(struct hud_screen_effect_definition, desaturation_flags) == 0x8C ? 1 : -1];
+#ifndef HALO_64BIT
 typedef char rasterizer_cinematic_screen_effect_parameters_tint_offset_assert[
 	offsetof(struct rasterizer_cinematic_screen_effect_parameters, filter_desaturation_tint) == 0x14 ? 1 : -1];
 
+#endif
 struct profile_value
 {
 	char name[256];
@@ -195,9 +201,11 @@ struct profile_value
 	boolean subtract_previous;
 	boolean enabled;
 };
+#ifndef HALO_64BIT
 
 typedef char profile_value_size_assert[
 	sizeof(struct profile_value) == 0x20C ? 1 : -1];
+#endif
 
 typedef char interface_hud_globals_default_weapon_hud_index_offset_assert[
 	offsetof(struct hud_globals_definition, defaults.default_weapon_hud.index) == 0x2CC ? 1 : -1];
@@ -436,7 +444,11 @@ void interface_draw_bitmap(
 	return;
 }
 
+#ifdef HALO_64BIT
+long interface_get_weapon_hud_index(
+#else
 static long interface_get_weapon_hud_index(
+#endif
 	real *flashlight_power)
 {
 	long player_index = local_player_get_player_index(render.local_player_index);
@@ -1217,9 +1229,14 @@ static void interface_splitscreen_render(
 {
 	rectangle2d bounds;
 	short window_count;
-	/* port: the screen's width, wider than the Xbox's 640 on a wide screen,
-	whose middle the windows split at (compute_window_bounds) */
-	short width = (short)halo_screen_width();
+	/* port: where compute_window_bounds splits the frame, across the whole
+	screen. The Xbox's drew at 640x480's middle (x 320, y 240, 640 wide),
+	which on a wider screen (halo_screen_width) is left of where the views
+	meet: the dividers crossed the views and stopped short of the right */
+	rectangle2d const *screen = &rasterizer_globals.reserved04.screen_bounds;
+	rectangle2d const *frame = &rasterizer_globals.reserved04.frame_bounds;
+	short middle_x = (short)(frame->x0 + (frame->x1 - frame->x0) / 2);
+	short middle_y = (short)(frame->y0 + (frame->y1 - frame->y0) / 2);
 
 	if (game_engine_force_single_screen() || cinematic_in_progress())
 		return;
@@ -1229,10 +1246,10 @@ static void interface_splitscreen_render(
 	if (window_count <= 1)
 		return;
 
-	bounds.y0 = 239;
-	bounds.x0 = 0;
-	bounds.y1 = 241;
-	bounds.x1 = width;
+	bounds.y0 = (short)(middle_y - 1);
+	bounds.x0 = screen->x0;
+	bounds.y1 = (short)(middle_y + 1);
+	bounds.x1 = screen->x1;
 	draw_quad(&bounds, 0xFF000000);
 
 	if (window_count <= 2)
@@ -1240,19 +1257,19 @@ static void interface_splitscreen_render(
 
 	if (window_count == 3)
 	{
-		bounds.y0 = 240;
-		bounds.x0 = width / 2 - 1;
-		bounds.y1 = 480;
-		bounds.x1 = width / 2 + 1;
+		bounds.y0 = middle_y;
+		bounds.x0 = (short)(middle_x - 1);
+		bounds.y1 = screen->y1;
+		bounds.x1 = (short)(middle_x + 1);
 		draw_quad(&bounds, 0xFF000000);
 
 		return;
 	}
 
-	bounds.y0 = 0;
-	bounds.x0 = width / 2 - 1;
-	bounds.y1 = 480;
-	bounds.x1 = width / 2 + 1;
+	bounds.y0 = screen->y0;
+	bounds.x0 = (short)(middle_x - 1);
+	bounds.y1 = screen->y1;
+	bounds.x1 = (short)(middle_x + 1);
 
 	match_assert(
 		"c:\\halo\\SOURCE\\interface\\interface.c",

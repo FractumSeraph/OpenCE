@@ -94,12 +94,7 @@ boolean rasterizer_vertex_buffer_new(
 	void const *vertices,
 	long buffer_size)
 {
-	/* BUG: The January XDK CreateVertexBuffer failure returns without writing
-	 * the output pointer (0x5de713..0x5de719); the original caller then tests
-	 * that uninitialized output (January function +0xb3). This inherited
-	 * failure-path bug is preserved; the Unlock restoration does not add it.
-	 */
-	D3DVertexBuffer *d3d_vertex_buffer;
+	D3DVertexBuffer *d3d_vertex_buffer = NULL;
 	byte *locked_vertices;
 	boolean success;
 	short vertex_size;
@@ -175,9 +170,13 @@ boolean rasterizer_vertex_buffer_new(
 
 			vertex_buffer->count = count;
 			vertex_buffer->offset = 0;
+#ifdef HALO_64BIT
+			vertex_buffer->base_address = xbox_address((void *)vertices);
+#else
 			vertex_buffer->base_address = (void *)vertices;
+#endif
 			vertex_buffer->type = (short)vertex_type;
-			vertex_buffer->hardware_format = d3d_vertex_buffer;
+			vertex_buffer->hardware_format = xbox_address(d3d_vertex_buffer);
 		}
 	}
 
@@ -196,7 +195,7 @@ void rasterizer_vertex_buffer_delete(
 	if (vertex_buffer && vertex_buffer->hardware_format)
 	{
 		IDirect3DVertexBuffer8_Release(
-			(D3DVertexBuffer *)vertex_buffer->hardware_format);
+			(D3DVertexBuffer *)xbox_pointer(vertex_buffer->hardware_format));
 		vertex_buffer->hardware_format = 0;
 	}
 
@@ -209,7 +208,7 @@ boolean rasterizer_triangle_buffer_new(
 	long count,
 	void const *triangles)
 {
-	D3DIndexBuffer *d3d_index_buffer;
+	D3DIndexBuffer *d3d_index_buffer = NULL;
 	byte *locked_triangles;
 	boolean success;
 	long buffer_size;
@@ -267,12 +266,6 @@ boolean rasterizer_triangle_buffer_new(
 					result,
 					"IDirect3DDevice8_CreateIndexBuffer(global_d3d_device, buffer_size, RASTERIZER_STATIC_BUFFER_USAGE, D3DFMT_INDEX16, RASTERIZER_STATIC_BUFFER_POOL, &d3d_index_buffer)");
 			}
-			/* BUG (preserved for exact matching): as in rasterizer_vertex_buffer_new, the
-			 * January XDK CreateIndexBuffer failure path (0x5de5d3..0x5de5d8) returns without
-			 * writing d3d_index_buffer, so after a failed call this test reads it unassigned.
-			 * success is already FALSE on that path and the pointer is cleared below, so the
-			 * result does not depend on the value. Source-policy approval pending (2026-09-27
-			 * audit). */
 			if (!d3d_index_buffer)
 				success = FALSE;
 			if (!success)
@@ -311,8 +304,13 @@ boolean rasterizer_triangle_buffer_new(
 
 			triangle_buffer->type = triangle_type;
 			triangle_buffer->count = count;
+#ifdef HALO_64BIT
+			triangle_buffer->base_address = xbox_address((void *)triangles);
+			triangle_buffer->hardware_format = xbox_address(d3d_index_buffer);
+#else
 			triangle_buffer->base_address = (void *)triangles;
 			triangle_buffer->hardware_format = d3d_index_buffer;
+#endif
 		}
 		else
 		{
@@ -330,7 +328,7 @@ void rasterizer_triangle_buffer_delete(
 	if (triangle_buffer && triangle_buffer->hardware_format)
 	{
 		IDirect3DIndexBuffer8_Release(
-			(D3DIndexBuffer *)triangle_buffer->hardware_format);
+			(D3DIndexBuffer *)xbox_pointer(triangle_buffer->hardware_format));
 		triangle_buffer->hardware_format = 0;
 	}
 

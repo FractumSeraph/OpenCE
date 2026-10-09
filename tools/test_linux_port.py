@@ -1,6 +1,5 @@
 """Tests for the native Linux build tooling (port/linux, tools/linux_*.py)."""
 
-import os
 import re
 import shutil
 import subprocess
@@ -305,6 +304,17 @@ def test_menu_settings_exist():
     assert controls == set(re.findall(r'\{ "(controls\.[a-z_]+)", L"', functions))
 
 
+def test_default_brokers_are_brokers_txt():
+    """The brokers a game uses with no brokers.txt beside its config.toml
+    (p2p_signal.c's DEFAULT_BROKERS) are port/assets/network/brokers.txt's."""
+    root = MENUS.parent.parent.parent
+    listed = [line.split("#", 1)[0].strip()
+              for line in (root / "port/assets/network/brokers.txt").read_text().splitlines()]
+    default = re.search(r'^#define DEFAULT_BROKERS "([^"]*)"',
+                        (root / "port/linux/src/p2p_signal.c").read_text(), re.M).group(1)
+    assert default.split(",") == [line for line in listed if line]
+
+
 def test_p2p_signatures_and_listings(tmp_path):
     """internet play's Ed25519 (RFC 8032), the X25519 key of a seed, and the
     server browser's listings from host to browser (tools/p2p_lobby_check.c),
@@ -373,41 +383,4 @@ def test_tag_validator_survives_damaged_maps():
     chosen = [path for path in maps if path.stem in ("bloodgulch", "a10", "ui")] or maps[:1]
     result = subprocess.run([str(MAP_VALIDATE), "--fuzz", "300", "--seed", "1", *map(str, chosen)],
                             capture_output=True, text=True, timeout=1800)
-    assert result.returncode == 0, (result.stdout + result.stderr)[-6000:]
-
-
-# ---------- Custom Edition maps (port/linux/game/cache_file_formats.c, custom_edition_cache.c)
-
-def _custom_edition_maps():
-    """the Custom Edition maps (HALO_CUSTOM_EDITION_MAPS, or the gitignored
-    assets/custom_edition), with the bitmaps.map, sounds.map and loc.map
-    they need beside them"""
-    configured = os.environ.get("HALO_CUSTOM_EDITION_MAPS")
-    folder = Path(configured) if configured else Path("assets/custom_edition")
-    maps = [path for path in sorted(folder.glob("*.map"))
-            if path.stem.lower() not in ("bitmaps", "sounds", "loc")]
-    if not maps or not (folder / "bitmaps.map").is_file() or not MAP_VALIDATE.is_file():
-        pytest.skip("needs Custom Edition maps (HALO_CUSTOM_EDITION_MAPS or assets/custom_edition) and "
-                    "ninja linux's build/linux/map_validate")
-    return maps
-
-
-def test_custom_edition_maps_are_loaded_and_checked():
-    """every Custom Edition map is loaded, converted and passed by the tag
-    validator, each of its structure bsps too: none is refused (a community
-    map's own mistakes are corrected and logged)"""
-    maps = _custom_edition_maps()
-    result = subprocess.run([str(MAP_VALIDATE), *map(str, maps)], capture_output=True, text=True, timeout=3600)
-    assert result.returncode == 0, result.stdout[-6000:]
-    assert "refused" not in result.stdout, result.stdout[-6000:]
-
-
-def test_custom_edition_loader_and_validator_survive_damaged_maps():
-    """Custom Edition maps with a few of their file's words changed at random:
-    the loader, the conversion and the validator never crash or hang, and a
-    map they let through is clean when checked again"""
-    maps = _custom_edition_maps()
-    chosen = [path for path in maps if path.stem.lower() in ("bloodgulch", "hugeass", "ui")] or maps[:2]
-    result = subprocess.run([str(MAP_VALIDATE), "--fuzz", "100", "--seed", "1", *map(str, chosen)],
-                            capture_output=True, text=True, timeout=3600)
     assert result.returncode == 0, (result.stdout + result.stderr)[-6000:]

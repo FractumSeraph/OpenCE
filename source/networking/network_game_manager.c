@@ -96,6 +96,12 @@ symbols in this file:
 
 #include <xtl.h>
 
+#ifdef HALO_64BIT
+/* (declared for the 64-bit build, which takes no implicit declarations; the
+32-bit build calls it as it did) */
+void player_delete(long player_index);
+#endif
+
 /* ---------- constants */
 
 /* the machine and player slots of a network game: the Xbox's 4 and 16, or the
@@ -135,7 +141,7 @@ static boolean network_game_player_slot_held(
 	{
 		return FALSE;
 	}
-	player = (struct player_datum *)((byte *)player_data->data + player_data->size * slot);
+	player = (struct player_datum *)((byte *)xbox_pointer(player_data->data) + player_data->size * slot);
 	if (((struct datum_header *)player)->identifier == 0)
 		return FALSE;
 	return !network_game_player_slot_reusable(player);
@@ -416,6 +422,14 @@ boolean network_game_has_free_player_slot(
 
 	if (game->player_count >= game->maximum_players)
 		return FALSE;
+#ifdef HALO_GAME_BROWSER
+	/* port: no more players than a Delta machine of the hosted game says it
+	takes (its platform key: a console; port/linux/src/delta_peer.h). No
+	limit unless one says so */
+	{ int delta_peer_host_player_limit(void);
+	  if (game->player_count >= delta_peer_host_player_limit())
+		return FALSE; }
+#endif
 	for (player_index = 0; player_index < NETWORK_GAME_PLAYER_SLOTS; player_index++)
 	{
 		if (game->players[player_index].player_list_index == NONE &&
@@ -487,7 +501,7 @@ boolean network_game_spawn_player(
 		and his units forget him */
 		if (player_data && player_data->valid && player->player_list_index < player_data->maximum_count)
 		{
-			struct player_datum *quitter = (struct player_datum *)((byte *)player_data->data +
+			struct player_datum *quitter = (struct player_datum *)((byte *)xbox_pointer(player_data->data) +
 				player_data->size * player->player_list_index);
 
 			/* (the host's choice stands: a client whose clock has not yet

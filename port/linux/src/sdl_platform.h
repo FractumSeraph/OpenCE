@@ -39,6 +39,9 @@ a mouse button (INPUT_MOUSE + SDL_BUTTON_*), or the wheel */
 /* an input by its name in config.toml ("W", "Mouse Left"), -1 if none */
 int halo_input_from_name(const char *name);
 void halo_input_name(int input, char *name, size_t size);
+/* a binding's name ("Z") as the keyboard's layout labels its key ("Y"),
+for the menus */
+void halo_input_shown_name(const char *binding, char *shown, size_t size);
 
 /* whether a menu is up (halo_ui_pointer_update, every frame) */
 void platform_menus_set_active(BOOL active);
@@ -97,36 +100,42 @@ display.interpolation is false (port/linux/game/render_interpolation.c) */
 int halo_interpolation_enabled(void);
 void platform_mouse_capture(BOOL capture);
 
-/* main thread only; a no-op elsewhere */
+/* handles the window's and input devices' events; main thread only, a no-op
+elsewhere; on Android this is where finger events reach touch_input.c, which
+is why that module's state is only touched from the main thread */
 void platform_pump_events(void);
-/* request a capture from the bound Screenshot action */
-void platform_screenshot_request(void);
-/* consume the request; call on the render thread with a completed frame */
-BOOL platform_screenshot_take_request(void);
+void platform_show_message(const char *title, const char *message);
 /* a snapshot of the input state; consume_motion resets the mouse deltas */
 void platform_input_read(struct platform_input_state *state, BOOL consume_motion);
-#if !defined(HALO_ANDROID) || defined(HALO_WEB)
 /* the pointer in the menus (d3d8_gl.c, halo_ui_pointer_update) */
 struct platform_ui_pointer
 {
-	/* in window coordinates, as SDL reports them */
+	/* in window coordinates, as SDL reports them (on Android the window's
+	pixels: touch_input.c) */
 	float x, y;
 	float click_x, click_y;
 	BOOL moved;
 	int left_clicks, right_clicks;
 	int wheel_steps;
+	/* fingers down since the last read, and where the latest went down
+	(the touchscreen only; the debug view of the menus' targets shows it) */
+	int downs;
+	float down_x, down_y;
+	/* the pointer is the touchscreen (touch_input.c), not a mouse */
+	BOOL touch;
 };
+/* says whether a menu is up; the mouse is released for the menus (desktop),
+or the touchscreen goes to them (Android); a change of mode drops the gesture
+in progress */
 void platform_ui_pointer_set_active(BOOL active);
+
+/* pointer receives what the pointer did since the last call; returns
+nonzero while a menu is up (platform_ui_pointer_set_active) */
 BOOL platform_ui_pointer_read(struct platform_ui_pointer *pointer);
-/* the open scoreboard's pointer, offered (a network game's) or not: TRUE
-while a right click has freed it, with what it did since the last call */
-BOOL platform_scoreboard_pointer(BOOL offered, struct platform_ui_pointer *pointer);
+
+/* returns the window's size in the units that pointer positions come in,
+which differ from the drawable's pixels on displays that scale */
 void platform_video_window_size(int *width, int *height);
-/* a menu's text field typed into or not (a password's or not): the system's
-on-screen keyboard up while it is, where there is one that text input shows
-(Steam's); each field begun brings it up again */
-void platform_screen_keyboard(BOOL show, BOOL password);
-#endif
 BOOL platform_next_keystroke(struct platform_keystroke *keystroke);
 /* the multiplayer scoreboard (game_engine.c) open or not: while it is, the
 mouse wheel and Page Up/Down scroll it instead of switching weapons; how

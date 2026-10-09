@@ -186,11 +186,13 @@ symbols in this file:
 #include "cache/cache_files_decompress_windows.h"
 #include "cache/texture_cache.h"
 #include "interface/ui_widget.h"
+#ifdef HALO_CUSTOM_EDITION
+#include "main/console.h"
+#endif
 #include "tag_files/files.h"
 #include "tag_files/tag_files.h"
 #include "scenario/scenario_definitions.h"
 #include "rasterizer/rasterizer.h"
-#include "custom_edition_cache.h" /* port: port/linux/game/custom_edition_cache.c */
 
 #include <xtl.h>
 
@@ -217,26 +219,34 @@ enum
 
 struct cache_file_tag_instance;
 
+#ifdef HALO_64BIT
+/* cache files hold arrays of Direct3D resource headers */
+typedef char d3d_vertex_buffer_size_assert[sizeof(D3DVertexBuffer) == 0xC ? 1 : -1];
+typedef char d3d_index_buffer_size_assert[sizeof(D3DIndexBuffer) == 0xC ? 1 : -1];
+typedef char d3d_texture_size_assert[sizeof(D3DTexture) == 0x14 ? 1 : -1];
+
+/* read from the cache file: Xbox addresses (as in cache_files.c) */
+#endif
 struct cache_file_tag_header
 {
-	struct cache_file_tag_instance *tag_instances;
+	XPTR(struct cache_file_tag_instance) tag_instances;
 	long scenario_tag_index;
 	unsigned long checksum;
 	long tag_count;
 	long vertex_buffer_count;
-	D3DVertexBuffer *vertex_buffers;
+	XPTR(D3DVertexBuffer) vertex_buffers;
 	long index_buffer_count;
-	D3DIndexBuffer *index_buffers;
+	XPTR(D3DIndexBuffer) index_buffers;
 	unsigned long signature;
 };
 
 struct cache_file_structure_bsp_header
 {
-	void *base_address;
+	XPTR(void) base_address;
 	long vertex_buffer_count;
-	D3DVertexBuffer *vertex_buffers;
+	XPTR(D3DVertexBuffer) vertex_buffers;
 	long lightmap_vertex_buffer_count;
-	D3DVertexBuffer *lightmap_vertex_buffers;
+	XPTR(D3DVertexBuffer) lightmap_vertex_buffers;
 	unsigned long signature;
 };
 
@@ -299,6 +309,7 @@ struct cache_file_runtime_globals
 
 typedef char verify_cache_file_header_size[
 	sizeof(struct cache_file_header) == 0x800 ? 1 : -1];
+#ifndef HALO_64BIT
 typedef char verify_cached_map_file_size[
 	sizeof(struct cached_map_file) == 0x80C ? 1 : -1];
 typedef char verify_cached_map_file_name_offset[
@@ -336,6 +347,7 @@ typedef char verify_cache_file_requests_offset[
 		struct cache_file_runtime_globals,
 		requests) == 0x3078 ? 1 : -1];
 
+#endif
 /* ---------- prototypes */
 
 static void cache_file_get_map_path(
@@ -428,6 +440,134 @@ static short cached_map_files_find_map(
 
 static struct cache_file_runtime_globals cache_file_globals;
 
+#ifdef HALO_CUSTOM_EDITION
+/* port: the maps past the Xbox's (halo_map_families.h): Halo PC's Custom
+Edition maps (version 609), played as <name>@ce, HaloMD's (Halo PC
+retail's version 7), played as <name>@md, and Halo PC retail's own maps
+(version 7), played as <name>@pc, each found in its family's folders
+(port/linux/game/map_families.c). Such a map is read where it is, not
+copied into one of the Xbox's cache slots and decompressed (it is not
+compressed): it has a slot of its own, after theirs, which every read goes
+through as theirs do (cache_files.c loads its tags into its own tag cache,
+platform.h) */
+#include "halo_map_families.h"
+
+#define CE_MAP_FILE_INDEX NUMBER_OF_CACHED_MAP_FILES
+
+static struct cached_map_file ce_map_file;
+static char ce_map_name[64];
+/* each request's file, if not the map's: a Custom Edition map's resource
+map, for its indexed tags' pixels and samples (port/linux/game/ce_resources.c) */
+static HANDLE ce_request_files[MAXIMUM_SIMULTANEOUS_CACHE_REQUESTS];
+HANDLE ce_resources_file_for_tag(long tag_index);
+boolean ce_map_check(HANDLE file, char const *map_name, long file_length, long tag_data_offset,
+	long tag_data_size);
+/* the version of the map checked or loaded (port/linux/game/ce_resources.c) */
+extern long ce_map_cache_version;
+/* the last map refused (ce_map_check), its size and checksum */
+static char ce_refused_map_name[64];
+static unsigned long ce_refused_map_size;
+static unsigned long ce_refused_map_checksum;
+
+static boolean ce_map_name_is(
+	const char *map_name)
+{
+	return map_family_parse(map_name, NULL, 0) != _map_family_xbox;
+}
+
+/* the map named <name>@ce, @md or @pc opened in its slot (once): FALSE if
+there is none, or it is not one, or it is refused (ce_map_check). The map
+open before stays open until another is accepted */
+static boolean ce_map_open(
+	const char *map_name)
+{
+	char path[256], file_name[64];
+	unsigned long bytes_read = 0;
+	struct cache_file_header header;
+	unsigned long file_size;
+	HANDLE file;
+	short family;
+
+	if (ce_map_file.file && !_stricmp(ce_map_name, map_name))
+		return TRUE;
+	if (strlen(map_name) >= sizeof(ce_map_name) - 1)
+		return FALSE;
+	/* (its tag cache, which the platform layer maps at start-up: xbox_memory.c) */
+	{
+		extern int platform_ce_tag_cache_ready;
+
+		if (!platform_ce_tag_cache_ready)
+		{
+			error(_error_silent, "Custom Edition map %s: no tag cache for it", map_name);
+			return FALSE;
+		}
+	}
+	family = map_family_parse(map_name, file_name, sizeof(file_name));
+	if (!map_family_find(family, file_name, path, sizeof(path)))
+		return FALSE;
+	file = CreateFileA(path, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, NULL);
+	if (file == INVALID_HANDLE_VALUE)
+		return FALSE;
+	memset(&header, 0, sizeof(header));
+	file_size = GetFileSize(file, NULL);
+	if (!ReadFile(file, &header, sizeof(header), &bytes_read, NULL))
+		bytes_read = 0;
+	/* (a map built by Invader may give its length as 0, which Halo PC's
+	engine did not read: beavercreek_rev_beta's; the file's own then, which
+	every offset in it is checked against: ce_map_check) */
+	if (bytes_read == sizeof(header) && !header.file_length && file_size <= 0x7fffffff)
+		header.file_length = (long)file_size;
+	/* (a map refused already, unchanged: refused again, quietly) */
+	if (!_stricmp(ce_refused_map_name, map_name) && ce_refused_map_size == file_size &&
+		ce_refused_map_checksum == header.checksum)
+	{
+		CloseHandle(file);
+		return FALSE;
+	}
+	/* (its family's version, as it was when it was found: map_family_find) */
+	if (bytes_read != sizeof(header) || !cache_file_header_verify(&header, path, FALSE) ||
+		header.version != map_family_cache_version(family))
+	{
+		error(_error_silent, "%s map %s refused: %s is not a cache file of this version",
+			map_family_kind(family), map_name, path);
+		console_warning("%s map %s refused: not a cache file of this version", map_family_kind(family), map_name);
+	}
+	/* every offset, count and size in it that the port reads checked, before
+	it has a slot (port/linux/game/ce_map_checks.c) */
+	else if ((ce_map_cache_version = header.version,
+		ce_map_check(file, map_name, header.file_length, header.tag_data_offset, header.tag_data_size)))
+	{
+		if (ce_map_file.file)
+			CloseHandle(ce_map_file.file);
+		ce_refused_map_name[0] = 0;
+		ce_map_file.file = file;
+		ce_map_file.header = header;
+		memset(ce_map_name, 0, sizeof(ce_map_name));
+		strncpy(ce_map_name, map_name, sizeof(ce_map_name) - 1);
+		error(_error_silent, "%s map %s: %s, build %.32s", map_family_kind(family), map_name, path,
+			ce_map_file.header.build);
+		return TRUE;
+	}
+	/* (the map open before stays open, and its version the one loaded) */
+	if (ce_map_file.file)
+		ce_map_cache_version = ce_map_file.header.version;
+	memset(ce_refused_map_name, 0, sizeof(ce_refused_map_name));
+	strncpy(ce_refused_map_name, map_name, sizeof(ce_refused_map_name) - 1);
+	ce_refused_map_size = file_size;
+	ce_refused_map_checksum = header.checksum;
+	CloseHandle(file);
+	return FALSE;
+}
+
+/* the map open in that slot, or NULL: its own sounds' samples are read
+from it as its tags load (port/linux/game/ce_resources.c) */
+HANDLE cache_files_ce_map_file(
+	void)
+{
+	return ce_map_file.file && ce_map_file.file != INVALID_HANDLE_VALUE ? ce_map_file.file : NULL;
+}
+#endif
+
 /* ---------- public code */
 
 void tags_header_register_vertex_and_index_buffers(
@@ -439,7 +579,11 @@ void tags_header_register_vertex_and_index_buffers(
 
 	for (index = 0; index < header->vertex_buffer_count; index++)
 	{
+#ifdef HALO_64BIT
+		D3DVertexBuffer *vertex_buffer = &XBOX_POINTER(D3DVertexBuffer, header->vertex_buffers)[index];
+#else
 		D3DVertexBuffer *vertex_buffer = &header->vertex_buffers[index];
+#endif
 
 		vertex_buffer->Common = D3DCOMMON_TYPE_VERTEXBUFFER | 1;
 		IDirect3DVertexBuffer8_Register(vertex_buffer, NULL);
@@ -447,7 +591,11 @@ void tags_header_register_vertex_and_index_buffers(
 
 	for (index = 0; index < header->index_buffer_count; index++)
 	{
+#ifdef HALO_64BIT
+		D3DIndexBuffer *index_buffer = &XBOX_POINTER(D3DIndexBuffer, header->index_buffers)[index];
+#else
 		D3DIndexBuffer *index_buffer = &header->index_buffers[index];
+#endif
 
 		index_buffer->Common = D3DCOMMON_TYPE_INDEXBUFFER | 1;
 	}
@@ -464,7 +612,11 @@ void tags_header_deregister_vertex_and_index_buffers(
 
 	for (index = 0; index < header->vertex_buffer_count; index++)
 	{
+#ifdef HALO_64BIT
+		D3DVertexBuffer *vertex_buffer = &XBOX_POINTER(D3DVertexBuffer, header->vertex_buffers)[index];
+#else
 		D3DVertexBuffer *vertex_buffer = &header->vertex_buffers[index];
+#endif
 
 		IDirect3DVertexBuffer8_BlockUntilNotBusy(vertex_buffer);
 		match_assert(
@@ -475,7 +627,11 @@ void tags_header_deregister_vertex_and_index_buffers(
 
 	for (index = 0; index < header->index_buffer_count; index++)
 	{
+#ifdef HALO_64BIT
+		D3DIndexBuffer *index_buffer = &XBOX_POINTER(D3DIndexBuffer, header->index_buffers)[index];
+#else
 		D3DIndexBuffer *index_buffer = &header->index_buffers[index];
+#endif
 
 		IDirect3DIndexBuffer8_BlockUntilNotBusy(index_buffer);
 		match_assert(
@@ -496,7 +652,11 @@ void structure_bsp_header_register_vertex_buffers(
 
 	for (index = 0; index < header->vertex_buffer_count; index++)
 	{
+#ifdef HALO_64BIT
+		D3DVertexBuffer *vertex_buffer = &XBOX_POINTER(D3DVertexBuffer, header->vertex_buffers)[index];
+#else
 		D3DVertexBuffer *vertex_buffer = &header->vertex_buffers[index];
+#endif
 
 		vertex_buffer->Common = D3DCOMMON_TYPE_VERTEXBUFFER | 1;
 		IDirect3DVertexBuffer8_Register(vertex_buffer, NULL);
@@ -504,7 +664,11 @@ void structure_bsp_header_register_vertex_buffers(
 
 	for (index = 0; index < header->lightmap_vertex_buffer_count; index++)
 	{
+#ifdef HALO_64BIT
+		D3DVertexBuffer *vertex_buffer = &XBOX_POINTER(D3DVertexBuffer, header->lightmap_vertex_buffers)[index];
+#else
 		D3DVertexBuffer *vertex_buffer = &header->lightmap_vertex_buffers[index];
+#endif
 
 		vertex_buffer->Common = D3DCOMMON_TYPE_VERTEXBUFFER | 1;
 		IDirect3DVertexBuffer8_Register(vertex_buffer, NULL);
@@ -524,14 +688,22 @@ void structure_bsp_header_deregister_vertex_buffers(
 
 	for (index = 0; index < header->vertex_buffer_count; index++)
 	{
+#ifdef HALO_64BIT
+		D3DVertexBuffer *vertex_buffer = &XBOX_POINTER(D3DVertexBuffer, header->vertex_buffers)[index];
+#else
 		D3DVertexBuffer *vertex_buffer = &header->vertex_buffers[index];
+#endif
 
 		IDirect3DVertexBuffer8_BlockUntilNotBusy(vertex_buffer);
 	}
 
 	for (index = 0; index < header->lightmap_vertex_buffer_count; index++)
 	{
+#ifdef HALO_64BIT
+		D3DVertexBuffer *vertex_buffer = &XBOX_POINTER(D3DVertexBuffer, header->lightmap_vertex_buffers)[index];
+#else
 		D3DVertexBuffer *vertex_buffer = &header->lightmap_vertex_buffers[index];
+#endif
 
 		IDirect3DVertexBuffer8_BlockUntilNotBusy(vertex_buffer);
 	}
@@ -587,11 +759,6 @@ boolean cache_files_precache_is_copying_map(
 boolean cache_files_precache_map_loaded(
 	const char *map_name)
 {
-	/* port: a Halo Custom Edition map (custom_maps\<name>) is read in place
-	and never copied to the cache partition; it is never the game's own map
-	of that file name (port/linux/game/custom_edition_cache.c) */
-	if (custom_edition_level_name(map_name))
-		return custom_edition_cache_playable(map_name);
 	return cached_map_files_find_map(tag_name_strip_path(map_name)) != NONE;
 }
 
@@ -604,19 +771,6 @@ boolean cache_files_precache_map_begin(
 {
 	const char *cache_map_name = tag_name_strip_path(map_name);
 
-	/* port: a Halo Custom Edition map (custom_maps\<name>) this machine has
-	not is missing, as a map not on the DVD is: never the game's own map of
-	its file name (port/linux/game/custom_edition_cache.c) */
-	if (custom_edition_level_name(map_name) && !custom_edition_cache_playable(map_name))
-	{
-		error(_error_silent, "couldn't find the Custom Edition map '%s' in custom_maps", map_name);
-		if (copy_map)
-		{
-			display_error_damaged_media();
-		}
-
-		return FALSE;
-	}
 	if (!cache_files_precache_map_loaded(map_name))
 	{
 		struct cache_file_header header;
@@ -714,10 +868,6 @@ void cache_files_initialize(
 		"c:\\halo\\SOURCE\\cache\\cache_files_windows.c",
 		188,
 		cache_file_globals.requests);
-	/* port: cache_file_open clears the requests before a map is read; a Halo
-	Custom Edition map is read without it, so they start out free
-	(port/linux/game/custom_edition_cache.c) */
-	memset(cache_file_globals.requests, 0, MAXIMUM_SIMULTANEOUS_CACHE_REQUESTS * sizeof(struct cache_file_request));
 	cache_file_windows_thread_create();
 	cache_files_verify_language();
 	cache_files_open_cache_files();
@@ -862,15 +1012,6 @@ short cache_file_read(
 	short request_index = cache_request_next_free_index();
 	struct cache_file_request *request = cache_request_get(request_index);
 
-	/* port: the reads of a Halo Custom Edition map are served in place, at
-	once; the request stays free (port/linux/game/custom_edition_cache.c) */
-	if (custom_edition_cache_tags_loaded())
-	{
-		custom_edition_cache_read(tag_index, offset, size, buffer);
-		*completion_flag_reference = TRUE;
-
-		return request_index;
-	}
 	match_assert(
 		"c:\\halo\\SOURCE\\cache\\cache_files_windows.c",
 		269,
@@ -897,11 +1038,21 @@ short cache_file_read(
 
 		return NONE;
 	}
-	if (size & (CACHE_FILE_SECTOR_SIZE - 1))
+	if (size & (CACHE_FILE_SECTOR_SIZE - 1)
+#ifdef HALO_CUSTOM_EDITION
+		/* (a Custom Edition map is read as it is, to its end, not in the
+		Xbox's whole sectors) */
+		&& cache_file_globals.open_map_file_index != CE_MAP_FILE_INDEX
+#endif
+		)
 	{
 		size = (size | (CACHE_FILE_SECTOR_SIZE - 1)) + 1;
 	}
 	*completion_flag_reference = FALSE;
+#ifdef HALO_CUSTOM_EDITION
+	ce_request_files[request_index] = cache_file_globals.open_map_file_index == CE_MAP_FILE_INDEX
+		? ce_resources_file_for_tag(tag_index) : NULL;
+#endif
 	memset(
 		&request->overlapped,
 		0,
@@ -1119,9 +1270,16 @@ static void cache_files_open_cache_files(
 		map_file->file = file;
 		if (valid)
 		{
+#ifdef HALO_64BIT
+			char *cache_map_name;
+#else
 			char *cache_map_name = cached_map_file_get(map_file_index)->header.name;
+#endif
 
 			cached_map_file_read_header(map_file_index);
+#ifdef HALO_64BIT
+			cache_map_name = map_file->header.name;
+#endif
 			if (cache_file_read_header_from_dvd(cache_map_name, &dvd_header) &&
 				map_file->header.checksum == dvd_header.checksum &&
 				valid)
@@ -1218,6 +1376,12 @@ static void cache_file_windows_thread_proc(
 			}
 
 			file = cached_map_file_get_handle(cache_file_globals.open_map_file_index);
+#ifdef HALO_CUSTOM_EDITION
+			/* (a Custom Edition map's indexed tag's pixels or samples: its
+			resource map) */
+			if (ce_request_files[best_request - cache_request_get(0)])
+				file = ce_request_files[best_request - cache_request_get(0)];
+#endif
 			match_assert(
 				"c:\\halo\\SOURCE\\cache\\cache_files_windows.c",
 				1327,
@@ -1700,6 +1864,10 @@ static void cache_requests_flush(
 static struct cached_map_file *cached_map_file_get(
 	short map_file_index)
 {
+#ifdef HALO_CUSTOM_EDITION
+	if (map_file_index == CE_MAP_FILE_INDEX)
+		return &ce_map_file;
+#endif
 	match_assert(
 		"c:\\halo\\SOURCE\\cache\\cache_files_windows.c",
 		1208,
@@ -1720,6 +1888,12 @@ static short cached_map_files_find_map(
 	const char *map_name)
 {
 	short map_file_index;
+
+#ifdef HALO_CUSTOM_EDITION
+	/* port: a Custom Edition map, in its own slot (above) */
+	if (ce_map_name_is(map_name))
+		return ce_map_open(map_name) ? CE_MAP_FILE_INDEX : NONE;
+#endif
 
 	for (map_file_index = 0;
 		map_file_index < NUMBER_OF_CACHED_MAP_FILES;

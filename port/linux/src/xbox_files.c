@@ -7,9 +7,6 @@ Xbox paths are translated below two roots. d:\ is the data root, the
 directory holding the game's maps/ folder: paths.data (port_config.c), else the current
 directory when it has maps/, else assets/ in the current directory or two
 levels above the executable (the repository root for build/linux/halo).
-h:\ is the Halo Custom Edition install paths.custom_edition names, if any
-(its maps folder holds the resource maps Custom Edition maps need, and more
-maps).
 Every other drive letter X:\ is the subdirectory X/ of the save root (z:\ holds the persistent cache and saves,
 u:\ user data, t:\ title data): paths.saves, else
 $XDG_DATA_HOME/halo-linux or ~/.local/share/halo-linux. Path components are
@@ -27,6 +24,9 @@ matched case-insensitively, like the Xbox's FATX volumes.
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+#endif
 
 /* ---------- paths */
 
@@ -45,6 +45,10 @@ static BOOL has_maps(const char *directory)
 	return directory_exists(directory) &&
 		posix_find_entry_case_insensitive(directory, "maps", on_disk, sizeof(on_disk));
 }
+
+#ifdef HALO_64BIT
+char platform_log_path[MAX_PATH];
+#endif
 
 static void trim_separators(char *path)
 {
@@ -72,7 +76,12 @@ const char *platform_data_root(void)
 		{
 			char executable[MAX_PATH];
 			char executable_directory[MAX_PATH] = "";
+#ifdef __APPLE__
+			uint32_t ex_size = sizeof(executable);
+			ssize_t length = _NSGetExecutablePath(executable, &ex_size) == 0 ? (ssize_t)strlen(executable) : -1;
+#else
 			ssize_t length = readlink("/proc/self/exe", executable, sizeof(executable) - 1);
+#endif
 
 			if (length > 0)
 			{
@@ -102,6 +111,22 @@ const char *platform_data_root(void)
 				int level;
 
 				executable[length] = '\0';
+#ifdef __APPLE__
+				/* ... and <repository>/build/macos/ChupathingyCE.app/Contents/MacOS/halo:
+				the nearest assets folder up to five levels up */
+				for (level = 0; level < 6 && (slash = strrchr(executable, '/')); level++)
+				{
+					char test_assets[MAX_PATH];
+
+					*slash = '\0';
+					snprintf(test_assets, sizeof(test_assets), "%s/assets", executable);
+					if (has_maps(test_assets))
+					{
+						snprintf(root, sizeof(root), "%s", test_assets);
+						break;
+					}
+				}
+#else
 				for (level = 0; level < 3 && (slash = strrchr(executable, '/')); level++)
 					*slash = '\0';
 				if (level == 3 && strlen(executable) + sizeof("/assets") <= sizeof(executable))
@@ -110,12 +135,23 @@ const char *platform_data_root(void)
 					if (has_maps(executable))
 						snprintf(root, sizeof(root), "%s", executable);
 				}
+#endif
 			}
 #ifndef HALO_ANDROID
-			if (!has_maps(root) && executable_directory[0] && platform_offer_game_data(executable_directory) &&
-				has_maps(executable_directory))
 			{
-				snprintf(root, sizeof(root), "%s", executable_directory);
+				/* (the macOS application's data goes in its folder in
+				Application Support, not in the application: port_config.c) */
+				char app_folder[MAX_PATH];
+				const char *destination = platform_app_folder(app_folder, sizeof(app_folder))
+					? app_folder : executable_directory;
+
+				if (!has_maps(root) && destination[0] && has_maps(destination))
+					snprintf(root, sizeof(root), "%s", destination);
+				else if (!has_maps(root) && destination[0] && platform_offer_game_data(destination) &&
+					has_maps(destination))
+				{
+					snprintf(root, sizeof(root), "%s", destination);
+				}
 			}
 #endif
 			if (!has_maps(root))
@@ -123,6 +159,10 @@ const char *platform_data_root(void)
 		}
 		trim_separators(root);
 		platform_log("data root: %s (the game's log: debug.txt there)", root);
+#ifdef HALO_64BIT
+		/* the platform layer's log goes to the game's (xbox_kernel.c) */
+		snprintf(platform_log_path, sizeof(platform_log_path), "%s/debug.txt", root);
+#endif
 	}
 	return root;
 }
@@ -148,6 +188,18 @@ static void make_directories(const char *path)
 		posix_make_directory(partial);
 }
 
+#ifdef __APPLE__
+/* whether this Mac has saves in the folder the game used before the
+application had its own (~/.local/share/halo-linux) */
+static BOOL saves_exist(const char *home)
+{
+	char path[MAX_PATH];
+
+	snprintf(path, sizeof(path), "%s/.local/share/halo-linux", home);
+	return directory_exists(path);
+}
+#endif
+
 const char *platform_save_root(void)
 {
 	static char root[MAX_PATH];
@@ -160,6 +212,16 @@ const char *platform_save_root(void)
 
 		if (*environment)
 			snprintf(root, sizeof(root), "%s", environment);
+#ifdef __APPLE__
+		/* the macOS application keeps everything in its folder in
+		Application Support (platform_app_folder), unless this Mac has saves
+		from before (and its player key: browser.c), in the folder below */
+		else if (platform_app_folder(root, sizeof(root)) &&
+			!(home && *home && saves_exist(home)))
+		{
+			strncat(root, "/saves", sizeof(root) - strlen(root) - 1);
+		}
+#endif
 #ifdef _WIN32
 		/* the Windows build (port/windows) keeps saves in the roaming
 		application data folder */
@@ -179,31 +241,6 @@ const char *platform_save_root(void)
 	return root;
 }
 
-const char *platform_custom_edition_root(void)
-{
-	static char root[MAX_PATH];
-	static int found;
-
-	if (!found)
-	{
-		char maps[MAX_PATH + 8];
-		struct posix_file_information information;
-
-		found = 1;
-		snprintf(root, sizeof(root), "%s", config_string("paths.custom_edition"));
-		trim_separators(root);
-		snprintf(maps, sizeof(maps), "%s/maps", root);
-		if (root[0] && posix_stat(maps, &information) != 0)
-		{
-			platform_log("Halo Custom Edition: %s has no maps folder; not using it", root);
-			root[0] = 0;
-		}
-		if (root[0])
-			platform_log("Halo Custom Edition: using the install at %s", root);
-	}
-	return root;
-}
-
 void platform_translate_path(const char *xbox_path, char *host_path, unsigned long host_path_size)
 {
 	char resolved[1024];
@@ -215,11 +252,7 @@ void platform_translate_path(const char *xbox_path, char *host_path, unsigned lo
 	{
 		char drive = (char)(cursor[0] | 0x20);
 
-		if (drive == 'h' && platform_custom_edition_root()[0])
-		{
-			snprintf(resolved, sizeof(resolved), "%s", platform_custom_edition_root());
-		}
-		else if (drive != 'd')
+		if (drive != 'd')
 		{
 			struct posix_file_information information;
 
@@ -266,6 +299,219 @@ void platform_translate_path(const char *xbox_path, char *host_path, unsigned lo
 		snprintf(resolved + length, sizeof(resolved) - length, "/%s", on_disk);
 	}
 	snprintf(host_path, host_path_size, "%s", resolved);
+}
+
+/* ---------- the maps folder's maps */
+
+enum
+{
+	/* a cache file's header: 'head' and its version */
+	MAP_HEADER_SIGNATURE = 0x68656164,
+	XBOX_MAP_VERSION = 5,
+	/* (Halo PC's: retail's, HaloMD's maps' too, and Custom Edition's) */
+	HALO_PC_MAP_VERSION = 7,
+	CUSTOM_EDITION_MAP_VERSION = 609,
+};
+
+/* a map file's cache version, by its header; 0 if it is not a cache file */
+static long map_file_version(const char *path)
+{
+	unsigned char header[8];
+	FILE *file = fopen(path, "rb");
+	long version = 0;
+
+	if (!file)
+		return 0;
+	if (fread(header, 1, sizeof(header), file) == sizeof(header) &&
+		(header[0] | header[1] << 8 | header[2] << 16 | (unsigned long)header[3] << 24) == MAP_HEADER_SIGNATURE)
+	{
+		version = (long)(header[4] | header[5] << 8 | header[6] << 16 | (unsigned long)header[7] << 24);
+	}
+	fclose(file);
+	return version;
+}
+
+static BOOL map_version_is_pc(long version)
+{
+	return version == HALO_PC_MAP_VERSION || version == CUSTOM_EDITION_MAP_VERSION;
+}
+
+static BOOL name_ends_with(const char *name, const char *ending)
+{
+	size_t length = strlen(name);
+	size_t ending_length = strlen(ending);
+	size_t index;
+
+	if (length < ending_length)
+		return FALSE;
+	for (index = 0; index < ending_length; index++)
+	{
+		if (tolower((unsigned char)name[length - ending_length + index]) != tolower((unsigned char)ending[index]))
+			return FALSE;
+	}
+	return TRUE;
+}
+
+/* the Halo PC maps in a folder (an Xbox path): how many, and the first
+few's names after names' (the maps named <name>@ce.map, <name>@md.map or
+<name>@pc.map, which are played from maps/ as Halo PC's, left out if asked) */
+static long pc_maps_in(const char *xbox_folder, BOOL skip_suffixed, char *names, unsigned long names_size)
+{
+	char folder[1024];
+	char name[256];
+	long count = 0;
+	void *directory;
+
+	platform_translate_path(xbox_folder, folder, sizeof(folder));
+	directory = posix_directory_open(folder);
+	if (!directory)
+		return 0;
+	while (posix_directory_next(directory, name, sizeof(name)))
+	{
+		char path[1300];
+
+		if (!name_ends_with(name, ".map") ||
+			(skip_suffixed && (name_ends_with(name, "@ce.map") || name_ends_with(name, "@md.map") ||
+				name_ends_with(name, "@pc.map"))))
+		{
+			continue;
+		}
+		snprintf(path, sizeof(path), "%s/%s", folder, name);
+		if (!map_version_is_pc(map_file_version(path)))
+			continue;
+		if (names && count < PLATFORM_MAPS_FOLDER_NAMED)
+		{
+			size_t length = strlen(names);
+
+			snprintf(names + length, names_size - length, "%s%s", length ? ", " : "", name);
+		}
+		count++;
+	}
+	posix_directory_close(directory);
+	return count;
+}
+
+void platform_maps_folder_check(struct platform_maps_folder *maps)
+{
+	const char *root = platform_data_root();
+	char path[1024];
+
+	memset(maps, 0, sizeof(*maps));
+	/* the data root as the player finds it (whole: Windows' is the
+	executable's folder's, or paths.data's) */
+#ifndef _WIN32
+	if (root[0] != '/' && getcwd(maps->root, sizeof(maps->root)))
+	{
+		size_t length = strlen(maps->root);
+
+		if (strcmp(root, "."))
+			snprintf(maps->root + length, sizeof(maps->root) - length, "/%s", root);
+	}
+	else
+#endif
+	{
+		snprintf(maps->root, sizeof(maps->root), "%s", root);
+	}
+	platform_translate_path("d:\\maps\\ui.map", path, sizeof(path));
+	maps->ui_version = map_file_version(path);
+	maps->stray_pc_maps = pc_maps_in("d:\\maps", TRUE, maps->stray_names, sizeof(maps->stray_names));
+	maps->pc_maps_beside = pc_maps_in("d:\\maps_ce", FALSE, NULL, 0) + pc_maps_in("d:\\maps_md", FALSE, NULL, 0) +
+		pc_maps_in("d:\\maps_pc", FALSE, NULL, 0) + pc_maps_in("d:\\maps\\ce", FALSE, NULL, 0) +
+		pc_maps_in("d:\\md_maps", FALSE, NULL, 0) + pc_maps_in("d:\\custom_maps", FALSE, NULL, 0);
+	if (maps->ui_version == XBOX_MAP_VERSION)
+		maps->state = _maps_folder_xbox;
+	else if (map_version_is_pc(maps->ui_version))
+		maps->state = _maps_folder_halo_pc;
+	else
+		maps->state = _maps_folder_no_ui;
+}
+
+/* ---------- the older map folders */
+
+static const struct
+{
+	const char *from;
+	const char *to;
+	/* the folder from is in, which must be no link either (or NULL: the
+	data root) */
+	const char *parent;
+} old_map_folders[] =
+{
+	{ "d:\\maps\\ce", "d:\\maps_ce", "d:\\maps" },
+	{ "d:\\md_maps", "d:\\maps_md", NULL },
+};
+
+/* the two folders' paths, and whether the old one can be moved to the new */
+static BOOL old_map_folder_movable(int index, char *from, char *to, unsigned long size)
+{
+	struct posix_file_information information;
+	char parent[1024];
+
+	platform_translate_path(old_map_folders[index].from, from, size);
+	platform_translate_path(old_map_folders[index].to, to, size);
+	if (posix_stat(from, &information) != 0 || !(information.flags & _posix_file_is_directory))
+		return FALSE;
+	if (posix_stat(to, &information) == 0 || posix_is_link(to))
+		return FALSE;
+	if (posix_is_link(from))
+		return FALSE;
+	if (old_map_folders[index].parent)
+	{
+		platform_translate_path(old_map_folders[index].parent, parent, sizeof(parent));
+		if (posix_is_link(parent))
+			return FALSE;
+	}
+	return TRUE;
+}
+
+int platform_old_map_folders(char *description, unsigned long size)
+{
+	int count = 0;
+	int index;
+
+	if (size)
+		description[0] = 0;
+	for (index = 0; index < (int)(sizeof(old_map_folders) / sizeof(old_map_folders[0])); index++)
+	{
+		char from[1024], to[1024];
+
+		if (!old_map_folder_movable(index, from, to, sizeof(from)))
+			continue;
+		if (size)
+		{
+			size_t length = strlen(description);
+
+			/* (as the player sees them: maps/ce, maps_ce) */
+			snprintf(description + length, size - length, "%s%s to %s", length ? "\n" : "",
+				index == 0 ? "maps/ce" : "md_maps", index == 0 ? "maps_ce" : "maps_md");
+		}
+		count++;
+	}
+	return count;
+}
+
+int platform_old_map_folders_move(void)
+{
+	int moved = 0;
+	int index;
+
+	for (index = 0; index < (int)(sizeof(old_map_folders) / sizeof(old_map_folders[0])); index++)
+	{
+		char from[1024], to[1024];
+
+		if (!old_map_folder_movable(index, from, to, sizeof(from)))
+			continue;
+		if (posix_rename_directory(from, to) == 0)
+		{
+			platform_log("map folders: moved %s to %s", from, to);
+			moved++;
+		}
+		else
+		{
+			platform_log("map folders: could not move %s to %s; its maps stay there and still play", from, to);
+		}
+	}
+	return moved;
 }
 
 /* ---------- file handles */
@@ -423,7 +669,12 @@ static BOOL read_at(struct platform_file *file, LPVOID buffer, DWORD count, LPDW
 		if (result == 0)
 			break;
 		if (bounce)
+#ifdef HALO_64BIT
+			/* (read-only guest pages, which a host page holds with others) */
+			platform_contiguous_write((char *)buffer + total, staging, (size_t)result);
+#else
 			memcpy((char *)buffer + total, staging, (size_t)result);
+#endif
 		total += (DWORD)result;
 	}
 	free(staging);

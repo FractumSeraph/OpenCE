@@ -29,30 +29,35 @@ import java.util.zip.ZipInputStream;
 /**
  * The app's self-updater, as the desktop games' (port/linux/src/updater.c).
  *
- * A build of the main branch made by GitHub Actions knows its build number
- * (BuildConfig.HALO_BUILD_NUMBER, the workflow's run number, which names its
- * release: build-number); other builds have none and never look. When
+ * A release's build (BuildConfig.HALO_RELEASE_BUILD: built from the
+ * release's tag, v<version>, by ChupathingyCE's release workflow) knows its
+ * version (BuildConfig.HALO_VERSION, 0.5.0b); nightlies and other builds
+ * never look. When
  * update.auto in config.toml is true (the default), the game asks GitHub for
  * the latest release when it starts, on a thread of its own, and if it is
  * newer asks the player whether to update:
  *
- * - Yes: the release's app (halo-android-release.zip or -debug.zip) is
+ * - Yes: the release's app (chupathingyce-android-release.zip or -debug.zip) is
  *   downloaded and handed to Android's package installer, which replaces the
  *   game (closing it) and offers to open the new version.
  * - No: nothing, until the next start.
  * - Do not ask again: after the player confirms it, update.auto = false is
  *   written to config.toml.
  *
- * Every build of main is signed with the same key (the workflow's), which an
- * app must keep for Android to install a new version over it.
+ * Every release and nightly is signed with the same key (the release
+ * workflow's), which an app must keep for Android to install a new version
+ * over it.
  */
 final class Updater {
-    /* the GitHub repository whose releases are this build's: the one it was
-       built in (HALO_UPDATE_REPOSITORY, tools/ci_build.py), so a fork's builds
-       update from the fork */
+    /* ChupathingyCE's releases; a fork's builds name their own repository's
+       (HALO_UPDATE_REPOSITORY: the one tools/ci_build.py builds in) */
     private static final String REPOSITORY = BuildConfig.HALO_UPDATE_REPOSITORY;
-    private static final String USER_AGENT = "halo-ce-universal-updater";
+    private static final String USER_AGENT = "ChupathingyCE/" + BuildConfig.HALO_VERSION + " (Android arm64)";
+    /** the logcat tag, the native side's (port/android/host/host.h) */
+    private static final String LOG_TAG = "chupathingyce";
     private static final int TIMEOUT_MILLISECONDS = 20000;
+    /** the most a download (a release's zip, about 25 MB) or the app in it may be */
+    private static final long MAXIMUM_UPDATE_SIZE = 256L * 1024 * 1024;
 
     private Updater() {
     }
@@ -61,12 +66,12 @@ final class Updater {
     static void start(Activity activity) {
         File config = configFile(activity);
 
-        if (BuildConfig.HALO_BUILD_NUMBER <= 0 || config == null || !autoUpdate(config))
+        if (!BuildConfig.HALO_RELEASE_BUILD || config == null || !autoUpdate(config))
             return;
         new Thread(() -> {
-            int latest = latestRelease();
+            String latest = latestRelease();
 
-            if (latest > BuildConfig.HALO_BUILD_NUMBER)
+            if (latest != null && newer(latest, BuildConfig.HALO_VERSION))
                 activity.runOnUiThread(() -> ask(activity, latest));
         }, "update check").start();
     }
@@ -178,8 +183,33 @@ final class Updater {
         return connection;
     }
 
-    /** the build number of GitHub's latest release, 0 if there is none */
-    private static int latestRelease() {
+    /**
+     * Whether version is newer than current: [v]<major>.<minor>.<patch> and a
+     * pre-release suffix (0.5.0b, 1.0.0rc1) or none, by the numbers, then a
+     * version without a suffix after the ones with, and suffixes in order (as
+     * updater.c's updater_newer).
+     */
+    static boolean newer(String version, String current) {
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("v?(\\d+)\\.(\\d+)\\.(\\d+)(.*)");
+        java.util.regex.Matcher latest = pattern.matcher(version), now = pattern.matcher(current);
+
+        if (!latest.matches() || !now.matches())
+            return false;
+        for (int part = 1; part <= 3; part++) {
+            long a = Long.parseLong(latest.group(part)), b = Long.parseLong(now.group(part));
+
+            if (a != b)
+                return a > b;
+        }
+        String latestSuffix = latest.group(4), currentSuffix = now.group(4);
+
+        if (latestSuffix.isEmpty() || currentSuffix.isEmpty())
+            return latestSuffix.isEmpty() && !currentSuffix.isEmpty();
+        return latestSuffix.compareTo(currentSuffix) > 0;
+    }
+
+    /** GitHub's latest release's version (its tag, without the v), null if there is none */
+    private static String latestRelease() {
         try {
             HttpURLConnection connection = open("https://api.github.com/repos/" + REPOSITORY + "/releases/latest");
 
@@ -187,25 +217,26 @@ final class Updater {
             try (InputStream stream = connection.getInputStream()) {
                 String tag = new JSONObject(new String(readAll(stream), StandardCharsets.UTF_8)).optString("tag_name");
 
-                return tag.startsWith("build-") ? Integer.parseInt(tag.substring(6)) : 0;
+                // (a version goes into the download's address: letters, digits and . _ + - only)
+                return tag.matches("v[0-9A-Za-z_+-][0-9A-Za-z._+-]{0,30}") ? tag.substring(1) : null;
             } finally {
                 connection.disconnect();
             }
         } catch (Exception e) {
-            android.util.Log.i("halo", "update: could not check for a new version: " + e);
-            return 0;
+            android.util.Log.i(LOG_TAG, "update: could not check for a new version: " + e);
+            return null;
         }
     }
 
     /* ---------- the player's answer */
 
-    private static void ask(Activity activity, int latest) {
+    private static void ask(Activity activity, String latest) {
         if (activity.isFinishing())
             return;
         new AlertDialog.Builder(activity)
-            .setTitle("Halo: new version")
-            .setMessage("A new version of Halo was detected (build " + latest + "; this is build "
-                + BuildConfig.HALO_BUILD_NUMBER + ").\n\nDo you want to update? The game will close and start "
+            .setTitle("ChupathingyCE: new version")
+            .setMessage("A new version of ChupathingyCE is out (" + latest + "; this is "
+                + BuildConfig.HALO_VERSION + ").\n\nDo you want to update? The game will close and start "
                 + "the new version.")
             .setCancelable(false)
             .setPositiveButton("Yes", (dialog, which) -> update(activity, latest))
@@ -216,7 +247,7 @@ final class Updater {
 
     private static void confirmNever(Activity activity) {
         new AlertDialog.Builder(activity)
-            .setTitle("Halo: new version")
+            .setTitle("ChupathingyCE: new version")
             .setMessage("Stop asking about new versions?\n\nTo ask again, set auto = true in the [update] section "
                 + "of config.toml.")
             .setCancelable(false)
@@ -232,8 +263,8 @@ final class Updater {
 
     /* ---------- updating */
 
-    private static void update(Activity activity, int latest) {
-        String asset = "halo-android-" + (BuildConfig.DEBUG ? "debug" : "release") + ".zip";
+    private static void update(Activity activity, String latest) {
+        String asset = "chupathingyce-android-" + (BuildConfig.DEBUG ? "debug" : "release") + ".zip";
         File directory = new File(activity.getCacheDir(), UpdateProvider.DIRECTORY);
         LinearLayout layout = new LinearLayout(activity);
         TextView status = new TextView(activity);
@@ -243,12 +274,12 @@ final class Updater {
 
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(padding, padding / 2, padding, 0);
-        status.setText("Downloading build " + latest + "...");
+        status.setText("Downloading version " + latest + "...");
         bar.setMax(1000);
         layout.addView(status);
         layout.addView(bar);
         AlertDialog progress = new AlertDialog.Builder(activity)
-            .setTitle("Halo: new version")
+            .setTitle("ChupathingyCE: new version")
             .setView(layout)
             .setCancelable(false)
             .show();
@@ -259,10 +290,10 @@ final class Updater {
                 File zip = new File(directory, "update.zip");
                 File apk = new File(directory, UpdateProvider.APK);
 
-                download("https://github.com/" + REPOSITORY + "/releases/download/build-" + latest + "/" + asset, zip,
+                download("https://github.com/" + REPOSITORY + "/releases/download/v" + latest + "/" + asset, zip,
                     (received, total) -> activity.runOnUiThread(() -> {
                         bar.setProgress(total > 0 ? (int) (received * 1000 / total) : 0);
-                        status.setText("Downloading build " + latest + "... (" + (received >> 20) + " of "
+                        status.setText("Downloading version " + latest + "... (" + (received >> 20) + " of "
                             + (total >> 20) + " MB)");
                     }));
                 extractApk(zip, apk);
@@ -272,11 +303,11 @@ final class Updater {
                     install(activity);
                 });
             } catch (Exception e) {
-                android.util.Log.i("halo", "update: failed: " + e);
+                android.util.Log.i(LOG_TAG, "update: failed: " + e);
                 activity.runOnUiThread(() -> {
                     progress.dismiss();
                     new AlertDialog.Builder(activity)
-                        .setTitle("Halo: new version")
+                        .setTitle("ChupathingyCE: new version")
                         .setMessage("The update failed:\n\n" + e.getMessage())
                         .setPositiveButton("OK", null)
                         .show();
@@ -305,8 +336,10 @@ final class Updater {
                 int count;
 
                 while ((count = in.read(buffer)) > 0) {
-                    out.write(buffer, 0, count);
                     received += count;
+                    if (received > MAXIMUM_UPDATE_SIZE)
+                        throw new IOException("the download is larger than expected");
+                    out.write(buffer, 0, count);
                     if (received - reported >= 256 * 1024 || received == total) {
                         progress.report(received, total);
                         reported = received;
@@ -330,10 +363,15 @@ final class Updater {
                     continue;
                 try (OutputStream out = new FileOutputStream(apk)) {
                     byte[] buffer = new byte[65536];
+                    long written = 0;
                     int count;
 
-                    while ((count = in.read(buffer)) > 0)
+                    while ((count = in.read(buffer)) > 0) {
+                        written += count;
+                        if (written > MAXIMUM_UPDATE_SIZE)
+                            throw new IOException("the app in the download is larger than expected");
                         out.write(buffer, 0, count);
+                    }
                 }
                 return;
             }

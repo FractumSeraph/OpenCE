@@ -269,11 +269,11 @@ enum
 
 /* ---------- globals */
 
-#ifndef HALO_ANDROID /* Mach-O section names differ; the default is .bss anyway */
+#if !defined(HALO_ANDROID) && !defined(__APPLE__) /* Mach-O section names differ; the default is .bss anyway */
 #pragma bss_seg(".bss")
 #endif
 static wchar_t bss_004c1a08[0x100];
-#ifndef HALO_ANDROID
+#if !defined(HALO_ANDROID) && !defined(__APPLE__)
 #pragma bss_seg()
 #endif
 
@@ -1338,6 +1338,9 @@ int usnprintf(
 	va_start(arglist, format);
 	result = _vsnwprintf(string, size, format, arglist);
 	va_end(arglist);
+	/* port: terminated when it is cut short, which MSVC's is not */
+	if (size > 0)
+		string[size - 1] = 0;
 
 	return result;
 }
@@ -1357,7 +1360,6 @@ int ustring_format_takes(
 	while (*format)
 	{
 		char kind;
-		short digits;
 
 		if (*format++ != L'%')
 			continue;
@@ -1366,21 +1368,10 @@ int ustring_format_takes(
 			format++;
 			continue;
 		}
-		while (*format == L'-' || *format == L'+' || *format == L' ' || *format == L'#' || *format == L'0')
-			format++;
-		/* (a width, then a precision, of a few digits: the game's are, and
-		Windows's printf refuses what is not a conversion) */
-		for (digits = 0; *format >= L'0' && *format <= L'9'; digits++)
-			format++;
-		if (digits > 3)
-			return FALSE;
-		if (*format == L'.')
+		while (*format == L'-' || *format == L'+' || *format == L' ' || *format == L'#' || *format == L'.' ||
+			(*format >= L'0' && *format <= L'9'))
 		{
 			format++;
-			for (digits = 0; *format >= L'0' && *format <= L'9'; digits++)
-				format++;
-			if (digits > 3)
-				return FALSE;
 		}
 		/* (the size prefixes the game's own formats use) */
 		if (*format == L'h' || *format == L'l' || *format == L'w')

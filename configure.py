@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 # root build script: writes build.ninja for the native ports (Linux, Windows,
-# Android)
+# Android, macOS) and the dedicated server (Linux)
 
 import argparse
 import io
@@ -13,15 +13,20 @@ from types import SimpleNamespace
 from tools import ninja_syntax
 from tools.android_build import android_configure_inputs, generate_android_build
 from tools.linux_build import generate_linux_build, linux_configure_inputs
-from tools.windows_build import generate_windows_build, windows_configure_inputs
+from tools.linux64_build import generate_linux64_build, linux64_configure_inputs
+from tools.macos_build import generate_macos_build, macos_configure_inputs
+from tools.server_build import generate_server_build, server_configure_inputs
+from tools.version import commit_inputs
 from tools.web_build import generate_web_build, web_configure_inputs
+from tools.windows_build import generate_windows_build, windows_configure_inputs
 
 # arguments
 parser = argparse.ArgumentParser()
 parser.add_argument(
     "--linux-cc",
     metavar="BINARY",
-    help="compiler for the native Linux build, `ninja linux` (default: clang)",
+    help="compiler for the native Linux builds, `ninja linux` and `ninja linux64`, and the dedicated "
+    "server, `ninja server` (default: clang)",
 )
 parser.add_argument(
     "--compiler-launcher",
@@ -35,6 +40,18 @@ parser.add_argument(
     help="release builds (Linux, Windows, Android, Web): assertions are not checked",
 )
 parser.add_argument(
+    "--web-cc",
+    type=str,
+    help="Emscripten compiler for `ninja web` (default: build/emsdk's emcc, then emcc on PATH)",
+)
+parser.add_argument(
+    "--game-browser",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help="every build (Linux, Windows, macOS, Android; always the server's): the game list and server browser of halo.milenko.org "
+    "(HALO_GAME_BROWSER; port/linux/src/browser.c); on unless --no-game-browser",
+)
+parser.add_argument(
     "--lto",
     choices=["full", "thin", "off"],
     default="full",
@@ -45,11 +62,7 @@ parser.add_argument(
     "--portable",
     action="store_true",
     help="x86 builds (Linux, Windows): code for any x86-64 processor (SSE2) rather than for this "
-    "machine's (-march=native, the default); use it for builds that run on other computers. On Linux it also "
-    "builds against Debian 11's glibc 2.31 rather than this machine's, and brings its own SDL 3 (libSDL3.so.0, "
-    "beside the executable), so that it starts on SteamOS and older distributions: the first build downloads "
-    "the Debian packages and SDL's source (build/linux/third_party, tools/linux_sysroot.py), and needs CMake, "
-    "pkgconf and wayland-scanner, not the 32-bit SDL 3",
+    "machine's (-march=native, the default); use it for builds that run on other computers",
 )
 parser.add_argument(
     "--pgo",
@@ -78,11 +91,6 @@ parser.add_argument(
     type=str,
     help="clang with the arm64_32 target for the Android guest (default: clang)",
 )
-parser.add_argument(
-    "--web-cc",
-    type=str,
-    help="Emscripten compiler for `ninja web` (default: build/emsdk's emcc, then emcc on PATH)",
-)
 args = parser.parse_args()
 
 # the settings the builds read
@@ -91,13 +99,14 @@ sln = SimpleNamespace(
     linux_cc=args.linux_cc,
     compiler_launcher=args.compiler_launcher,
     port_release=args.release,
+    game_browser=args.game_browser,
+    web_cc=args.web_cc,
     port_lto=args.lto,
     port_portable=args.portable,
     port_pgo=args.pgo,
     port_pgo_profile=args.pgo_profile,
     android_ndk=args.android_ndk,
     android_guest_cc=args.android_guest_cc,
-    web_cc=args.web_cc,
 )
 
 
@@ -121,8 +130,11 @@ n.variable("python", f'"{sys.executable}"')
 n.newline()
 
 generate_linux_build(n, sln)
+generate_linux64_build(n, sln)
 generate_android_build(n, sln)
 generate_windows_build(n, sln)
+generate_macos_build(n, sln)
+generate_server_build(n, sln)
 generate_web_build(n, sln)
 
 n.comment("Reconfigure on change")
@@ -139,16 +151,21 @@ n.build(
         configure_script,
         Path("tools/ninja_syntax.py"),
         *linux_configure_inputs(),
+        *linux64_configure_inputs(),
         *android_configure_inputs(),
         *windows_configure_inputs(),
+        *macos_configure_inputs(),
+        *server_configure_inputs(),
         *web_configure_inputs(),
+        # (the commit the builds record: tools/version.py)
+        *commit_inputs(),
     ],
 )
 n.newline()
 
 # the build for this computer, where it could be generated (the Windows
 # build is left out when SDL cannot be fetched, for instance)
-default = "windows" if is_windows() else "linux"
+default = "windows" if is_windows() else "macos" if sys.platform == "darwin" else "linux"
 if f"\nbuild {default}: " in out.getvalue():
     n.comment("Default rule: the build for this computer")
     n.default(default)

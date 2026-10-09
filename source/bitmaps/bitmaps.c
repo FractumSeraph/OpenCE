@@ -472,7 +472,7 @@ struct bitmap_data *bitmap_2d_new(
 			SET_FLAG(bitmap->flags, _bitmap_palettized_bit, TRUE);
 		}
 
-		bitmap->base_address = match_malloc("c:\\halo\\SOURCE\\bitmaps\\bitmaps.c", 0xD5, bitmap_get_pixel_data_size(bitmap));
+		bitmap->base_address = xbox_address(match_malloc("c:\\halo\\SOURCE\\bitmaps\\bitmaps.c", 0xD5, bitmap_get_pixel_data_size(bitmap)));
 		if (bitmap->base_address)
 		{
 			match_assert("c:\\halo\\SOURCE\\bitmaps\\bitmaps.c", 0xD9, bitmap_verify(bitmap, FALSE));
@@ -528,7 +528,7 @@ struct bitmap_data *bitmap_3d_new(
 			SET_FLAG(bitmap->flags, _bitmap_palettized_bit, TRUE);
 		}
 
-		bitmap->base_address = match_malloc("c:\\halo\\SOURCE\\bitmaps\\bitmaps.c", 0x112, bitmap_get_pixel_data_size(bitmap));
+		bitmap->base_address = xbox_address(match_malloc("c:\\halo\\SOURCE\\bitmaps\\bitmaps.c", 0x112, bitmap_get_pixel_data_size(bitmap)));
 		if (bitmap->base_address)
 		{
 			match_assert("c:\\halo\\SOURCE\\bitmaps\\bitmaps.c", 0x116, bitmap_verify(bitmap, FALSE));
@@ -567,7 +567,7 @@ struct bitmap_data *bitmap_cube_map_new(
 		bitmap->type = _bitmap_type_cube_map;
 		bitmap->format = format;
 		bitmap->mipmap_count = mipmap_count;
-		bitmap->hardware_format = NULL;
+		bitmap->hardware_format = XBOX_NULL;
 		bitmap->flags = FLAG(_bitmap_has_power_of_two_dimensions_bit)|FLAG(_bitmap_allocated_bit);
 		if (format>=FIRST_COMPRESSED_BITMAP_FORMAT && format<=LAST_COMPRESSED_BITMAP_FORMAT)
 		{
@@ -578,7 +578,7 @@ struct bitmap_data *bitmap_cube_map_new(
 			SET_FLAG(bitmap->flags, _bitmap_palettized_bit, TRUE);
 		}
 
-		bitmap->base_address = match_malloc("c:\\halo\\SOURCE\\bitmaps\\bitmaps.c", 0x14D, bitmap_get_pixel_data_size(bitmap));
+		bitmap->base_address = xbox_address(match_malloc("c:\\halo\\SOURCE\\bitmaps\\bitmaps.c", 0x14D, bitmap_get_pixel_data_size(bitmap)));
 		if (bitmap->base_address)
 		{
 			match_assert("c:\\halo\\SOURCE\\bitmaps\\bitmaps.c", 0x151, bitmap_verify(bitmap, FALSE));
@@ -632,7 +632,7 @@ void bitmap_delete(
 			if (bitmap->base_address)
 			{
 				debug_free(
-					bitmap->base_address,
+					xbox_pointer(bitmap->base_address),
 					"c:\\halo\\SOURCE\\bitmaps\\bitmaps.c",
 					0x18B);
 			}
@@ -677,7 +677,7 @@ void *bitmap_2d_address(
 		height = MAX(minimum_dimension, height>>1);
 	}
 
-	return (byte *)bitmap->base_address + (pixel_offset + width*y + x)*bits_per_pixel/8;
+	return (byte *)xbox_pointer(bitmap->base_address) + (pixel_offset + width*y + x)*bits_per_pixel/8;
 }
 
 void *bitmap_3d_address(
@@ -715,7 +715,7 @@ void *bitmap_3d_address(
 		depth = MAX(1, depth>>1);
 	}
 
-	return (byte *)bitmap->base_address + (pixel_offset + (height*z + y)*width + x)*bits_per_pixel/8;
+	return (byte *)xbox_pointer(bitmap->base_address) + (pixel_offset + (height*z + y)*width + x)*bits_per_pixel/8;
 }
 
 void *bitmap_cube_map_address(
@@ -748,7 +748,7 @@ void *bitmap_cube_map_address(
 		width = MAX(minimum_dimension, width>>1);
 	}
 
-	return (byte *)bitmap->base_address + (pixel_offset + (face_index*width + y)*width + x)*bits_per_pixel/8;
+	return (byte *)xbox_pointer(bitmap->base_address) + (pixel_offset + (face_index*width + y)*width + x)*bits_per_pixel/8;
 }
 
 void *bitmap_mipmap_address(
@@ -1128,46 +1128,34 @@ pixel32 bitmap_2d_get_pixel(
 			x &= 3;
 			y &= 3;
 
-			/* BUG (original, preserved for exact matching; admitted narrowly by the owner 2026-09-27 - no general
-			 * varargs exception): both messages end "lod=%f" but January passes the short mipmap_index there
-			 * (0x46c140 +0x2d2 movsx eax,[ebp-0x10] / +0x2e2 push eax, and +0x363 / +0x373; the same defect occurs
-			 * in the August and September 2001 builds and the later /Od build). Stack at the csprintf call: six ints for
-			 * the %d conversions, then mipmap_index, then display_assert's __FILE__ pointer pushed just before it.
-			 * %f is the last conversion, so it consumes exactly those two pushed dwords (no later argument shifts).
-			 * Passing an int where the format reads a double is undefined behaviour in C; the bound below is a
-			 * property of this compiler, CRT and linked image, not of the source: for every mipmap_index value with
-			 * January's __FILE__ address as the high dword the double is a tiny positive normal and the halt message
-			 * shows "lod=0.000000" (at most 182 characters plus NUL in the 256-byte buffer; January's formatter has no x87 code).
-			 * display_assert then returns into an unconditional system_exit, which never returns (halt_and_catch_fire).
-			 * A corrected build passes lod. */
 			match_vassert(
 				"c:\\halo\\SOURCE\\bitmaps\\bitmaps.c",
 				0x2A0,
-				block_address >= (byte *)bitmap->base_address,
+				block_address >= (byte *)xbox_pointer(bitmap->base_address),
 				csprintf(
 					temporary,
 					"bitmap_2d_get_pixel tried to access compressed block @ -%d bytes from address start (w=%d, h=%d, m=%d, x=%d, y=%d, lod=%f)",
-					(byte *)bitmap->base_address - block_address,
+					(byte *)xbox_pointer(bitmap->base_address) - block_address,
 					bitmap->width,
 					bitmap->height,
 					(short)bitmap->mipmap_count,
 					fast_ftol((real)width * point->x - 0.5f) % width,
 					fast_ftol((real)height * point->y - 0.5f) % height,
-					mipmap_index));
+					lod));
 			match_vassert(
 				"c:\\halo\\SOURCE\\bitmaps\\bitmaps.c",
 				0x2A9,
-				block_address < (byte *)bitmap->base_address + bitmap->pixels_size,
+				block_address < (byte *)xbox_pointer(bitmap->base_address) + bitmap->pixels_size,
 				csprintf(
 					temporary,
 					"bitmap_2d_get_pixel tried to access compressed block @ -%d bytes from address end (w=%d, h=%d, m=%d, x=%d, y=%d, lod=%f)",
-					block_address - ((byte *)bitmap->base_address + bitmap->pixels_size),
+					block_address - ((byte *)xbox_pointer(bitmap->base_address) + bitmap->pixels_size),
 					bitmap->width,
 					bitmap->height,
 					(short)bitmap->mipmap_count,
 					fast_ftol((real)width * point->x - 0.5f) % width,
 					fast_ftol((real)height * point->y - 0.5f) % height,
-					mipmap_index));
+					lod));
 
 			switch (bitmap->format)
 			{
@@ -1201,15 +1189,10 @@ pixel32 bitmap_2d_get_pixel(
 					0x2B7,
 					FALSE,
 					"### ERROR unsupported bitmap format");
+				pixel = 0;
 				break;
 			}
 
-			/* BUG (original, preserved for exact matching; admitted narrowly by the owner 2026-09-27): the
-			 * unsupported-format default arm leaves pixel unassigned and January returns it after the fatal
-			 * assertion (0x46c140 +0x3ed mov eax,[ebp+8]). In this image the assertion is followed by an
-			 * unconditional system_exit, which never returns (halt_and_catch_fire loops or calls _exit on re-entry).
-			 * The uninitialised return expression would read an indeterminate value if the halt returned, but is
-			 * not executed on this path. A corrected build assigns pixel in that arm. */
 			return pixel;
 		}
 

@@ -1,12 +1,23 @@
-"""Ninja rules for the native Windows build (``ninja windows``).
+"""Ninja rules for the native Windows builds (``ninja windows``, ``ninja
+windows64``).
 
 Like the Linux build (tools/linux_build.py), it compiles the game sources
 with clang for 32-bit x86 Windows (i686-pc-windows-msvc), adds the platform layer shared with
 Linux (``port/linux/src``) and the Windows parts in ``port/windows``, and
 links ``build/windows/halo.exe`` with lld. It is generated only when
 configure.py runs on Windows. See port/windows/README.md for the design.
+
+``ninja windows64`` compiles the same units for x64 Windows
+(x86_64-pc-windows-msvc) into ``build/windows64/halo.exe``, with the 64-bit
+builds' code paths (HALO_64BIT: source/cseries/xbox_address.h), as
+``ninja linux64`` and ``ninja macos`` have them. Both play Halo PC's Custom
+Edition maps (HALO_CUSTOM_EDITION).
+Windows keeps `long` 32 bits wide on x64 (LLP64), as the Xbox's compiler
+did, so the sources need none of the LP64 builds' `long` rewrite
+(tools/lp64_build.py).
 """
 
+import hashlib
 import json
 import os
 import re
@@ -15,14 +26,17 @@ import subprocess
 import sys
 import urllib.request
 import zipfile
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .linux_build import (LINUX_PROFILE, MINIUPNPC_DIR, OPTIMISATION, WINDOWS_PROFILE, XDK_INCLUDE, lto_mode,
-                          march_flag, miniupnpc_sources, pgo_mode, compile_launcher, game_defines_and_includes,
+from .version import VERSION_SOURCES, identity_defines, release_build, version
+from .linux_build import (CUSTOM_EDITION_DEFINES, LINUX_PROFILE, MBEDTLS_DIR, MINIUPNPC_DIR, OPTIMISATION, STB_DIR, WINDOWS_PROFILE,
+                          XDK_INCLUDE, game_browser_defines, lto_mode, march_flag, miniupnpc_sources, pgo_mode, compile_launcher, game_defines_and_includes,
                           game_sources, musl_math_cflags, musl_math_sources, opus_cflags, opus_sources, pgo_profile,
                           profile_use_flags, xdk_headers)
-from .embed_assets import hud_assets_build, hud_configure_inputs
+from .lp64_build import lp64_excluded
+from .embed_assets import hud_assets_build, hud_configure_inputs, ui_fonts_build
 from .ninja_syntax import Writer
 
 LINUX_DIR = Path("port/linux")
@@ -30,12 +44,13 @@ PORT_DIR = Path("port/windows")
 PORT_CONFIG = PORT_DIR / "port.json"
 BUILD = Path("build/windows")
 
-# (as tools/android_build.py's SDL_TAG and tools/linux_sysroot.py's SDL_VERSION)
 SDL_VERSION = "3.4.16"
 SDL_URL = (
     f"https://github.com/libsdl-org/SDL/releases/download/release-{SDL_VERSION}/"
     f"SDL3-devel-{SDL_VERSION}-VC.zip"
 )
+# (its SHA-256 when it was pinned: the DLL ships in the builds)
+SDL_SHA256 = "1a784cb2a5c64d56fe7a62090fe9d242d9865f235e4ea9678f1a6ba4e693e7de"
 THIRD_PARTY = BUILD / "third_party"
 SDL_DIR = THIRD_PARTY / f"SDL3-{SDL_VERSION}"
 
@@ -53,6 +68,7 @@ TOML_DIR = Path("port/third_party/tomlc17")
 EXPAT_DIR = Path("port/third_party/expat")
 EXPAT_SOURCES = ("xmlparse.c", "xmlrole.c", "xmltok.c", "random_rand_s.c")
 KCP_DIR = Path("port/third_party/kcp")
+QRCODEGEN_DIR = Path("port/third_party/qrcodegen")
 MONOCYPHER_DIR = Path("port/third_party/monocypher")
 # the port's zlib (port/third_party/zlib/zlib_prefixed.h), which inflates
 # the maps, the menus' and the HUD's PNGs and the updates
@@ -64,14 +80,13 @@ ZLIB_DEFINES = ("-DZ_PREFIX", "-Dz_errmsg=z_port_errmsg")
 
 
 def updater_defines(release: bool) -> str:
-    """the self-updater's build (port/linux/src/updater.c): its number, from
-    HALO_BUILD_NUMBER (tools/ci_build.py gives it for builds of main; none
-    elsewhere, which never look for updates), and its configuration"""
-    number = os.environ.get("HALO_BUILD_NUMBER", "0")
-    if not number.isdigit():
-        number = "0"
+    """the version's defines (port/linux/src/updater.c, the self-updater, has
+    them, and gives the version to the rest): the version (tools/version.py),
+    whether this build is a release's (only those look for updates), and its
+    configuration; and the channel and commit (build_identity.c)"""
     flavor = "release" if release else "debug"
-    defines = f'-DHALO_BUILD_NUMBER={number} -DHALO_BUILD_FLAVOR=\\"{flavor}\\"'
+    defines = (f'-DHALO_VERSION=\\"{version()}\\" -DHALO_RELEASE_BUILD={int(release_build())} '
+            f'-DHALO_BUILD_FLAVOR=\\"{flavor}\\" {identity_defines()}')
     # (HALO_UPDATE_REPOSITORY: the GitHub repository whose releases it
     # updates from, owner/name; tools/ci_build.py gives the one it is built in)
     repository = os.environ.get("HALO_UPDATE_REPOSITORY", "")
@@ -142,6 +157,113 @@ WIN32_FLAGS = [
     "-Wall",
 ]
 
+# The conversions that truncate a 64-bit pointer, errors in the 64-bit
+# build: each is a place that still treats an Xbox address as a pointer or
+# the reverse (as in the LP64 builds, tools/lp64_build.py)
+POINTER_TRUNCATION_ERRORS = [
+    "-Werror=int-to-pointer-cast",
+    "-Werror=pointer-to-int-cast",
+    "-Werror=void-pointer-to-int-cast",
+    "-Werror=int-conversion",
+]
+
+
+@dataclass
+class WindowsTarget:
+    """What the 32-bit and the 64-bit Windows builds compile differently."""
+    # the build's name: its ninja target, its folder in build/, its rules' prefix
+    name: str
+    # the clang target
+    triple: str
+    # SDL's folder of libraries for it (lib/x86, lib/x64)
+    sdl_arch: str
+    abi_flags: List[str]
+    game_flags: List[str]
+    platform_flags: List[str]
+    win32_flags: List[str]
+    # the link's, ahead of link-time optimisation's
+    ldflags: List[str]
+    # the comment above its rules
+    comment: str
+    # optimised with a profile (pgo/): the committed ones are the 32-bit builds'
+    pgo: bool = True
+    # leaves out what the 64-bit builds do (port/linux/port.json "lp64")
+    lp64_exclusions: bool = False
+
+    @property
+    def build(self) -> Path:
+        return Path("build") / self.name
+
+
+WINDOWS32 = WindowsTarget(
+    name="windows",
+    triple="i686-pc-windows-msvc",
+    sdl_arch="x86",
+    # Halo PC's Custom Edition maps (linux_build.py, CUSTOM_EDITION_DEFINES),
+    # as the 32-bit Linux build has them: their tag cache is mapped at the
+    # host address they are linked to (port/linux/src/xbox_memory.c)
+    abi_flags=[*WINDOWS_ABI_FLAGS, *CUSTOM_EDITION_DEFINES],
+    game_flags=GAME_FLAGS,
+    platform_flags=PLATFORM_FLAGS,
+    win32_flags=WIN32_FLAGS,
+    ldflags=[
+        "--target=i686-pc-windows-msvc",
+        "-fuse-ld=lld",
+        "-g",
+        # the Xbox memory window is at 0x80000000, in the upper half of the
+        # 32-bit address space
+        "-Wl,/LARGEADDRESSAWARE",
+        "-Wl,/STACK:0x800000",
+    ],
+    comment="Native Windows build (ninja windows)",
+)
+
+WINDOWS64 = WindowsTarget(
+    name="windows64",
+    triple="x86_64-pc-windows-msvc",
+    sdl_arch="x64",
+    abi_flags=[
+        "--target=x86_64-pc-windows-msvc",
+        # (time_t is 64-bit on x64: the C runtime has no 32-bit one there)
+        *(flag for flag in WINDOWS_ABI_FLAGS
+          if not flag.startswith("--target=") and flag != "-D_USE_32BIT_TIME_T"),
+        # the 64-bit builds' code paths (source/cseries/xbox_address.h)
+        "-DHALO_64BIT",
+        # Halo PC's Custom Edition maps (linux_build.py, CUSTOM_EDITION_DEFINES)
+        *CUSTOM_EDITION_DEFINES,
+    ],
+    game_flags=[
+        *(flag for flag in GAME_FLAGS if flag not in ("-w", "-Wno-error=int-conversion",
+                                                      "-Wno-error=implicit-function-declaration")),
+        "-ferror-limit=0",
+        # -w would also hide the errors below
+        "-Wno-everything",
+        *POINTER_TRUNCATION_ERRORS,
+        "-Werror=pointer-integer-compare",
+        # an undeclared function returns int, truncating a returned pointer
+        "-Werror=implicit-function-declaration",
+        # (not -Werror=format, as the LP64 builds have: where they spell
+        # `long` int, a %d given a long is the same size here, and the
+        # sizes that differ between 32 and 64 bits are the same as theirs)
+    ],
+    platform_flags=[*PLATFORM_FLAGS, "-Werror=incompatible-pointer-types", *POINTER_TRUNCATION_ERRORS],
+    win32_flags=[*WIN32_FLAGS, *POINTER_TRUNCATION_ERRORS],
+    ldflags=[
+        "--target=x86_64-pc-windows-msvc",
+        "-fuse-ld=lld",
+        "-g",
+        # the Xbox address space is 4 GB at 1 TB (xbox_address.h), reserved
+        # at start-up (port/linux/src/xbox_memory.c). High-entropy
+        # randomization would spread the first allocations over the bottom
+        # terabyte, up to that window; without it they stay low
+        "-Wl,/HIGHENTROPYVA:NO",
+        "-Wl,/STACK:0x800000",
+    ],
+    comment="Native 64-bit Windows build (ninja windows64)",
+    pgo=False,
+    lp64_exclusions=True,
+)
+
 
 def _load_config() -> Dict[str, Any]:
     with open(PORT_CONFIG, "r", encoding="utf-8") as f:
@@ -161,13 +283,17 @@ def _quote(path: Any) -> str:
 def fetch_sdl() -> None:
     """Downloads SDL3's Visual C++ development package (headers, import
     library and DLL) once."""
-    if (SDL_DIR / "lib" / "x86" / "SDL3.lib").is_file():
+    if all((SDL_DIR / "lib" / arch / "SDL3.lib").is_file() for arch in ("x86", "x64")):
         return
     THIRD_PARTY.mkdir(parents=True, exist_ok=True)
     archive = THIRD_PARTY / f"SDL3-devel-{SDL_VERSION}-VC.zip"
     print(f"Downloading {SDL_URL}")
     with urllib.request.urlopen(SDL_URL) as response, open(archive, "wb") as f:
         shutil.copyfileobj(response, f)
+    digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+    if digest != SDL_SHA256:
+        archive.unlink()
+        raise SystemExit(f"{SDL_URL}: SHA-256 {digest}, not the pinned {SDL_SHA256}")
     with zipfile.ZipFile(archive) as z:
         z.extractall(THIRD_PARTY)
     archive.unlink()
@@ -187,15 +313,6 @@ PROFILE_RUNTIME_HEADERS = [
     "lib/profile/InstrProfilingUtil.h", "lib/profile/WindowsMMap.h", "include/profile/InstrProfData.inc",
     "include/profile/instr_prof_interface.h", "include/profile/MIBEntryDef.inc", "include/profile/MemProfData.inc",
 ]
-
-
-def windows_rc(cc: str) -> str:
-    """LLVM's resource compiler of the clang named cc: beside it, where cc is
-    a path, else the one on the PATH"""
-    path = Path(cc)
-    if path.parent == Path("."):
-        return "llvm-rc"
-    return str(path.with_name("llvm-rc" + path.suffix))
 
 
 def clang_release(cc: str) -> Optional[str]:
@@ -235,7 +352,7 @@ EXPORTED_INLINE = re.compile(
 COMMENT = re.compile(r"/\*.*?\*/|//[^\n]*", re.S)
 
 
-def inline_export_wrapper(source: Path) -> Path:
+def inline_export_wrapper(source: Path, build: Path = BUILD) -> Path:
     """MSVC emits a C __inline function with external linkage wherever a
     call to it is not inlined, and other units may call it through a
     prototype; clang can inline every call in the defining unit, leaving no
@@ -247,7 +364,7 @@ def inline_export_wrapper(source: Path) -> Path:
     names = EXPORTED_INLINE.findall(COMMENT.sub("", source.read_text(encoding="utf-8", errors="replace")))
     if not names:
         return source
-    wrapper = BUILD / "inline_exports" / source
+    wrapper = build / "inline_exports" / source
     text = (
         "/* generated by tools/windows_build.py: see inline_export_wrapper */\n"
         f'#include "{source.resolve().as_posix()}"\n'
@@ -269,83 +386,82 @@ def generate_windows_build(n: Writer, sln: Any) -> None:
     except OSError as error:
         print(f"Windows build disabled: cannot fetch SDL3 ({error})", file=sys.stderr)
         return
+    for target in (WINDOWS32, WINDOWS64):
+        generate_windows_target(n, sln, target)
+
+
+def generate_windows_target(n: Writer, sln: Any, target: WindowsTarget) -> None:
+    """one Windows build's rules: ``ninja windows`` or ``ninja windows64``"""
     linux_config: Dict[str, Any] = json.loads((LINUX_DIR / "port.json").read_text(encoding="utf-8"))
     config = _load_config()
 
-    tags_header = BUILD / "halo_msvc_tags.h"
-    obj_dir = BUILD / "obj"
-    output = BUILD / "halo.exe"
-    sdl_dll = BUILD / "SDL3.dll"
+    prefix = target.name
+    label = prefix.upper()
+    build = target.build
+    tags_header = build / "halo_msvc_tags.h"
+    obj_dir = build / "obj"
+    output = build / "halo.exe"
+    sdl_dll = build / "SDL3.dll"
+    sdl_lib = SDL_DIR / "lib" / target.sdl_arch
     cc = getattr(sln, "windows_cc", None) or "clang"
     prefix_header = PORT_DIR / "include" / "halo_windows_prefix.h"
     crt_include = PORT_DIR / "include" / "crt"
     posix_include = PORT_DIR / "include" / "posix"
+    excluded = set(lp64_excluded()) if target.lp64_exclusions else set()
 
-    n.comment("Native Windows build (ninja windows)")
-    n.variable("windows_cc", cc)
+    n.comment(target.comment)
+    n.variable(f"{prefix}_cc", cc)
     # MSVC gives struct tags first named in a prototype file scope; clang
     # does not (the Linux build's generator also writes these declarations)
     n.rule(
-        name="windows_msvc_tags",
+        name=f"{prefix}_msvc_tags",
         command="$python tools/linux_msvc_semantics.py --output $out --tags source",
-        description="WINDOWS MSVC TAGS $out",
+        description=f"{label} MSVC TAGS $out",
         restat=True,
     )
     game_headers = sorted(p for p in Path("source").rglob("*") if p.suffix in (".c", ".h"))
-    n.build(outputs=tags_header, rule="windows_msvc_tags",
+    n.build(outputs=tags_header, rule=f"{prefix}_msvc_tags",
             implicit=[Path("tools/linux_msvc_semantics.py"), *game_headers])
     n.rule(
-        name="windows_cc",
-        command=f"{compile_launcher(sln)}$windows_cc -MMD -MF $out.d $cflags -c $in -o $out",
-        description="WINDOWS CC $out",
+        name=f"{prefix}_cc",
+        command=f"{compile_launcher(sln)}${prefix}_cc -MMD -MF $out.d $cflags -c $in -o $out",
+        description=f"{label} CC $out",
         depfile="$out.d",
         deps="gcc",
     )
     n.rule(
-        name="windows_link",
-        command="$windows_cc $ldflags -o $out --rsp-quoting=windows @$out.rsp $libs",
-        description="WINDOWS LINK $out",
+        name=f"{prefix}_link",
+        command=f"${prefix}_cc $ldflags -o $out --rsp-quoting=windows @$out.rsp $libs",
+        description=f"{label} LINK $out",
         rspfile="$out.rsp",
         rspfile_content="$in_newline",
     )
-    # the executable's resources (port/windows/halo.rc: its icon), compiled
-    # by LLVM's resource compiler, beside the clang that builds the game
-    n.variable("windows_rc", windows_rc(cc))
     n.rule(
-        name="windows_rc",
-        command="$windows_rc /no-preprocess /FO $out $in",
-        description="WINDOWS RC $out",
-    )
-    resources = BUILD / "halo.res"
-    n.build(outputs=resources, rule="windows_rc", inputs=PORT_DIR / "halo.rc", implicit=[PORT_DIR / "opence-icon.ico"])
-    n.rule(
-        name="windows_copy",
+        name=f"{prefix}_copy",
         command="$python -c \"import shutil,sys; shutil.copyfile(sys.argv[1], sys.argv[2])\" $in $out",
-        description="WINDOWS COPY $out",
+        description=f"{label} COPY $out",
     )
 
     # the high-res HUD's textures (port/assets/hud; port/linux/src/hud_hires.c)
-    embedded_assets = hud_assets_build(n, "windows", BUILD / "generated" / "hud_hires_assets.c")
+    embedded_assets = (hud_assets_build(n, prefix, build / "generated" / "hud_hires_assets.c")
+                       + ui_fonts_build(n, prefix, build / "generated" / "ui_fonts.c", sln))
 
-    # (a debug build checks its stack frames (/GS), and stops at the first
-    # one overrun, as at the first failed assertion; a release build does
-    # not, so that an overrun nobody has met cannot end a game)
-    abi = " ".join(WINDOWS_ABI_FLAGS + [march_flag(sln)] + (["-DHALO_RELEASE"] if getattr(sln, "port_release", False)
-                                                            else ["-fstack-protector-strong"]))
+    # (the game browser, the game list and dedicated servers, as every
+    # desktop build has them: HALO_GAME_BROWSER, configure.py; a debug build
+    # checks its stack frames (/GS), and stops at the first one overrun, as
+    # at the first failed assertion; a release build does not, so that an
+    # overrun nobody has met cannot end a game)
+    abi = " ".join(target.abi_flags + [march_flag(sln)] + (["-DHALO_RELEASE"] if getattr(sln, "port_release", False)
+                                                           else ["-fstack-protector-strong"])
+                   + game_browser_defines(sln))
     sdl_include = SDL_DIR / "include"
     libs = " ".join(
-        [_quote(SDL_DIR / "lib" / "x86" / "SDL3.lib")]
+        [_quote(sdl_lib / "SDL3.lib")]
         + [f"-l{lib}" for lib in config.get("libraries", [])]
     )
-    base_ldflags = [
-        "--target=i686-pc-windows-msvc",
-        "-fuse-ld=lld",
-        "-g",
-        # the Xbox memory window is at 0x80000000, in the upper half of the
-        # 32-bit address space
-        "-Wl,/LARGEADDRESSAWARE",
-        "-Wl,/STACK:0x800000",
-    ]
+    # (the linker's map beside the program, halo.map: its functions'
+    # addresses, kept with the symbols, tools/ci_build.py)
+    base_ldflags = list(target.ldflags) + ["-Wl,/MAP"]
     if getattr(sln, "port_release", False):
         # no console window (the port's log goes to halo.log instead,
         # win32_posix.c): under Wine (Proton, gamescope) the console window
@@ -363,10 +479,10 @@ def generate_windows_build(n: Writer, sln: Any) -> None:
         def add_object(source: Path, cflags: str) -> None:
             obj = obj_dir / source.with_suffix(".o")
             objects.append(obj)
-            compiled = inline_export_wrapper(source)
+            compiled = inline_export_wrapper(source, build)
             n.build(
                 outputs=obj,
-                rule="windows_cc",
+                rule=f"{prefix}_cc",
                 inputs=compiled,
                 implicit=[*xdk_headers(), prefix_header, tags_header, source, *implicit_inputs],
                 variables={"cflags": f"{cflags} {extra}"},
@@ -374,7 +490,7 @@ def generate_windows_build(n: Writer, sln: Any) -> None:
 
         game_cflags = " ".join([
             abi,
-            " ".join(GAME_FLAGS),
+            " ".join(target.game_flags),
             f"-include {prefix_header}",
             f"-include {tags_header}",
             f"-I{crt_include}",
@@ -392,18 +508,19 @@ def generate_windows_build(n: Writer, sln: Any) -> None:
             f"-I{XDK_INCLUDE}",
         ])
         for source in game_sources(linux_config):
-            # The halt screen and version command identify this native build.
-            flags = game_cflags
-            if source.as_posix() == "source/main/main.c":
-                flags += " " + updater_defines(getattr(sln, "port_release", False))
-            add_object(source, flags)
+            if source.as_posix() not in excluded:
+                add_object(source, game_cflags)
         for source in sorted(Path(linux_config["game_sources"]).glob("*.c")):
             add_object(source, game_cflags)
+        # the dedicated server's director, with the game browser (server/)
+        if getattr(sln, "game_browser", False):
+            for source in sorted(Path("server/src").glob("*.c")):
+                add_object(source, game_cflags)
 
         linux_platform = Path(linux_config["platform_sources"])
         platform_cflags = " ".join([
             abi,
-            " ".join(PLATFORM_FLAGS),
+            " ".join(target.platform_flags),
             f"-include {prefix_header}",
             f"-I{posix_include}",
             f"-I{crt_include}",
@@ -412,6 +529,7 @@ def generate_windows_build(n: Writer, sln: Any) -> None:
             f"-I{TOML_DIR}",
             f"-I{EXPAT_DIR}",
             f"-I{KCP_DIR}",
+            f"-I{QRCODEGEN_DIR}",
             f"-I{MONOCYPHER_DIR}",
             f"-I{ZLIB_DIR}",
             # halo_linux_winsock_names.h, but not the Linux build's C runtime
@@ -423,7 +541,7 @@ def generate_windows_build(n: Writer, sln: Any) -> None:
         ])
         win32_cflags = " ".join([
             abi,
-            " ".join(WIN32_FLAGS),
+            " ".join(target.win32_flags),
             f"-I{posix_include}",
             f"-I{linux_platform}",
             f"-I{_quote(sdl_include)}",
@@ -432,17 +550,27 @@ def generate_windows_build(n: Writer, sln: Any) -> None:
         for source in sorted(linux_platform.glob("*.c")):
             if source.name in replaced:
                 continue
-            if source.name == "updater.c":
+            if source.name in VERSION_SOURCES:
                 add_object(source, f"{platform_cflags} {updater_defines(getattr(sln, 'port_release', False))}")
+            elif source.name == "posix_browser.c":
+                # (the game list's requests: on Winsock, with Mbed TLS, as
+                # on Linux)
+                add_object(source, f"{win32_cflags} -I{MBEDTLS_DIR / 'include'}")
+            elif source.name == "posix_ui_font.c":
+                # (the overlay's fonts: stb_truetype; their data, tools/embed_assets.py --fonts)
+                add_object(source, f"{platform_cflags} -I{STB_DIR}")
             else:
                 add_object(source, platform_cflags)
+        # the game list's TLS (port/third_party/mbedtls; posix_browser.c), on
+        # Winsock
+        if getattr(sln, "game_browser", False):
+            for source in sorted((MBEDTLS_DIR / "library").glob("*.c")):
+                add_object(source, " ".join([abi, *WIN32_FLAGS, f"-I{MBEDTLS_DIR / 'include'}",
+                                             f"-I{MBEDTLS_DIR / 'library'}", "-D_CRT_SECURE_NO_WARNINGS", "-w"]))
         miniupnpc_include = f"-I{MINIUPNPC_DIR / 'include'} -DMINIUPNP_STATICLIB"
         for source in sorted((PORT_DIR / "src").glob("*.c")):
             if source.name == "win32_upnp.c":
                 add_object(source, f"{win32_cflags} {miniupnpc_include}")
-            elif source.name == "win32_crash.c":
-                # the build's number and configuration name its crash reports
-                add_object(source, f"{win32_cflags} {updater_defines(getattr(sln, 'port_release', False))}")
             else:
                 add_object(source, win32_cflags if source.name.startswith("win32_") else platform_cflags)
         # internet play's UPnP (port/third_party/miniupnpc), on Winsock, as
@@ -464,6 +592,8 @@ def generate_windows_build(n: Writer, sln: Any) -> None:
         # voice chat's codec (port/third_party/opus)
         for source in opus_sources():
             add_object(source, opus_cflags(abi))
+        # Link Profile's QR code (port/third_party/qrcodegen; browser.c)
+        add_object(QRCODEGEN_DIR / "qrcodegen.c", " ".join([abi, "-std=gnu11", "-w"]))
         # internet play's signatures, for public games' listings
         # (port/third_party/monocypher; p2p_crypto.c)
         for name in ("monocypher.c", "monocypher-ed25519.c"):
@@ -478,8 +608,8 @@ def generate_windows_build(n: Writer, sln: Any) -> None:
 
         n.build(
             outputs=output,
-            rule="windows_link",
-            inputs=objects + extra_objects + [resources],
+            rule=f"{prefix}_link",
+            inputs=objects + extra_objects,
             variables={"ldflags": " ".join(base_ldflags + extra_ldflags), "libs": libs},
         )
 
@@ -488,7 +618,7 @@ def generate_windows_build(n: Writer, sln: Any) -> None:
     # one that an instrumented build records while playing
     # (tools/pgo_train.py). A profile is trained once: code changed since
     # simply goes without, and deleting it trains a new one.
-    profile = pgo_profile(sln, WINDOWS_PROFILE, [LINUX_PROFILE], cc)
+    profile = pgo_profile(sln, WINDOWS_PROFILE, [LINUX_PROFILE], cc) if target.pgo else None
     if pgo_mode(sln) == "train" and profile == WINDOWS_PROFILE:
         release = clang_release(cc)
         if not release:
@@ -536,12 +666,12 @@ def generate_windows_build(n: Writer, sln: Any) -> None:
     lto_cflags = [] if lto == "off" else ["-flto=thin" if lto == "thin" else "-flto=full"]
     emit(obj_dir, output, lto_cflags + profile_use_flags(profile),
          lto_cflags + [OPTIMISATION] if lto_cflags else [], [], [profile] if profile else [])
-    n.build(outputs=sdl_dll, rule="windows_copy", inputs=SDL_DIR / "lib" / "x86" / "SDL3.dll")
+    n.build(outputs=sdl_dll, rule=f"{prefix}_copy", inputs=sdl_lib / "SDL3.dll")
     # internet play's MQTT brokers, a file beside the game (network.brokers_file)
-    brokers = BUILD / "brokers.txt"
-    n.build(outputs=brokers, rule="windows_copy", inputs=Path("port/assets/network/brokers.txt"))
+    brokers = build / "brokers.txt"
+    n.build(outputs=brokers, rule=f"{prefix}_copy", inputs=Path("port/assets/network/brokers.txt"))
     # the Custom Edition maps' torrents, a file beside the game (maps.torrent_index)
-    map_torrents = BUILD / "map_torrents.txt"
-    n.build(outputs=map_torrents, rule="windows_copy", inputs=Path("port/assets/network/map_torrents.txt"))
-    n.build(outputs="windows", rule="phony", inputs=[output, sdl_dll, brokers, map_torrents])
+    map_torrents = build / "map_torrents.txt"
+    n.build(outputs=map_torrents, rule=f"{prefix}_copy", inputs=Path("port/assets/network/map_torrents.txt"))
+    n.build(outputs=prefix, rule="phony", inputs=[output, sdl_dll, brokers, map_torrents])
     n.newline()

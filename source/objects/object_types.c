@@ -144,6 +144,9 @@ symbols in this file:
 #include "units/bipeds.h"
 #include "units/units.h"
 #include "units/vehicles.h"
+#ifdef HALO_64BIT
+#include "game/game_engine.h" /* port: game_engine_vehicle_placement_begin, _allowed */
+#endif
 
 /* ---------- constants */
 
@@ -474,14 +477,15 @@ struct object_type_definition *object_type_definitions[NUMBER_OF_OBJECT_TYPES] =
 
 struct object_type_definition *first_object_type_definition;
 /* VC7 otherwise emits this tentative definition as a common symbol. */
-#ifndef HALO_ANDROID /* Mach-O section names differ; the default is .bss anyway */
+#if !defined(HALO_ANDROID) && !defined(__APPLE__) /* Mach-O section names differ; the default is .bss anyway */
 #pragma bss_seg(".bss")
 #endif
 static word processed_bsp_flags;
-#ifndef HALO_ANDROID
+#if !defined(HALO_ANDROID) && !defined(__APPLE__)
 #pragma bss_seg()
 #endif
 
+#ifndef HALO_64BIT /* the definitions hold function pointers */
 typedef char verify_object_type_definition_size[
 	sizeof(struct object_type_definition) == 0xA0 ? 1 : -1];
 
@@ -496,6 +500,7 @@ typedef char verify_object_type_definition_part_definitions_offset[
 
 typedef char verify_object_type_definition_next_offset[
 	offsetof(struct object_type_definition, next) == 0x9C ? 1 : -1];
+#endif
 
 /* ---------- public code */
 
@@ -1221,14 +1226,16 @@ void object_types_place_all(
 							scenario_datum_index,
 							element_size);
 
-					/* port: a Halo Custom Edition map's vehicles are those its
-					placements' multiplayer spawn flags name for the game type, as
-					retail Halo's are (port/linux/game/custom_edition_objects.c);
-					then the gametype's vehicles of each team (game_variant_options:
-					every machine places the same), asked last as it counts those it
+					/* port: a Halo PC map's vehicles by their placements' spawn
+					flags (game_engine_ce_vehicles_by_placement), then the
+					gametype's vehicles of each team (game_variant_options: every
+					machine places the same), asked last as it counts those it
 					places */
 					if (object_type == _object_type_vehicle &&
-						(!custom_edition_vehicle_placement_allowed(scenario_object) ||
+						(
+#ifdef HALO_CUSTOM_EDITION
+						!game_engine_ce_vehicle_placement_allowed(scenario_object) ||
+#endif
 						!game_engine_vehicle_placement_allowed(scenario_object, scenario_palette)))
 					{
 						continue;

@@ -108,6 +108,9 @@ symbols in this file:
 #include <xtl.h>
 #include "rasterizer_xbox.h"
 #include "rasterizer_xbox_pixel_shader.h"
+#ifdef HALO_64BIT
+#include "cseries/cseries_windows.h" /* (declared: its result is not an int) */
+#endif
 
 /* ---------- constants */
 
@@ -173,6 +176,7 @@ typedef char rasterizer_screen_effect_debug_options_effects_offset_assert[
 	offsetof(struct rasterizer_debug_options, screen_effects_enabled) == 0x48 ? 1 : -1];
 typedef char rasterizer_screen_effect_parameters_mask_offset_assert[
 	offsetof(struct rasterizer_cinematic_screen_effect_parameters, convolution_mask) == 0x08 ? 1 : -1];
+#ifndef HALO_64BIT
 typedef char rasterizer_screen_effect_parameters_tint_offset_assert[
 	offsetof(struct rasterizer_cinematic_screen_effect_parameters, filter_desaturation_tint) == 0x14 ? 1 : -1];
 typedef char rasterizer_screen_effect_parameters_video_offset_assert[
@@ -181,12 +185,15 @@ typedef char rasterizer_screen_effect_parameters_scanline_offset_assert[
 	offsetof(struct rasterizer_cinematic_screen_effect_parameters, video_scanline_map) == 0x28 ? 1 : -1];
 typedef char rasterizer_screen_effect_parameters_noise_offset_assert[
 	offsetof(struct rasterizer_cinematic_screen_effect_parameters, video_noise_map) == 0x34 ? 1 : -1];
+#endif
 typedef char rasterizer_screen_effect_window_viewport_offset_assert[
 	offsetof(struct rasterizer_window_begin_parameters, camera.viewport_bounds) == 0x34 ? 1 : -1];
 typedef char rasterizer_screen_effect_window_bounds_offset_assert[
 	offsetof(struct rasterizer_window_begin_parameters, camera.window_bounds) == 0x3C ? 1 : -1];
+#ifndef HALO_64BIT
 typedef char rasterizer_screen_effect_window_flash_offset_assert[
 	offsetof(struct rasterizer_window_begin_parameters, screen_flash) == 0x238 ? 1 : -1];
+#endif
 typedef char rasterizer_screen_effect_pixel_shader_size_assert[
 	sizeof(struct pixel_shader_definition) == 0xF0 ? 1 : -1];
 
@@ -484,6 +491,28 @@ void _rasterizer_screen_effect(
 	{
 		short pass_count = (parameters->convolution_extra_passes + 1) * 2;
 		short pass;
+		/* The native builds draw the screen at several pixels to the Xbox's
+		one (halo_screen_scale): a convolution's few copies of the screen,
+		apart by its radius in the Xbox's pixels, blended into a blur at
+		640x480, and at four times the pixels they stand apart as sharp
+		ghosts (the zoom's warp). The same spread in that many times the
+		passes, each a step of it, blends them again. */
+		struct rasterizer_cinematic_screen_effect_parameters scaled_parameters;
+
+		if (parameters->convolution_type != _rasterizer_screen_effect_convolution_type_none && !parameters->video_on)
+		{
+			long steps = (long)(halo_screen_scale() + 0.999f);
+
+			if (steps > 6)
+				steps = 6;
+			if (steps > 1)
+			{
+				scaled_parameters = *parameters;
+				scaled_parameters.convolution_radius /= (real)steps;
+				parameters = &scaled_parameters;
+				pass_count *= (short)steps;
+			}
+		}
 		short source_target;
 		short destination_target;
 		short stage;

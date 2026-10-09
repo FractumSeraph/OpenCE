@@ -4,39 +4,79 @@
 
     python tools/ci_build.py linux debug
     python tools/ci_build.py android release
+    python tools/ci_build.py server-x64 release --alpine
 
-Builds are portable (any x86-64 processor), so they run on other
-computers. Debug builds skip link-time and profile-guided optimisation,
+Builds are portable (any x86-64 processor; for the arm64 server, any
+64-bit ARM), so they run on other computers. Debug builds skip link-time and profile-guided optimisation,
 which only make the build slower; release builds use both, as a local
 release build does (profile-guided optimisation needs clang 22 or later,
 and is skipped with an older one). CI_COMPILER_LAUNCHER (ccache, say) is
-passed on as --compiler-launcher. A build of the main branch gets the run's
-number (HALO_BUILD_NUMBER), which its release is named after and the
-self-updater compares.
+passed on as --compiler-launcher.
+
+The version comes from the environment (tools/version.py), which
+ChupathingyCE's release workflows set: HALO_VERSION (0.5.0b, or
+0.5.0b-nightly.42), and HALO_RELEASE_BUILD=1 for a release (whose version
+must be VERSION's). Without them, a build is VERSION's -dev and never looks
+for updates.
+
+The Android app is signed with ChupathingyCE's key when
+port/android/keystore.properties is there (the release workflows write it;
+port/android/README.md): chupathingyce-android-<config>.apk. Without it
+(pull requests, forks), the debug build has the runner's own key,
+chupathingyce-android-debug-testkey.apk, which installs over nothing
+signed with ChupathingyCE's key, and the release build is unsigned,
+chupathingyce-android-release-unsigned.apk.
+
+The dedicated server (server-x86, server-x64, server-arm64:
+tools/server_build.py) is built against musl, so that it is one static
+program: on a musl system (Alpine Linux) as it is, or with --alpine in
+Alpine's Docker container of the server's architecture (an x86 one runs on
+an x86-64 machine, an arm64 one on an arm64 machine); it goes into
+dist/chupathingyce-server-linux-<arch> (-debug for a debug build), with
+its README and playlists. A release's server there is stripped of its debug
+information; a debug build's keeps it.
 """
 
 import argparse
-import re
 import os
+import re
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+
+from tools.version import base_version, commit, release_build, version  # noqa: E402
 
 # what each port's build leaves, and what goes into dist/
 OUTPUTS = {
-    # (and the SDL3 the portable build brings, tools/linux_build.py, with its
-    # zlib license, as the release carries the other libraries')
-    "linux": ["build/linux/halo", "build/linux/libSDL3.so.0", "build/linux/SDL3-LICENSE.txt"],
+    "linux": ["build/linux/halo"],
+    # the native 64-bit build (ninja linux64; tools/linux64_build.py)
+    "linux64": ["build/linux64/halo"],
     "windows": ["build/windows/halo.exe", "build/windows/SDL3.dll"],
+    # the native 64-bit build (ninja windows64; tools/windows_build.py)
+    "windows64": ["build/windows64/halo.exe", "build/windows64/SDL3.dll"],
     "android": [],  # the APK, below
+    # the application (universal and self-contained: --portable), whole
+    "macos": ["build/macos/ChupathingyCE.app"],
+    # the dedicated server (ninja server-<arch>; tools/server_build.py)
+    "server-x86": ["build/server-x86/chupathingyce-server"],
+    "server-x64": ["build/server-x64/chupathingyce-server"],
+    "server-arm64": ["build/server-arm64/chupathingyce-server"],
 }
+# the servers' Alpine Linux (--alpine), and Docker's name for each one's
+# architecture
+ALPINE_IMAGE = "alpine:3.22"
+ALPINE_PACKAGES = ["clang", "lld", "llvm", "gcc", "musl-dev", "linux-headers", "python3", "samurai", "ccache"]
+DOCKER_PLATFORMS = {"server-x86": "linux/386", "server-x64": "linux/amd64", "server-arm64": "linux/arm64"}
 APKS = {
     "debug": "port/android/app/build/outputs/apk/debug/app-debug.apk",
     "release": "port/android/app/build/outputs/apk/release/app-release.apk",
 }
+# what Gradle calls the release build without a key (app/build.gradle)
+UNSIGNED_APK = "port/android/app/build/outputs/apk/release/app-release-unsigned.apk"
 
 
 def run(command, cwd=ROOT):
@@ -48,9 +88,27 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("platform", choices=sorted(OUTPUTS))
     parser.add_argument("config", choices=["debug", "release"])
+    parser.add_argument("--alpine", action="store_true",
+                        help="a server: build it in Alpine Linux's Docker container (musl, static)")
     args = parser.parse_args()
+    server = args.platform.startswith("server-")
+    # (the repository whose releases are these builds, as GitHub names the one
+    # this runs in: a fork's builds look for updates in the fork's releases,
+    # port/linux/src/updater.c)
+    repository = os.environ.get("GITHUB_REPOSITORY", "")
+    if re.fullmatch(r"[A-Za-z0-9-]+/[A-Za-z0-9._-]+", repository):
+        os.environ["HALO_UPDATE_REPOSITORY"] = repository
+        print(f"updates from {repository}", flush=True)
+    if args.alpine:
+        if not server:
+            parser.error("--alpine builds the servers only")
+        return alpine_build(args.platform, args.config)
 
     configure = [sys.executable, "configure.py", "--portable"]
+    if server:
+        # (the profiles are the 32-bit game's, which the servers' clang may
+        # not read; a server's work is light)
+        configure.append("--pgo=off")
     if args.config == "release":
         configure.append("--release")
     else:
@@ -58,80 +116,157 @@ def main() -> int:
     launcher = os.environ.get("CI_COMPILER_LAUNCHER")
     if launcher:
         configure += ["--compiler-launcher", launcher]
-    # a build of main knows its number, which names its release (build-<n>),
-    # for the self-updater (port/linux/src/updater.c, and the Android app);
-    # other builds have none, and never look for updates
-    if os.environ.get("GITHUB_REF") == "refs/heads/main" and os.environ.get("GITHUB_RUN_NUMBER", "").isdigit():
-        os.environ["HALO_BUILD_NUMBER"] = os.environ["GITHUB_RUN_NUMBER"]
-        print(f"build number {os.environ['HALO_BUILD_NUMBER']}", flush=True)
-        # (the repository whose releases are these builds: a fork's builds
-        # look for updates in the fork's releases, not this project's)
-        repository = os.environ.get("GITHUB_REPOSITORY", "")
-        if re.fullmatch(r"[A-Za-z0-9-]+/[A-Za-z0-9._-]+", repository):
-            os.environ["HALO_UPDATE_REPOSITORY"] = repository
-            print(f"updates from {repository}", flush=True)
+    # a release is VERSION's, and nothing else is one
+    if release_build() and version() != base_version():
+        print(f"error: a release build of {version()}, but VERSION is {base_version()}", file=sys.stderr)
+        return 1
+    print(f"version {version()}{' (a release)' if release_build() else ''}", flush=True)
     run(configure)
 
+    apk_names = {}
     if args.platform == "android":
         # the native part, then the app around it (Gradle's variant of the
-        # same name: release is signed with the debug key, not debuggable)
+        # same name), named for its signature
         run(["ninja", "android"])
         gradlew = "gradlew.bat" if os.name == "nt" else "./gradlew"
+        for stale in (APKS[args.config], UNSIGNED_APK):
+            (ROOT / stale).unlink(missing_ok=True)
         run([gradlew, "--console=plain", "-q", f"assemble{args.config.capitalize()}"], cwd=ROOT / "port/android")
-        outputs = [APKS[args.config]]
+        if (ROOT / "port/android/keystore.properties").exists():
+            apk, name = APKS[args.config], f"chupathingyce-android-{args.config}.apk"
+        elif args.config == "debug":
+            apk, name = APKS["debug"], "chupathingyce-android-debug-testkey.apk"
+        else:
+            apk, name = UNSIGNED_APK, "chupathingyce-android-release-unsigned.apk"
+        outputs = [apk]
+        apk_names[apk] = name
     else:
         run(["ninja", args.platform])
         outputs = OUTPUTS[args.platform]
 
-    dist = ROOT / "dist" / f"halo-{args.platform}-{args.config}"
+    if server:
+        return server_dist(args.platform, args.config, outputs[0])
+
+    dist = ROOT / "dist" / f"chupathingyce-{args.platform}-{args.config}"
     if dist.exists():
         shutil.rmtree(dist)
     dist.mkdir(parents=True)
     for output in outputs:
-        shutil.copy2(ROOT / output, dist)
+        if (ROOT / output).is_dir():
+            # (a bundle: its symbolic links as they are, for its signature)
+            shutil.copytree(ROOT / output, dist / Path(output).name, symlinks=True)
+        else:
+            shutil.copy2(ROOT / output, dist / apk_names.get(output, Path(output).name))
         print(f"{output} -> {dist.relative_to(ROOT)}", flush=True)
-    if args.platform == "windows":
+    if args.platform == "macos":
+        # (the SDL3 inside it, the build's own: zlib license)
+        shutil.copy2(ROOT / "build/macos/third_party/SDL3/LICENSE.txt", dist / "SDL3-LICENSE.txt")
+    if args.platform in ("windows", "windows64"):
         # the symbols of halo.exe and SDL3.dll, apart (players do not need
-        # them): the workflow uploads them to Sentry, which turns the crash
-        # reports' minidumps into function names and lines
-        # (port/windows/src/win32_crash.c), and tools/symbolize_crash.py
-        # reads debug.txt's crash lines with them
-        symbols = ROOT / "dist" / f"halo-windows-{args.config}-symbols"
+        # them): tools/symbolize_crash.py reads debug.txt's crash lines and
+        # the crash reports' calls (port/windows/src/win32_crash.c) with
+        # them, and a debugger the reports' minidumps; halo.map, the
+        # linker's map, names the functions without LLVM's tools
+        symbols = ROOT / "dist" / f"chupathingyce-{args.platform}-{args.config}-symbols"
+        sdl_arch = "x64" if args.platform == "windows64" else "x86"
         if symbols.exists():
             shutil.rmtree(symbols)
         symbols.mkdir(parents=True)
-        for pdb in [ROOT / "build/windows/halo.pdb", *sorted((ROOT / "build/windows/third_party").glob("SDL3-*/lib/x86/SDL3.pdb"))]:
+        for pdb in [ROOT / f"build/{args.platform}/halo.pdb", ROOT / f"build/{args.platform}/halo.map",
+                    *sorted((ROOT / "build/windows/third_party").glob(f"SDL3-*/lib/{sdl_arch}/SDL3.pdb"))]:
             shutil.copy2(pdb, symbols)
             print(f"{pdb.relative_to(ROOT)} -> {symbols.relative_to(ROOT)}", flush=True)
     # the disc image readers (port/linux/src/xiso.c, and the Android app's
     # XisoExtractor.java) follow extract-xiso, whose license asks binaries
     # to carry its notice
     shutil.copy2(ROOT / "port/third_party/extract-xiso/LICENSE.TXT", dist / "extract-xiso-LICENSE.txt")
-    if args.platform == "linux":
-        # the self-updater's TLS (port/third_party/mbedtls), whose Apache
-        # license asks the same
-        shutil.copy2(ROOT / "port/third_party/mbedtls/LICENSE", dist / "mbedtls-LICENSE.txt")
+    # the game list's and the self-updater's TLS (port/third_party/mbedtls),
+    # in every build (HALO_GAME_BROWSER), whose Apache license asks the same
+    shutil.copy2(ROOT / "port/third_party/mbedtls/LICENSE", dist / "mbedtls-LICENSE.txt")
     # internet play's UPnP (port/third_party/miniupnpc), in every build,
     # whose BSD license asks binaries to carry its notice
     shutil.copy2(ROOT / "port/third_party/miniupnpc/LICENSE", dist / "miniupnpc-LICENSE.txt")
     # the text's fonts (port/assets/fonts), embedded in every build, whose
     # SIL Open Font License asks each copy to carry it
     shutil.copy2(ROOT / "port/assets/fonts/Overpass-OFL.txt", dist / "Overpass-OFL.txt")
+    # the overlay's fonts (port/linux/ui/fonts), in every build: Noto Sans's
+    # license asks the same; Kenney's Input Prompts are CC0, credited all
+    # the same
+    shutil.copy2(ROOT / "port/linux/ui/fonts/OFL.txt", dist / "NotoSans-OFL.txt")
+    shutil.copy2(ROOT / "port/linux/ui/fonts/KENNEY-CC0.txt", dist / "Kenney-Input-Prompts-CC0.txt")
     # the menus' XML parser (port/third_party/expat), in every build, whose
     # MIT license asks copies to carry its notice
     shutil.copy2(ROOT / "port/third_party/expat/COPYING", dist / "expat-COPYING.txt")
-    # voice chat's codec (port/third_party/opus), in every build, whose BSD
-    # license asks binaries to carry its notice
-    shutil.copy2(ROOT / "port/third_party/opus/COPYING", dist / "opus-COPYING.txt")
-    # voice chat's speaker icons (port/assets/icons/lucide, drawn into the
-    # menus' bitmaps), whose ISC license asks copies to carry its notice
-    shutil.copy2(ROOT / "port/assets/icons/lucide/LICENSE", dist / "lucide-LICENSE.txt")
     # internet play's MQTT brokers, a file beside the game (network.brokers_file;
     # Android's APK has its own copy)
     if args.platform != "android":
         shutil.copy2(ROOT / "port/assets/network/brokers.txt", dist / "brokers.txt")
         # the Custom Edition maps' torrents, likewise (maps.torrent_index)
         shutil.copy2(ROOT / "port/assets/network/map_torrents.txt", dist / "map_torrents.txt")
+    return 0
+
+
+def alpine_build(platform: str, config: str) -> int:
+    """the server, built by this script in Alpine's container of its
+    architecture with the checkout mounted in it (and its compile cache,
+    with CCACHE_DIR in the checkout)"""
+    environment = []
+    for name in ("CI_COMPILER_LAUNCHER", "CCACHE_DIR", "CCACHE_BASEDIR", "CCACHE_MAXSIZE", "HALO_VERSION",
+                 "HALO_RELEASE_BUILD", "HALO_UPDATE_REPOSITORY"):
+        value = os.environ.get(name)
+        if not value:
+            continue
+        # (the checkout is /src in the container)
+        if name in ("CCACHE_DIR", "CCACHE_BASEDIR") and Path(value).resolve().is_relative_to(ROOT):
+            value = (Path("/src") / Path(value).resolve().relative_to(ROOT)).as_posix()
+        environment += ["-e", f"{name}={value}"]
+    # (the checkout's commit, which git in the container may not read: the
+    # checkout's owner is another user there)
+    environment += ["-e", f"HALO_COMMIT={commit()}"]
+    script = f"apk add --no-cache -q {' '.join(ALPINE_PACKAGES)} && python3 tools/ci_build.py {platform} {config}"
+    run(["docker", "run", "--rm", "--platform", DOCKER_PLATFORMS[platform], "-v", f"{ROOT}:/src", "-w", "/src",
+         *environment, ALPINE_IMAGE, "sh", "-c", script])
+    return 0
+
+
+def strip_debug(program: Path) -> None:
+    """removes a program's debug information (its symbols stay, for crash
+    reports): llvm-strip, or binutils' strip"""
+    tool = shutil.which("llvm-strip") or shutil.which("strip")
+    if tool is None:
+        raise SystemExit("error: no llvm-strip or strip to remove the release server's debug information")
+    before = program.stat().st_size
+    run([tool, "--strip-debug", program])
+    print(f"{program.relative_to(ROOT)}: {before / 1e6:.1f} MB -> {program.stat().st_size / 1e6:.1f} MB "
+          "(debug information removed)", flush=True)
+
+
+def server_dist(platform: str, config: str, output: str) -> int:
+    """dist/chupathingyce-server-linux-<arch>[-debug]: the server, its
+    README, its playlists and the notices its parts' licenses ask for"""
+    arch = platform[len("server-"):]
+    dist = ROOT / "dist" / f"chupathingyce-server-linux-{arch}{'' if config == 'release' else '-debug'}"
+    if dist.exists():
+        shutil.rmtree(dist)
+    (dist / "playlists").mkdir(parents=True)
+    shutil.copy2(ROOT / output, dist)
+    if config == "release":
+        # a release's download without its debug information (about 20 MB
+        # of 33); build/server-<arch>/ keeps the full program, and a debug
+        # build ships it
+        strip_debug(dist / Path(output).name)
+    shutil.copy2(ROOT / "server/README.md", dist / "README.md")
+    for playlist in sorted((ROOT / "server/playlists").glob("*.txt")):
+        shutil.copy2(playlist, dist / "playlists")
+    for source, name in (("port/third_party/mbedtls/LICENSE", "mbedtls-LICENSE.txt"),
+                         ("port/third_party/miniupnpc/LICENSE", "miniupnpc-LICENSE.txt"),
+                         ("port/third_party/expat/COPYING", "expat-COPYING.txt"),
+                         ("port/third_party/extract-xiso/LICENSE.TXT", "extract-xiso-LICENSE.txt"),
+                         ("port/assets/fonts/Overpass-OFL.txt", "Overpass-OFL.txt"),
+                         ("port/linux/ui/fonts/OFL.txt", "NotoSans-OFL.txt"),
+                         ("port/linux/ui/fonts/KENNEY-CC0.txt", "Kenney-Input-Prompts-CC0.txt")):
+        shutil.copy2(ROOT / source, dist / name)
+    print(f"{output} -> {dist.relative_to(ROOT)}", flush=True)
     return 0
 
 

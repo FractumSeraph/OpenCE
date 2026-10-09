@@ -330,7 +330,7 @@ void *object_iterator_next(
 	abs_index = iterator->absolute_index;
 
 	// The operation to get this header is inlined in the original code?
-	header = (struct object_header_datum *)((char*)object_header_data->data + sizeof(struct object_header_datum) * abs_index);
+	header = (struct object_header_datum *)((char*)xbox_pointer(object_header_data->data) + sizeof(struct object_header_datum) * abs_index);
 
 	while (abs_index<object_header_data->count)
 	{
@@ -487,7 +487,7 @@ void objects_information_get(
 
 	memset(information, 0, sizeof(*information));
 	
-	header = (struct object_header_datum *)object_header_data->data;
+	header = (struct object_header_datum *)xbox_pointer(object_header_data->data);
 	for (i = 0; i<object_header_data->count; header++)
 	{
 		if (header->identifier)
@@ -560,7 +560,7 @@ void object_pvs_set_camera_point(
 void objects_port_set_activating_cluster(
 	short cluster_index)
 {
-	/* (port: a co-op host sends it, so any index outside the BSP's clusters is none) */
+	/* (a co-op host's, from the network: only one of the BSP's clusters is taken) */
 	if (cluster_index < 0 || cluster_index >= global_structure_bsp_get()->clusters.count)
 	{
 		object_globals->pvs_activation_type = _pvs_activation_normal;
@@ -2372,6 +2372,12 @@ void object_export_function_values(
 				break;
 			default:
 				region_index = object_definition->object.function_modes[i]-_object_function_first_region_damage;
+				/* port: a mode that is no region's damage (the umbrella
+				shield's, or past the modes: a Halo PC map's object may have
+				one, shipment-cod4's) exports 0; it asserted here, and read
+				past the object's regions */
+				if (region_index<0 || region_index>=MAXIMUM_REGIONS_PER_OBJECT)
+					break;
 				match_assert("c:\\halo\\SOURCE\\objects\\objects.c", 2630, region_index>=0 && region_index<MAXIMUM_REGIONS_PER_OBJECT);
 				/* port: a region the object has, or 0 (a map's function mode;
 				retail's are 0-5, 10, 18 and 19) */
@@ -3072,11 +3078,11 @@ void object_render_debug(
 		real_vector3d velocity;
 		real_matrix4x3 world_matrix;
 		
-		char* model_name = strrchr(object_definition->object.model.name, '\\');
+		char* model_name = strrchr(xbox_pointer(object_definition->object.model.name), '\\');
 		object_get_world_matrix(object_index, &world_matrix);
 		object_get_velocities(object_index, &velocity, NULL);
 
-		model_name = model_name ? &model_name[1] : object_definition->object.model.name;
+		model_name = model_name ? &model_name[1] : (char *)xbox_pointer(object_definition->object.model.name);
 		
 		render_debug_string_at_point(0, &world_matrix.position, model_name, global_real_argb_orange);
 		render_debug_matrix(TRUE, &world_matrix, object->object.bounding_sphere_radius);
@@ -4454,7 +4460,7 @@ void objects_update(
 
 	if (csmemcmp(last_active_cluster_bits, active_cluster_bits, BIT_VECTOR_SIZE_IN_BYTES(cluster_count)))
 	{
-		object_header = (struct object_header_datum *)object_header_data->data;
+		object_header = (struct object_header_datum *)xbox_pointer(object_header_data->data);
 		for (i = 0; i<object_header_data->count; ++object_header)
 		{
 			if (object_header->identifier &&
@@ -4495,7 +4501,7 @@ void objects_update(
 			cluster_count);
 	}
 
-	object_header = (struct object_header_datum *)object_header_data->data;
+	object_header = (struct object_header_datum *)xbox_pointer(object_header_data->data);
 	for (i = 0; i<object_header_data->count; ++object_header)
 	{
 		if (object_header->identifier)
@@ -4518,7 +4524,7 @@ void objects_update(
 		++i;
 	}
 
-	object_header = (struct object_header_datum *)object_header_data->data;
+	object_header = (struct object_header_datum *)xbox_pointer(object_header_data->data);
 	for (i = 0; i<object_header_data->count; ++object_header)
 	{
 		if (object_header->identifier)

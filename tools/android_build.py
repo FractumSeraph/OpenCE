@@ -18,6 +18,7 @@ and stages both, with the SDL3 Java sources, for the Gradle project in
 port/android/app, which ``ninja android_apk`` then assembles.
 """
 
+import hashlib
 import os
 import shutil
 import subprocess
@@ -25,12 +26,13 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .linux_build import (LINUX_PROFILE, MINIUPNPC_DEFINES, MINIUPNPC_DIR, MUSL_MATH_DIR, XDK_INCLUDE,
-                          compile_launcher, game_defines_and_includes, game_sources, miniupnpc_sources,
-                          musl_math_sources, opus_cflags, opus_sources, pgo_mode, pgo_profile,
+from .linux_build import (CUSTOM_EDITION_DEFINES, LINUX_PROFILE, MBEDTLS_DIR, MINIUPNPC_DEFINES, MINIUPNPC_DIR, MUSL_MATH_DIR, STB_DIR,
+                          XDK_INCLUDE, compile_launcher, game_browser_defines, game_defines_and_includes, game_sources, miniupnpc_sources,
+                          musl_math_sources, opus_flags, opus_sources, pgo_mode, pgo_profile,
                           profile_use_flags, updater_defines, xdk_headers)
-from .embed_assets import hud_assets_build, hud_configure_inputs
+from .embed_assets import hud_assets_build, hud_configure_inputs, ui_fonts_build
 from .ninja_syntax import Writer
+from .version import VERSION_SOURCES
 
 PORT_DIR = Path("port/android")
 LINUX_DIR = Path("port/linux")
@@ -41,6 +43,7 @@ TOML_DIR = Path("port/third_party/tomlc17")
 EXPAT_DIR = Path("port/third_party/expat")
 EXPAT_SOURCES = ("xmlparse.c", "xmlrole.c", "xmltok.c")
 KCP_DIR = Path("port/third_party/kcp")
+QRCODEGEN_DIR = Path("port/third_party/qrcodegen")
 MONOCYPHER_DIR = Path("port/third_party/monocypher")
 # the port's zlib (port/third_party/zlib/zlib_prefixed.h): what inflates the
 # maps, the menus' and the HUD's PNGs and the updates, data from anywhere,
@@ -53,12 +56,12 @@ ZLIB_DEFINES = ("-DZ_PREFIX", "-Dz_errmsg=z_port_errmsg")
 MUSL_VERSION = "1.2.5"
 MUSL_DIR = THIRD_PARTY / f"musl-{MUSL_VERSION}"
 MUSL_URL = f"https://musl.libc.org/releases/musl-{MUSL_VERSION}.tar.gz"
-# (as tools/windows_build.py's and tools/linux_sysroot.py's SDL_VERSION)
+# (the download's SHA-256, and the tag's commit, when they were pinned)
+MUSL_SHA256 = "a9a118bbe84d8764da0ea0d28b3ab3fae8477fc7e4085d90102b8596fc7c75e4"
 SDL_TAG = "release-3.4.16"
+SDL_COMMIT = "fa2c02bb6e21974a89ea9824bc53c9932abe5f9c"
 SDL_DIR = THIRD_PARTY / "SDL3"
 SDL_URL = "https://github.com/libsdl-org/SDL.git"
-SDL_ANDROID_MOUSE_PATCH = Path("port/android/patches/sdl-relative-mouse.patch")
-SDL_ANDROID_MOUSE_LISTENER = "android-project/app/src/main/java/org/libsdl/app/SDLControllerManager.java"
 ANDROID_API = 28
 
 # The guest ABI: AArch64 code with 32-bit pointers (clang's only such target
@@ -144,7 +147,6 @@ VARIADIC_PROTOTYPE_FILES = {
     "source/bungie_net/common/public_key_crypt.c", "source/camera/editor_flying_camera.c",
     "source/game/cheats.c", "source/game/game_engine.c", "source/game/players.c",
     "source/hs/hs.c", "source/interface/hud_nav_points.c",
-    "source/interface/ui_widget_game_data_input_functions.c",
     "source/networking/telnet_console.c", "source/rasterizer/xbox/rasterizer_xbox_errors.c",
     "source/render/render.c",
 }
@@ -175,6 +177,15 @@ def _find_ndk() -> Optional[Path]:
     return None
 
 
+def check_sdl_commit(directory: Path) -> None:
+    """SDL3's clone refused unless its tag is still the pinned commit."""
+    commit = subprocess.run(["git", "-C", str(directory), "rev-parse", "HEAD"], capture_output=True, text=True,
+                            check=True).stdout.strip()
+    if commit != SDL_COMMIT:
+        shutil.rmtree(directory)
+        raise SystemExit(f"SDL3 {SDL_TAG} is {commit}, not the pinned {SDL_COMMIT}")
+
+
 def fetch_third_party() -> None:
     """Download musl and SDL3 (configure time, once)."""
     THIRD_PARTY.mkdir(parents=True, exist_ok=True)
@@ -182,23 +193,17 @@ def fetch_third_party() -> None:
         print(f"Downloading {MUSL_URL}")
         archive = THIRD_PARTY / f"musl-{MUSL_VERSION}.tar.gz"
         subprocess.run(["curl", "-sSfL", "-o", str(archive), MUSL_URL], check=True)
+        digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+        if digest != MUSL_SHA256:
+            archive.unlink()
+            raise SystemExit(f"{MUSL_URL}: SHA-256 {digest}, not the pinned {MUSL_SHA256}")
         subprocess.run(["tar", "xzf", archive.name], cwd=THIRD_PARTY, check=True)
         archive.unlink()
     if not SDL_DIR.is_dir():
         print(f"Cloning SDL3 {SDL_TAG}")
         subprocess.run(["git", "clone", "-q", "--depth", "1", "--branch", SDL_TAG, SDL_URL, str(SDL_DIR)],
                        check=True)
-    # SDL 3.4.16's generic mouse listener drops captured relative motion and
-    # button transitions unless they are forwarded from captured pointer events.
-    # A tree patched by another version of the patch (an older checkout, or
-    # CI's cached one) is put back as SDL has it before this one is applied.
-    reverse = subprocess.run(
-        ["git", "-C", str(SDL_DIR), "apply", "--reverse", "--check", str(SDL_ANDROID_MOUSE_PATCH.resolve())],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-    )
-    if reverse.returncode != 0:
-        subprocess.run(["git", "-C", str(SDL_DIR), "checkout", "--", SDL_ANDROID_MOUSE_LISTENER], check=True)
-        subprocess.run(["git", "-C", str(SDL_DIR), "apply", str(SDL_ANDROID_MOUSE_PATCH.resolve())], check=True)
+        check_sdl_commit(SDL_DIR)
 
 
 def _musl_sources() -> List[Path]:
@@ -222,8 +227,7 @@ def _musl_sources() -> List[Path]:
 
 
 def android_configure_inputs() -> List[Path]:
-    return [Path(__file__), SDL_ANDROID_MOUSE_PATCH, PORT_DIR / "guest" / "runtime", PORT_DIR / "host",
-            LINUX_DIR / "src", *hud_configure_inputs()]
+    return [Path(__file__), PORT_DIR / "guest" / "runtime", PORT_DIR / "host", LINUX_DIR / "src", *hud_configure_inputs()]
 
 
 def generate_android_build(n: Writer, sln: Any) -> None:
@@ -338,11 +342,13 @@ def generate_android_build(n: Writer, sln: Any) -> None:
     posix_imports = gen_dir / "posix_imports.list"
     n.rule(
         name="android_posix_stubs",
-        command=f"{python} tools/android_posix_stubs.py {LINUX_DIR}/src/posix.h {guest_posix_c} {posix_imports}",
+        command=(f"{python} tools/android_posix_stubs.py {LINUX_DIR}/src/posix.h {LINUX_DIR}/src/browser_http.h "
+                 f"{guest_posix_c} {posix_imports}"),
         description="ANDROID POSIX STUBS",
     )
     n.build(outputs=[guest_posix_c, posix_imports], rule="android_posix_stubs",
-            implicit=[Path("tools/android_posix_stubs.py"), LINUX_DIR / "src" / "posix.h"])
+            implicit=[Path("tools/android_posix_stubs.py"), LINUX_DIR / "src" / "posix.h",
+                      LINUX_DIR / "src" / "browser_http.h"])
 
     imports_s = gen_dir / "imports.s"
     host_table_c = BUILD / "host" / "host_import_table.c"
@@ -380,7 +386,11 @@ def generate_android_build(n: Writer, sln: Any) -> None:
         f"-isystem {libc_include}", f"-isystem {arch}", f"-isystem {MUSL_DIR}/arch/generic",
         f"-isystem {MUSL_DIR}/include",
     ]
-    guest_abi = " ".join(GUEST_ABI_FLAGS + (["-DHALO_RELEASE"] if getattr(sln, "port_release", False) else []))
+    # (the game browser, the game list and dedicated servers, as every other
+    # build has them: HALO_GAME_BROWSER, configure.py; and Halo PC's Custom
+    # Edition maps, linux_build.py CUSTOM_EDITION_DEFINES)
+    guest_abi = " ".join(GUEST_ABI_FLAGS + (["-DHALO_RELEASE"] if getattr(sln, "port_release", False) else [])
+                         + game_browser_defines(sln) + CUSTOM_EDITION_DEFINES)
     guest_code = " ".join(GUEST_CODE_FLAGS)
     tool_implicit = [Path("tools/android_asm_convert.py"), *generated_headers]
     # profile-guided optimisation with the Linux build's profile (committed,
@@ -439,30 +449,45 @@ def generate_android_build(n: Writer, sln: Any) -> None:
     ])
     for source in game_sources(config):
         cflags = game_cflags
-        if source.as_posix() == "source/main/main.c":
-            cflags += " " + updater_defines(getattr(sln, "port_release", False))
         if source.as_posix() in VARIADIC_PROTOTYPE_FILES:
             cflags += f" -include {PORT_DIR}/include/halo_android_variadic_prototypes.h"
         objects.append(guest_object(source, cflags))
     for source in sorted(Path(config["game_sources"]).glob("*.c")):
         objects.append(guest_object(source, game_cflags))
+    # the dedicated server's director, with the game browser (server/)
+    if getattr(sln, "game_browser", False):
+        for source in sorted(Path("server/src").glob("*.c")):
+            objects.append(guest_object(source, game_cflags))
 
     # the platform layer shared with Linux, and the guest runtime
     platform_cflags = " ".join([
         guest_abi, guest_code, "-std=gnu11", "-D_GNU_SOURCE", "-DHALO_LINUX_PLATFORM_LAYER", "-w", profile_flags,
         f"-include {prefix_header}", f"-include {platform_semantics_header}",
         f"-I{LINUX_DIR}/src", f"-I{LINUX_DIR}/include", f"-I{PORT_DIR}/guest/runtime",
-        f"-I{PORT_DIR}/include", f"-I{TOML_DIR}", f"-I{EXPAT_DIR}", f"-I{KCP_DIR}", f"-I{MONOCYPHER_DIR}",
+        f"-I{PORT_DIR}/include", f"-I{TOML_DIR}", f"-I{EXPAT_DIR}", f"-I{KCP_DIR}", f"-I{QRCODEGEN_DIR}", f"-I{MONOCYPHER_DIR}",
         f"-I{ZLIB_DIR}", "-Isource -Isource/cseries",
         f"-I{SDL_DIR}/include", f"-I{gl_include}", *libc_includes, f"-idirafter {XDK_INCLUDE}",
     ])
     guest_host_only = {"memory_watch.c"}  # replaced by guest_memory_watch.c
+    # (the overlay's fonts are plain C, drawn in the guest with the overlay:
+    # stb_truetype; the fonts, tools/embed_assets.py --fonts)
+    guest_posix = {"posix_ui_font.c": f"-I{STB_DIR}"}
     for source in sorted((LINUX_DIR / "src").glob("*.c")):
+        if source.name in guest_posix:
+            objects.append(guest_object(source, f"{platform_cflags} {guest_posix[source.name]}"))
+            continue
         if source.name.startswith("posix_") or source.name in guest_host_only:
+            continue
+        if source.name in VERSION_SOURCES:
+            # (the version and the build's identity, as the other ports'
+            # have them; the app's own version is build.gradle's, the same)
+            objects.append(guest_object(source, f"{platform_cflags} "
+                                                f"{updater_defines(getattr(sln, 'port_release', False))}"))
             continue
         objects.append(guest_object(source, platform_cflags))
     # the high-res HUD's textures (port/assets/hud; port/linux/src/hud_hires.c)
-    for source in hud_assets_build(n, "android", gen_dir / "hud_hires_assets.c"):
+    for source in (hud_assets_build(n, "android", gen_dir / "hud_hires_assets.c")
+                   + ui_fonts_build(n, "android", gen_dir / "ui_fonts.c", sln)):
         objects.append(guest_object(source, platform_cflags))
     # the settings file's parser (port/third_party/tomlc17)
     objects.append(guest_object(TOML_DIR / "tomlc17.c", platform_cflags))
@@ -474,7 +499,9 @@ def generate_android_build(n: Writer, sln: Any) -> None:
     # voice chat's codec (port/third_party/opus), with the guest's ABI and C
     # library
     for source in opus_sources():
-        objects.append(guest_object(source, " ".join([opus_cflags(guest_abi), *libc_includes])))
+        objects.append(guest_object(source, " ".join([platform_cflags, opus_flags()])))
+    # Link Profile's QR code (port/third_party/qrcodegen; browser.c)
+    objects.append(guest_object(QRCODEGEN_DIR / "qrcodegen.c", platform_cflags))
     # internet play's signatures, for public games' listings
     # (port/third_party/monocypher; p2p_crypto.c)
     for name in ("monocypher.c", "monocypher-ed25519.c"):
@@ -584,6 +611,18 @@ def generate_android_build(n: Writer, sln: Any) -> None:
         n.build(outputs=obj, rule="android_host_cc", inputs=source,
                 variables={"cflags": miniupnpc_cflags + (" -w" if source.name != "posix_upnp.c" else "")})
         host_objects.append(obj)
+    # the game list's requests (posix_browser.c, with port/third_party/mbedtls
+    # and Android's certificate authorities), as the other posix_*.c in the
+    # host
+    if getattr(sln, "game_browser", False):
+        mbedtls_cflags = " ".join([host_cflags, *game_browser_defines(sln), f"-I{MBEDTLS_DIR / 'include'}"])
+        for source in [LINUX_DIR / "src" / "posix_browser.c", *sorted((MBEDTLS_DIR / "library").glob("*.c"))]:
+            obj = host_obj_dir / ("mbedtls_" + source.name + ".o" if source.parent.parent == MBEDTLS_DIR
+                                  else source.name + ".o")
+            n.build(outputs=obj, rule="android_host_cc", inputs=source,
+                    variables={"cflags": mbedtls_cflags + (f" -I{MBEDTLS_DIR / 'library'} -w"
+                                                           if source.name != "posix_browser.c" else "")})
+            host_objects.append(obj)
     table_obj = host_obj_dir / "host_import_table.c.o"
     n.build(outputs=table_obj, rule="android_host_cc", inputs=host_table_c, variables={"cflags": host_cflags})
     host_objects.append(table_obj)
@@ -614,7 +653,6 @@ def generate_android_build(n: Writer, sln: Any) -> None:
             inputs=[libmain, staged_sdl, staged_image, staged_brokers, staged_map_torrents])
 
     apk = PORT_DIR / "app" / "build" / "outputs" / "apk" / "debug" / "app-debug.apk"
-    sdl_android_mouse_listener = SDL_DIR / SDL_ANDROID_MOUSE_LISTENER
     n.rule(
         name="android_gradle",
         # Gradle leaves the APK alone when its contents would not change
@@ -624,7 +662,6 @@ def generate_android_build(n: Writer, sln: Any) -> None:
         pool="console",
     )
     n.build(outputs=apk, rule="android_gradle",
-            inputs=[libmain, staged_sdl, staged_image, staged_brokers, staged_map_torrents],
-            implicit=[sdl_android_mouse_listener])
+            inputs=[libmain, staged_sdl, staged_image, staged_brokers, staged_map_torrents])
     n.build(outputs="android_apk", rule="phony", inputs=apk)
     n.newline()

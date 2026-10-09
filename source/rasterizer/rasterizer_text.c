@@ -299,7 +299,7 @@ rasterizer_text_cache_initialize(
 			if (hires_text_atlas)
 			{
 				text_hires_register_atlas(
-					(unsigned long const *)hires_text_atlas->hardware_format,
+					(unsigned long const *)xbox_pointer(hires_text_atlas->hardware_format),
 					HIRES_TEXT_ATLAS_BITMAP_SIZE,
 					HIRES_TEXT_ATLAS_BITMAP_SIZE);
 			}
@@ -525,8 +525,6 @@ rasterizer_draw_string(
 			parameters.map_scale[0].i = parameters.map_scale[0].j = 1.0f;
 			parameters.meter_parameters = NULL;
 			parameters.point_sampled = FALSE;
-			/* port: (rasterizer.h) */
-			parameters.alpha_weighted = FALSE;
 			parameters.framebuffer_blend_function = _shader_framebuffer_blend_function_alpha_blend;
 			parameters.map[0] = bitmap;
 
@@ -656,8 +654,6 @@ rasterizer_draw_unicode_string(
 			parameters.map_scale[0].i = parameters.map_scale[0].j = 1.0f;
 			parameters.meter_parameters = NULL;
 			parameters.point_sampled = FALSE;
-			/* port: (rasterizer.h) */
-			parameters.alpha_weighted = FALSE;
 			parameters.framebuffer_blend_function = _shader_framebuffer_blend_function_alpha_blend;
 			parameters.map[0] = bitmap;
 
@@ -817,7 +813,7 @@ static long hires_text_font_get(
 	capital = font_get_character_by_ascii_code(font, 'H');
 	if (capital)
 	{
-		byte const *pixels = (byte const *)font->pixels.address + capital->pixels_offset;
+		byte const *pixels = (byte const *)xbox_pointer(font->pixels.address) + capital->pixels_offset;
 
 		for (row = 0; row < capital->bitmap_height; row++)
 		{
@@ -857,7 +853,7 @@ static long font_character_ink(
 	short y0,
 	short y1)
 {
-	byte const *pixels = (byte const *)font->pixels.address + font_character->pixels_offset;
+	byte const *pixels = (byte const *)xbox_pointer(font->pixels.address) + font_character->pixels_offset;
 	short row, column;
 	long ink = 0;
 
@@ -1172,7 +1168,7 @@ cache_hardware_format_character(
 		hardware_character->x0 = hardware_character_cache.x0;
 		hardware_character->y0 = hardware_character_cache.y0;
 
-		source = (byte *)font->pixels.address + font_character->pixels_offset;
+		source = (byte *)xbox_pointer(font->pixels.address) + font_character->pixels_offset;
 
 		/* (port: the border clear, white with no alpha as the character's
 		own clear texels are) */

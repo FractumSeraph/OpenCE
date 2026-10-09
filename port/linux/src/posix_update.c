@@ -17,6 +17,7 @@ Built with the host's ABI, as the other posix_*.c.
 */
 
 #include "update.h"
+#include "build_identity.h"
 
 #include "mbedtls/error.h"
 #include "mbedtls/net_sockets.h"
@@ -36,7 +37,6 @@ Built with the host's ABI, as the other posix_*.c.
 #include <sys/types.h>
 #include <unistd.h>
 
-#define UPDATE_USER_AGENT "halo-ce-universal-updater"
 #define MAXIMUM_REDIRECTS 8
 #define TIMEOUT_MILLISECONDS 20000
 #define MAXIMUM_HEADER_SIZE 16384
@@ -73,7 +73,7 @@ static void load_certificates(void)
 			certificates_loaded = 1;
 			if (environment && *environment)
 			{
-				fprintf(stderr, "halo-linux: update: SSL_CERT_FILE is ignored; the update server is checked "
+				fprintf(stderr, PLATFORM_LOG_PREFIX "update: SSL_CERT_FILE is ignored; the update server is checked "
 					"against %s\n", certificate_bundles[index]);
 			}
 			return;
@@ -85,7 +85,7 @@ static void load_certificates(void)
 		certificates.version)
 	{
 		certificates_loaded = 1;
-		fprintf(stderr, "halo-linux: update: WARNING: no system certificate authorities were found; the update "
+		fprintf(stderr, PLATFORM_LOG_PREFIX "update: WARNING: no system certificate authorities were found; the update "
 			"server is checked against SSL_CERT_FILE (%s) instead\n", environment);
 	}
 }
@@ -311,7 +311,7 @@ struct download
 	FILE *file;
 	update_progress_proc progress;
 	void *context;
-	unsigned long long received, total;
+	unsigned long long received, total, maximum;
 };
 
 /* (a release is tens of megabytes: a body past this fills no disk) */
@@ -319,7 +319,8 @@ struct download
 
 static int body_write(struct download *download, const unsigned char *data, size_t size)
 {
-	if (download->received + size > MAXIMUM_DOWNLOAD_SIZE)
+	/* (no more than the caller expects: a body that goes on is refused) */
+	if (size > download->maximum - download->received)
 		return 0;
 	if (fwrite(data, 1, size, download->file) != size)
 		return 0;
@@ -414,9 +415,9 @@ static int https_get(const char *url, struct download *download, char *location,
 		return 0;
 	}
 	snprintf(request, sizeof(request),
-		"GET %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: " UPDATE_USER_AGENT "\r\n"
+		"GET %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: %s\r\n"
 		"Accept: */*\r\nConnection: close\r\n\r\n",
-		path, host);
+		path, host, build_identity_user_agent());
 	if (!connection_write(&connection, request, strlen(request)) ||
 		!connection_read_line(&connection, line, sizeof(line)) ||
 		sscanf(line, "HTTP/%*d.%*d %d", &status) != 1)
@@ -466,6 +467,12 @@ static int https_get(const char *url, struct download *download, char *location,
 	}
 	if (status == 200)
 	{
+		if (have_length && !chunked && length > download->maximum)
+		{
+			snprintf(error, (size_t)error_size, "the download from %s is larger than expected", host);
+			connection_free(&connection);
+			return 0;
+		}
 		download->total = have_length && !chunked ? length : 0;
 		if (!read_body(&connection, download, chunked, length, have_length && !chunked))
 		{
@@ -477,8 +484,8 @@ static int https_get(const char *url, struct download *download, char *location,
 	return status;
 }
 
-int update_download(const char *url, const char *path, update_progress_proc progress, void *context, char *error,
-	int error_size)
+int update_download(const char *url, const char *path, unsigned long long maximum, update_progress_proc progress,
+	void *context, char *error, int error_size)
 {
 	char current[2048];
 	char location[2048];
@@ -500,6 +507,7 @@ int update_download(const char *url, const char *path, update_progress_proc prog
 	memset(&download, 0, sizeof(download));
 	download.progress = progress;
 	download.context = context;
+	download.maximum = maximum;
 	download.file = fopen(path, "wb");
 	if (!download.file)
 	{

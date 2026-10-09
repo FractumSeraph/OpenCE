@@ -9,7 +9,15 @@ TAG_GROUPS.C
 #include "tag_files.h"
 #include "byte_swapping.h"
 #include "tag_groups.h"
-#include "custom_edition_cache.h" /* port: port/linux/game/custom_edition_cache.c */
+
+#ifdef HALO_CUSTOM_EDITION
+void *ce_tags_pointer(unsigned long address, long size);
+boolean cache_file_tags_are_ce(void);
+boolean tag_index_is_group(long tag_index, long group_tag);
+/* (whether the map being loaded, or loaded, is a Custom Edition map:
+cache_files.c) */
+extern boolean cache_file_is_ce;
+#endif
 
 /* ---------- constants */
 
@@ -22,8 +30,13 @@ enum
 
 /* ---------- globals */
 
-/* port: (tag_empty_data) */
+/* port: (tag_empty_data; in the Xbox address space on the 64-bit builds,
+where a tag's pointers to it are Xbox addresses: xbox_address.h) */
+#ifdef HALO_64BIT
+static unsigned long *tag_empty_data_bytes;
+#else
 static unsigned long tag_empty_data_bytes[TAG_EMPTY_DATA_SIZE / sizeof(unsigned long)];
+#endif
 
 /* ---------- private code */
 
@@ -56,13 +69,18 @@ nowhere that matters */
 void *tag_empty_data(
 	void)
 {
+#ifdef HALO_64BIT
+	if (!tag_empty_data_bytes)
+		tag_empty_data_bytes = malloc(TAG_EMPTY_DATA_SIZE);
+	if (!tag_empty_data_bytes)
+		return NULL;
+	csmemset(tag_empty_data_bytes, 0, TAG_EMPTY_DATA_SIZE);
+#else
 	csmemset(tag_empty_data_bytes, 0, sizeof(tag_empty_data_bytes));
+#endif
 
 	return tag_empty_data_bytes;
 }
-
-/* port: (cache_files.c) */
-boolean tag_index_is_group(long tag_index, long group_tag);
 
 long verify_tag_reference(
 	const struct tag_reference *reference)
@@ -70,18 +88,30 @@ long verify_tag_reference(
 	long index;
 
 	match_assert("c:\\halo\\SOURCE\\tag_files\\tag_groups.c", 3055, reference);
-	/* port: a protected Custom Edition map has its tag names replaced and
-	its references' names emptied, so a reference is taken by its index
-	(port/linux/game/custom_edition_cache.c) */
-	if (custom_edition_cache_tags_loaded())
+#ifdef HALO_CUSTOM_EDITION
+	/* port: a Custom Edition map's tags are not found by name. A "protected"
+	map (made with a map protector) has its tags' names replaced, most with
+	the same one, and its references' emptied, so the name finds no tag or
+	another; the reference's index, a tag of its group, is the tag
+	(cache_files.c's tag_index_is_group) */
+	if (cache_file_tags_are_ce())
 		return tag_index_is_group(reference->index, reference->group_tag) ? reference->index : NONE;
+#endif
+#ifdef HALO_64BIT
+	index = tag_loaded(reference->group_tag, TAG_REFERENCE_NAME(reference));
+#else
 	index = tag_loaded(reference->group_tag, reference->name);
+#endif
 	
 	match_vassert(
 		"c:\\halo\\SOURCE\\tag_files\\tag_groups.c", 3061, reference->index==index,
 		csprintf(temporary,
 			"tag reference \"%s\" and actual index do not match: is %08lX but should be %08lX",
+#ifdef HALO_64BIT
+			TAG_REFERENCE_NAME(reference),
+#else
 			reference->name,
+#endif
 			reference->index,
 			index));
 
@@ -93,15 +123,8 @@ void* tag_data_get_pointer(
 	long offset, 
 	long size) 
 {
-	/* port: Halo PC reads a Custom Edition map's tags unchecked, and maps
-	made for it can hold an offset past a tag data's end, which never
-	stopped a game there: it gets the empty data below without an
-	assertion. This build's maps keep theirs */
-	if (!custom_edition_cache_tags_loaded())
-	{
-		match_assert("c:\\halo\\SOURCE\\tag_files\\tag_groups.c", 3073, size>=0);
-		match_assert("c:\\halo\\SOURCE\\tag_files\\tag_groups.c", 3074, offset>=0 && offset+size<=data->size);
-	}
+	match_assert("c:\\halo\\SOURCE\\tag_files\\tag_groups.c", 3073, size>=0);
+	match_assert("c:\\halo\\SOURCE\\tag_files\\tag_groups.c", 3074, offset>=0 && offset+size<=data->size);
 	/* port: bytes past the data are the empty data's (tag_empty_data), as
 	far as they go */
 	if (size < 0 || offset < 0 || offset > data->size || size > data->size - offset || (size && !data->address))
@@ -110,7 +133,17 @@ void* tag_data_get_pointer(
 		return size <= TAG_EMPTY_DATA_SIZE ? tag_empty_data() : NULL;
 	}
 
+#ifdef HALO_CUSTOM_EDITION
+	/* port: (a Custom Edition map's, only in its tag cache: ce_map_checks.c;
+	the other maps' as below, without the call) */
+	if (cache_file_is_ce)
+		return ce_tags_pointer((unsigned long)data->address + offset, size);
+#endif
+#if defined(HALO_64BIT)
+	return (void *)((byte *)TAG_DATA_ADDRESS(data) + offset);
+#else
 	return (void *)((byte *)data->address + offset);
+#endif
 }
 
 void *tag_block_get_element_with_size(
@@ -120,13 +153,24 @@ void *tag_block_get_element_with_size(
 {
 	match_assert("c:\\halo\\SOURCE\\tag_files\\tag_groups.c", 3084, block);
 	match_assert("c:\\halo\\SOURCE\\tag_files\\tag_groups.c", 3085, block->count>=0);
+#ifndef HALO_64BIT
+#ifdef HALO_CUSTOM_EDITION
+	/* port: a Custom Edition map's blocks keep the definitions' addresses in
+	Halo PC's executable, not this one's (cache_files.c) */
+	if (!cache_file_is_ce)
+#endif
 	match_assert("c:\\halo\\SOURCE\\tag_files\\tag_groups.c", 3086, !block->definition || block->definition->element_size==element_size);
+#endif
 
 	match_vassert("c:\\halo\\SOURCE\\tag_files\\tag_groups.c", 3089, index>=0 && index<block->count,
 		csprintf(temporary,
 			"#%d is not a valid %s index in [#0,#%d)",
 			index,
+#ifdef HALO_64BIT
+			"<unknown>", block->count));
+#else
 			block->definition ? block->definition->name : "<unknown>", block->count));
+#endif
 	match_assert("c:\\halo\\SOURCE\\tag_files\\tag_groups.c", 3090, block->address);
 	/* port: an element past the block (an index a map's data gave, which
 	nothing checked) is the empty data (tag_empty_data), not whatever lies
@@ -137,5 +181,15 @@ void *tag_block_get_element_with_size(
 		return element_size <= TAG_EMPTY_DATA_SIZE ? tag_empty_data() : NULL;
 	}
 
+#ifdef HALO_CUSTOM_EDITION
+	/* port: (a Custom Edition map's, only in its tag cache: ce_map_checks.c;
+	the other maps' as below, without the call) */
+	if (cache_file_is_ce)
+		return ce_tags_pointer((unsigned long)block->address + index * element_size, element_size);
+#endif
+#if defined(HALO_64BIT)
+	return (void *)((byte *)TAG_BLOCK_ADDRESS(block) + (index * element_size));
+#else
 	return (void *)((byte *)block->address + (index * element_size));
+#endif
 }

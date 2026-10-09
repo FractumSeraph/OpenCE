@@ -22,6 +22,9 @@ and the debug keyboard that the game's console reads.
 #ifndef HALO_ANDROID
 #include "update.h"
 #endif
+#include "touch_input.h"
+#include "delta.h"
+#include "crash_report.h"
 
 #include <SDL3/SDL.h>
 #include <stdio.h>
@@ -29,6 +32,9 @@ and the debug keyboard that the game's console reads.
 #include <string.h>
 #if !defined(_WIN32) && !defined(HALO_ANDROID)
 #include <signal.h>
+#endif
+#ifdef HALO_GAME_BROWSER
+#include "browser.h"
 #endif
 
 static SDL_Window *platform_window;
@@ -127,6 +133,188 @@ extern const unsigned long platform_window_icon_size;
 /* map_torrents.c's: Custom Edition maps downloaded and seeded */
 void map_torrents_initialize(void);
 void map_torrents_poll(void);
+/* (and the version, for the window's title) */
+const char *updater_version(void);
+
+/* the older folders of Halo PC maps (maps/ce, md_maps) moved into the new
+ones (maps_ce, maps_md) once, as game.move_old_map_folders says: asked, in
+the game's message box, when someone is there to answer; the answer kept.
+Android, whose game data is the app's own, moves them without asking */
+static void old_map_folders_offer(BOOL quiet)
+{
+	static const SDL_MessageBoxButtonData buttons[] = {
+		{ SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, 1, "Move them" },
+		{ SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, 0, "Leave them" },
+	};
+	const char *setting = config_string("game.move_old_map_folders");
+	char moves[256];
+	char text[1024];
+	SDL_MessageBoxData question = { SDL_MESSAGEBOX_INFORMATION, NULL, "ChupathingyCE: map folders", text, 2,
+		buttons, NULL };
+	int answer = 0;
+
+	if (!strcmp(setting, "no") || !platform_old_map_folders(moves, sizeof(moves)))
+		return;
+#ifndef HALO_ANDROID
+	if (strcmp(setting, "yes"))
+	{
+		if (quiet)
+		{
+			platform_log("map folders: older folders of Halo PC maps (%s) are played from where they are; "
+				"game.move_old_map_folders = \"yes\" moves them", moves);
+			return;
+		}
+		snprintf(text, sizeof(text),
+			"Halo PC maps have folders of their own beside the maps folder now: maps_ce for Custom Edition "
+			"maps, maps_md for HaloMD maps and maps_pc for the maps of your Halo PC disc.\n\n"
+			"Move your older folders there?\n\n%s\n\n"
+			"Each folder is moved whole: nothing is copied or deleted. If you leave them, their maps still "
+			"play from where they are.",
+			moves);
+		if (!SDL_ShowMessageBox(&question, &answer))
+			return;
+		config_write("game.move_old_map_folders", answer ? "yes" : "no");
+		if (!answer)
+		{
+			platform_log("map folders: the player left the older folders where they are (%s)", moves);
+			return;
+		}
+	}
+#else
+	(void)quiet;
+	(void)question;
+	(void)answer;
+	(void)text;
+#endif
+	platform_old_map_folders_move();
+}
+
+#ifndef HALO_ANDROID
+/* the maps folder checked to hold the Xbox maps (platform_maps_folder_check).
+When it holds Halo PC's instead, or no ui.map, the player is told where each
+kind goes and the game quits, rather than failing to load Halo PC's ui.map
+as the Xbox's (game_load). Halo PC maps in maps/ itself, which only play
+from maps_ce, maps_md or maps_pc, are warned of. Then the older folders of
+Halo PC maps are offered a move into the new ones (game.move_old_map_folders) */
+static void data_check_maps(void)
+{
+	struct platform_maps_folder maps;
+	char message[2048];
+	char where[1200];
+	BOOL quiet = config_boolean("debug.hidden_window") || config_real("debug.exit_after") > 0.0 ||
+		config_boolean("debug.null_renderer");
+
+#ifdef HALO_GAME_BROWSER
+	quiet = quiet || browser_headless();
+#endif
+	platform_maps_folder_check(&maps);
+	snprintf(where, sizeof(where),
+		"Put the Xbox maps from your Halo: Combat Evolved disc image in %s/maps. Halo PC "
+		"maps go in folders beside it: Custom Edition maps (with Custom Edition's bitmaps.map, "
+		"sounds.map and loc.map) in maps_ce, HaloMD maps in maps_md, and the maps of your "
+		"Halo PC disc in maps_pc.",
+		maps.root);
+	switch (maps.state)
+	{
+	case _maps_folder_xbox:
+		old_map_folders_offer(quiet);
+		if (!maps.stray_pc_maps)
+			return;
+		snprintf(message, sizeof(message),
+			"These maps in the maps folder are Halo PC maps, which play only from maps_ce, maps_md or "
+			"maps_pc: %s%s.\n\n%s",
+			maps.stray_names, maps.stray_pc_maps > PLATFORM_MAPS_FOLDER_NAMED ? " and more" : "", where);
+		platform_log("maps folder: %ld Halo PC maps in %s/maps (%s)", maps.stray_pc_maps, maps.root,
+			maps.stray_names);
+		if (!quiet)
+			SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_WARNING, "ChupathingyCE", message, NULL);
+		return;
+	case _maps_folder_halo_pc:
+		snprintf(message, sizeof(message),
+			"The maps folder holds Halo PC maps, not the Xbox maps: its ui.map is from %s.\n\n%s\n\n"
+			"To copy the Xbox maps out of your disc image again, move this maps folder aside and "
+			"start ChupathingyCE.",
+			maps.ui_version == 609 ? "Halo PC (Custom Edition)" : "Halo PC", where);
+		break;
+	default:
+		snprintf(message, sizeof(message),
+			"Halo's Xbox maps were not found: %s/maps has no ui.map.%s\n\n%s\n\n"
+			"To copy the Xbox maps out of your disc image, move the maps folder aside and start "
+			"ChupathingyCE.",
+			maps.root, maps.stray_pc_maps || maps.pc_maps_beside ?
+				" Its Halo PC maps play only alongside the Xbox maps." : "",
+			where);
+		break;
+	}
+	platform_log("maps folder: %s/maps is not the Xbox maps (ui.map version %ld): quitting", maps.root,
+		maps.ui_version);
+	platform_log("%s", message);
+	if (!quiet)
+		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "ChupathingyCE", message, NULL);
+	exit(EXIT_FAILURE);
+}
+#endif
+
+#if !defined(_WIN32) && !defined(HALO_ANDROID)
+/* crash reports (posix_crash.c; Windows's are win32_crash.c's): the handler
+for this run's crashes, then the reports earlier ones left, sent, deleted or
+asked about as crash_reports.upload says */
+static void crash_reports_start(void)
+{
+	static const SDL_MessageBoxButtonData buttons[] = {
+		{ SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, 1, "Yes" },
+		{ SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, 0, "No" },
+	};
+	static const char text[] =
+		"ChupathingyCE crashed the last time it ran.\n\n"
+		"Do you want to send crash reports to the developers? They help us find and fix crashes.\n\n"
+		"A report holds the game's version, where in the game it crashed and the calls that led there, and the "
+		"end of its log, debug.txt, with IP addresses taken out. Reports go to the ChupathingyCE site "
+		"(network.browser_url) and its developers.\n\n"
+		"The answer is kept in config.toml (crash_reports.upload): Yes sends the report of this crash and of "
+		"every later one, No never sends one.";
+	SDL_MessageBoxData question = { SDL_MESSAGEBOX_WARNING, NULL, "ChupathingyCE crashed", text, 2, buttons, NULL };
+	char folder[1024], log[1024];
+	const char *consent;
+	int pending, answer = 0;
+
+	if (!crash_reports_armed())
+		return;
+#ifdef HALO_GAME_BROWSER
+	/* (a probe has none: its crashes are the site's to see) */
+	if (browser_headless())
+		return;
+#endif
+	snprintf(folder, sizeof(folder), "%s/crashes", platform_data_root());
+	snprintf(log, sizeof(log), "%s/debug.txt", platform_data_root());
+	if (!posix_crash_install(folder, log) || !(pending = posix_crash_pending()))
+		return;
+	consent = config_string("crash_reports.upload");
+	if (!strcmp(consent, "no"))
+	{
+		posix_crash_discard();
+		return;
+	}
+	if (strcmp(consent, "yes"))
+	{
+		/* (not for runs nobody is watching: the reports wait) */
+		if (config_boolean("debug.hidden_window") || config_real("debug.exit_after") > 0.0 ||
+			!SDL_ShowMessageBox(&question, &answer))
+		{
+			return;
+		}
+		config_write("crash_reports.upload", answer ? "yes" : "no");
+		if (!answer)
+		{
+			platform_log("crash report: the player declined; none will be sent");
+			posix_crash_discard();
+			return;
+		}
+	}
+	platform_log("crash report: sending %d", pending);
+	posix_crash_send();
+}
+#endif
 
 BOOL platform_sdl_initialize(void)
 {
@@ -148,7 +336,12 @@ BOOL platform_sdl_initialize(void)
 #endif
 	)
 		exit(EXIT_SUCCESS);
-	SDL_SetHint(SDL_HINT_APP_NAME, "Halo");
+	SDL_SetHint(SDL_HINT_APP_NAME, "ChupathingyCE");
+#ifdef __APPLE__
+	/* closing the window is the event's to decide (platform_pump_events:
+	Command-W does not quit) */
+	SDL_SetHint(SDL_HINT_QUIT_ON_LAST_WINDOW_CLOSE, "0");
+#endif
 #if defined(HALO_ANDROID) && !defined(HALO_WEB)
 	/* landscape only; the back key arrives as a key event (xinput_sdl.c)
 	instead of closing the activity */
@@ -158,26 +351,64 @@ BOOL platform_sdl_initialize(void)
 	controller emulation in xinput_sdl.c) */
 	SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
 #endif
+#ifdef HALO_GAME_BROWSER
+	/* the dedicated server and a probe play no sound and need no display
+	(server/src) */
+	if (browser_headless())
+	{
+		SDL_SetHint(SDL_HINT_AUDIO_DRIVER, "dummy");
+		SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "dummy");
+	}
+#endif
 	if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD | SDL_INIT_EVENTS))
 	{
 		platform_log("SDL_Init failed: %s", SDL_GetError());
 		return FALSE;
 	}
 	platform_sdl_started = TRUE;
+	/* which build this is, first in its log (build_identity.c) */
+	build_identity_log();
 #if !defined(HALO_ANDROID) || defined(HALO_WEB)
 	/* found (or offered to the player, platform_offer_game_data) before the
-	game's window opens */
+	game's window opens, and checked to be the Xbox maps */
 	platform_data_root();
-	#ifndef HALO_WEB
+#ifndef HALO_WEB
+	data_check_maps();
 	/* (a new version looked for meanwhile, updater_poll asking about it) */
 	updater_start();
-	#endif
+#ifndef _WIN32
+	crash_reports_start();
 #endif
+#endif
+#else
+	/* (the desktop's are moved from data_check_maps) */
+	old_map_folders_offer(TRUE);
+#endif
+#ifndef HALO_WEB
+	/* (the legacy table: a newer one fetched meanwhile; the browser's is the
+	page's, port/web/src/web_delta.c) */
+	delta_legacy_start();
+#endif
+	/* (Custom Edition maps downloaded and seeded: map_torrents.c) */
 	map_torrents_initialize();
 	return TRUE;
 }
 
+/* the mouse pointer shown or hidden (Android has none to show) */
+static void show_pointer(BOOL shown)
+{
 #ifndef HALO_ANDROID
+	if (shown)
+		SDL_ShowCursor();
+	else
+		SDL_HideCursor();
+#else
+	(void)shown;
+#endif
+}
+
+#ifndef HALO_ANDROID
+
 /* ---------- first start without game data (xbox_files.c) */
 
 #ifdef _WIN32
@@ -415,7 +646,7 @@ static BOOL data_extract(const char *image, const char *url, const char *destina
 	/* (waited for through extraction.finished; the Windows port's threads
 	cannot be joined) */
 	pthread_detach(thread);
-	window = SDL_CreateWindow("Halo", 640, 150, 0);
+	window = SDL_CreateWindow("ChupathingyCE", 640, 150, 0);
 	if (window)
 	{
 		renderer = SDL_CreateRenderer(window, NULL);
@@ -565,7 +796,7 @@ BOOL platform_offer_game_data(const char *destination)
 	}
 	for (;;)
 	{
-		SDL_MessageBoxData question = { SDL_MESSAGEBOX_INFORMATION, NULL, "Halo", message,
+		SDL_MessageBoxData question = { SDL_MESSAGEBOX_INFORMATION, NULL, "ChupathingyCE", message,
 			download ? 3 : 2, download ? download_buttons : image_buttons, NULL };
 		char image[1024];
 		char error[512];
@@ -598,7 +829,7 @@ BOOL platform_offer_game_data(const char *destination)
 			return TRUE;
 		}
 		platform_log("extraction failed: %s", error);
-		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Halo", error, NULL);
+		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "ChupathingyCE", error, NULL);
 	}
 }
 #endif
@@ -1057,6 +1288,7 @@ static long platform_window_width = -1, platform_window_height = -1;
 BOOL platform_video_initialize(unsigned long width, unsigned long height)
 {
 	int version;
+	char title[64];
 
 	if (platform_window)
 		return TRUE;
@@ -1074,6 +1306,14 @@ BOOL platform_video_initialize(unsigned long width, unsigned long height)
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
+#elif defined(__APPLE__)
+	/* macOS stops at OpenGL 4.1, whose core contexts must be forward
+	compatible; the renderer does without what it uses from later versions
+	(d3d8_gl.c) */
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
 #else
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
@@ -1083,7 +1323,15 @@ BOOL platform_video_initialize(unsigned long width, unsigned long height)
 	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 0);
 	SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 0);
 	if (config_boolean("debug.gl_debug"))
-		SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
+	{
+		int flags = 0;
+
+#ifndef HALO_ANDROID
+		/* (the Android guest's SDL has no getter: port/android) */
+		SDL_GL_GetAttribute(SDL_GL_CONTEXT_FLAGS, &flags);
+#endif
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, flags | SDL_GL_CONTEXT_DEBUG_FLAG);
+	}
 #if !defined(HALO_ANDROID) && !defined(_WIN32)
 	/* Mesa's GL thread: the renderer makes thousands of GL calls a frame
 	and never waits for their results, so handing them to a thread of
@@ -1092,6 +1340,8 @@ BOOL platform_video_initialize(unsigned long width, unsigned long height)
 	setenv("mesa_glthread", "true", 0);
 #endif
 
+	/* "ChupathingyCE 0.5.0b" */
+	snprintf(title, sizeof(title), "ChupathingyCE %s", updater_version());
 #ifdef HALO_ANDROID
 	{
 		int scale = (int)config_integer("display.window_scale");
@@ -1103,7 +1353,7 @@ BOOL platform_video_initialize(unsigned long width, unsigned long height)
 		platform_window = SDL_CreateWindow("Halo", (int)(width * scale), (int)(height * scale),
 			SDL_WINDOW_OPENGL);
 #else
-		platform_window = SDL_CreateWindow("Halo", (int)(width * scale), (int)(height * scale),
+		platform_window = SDL_CreateWindow(title, (int)(width * scale), (int)(height * scale),
 			SDL_WINDOW_OPENGL | SDL_WINDOW_FULLSCREEN);
 #endif
 	}
@@ -1115,7 +1365,7 @@ BOOL platform_video_initialize(unsigned long width, unsigned long height)
 	(void)width;
 	(void)height;
 	platform_window_size_setting(&platform_window_width, &platform_window_height);
-	platform_window = SDL_CreateWindow("Halo", (int)platform_window_width, (int)platform_window_height,
+	platform_window = SDL_CreateWindow(title, (int)platform_window_width, (int)platform_window_height,
 		SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY |
 		(config_boolean("debug.hidden_window") ? SDL_WINDOW_HIDDEN : 0) |
 		(platform_fullscreen_setting() ? SDL_WINDOW_FULLSCREEN : 0));
@@ -1138,6 +1388,13 @@ BOOL platform_video_initialize(unsigned long width, unsigned long height)
 	}
 	platform_fullscreen_requested = platform_fullscreen_setting();
 	platform_fullscreen_kind_apply();
+#endif
+#ifdef __APPLE__
+	/* macOS opens a fullscreen window as an animated move to a Space of its
+	own, and the first swap waits for it; the game draws its first frames
+	before its event loop runs (rasterizer_preinitialize), so wait for the
+	window here */
+	SDL_SyncWindow(platform_window);
 #endif
 	platform_gl_context = SDL_GL_CreateContext(platform_window);
 #ifdef HALO_ANDROID
@@ -1162,7 +1419,17 @@ BOOL platform_video_initialize(unsigned long width, unsigned long height)
 	callback returns. */
 	version = 0;
 #else
+#ifdef __APPLE__
+	{
+		/* port/macos/src/macos_video.c */
+		void macos_set_swap_interval(int interval);
+
+		version = SDL_GL_SetSwapInterval(0);
+		macos_set_swap_interval(config_boolean("display.vsync") ? 1 : 0);
+	}
+#else
 	version = SDL_GL_SetSwapInterval(config_boolean("display.vsync") ? 1 : 0);
+#endif
 #endif
 	(void)version;
 	platform_event_thread = SDL_GetCurrentThreadID();
@@ -1203,7 +1470,16 @@ void platform_display_apply(void)
 #ifndef HALO_WEB
 	/* (the browser presents when each main-loop callback returns: no swap
 	interval, platform_video_initialize) */
+#ifdef __APPLE__
+	{
+		/* (the context's own interval, as at start-up: SDL's stays off) */
+		void macos_set_swap_interval(int interval);
+
+		macos_set_swap_interval(config_boolean("display.vsync") ? 1 : 0);
+	}
+#else
 	SDL_GL_SetSwapInterval(config_boolean("display.vsync") ? 1 : 0);
+#endif
 #endif
 }
 
@@ -1543,6 +1819,11 @@ static void platform_invite_clipboard(BOOL look)
 	static char seen[256];
 	const char *invite = p2p_take_clipboard_text();
 
+#ifdef HALO_GAME_BROWSER
+	/* (the dedicated server and a probe leave the clipboard alone) */
+	if (browser_headless())
+		return;
+#endif
 	if (invite)
 	{
 		SDL_SetClipboardText(invite);
@@ -1589,12 +1870,75 @@ void platform_show_message(const char *title, const char *message)
 	/* (a run nobody watches: the log only) */
 	if (config_boolean("debug.hidden_window") || config_boolean("debug.null_renderer"))
 		return;
+#ifdef HALO_GAME_BROWSER
+	if (browser_headless())
+		return;
+#endif
 	pthread_mutex_lock(&platform_message_lock);
 	snprintf(platform_message_title, sizeof(platform_message_title), "%s", title);
 	snprintf(platform_message_text, sizeof(platform_message_text), "%s", message);
 	platform_message_pending = TRUE;
 	pthread_mutex_unlock(&platform_message_lock);
 }
+
+#ifdef HALO_GAME_BROWSER
+static pthread_mutex_t platform_url_lock = PTHREAD_MUTEX_INITIALIZER;
+static char platform_url[700];
+
+void platform_open_url(const char *url)
+{
+	pthread_mutex_lock(&platform_url_lock);
+	snprintf(platform_url, sizeof(platform_url), "%s", url);
+	pthread_mutex_unlock(&platform_url_lock);
+}
+
+/* (the main thread's: a page to open, a restored key to ask about) */
+static void platform_game_list_requests(void)
+{
+	char url[sizeof(platform_url)];
+	char new_id[64], old_id[64], message[512];
+
+	pthread_mutex_lock(&platform_url_lock);
+	snprintf(url, sizeof(url), "%s", platform_url);
+	platform_url[0] = 0;
+	pthread_mutex_unlock(&platform_url_lock);
+	if (url[0] && !SDL_OpenURL(url))
+		platform_log("Game list: could not open the web browser: %s", SDL_GetError());
+
+	if (browser_take_key_link(new_id, old_id, sizeof(new_id)))
+	{
+		static const SDL_MessageBoxButtonData buttons[] =
+		{
+			{ SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, 0, "Keep mine" },
+			{ 0, 1, "Replace" },
+		};
+		SDL_MessageBoxData question;
+		int answer = 0;
+
+		if (!strcmp(new_id, old_id))
+		{
+			platform_log("Game list: that player key is already this copy's");
+			browser_answer_key_link(0);
+			return;
+		}
+		snprintf(message, sizeof(message),
+			"A link asks to replace this copy's player key, which confirms your games on the game list.\n\n"
+			"Your games are now confirmed as player %.8s. With the new key they will be player %.8s.\n\n"
+			"Replace the key only with your own, from your profile on the game list.",
+			old_id[0] ? old_id : "(none)", new_id);
+		memset(&question, 0, sizeof(question));
+		question.flags = SDL_MESSAGEBOX_WARNING;
+		question.window = platform_window;
+		question.title = "Halo: replace your player key?";
+		question.message = message;
+		question.numbuttons = 2;
+		question.buttons = buttons;
+		if (!SDL_ShowMessageBox(&question, &answer))
+			answer = 0;
+		browser_answer_key_link(answer == 1);
+	}
+}
+#endif
 
 static void platform_show_pending_message(void)
 {
@@ -1629,7 +1973,23 @@ static void platform_show_pending_message(void)
 /* ---------- events */
 
 /* quits as closing the window does, when the events are next read (the
-menus' Quit: port/linux/game/menu_functions.c); on Android at once */
+menus' Quit: port/linux/game/menu_functions.c); Android's menus have none,
+as the system closes its apps */
+#ifdef __APPLE__
+/* the menus asked to quit (platform_request_quit), not Command-Q */
+static BOOL quit_requested;
+
+/* the game's console (source/interface/terminal.c) */
+void terminal_printf(const void *color, const char *format, ...);
+
+/* a line in the game's console and the log */
+static void platform_quit_notice(const char *text)
+{
+	platform_log("%s", text);
+	terminal_printf(NULL, "%s", text);
+}
+#endif
+
 void platform_request_quit(void)
 {
 #ifdef HALO_ANDROID
@@ -1638,6 +1998,9 @@ void platform_request_quit(void)
 #else
 	SDL_Event event;
 
+#ifdef __APPLE__
+	quit_requested = TRUE;
+#endif
 	memset(&event, 0, sizeof(event));
 	event.type = SDL_EVENT_QUIT;
 	SDL_PushEvent(&event);
@@ -1742,6 +2105,20 @@ void platform_pump_events(void)
 	static BOOL looked_at_clipboard;
 	BOOL look_at_clipboard = !looked_at_clipboard;
 
+#ifdef HALO_GAME_BROWSER
+	/* the dedicated server has no window, but stops as asked (SIGTERM or
+	SIGINT: SDL's quit event), as a service is stopped */
+	if (!platform_window && browser_headless())
+	{
+		SDL_PumpEvents();
+		if (SDL_PeepEvents(&event, 1, SDL_GETEVENT, SDL_EVENT_QUIT, SDL_EVENT_QUIT) > 0)
+		{
+			platform_log("dedicated server: stopping");
+			exit(EXIT_SUCCESS);
+		}
+		return;
+	}
+#endif
 	if (!platform_window || SDL_GetCurrentThreadID() != platform_event_thread)
 		return;
 	if (exit_ticks == (Uint64)-1)
@@ -1756,6 +2133,9 @@ void platform_pump_events(void)
 		exit(EXIT_SUCCESS);
 	}
 	platform_show_pending_message();
+#ifdef HALO_GAME_BROWSER
+	platform_game_list_requests();
+#endif
 #ifndef HALO_ANDROID
 	updater_poll(platform_window);
 	/* (Settings > Audio's output device, as it changes: dsound_sdl.c) */
@@ -1776,7 +2156,37 @@ void platform_pump_events(void)
 	{
 		switch (event.type)
 		{
+#ifdef __APPLE__
+		/* the window's close button quits at once; Command-W (the Window
+		menu's Close, while W moves the player forward) does nothing */
+		case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
+			if (SDL_GetModState() & SDL_KMOD_GUI)
+			{
+				platform_quit_notice("Command-W does not close the game: press Command-Q twice to quit");
+				break;
+			}
+			pthread_mutex_unlock(&input_lock);
+			platform_log("window closed");
+			exit(EXIT_SUCCESS);
+#endif
 		case SDL_EVENT_QUIT:
+#ifdef __APPLE__
+			/* Command-Q quits on a second press within two seconds (Q is the
+			flashlight); the menus' Quit, the Dock's and logging out quit at
+			once */
+			if (!quit_requested && (SDL_GetModState() & SDL_KMOD_GUI))
+			{
+				static Uint64 first_quit;
+				Uint64 now = SDL_GetTicks();
+
+				if (!first_quit || now - first_quit > 2000)
+				{
+					first_quit = now;
+					platform_quit_notice("press Command-Q again to quit");
+					break;
+				}
+			}
+#endif
 			pthread_mutex_unlock(&input_lock);
 			platform_log("window closed");
 			exit(EXIT_SUCCESS);
@@ -1808,8 +2218,9 @@ void platform_pump_events(void)
 			if (event.key.down && !event.key.repeat && event.key.scancode == SDL_SCANCODE_F12)
 			{
 				input_state.mouse_released = !input_state.mouse_released;
-				platform_mouse_capture(!input_state.mouse_released && !input_state.ui_pointer &&
-					!scoreboard_pointer_active);
+				platform_mouse_capture(!input_state.mouse_released && !input_state.ui_pointer);
+				/* (the pointer shows while released, hidden again in play) */
+				show_pointer(input_state.mouse_released || input_state.ui_pointer);
 			}
 		#if !defined(HALO_ANDROID) || defined(HALO_WEB)
 			/* F11 switches between fullscreen and the window (SDL keeps the
@@ -1960,9 +2371,9 @@ void platform_pump_events(void)
 			memset(input_state.mouse_buttons, 0, sizeof(input_state.mouse_buttons));
 			memset(mouse_buttons_pressed, 0, sizeof(mouse_buttons_pressed));
 			input_state.focused = FALSE;
-			/* (the scoreboard's pointer goes; the mouse is taken back for
-			the aim as the window has the focus again) */
-			scoreboard_pointer_active = FALSE;
+#ifdef HALO_ANDROID
+			touch_input_cancel();
+#endif
 			break;
 		case SDL_EVENT_WINDOW_FOCUS_GAINED:
 			input_state.focused = TRUE;
@@ -1972,6 +2383,14 @@ void platform_pump_events(void)
 				platform_mouse_capture(TRUE);
 #endif
 			break;
+#ifdef HALO_ANDROID
+		case SDL_EVENT_FINGER_DOWN:
+		case SDL_EVENT_FINGER_MOTION:
+		case SDL_EVENT_FINGER_UP:
+		case SDL_EVENT_FINGER_CANCELED:
+			touch_input_event(event.type, &event.tfinger);
+			break;
+#endif
 		case SDL_EVENT_GAMEPAD_ADDED:
 #ifdef HALO_ANDROID
 			/* (the guest reaches SDL only through host_imports.list, which
@@ -2001,6 +2420,28 @@ void platform_pump_events(void)
 				SDL_CloseGamepad(gamepad);
 			break;
 		}
+#endif
+#ifdef __APPLE__
+		case SDL_EVENT_DROP_FILE:
+		case SDL_EVENT_DROP_TEXT:
+			/* macOS hands an opened halo:// link (an invite) to the running
+			application, which SDL reports as a dropped file; elsewhere it
+			arrives on the command line (p2p_hand_off_invite) */
+			if (event.drop.data && !strncmp(event.drop.data, "halo://", 7))
+			{
+				/* (a player key's link is a secret: never in the log) */
+				if (!SDL_strncasecmp(event.drop.data, "halo://key/", 11))
+					platform_log("Internet play: opened a player key link");
+				else
+				{
+					char shown[128];
+
+					platform_log("Internet play: opened %s",
+						p2p_invite_log_text(event.drop.data, shown, sizeof(shown)));
+				}
+				p2p_join_invite(event.drop.data);
+			}
+			break;
 #endif
 		default:
 			break;
@@ -2072,10 +2513,15 @@ void platform_ui_pointer_set_active(BOOL active)
 
 		SDL_GetWindowSize(platform_window, &width, &height);
 		SDL_WarpMouseInWindow(platform_window, width * 0.5f, height * 0.5f);
+		show_pointer(TRUE);
 		pthread_mutex_lock(&input_lock);
 		ui_pointer.x = width * 0.5f;
 		ui_pointer.y = height * 0.5f;
 		pthread_mutex_unlock(&input_lock);
+	}
+	else
+	{
+		show_pointer(FALSE);
 	}
 }
 
@@ -2100,81 +2546,38 @@ void platform_video_window_size(int *width, int *height)
 	SDL_GetWindowSize(platform_window, width, height);
 }
 
-/* ---------- the system's on-screen keyboard */
+#else
+/* ---------- the menus' pointer (the touchscreen)
 
-/* A menu's text field is typed into (platform_text_field, xinput_sdl.c).
-Where Steam's on-screen keyboard is there to bring up (in Big Picture and in
-the Steam Deck's Game Mode, which ask for it with
-SDL_ENABLE_STEAM_SCREEN_KEYBOARD), SDL's text input runs while the field is
-typed into: the keyboard comes up with the field and goes with it, and what
-it types arrives as keys. Elsewhere text input stays off, as before, so that
-no input method takes the keys the field reads: a Wayland touch screen's
-keyboard (text-input-v3) would type text events, which the field does not
-read. */
-static SDL_AtomicInt screen_keyboard_wanted;
-/* (each field begun, which brings the keyboard up again: Steam does not say
-when its keyboard goes, by its own Enter or closed by hand, so SDL holds it
-to be up still; after a field ended and another begun in the same frame, as
-the password screen's is after a wrong password, it would not come back) */
-static SDL_AtomicInt screen_keyboard_requests;
-
-void platform_screen_keyboard(BOOL show, BOOL password)
+While a menu is up, taps and drags go to the menus (touch_input.c,
+halo_ui_pointer_update in d3d8_gl.c). */
+void platform_ui_pointer_set_active(BOOL active)
 {
-	SDL_SetAtomicInt(&screen_keyboard_wanted, !show ? 0 : password ? 2 : 1);
-	if (show)
-		SDL_AddAtomicInt(&screen_keyboard_requests, 1);
+	pthread_mutex_lock(&input_lock);
+	if ((active != FALSE) != (input_state.ui_pointer != FALSE))
+	{
+		input_state.ui_pointer = active;
+		touch_input_menu_set_active(active != FALSE);
+	}
+	pthread_mutex_unlock(&input_lock);
 }
 
-/* (on the window's thread, as SDL asks: platform_pump_events) */
-static void screen_keyboard_update(void)
+BOOL platform_ui_pointer_read(struct platform_ui_pointer *pointer)
 {
-	/* (a keyboard shown again is closed first, as SDL opens none that it
-	holds to be up, and opened a moment later: Steam takes each as a URL,
-	steam://close/keyboard then steam://open/keyboard, which must not
-	arrive the other way round) */
-	enum { REOPEN_DELAY_MS = 500 };
-	static int requests_handled;
-	static Uint64 open_time;
-	int requests = SDL_GetAtomicInt(&screen_keyboard_requests);
-	int wanted = SDL_GetAtomicInt(&screen_keyboard_wanted);
+	BOOL active;
 
-	if (!wanted)
-	{
-		open_time = 0;
-		if (SDL_TextInputActive(platform_window))
-			SDL_StopTextInput(platform_window);
-		return;
-	}
-	if (requests != requests_handled)
-	{
-		requests_handled = requests;
-		if (!SDL_HasScreenKeyboardSupport() ||
-			!SDL_GetHintBoolean(SDL_HINT_ENABLE_STEAM_SCREEN_KEYBOARD, false))
-		{
-			return;
-		}
-		open_time = SDL_GetTicks();
-		if (SDL_TextInputActive(platform_window))
-		{
-			SDL_StopTextInput(platform_window);
-			open_time += REOPEN_DELAY_MS;
-		}
-	}
-	if (open_time && SDL_GetTicks() >= open_time)
-	{
-		/* one line: the keyboard's Enter ends the field (and Steam's
-		keyboard goes with it); a password's, for the keyboards that hide
-		what is typed into one */
-		SDL_PropertiesID properties = SDL_CreateProperties();
+	pthread_mutex_lock(&input_lock);
+	active = input_state.ui_pointer;
+	touch_input_menu_read(pointer);
+	pthread_mutex_unlock(&input_lock);
+	return active;
+}
 
-		open_time = 0;
-		platform_log("text field: showing the on-screen keyboard");
-		SDL_SetBooleanProperty(properties, SDL_PROP_TEXTINPUT_MULTILINE_BOOLEAN, false);
-		SDL_SetNumberProperty(properties, SDL_PROP_TEXTINPUT_TYPE_NUMBER,
-			wanted == 2 ? SDL_TEXTINPUT_TYPE_TEXT_PASSWORD_HIDDEN : SDL_TEXTINPUT_TYPE_TEXT);
-		SDL_StartTextInputWithProperties(platform_window, properties);
-		SDL_DestroyProperties(properties);
-	}
+/* the window is its pixels on Android (no display scaling): touch_input.c
+scales the fingers' 0..1 by the drawable's size */
+void platform_video_window_size(int *width, int *height)
+{
+	platform_video_drawable_size(width, height);
 }
 
 #endif

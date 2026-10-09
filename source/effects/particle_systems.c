@@ -1549,10 +1549,13 @@ static void particle_system_render(
 					{
 						sequence_index = state_definition->sequence_index;
 					}
-					/* port: a bitmap without that sequence, or with no sprites in it,
-					draws nothing (a Custom Edition map's can: Hornets Nest's), where
-					this read past its sequences and divided by its sprite count */
-					if (!VALID_INDEX(sequence_index, bitmap->sequences.count) ||
+					/* port: a rotational sprite's sequence is the one after its state's,
+					which a Halo PC map's bitmap may not have (Hornets Nest's): its
+					state's own then; a particle whose bitmap has neither, or no sprites
+					in it, is not drawn, rather than read past the bitmap's sequences */
+					if (sequence_index >= bitmap->sequences.count)
+						sequence_index = state_definition->sequence_index;
+					if (sequence_index < 0 || sequence_index >= bitmap->sequences.count ||
 						TAG_BLOCK_GET_ELEMENT(&bitmap->sequences, sequence_index,
 							struct bitmap_group_sequence)->sprites.count <= 0)
 					{

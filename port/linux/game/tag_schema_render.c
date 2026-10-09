@@ -1148,6 +1148,18 @@ static char const bitmap_format_bits_per_pixel[NUMBER_OF_BITMAP_FORMATS] =
 	8, 8, 8, 16, 0, 0, 16, 0, 16, 16, 32, 32, 0, 0, 4, 8, 8, 8
 };
 
+/* whether size bytes at offset lie in the map's file (NONE bytes, more
+than anything reads, never do) */
+static boolean file_contains(
+	struct tag_validation *validation,
+	long offset,
+	long size)
+{
+	long file_length = tag_validate_file_length(validation);
+
+	return size >= 0 && offset >= 0 && offset <= file_length && size <= file_length - offset;
+}
+
 /* the bytes of pixels the game reads for a bitmap (bitmap_get_pixel_data_size:
 every mipmap's width by height by depth, compressed sides rounded to 4, a
 cube map's six faces, at its format's bits a pixel), or NONE when they are
@@ -1247,15 +1259,13 @@ static boolean bitmap_data_check(
 		bitmap->mipmap_count = (short)PIN(bitmap->mipmap_count, 0, maximum_mipmap_count);
 	}
 	/* (a linear texture has a format with a linear form, and a pitch of
-	64-byte steps: a Custom Edition map's rows are padded to them as its
-	pixels load, custom_edition_bitmaps.c) */
+	64-byte steps) */
 	if (TEST_FLAG(bitmap->flags, _bitmap_linear_bit))
 	{
 		long pitch = (long)bitmap->width * bitmap_format_bits_per_pixel[bitmap->format] / 8;
-		long padded_pitch = (pitch + BITMAP_PITCH_ALIGNMENT - 1) / BITMAP_PITCH_ALIGNMENT * BITMAP_PITCH_ALIGNMENT;
 
 		if (compressed || bitmap->format == _bitmap_format_p8_bump || bitmap->type != _bitmap_type_2d ||
-			(pitch != padded_pitch && !tag_validate_custom_edition(validation)) || padded_pitch > MAXIMUM_BITMAP_PITCH)
+			pitch % BITMAP_PITCH_ALIGNMENT || pitch > MAXIMUM_BITMAP_PITCH)
 		{
 			tag_validate_correct(validation, "is linear, but of format %d, type %d, pitch %ld: not linear",
 				bitmap->format, bitmap->type, pitch);
@@ -1265,11 +1275,12 @@ static boolean bitmap_data_check(
 	/* (the pixels the game reads are as many as its dimensions, format and
 	mipmaps make, whatever the map says: texture_cache_bitmap_new) */
 	if (bitmap->pixels_size < 0 || bitmap->pixels_size > MAXIMUM_BITMAP_PIXELS_SIZE ||
-		!tag_validate_file_contains(validation, bitmap->pixels_offset, bitmap->pixels_size) ||
-		!tag_validate_file_contains(validation, bitmap->pixels_offset, bitmap_read_pixel_data_size(bitmap)))
+		!file_contains(validation, bitmap->pixels_offset, bitmap->pixels_size) ||
+		!file_contains(validation, bitmap->pixels_offset, bitmap_read_pixel_data_size(bitmap)))
 	{
-		tag_validate_correct(validation, "has %ld (reads %ld) bytes of pixels at %08lx, outside the map's files: none",
-			bitmap->pixels_size, bitmap_read_pixel_data_size(bitmap), (unsigned long)bitmap->pixels_offset);
+		tag_validate_correct(validation, "has %ld (reads %ld) bytes of pixels at %08lx, outside the map's %ld: none",
+			bitmap->pixels_size, bitmap_read_pixel_data_size(bitmap), (unsigned long)bitmap->pixels_offset,
+			tag_validate_file_length(validation));
 		bitmap_make_empty(bitmap);
 	}
 
@@ -1285,40 +1296,49 @@ static boolean bitmap_group_check(
 	long sequence_index;
 
 	/* (the texture cache adds the pixel data's offset in the file to each
-	bitmap's own: the sum must be in the map's files, as bitmap_data_check
-	has the bitmap's alone) */
+	bitmap's own: the sum must be in the map, as bitmap_data_check has the
+	bitmap's alone) */
 	{
+		long file_length = tag_validate_file_length(validation);
 		long bitmap_index;
 
-		if (!tag_validate_file_contains(validation, group->pixel_data.file_offset, 0))
+		if (group->pixel_data.file_offset < 0 || group->pixel_data.file_offset > file_length)
 		{
-			tag_validate_correct(validation, "has its pixel data at %08lx, outside the map's files: 0",
-				(unsigned long)group->pixel_data.file_offset);
+			tag_validate_correct(validation, "has its pixel data at %08lx, outside the map's %ld: 0",
+				(unsigned long)group->pixel_data.file_offset, file_length);
 			group->pixel_data.file_offset = 0;
 		}
 		for (bitmap_index = 0; bitmap_index < group->bitmaps.count; bitmap_index++)
 		{
-			struct bitmap_data *bitmap = (struct bitmap_data *)group->bitmaps.address + bitmap_index;
-			unsigned long offset = (unsigned long)group->pixel_data.file_offset + (unsigned long)bitmap->pixels_offset;
+			struct bitmap_data *bitmap = (struct bitmap_data *)xbox_pointer(group->bitmaps.address) + bitmap_index;
 
-			if (offset > (unsigned long)LONG_MAX ||
-				!tag_validate_file_contains(validation, (long)offset, bitmap->pixels_size) ||
-				!tag_validate_file_contains(validation, (long)offset, bitmap_read_pixel_data_size(bitmap)))
+			if (!file_contains(validation, group->pixel_data.file_offset + bitmap->pixels_offset, bitmap->pixels_size) ||
+				!file_contains(validation, group->pixel_data.file_offset + bitmap->pixels_offset,
+					bitmap_read_pixel_data_size(bitmap)))
 			{
 				tag_validate_correct(validation,
-					"has bitmap %ld with %ld (reads %ld) bytes of pixels at %08lx past its data at %08lx, outside the map's files: none",
+					"has bitmap %ld with %ld (reads %ld) bytes of pixels at %08lx past its data at %08lx, outside the map's %ld: none",
 					bitmap_index, bitmap->pixels_size, bitmap_read_pixel_data_size(bitmap),
-					(unsigned long)bitmap->pixels_offset, (unsigned long)group->pixel_data.file_offset);
+					(unsigned long)bitmap->pixels_offset, (unsigned long)group->pixel_data.file_offset, file_length);
 				bitmap_make_empty(bitmap);
-				/* (the group's offset is added by the game: the start of the
-				file is where it stands) */
-				bitmap->pixels_offset = -group->pixel_data.file_offset;
+				/* (the group's offset is added by the game: its pixel at the
+				group's data, which is in the file unless the data starts at
+				its end, as bitmap_data_check has a bitmap's offset alone. A
+				negative one, the start of the file, was corrected again by
+				bitmap_data_check. Data starting at the end of the file is
+				moved to its start, and the bitmaps checked again) */
+				if (!file_contains(validation, group->pixel_data.file_offset, 1))
+				{
+					tag_validate_correct(validation, "has its pixel data at the end of the map's %ld: 0", file_length);
+					group->pixel_data.file_offset = 0;
+					bitmap_index = -1;
+				}
 			}
 		}
 	}
 	for (sequence_index = 0; sequence_index < group->sequences.count; sequence_index++)
 	{
-		struct bitmap_group_sequence *sequence = (struct bitmap_group_sequence *)group->sequences.address +
+		struct bitmap_group_sequence *sequence = (struct bitmap_group_sequence *)xbox_pointer(group->sequences.address) +
 			sequence_index;
 
 		if (sequence->first_bitmap_index < 0 || sequence->bitmap_count < 0 ||
@@ -1393,7 +1413,7 @@ static boolean shader_layers_too_deep(
 		return TRUE;
 	for (layer_index = 0; layer_index < layers->count; layer_index++)
 	{
-		if (shader_layers_too_deep(validation, ((struct tag_reference *)layers->address)[layer_index].index,
+		if (shader_layers_too_deep(validation, ((struct tag_reference *)xbox_pointer(layers->address))[layer_index].index,
 			(short)(depth - 1)))
 		{
 			return TRUE;
@@ -1414,7 +1434,7 @@ static void shader_transparent_check(
 
 	for (layer_index = 0; layer_index < transparent->extra_layers.count; layer_index++)
 	{
-		struct tag_reference *layer = (struct tag_reference *)transparent->extra_layers.address + layer_index;
+		struct tag_reference *layer = (struct tag_reference *)xbox_pointer(transparent->extra_layers.address) + layer_index;
 
 		if (shader_layers_too_deep(validation, layer->index, MAXIMUM_SHADER_LAYER_DEPTH - 1))
 		{
@@ -1445,7 +1465,7 @@ static boolean shader_transparent_generic_check(
 
 	shader_type_check(validation, base, _shader_type_transparent_generic);
 	shader_transparent_check(validation, &generic->transparent, generic->transparent.maps.count ?
-		&((struct shader_transparent_generic_map *)generic->transparent.maps.address)->map : NULL);
+		&((struct shader_transparent_generic_map *)xbox_pointer(generic->transparent.maps.address))->map : NULL);
 
 	return TRUE;
 }
@@ -1458,7 +1478,7 @@ static boolean shader_transparent_chicago_check(
 
 	shader_type_check(validation, base, _shader_type_transparent_chicago);
 	shader_transparent_check(validation, &chicago->transparent, chicago->transparent.maps.count ?
-		&((struct shader_transparent_chicago_map *)chicago->transparent.maps.address)->map : NULL);
+		&((struct shader_transparent_chicago_map *)xbox_pointer(chicago->transparent.maps.address))->map : NULL);
 
 	return TRUE;
 }
@@ -1477,10 +1497,10 @@ static boolean shader_transparent_chicago_extended_check(
 		tag_validate_correct(validation, "has %ld two stage maps, which the game reads as its flags: none",
 			chicago->two_stage_maps.count);
 		chicago->two_stage_maps.count = 0;
-		chicago->two_stage_maps.address = NULL;
+		chicago->two_stage_maps.address = XBOX_NULL;
 	}
 	shader_transparent_check(validation, &chicago->transparent, chicago->transparent.maps.count ?
-		&((struct shader_transparent_chicago_map *)chicago->transparent.maps.address)->map : NULL);
+		&((struct shader_transparent_chicago_map *)xbox_pointer(chicago->transparent.maps.address))->map : NULL);
 
 	return TRUE;
 }
@@ -1653,7 +1673,7 @@ static boolean particle_system_type_check(
 	loop_time = 0.0f;
 	for (state_index = 0; state_index < type->type_states.count; state_index++)
 	{
-		struct particle_system_type_state *state = (struct particle_system_type_state *)type->type_states.address +
+		struct particle_system_type_state *state = (struct particle_system_type_state *)xbox_pointer(type->type_states.address) +
 			state_index;
 
 		loop_time += state->duration_lower_bound + state->transition_time_lower_bound;
@@ -1667,7 +1687,7 @@ static boolean particle_system_type_check(
 	for (state_index = 0; state_index < type->particle_states.count; state_index++)
 	{
 		struct particle_system_type_particle_state *state =
-			(struct particle_system_type_particle_state *)type->particle_states.address + state_index;
+			(struct particle_system_type_particle_state *)xbox_pointer(type->particle_states.address) + state_index;
 		struct bitmap_group *bitmap = tag_validate_tag_get(validation, state->bitmaps.index, 'bitm');
 		long sequence_index = state->sequence_index +
 			(type->complex_sprite_render_mode == _particle_system_type_complex_sprite_render_mode_rotational);
@@ -1675,7 +1695,7 @@ static boolean particle_system_type_check(
 		loop_time += state->duration_lower_bound + state->transition_time_lower_bound;
 		if (!TEST_FLAG(type->flags, _particle_system_type_disabled_bit) &&
 			(!bitmap || state->sequence_index < 0 || sequence_index >= bitmap->sequences.count ||
-				((struct bitmap_group_sequence *)bitmap->sequences.address)[sequence_index].sprites.count <= 0))
+				((struct bitmap_group_sequence *)xbox_pointer(bitmap->sequences.address))[sequence_index].sprites.count <= 0))
 		{
 			tag_validate_correct(validation, "has particle state %ld of sequence %ld, which has no sprites: disabled",
 				state_index, sequence_index);
@@ -1816,7 +1836,7 @@ static struct bitmap_data *bitmap_from_sequence(
 
 	if (group->sequences.count > 0 && sequence_index >= 0)
 	{
-		struct bitmap_group_sequence *sequence = (struct bitmap_group_sequence *)group->sequences.address +
+		struct bitmap_group_sequence *sequence = (struct bitmap_group_sequence *)xbox_pointer(group->sequences.address) +
 			sequence_index % group->sequences.count;
 
 		if (sequence->bitmap_count > 0)
@@ -1826,14 +1846,14 @@ static struct bitmap_data *bitmap_from_sequence(
 		else if (sequence->sprites.count && frame_index >= 0)
 		{
 			bitmap_index = frame_index < sequence->sprites.count ?
-				((struct bitmap_group_sprite *)sequence->sprites.address)[frame_index].bitmap_index : 0;
+				((struct bitmap_group_sprite *)xbox_pointer(sequence->sprites.address))[frame_index].bitmap_index : 0;
 		}
 	}
 	if (bitmap_index == NONE)
 		bitmap_index = frame_index;
 
 	return bitmap_index >= 0 && bitmap_index < group->bitmaps.count ?
-		(struct bitmap_data *)group->bitmaps.address + bitmap_index : NULL;
+		(struct bitmap_data *)xbox_pointer(group->bitmaps.address) + bitmap_index : NULL;
 }
 
 /* a glow's sprite is its texture's first sequence's first sprite, whose
@@ -1849,8 +1869,8 @@ static boolean glow_check(
 	{
 		struct bitmap_group_sprite *sprite = NULL;
 
-		if (texture->sequences.count > 0 && ((struct bitmap_group_sequence *)texture->sequences.address)->sprites.count > 0)
-			sprite = (struct bitmap_group_sprite *)((struct bitmap_group_sequence *)texture->sequences.address)->sprites.address;
+		if (texture->sequences.count > 0 && ((struct bitmap_group_sequence *)xbox_pointer(texture->sequences.address))->sprites.count > 0)
+			sprite = (struct bitmap_group_sprite *)xbox_pointer(((struct bitmap_group_sequence *)xbox_pointer(texture->sequences.address))->sprites.address);
 		if (!bitmap_from_sequence(texture, 0, sprite ? sprite->bitmap_index : 0))
 		{
 			tag_validate_correct(validation, "has a texture whose first sprite has no bitmap: none");
@@ -1899,7 +1919,7 @@ static boolean lightning_check(
 	for (marker_index = 0; marker_index < lightning->markers.count; marker_index++)
 	{
 		struct lightning_marker_definition *marker =
-			(struct lightning_marker_definition *)lightning->markers.address + marker_index;
+			(struct lightning_marker_definition *)xbox_pointer(lightning->markers.address) + marker_index;
 
 		if (marker->octaves_to_next_marker < 0 || marker->octaves_to_next_marker > MAXIMUM_LIGHTNING_OCTAVES)
 		{

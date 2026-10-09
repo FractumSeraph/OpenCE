@@ -24,7 +24,7 @@ xbox/
 !source/**/xbox/
 
 # Locally extracted proprietary game data (never commit)
-assets/
+/assets
 # (but the high-res assets, drawn for the port: tools/hud_assets.py)
 !port/assets/
 original/
@@ -40,3 +40,9 @@ dist/
 /services/selfhost/server/signaling/
 /services/selfhost/server/bin/
 /services/selfhost/server/runtime/
+
+# The Android signing key's settings (port/android/app/build.gradle reads
+# them), and any key; never commit
+port/android/keystore.properties
+*.keystore
+*.jks

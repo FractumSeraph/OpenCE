@@ -87,6 +87,22 @@ To see the glibc version that a build needs, enter
 2. Enter `python configure.py`.
 3. Enter `ninja linux`.
 
+### 64-bit
+
+`ninja linux64` builds the same game as native x86-64 code,
+`build/linux64/halo`, the way the macOS build does (the 64-bit build in
+[port/macos/README.md](../macos/README.md): `HALO_64BIT` and the `long`
+rewrite, `tools/lp64_build.py`). It needs the 64-bit glibc and SDL3
+development files (`sdl3` on Arch Linux, `libsdl3-dev` on Debian 13 and
+Ubuntu 25.04 or later) instead of the 32-bit ones, and the 64-bit OpenGL and
+sound libraries to start. An SDL3 built by hand is found through
+`LIBRARY_PATH` when linking and `LD_LIBRARY_PATH` when starting. It is not
+optimised with a profile (the committed profiles are the 32-bit build's).
+Its releases are their own download, `chupathingyce-linux64-release.zip`,
+which its self-updater asks for. It plays Halo PC's maps (`maps_ce/`,
+`maps_md/`, `maps_pc/`) and plays with the 32-bit builds and the other ports over the
+network, and it is a dedicated server too (`server/README.md`).
+
 ## Start the game
 
 Enter `build/linux/halo`.
@@ -169,6 +185,7 @@ These files are in the data root:
 | File | Contents |
 | --- | --- |
 | `debug.txt` | The log of the game. At start-up, the game shows the data root in the terminal. A crash writes its report (the faulting address and the calls that led to it) here as well; the `reference address` line at the top of each session places those addresses in the build. |
+| `crashes/` | Crash reports that wait to be sent (Linux and macOS; refer to "Crash reports"). |
 | `init.txt` | Console commands that the game does at start-up. For example, `map_name levels\a10\a10` starts the first campaign level. |
 | `tags/` | Sound tag files that replace the sounds of the maps (`audio.loose_sounds`). |
 
@@ -179,6 +196,30 @@ The settings are in `config.toml` next to the executable. Refer to
 If the game stops because of a fatal signal, it writes the address and a
 backtrace to the standard error. To find the function at the address, enter
 `addr2line -e build/linux/halo <address>`.
+
+### Crash reports
+
+Releases and nightlies on Linux and macOS also write a crash report when
+the game stops because of `SIGSEGV`, `SIGBUS`, `SIGILL`, `SIGFPE` or
+`SIGABRT` (`port/linux/src/posix_crash.c`). The report goes to `crashes/`
+in the data root. When the game starts the next time, it does what
+`crash_reports.upload` says: `"yes"` sends the reports to the ChupathingyCE
+site (`network.browser_url`, `POST /v1/crash`) in the background, `"no"`
+deletes them, and `"ask"` asks the player first. `crashes/` keeps at most 8
+reports.
+
+A report has the same format as on Windows
+(`port/linux/src/crash_report.h`), without a minidump: the build, the
+system, the signal, up to 32 calls (each a module and an offset in it, for
+example `halo+0x2715b4`), and the last 200 lines of `debug.txt` from before
+the crash, with each public IP address replaced with `[address]`. To find
+the function of a call on macOS, enter `atos -o halo -l 0x100000000
+0x1002715b4` (the offset plus `0x100000000`); on Linux, enter
+`addr2line -e halo 0x2715b4`.
+
+Local builds send no crash reports. To test the crash reports with such a
+build, set the `HALO_CRASH_REPORTS_ANY_BUILD` environment variable. Android
+and the dedicated server have no crash reports.
 
 ## Controls
 
@@ -229,6 +270,8 @@ In the menus, the mouse moves a pointer:
 - A left click selects the item. On a setting with values, a click on the
   left or right half changes the value. On a button in the key of a screen
   (for example "B = Back"), a click pushes that button.
+- On the on-screen keyboard (a profile's name), a left click presses the
+  key below the pointer, or pushes the "B =BACK" or "A =ENTER" legend.
 - A right click goes back.
 - The mouse wheel moves through the items.
 
@@ -255,8 +298,9 @@ other functions behind the screens are not wired to this game yet
 (`port/assets/menus/UNWIRED.md`): the lists they fill (profiles, maps,
 servers, key bindings) are empty, and the settings they change do not
 change. The screens open, close and move between each other as the PC
-version's. `display.menus = "xbox"` gives the Xbox's menus, which start every
-kind of game.
+version's. ChupathingyCE starts on the Xbox's menus (`display.menus = "xbox"`),
+which start every kind of game and have Online Games; `display.menus = "pc"`
+gives these.
 
 Multiplayer > CO-OP CAMPAIGN is the Xbox's cooperative play, which the PC
 version does not have: two players on this computer play the campaign in
@@ -301,15 +345,35 @@ problem.
 
 The settings are in `config.toml` next to the executable
 (`build/linux/config.toml`). At the first start, the game writes the file
-with the default values and a comment for each setting. To get the default
-values again, delete the file.
+with a comment for each setting and its default value, commented out:
+
+```toml
+# The menus: "xbox" for the Xbox's (with Online Games), "pc" for the
+# ...
+# menus = "xbox"
+```
+
+A setting that is commented out follows the default of the version that
+runs, so a new version with a different default changes it. To choose a
+value, remove the `# ` at the start of the line and change the value. Only
+the settings that you (or the Settings menu) change are lines without `#`;
+those stay as they are, also if a later version changes the default. To get
+the default values again, delete the file.
 
 The game reads the file at start-up. If a key is not correct, or a value
 has the wrong type, the game writes the line to the log and uses the default
 value. The Settings menu (Video, Mouse, Audio, Network and Controls Setup)
 changes the useful settings, writes them into the file (only their lines
-change) and applies them at once, but `audio.enabled`, and `display.menus`
-from the next main menu.
+change: the line of a setting at its default loses its `#`) and applies
+them at once, but `audio.enabled`, and `display.menus` from the next main
+menu. A new version adds its new settings to the file, commented out.
+
+Earlier versions wrote every setting as a value. The first start of this
+version updates such a file once (`config_version = 2` at the top
+marks it): a setting that holds the default of this version, or the
+default of an earlier version (`display.menus = "pc"`, the default before
+0.5.2b), is commented out, so that it follows the default. A setting with
+another value stays. The log has one line that tells what changed.
 
 Each setting has an environment variable. The environment variable changes
 the setting for one start of the game. It has priority over the file.
@@ -331,27 +395,31 @@ the setting for one start of the game. It has priority over the file.
 | `display.high_res_hud` | `true` | `HALO_HIGH_RES_HUD` | `true`: the HUD (meters, counters, panels and their outlines, the motion sensor, reticles, waypoints, scopes) is drawn from the high-res assets in `port/assets/hud`, 8x the size of the maps' bitmaps. The bitmaps with English text keep the maps' own. `false`: the maps' own bitmaps. |
 | `display.high_res_text` | `true` | `HALO_HIGH_RES_TEXT` | `true`: the menus' and HUD's text is drawn with the fonts in `port/assets/fonts` (Overpass, in place of the maps' Interstate) at the resolution the game draws at, laid out as before, and the menus' titles are drawn from the high-res pictures in `port/assets/titles`. `false`: the maps' bitmap fonts and titles. |
 | `display.shadow_resolution` | `128` | `HALO_SHADOW_RESOLUTION` | The size of the maps that the shadows of the objects are drawn in, in pixels each way: `128`, `256`, `512` or `1024` (other values go down to one of these). The game draws the shadow of each object into a map of 128x128 pixels, blurs it and projects it onto the ground. On a large screen, the edges of these shadows show steps that move when the object moves. A larger map makes the edges smooth; the blur is made wider to match, so the shadows are as soft as on the Xbox. Each doubling adds two passes of the blur. `128`: as on the Xbox. |
-| `display.menus` | `"pc"` | `HALO_MENUS` | `"pc"`: the PC version's menus, from the files in `port/assets/menus` and a `menus` folder next to `config.toml`. Refer to "Menus". `"xbox"`: the Xbox's menus. |
+| `display.menus` | `"xbox"` | `HALO_MENUS` | `"xbox"`: the Xbox's menus, with Online Games (ChupathingyCE's default). `"pc"`: the PC version's menus, from the files in `port/assets/menus` and a `menus` folder next to `config.toml`. Refer to "Menus". |
 | `display.player_names` | `"all"` | `HALO_PLAYER_NAMES` | In multiplayer, whose names are drawn above their heads: `"all"`, `"allies"`, `"enemies"` or `"none"`. An ally's name is drawn above the triangle the game shows over teammates. An enemy's name shows only within the motion sensor's reach, while the enemy is in sight and not camouflaged, so it never shows where an enemy hides. The gametype's motion tracker setting also applies: no names if it shows no players, only allies' if it shows only friends. |
 | `display.player_name_scale` | `1.0` | `HALO_PLAYER_NAME_SCALE` | How large the players' names are drawn: `1.0` is three quarters of the size of the HUD's text, from `0.25` to `4`. With high-res text, larger names are rasterized at their size, so they stay sharp. |
 | `display.scoreboard_team_layout` | `"teams"` | `HALO_SCOREBOARD_TEAM_LAYOUT` | How the multiplayer scoreboard (hold BACK, or tab) lists a team game's players. `"teams"`: a column for each team, red on the left and blue on the right. `"score"`: all the players in order of score. With more players than fit, the mouse wheel and Page Up / Page Down scroll the scoreboard. |
 | `display.scoreboard_background` | `true` | `HALO_SCOREBOARD_BACKGROUND` | `true`: the multiplayer scoreboard (hold BACK, or tab) has a panel behind its text, for clearer text. |
+| `display.show_quit_players` | `true` | `HALO_SHOW_QUIT_PLAYERS` | `true`: players who quit stay on the multiplayer scoreboard (hold BACK, or tab) and the score in the corner, as in the original game. `false`: they are left off, and the players still in the game are ranked among themselves, as OpenCE does. Only what this machine draws changes. |
 | `display.scoreboard_background_color` | `"16, 16, 16, 150"` | `HALO_SCOREBOARD_BACKGROUND_COLOR` | The colour of the scoreboard's panel: `"red, green, blue, alpha"`, each from `0` to `255`. Alpha `0` is see-through, `255` is solid. |
 | `display.per_pixel_lighting` | `false` | `HALO_PER_PIXEL_LIGHTING` | `false`: the models (characters, weapons, vehicles, scenery) are lit at each vertex and the light is blended between them, as on the Xbox. The light across a curved surface then shows facets, and a point light that passes close lights only the vertices it reaches. `true`: the models are lit at each pixel by the same lights (the ambient light, two distant lights and two point lights), which changes their look. |
 | `audio.enabled` | `true` | `HALO_NO_AUDIO=1` sets `false` | `false`: no audio device. The sound continues without output. |
 | `audio.volume` | `1.0` | `HALO_VOLUME` | The master volume. |
 | `audio.music_volume` | `1.0` | `HALO_MUSIC_VOLUME` | The music's volume, of the master volume. |
 | `audio.effects_volume` | `1.0` | `HALO_EFFECTS_VOLUME` | The volume of the other sounds (effects and speech), of the master volume. |
+| `audio.buffer_frames` | `2048` on macOS, `512` elsewhere | `HALO_AUDIO_BUFFER_FRAMES` | The audio device's buffer, in sample frames at 48 kHz, from `64` to `8192`. Larger rides out stalls that would cut the sound out; smaller has less delay (512 is 11 ms, 2048 is 43 ms). |
 | `audio.reverb` | `true` | `HALO_REVERB` | `true`: the sounds of the world reverberate as the place the player is in does: the sound environments of the maps (a corridor, a cave, a large hall, outdoors) set the reverberation, as the I3DL2 reverb of the Xbox did. A sound behind a wall or a door is muffled in it too. `false`: no reverberation (sounds behind a wall are still muffled). |
 | `audio.voice_chat` | `"push_to_talk"` | `HALO_VOICE_CHAT` | How you talk in voice chat: `"push_to_talk"` (while `controls.push_to_talk` is held; the microphone opens when you first press it), `"open_mic"` (when the microphone hears speech), or `"off"`. You hear the other players in every case. Refer to "Voice chat". |
 | `audio.voice_volume` | `1.0` | `HALO_VOICE_VOLUME` | The volume of the voices of the other players, `0` to `2`. |
 | `audio.output_device`, `audio.input_device` | `"default"` | `HALO_AUDIO_OUTPUT_DEVICE`, `HALO_AUDIO_INPUT_DEVICE` | The speakers and the microphone, by the name that Settings > Audio shows, or `"default"` for the device of the system. If the device is not found, the game uses the device of the system. Not on Android. |
 | `audio.loose_sounds` | `false` | `HALO_LOOSE_SOUNDS` | For those who make sounds. `true`: each sound of a map that has a sound tag file of its name in `tags/` in the data root (for example `tags/sound/sfx/weapons/assault rifle/fire.sound`) plays from that file. The files are Halo PC tag files, as the Halo Editing Kit and Invader write them. At the console, `loose_sounds_reload` reads the files again, and `loose_sounds false` plays the sounds of the map again. When a file changes, all sounds stop. |
+| `audio.resampling` | `"sinc"` | `HALO_AUDIO_RESAMPLING` | How the sounds, most of them recorded at 22 kHz, are brought to the output's 48 kHz. `"sinc"`: a windowed sinc low pass keeps each sound's band (flat to about 9 kHz for a 22 kHz sound) and nothing above it. `"linear"`: linear interpolation, as before OpenCE's build 130: the top of each sound's band is duller (-4 dB at 8 kHz) and images of the band reach up to 22 kHz, a brighter, grainier sound. |
 | `input.mouse_sensitivity` | `1.0` | `HALO_MOUSE_SENSITIVITY` | The multiplier for the mouse aim. |
 | `input.mouse_vertical_sensitivity` | `0.0` | `HALO_MOUSE_VERTICAL_SENSITIVITY` | The multiplier for the vertical mouse aim. `0`: the same as `input.mouse_sensitivity`. |
 | `input.invert_mouse` | `false` | `HALO_MOUSE_INVERT=1` sets `true` | `true`: the vertical mouse aim is inverted. |
 | `input.mouse_aim_assist` | `false` | `HALO_MOUSE_AIM_ASSIST` | `true`: the magnetism of the controller also operates for the mouse. `false`: when the mouse moved after the right stick, the view is not slowed or dragged by a target. The autoaim of the bullets operates in both cases. |
-| `controls.<action>` | (the table in "Controls") | `HALO_KEY_<ACTION>` | The keys and mouse buttons of an action, up to two, separated by a comma: `move_forward`, `move_backward`, `strafe_left`, `strafe_right`, `jump`, `crouch`, `fire`, `throw_grenade`, `melee`, `reload`, `zoom`, `switch_weapon`, `switch_grenade`, `action`, `flashlight`, `scoreboard`, `pause`, `screenshot`, `push_to_talk`. Keys by their names (`"W"`, `"Space"`, `"Left Ctrl"`, `"F1"`), and `"Mouse Left"`, `"Mouse Right"`, `"Mouse Middle"`, `"Mouse 4"`, `"Mouse 5"`, `"Wheel"` (either way), `"Wheel Up"`, `"Wheel Down"`. |
+| `controls.<action>` | (the table in "Controls") | `HALO_KEY_<ACTION>` | The keys and mouse buttons of an action, up to two, separated by a comma: `move_forward`, `move_backward`, `strafe_left`, `strafe_right`, `jump`, `crouch`, `fire`, `throw_grenade`, `melee`, `reload`, `zoom`, `switch_weapon`, `switch_grenade`, `action`, `flashlight`, `scoreboard`, `pause`. Keys by their names (`"W"`, `"Space"`, `"Left Ctrl"`, `"F1"`), and `"Mouse Left"`, `"Mouse Right"`, `"Mouse Middle"`, `"Mouse 4"`, `"Mouse 5"`, `"Wheel"` (either way), `"Wheel Up"`, `"Wheel Down"`. |
+| `game.downloaded_maps` | `""` | `HALO_DOWNLOADED_MAPS` | Maps to play as downloaded maps, until the game downloads maps itself: their names as the game names them (`bloodgulch`, `hugeass@ce`), separated by commas, or `"*"` for all the maps. The scripts of a downloaded map cannot change the settings of the player or the games of other players. `debug.txt` names what the game refused. |
 | `game.console_log` | `"important"` | `HALO_CONSOLE_LOG` | What the console shows on the screen. `"important"`: bans, players that the host drops for cheating, the reasons that the game refuses a command, and the asserts that stop the game. `"all"`: all the lines. `"none"`: only the asserts that stop the game. The output of a command always shows. `debug.txt` gets all the lines. |
 | `game.language` | `""` | `HALO_LANGUAGE` | The language of the menus: `ja`, `de`, `fr`, `es` or `it`. Empty: English. |
 | `game.enhanced_animations` | `true` | `HALO_ENHANCED_ANIMATIONS` | `true`: the player bipeds' grenade throws keep their legs moving, blended by speed and direction (crouched throws stay crouched, throws in the air use the jump's legs), Warthog and Scorpion riders stay seated to throw and let go of the grips to throw and reload, and a player turns with the aim while throwing, as while meleeing. `false`: the original animations, which freeze the legs during a throw and stand a rider up. Only in config.toml, not in the menus. |
@@ -363,6 +431,10 @@ the setting for one start of the game. It has priority over the file.
 | `network.join_from_clipboard` | `true` | `HALO_NET_JOIN_FROM_CLIPBOARD` | `true`: when the game comes to the front, it joins the game of an invite link on the clipboard. |
 | `network.tunnel_port` | `0` | `HALO_NET_TUNNEL_PORT` | The UDP port for internet play. `0`: the game selects a port. Refer to "Internet play". |
 | `network.allow_upnp` | `true` | `HALO_NET_ALLOW_UPNP` | `true`: internet play can ask the router to forward its port (UPnP). `false`: the game does not ask. Refer to "Internet play". |
+| `network.protocol` | `"auto"` | `HALO_NET_PROTOCOL` | Delta Peer, the messages between ChupathingyCE machines beside OpenCE's protocol (UDP port 5160; `docs/delta.md`). `"auto"`: Delta with the machines that speak it, plain OpenCE with the others. `"opence"`: Delta off. `"delta"`: as `"auto"` for now. |
+| `network.share_profile` | `false` | `HALO_NET_SHARE_PROFILE` | `true`: the other ChupathingyCE players of a game see this copy's player ID (its game list profile), over Delta. |
+| `network.platform_limits` | `"on"` | `HALO_NET_PLATFORM_LIMITS` | `"on"`: Delta hosts keep a game to the players this platform takes (an original Xbox: 16). `"off"`: this machine joins games of any size. |
+| `network.host_platform_limits` | `true` | `HALO_NET_HOST_PLATFORM_LIMITS` | `true`: a game this machine hosts keeps to the players its Delta machines' platforms take. `false`: their limits are ignored, for testing. |
 | `network.public_lobby` | `true` | `HALO_NET_PUBLIC_LOBBY` | `true`: the server browser. Public games are listed, and Join Game > Server Browser shows them. `false`: no games are listed or shown. Refer to "Server browser". |
 | `network.host_public` | `true` | `HALO_NET_HOST_PUBLIC` | `true`: a new game of Create Game > Internet starts as PUBLIC. `false`: it starts as PRIVATE. LISTING in Server Setup changes it for each game. Refer to "Server browser". |
 | `network.coop_friendly_fire` | `"on"` | `HALO_NET_COOP_FRIENDLY_FIRE` | Whether the players of an online co-op game hurt each other: `"off"`, `"on"`, `"shields_only"` or `"explosives_only"`. FRIENDLY FIRE in co-op's Server Setup > Co-op Options writes its choice here. Their AI allies they always can, as in the campaign. |
@@ -380,9 +452,10 @@ the setting for one start of the game. It has priority over the file.
 | `network.coop_public` | `false` | `HALO_NET_COOP_PUBLIC` | `true`: an online co-op game (Create Game > Internet, a SINGLEPLAYER map) starts as PUBLIC. `false`: it starts as PRIVATE. LISTING in co-op's Server Setup writes its choice here. Refer to "Server browser". |
 | `network.brokers_file` | `"brokers.txt"` | `HALO_NET_BROKERS_FILE` | The file of the public MQTT brokers that let the machines of an invite find each other, and that carry the listings of the server browser: next to `config.toml`, unless a full path. One `host:port` on each line, up to 5; `#` starts a comment. |
 | `network.stun_servers` | Google and Cloudflare | `HALO_NET_STUN` | The public STUN servers (`host:port`, with commas between them) that give the internet address of a machine. |
+| `network.legacy_table` | `""` | `HALO_LEGACY_TABLE` | For testing, and for admins: a legacy table file, not signed, next to `config.toml` unless a full path. Its row for the wire of the build sets the OpenCE network versions that the game announces and joins, in place of the signed tables. The log shows a warning at start. Refer to `docs/delta.md`. Empty: none. |
 | `discord.application_id` | the application of the project | `HALO_DISCORD_APPLICATION` | The Discord application for invites. Empty: no Discord. |
 | `update.auto` | `true` | `HALO_UPDATE_AUTO` | `true`: at start-up, the game looks for a new version. Refer to "Updates". `false`: the game does not look. |
-| `crash_reports.upload` | `"ask"` | `HALO_CRASH_REPORTS` | Windows only. `"yes"`: the game sends a report of each crash to the developers. `"no"`: the game sends no reports. `"ask"`: the game asks at the next crash and writes the answer here. Refer to "Crash reports" in [port/windows/README.md](../windows/README.md#crash-reports). |
+| `crash_reports.upload` | `"ask"` | `HALO_CRASH_REPORTS` | Desktop builds (releases and nightlies). `"yes"`: the game sends a report of each crash to the developers, through `network.browser_url`. `"no"`: the game sends no reports. `"ask"`: the game asks after the next crash (on Linux and macOS, when it starts the next time) and writes the answer here. Refer to "Crash reports" below and in [port/windows/README.md](../windows/README.md#crash-reports). |
 | `debug.update_answer` | `""` | `HALO_UPDATE_ANSWER` | The answer to the update question, for automatic tests: `yes`, `no` or `never`. Empty: the game asks. |
 | `debug.exit_after` | `0.0` | `HALO_EXIT_AFTER` | The game stops after this number of seconds. `0`: never. |
 | `debug.screenshot_directory`, `debug.screenshot_every` | `""`, `0` | `HALO_SCREENSHOT_DIR`, `HALO_SCREENSHOT_EVERY` | The game writes each Nth frame to this folder as a BMP file. |
@@ -391,6 +464,8 @@ the setting for one start of the game. It has priority over the file.
 | `debug.menu_open` | `""` | `HALO_MENU_OPEN` | Start on this screen of the menus (`main_menu/settings_select/...`, as `port/assets/menus` names it), a player profile being edited, to look at it. |
 | `debug.gpu_skip_vertex_shaders`, `debug.gpu_debug_expression`, `debug.gpu_debug_flat`, `debug.gpu_debug_texture0` | off | `HALO_GPU_SKIP_VS`, `HALO_GPU_DEBUG_EXPR`, `HALO_GPU_DEBUG_FLAT`, `HALO_GPU_DEBUG_T0` | Tools to find problems in the graphics: skip the draws of a vertex shader, or replace the output of all pixel shaders with a GLSL expression (for example `t0.rgb`). |
 | `debug.network_test`, `debug.network_test_start`, `debug.network_test_kill`, `debug.network_test_score`, `debug.network_test_shoot`, `debug.network_test_vehicle`, `debug.network_test_pickup`, `debug.network_test_pickup_weapon`, `debug.test_input` | off | `HALO_NETWORK_TEST`, `HALO_NETWORK_TEST_START`, `HALO_NETWORK_TEST_KILL`, `HALO_NETWORK_TEST_SCORE`, `HALO_NETWORK_TEST_SHOOT`, `HALO_NETWORK_TEST_VEHICLE`, `HALO_NETWORK_TEST_PICKUP`, `HALO_NETWORK_TEST_PICKUP_WEAPON`, `HALO_TEST_INPUT` | Automatic tests of system link (`game/network_test.c`). Refer to `NETCODE.md`. |
+| `debug.touch_targets` | `false` | `HALO_TOUCH_TARGETS` | Outlines the tap targets of the menus (item green, value blue, list slot yellow, legend button red, the band beside the slots of a list orange, keys of the on-screen keyboard white), marks where the last finger went down and the last tap landed for 3 seconds, and logs each tap with the target that it hit (for a value, also where it splits into previous and next): to judge the accuracy of touch. |
+| `debug.solo_game` | `false` | `HALO_SOLO_GAME` | A system link or split screen game can start with one player, alone on this machine: to test multiplayer maps without a second machine. |
 | `debug.network_latency`, `debug.network_loss`, `debug.network_corrupt`, `debug.network_corrupt_stream`, `debug.network_corrupt_after` | `0` | `HALO_NETWORK_LATENCY`, `HALO_NETWORK_LOSS`, `HALO_NETWORK_CORRUPT`, `HALO_NETWORK_CORRUPT_STREAM`, `HALO_NETWORK_CORRUPT_AFTER` | The game holds all the data that it receives for this number of milliseconds, ignores this percentage of the datagrams, and damages this percentage of the datagrams it receives, and this percentage of its reads of streams, at random (bytes changed, cut short, stretched or replaced), from this many seconds after the start. Use the first two to test the netcode as on the internet, and the others to test that nothing another machine sends can crash the game (a damaged stream is closed, so a little goes a long way; a host's messages to its own client are damaged too, so start damaging once the game has started). |
 | `debug.voice_test` | `false` | `HALO_VOICE_TEST` | Automatic tests of voice chat: a tone replaces the microphone, and each voice that the game hears is written to the log once each second. |
 | `debug.telnet_console`, `debug.telnet_console_port` | `false`, `2323` | `HALO_TELNET_CONSOLE`, `HALO_TELNET_CONSOLE_PORT` | The game listens on 127.0.0.1, on this port, for a script console (connect with telnet). The console has no password, so only this computer can reach it. |
@@ -415,6 +490,11 @@ If the latest release is newer, the game asks: "Do you want to update?"
 - Select "Do not ask again", then "Yes", to stop the questions. The game
   writes `auto = false` in the `[update]` section of `config.toml`. To get
   the questions again, set `auto = true`.
+
+Under gamescope (the Game Mode of the Steam Deck), the game does not ask,
+because a system dialog stops the game there. The game writes the new
+version in the log. To update, start the game from the desktop, or set
+`update_answer = "yes"` in the `[debug]` section of `config.toml`.
 
 The game downloads through HTTPS. It examines the certificate of the server
 against the certificate authorities of the system: on Linux, the bundle of
@@ -671,13 +751,38 @@ as for any public server.
 The brokers are in `brokers.txt` next to the executable (from
 `port/assets/network/brokers.txt`; on Android, the app writes it next to
 `config.toml` at each start), one `host:port` on each line. The game uses
-all of them at once (up to 5), so one that works is enough. An update
-replaces `brokers.txt`: to use brokers of your own, put them in another
+all of them at once (up to 5), so one that works is enough. Without the
+file (the dedicated server's container, the macOS application, whose
+`config.toml` is in Application Support), the game uses its own copy of the
+list. An update replaces `brokers.txt`: to use brokers of your own, put them in another
 file and name it in `network.brokers_file`. All the players must use the
 same broker to see each other's games. The game uses
 MQTT 5 if the broker has it, else MQTT 3.1.1. A broker that does not keep
 retained messages, or does not let clients subscribe with wildcards, carries
 only invites, not listings.
+
+ChupathingyCE's own parts of the server browser:
+
+- A game hosted from the Xbox menus (System Link, or Online Games) is an
+  internet game too, and public as `network.host_public` says, so it shows
+  in the Server Browser of OpenCE and ChupathingyCE. The dedicated server
+  (`server/`) is public unless `HALO_DEDICATED_PUBLIC=false`.
+- Builds with the game list (`configure.py --game-browser`) also show the
+  games of `network.browser_url` (halo.milenko.org). While the Server
+  Browser is open, the game reads the list with an HTTPS GET of
+  `/v1/games.txt` (at most every 5 seconds), and shows the games of its
+  network version, not its own. A game that is also listed on the brokers
+  shows once, with its listing (the same invite token). Joining a game of
+  the list joins its invite, as for a link.
+- A game on a Halo PC map, listed as `<map>@ce` (`@md`, `@pc`), shows PC
+  (MD) after the map's name. It can be joined only with the map in its
+  folder (`maps_ce/`, `maps_md/`, `maps_pc/`),
+  on a build that plays Halo PC maps (`HALO_CUSTOM_EDITION`); otherwise
+  the Server Browser says what is missing (`game/server_browser.c`).
+- Column titles sort the games (players, name, map, gametype, ping). Select
+  a title again to sort the other way. The chosen game stays chosen while
+  the list changes. The lines below the rows show the players (by name,
+  when the host sends a roster) and the rules of the chosen game.
 
 ### Security
 
@@ -836,6 +941,53 @@ the invite with the invite button of Discord. When a person accepts it, that
 person joins the game. If the game does not operate, Discord starts it.
 The game sends the activity only to a Discord client of the same user.
 
+### Online Games and the profile
+
+Builds with the game list (`configure.py --game-browser`) have Online Games
+in the Multiplayer menu: the games on `network.browser_url`
+(halo.milenko.org). Each copy of the game has a player key in the save root
+(`game_list_player.key`). The key confirms the player's lines in finished
+games. The game sends the key only to an HTTPS server, or to a server on
+this computer (`http://127.0.0.1`, `http://localhost`) for tests.
+
+To link the game to a profile on the site, do one of these steps in Online
+Games:
+
+- Press Start. The game opens the profile page in the web browser, signed
+  in as this player.
+- Press RB, or C on the keyboard (Link Profile). Use this step where no web
+  browser opens: Steam's Game Mode, a Steam Deck, a console. The game shows
+  a short code and a QR code. On a phone or a computer, go to
+  `<server>/connect` (the address that the game shows), sign in, and enter
+  the code, or scan the QR code. Then the game asks "Connect this game to
+  <name>?" (or "Move this game from <old name> to <name>?"). Press A to
+  connect, or B to cancel. A code operates for two minutes, and the question
+  for two minutes. Press RB (or C) for a new code.
+
+You link once. The link stays until you change the save root or the player
+key: the profile keeps the link, and the games the key played before it
+count too. Linking by code needs no key import.
+
+To use a key from another computer (or a backup of the profile's key) on
+Linux, either copy `game_list_player.key` into the save root, or start the
+game with the key's link as its argument: `halo 'halo://key/<64 hexadecimal
+digits>'` (the profile page's "Copy key link"). The game asks before it
+replaces its key. The file is the 32 bytes of the key. The game ignores a
+key file that another user owns or that others can read, and then has no
+key at all: `chmod 600 game_list_player.key`. The profile page's Install in
+Game button needs a desktop that opens `halo://` links for the game
+(it registers itself at start); on a Steam Deck's Game Mode, or in a
+sandbox, use the argument.
+
+Link Profile uses these requests to the server (`src/browser.c`, on the
+thread of the game list): `POST /v1/connect/start` with the key (and the
+name of the profile) gives `ok <code> <seconds> <token>`.
+`POST /v1/connect/status` with the token, each 3 seconds, gives `pending`,
+`confirm <name> [<old name>]`, `connected <name>`, `declined` or `expired`.
+`POST /v1/connect/confirm` with the token and the answer gives
+`connected <name>`, `declined` or `expired`. The QR code is from
+`port/third_party/qrcodegen`.
+
 ## Map checks
 
 The game reads a map's tags straight into memory and uses them as its own
@@ -866,20 +1018,6 @@ A map's scripts can call only the script functions that a map needs (the
 allowlist in `hs/hs.c`). They cannot call the functions for files, the
 saved state of the game, the console, debugging or cheats. A script that
 calls one does not run. The developer console can call every function.
-
-Halo Custom Edition maps get the same checks (those that need OpenSauce are
-refused). Their own loader (`game/cache_file_formats.c`) reads them into
-their tag cache at 0x40440000 and converts what Custom Edition lays out
-differently, then the validator checks their tags and each of their BSPs as
-it checks this build's maps, before the game converts their models, BSP
-geometry and scripts. Put them with `bitmaps.map`, `sounds.map` and
-`loc.map` in `custom_maps`, beside `maps`, or set `paths.custom_edition` to
-a Custom Edition install; the map lists show them as CUSTOM SINGLEPLAYER and
-CUSTOM MULTIPLAYER, played as campaign levels (alone, or as network co-op)
-or as multiplayer maps by their scenario type, and `game.custom_edition =
-false` refuses them. `map_validate` checks them too, with the resource maps
-beside each map or in `--maps <folder>`. See
-`docs/custom_edition_caches.md`.
 
 Defensive checks stay in the game code too. An index into a tag block, the
 tags or a tag's data that is out of range gets zeros (`tag_empty_data` in

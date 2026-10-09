@@ -692,7 +692,7 @@ static boolean game_state_image_data_valid(
 		return game_state_image_refuse(name, "is a data array of another signature");
 	if (data->maximum_count != maximum_count || data->size != element_size)
 		return game_state_image_refuse(name, "is a data array of another capacity");
-	if (data->data != live + 1)
+	if (data->data != XBOX_ADDRESS(live + 1))
 		return game_state_image_refuse(name, "is a data array whose elements are elsewhere");
 	if (data->count < 0 || data->count > data->maximum_count ||
 		data->first_free_absolute_index < 0 || data->first_free_absolute_index > data->maximum_count ||
@@ -719,7 +719,7 @@ static boolean game_state_image_reference_valid(
 {
 	long index;
 
-	if (!game_state_image_contains(reference, sizeof(*reference)) || ((unsigned long)reference & 3))
+	if (!game_state_image_contains(reference, sizeof(*reference)) || (POINTER_BITS(reference) & 3))
 		return FALSE;
 	for (index = 0; index < game_state_allocation_count; index++)
 	{
@@ -765,7 +765,7 @@ static boolean game_state_image_memory_pool_valid(
 		struct memory_pool_block *block;
 
 		if ((byte const *)block_live < first || (byte const *)block_live > last - sizeof(*block) ||
-			((unsigned long)block_live & 3) || ++count > size / (long)sizeof(*block))
+			(POINTER_BITS(block_live) & 3) || ++count > size / (long)sizeof(*block))
 		{
 			return game_state_image_refuse(name, "is a memory pool with a block outside it");
 		}
@@ -883,7 +883,7 @@ made valid for the map, with an identifier to give out and counts that fit
 static boolean game_state_data_array_good(
 	struct data_array const *data)
 {
-	return data->signature == 'd@t@' && data->data == (void *)(data + 1) && data->valid && data->next_identifier &&
+	return data->signature == 'd@t@' && data->data == XBOX_ADDRESS(data + 1) && data->valid && data->next_identifier &&
 		data->count >= 0 && data->count <= data->maximum_count &&
 		data->actual_count >= 0 && data->actual_count <= data->count &&
 		data->first_free_absolute_index >= 0 && data->first_free_absolute_index <= data->maximum_count;

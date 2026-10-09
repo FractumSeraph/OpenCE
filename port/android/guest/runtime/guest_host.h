@@ -75,6 +75,9 @@ void host_sdl_scancode_name(int scancode, char *buffer, unsigned int size);
 int host_sdl_scancode_from_name(const char *name);
 int host_sdl_show_toast(const char *message, int duration, int gravity, int x, int y);
 int host_sdl_show_simple_message_box(unsigned int flags, const char *title, const char *message);
+int host_sdl_show_message_box(unsigned int flags, const char *title, const char *message, int count,
+	const unsigned int *button_flags, const int *button_ids, const unsigned int *button_texts);
+int host_sdl_open_url(const char *url);
 int host_sdl_get_gamepads(unsigned int *ids, int capacity);
 unsigned int host_sdl_open_gamepad(unsigned int id);
 unsigned int host_sdl_gamepad_from_id(unsigned int id);
@@ -112,5 +115,21 @@ void host_gl_wait_frame(unsigned int slot);
 
 /* the storage directories the port uses, copied into buffer */
 void host_android_path(int which, char *buffer, unsigned int size);
+
+/* the edges where Android keeps its gestures, as left, top, right, bottom
+in pixels of the current orientation, into insets[4]; all 0 when unknown */
+void host_gesture_insets(int *insets);
+
+/* ---------- the on-screen touch controls (host_touch.c) */
+
+/* the overlay's controller: the SDL axes (left x, y, right x, y, left
+trigger, right trigger) and the SDL button bits, into state[7] */
+void host_touch_read(int *state);
+/* the overlay's view swipe since the last read, into delta[2] */
+void host_touch_look_read(float *delta);
+/* port 0's motors, for the phone's vibration */
+void host_touch_rumble(unsigned int low, unsigned int high);
+/* tells the overlay when to show: _touch_scene_* bits (touch_input.c) */
+void host_touch_scene(int scene);
 
 #endif

@@ -393,9 +393,17 @@ void _rasterizer_dynamic_vertices_unlock(
 	long dynamic_vertex_buffer_index);
 void _rasterizer_dynamic_vertices_delete(
 	long dynamic_vertex_buffer_index);
+#ifdef HALO_64BIT
+/* (as defined: an x64 Windows caller leaves the upper bits of an argument
+narrower than the definition's parameter as they are) */
+void *_rasterizer_decal_vertices_lock(
+	long cache_index,
+	long cache_size);
+#else
 void *_rasterizer_decal_vertices_lock(
 	short cache_index,
 	unsigned long cache_size);
+#endif
 long _rasterizer_decal_vertices_new(
 	long size);
 void _rasterizer_decal_vertices_delete(
@@ -559,8 +567,15 @@ void _rasterizer_environment_fog_screen_wind_get_vector(
 	short wind_index,
 	real animation_time,
 	real_vector3d *wind_vector);
+#ifdef HALO_64BIT
+/* (as defined: an x64 Windows caller leaves the upper bits of an argument
+narrower than the definition's parameter as they are) */
+void _rasterizer_environment_fog_screen_begin(
+	short pass);
+#else
 void _rasterizer_environment_fog_screen_begin(
 	boolean render_fog);
+#endif
 void _rasterizer_screen_flash(
 	void);
 /* ---------- globals */
@@ -686,12 +701,12 @@ struct rasterizer_debug_options rasterizer_debug_options =
 	{ 0 }, /* pad8A[2] */
 };
 /* No PDB name survives for this target-owned BSS symbol. */
-#ifndef HALO_ANDROID /* Mach-O section names differ; the default is .bss anyway */
+#if !defined(HALO_ANDROID) && !defined(__APPLE__) /* Mach-O section names differ; the default is .bss anyway */
 #pragma bss_seg(".bss")
 #endif
 static long bss_004662ec;
 real_argb_color *global_rasterizer_model_ambient_reflection_tint;
-#ifndef HALO_ANDROID
+#if !defined(HALO_ANDROID) && !defined(__APPLE__)
 #pragma bss_seg()
 #endif
 
@@ -1901,6 +1916,7 @@ void rasterizer_debug_model_vertices(
 	{
 		debug_vertex_count = 0;
 		closest_debug_vertex_index = NONE;
+		closest_debug_vertex_dot = -1.f;
 		match_assert(
 			"c:\\halo\\SOURCE\\rasterizer\\rasterizer.c",
 			857,
@@ -1910,9 +1926,9 @@ void rasterizer_debug_model_vertices(
 			triangle_vertex_index < part->triangle_buffer.count + 2;
 			triangle_vertex_index++)
 		{
-			word model_vertex_index = ((word const *)part->triangles.address)[triangle_vertex_index];
+			word model_vertex_index = ((word const *)xbox_pointer(part->triangles.address))[triangle_vertex_index];
 			struct rasterizer_model_vertex_compressed const *vertex =
-				&((struct rasterizer_model_vertex_compressed const *)part->compressed_vertices.address)[model_vertex_index];
+				&((struct rasterizer_model_vertex_compressed const *)xbox_pointer(part->compressed_vertices.address))[model_vertex_index];
 			short node_index0;
 			short node_index1;
 			real node_weight0;
@@ -2032,13 +2048,6 @@ void rasterizer_debug_model_vertices(
 				camera_dot = dot_product3d(
 					&camera_to_vertex,
 					&global_window_parameters.camera.forward);
-				/* BUG (preserved for exact matching): closest_debug_vertex_dot is never initialised
-				 * (only closest_debug_vertex_index is), so the first vertex compares an unassigned
-				 * real here (January 0x56cb00 reads [ebp-0x2c] at +0x496 and +0x4a3; its only store
-				 * is +0x4b9). Reached whenever the hs global rasterizer_debug_model_vertices is set
-				 * and the obscuring object is drawn; the value only chooses which vertex label is
-				 * drawn red. A corrected build should initialise it to -1.0f. Source-policy approval
-				 * pending (2026-09-27 audit). */
 				if ((dot_product3d(&camera_to_vertex, &normal) < 0.f &&
 					closest_debug_vertex_dot < camera_dot) ||
 					closest_debug_vertex_dot == -1.f)

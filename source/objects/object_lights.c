@@ -252,12 +252,12 @@ enum
 		_shader_type_environment))
 
 #define structure_material_get_vertex(material, vertex_index) \
-	((struct environment_vertex_compressed const *)(material)->compressed_vertex_data.address \
+	((struct environment_vertex_compressed const *)xbox_pointer((material)->compressed_vertex_data.address) \
 		+ (vertex_index))
 
 #define structure_material_get_lightmap_vertex(material, vertex_index) \
 	((struct environment_lightmap_vertex_compressed const *) \
-		((struct environment_vertex_compressed const *)(material)->compressed_vertex_data.address \
+		((struct environment_vertex_compressed const *)xbox_pointer((material)->compressed_vertex_data.address) \
 			+ (material)->vertices.count) \
 		+ (vertex_index))
 
@@ -392,11 +392,13 @@ typedef char verify_light_definition_falloff_function_offset[
 	offsetof(struct point_light_definition, falloff_function) == 0xFA ? 1 : -1];
 typedef char verify_light_datum_size[
 	sizeof(struct light_datum) == 0x7C ? 1 : -1];
+#ifndef HALO_64BIT
 typedef char verify_rasterizer_light_submit_parameters_size[
 	sizeof(struct rasterizer_light_submit_parameters) == 0x38 ? 1 : -1];
 typedef char verify_lights_globals_size[
 	sizeof(struct lights_globals) == 0x350 ? 1 : -1];
 
+#endif
 /* ---------- prototypes */
 
 static boolean should_render_lights(
@@ -745,7 +747,7 @@ boolean lights_port_recover(
 	struct object_iterator iterator;
 	struct object_datum *object;
 
-	if (data->signature == 'd@t@' && data->data == (void *)(data + 1) && data->valid && data->next_identifier &&
+	if (data->signature == 'd@t@' && data->data == XBOX_ADDRESS(data + 1) && data->valid && data->next_identifier &&
 		data->maximum_count == MAXIMUM_LIGHTS_PER_MAP && data->size == sizeof(struct light_datum) &&
 		data->count >= 0 && data->count <= data->maximum_count &&
 		data->actual_count >= 0 && data->actual_count <= data->count &&

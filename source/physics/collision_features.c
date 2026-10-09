@@ -288,12 +288,19 @@ void collision_features_from_vertex(
 		return;
 	}
 	edge = TAG_BLOCK_GET_ELEMENT(&bsp->edges, vertex->first_edge_index, struct collision_edge);
-	if (!collision_bsp_valid_surface_index(bsp, edge->surface_indices[0]))
+	/* port: the vertex's first edge's first surface, or its other if that
+	edge is open (collision_features_from_edge); a vertex of no surface is
+	no feature */
 	{
-		return;
+		long edge_surface_index = edge->surface_indices[0];
+
+		if (!collision_bsp_valid_surface_index(bsp, edge_surface_index))
+			edge_surface_index = edge->surface_indices[1];
+		if (!collision_bsp_valid_surface_index(bsp, edge_surface_index))
+			return;
+		surface = TAG_BLOCK_GET_ELEMENT(&bsp->surfaces, edge_surface_index, struct collision_surface);
+		surface_index = object_index != NONE ? NONE : edge_surface_index;
 	}
-	surface = TAG_BLOCK_GET_ELEMENT(&bsp->surfaces, edge->surface_indices[0], struct collision_surface);
-	surface_index = object_index != NONE ? NONE : edge->surface_indices[0];
 
 	if (matrix)
 	{
@@ -351,6 +358,9 @@ void collision_features_from_edge(
 		return;
 	}
 	edge = TAG_BLOCK_GET_ELEMENT(&bsp->edges, edge_index, struct collision_edge);
+	/* port: an open edge, of one surface (a Halo PC map's BSP may have
+	them: Gemini's), has no crease to collide with; its surface still
+	collides. It asserted here, and read the surface before the first */
 	if (!collision_bsp_valid_surface_index(bsp, edge->surface_indices[0]) ||
 		!collision_bsp_valid_surface_index(bsp, edge->surface_indices[1]))
 	{

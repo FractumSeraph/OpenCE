@@ -191,6 +191,7 @@ symbols in this file:
 /* ---------- headers */
 
 #include "cseries.h"
+#include "cseries/cseries_windows.h"
 #include "bungie_net/common/message_header.h"
 #include "bungie_net/network/transport.h"
 #include "bungie_net/network/transport_endpoint_winsock.h"
@@ -315,7 +316,8 @@ struct message_server_pregame_countdown
 
 struct message_server_pregame_keep_alive
 {
-	short unused;
+	/* (a short on the Xbox, a long on the wire: network_messages.c) */
+	long unused;
 };
 
 struct message_server_postgame_keep_alive

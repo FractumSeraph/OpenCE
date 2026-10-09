@@ -350,8 +350,9 @@ static struct
 
 static int elapsed(unsigned long since, unsigned long time)
 {
-	/* (unsigned, as the clock wraps) */
-	return (unsigned int)(p2p_now() - since) >= (unsigned int)time;
+	/* 0 is "never", which is long ago (p2p.c's elapsed); unsigned, as the
+	clock wraps */
+	return !since || (unsigned int)(p2p_now() - since) >= (unsigned int)time;
 }
 
 static unsigned short network_short(unsigned short value)
@@ -639,7 +640,9 @@ static int broker_publish_listing(struct broker *broker, const unsigned char *pa
 	if (size)
 		memcpy(broker->in_flight[free_index].payload, payload, (size_t)size);
 	broker_publish_slot(broker, broker->in_flight[free_index].identifier, payload, size, 0);
-	return 1;
+	/* (not sent if the send closed the broker: published again once it is
+	connected, as its will cleared the slot) */
+	return broker->state == _broker_ready;
 }
 
 /* whether the broker carries the server browser: retained messages and
@@ -673,6 +676,10 @@ static void broker_sync_topics(struct broker *broker)
 			broker_topic(broker, had, 0, 0);
 		if (wanted[index][0])
 			broker_topic(broker, wanted[index], 1, index == _topic_own_slot);
+		/* (a send that failed closed the broker, which forgot its topics:
+		they are asked for again once it is ready again) */
+		if (broker->state != _broker_ready)
+			return;
 		/* (once subscribed to the slots, the hosts are asked to publish:
 		retained copies come at once, but may be old) */
 		if (index == _topic_slots && wanted[index][0])
@@ -1513,10 +1520,16 @@ static void broker_readable(struct broker *broker)
 
 /* ---------- p2p.c's side */
 
+/* port/assets/network/brokers.txt's brokers, for a game with no such file
+beside its config.toml: the dedicated server's container, a macOS
+application (its config.toml in Application Support), a build run from its
+build folder. Keep it the same as that file */
+#define DEFAULT_BROKERS "opence.milenko.org:1883,broker.emqx.io:1883,broker.hivemq.com:1883,test.mosquitto.org:1883"
+
 /* the brokers in network.brokers_file (beside config.toml, unless a full
 path: port/assets/network/brokers.txt, which the builds put there), one on
 each line, "#" starting a comment, into text: host:port entries separated by
-commas; empty if the file cannot be read */
+commas; DEFAULT_BROKERS if the file cannot be read */
 static void brokers_list(char *text, size_t size)
 {
 	const char *name = config_string("network.brokers_file");
@@ -1536,7 +1549,9 @@ static void brokers_list(char *text, size_t size)
 	file = config_file_read(path, &file_size);
 	if (!file)
 	{
-		platform_log("Internet play: the brokers' file %s cannot be read (network.brokers_file)", path);
+		platform_log("Internet play: the brokers' file %s cannot be read (network.brokers_file); "
+			"using the game's own list", path);
+		snprintf(text, size, "%s", DEFAULT_BROKERS);
 		return;
 	}
 	for (index = 0; index < file_size && length + 1 < size; index++)

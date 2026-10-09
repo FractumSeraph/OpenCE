@@ -36,6 +36,7 @@ Called from the main loop every frame (main.c).
 
 #include "cseries.h"
 #include "main/main.h"
+#include "bink/bink_playback.h"
 #include "interface/player_ui.h"
 #include "interface/ui_widget.h"
 #include "networking/network_game_globals.h"
@@ -59,6 +60,9 @@ Called from the main loop every frame (main.c).
 #include <math.h>
 #include <stdarg.h>
 #include <stdio.h>
+
+/* players.c's (not in players.h) */
+boolean player_handle_powerup(long player_index, short powerup_type, short duration);
 #include <string.h>
 
 /* the platform layer's (port/linux/src/port_config.c) */
@@ -438,7 +442,7 @@ static void network_test_shoot(
 		scenario_location_from_point(&damage.location, &damage.epicenter);
 		object_cause_damage(&damage, target->unit_index, NONE, NONE, NONE, NULL);
 		platform_log("network test: player %ld shoots player %ld",
-			(long)DATUM_INDEX_TO_ABSOLUTE_INDEX(iterator.datum_index), (long)(target - (struct player_datum *)player_data->data));
+			(long)DATUM_INDEX_TO_ABSOLUTE_INDEX(iterator.datum_index), (long)(target - (struct player_datum *)xbox_pointer(player_data->data)));
 	}
 }
 
@@ -512,7 +516,7 @@ static void network_test_gather(
 		}
 		object_set_position(player->unit_index, &position, NULL, NULL);
 		platform_log("network test: the host brings player %ld near the first",
-			(long)(player - (struct player_datum *)player_data->data));
+			(long)(player - (struct player_datum *)xbox_pointer(player_data->data)));
 	}
 }
 
@@ -657,7 +661,7 @@ static void network_test_second_weapon(
 		{
 			platform_log("network test: the last player takes a second weapon (%lx)", weapon->definition_index);
 			/* (and camouflage, as a powerup gives) */
-			player_handle_powerup(DATUM_INDEX_NEW(last - (struct player_datum *)player_data->data, last->identifier),
+			player_handle_powerup(DATUM_INDEX_NEW(last - (struct player_datum *)xbox_pointer(player_data->data), last->identifier),
 				_player_powerup_active_camouflage, 10 * TICKS_PER_SECOND);
 			return;
 		}
@@ -905,12 +909,25 @@ void network_test_update(
 			holds the countdown) */
 			if (global_network_game_server_get())
 				network_game_server_pause_countdown(global_network_game_server_get(), FALSE);
+			/* a join that arrived as the last game ended would refuse every
+			later one, the server holding it behind the queued player */
+			network_game_server_port_clear_queued_players(global_network_game_server_get());
 			platform_log("network test: the next game");
 		}
 	}
 
 	if (!main_menu_loaded)
 		return;
+	/* the intro movie skipped first, as a button press does: the movie
+	holds the texture cache's spare memory, which starting the map
+	takes too (texture_cache_steal_memory's assertion) */
+	if (bink_playback_in_progress())
+	{
+		bink_playback_stop();
+		network_test.menu_seconds = 0.0f;
+		platform_log("network test: skipped the movie");
+		return;
+	}
 	network_test.menu_seconds += seconds;
 	/* (the main menu settling first) */
 	if (network_test.menu_seconds < 2.0f)

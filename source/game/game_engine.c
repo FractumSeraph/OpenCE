@@ -592,7 +592,21 @@ struct network_game *network_game_server_get_game(struct network_game_server *se
 #include "text/unicode.h"
 #include "units/bipeds.h"
 #include "units/units.h"
-#include "custom_edition_cache.h" /* port: port/linux/game/custom_edition_cache.c */
+#ifdef HALO_64BIT
+#include "main/console.h"
+#endif
+#ifdef HALO_GAME_BROWSER
+#include "../../port/linux/src/browser.h"
+/* port/linux/game/game_stats.c's */
+void game_stats_player_killed(long killing_player_index, long dead_player_index, boolean friendly_fire);
+void game_stats_player_extra(long player_index, char *text, long size, short *multikills);
+void game_stats_game_extra(boolean host, char *text, long size);
+#endif
+
+#ifdef HALO_CUSTOM_EDITION
+/* cache_files.c's */
+boolean cache_file_tags_are_ce(void);
+#endif
 
 /* network_game_globals.c's */
 boolean network_game_distributed_client(void);
@@ -937,9 +951,9 @@ long game_globals_get_weapon(
 	struct tag_reference *weapon;
 	long weapon_definition_index;
 
-	/* port: none past the end of the list. A Custom Edition map's globals can
-	list fewer weapons than the Xbox's fourteen (stopping before the
-	grenades). */
+	/* port: none past the globals' list (a Halo PC map's may be shorter
+	than the Xbox's: mermaids_plaza's ends before the grenades), as for a
+	weapon a game has none of */
 	if (weapon_list_index < 0 || weapon_list_index >= game_globals->weapon_list.count)
 		return NONE;
 	weapon = TAG_BLOCK_GET_ELEMENT(
@@ -969,6 +983,25 @@ long game_engine_get_team_score(
 
 	return 0;
 }
+
+#ifdef HALO_GAME_BROWSER
+/* every player's score added up: the dedicated server's sign that a game is
+being played (server/src/dedicated.c) */
+long game_engine_total_score(
+	void)
+{
+	struct data_iterator iterator;
+	long total = 0;
+
+	if (!game_engine || !game_engine->get_player_score)
+		return 0;
+	data_iterator_new(&iterator, player_data);
+	while (data_iterator_next(&iterator))
+		total += game_engine->get_player_score(iterator.datum_index, FALSE);
+
+	return total;
+}
+#endif
 
 real linear_to_non_linear_alpha(
 	real linear_alpha)
@@ -1197,7 +1230,7 @@ static void game_engine_generate_title_string(
 			}
 			else
 				outcome_string = L"";
-			ustrncpy(title_string, outcome_string, 80);
+			ustrncpy_terminated(title_string, outcome_string, 80);
 			break;
 
 		case FALSE:
@@ -1213,7 +1246,7 @@ static void game_engine_generate_title_string(
 				}
 				else
 					outcome_string = L"";
-				ustrncpy(title_string, outcome_string, 80);
+				ustrncpy_terminated(title_string, outcome_string, 80);
 			}
 			else
 			{
@@ -1227,7 +1260,7 @@ static void game_engine_generate_title_string(
 				}
 				else
 					outcome_string = L"";
-				ustrncpy(title_string, outcome_string, 80);
+				ustrncpy_terminated(title_string, outcome_string, 80);
 			}
 			break;
 
@@ -1244,7 +1277,7 @@ static void game_engine_generate_title_string(
 				}
 				else
 					outcome_string = L"";
-				ustrncpy(title_string, outcome_string, 80);
+				ustrncpy_terminated(title_string, outcome_string, 80);
 			}
 			else
 			{
@@ -1258,7 +1291,7 @@ static void game_engine_generate_title_string(
 				}
 				else
 					outcome_string = L"";
-				ustrncpy(title_string, outcome_string, 80);
+				ustrncpy_terminated(title_string, outcome_string, 80);
 			}
 			break;
 		}
@@ -1470,8 +1503,17 @@ static void rasterize_in_game_score_draw_line(
 
 /* port: the in-game scoreboard's lists (game_engine_rasterize_scoreboard,
 game_engine_rasterize_in_game_score): the players in the game, not those who
-quit, ranked and placed among themselves */
+quit, ranked and placed among themselves, unless display.show_quit_players
+keeps them listed as the original game did (only what this machine draws) */
 static boolean statistic_buffer_in_game_only = FALSE;
+
+int config_boolean(const char *name);
+
+static boolean scoreboard_in_game_only(
+	void)
+{
+	return !config_boolean("display.show_quit_players");
+}
 
 long populate_statistic_buffer(
 	struct statistic_buffer *statistic_buffer,
@@ -2117,7 +2159,7 @@ static void game_engine_rasterize_scoreboard(
 	}
 	else
 	{
-		statistic_buffer_in_game_only = TRUE;
+		statistic_buffer_in_game_only = scoreboard_in_game_only();
 		ranked_count = populate_statistic_buffer(ranked, _postgame_statistic_ranking, FALSE);
 		statistic_buffer_in_game_only = FALSE;
 	}
@@ -2273,7 +2315,6 @@ static void game_engine_rasterize_scoreboard(
 	/* port: bounded (the map's column names) */
 	usnprintf(row_string, NUMBEROF(row_string), L"\t%s\t%s\t%s\t%s", column_name, score_name, score_string,
 		network ? L"Ping" : L"");
-	row_string[NUMBEROF(row_string) - 1] = 0;
 	{
 		long column;
 
@@ -2532,7 +2573,7 @@ static void game_engine_rasterize_in_game_score(
 		return;
 	}
 	game_engine_generate_title_string(title_string, player_index);
-	statistic_buffer_in_game_only = TRUE;
+	statistic_buffer_in_game_only = scoreboard_in_game_only();
 	entry_count = select_players_to_display(
 		_postgame_statistic_ranking,
 		player_index,
@@ -2565,7 +2606,6 @@ static void game_engine_rasterize_in_game_score(
 
 	game_engine->format_score_name(score_string);
 	usnprintf(row_string, NUMBEROF(row_string), L"\t%s\t%s\t%s", column_name, score_name, score_string);
-	row_string[NUMBEROF(row_string) - 1] = 0;
 	rasterize_in_game_score_draw_line(row_string, FALSE, &color, 1);
 
 	for (entry_index = 0; entry_index < entry_count; entry_index++)
@@ -4649,8 +4689,8 @@ it, back there after the time (the clients get the host's: the distributed
 netcode). Vehicles otherwise stay where they are left (the Xbox game's). */
 enum
 {
-	/* (a map places up to 80 vehicles, a Custom Edition map more: those
-	past this never came back) */
+	/* (a map places up to 80 vehicles, a Halo PC map more: those past this
+	never came back; 48 bytes each, outside the game state) */
 	MAXIMUM_VEHICLE_HOMES = 1024
 };
 
@@ -4929,6 +4969,11 @@ void game_engine_player_killed(
 	/* port: a killer who has left the game since is no one's kill */
 	if (killing_player_index != NONE && !player_try_and_get(killing_player_index))
 		killing_player_index = NONE;
+#ifdef HALO_GAME_BROWSER
+	/* the game list's statistics recorder (port/linux/game/game_stats.c):
+	who killed whom, as this machine's game has it; it changes nothing */
+	game_stats_player_killed(killing_player_index, dead_player_index, friendly_fire);
+#endif
 	/* the host's kill of a player who quit, ahead of this client's clock
 	(game_update_quit_players has not come to its time yet) */
 	if (network_game_distributed_client() && dead_player->quit_out_of_game_time != NONE &&
@@ -5813,11 +5858,123 @@ void game_engine_web_report_update(
 }
 #endif
 
+#ifdef HALO_GAME_BROWSER
+/* the lines of a carnage report: the players in the postgame's order, as
+this machine's game has them (the host's own, or a client's copy of the
+host's statistics and scores, network_distributed.c), each with what the
+game's statistics recorder adds (port/linux/game/game_stats.c: medals,
+weapons, sprees); the host also gives each player's machine's address, for
+its tag (browser.c). Returns the count. */
+long game_engine_report_lines(
+	struct browser_report_player *players,
+	long maximum)
+{
+	static struct statistic_buffer ranking[MULTIPLAYER_MAXIMUM_PLAYERS];
+	static char extras[MULTIPLAYER_MAXIMUM_PLAYERS][BROWSER_REPORT_EXTRA_SIZE];
+	struct network_game_server *server = global_network_game_server_get();
+	long count = populate_statistic_buffer(ranking, _postgame_statistic_ranking, FALSE);
+	long index;
+
+	if (count > maximum)
+		count = maximum;
+	for (index = 0; index < count; index++)
+	{
+		struct player_datum *player = player_get(ranking[index].player_index);
+		struct browser_report_player *line = &players[index];
+
+		csmemset(line, 0, sizeof(*line));
+		csmemcpy(line->name, player->name, sizeof(line->name));
+		line->team = (short)player->team_index;
+		line->place = (short)((ranking[index].place & 0x7FFFFFFF) + 1);
+		line->score = game_engine->get_player_score
+			? game_engine->get_player_score(ranking[index].player_index, FALSE)
+			: 0;
+		line->kills = player->statistics.kills[0];
+		line->assists = player->statistics.assists[0];
+		line->deaths = player->statistics.deaths;
+		line->betrayals = player->statistics.friendly_fire_kills;
+		line->suicides = player->statistics.suicides;
+		/* (the game's own count is of the multikill under way, not of all
+		of them: the recorder's, from every kill, where it has them) */
+		line->multikills = player->statistics.multiple_kills;
+		line->shots_fired = player->statistics.shots_fired;
+		line->shots_hit = player->statistics.shots_hit;
+		line->color = player->network_player_data.primary_color_index;
+		if (server)
+		{
+			unsigned long network_game_server_machine_ipv4_address(struct network_game_server *server,
+				short machine_index);
+
+			line->address = network_game_server_machine_ipv4_address(server,
+				player->network_player_data.machine_index);
+		}
+		/* (the game type's statistics: the union's member for this game) */
+		switch (global_variant.game_engine_index)
+		{
+		case game_engine_ctf:
+			line->flag_grabs = player->statistics.multiplayer_statistics.ctf_statistics.flag_grabs;
+			line->flag_returns = player->statistics.multiplayer_statistics.ctf_statistics.flag_returns;
+			line->flag_scores = player->statistics.multiplayer_statistics.ctf_statistics.flag_scores;
+			break;
+		case game_engine_oddball:
+			line->ball_time = player->statistics.multiplayer_statistics.oddball_statistics.time_with_the_ball;
+			line->ball_carrier_kills = player->statistics.multiplayer_statistics.oddball_statistics.ball_carrier_kills;
+			break;
+		case game_engine_king:
+			line->hill_time = player->statistics.multiplayer_statistics.king_statistics.time_on_hill;
+			break;
+		case game_engine_race:
+			line->laps = player->statistics.multiplayer_statistics.race_statistics.laps;
+			break;
+		}
+		{
+			short multikills = line->multikills;
+
+			extras[index][0] = 0;
+			game_stats_player_extra(ranking[index].player_index, extras[index], BROWSER_REPORT_EXTRA_SIZE,
+				&multikills);
+			line->multikills = multikills;
+			line->extra = extras[index];
+		}
+	}
+	return count;
+}
+
+/* the carnage report of a game this machine hosts, as it ends, for the game
+list (port/linux/src/browser.c, which sends it if the game is listed). A
+game that is quit or crashes never gets here, so it is never reported. */
+static void game_engine_report_game(
+	void)
+{
+	static struct browser_report_player players[MULTIPLAYER_MAXIMUM_PLAYERS];
+	static char extra[BROWSER_REPORT_GAME_EXTRA_SIZE];
+	long count = game_engine_report_lines(players, MULTIPLAYER_MAXIMUM_PLAYERS);
+	boolean teams = global_variant.universal_variant.teams;
+
+	/* (a game everyone left, the dedicated server's to end: no report) */
+	if (count == 0)
+		return;
+	game_stats_game_extra(TRUE, extra, sizeof(extra));
+	browser_report_game(
+		teams,
+		teams ? game_engine_get_team_score(0) : 0,
+		teams ? game_engine_get_team_score(1) : 0,
+		game_time_get() / TICKS_PER_SECOND,
+		players,
+		count,
+		extra);
+}
+#endif
+
 void game_engine_end_game(
 	void)
 {
 	if (game_engine_globals.postgame_state==game_engine_mode_active)
 	{
+#ifdef HALO_GAME_BROWSER
+		if (global_network_game_server_get())
+			game_engine_report_game();
+#endif
 		game_engine_globals.postgame_state = game_engine_mode_postgame_delay;
 		game_engine_globals.postgame_timer = 7.0f;
 		game_engine_play_multiplayer_sound(_multiplayer_sound_game_over);
@@ -7408,72 +7565,60 @@ void game_engine_variant_cleanup(
 	return;
 }
 
-static void game_engine_predict_resources(
-	void)
+/* port: one of the globals' three multiplayer vehicles (0 warthog, 1 ghost,
+2 scorpion), or NONE for one the map's globals lack: a Custom Edition map's
+may have fewer, which the original read past the end of */
+static long game_engine_multiplayer_vehicle(
+	long index)
 {
-	struct game_globals *game_globals;
-	struct game_globals_multiplayer_information *multiplayer_information;
-	struct game_globals_vehicle *vehicle;
-	long weapon_indices[10];
-	long weapon_index;
+	struct game_globals *game_globals = scenario_get_game_globals();
+	struct game_globals_multiplayer_information *information;
 
-	game_globals = scenario_get_game_globals();
-	multiplayer_information = TAG_BLOCK_GET_ELEMENT(
+	if (game_globals->multiplayer_information.count <= 0)
+		return NONE;
+	information = TAG_BLOCK_GET_ELEMENT(
 		&game_globals->multiplayer_information,
 		0,
 		struct game_globals_multiplayer_information);
+	if (index >= information->vehicles.count)
+		return NONE;
+	return TAG_BLOCK_GET_ELEMENT(&information->vehicles, index, struct game_globals_vehicle)->vehicle.index;
+}
 
-	/* port: the cases below take the three multiplayer vehicles the Xbox's
-	globals always have; a Halo Custom Edition map's can have fewer, and then
-	gets no vehicle predicted (port/linux/game/custom_edition_cache.c) */
-	if (multiplayer_information->vehicles.count >= 3)
+static void game_engine_predict_multiplayer_vehicle(
+	long index)
+{
+	long definition_index = game_engine_multiplayer_vehicle(index);
+
+	if (definition_index != NONE)
+		object_definition_predict(definition_index);
+}
+
+static void game_engine_predict_resources(
+	void)
+{
+	long weapon_indices[10];
+	long weapon_index;
+
 	switch (global_variant.universal_variant.vehicle_set)
 	{
 	case _game_engine_vehicles_warthog:
-		vehicle = TAG_BLOCK_GET_ELEMENT(
-			&multiplayer_information->vehicles,
-			0,
-			struct game_globals_vehicle);
-		object_definition_predict(vehicle->vehicle.index);
+		game_engine_predict_multiplayer_vehicle(0);
 		break;
 
 	case _game_engine_vehicles_ghost:
-		vehicle = TAG_BLOCK_GET_ELEMENT(
-			&multiplayer_information->vehicles,
-			1,
-			struct game_globals_vehicle);
-		object_definition_predict(vehicle->vehicle.index);
+		game_engine_predict_multiplayer_vehicle(1);
 		break;
 
 	case _game_engine_vehicles_tank:
-		vehicle = TAG_BLOCK_GET_ELEMENT(
-			&multiplayer_information->vehicles,
-			2,
-			struct game_globals_vehicle);
-		object_definition_predict(vehicle->vehicle.index);
+		game_engine_predict_multiplayer_vehicle(2);
 		break;
 
 	default:
-	{
-		struct tag_block *vehicles = &multiplayer_information->vehicles;
-
-		vehicle = TAG_BLOCK_GET_ELEMENT(
-			vehicles,
-			0,
-			struct game_globals_vehicle);
-		object_definition_predict(vehicle->vehicle.index);
-		vehicle = TAG_BLOCK_GET_ELEMENT(
-			vehicles,
-			1,
-			struct game_globals_vehicle);
-		object_definition_predict(vehicle->vehicle.index);
-		vehicle = TAG_BLOCK_GET_ELEMENT(
-			vehicles,
-			2,
-			struct game_globals_vehicle);
-		object_definition_predict(vehicle->vehicle.index);
+		game_engine_predict_multiplayer_vehicle(0);
+		game_engine_predict_multiplayer_vehicle(1);
+		game_engine_predict_multiplayer_vehicle(2);
 		break;
-	}
 	}
 
 	object_definition_predict(list_index_to_weapon_definition_index(_weapon_list_frag_grenade));
@@ -7762,6 +7907,57 @@ static short game_engine_nearest_team(
 	return team;
 }
 
+#ifdef HALO_CUSTOM_EDITION
+/* port: a Halo PC map's multiplayer vehicles are chosen by their
+placements, as retail Halo's are and as the maps were made for: a vehicle
+placement (0x78 bytes of the scenario tag) has its multiplayer spawn flags
+at 0x5a, whose low four bits place it by default in slayer, ctf, king and
+oddball. In those game types, unless the variant has no vehicles, only the
+placements whose bit names the game type are placed (and then as the
+variant's vehicle set allows: game_engine_vehicle_placement_allowed), and a
+script may make any vehicle (game_engine_remap_vehicle). Race has no bit,
+and keeps this build's rule. OpenCE's build-145 plays Custom Edition maps
+so, and a game of one must place the same vehicles on every machine. */
+enum
+{
+	CE_VEHICLE_SPAWN_FLAGS_OFFSET = 0x5a,
+};
+
+static short game_engine_ce_vehicle_default_bit(
+	void)
+{
+	switch (global_variant.game_engine_index)
+	{
+	case game_engine_slayer: return 0;
+	case game_engine_ctf: return 1;
+	case game_engine_king: return 2;
+	case game_engine_oddball: return 3;
+	default: return NONE;
+	}
+}
+
+boolean game_engine_ce_vehicles_by_placement(
+	void)
+{
+	extern boolean cache_file_tags_are_ce(void);
+
+	return game_engine && cache_file_tags_are_ce() &&
+		global_variant.universal_variant.vehicle_set != _game_engine_vehicles_none &&
+		game_engine_ce_vehicle_default_bit() != NONE;
+}
+
+boolean game_engine_ce_vehicle_placement_allowed(
+	struct scenario_object_datum const *placement)
+{
+	word spawn_flags;
+
+	if (!game_engine_ce_vehicles_by_placement())
+		return TRUE;
+	csmemcpy(&spawn_flags, (byte const *)placement + CE_VEHICLE_SPAWN_FLAGS_OFFSET, sizeof(spawn_flags));
+	return TEST_FLAG(spawn_flags, game_engine_ce_vehicle_default_bit());
+}
+#endif
+
 boolean game_engine_vehicle_placement_allowed(
 	struct scenario_object_datum const *placement,
 	struct tag_block *palette)
@@ -7870,11 +8066,12 @@ long game_engine_remap_vehicle(
 {
 	long result = vehicle_definition_index;
 
-	/* port: a Halo Custom Edition map's vehicles are chosen by their
-	placements, and its scripts may create any
-	(port/linux/game/custom_edition_objects.c) */
-	if (custom_edition_vehicles_by_placement())
+#ifdef HALO_CUSTOM_EDITION
+	/* port: a Halo PC map's placements were chosen by their spawn flags,
+	and its scripts may make any vehicle (game_engine_ce_vehicles_by_placement) */
+	if (game_engine_ce_vehicles_by_placement())
 		return result;
+#endif
 	/* port: and the PC vehicle set's are every one the map places
 	(game_engine_vehicle_placement_allowed) */
 	if (game_engine && (game_variant_options_get()->vehicle_set[0] == VARIANT_VEHICLE_SET_PC ||
@@ -7884,32 +8081,16 @@ long game_engine_remap_vehicle(
 	}
 	if (game_engine)
 	{
-		struct game_globals *game_globals;
-		struct game_globals_multiplayer_information *multiplayer_information;
-		struct tag_block *vehicles;
-		struct game_globals_vehicle *vehicle0;
-		struct game_globals_vehicle *vehicle1;
-		struct game_globals_vehicle *vehicle2;
-		struct game_globals_vehicle *vehicle;
-
-		game_globals = scenario_get_game_globals();
-		multiplayer_information = TAG_BLOCK_GET_ELEMENT(
-			&game_globals->multiplayer_information,
-			0,
-			struct game_globals_multiplayer_information);
-		vehicle0 = TAG_BLOCK_GET_ELEMENT(
-			&multiplayer_information->vehicles,
-			0,
-			struct game_globals_vehicle);
-		vehicles = &multiplayer_information->vehicles;
-		vehicle1 = TAG_BLOCK_GET_ELEMENT(vehicles, 1, struct game_globals_vehicle);
-		vehicle2 = TAG_BLOCK_GET_ELEMENT(vehicles, 2, struct game_globals_vehicle);
+		/* (port: NONE for one the map's globals lack) */
+		long vehicle0 = game_engine_multiplayer_vehicle(0);
+		long vehicle1 = game_engine_multiplayer_vehicle(1);
+		long vehicle2 = game_engine_multiplayer_vehicle(2);
 
 		/* (port: and the other types a gametype's sets name, which a map may
 		have: game_engine_variant_vehicle_type) */
-		if (result != vehicle0->vehicle.index &&
-			result != vehicle1->vehicle.index &&
-			result != vehicle2->vehicle.index &&
+		if (result != vehicle0 &&
+			result != vehicle1 &&
+			result != vehicle2 &&
 			((game_variant_options_get()->vehicle_set[0] == _game_engine_vehicles_default &&
 				game_variant_options_get()->vehicle_set[1] == _game_engine_vehicles_default) ||
 				game_engine_variant_vehicle_type(result) == NONE))
@@ -7927,29 +8108,17 @@ long game_engine_remap_vehicle(
 			break;
 
 		case _game_engine_vehicles_warthog:
-			vehicle = TAG_BLOCK_GET_ELEMENT(
-				vehicles,
-				0,
-				struct game_globals_vehicle);
-			if (vehicle->vehicle.index != result)
+			if (vehicle0 != result)
 				result = NONE;
 			break;
 
 		case _game_engine_vehicles_ghost:
-			vehicle = TAG_BLOCK_GET_ELEMENT(
-				vehicles,
-				1,
-				struct game_globals_vehicle);
-			if (vehicle->vehicle.index != result)
+			if (vehicle1 != result)
 				result = NONE;
 			break;
 
 		case _game_engine_vehicles_tank:
-			vehicle = TAG_BLOCK_GET_ELEMENT(
-				vehicles,
-				2,
-				struct game_globals_vehicle);
-			if (vehicle->vehicle.index != result)
+			if (vehicle2 != result)
 				result = NONE;
 			break;
 		}
@@ -8964,7 +9133,7 @@ static long item_collection_get_total(
 	struct tag_block const *permutations)
 {
 	struct item_permutation_definition const *permutation =
-		(struct item_permutation_definition const *)permutations->address;
+		(struct item_permutation_definition const *)xbox_pointer(permutations->address);
 	long permutation_count = permutations->count;
 	long result = 0;
 	long permutation_index;
@@ -8992,7 +9161,7 @@ static long random_item(
 		0,
 		(short)item_collection_get_total(permutations));
 	struct item_permutation_definition const *permutation =
-		permutations->address;
+		xbox_pointer(permutations->address);
 	long permutation_index = 0;
 
 	while (permutation_index < permutation_count)
@@ -9077,8 +9246,10 @@ static void game_engine_update_item_spawn(
 				placement_data.position = equipment->position;
 				/* port: Halo PC faces a Custom Edition map's items the way
 				their placements do, where the Xbox copied only the position */
-				if (custom_edition_cache_tags_loaded())
+#ifdef HALO_CUSTOM_EDITION
+				if (cache_file_tags_are_ce())
 					vector3d_from_angle(&placement_data.forward, equipment->facing);
+#endif
 				object_index = object_new(&placement_data);
 				if (object_index != NONE)
 				{

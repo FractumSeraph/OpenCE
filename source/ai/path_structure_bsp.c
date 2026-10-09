@@ -780,7 +780,7 @@ static byte path_pathfinding_surface(
 	struct structure_bsp const *structure,
 	long surface_index)
 {
-	byte const *pathfinding_surfaces = structure->pathfinding_surfaces.address;
+	byte const *pathfinding_surfaces = xbox_pointer(structure->pathfinding_surfaces.address);
 
 	if ((surface_index == NONE && structure->pathfinding_surfaces.count > 0) ||
 		VALID_INDEX(surface_index, structure->pathfinding_surfaces.count))

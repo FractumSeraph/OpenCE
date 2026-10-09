@@ -281,8 +281,12 @@ symbols in this file:
 #include "saved games/game_state.h"
 #include "text/draw_string.h"
 #include "cseries/errors.h"
+#include "interface/terminal.h"
 #include "main/console.h"
 #include "game/game.h"
+#ifdef HALO_64BIT
+#include "cseries/cseries_windows.h"
+#endif
 
 /* ---------- constants */
 
@@ -308,7 +312,14 @@ enum
 
 enum
 {
+#ifdef HALO_64BIT
+	/* doubled: stack frames hold two native pointers; and doubled again
+	for Halo PC's maps, whose scripts run deeper than the Xbox's (Halo
+	Kart's), which Halo PC's engine let them */
+	HS_THREAD_STACK_SIZE = 0x800
+#else
 	HS_THREAD_STACK_SIZE = 0x200
+#endif
 };
 
 /* port: the size of the text an inspector writes (hs_evaluate_inspect) */
@@ -338,8 +349,8 @@ enum
 /* a thread is valid when it lies inside the thread data array and its stack pointer and
    the fill mark of its topmost frame lie inside its own inline stack buffer */
 #define valid_thread(thread) \
-	((byte *)(thread)>=(byte *)hs_thread_data->data && \
-	(byte *)(thread)<(byte *)hs_thread_data->data+hs_thread_data->count*hs_thread_data->size && \
+	((byte *)(thread)>=(byte *)xbox_pointer(hs_thread_data->data) && \
+	(byte *)(thread)<(byte *)xbox_pointer(hs_thread_data->data)+hs_thread_data->count*hs_thread_data->size && \
 	(byte *)(thread)->stack>=(thread)->stack_data && \
 	(byte *)(thread)->stack<(thread)->stack_data+HS_THREAD_STACK_SIZE && \
 	(thread)->stack->data+(thread)->stack->size<=(thread)->stack_data+HS_THREAD_STACK_SIZE)
@@ -426,11 +437,15 @@ struct hs_thread_datum
 	long previous_sleep_until;
 	struct hs_stack_frame *stack;
 	long result;
-	byte stack_data[0x200];
+	/* sized by the limit the stack checks allow: with 0x200 here, a 64-bit
+	   script deeper than 0x200 bytes wrote over the next thread's datum */
+	byte stack_data[HS_THREAD_STACK_SIZE];
 };
+#ifndef HALO_64BIT
 
 typedef char hs_thread_datum_size_assert[
 	sizeof(struct hs_thread_datum) == 0x218 ? 1 : -1];
+#endif
 
 /* ---------- prototypes */
 
@@ -743,7 +758,12 @@ void hs_runtime_initialize(
 	short global_index;
 	long index;
 
+#ifdef HALO_64BIT
+	/* the thread holds a native stack frame pointer */
+	hs_thread_data = game_state_data_new("hs thread", 0x100, MAX(0x218, sizeof(struct hs_thread_datum)));
+#else
 	hs_thread_data = game_state_data_new("hs thread", 0x100, 0x218);
+#endif
 	hs_global_data = game_state_data_new("hs globals", 0x400, 8);
 	if (hs_thread_data && hs_global_data)
 	{
@@ -1621,7 +1641,7 @@ static void hs_inspect_string(
 
 	/* port: no longer than hs_evaluate_inspect's buffer (a script's
 	string can be any length) */
-	snprintf(buffer, HS_INSPECT_BUFFER_SIZE, "%s", (char const *)value);
+	snprintf(buffer, HS_INSPECT_BUFFER_SIZE, "%s", (char const *)xbox_pointer(value));
 
 	return;
 }
@@ -1658,13 +1678,7 @@ static long hs_long_to_boolean(
 {
 	long result;
 
-	/* BUG: only the low byte of this uninitialised long is written, and the whole long is returned; its
-	   upper three bytes are indeterminate. January homes result in the argument slot, so they are bits 8-31
-	   of n; where hs_string_to_boolean inlines this function they come from its 'push ecx' slot, which holds
-	   hs_cast's table index 254 (0x000000fe), so they are zero there. No January consumer reads a boolean
-	   cell beyond its low byte, but hs_return and the pass-through forms copy the whole long into hs thread
-	   stacks and hs globals, so these bytes reach the saved-game CRC and the save files
-	   (game_state_write_to_persistent_storage, game_state_write_to_file, game_state_write_core). */
+	result = 0;
 	*(boolean *)&result = n==0;
 
 	return result;
@@ -1675,12 +1689,7 @@ static long hs_short_to_boolean(
 {
 	long result;
 
-	/* BUG: only the low byte of this uninitialised long is written, and the whole long is returned; its
-	   upper three bytes are indeterminate. January homes result in the argument slot, so they are bits 8-31
-	   of s. No January consumer reads a boolean cell beyond its low byte, but hs_return and the pass-through
-	   forms copy the whole long into hs thread stacks and hs globals, so these bytes reach the saved-game CRC
-	   and the save files (game_state_write_to_persistent_storage, game_state_write_to_file,
-	   game_state_write_core). */
+	result = 0;
 	*(boolean *)&result = (short)s==0;
 
 	return result;
@@ -1689,7 +1698,7 @@ static long hs_short_to_boolean(
 static long hs_string_to_boolean(
 	long n)
 {
-	return hs_long_to_boolean(csstrlen((char const *)n));
+	return hs_long_to_boolean(csstrlen((char const *)xbox_pointer(n)));
 }
 
 static long hs_data_to_void(
@@ -1733,12 +1742,7 @@ static long hs_real_to_short(
 {
 	long result;
 
-	/* BUG: only the low word of this uninitialised long is written, and the whole long is returned; its
-	   upper word is indeterminate. January homes result in the argument slot, so it is the upper word of r's
-	   bit pattern. No January consumer reads a short cell beyond its low word, but hs_return and the
-	   pass-through forms copy the whole long into hs thread stacks and hs globals, so these bytes reach the
-	   saved-game CRC and the save files (game_state_write_to_persistent_storage, game_state_write_to_file,
-	   game_state_write_core). */
+	result = 0;
 	*(short *)&result = (short)*(real *)&r;
 
 	return result;
@@ -1755,12 +1759,7 @@ static long hs_long_to_short(
 {
 	long result;
 
-	/* BUG: only the low word of this uninitialised long is written, and the whole long is returned; its
-	   upper word is indeterminate. January homes result in the argument slot, so it is the upper word of l
-	   (January returns l unchanged). No January consumer reads a short cell beyond its low word, but
-	   hs_return and the pass-through forms copy the whole long into hs thread stacks and hs globals, so these
-	   bytes reach the saved-game CRC and the save files (game_state_write_to_persistent_storage,
-	   game_state_write_to_file, game_state_write_core). */
+	result = 0;
 	*(short *)&result = (short)l;
 
 	return result;
@@ -1923,6 +1922,40 @@ void hs_return(
 	return;
 }
 
+#ifdef HALO_64BIT
+#define MAXIMUM_HS_FUNCTION_PARAMETERS 32
+
+short const *hs_function_parameter_types(
+	struct hs_function_definition const *function)
+{
+	static struct
+	{
+		struct hs_function_definition const *function;
+		short types[MAXIMUM_HS_FUNCTION_PARAMETERS];
+	} copies[512];
+	static int copy_count = 0;
+	int copy_index;
+	short parameter_index;
+
+	for (copy_index = 0; copy_index < copy_count; copy_index++)
+	{
+		if (copies[copy_index].function == function)
+		{
+			return copies[copy_index].types;
+		}
+	}
+	match_assert("c:\\halo\\SOURCE\\hs\\hs_runtime.c", __LINE__,
+		copy_count < NUMBEROF(copies) && function->parameter_count <= MAXIMUM_HS_FUNCTION_PARAMETERS);
+	for (parameter_index = 0; parameter_index < function->parameter_count; parameter_index++)
+	{
+		copies[copy_count].types[parameter_index] = HS_FUNCTION_PARAMETER_TYPE(function, parameter_index);
+	}
+	copies[copy_count].function = function;
+
+	return copies[copy_count++].types;
+}
+
+#endif
 long *hs_macro_function_evaluate(
 	short function_index,
 	long thread_index,
@@ -1933,7 +1966,11 @@ long *hs_macro_function_evaluate(
 	return hs_arguments_evaluate(
 		thread_index,
 		function->parameter_count,
+#ifdef HALO_64BIT
+		hs_function_parameter_types(function),
+#else
 		function->parameter_types,
+#endif
 		initialize);
 }
 
@@ -1999,13 +2036,7 @@ void hs_evaluate_equality(
 		if (function_index==_hs_function_not_equal)
 			equal = !equal;
 
-		/* BUG: only the low byte of this uninitialised long is written, and the whole long is passed to
-		   hs_return; its upper three bytes are indeterminate. January reuses the function_index argument
-		   slot, which parameter_types has just filled with the argument type twice, so the long is
-		   (type<<16)|equal. No January consumer reads a boolean cell beyond its low byte, but hs_return and
-		   the pass-through forms copy the whole long into hs thread stacks and hs globals, so these bytes
-		   reach the saved-game CRC and the save files (game_state_write_to_persistent_storage,
-		   game_state_write_to_file, game_state_write_core). */
+		result_long = 0;
 		*(boolean *)&result_long = equal;
 		hs_return(thread_index, result_long);
 	}
@@ -2051,13 +2082,7 @@ void hs_evaluate_inequality(
 			break;
 		}
 
-		/* BUG: only the low byte of this uninitialised long is written, and the whole long is passed to
-		   hs_return; its upper three bytes are indeterminate. January reuses the function_index argument
-		   slot, where it has just spilled value1, so they are bits 8-31 of value1's bit pattern. No January
-		   consumer reads a boolean cell beyond its low byte, but hs_return and the pass-through forms copy
-		   the whole long into hs thread stacks and hs globals, so these bytes reach the saved-game CRC and
-		   the save files (game_state_write_to_persistent_storage, game_state_write_to_file,
-		   game_state_write_core). */
+		result_long = 0;
 		*(boolean *)&result_long = comparison;
 		hs_return(thread_index, result_long);
 	}
@@ -2107,13 +2132,7 @@ void hs_evaluate_logical(
 	}
 	else
 	{
-		/* BUG: only the low byte of this uninitialised long is written, and the whole long is passed to
-		   hs_return; its upper three bytes are indeterminate. January reuses the initialize argument slot,
-		   so they are the upper bytes of the dword hs_thread_main pushed for initialize (stack residue from
-		   hs_thread_main's frame). No January consumer reads a boolean cell beyond its low byte, but
-		   hs_return and the pass-through forms copy the whole long into hs thread stacks and hs globals, so
-		   these bytes reach the saved-game CRC and the save files (game_state_write_to_persistent_storage,
-		   game_state_write_to_file, game_state_write_core). */
+		result_long = 0;
 		*(boolean *)&result_long = *result;
 
 		hs_return(thread_index, result_long);
@@ -2271,10 +2290,10 @@ void hs_evaluate_inspect(
 		if (hs_type_valid(expression->type) && hs_type_inspectors[expression->type])
 		{
 			hs_type_inspectors[expression->type](expression->type, *value, string);
-			/* port: printed through "%s". January passes the text as the
-			format (0x4bc840 +0xdd..+0xe6), so a '%' in an inspected string
-			read arguments that were never passed */
-			console_printf(FALSE, "%s", string);
+			/* (port: a scenario script's inspect is the game's chatter, as
+			print is, hs_print) */
+			if (terminal_shows(terminal_command_running ? _terminal_message_serious : _terminal_message_chatter))
+				console_printf(FALSE, "%s", string);
 		}
 
 		hs_return(thread_index, 0);
@@ -2498,7 +2517,11 @@ void hs_evaluate_debug_string(
 
 		hs_evaluate(thread_index, *expression_index, &argument);
 		*expression_index = hs_syntax_get(*expression_index)->next_node_index;
+#ifdef HALO_64BIT
+		arguments[*argument_count] = xbox_pointer(argument);
+#else
 		arguments[*argument_count] = (char const *)argument;
+#endif
 		*argument_count += 1;
 	}
 	else
@@ -2702,6 +2725,25 @@ static void hs_thread_main(
 	hs_runtime_globals.executing_thread_index = (short)thread_index;
 	if (thread->type==_hs_thread_type_script)
 	{
+		/* port: a corrupted thread's script index halted the whole game from
+	   the assert inside tag_block_get_element (observed on a10 with the
+	   sound cache under pressure); drop the bad thread and keep running */
+		if (thread->script_index<0 ||
+			thread->script_index>=global_scenario_get()->hs_scripts.count)
+		{
+			error(_error_silent, "hs thread #%08lX has a bad script index #%08lX; dropping it",
+				(unsigned long)thread_index, (unsigned long)thread->script_index);
+			thread->type = _hs_thread_type_console_command;
+			thread->script_index = NONE;
+			thread->sleep_until = 0;
+			thread->stack = (struct hs_stack_frame *)thread->stack_data;
+			thread->stack->previous = NULL;
+			thread->stack->size = 0;
+			thread->stack->expression_index = NONE;
+			hs_thread_delete(thread_index);
+			hs_runtime_globals.executing_thread_index = NONE;
+			return;
+		}
 		script = TAG_BLOCK_GET_ELEMENT(
 			&global_scenario_get()->hs_scripts,
 			thread->script_index,
@@ -2857,7 +2899,21 @@ static long hs_type_default_value(
 	case _hs_type_long_integer:
 		return _hs_type_long_integer_default;
 	case _hs_type_string:
+#ifdef HALO_64BIT
+	{
+		/* (a string value is an Xbox address: an empty string there) */
+		static char *empty_string;
+
+		if (!empty_string)
+			empty_string = malloc(1);
+		if (!empty_string)
+			return 0;
+		empty_string[0] = 0;
+		return (long)xbox_address(empty_string);
+	}
+#else
 		return (long)_hs_type_string_default;
+#endif
 	default:
 		/* (the rest's defaults, hs.c's _hs_type_*_default, are all NONE) */
 		return NONE;
@@ -3223,7 +3279,7 @@ static void hs_global_reconcile_write(
 			break;
 		case _hs_type_string:
 			if (external->address)
-				*(char const **)external->address = (char const *)global->value;
+				*(char const **)external->address = (char const *)xbox_pointer(global->value);
 			break;
 		case _hs_type_script:
 			if (external->address)

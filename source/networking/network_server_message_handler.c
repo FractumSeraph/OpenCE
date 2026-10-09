@@ -248,6 +248,7 @@ symbols in this file:
 /* ---------- headers */
 
 #include "cseries.h"
+#include "halo_map_families.h" /* port: map_family_wire_name */
 #include "bungie_net/common/message_header.h"
 #include "bungie_net/network/transport.h"
 #include "bungie_net/network/transport_endpoint_winsock.h"
@@ -773,6 +774,22 @@ boolean network_game_server_send_message_to_client_machine(
 	return network_game_server_write(connection, buffer, size, NULL, 1);
 }
 
+/* port: the game's settings as they go to the other machines: a Halo PC
+map's name as the game's protocol has it (custom_maps\\<name>, OpenCE's
+build-145's; halo_map_families.h), into wire, which game is then */
+static void const *network_game_server_wire_game(
+	void const *game,
+	long game_size,
+	struct network_game *wire)
+{
+	if (game_size != (long)sizeof(*wire))
+		return game;
+	csmemcpy(wire, game, sizeof(*wire));
+	map_family_wire_name(((struct network_game const *)game)->map.name, wire->map.name, sizeof(wire->map.name));
+
+	return wire;
+}
+
 boolean network_game_server_send_game_settings_to_client_machine(
 	struct network_game_server *server,
 	struct network_game_server_client_machine *machine,
@@ -780,8 +797,10 @@ boolean network_game_server_send_game_settings_to_client_machine(
 	long game_size)
 {
 	struct message_server_game_settings_update message;
+	struct network_game wire_game;
 	long offset;
 
+	game = network_game_server_wire_game(game, game_size, &wire_game);
 	for (offset = 0; offset < game_size; offset += sizeof(message.data))
 	{
 		void *encoded_message;
@@ -1085,6 +1104,7 @@ boolean network_game_server_send_game_settings_to_all_machines(
 	long game_size)
 {
 	struct message_server_game_settings_update message;
+	struct network_game wire_game;
 	long offset;
 	boolean result = TRUE;
 
@@ -1093,6 +1113,7 @@ boolean network_game_server_send_game_settings_to_all_machines(
 		0x1C8,
 		server);
 
+	game = network_game_server_wire_game(game, game_size, &wire_game);
 	/* every piece goes out even if one fails for a machine: the others
 	would otherwise keep the old settings (a machine whose connection failed
 	is closed, and is skipped when the update is sent again) */
@@ -1748,6 +1769,9 @@ static boolean network_game_server_handle_message_client_broadcast_game_search(
 			ustrncpy(advertisement.game_name, game->name, NETWORK_GAME_NAME_LENGTH - 1);
 			advertisement.engine_type = (short)game->variant.game_engine_index;
 			csmemcpy(&advertisement.map, &game->map, sizeof(game->map));
+			/* port: the map as the game's protocol names it (a Halo PC map's:
+			halo_map_families.h) */
+			map_family_wire_name(game->map.name, advertisement.map.name, sizeof(advertisement.map.name));
 			advertisement.machine_count = game->machine_count;
 			advertisement.player_count = game->player_count;
 			advertisement.maximum_player_count = game->maximum_players;
@@ -1767,10 +1791,16 @@ static boolean network_game_server_handle_message_client_broadcast_game_search(
 			/* the native builds' network version and netcode (a client
 			refuses a host of another version, or of the lockstep netcode
 			older builds had: network_client_manager.c) */
-			advertisement.reserved[HALO_PORT_ADVERTISED_VERSION_OFFSET] = (byte)(HALO_PORT_NETWORK_VERSION & 0xFF);
-			advertisement.reserved[HALO_PORT_ADVERTISED_VERSION_OFFSET + 1] = (byte)(HALO_PORT_NETWORK_VERSION >> 8);
+			advertisement.reserved[HALO_PORT_ADVERTISED_VERSION_OFFSET] = (byte)(delta_legacy_announce() & 0xFF);
+			advertisement.reserved[HALO_PORT_ADVERTISED_VERSION_OFFSET + 1] = (byte)(delta_legacy_announce() >> 8);
 			advertisement.reserved[HALO_PORT_ADVERTISED_FLAGS_OFFSET] =
 				HALO_PORT_ADVERTISED_DISTRIBUTED_FLAG;
+#ifdef HALO_GAME_BROWSER
+			/* (and Delta Peer's flag, while this host speaks it: OpenCE's
+			machines ignore the bit; port/linux/src/delta_peer.h) */
+			{ unsigned char delta_peer_advertised_flags(void);
+			  advertisement.reserved[HALO_PORT_ADVERTISED_FLAGS_OFFSET] |= delta_peer_advertised_flags(); }
+#endif
 			if (network_game_server_get_state(server, NULL) != _network_game_server_state_pregame ||
 				network_game_server_game_is_loading(server))
 			{
@@ -2061,7 +2091,9 @@ static boolean network_game_server_handle_message_client_join_game_request(
 						struct message_server_machine_rejected rejection;
 						struct network_message *reply;
 
-						rejection.reason = _network_game_server_rejection_reason_game_not_open;
+						/* port: a banned machine is told so (it was told the
+						game is not open) */
+						rejection.reason = network_game_server_last_refusal_code();
 						network_event(
 							"server failed to accept valid client machine '%s' @%s into the game",
 							join_game_request.machine_name,
@@ -2594,6 +2626,13 @@ static boolean network_game_server_handle_message_client_map_is_precached_pregam
 			&packet_version,
 			_network_game_packet_class_client_pregame))
 		{
+			/* port: a Halo PC map's name as this port names it (an OpenCE
+			client says custom_maps\\<name>: halo_map_families.h) */
+			char map_name[sizeof(map_is_precached.map_name) + 1];
+
+			csmemcpy(map_name, map_is_precached.map_name, sizeof(map_is_precached.map_name));
+			map_name[sizeof(map_is_precached.map_name)] = 0;
+			map_family_from_wire_name(map_name, map_is_precached.map_name, sizeof(map_is_precached.map_name));
 			network_game_server_client_machine_is_precached(
 				server,
 				client_machine,

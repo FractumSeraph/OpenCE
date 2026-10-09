@@ -367,11 +367,13 @@ struct effect_marker_list
 	real_vector3d const *forwards;
 };
 
+#ifndef HALO_64BIT
 typedef char effect_marker_list_size_assert[
 	sizeof(struct effect_marker_list) == 0x18 ? 1 : -1];
 typedef char effect_marker_list_names_offset_assert[
 	offsetof(struct effect_marker_list, names) == 0x0C ? 1 : -1];
 
+#endif
 
 struct effect_particles_definition
 {
@@ -436,12 +438,14 @@ typedef char effects_information_size_assert[
 	sizeof(struct effects_information) == 0x6 ? 1 : -1];
 typedef char effect_datum_location_offset_assert[
 	offsetof(struct effect_datum, location) == 0x10 ? 1 : -1];
+#ifndef HALO_64BIT
 typedef char effect_datum_object_index_offset_assert[
 	offsetof(struct effect_datum, object_index) == 0x3C ? 1 : -1];
 typedef char effect_datum_location_indices_offset_assert[
 	offsetof(struct effect_datum, location_datum_indices) == 0x5C ? 1 : -1];
 typedef char effect_datum_size_assert[
 	sizeof(struct effect_datum) == 0xFC ? 1 : -1];
+#endif
 typedef char effect_location_datum_matrix_offset_assert[
 	offsetof(struct effect_location_datum, matrix) == 0x08 ? 1 : -1];
 typedef char effect_location_datum_size_assert[
@@ -618,7 +622,16 @@ void effects_initialize(
 {
 	/* the native builds' larger effect pools (halo_port_capacity.h); a full
 	pool drops deterministic effects, damage included */
+#ifdef HALO_64BIT
+	/* an effect's impulse field holds native pointers, which make it larger
+	than the Xbox's 0xFC: in 0xFC slots, an effect's last particle counts
+	(an event's 21st particles on) were the next effect's identifier and
+	definition, and a deleted effect could come back with its freed
+	locations */
+	effect_data = game_state_data_new("effect", HALO_PORT_MAXIMUM_EFFECTS, sizeof(struct effect_datum));
+#else
 	effect_data = game_state_data_new("effect", HALO_PORT_MAXIMUM_EFFECTS, 0xFC);
+#endif
 	effect_location_data = game_state_data_new("effect location", HALO_PORT_MAXIMUM_EFFECT_LOCATIONS, 0x3C);
 	if (!effect_data || !effect_location_data)
 		error(_error_immediate, "couldn't allocate effect globals");
@@ -2623,16 +2636,7 @@ static boolean effect_allowed_by_environment(
 				888,
 				FALSE,
 				NULL);
-			/* BUG (original, preserved for exact matching): this arm leaves allowed
-			 * unassigned, and January returns it after the fatal assertion: 0x48b160 +0x5f mov al,[ebp-1]
-			 * reads the never-written byte slot. The later /Od+/RTC build attests the uninitialised
-			 * declaration: its single exit calls _RTC_UninitUse("allowed").
-			 * The read is not executed in January: display_assert returns into an unconditional
-			 * system_exit, which never returns (it jumps to halt_and_catch_fire, which loops, or calls
-			 * _exit on re-entry), and no other path reaches the read. The arm itself is entered only for
-			 * an environment value outside the four cases above, each of which assigns allowed; the
-			 * value comes from effect tag data, so this arm is not proven unreachable. A corrected build
-			 * assigns allowed in this arm. */
+			allowed = FALSE;
 			break;
 	}
 

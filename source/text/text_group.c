@@ -31,19 +31,9 @@ symbols in this file:
 /* ---------- NTSC maps' missing multiplayer strings */
 
 #include "tag_files/tag_files.h"
-#include "custom_edition_maps.h"
 
 #define MULTIPLAYER_GAME_TEXT_TAG_NAME "ui\\multiplayer_game_text"
 #define FIRST_FALLBACK_MULTIPLAYER_GAME_TEXT_STRING 36
-
-/* the multiplayer level list's level names and descriptions, past which the
-Custom Edition maps after the Xbox levels have their display indices
-(port/linux/game/custom_edition_maps.c), and the PC menus' copies of them
-(port/linux/game/menu_tags.c) */
-#define LEVEL_NAMES_TAG_NAME "ui\\shell\\main_menu\\mp_map_list"
-#define LEVEL_DESCRIPTIONS_TAG_NAME "ui\\shell\\main_menu\\multiplayer_type_select\\mp_map_select\\map_data"
-#define PC_LEVEL_NAMES_TAG_NAME "pc\\main_menu\\mp_map_list"
-#define PC_LEVEL_DESCRIPTIONS_TAG_NAME "pc\\main_menu\\multiplayer_type_select\\mp_map_select\\map_data"
 
 /* ui\multiplayer_game_text holds 184 strings in the PAL release's maps
 (01.01.14.2342, the build this code is), but only the first 36 in the NTSC
@@ -211,22 +201,39 @@ typedef char fallback_multiplayer_game_text_string_count_check[
 or NULL */
 static wchar_t *fallback_string(long tag_index, short string_index)
 {
-	char const *tag_name = tag_get_name(tag_index);
 	short fallback_index = string_index - FIRST_FALLBACK_MULTIPLAYER_GAME_TEXT_STRING;
 
-	/* (a Custom Edition map's name or description, by its display index) */
-	if (!csstrcasecmp(tag_name, LEVEL_NAMES_TAG_NAME) || !csstrcasecmp(tag_name, PC_LEVEL_NAMES_TAG_NAME))
-		return custom_edition_maps_name(string_index);
-	if (!csstrcasecmp(tag_name, LEVEL_DESCRIPTIONS_TAG_NAME) || !csstrcasecmp(tag_name, PC_LEVEL_DESCRIPTIONS_TAG_NAME))
-		return custom_edition_maps_description(string_index);
 	if (fallback_index < 0 ||
 		fallback_index >= (short)NUMBEROF(fallback_multiplayer_game_text_strings) ||
-		csstrcasecmp(tag_name, MULTIPLAYER_GAME_TEXT_TAG_NAME))
+		csstrcasecmp(tag_get_name(tag_index), MULTIPLAYER_GAME_TEXT_TAG_NAME))
 	{
 		return NULL;
 	}
 	return fallback_multiplayer_game_text_strings[fallback_index];
 }
+
+#ifdef HALO_CUSTOM_EDITION
+/* Custom Edition maps' ui\multiplayer_game_text (Halo PC's, 194 strings) has
+the PAL list's strings at the same indices, but three of them name keys, for
+Halo PC's keyboard: the postgame prompts (72, 73: "ESCAPE = Quit    ENTER =
+Continue", "ESCAPE = Quit") and the first seconds' scoreboard prompt (100:
+'Hold "%s" for score', its key's name put in by Halo PC's executable, which
+this code does not do, so it showed "%s"). With a Custom Edition map's tags
+loaded those three are the console's, as with the Xbox's maps, the buttons
+drawn as their icons (draw_string_and_hack_in_icons) or named */
+static wchar_t *custom_edition_keyboard_string(long tag_index, short string_index)
+{
+	extern boolean cache_file_tags_are_ce(void);
+
+	if ((string_index != 72 && string_index != 73 && string_index != 100) ||
+		!cache_file_tags_are_ce() ||
+		csstrcasecmp(tag_get_name(tag_index), MULTIPLAYER_GAME_TEXT_TAG_NAME))
+	{
+		return NULL;
+	}
+	return fallback_multiplayer_game_text_strings[string_index - FIRST_FALLBACK_MULTIPLAYER_GAME_TEXT_STRING];
+}
+#endif
 
 /* ---------- public code */
 
@@ -247,7 +254,7 @@ char *string_list_get_string(long tag_index, short string_index)
 
 			if (entry->string.size > 0)
 			{
-				result = entry->string.address;
+				result = xbox_pointer(entry->string.address);
 				result[entry->string.size - 1] = '\0';
 			}
 		}
@@ -264,6 +271,11 @@ wchar_t *unicode_string_list_get_string(long tag_index, short string_index)
 	{
 		struct string_list *list = unicode_string_list_definition_get(tag_index);
 
+#ifdef HALO_CUSTOM_EDITION
+		if (custom_edition_keyboard_string(tag_index, string_index))
+			result = custom_edition_keyboard_string(tag_index, string_index);
+		else
+#endif
 		if (string_index >= 0 && string_index < list->strings.count)
 		{
 			struct string_list_entry *entry = TAG_BLOCK_GET_ELEMENT(
@@ -271,12 +283,18 @@ wchar_t *unicode_string_list_get_string(long tag_index, short string_index)
 				string_index,
 				struct string_list_entry);
 
-			/* port: only a string of at least one character, terminated
-			within it (a size of 1 wrote the terminator before its data) */
+			/* port: through tag_data_get_pointer, which keeps a Custom
+			Edition map's within its tags (its string lists' data is
+			otherwise unchecked: ce_map_checks.c), and only a string of at
+			least one character, which is terminated within it (a size of 1
+			wrote before its data) */
 			if (entry->string.size >= (long)sizeof(wchar_t))
 			{
-				result = entry->string.address;
-				result[entry->string.size / sizeof(wchar_t) - 1] = L'\0';
+				result = tag_data_get_pointer(&entry->string, 0, entry->string.size);
+				if (result)
+					result[entry->string.size / sizeof(wchar_t) - 1] = L'\0';
+				else
+					result = L"";
 			}
 		}
 		else if (fallback_string(tag_index, string_index))

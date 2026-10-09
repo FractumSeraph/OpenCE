@@ -152,7 +152,12 @@ static void write_to_debug_file(
 	prefix[0] = 0;
 	if (date)
 	{
+#ifdef HALO_64BIT
+		/* (the host's time_t: 64 bits, which time() writes whole) */
+		time_t timeptr;
+#else
 		long timeptr;
+#endif
 		struct tm *_time;
 
 		time(&timeptr);
@@ -200,6 +205,15 @@ void write_to_error_file(
 	{
 		write_to_debug_file(string, date);
 	}
+#ifdef HALO_SERVER
+	{
+		/* port: the dedicated server's recent log, for its control API
+		(server/platform/server_control.c) */
+		void server_control_log(char const *text);
+
+		server_control_log(string);
+	}
+#endif
 
 	return;
 }

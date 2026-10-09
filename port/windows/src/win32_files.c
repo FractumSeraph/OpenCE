@@ -199,6 +199,20 @@ int posix_set_read_only(const char *path, int read_only)
 	return SetFileAttributesA(path, attributes) ? 0 : fail();
 }
 
+int posix_is_link(const char *path)
+{
+	DWORD attributes = GetFileAttributesA(path);
+
+	return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_REPARSE_POINT);
+}
+
+int posix_rename_directory(const char *from, const char *to)
+{
+	/* (MoveFileA never replaces what is there, and moves within a volume
+	only) */
+	return MoveFileA(from, to) ? 0 : fail();
+}
+
 int posix_make_directory(const char *path)
 {
 	return CreateDirectoryA(path, NULL) ? 0 : fail();
@@ -311,3 +325,34 @@ int posix_find_entry_case_insensitive(const char *directory, const char *name,
 	strcpy(result, data.cFileName);
 	return 1;
 }
+
+#ifdef HALO_64BIT
+/* ---------- symbols */
+
+/* Describe a code address as "module+offset" without allocating, for the
+64-bit game's stack dumps (source/cseries/stack_walk_windows.c): the
+offset into halo.exe is the build's own address, the same from run to run */
+void posix_describe_address(void *address, char *buffer, posix_ulong size)
+{
+	HMODULE module;
+	char path[MAX_PATH];
+	const char *name;
+
+	if (!size)
+		return;
+	if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+			(LPCSTR)address, &module) &&
+		GetModuleFileNameA(module, path, sizeof(path)))
+	{
+		name = strrchr(path, '\\');
+		name = name ? name + 1 : path;
+		_snprintf(buffer, size, "%p %s+0x%llx", address, name,
+			(unsigned long long)((char *)address - (char *)module));
+	}
+	else
+	{
+		_snprintf(buffer, size, "%p ?????", address);
+	}
+	buffer[size - 1] = 0;
+}
+#endif

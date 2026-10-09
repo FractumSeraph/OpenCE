@@ -23,8 +23,14 @@ missing from the reconstruction.
 
 /* ---------- pooled COMMON globals */
 
+#ifdef HALO_64BIT
+/* (twice the Xbox's size: many of them hold pointers) */
+#define HALO_COMMON(name, size) \
+	__attribute__((weak, aligned(16))) unsigned char name[(size) * 2]
+#else
 #define HALO_COMMON(name, size) \
 	__attribute__((weak, aligned(16))) unsigned char name[size]
+#endif
 
 HALO_COMMON(ai_globals, 12); /* struct ai_globals_data *ai_globals */
 HALO_COMMON(antenna_data, 12); /* struct data_array *antenna_data */
@@ -98,7 +104,12 @@ HALO_COMMON(debug_sprites, 24); /* byte debug_sprites[] */
 HALO_COMMON(debug_trigger_volumes, 1); /* boolean debug_trigger_volumes */
 HALO_COMMON(device_groups_data, 24); /* struct data_array *device_groups_data */
 HALO_COMMON(director_camera_scripted, 4); /* struct director_scripting_globals *director_camera_scripted */
+#ifdef HALO_CUSTOM_EDITION
+/* (eight channel types, not four: sound_dsound_xbox.c) */
+HALO_COMMON(dsound_globals, 30924 + 8); /* struct dsound_globals dsound_globals */
+#else
 HALO_COMMON(dsound_globals, 30924); /* struct dsound_globals dsound_globals */
+#endif
 HALO_COMMON(effect_data, 4); /* struct data_array *effect_data */
 HALO_COMMON(effect_location_data, 4); /* struct data_array *effect_location_data */
 HALO_COMMON(error_globals, 2080); /* struct error_global_data error_globals */

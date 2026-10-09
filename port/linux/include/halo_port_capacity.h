@@ -21,9 +21,8 @@ The Xbox game state is 0x345000 bytes at 0x80061000 and ends where the tag
 cache begins (0x803A6000). Cache files are linked to that tag cache address,
 so the game state cannot grow in place. The native builds put a 16 MB game
 state above the tag cache (which ends at 0x819A6000), inside the Xbox memory
-window (0x80000000-0xA0000000, Android's to 0x88000000:
-port/linux/src/platform.h) and below everything the window hands out
-top-down (texture and sound caches, Direct3D resources).
+window (0x80000000 up, port/linux/src/platform.h) and below everything
+the window hands out top-down (texture and sound caches, Direct3D resources).
 
 The CPU part holds about 17.2 MB of pools at the sizes below (the Xbox pools
 fill 3,165,260 of its 0x305000 bytes); the GPU part holds only the decal
@@ -35,23 +34,64 @@ layout: saved games of builds before it no longer load. */
 #define HALO_PORT_GAME_STATE_GPU_SIZE 0x40000 /* (0x40000) */
 #define HALO_PORT_GAME_STATE_SIZE (HALO_PORT_GAME_STATE_CPU_SIZE+HALO_PORT_GAME_STATE_GPU_SIZE)
 
-/* ---------- textures
+/* ---------- texture cache
 
-The texture cache holds the textures being drawn in 16 KB pages, 22 MB of
-them on the Xbox, which Xbox maps were made to fit. Halo Custom Edition maps
-were made for Halo PC, which has no such bound: a texture that does not fit
-is drawn as the default one ("YOU GOT STABBED" in debug.txt; Elite_Alpha_Siege
-did at 22 MB), and a frame of bigass_v3 draws more than 64 MB (DamnationCE's
-measurement). The desktop builds' cache is 256 MB, half their 512 MB memory
-window (port/linux/src/platform.h), whose pages are backed as they are used.
-Android's window is 128 MB, and its cache the Xbox's. */
+The texture cache (cache/xbox_texture_cache.c) holds the pixels of the
+bitmaps the renderer draws, in 16 KB pages, and is allocated top-down in
+the Xbox memory window (cache/physical_memory_map.c). When a frame's
+bitmaps do not fit, the cache cannot load the rest ("YOU GOT STABBED" in
+debug.txt) and the surfaces drawn with them show whatever is at their
+pixels' addresses. The Xbox's maps fit the Xbox's 22 MB. Halo PC's maps
+keep their bump maps in 32 bits a pixel, not the Xbox's 8-bit palettized
+ones, and community maps draw many large ones at once: Portent's busiest
+frames draw 23 MB, Foundation's 66 MB.
 
-#ifdef HALO_ANDROID
-#define HALO_PORT_TEXTURE_CACHE_PAGE_COUNT 0x580 /* (0x580) */
+The desktop builds (Linux, macOS and Windows, 32-bit and 64-bit) are not
+held to the Xbox's memory: their window is 512 MB (port/linux/src/platform.h) and
+their cache 256 MB, about four times Foundation's busiest frame and more
+than bigass_v3's (over 64 MB, DamnationCE's measurement, as OpenCE's
+build-145 has it); with it the window still has about 170 MB free. A block's
+pages are taken only as the game writes them (xbox_memory.c), so a map
+that fills a fraction of the cache takes no more. Nothing of the cache's
+size reaches the network or the game state.
+
+Android's window stays the development kit's 128 MB (its guest image is
+linked just above it), 82 MB of it above the game state. Besides the
+texture cache, Portent and Foundation take about 23 MB of that in a game
+(the sound cache and Direct3D's resources), so Android's cache is twice
+the Xbox's, 44 MB, and leaves about 15 MB free: Portent's busiest frames
+fit, Foundation's (66 MB) do not, and some of its surfaces can show the
+wrong pixels there. The Xbox builds (HALO_XBOX_CONSOLE) keep the Xbox's
+cache. */
+
+#if defined(HALO_ANDROID)
+#define HALO_PORT_TEXTURE_CACHE_SIZE 0x2C00000 /* (0x1600000) */
+#elif !defined(HALO_XBOX_CONSOLE)
+#define HALO_PORT_TEXTURE_CACHE_SIZE 0x10000000 /* (0x1600000) */
 #else
-#define HALO_PORT_TEXTURE_CACHE_PAGE_COUNT 0x4000 /* (0x580) */
+#define HALO_PORT_TEXTURE_CACHE_SIZE 0x1600000 /* (0x1600000) */
 #endif
-#define HALO_PORT_TEXTURE_CACHE_SIZE (HALO_PORT_TEXTURE_CACHE_PAGE_COUNT*0x4000) /* (0x1600000) */
+
+/* ---------- structure rendering
+
+The structure BSP's surfaces (its triangles) drawn in a frame
+(render/render.h: past them, the farther are not drawn) and the dynamic
+triangles a frame's draws take, the BSP's among them (rasterizer.h). The
+Xbox's maps fit the Xbox's 16384 surfaces; big community maps draw more
+(Halo PC's own engine stopped at 16384 too, and the PC community's tools
+for those maps raise it to 32767 surfaces with a 65536-triangle buffer).
+The desktop builds draw up to 32767 (the count is a short), with twice the
+dynamic triangles, so the BSP's do not leave the rest of a frame's draws
+none. Only what is drawn changes: nothing reaches the network or the game
+state. Android and the Xbox builds keep the Xbox's. */
+
+#if !defined(HALO_ANDROID) && !defined(HALO_XBOX_CONSOLE)
+#define HALO_PORT_MAXIMUM_RENDERED_ENVIRONMENT_SURFACES 32767 /* (16384) */
+#define HALO_PORT_MAXIMUM_DYNAMIC_TRIANGLES 65536 /* (32768) */
+#else
+#define HALO_PORT_MAXIMUM_RENDERED_ENVIRONMENT_SURFACES 16384 /* (16384) */
+#define HALO_PORT_MAXIMUM_DYNAMIC_TRIANGLES 32768 /* (32768) */
+#endif
 
 /* ---------- sounds
 

@@ -178,7 +178,22 @@ lists a public game with a password with its invite's token sealed with the
 password's key (`p2p_lobby.c`), a listing of another layout; version 21
 sends each killing blow again reliably and an object come to rest three
 times (a client waits for a player's blow before its body dies without one),
-and switches co-op's BSP on the host's crossing alone.
+and switches co-op's BSP on the host's crossing alone; version 22 names a
+Halo Custom Edition map `custom_maps\<name>` in the game's settings, and a
+client without the map it names is told which map it misses and where to
+put it; version 24 sends the gametype's PC vehicle set, with which every
+machine places all of the map's vehicles.
+
+A host never checks a joining client's version: the client reads the
+host's from its advertisement and joins only a version it plays with. That
+is its own, or one of a range (HALO_PORT_NETWORK_VERSION_MINIMUM to
+HALO_PORT_NETWORK_VERSION_MAXIMUM, halo_port_limits.h) of versions that
+differ from it only in messages the other machine drops, not knowing them:
+version 10 (OpenCE's build-73) adds the host's message of the players'
+pings, which a machine of version 9 drops. This build has version 10, as
+OpenCE's current builds (so their clients join its hosts), without that
+message (its hosts do not send it, its clients drop it), and joins hosts of
+9 and 10. The game browser lists the range's games.
 
 A client plays by its host's rules: in another's game (searching for it,
 in its lobby, or playing it) the developer console, the telnet console
@@ -512,7 +527,12 @@ Unity's Netcode for Entities, lightyear, netfox and the Ares source):
   messages (checked as the host's below); the game's own messages (a player
   added or removed, the game begun or over, its settings), which the host
   sends over its connection, are ignored in a datagram
-  (`network_client_message_handler.c`).
+  (`network_client_message_handler.c`). The host takes a client's hits,
+  Discord user and readiness only over its connection too, and every
+  machine drops a datagram of the netcode stamped with a tick more than 15
+  seconds from the latest it had from that machine (one stamped far ahead
+  would have the machine's newer ones taken for stale); a message over the
+  connection is taken whatever its tick (`network_distributed.c`).
 - **Nothing held back.** The game's connections (the reliable messages:
   objects made and deleted, the game type's state, hits, pickups) send each
   write at once (`TCP_NODELAY`, in `xnet.c` for the game's sockets and in

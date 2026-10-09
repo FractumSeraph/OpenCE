@@ -25,7 +25,12 @@ enum
 {
 	NUMBER_OF_SOUND_SAMPLE_RATES = 2,
 	MAXIMUM_SOUND_CHANNELS = 256,
+#ifdef HALO_CUSTOM_EDITION
+	/* (sound_preferences.c: the Xbox's four, and the port's four of PCM) */
+	NUMBER_OF_SOUND_CHANNEL_TYPES = 8,
+#else
 	NUMBER_OF_SOUND_CHANNEL_TYPES = 4,
+#endif
 	MAXIMUM_DSOUND_ERROR_STRING_LENGTH = 256,
 	MAXIMUM_DSOUND_ERROR_MESSAGE_LENGTH = 4096,
 	MAXIMUM_SOUND_PACKETS = 4,
@@ -132,12 +137,14 @@ typedef char sound_channel_sample_offset_offset_assert[
 	offsetof(struct sound_channel, sample_offset) == 0x64 ? 1 : -1];
 typedef char sound_channel_type_flags_offset_assert[
 	offsetof(struct sound_channel, type_flags) == 0x38 ? 1 : -1];
+#ifndef HALO_64BIT
 typedef char sound_channel_stream_offset_assert[
 	offsetof(struct sound_channel, stream) == 0x70 ? 1 : -1];
 
 typedef char sound_channel_size_assert[
 	sizeof(struct sound_channel) == 0x74 ? 1 : -1];
 
+#endif
 struct dsound_globals
 {
 	boolean initialized;
@@ -161,15 +168,21 @@ struct dsound_globals
 	byte reserved78c5[3];
 	real pause_gain;
 };
+#ifndef HALO_64BIT
 
 typedef char dsound_globals_type_first_channel_index_offset_assert[
 	offsetof(struct dsound_globals, type_first_channel_index) == 0x7808 ? 1 : -1];
+#ifndef HALO_CUSTOM_EDITION
+/* (past the per-type arrays, which have the port's four PCM types too with
+Custom Edition maps) */
 typedef char dsound_globals_direct_sound_offset_assert[
 	offsetof(struct dsound_globals, direct_sound) == 0x789C ? 1 : -1];
 typedef char dsound_globals_paused_offset_assert[
 	offsetof(struct dsound_globals, paused) == 0x78C4 ? 1 : -1];
 typedef char dsound_globals_pause_gain_offset_assert[
 	offsetof(struct dsound_globals, pause_gain) == 0x78C8 ? 1 : -1];
+#endif
+#endif
 
 struct sound_platform_definition
 {
@@ -211,9 +224,11 @@ struct sound_platform_definition
 		boolean gain_only);
 	real direct_path_gain;
 };
+#ifndef HALO_64BIT
 
 typedef char sound_platform_definition_direct_path_gain_offset_assert[
 	offsetof(struct sound_platform_definition, direct_path_gain) == 0x38 ? 1 : -1];
+#endif
 
 /* ---------- prototypes */
 
@@ -2148,10 +2163,21 @@ static boolean dsound_initialize_channel(
 	{
 		wave_format.wfx.wFormatTag= WAVE_FORMAT_PCM;
 		wave_format.wfx.wBitsPerSample= 16;
+#ifdef HALO_CUSTOM_EDITION
+		/* (port: a PCM channel is of its type's channels and rate, as a
+		compressed one is: the Xbox's were only ever stereo 44 kHz) */
+		wave_format.wfx.nChannels= (WORD)(TEST_FLAG(type_flags, _sound_channel_stereo_bit) ? 2 : 1);
+		wave_format.wfx.nBlockAlign= (WORD)(2*wave_format.wfx.nChannels);
+		wave_format.wfx.nSamplesPerSec= sound_samples_per_second(
+			TEST_FLAG(type_flags, _sound_channel_44k_bit));
+		wave_format.wfx.nAvgBytesPerSec= wave_format.wfx.nSamplesPerSec*wave_format.wfx.nBlockAlign;
+		wave_format.wfx.cbSize= 0;
+#else
 		wave_format.wfx.nChannels= 2;
 		wave_format.wfx.nBlockAlign= 4;
 		wave_format.wfx.nSamplesPerSec= sound_sample_rate_samples_per_second[1];
 		wave_format.wfx.nAvgBytesPerSec= wave_format.wfx.nSamplesPerSec*4;
+#endif
 	}
 	else
 	{
@@ -2175,7 +2201,11 @@ static boolean dsound_initialize_channel(
 	stream_desc.lpwfxFormat= &wave_format.wfx;
 	stream_desc.dwFlags= 0;
 	stream_desc.lpfnCallback= dsound_channel_callback;
+#ifdef HALO_64BIT
+	stream_desc.lpvContext= (LPVOID)(__INTPTR_TYPE__)channel_index;
+#else
 	stream_desc.lpvContext= (LPVOID)channel_index;
+#endif
 
 	if (TEST_FLAG(type_flags, _sound_channel_3d_bit))
 	{
@@ -2266,11 +2296,16 @@ static void CALLBACK dsound_channel_callback(
 	void *packet_context,
 	unsigned long status)
 {
+#ifdef HALO_64BIT
+	short channel_index= (short)(__INTPTR_TYPE__)stream_context;
+#else
 	short channel_index= (short)stream_context;
+#endif
 
 	if (channel_index>=0 && channel_index<dsound_globals.actual_channel_count)
 	{
 		struct sound_channel *channel= channel_get(channel_index);
+
 
 		if (status==XMEDIAPACKET_STATUS_SUCCESS || status==XMEDIAPACKET_STATUS_FLUSHED)
 		{
@@ -2278,7 +2313,7 @@ static void CALLBACK dsound_channel_callback(
 
 			channel->packet_count--;
 
-			if (!dsound_globals.paused)
+			if (!dsound_globals.paused && !channel->stopping)
 			{
 				if (channel->packet_count==0)
 				{
@@ -2430,12 +2465,24 @@ static void dsound_channel_set_properties(
 	boolean gain_only)
 {
 	struct sound_channel *channel= channel_get(channel_index);
+#if defined(HALO_64BIT) || defined(HALO_CUSTOM_EDITION)
+	/* port: a gain past 1 taken as 1, as a sound card plays it: a Halo PC
+	map's sound may have one (beavercreek_rev_beta's grenade throw has a gain
+	modifier of 1.4), which halted a debug build */
+	real prop_gain = PIN(properties->gain, 0.f, 1.f);
+	real gain= dsound_globals.pause_gain*prop_gain;
+#else
 	real gain= dsound_globals.pause_gain*properties->gain;
+#endif
 
 	match_assert(
 		"c:\\halo\\SOURCE\\sound\\sound_dsound_xbox.c",
 		980,
+#if defined(HALO_64BIT) || defined(HALO_CUSTOM_EDITION)
+		prop_gain>=0.f && prop_gain<=1.f);
+#else
 		properties->gain>=0.f && properties->gain<=1.f);
+#endif
 	match_assert(
 		"c:\\halo\\SOURCE\\sound\\sound_dsound_xbox.c",
 		981,
@@ -2584,11 +2631,11 @@ static boolean dsound_channel_queue_packet(
 			past the cache (the end wrapped), or that the channel has played
 			past, is outside the range too (it reached the decoder as a
 			packet of nearly 4 GB) */
-			if ((byte *)channel->playing_permutation->cache_base_address>=
+			if ((byte *)xbox_pointer(channel->playing_permutation->cache_base_address)>=
 					(byte *)physical_memory_get_sound_cache_base_address() &&
 				channel->playing_permutation->samples.size>=0 &&
 				channel->playing_permutation->samples.size<=SOUND_CACHE_SIZE &&
-				(unsigned long)((byte *)channel->playing_permutation->cache_base_address-
+				(unsigned long)((byte *)xbox_pointer(channel->playing_permutation->cache_base_address)-
 					(byte *)physical_memory_get_sound_cache_base_address())<=
 					(unsigned long)(SOUND_CACHE_SIZE-channel->playing_permutation->samples.size) &&
 				channel->sample_offset>=0 &&
@@ -2601,7 +2648,7 @@ static boolean dsound_channel_queue_packet(
 
 				channel->packet_count++;
 
-				packet.pvBuffer= (byte *)sound->cache_base_address+channel->sample_offset;
+				packet.pvBuffer= (byte *)xbox_pointer(sound->cache_base_address)+channel->sample_offset;
 				packet.pdwCompletedSize= NULL;
 				packet.pdwStatus= NULL;
 				packet.prtTimestamp= 0;
@@ -2726,6 +2773,7 @@ static void dsound_channel_queue_sound(
 	struct sound_permutation *sound)
 {
 	struct sound_channel *channel= channel_get(index);
+
 
 	match_assert(
 		"c:\\halo\\SOURCE\\sound\\sound_dsound_xbox.c",
@@ -2936,12 +2984,7 @@ static void dsound_error(
 			break;
 	}
 
-	/* BUG (preserved for exact matching): the format has three conversions but January
-	 * passes two values (0x5b93e0 +0x93..+0xa2), so "#%d" prints the next stack word.
-	 * Reached on every DirectSound failure reported through dsound_error. A corrected
-	 * build should pass result as the third value. Source-policy approval pending
-	 * (2026-09-27 audit). */
-	error(_error_silent, "DirectSound:  '%s' (%s#%d)", message, result_name);
+	error(_error_silent, "DirectSound:  '%s' (%s#%d)", message, result_name, result);
 
 	return;
 }
@@ -2951,16 +2994,19 @@ static void channel_stop(
 {
 	struct sound_channel *channel= channel_get(index);
 
-	if (channel->state!=_sound_channel_idle)
-	{
-		DirectSoundStopStream(channel->stream);
 
-		channel->stopping= TRUE;
-		channel->state= _sound_channel_idle;
-	}
-
+	/* The SDL backend completes packets synchronously during StopStream.
+	   Retire the producer before flushing: a SUCCESS callback for an already
+	   mixed packet must not refill the stream we are cancelling. */
 	channel->playing_permutation= NULL;
 	channel->queued_permutation= NULL;
+
+	if (channel->state!=_sound_channel_idle || channel->packet_count!=0)
+	{
+		channel->stopping= TRUE;
+		DirectSoundStopStream(channel->stream);
+		channel->state= _sound_channel_idle;
+	}
 
 	return;
 }

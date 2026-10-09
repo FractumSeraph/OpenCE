@@ -76,6 +76,7 @@ machine (their datum identifiers need not be).
 
 #include <limits.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <time.h>
 #include <math.h>
 
@@ -103,6 +104,8 @@ void p2p_hardware_id_sanitize(char *destination, int size, const char *source);
 void p2p_discord_sanitize(char *destination, int size, const char *source, int name);
 void p2p_discord_identity(char *id, int id_size, char *name, int name_size);
 unsigned long p2p_peer_endpoint_address(unsigned long virtual_address);
+/* network_connection.c's */
+boolean network_connection_last_read_was_unreliable(void);
 unsigned long system_milliseconds(void);
 void console_warning(const char *format, ...);
 
@@ -123,6 +126,10 @@ host's copies go as its own ticks have them) ... */
 #define CLIENT_CLOCK_FAST_WINDOWS 5
 /* the longest notice's text (_distributed_message_notice) */
 #define MAXIMUM_NOTICE_LENGTH 160
+/* how far a datagram's tick may be from the latest a message from its
+sender had, either way (distributed_sender_times): as long as a machine may
+go silent before it is dropped */
+#define DISTRIBUTED_TIME_WINDOW_TICKS (15 * TICKS_PER_SECOND)
 /* a Discord user's id and name as kept, with their ends (p2p.h's
 P2P_DISCORD_ID_SIZE and P2P_DISCORD_NAME_SIZE) */
 #define DISCORD_ID_SIZE 24
@@ -594,6 +601,14 @@ static long distributed_game_state_time;
 /* the latest tick of each kind of unreliable message had from each sender
 (a machine, or the host), NONE for none */
 static long distributed_received_times[MAXIMUM_SENDERS][NUMBER_OF_DISTRIBUTED_MESSAGES];
+/* the latest tick of any message had from each sender, NONE for none: a
+datagram, which anyone can send as from another machine, is dropped when
+its tick is further from it than DISTRIBUTED_TIME_WINDOW_TICKS (one stamped
+far ahead would have every newer one of the sender's taken for stale, and
+its clock for fast); a message over the sender's stream, which only it can
+send, is taken whatever its tick, and moves it
+(distributed_message_time_bounded) */
+static long distributed_sender_times[MAXIMUM_SENDERS];
 /* the host: each client machine's clock, measured (CLIENT_CLOCK_WINDOW_MILLISECONDS):
 its latest tick, and its tick and the host's time as the window began
 (NONE: none begun); how many windows in a row it went fast, and whether
@@ -1123,7 +1138,7 @@ struct player_datum *distributed_player(
 
 	if (player_index < 0 || player_index >= player_data->maximum_count)
 		return NULL;
-	player = (struct player_datum *)((byte *)player_data->data + player_index * player_data->size);
+	player = (struct player_datum *)((byte *)xbox_pointer(player_data->data) + player_index * player_data->size);
 	return player->identifier ? player : NULL;
 }
 
@@ -1248,6 +1263,7 @@ static boolean distributed_machine_loaded(
 		sizeof(distributed_machine_players[machine_index]));
 	for (type = 0; type < NUMBER_OF_DISTRIBUTED_MESSAGES; type++)
 		distributed_received_times[machine_index][type] = NONE;
+	distributed_sender_times[machine_index] = NONE;
 	csmemset(&distributed_round_trips[machine_index], 0, sizeof(distributed_round_trips[machine_index]));
 	csmemset(distributed_viewers[machine_index], 0, sizeof(distributed_viewers[machine_index]));
 	csmemset(&distributed_client_clocks[machine_index], 0, sizeof(distributed_client_clocks[machine_index]));
@@ -3283,6 +3299,7 @@ void network_distributed_new_game(
 		distributed_batches[sender].size = 0;
 		for (type = 0; type < NUMBER_OF_DISTRIBUTED_MESSAGES; type++)
 			distributed_received_times[sender][type] = NONE;
+		distributed_sender_times[sender] = NONE;
 	}
 	for (player_index = 0; player_index < MAXIMUM_TRACKED_PLAYERS; player_index++)
 	{
@@ -3382,6 +3399,61 @@ void network_distributed_tick(
 	distributed_batches_flush();
 	distributed_machines.in_tick = FALSE;
 	distributed_machines.valid = FALSE;
+}
+
+/* whether a message's tick is near enough the latest had from its sender
+to be taken (distributed_sender_times); from_stream: it came over the
+sender's stream (or a client's connection to the host), not in a datagram */
+static boolean distributed_message_time_bounded(
+	long machine_index,
+	long game_time,
+	boolean from_stream)
+{
+	short sender = machine_index == NONE ? HOST_SENDER : (short)machine_index;
+	long *latest;
+	unsigned long distance;
+	short type;
+
+	if (sender < 0 || sender >= MAXIMUM_SENDERS)
+		return FALSE;
+	latest = &distributed_sender_times[sender];
+	if (*latest == NONE)
+	{
+		*latest = game_time;
+		return TRUE;
+	}
+	/* (unsigned: no tick, however far, overflows it) */
+	distance = game_time > *latest ?
+		(unsigned long)game_time - (unsigned long)*latest :
+		(unsigned long)*latest - (unsigned long)game_time;
+	if (distance > DISTRIBUTED_TIME_WINDOW_TICKS)
+	{
+		static unsigned long last_logged_time;
+		static boolean logged;
+
+		if (!from_stream)
+		{
+			unsigned long now = system_milliseconds();
+
+			if (!logged || now - last_logged_time >= 1000)
+			{
+				error(_error_silent, "distributed message stamped %ld ticks from its sender's latest in a datagram; dropped",
+					game_time > *latest ? (long)distance : -(long)distance);
+				last_logged_time = now;
+				logged = TRUE;
+			}
+			return FALSE;
+		}
+		/* (the sender's own word: what a datagram sent as from it had moved
+		its latest to is forgotten) */
+		*latest = game_time;
+		for (type = 0; type < NUMBER_OF_DISTRIBUTED_MESSAGES; type++)
+			distributed_received_times[sender][type] = NONE;
+		return TRUE;
+	}
+	if (game_time > *latest)
+		*latest = game_time;
+	return TRUE;
 }
 
 /* whether an unreliable message of the kind is older than one had already
@@ -3567,7 +3639,8 @@ unsigned long distributed_machine_real_address(
 }
 
 /* (the host) a client machine's address as text: its real one, for an
-internet play peer's stand-in (p2p.c) */
+internet play peer's stand-in (p2p.c). Whole, for the host's own CHEATERS_FILE
+and BANS_FILE, which match on it: never for the log (log_address.h) */
 static void distributed_address_text(
 	unsigned long address,
 	char *text,
@@ -3614,13 +3687,16 @@ static void distributed_printable(
 their address, Discord user and names, and why; separated by tabs, each
 part kept to the characters allowed and their lengths (what a player could
 tell: their Discord user and names). The Discord user of the machine at
-the index, if it is one in the game (NONE: none) */
+the index, if it is one in the game (NONE: none). A ban for a while has
+until= last, when it ends (seconds since 1970, UTC); one without is for
+ever */
 static void distributed_write_player_record(
 	char const *file_name,
 	char const *address,
 	long machine_index,
 	char const *names,
-	char const *reason)
+	char const *reason,
+	unsigned long until)
 {
 	char discord_id[DISCORD_ID_SIZE] = "";
 	char discord_name[DISCORD_NAME_SIZE] = "";
@@ -3654,11 +3730,14 @@ static void distributed_write_player_record(
 	}
 	/* (the Discord user as the machine told it, which it may say is anyone's:
 	marked so) */
-	fprintf(file, "%s\tip=%s\thwid=%s\tdiscord_username=%s%s\tdiscord_id=%s%s\tplayers=%s\treason=%s\n", when,
+	fprintf(file, "%s\tip=%s\thwid=%s\tdiscord_username=%s%s\tdiscord_id=%s%s\tplayers=%s\treason=%s", when,
 		kept_address, hardware_id[0] ? hardware_id : "none",
 		discord_name[0] ? discord_name : "none", discord_name[0] ? " (self-reported)" : "",
 		discord_id[0] ? discord_id : "none", discord_id[0] ? " (self-reported)" : "",
 		kept_names, kept_reason);
+	if (until)
+		fprintf(file, "\tuntil=%lu", until);
+	fprintf(file, "\n");
 	fclose(file);
 }
 
@@ -3672,14 +3751,69 @@ static void distributed_log_cheater(
 	char address[32];
 
 	distributed_machine_address_text(machine_index, address, sizeof(address));
-	distributed_write_player_record(CHEATERS_FILE, address, machine_index, names, reason);
-	distributed_write_player_record(BANS_FILE, address, machine_index, names, reason);
+	distributed_write_player_record(CHEATERS_FILE, address, machine_index, names, reason, 0);
+	distributed_write_player_record(BANS_FILE, address, machine_index, names, reason, 0);
+}
+
+/* a line of BANS_FILE's field (its "name=" given), up to the next tab or
+the line's end, kept to printable ASCII, in text; FALSE if it has none */
+static boolean distributed_ban_field(
+	char const *line,
+	char const *name,
+	char *text,
+	long size)
+{
+	char const *field = line;
+	long name_length = (long)strlen(name);
+	long length = 0;
+
+	if (size > 0)
+		text[0] = 0;
+	/* (a field's name begins the line or follows a tab) */
+	while (field && *field)
+	{
+		if ((field == line || field[-1] == '\t') && !strncmp(field, name, (size_t)name_length))
+			break;
+		field = strchr(field, '\t');
+		if (field)
+			field++;
+	}
+	if (!field || !*field)
+		return FALSE;
+	for (field += name_length; *field && *field != '\t' && *field != '\r' && *field != '\n' && length < size - 1;
+		field++)
+	{
+		text[length++] = *field >= 32 && *field < 127 ? *field : '?';
+	}
+	if (size > 0)
+		text[length] = 0;
+	return TRUE;
+}
+
+/* when a line of BANS_FILE's ban ends (its "until=", seconds since 1970); 0
+if it is for ever */
+static unsigned long distributed_ban_until(
+	char const *line)
+{
+	char text[24];
+
+	if (!distributed_ban_field(line, "until=", text, sizeof(text)))
+		return 0;
+	return strtoul(text, NULL, 10);
+}
+
+/* whether a line of BANS_FILE's is a ban (an address or a hardware id to
+refuse; # begins a comment) */
+static boolean distributed_ban_line(
+	char const *line)
+{
+	return line[0] != '#' && (strstr(line, "ip=") || strstr(line, "hwid="));
 }
 
 /* (the host: network_server_manager.c) whether a machine of this address
 (host byte order; an internet play peer's by its real one) is banned: its
 address one of BANS_FILE's (each line's "ip=", which a host may add or
-take out by hand) */
+take out by hand), and the ban not over (its "until=") */
 boolean network_distributed_banned(
 	unsigned long address,
 	char const *hardware_id)
@@ -3700,10 +3834,15 @@ boolean network_distributed_banned(
 		return FALSE;
 	while (!banned && fgets(line, sizeof(line), file))
 	{
+		unsigned long until = distributed_ban_until(line);
 		char const *ip = strstr(line, "ip=");
 		char const *hwid = strstr(line, "hwid=");
 		size_t length = csstrlen(text);
 		size_t hardware_id_length = csstrlen(kept_hardware_id);
+
+		/* (not a comment, nor a ban for a while that is over) */
+		if (!distributed_ban_line(line) || (until && (unsigned long)time(NULL) >= until))
+			continue;
 
 		/* (the whole address: 1.2.3.4 is not 1.2.3.45) */
 		if (length && ip && !strncmp(ip + 3, text, length) &&
@@ -3725,14 +3864,17 @@ boolean network_distributed_banned(
 	return banned;
 }
 
-/* (the host: network_server_manager.c, its ban command) a machine banned
-by the host: its line in BANS_FILE, and every machine told (the Discord
-user of the machine at the index, if it is one in the game; its address,
-host byte order) */
-void network_distributed_ban(
+/* (the host: network_server_manager.c, its ban command; the dedicated
+server's sv_ban, server/src/server_commands.c) a machine banned: its line
+in BANS_FILE, for ever (until 0) or until then (seconds since 1970), and
+every machine told, "<names> <reason>" (the Discord user of the machine at
+the index, if it is one in the game; its address, host byte order) */
+void network_distributed_ban_until(
 	long machine_index,
 	unsigned long address,
-	char const *names)
+	char const *names,
+	char const *reason,
+	unsigned long until)
 {
 	char text[32];
 	char kept_names[64];
@@ -3742,7 +3884,7 @@ void network_distributed_ban(
 	char notice[MAXIMUM_NOTICE_LENGTH];
 
 	distributed_address_text(address, text, sizeof(text));
-	distributed_write_player_record(BANS_FILE, text, machine_index, names, "banned by the host");
+	distributed_write_player_record(BANS_FILE, text, machine_index, names, reason, until);
 	distributed_printable(kept_names, sizeof(kept_names), names);
 	if (game_in_progress() && machine_index >= 0 && machine_index < HALO_PORT_MAXIMUM_NETWORK_MACHINES)
 	{
@@ -3752,7 +3894,7 @@ void network_distributed_ban(
 	}
 	if (discord_id[0] || discord_name[0])
 		snprintf(discord, sizeof(discord), " (Discord: %s, %s)", discord_name, discord_id);
-	snprintf(notice, sizeof(notice), "%s%s banned by the host", kept_names, discord);
+	snprintf(notice, sizeof(notice), "%s%s %s", kept_names, discord, reason);
 	/* (to every client in the game: in the lobby, the host's own) */
 	if (game_in_progress())
 		distributed_send_notice(notice);
@@ -3761,6 +3903,125 @@ void network_distributed_ban(
 		console_warning("%s", notice);
 		error(_error_log, "%s", notice);
 	}
+}
+
+void network_distributed_ban(
+	long machine_index,
+	unsigned long address,
+	char const *names)
+{
+	network_distributed_ban_until(machine_index, address, names, "banned by the host", 0);
+}
+
+/* (the dedicated server's sv_banlist) BANS_FILE's index-th ban (from 0,
+comments and other lines not counted): when it was made, the hardware id
+banned ("none"), the players' names, why, and when it ends (0: never); no
+address. FALSE past the last */
+boolean network_distributed_ban_entry(
+	long index,
+	char *when,
+	long when_size,
+	char *hardware_id,
+	long hardware_id_size,
+	char *players,
+	long players_size,
+	char *reason,
+	long reason_size,
+	unsigned long *until)
+{
+	char line[512];
+	FILE *file = fopen(BANS_FILE, "r");
+	long count = 0;
+	boolean found = FALSE;
+
+	if (!file)
+		return FALSE;
+	while (!found && fgets(line, sizeof(line), file))
+	{
+		if (!distributed_ban_line(line))
+			continue;
+		if (count++ != index)
+			continue;
+		found = TRUE;
+		/* (the first field, its date and time) */
+		{
+			long length = 0;
+
+			while (line[length] && line[length] != '\t' && line[length] != '\n' && length < when_size - 1)
+			{
+				when[length] = line[length] >= 32 && line[length] < 127 ? line[length] : '?';
+				length++;
+			}
+			when[length] = 0;
+			/* (a line written by hand may begin with a field) */
+			if (strchr(when, '='))
+				when[0] = 0;
+		}
+		if (!distributed_ban_field(line, "hwid=", hardware_id, hardware_id_size) || !hardware_id[0])
+			snprintf(hardware_id, (size_t)hardware_id_size, "none");
+		distributed_ban_field(line, "players=", players, players_size);
+		distributed_ban_field(line, "reason=", reason, reason_size);
+		*until = distributed_ban_until(line);
+	}
+	fclose(file);
+	return found;
+}
+
+/* (the dedicated server's sv_unban) BANS_FILE's index-th ban (as
+network_distributed_ban_entry counts) taken out, every other line kept as
+it was; FALSE if there is none, or the file could not be written */
+boolean network_distributed_unban(
+	long index)
+{
+	enum
+	{
+		/* (a bans file larger than this is not rewritten) */
+		MAXIMUM_BANS_FILE_SIZE = 1024 * 1024,
+	};
+	static char contents[MAXIMUM_BANS_FILE_SIZE];
+	char line[512];
+	long size = 0;
+	long count = 0;
+	boolean found = FALSE;
+	FILE *file = fopen(BANS_FILE, "r");
+
+	if (!file)
+		return FALSE;
+	while (fgets(line, sizeof(line), file))
+	{
+		long length = (long)strlen(line);
+
+		if (distributed_ban_line(line) && count++ == index)
+		{
+			found = TRUE;
+			continue;
+		}
+		if (size + length >= MAXIMUM_BANS_FILE_SIZE)
+		{
+			fclose(file);
+			error(_error_log, "%s is too large to rewrite", BANS_FILE);
+			return FALSE;
+		}
+		csmemcpy(contents + size, line, length);
+		size += length;
+	}
+	fclose(file);
+	if (!found)
+		return FALSE;
+	file = fopen(BANS_FILE, "w");
+	if (!file)
+	{
+		error(_error_log, "could not open %s to take a ban out of it", BANS_FILE);
+		return FALSE;
+	}
+	if (size && fwrite(contents, 1, (size_t)size, file) != (size_t)size)
+	{
+		fclose(file);
+		error(_error_log, "could not write %s", BANS_FILE);
+		return FALSE;
+	}
+	fclose(file);
+	return TRUE;
 }
 
 /* (the host: network_server_manager.c, its kick command) players kicked by
@@ -3881,7 +4142,7 @@ static void distributed_note_client_clock(
 				snprintf(reason, sizeof(reason), "unverified speed hack (its datagrams only, not dropped: "
 					"game ran %.2f times as fast)", rate);
 				distributed_machine_address_text(machine_index, address, sizeof(address));
-				distributed_write_player_record(CHEATERS_FILE, address, machine_index, names, reason);
+				distributed_write_player_record(CHEATERS_FILE, address, machine_index, names, reason, 0);
 				clock->logged_unverified = TRUE;
 			}
 		}
@@ -4014,6 +4275,15 @@ void network_distributed_handle_message(
 	}
 	distributed_statistics.received++;
 
+	/* (the kinds a client sends only over its stream: in a datagram, which
+	anyone can send as from it, they are not its) */
+	if ((header.type == _distributed_message_client_ready ||
+			header.type == _distributed_message_client_identity ||
+			header.type == _distributed_message_hit_reports) &&
+		!distributed_handling_stream_message)
+	{
+		return;
+	}
 	/* (each kind from the host, or from a client) */
 	switch (header.type)
 	{
@@ -4031,11 +4301,19 @@ void network_distributed_handle_message(
 	default:
 		if (game_connection() != _game_connection_network_client)
 			return;
-		/* (the host's latest tick, which this client's input messages tell
-		it back) */
-		if (distributed_host_time == NONE || header.game_time > distributed_host_time)
-			distributed_host_time = header.game_time;
 		break;
+	}
+	if (!distributed_message_time_bounded(machine_index, header.game_time,
+		machine_index == NONE ? !network_connection_last_read_was_unreliable() : distributed_handling_stream_message))
+	{
+		return;
+	}
+	/* (a client: the host's latest tick, which its input messages tell it
+	back) */
+	if (machine_index == NONE &&
+		(distributed_host_time == NONE || header.game_time > distributed_host_time))
+	{
+		distributed_host_time = header.game_time;
 	}
 	if ((distributed_handling_batch || header.type != _distributed_message_damage_events) &&
 		distributed_message_stale(machine_index, &header))

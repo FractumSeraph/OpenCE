@@ -52,6 +52,14 @@ written */
 GLuint xgpu_compile_shader(GLenum type, const char *code, const char *what);
 GLuint xgpu_link_program(GLuint vertex_shader, GLuint fragment_shader, const char *what);
 
+/* the draws' shaders by their text (xgpu_shader_cache.c): a text compiled
+before gives the same shader; program_get tells it each pair it links; and
+at start-up the texts and pairs of earlier runs are all compiled and linked,
+each program handed to linked() */
+GLuint xgpu_shader_cache_compile(GLenum type, const char *source, const char *what);
+void xgpu_shader_cache_linked(GLuint vertex_shader, GLuint fragment_shader);
+void xgpu_shader_cache_warm(void (*linked)(GLuint vertex_shader, GLuint fragment_shader, GLuint program));
+
 /* ---------- generated source text */
 
 struct xgpu_text
@@ -94,6 +102,12 @@ NORMPACKED3 32-bit integers and unpacked in the shader. With lighting (else
 NULL), the normal and world position go to the pixel shader too, which
 lights the diffuse color for each pixel (nv2a_pixel_shader_key
 per_pixel_lighting). Returns a malloc'd string. */
+/* OpenGL ES and macOS's OpenGL 4.1 have no glClipControl: vertex shaders
+convert D3D's clip space themselves (nv2a_vsh.c) */
+#if defined(HALO_ANDROID) || defined(__APPLE__)
+#define HALO_GL_NO_CLIP_CONTROL 1
+#endif
+
 char *nv2a_vertex_shader_to_glsl(const DWORD *instructions, unsigned long instruction_count,
 	unsigned long packed_attribute_mask, const struct nv2a_vertex_lighting *lighting);
 
@@ -143,6 +157,9 @@ struct nv2a_pixel_shader_key
 	proportion to how far alpha is past the reference, not all of the pixel
 	or none of it, so that cut-out edges (foliage, grates) are smoothed too */
 	unsigned char alpha_test_samples;
+	/* Discrete meter thresholds in texture 0's red are read at level zero,
+	without filtering. Coverage/brightness still use the filtered lookup. */
+	unsigned char point_threshold;
 };
 
 char *nv2a_pixel_shader_to_glsl(const struct nv2a_pixel_shader_key *key);
@@ -184,6 +201,9 @@ struct xgpu_texture_description
 	unsigned long width, height, depth, levels;
 	BOOL cube_map;
 	BOOL linear;        /* not swizzled; addressed with texel coordinates */
+	BOOL pc_layout;     /* laid out as Halo PC's bitmaps (D3DCOMMON_PORT_PC_LAYOUT) */
+	BOOL pc_meter;      /* a Halo PC HUD meter's channels (D3DCOMMON_PORT_PC_METER) */
+	BOOL pc_multipurpose; /* a Halo PC multipurpose map's channels (D3DCOMMON_PORT_PC_MULTIPURPOSE) */
 	BOOL compressed;
 	unsigned long pitch; /* linear textures */
 	BOOL hires;         /* a high-res HUD texture drawn in the texture's place (hud_hires.h) */

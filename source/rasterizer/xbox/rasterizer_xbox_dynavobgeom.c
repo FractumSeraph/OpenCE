@@ -76,6 +76,7 @@ symbols in this file:
 #include "rasterizer.h"
 #include "rasterizer/rasterizer_console_vars.h"
 #include "rasterizer/rasterizer_model_types.h"
+#include "rasterizer/rasterizer_transparent_geometry.h"
 #include "render/render_cameras.h"
 #include "shaders/shader_definitions.h"
 #include "rasterizer_xbox_pixel_shader.h"
@@ -160,6 +161,7 @@ enum
 		(struct shader *)(shader), _shader_type_effect))
 
 /* ---------- structures */
+#ifndef HALO_64BIT
 
 struct transparent_geometry_group
 {
@@ -205,6 +207,7 @@ typedef char transparent_geometry_group_plane_offset_assert[
 	offsetof(struct transparent_geometry_group, plane) == 0x80 ? 1 : -1];
 typedef char transparent_geometry_group_cortana_hack_offset_assert[
 	offsetof(struct transparent_geometry_group, cortana_hack) == 0x9D ? 1 : -1];
+#endif
 
 struct rasterizer_meter_parameters
 {
@@ -633,9 +636,7 @@ void _rasterizer_psuedo_dynamic_screen_quad_draw(
 		}
 
 		pixel_shader.combiner_count = combiner_index | 0x00011100;
-		/* (port: r0 times its alpha, as the meters' final combiner takes
-		r0 times t0's) */
-		pixel_shader.final_combiner_inputs_abcd = parameters->alpha_weighted ? 0x0C1C0000 : 0x0000000C;
+		pixel_shader.final_combiner_inputs_abcd = 0x0000000C;
 		pixel_shader.final_combiner_inputs_efg = 0x00001C00;
 	}
 
