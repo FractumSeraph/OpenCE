@@ -108,7 +108,7 @@ impl Config {
                 1_000_000_000_000,
             )?,
             max_sessions: env_usize("MAX_SESSIONS", 64, 1, 512)?,
-            max_sessions_per_actor: env_usize("MAX_SESSIONS_PER_ACTOR", 2, 1, 8)?,
+            max_sessions_per_actor: env_usize("MAX_SESSIONS_PER_ACTOR", 2, 1, 512)?,
             origins: Arc::from(origins),
             public_ip,
             public_websocket_url,

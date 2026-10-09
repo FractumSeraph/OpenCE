@@ -38,7 +38,7 @@ Optional:
 - `BIND_ADDR` (default `127.0.0.1:8080`)
 - `UDP_PORT_START` / `UDP_PORT_END` (default `40000` / `40127`)
 - `MAX_SESSIONS` (default `64`)
-- `MAX_SESSIONS_PER_ACTOR` (default `2`)
+- `MAX_SESSIONS_PER_ACTOR` (default `2`, at most `512`): one address's sessions at once (a household, a school: everyone behind one router is one address)
 - `GLOBAL_DAILY_BYTE_CAP` (default `10000000000`)
 
 Each session is additionally limited to 2 MiB/s, 1 GiB total, four reliable

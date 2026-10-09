@@ -258,7 +258,7 @@ proxies do this by default.
 | `lobby.maxRoomCapacity` | Players per lobby (the game's maximum is 128). |
 | `lobby.roomHours` | How long a lobby invite stays valid. |
 | `iceServers` | STUN/TURN servers handed to players. |
-| `nativeGateway.*` | Native-invite gateway: enable/disable, public IP, UDP port range. |
+| `nativeGateway.*` | Native-invite gateway: enable/disable, public IP, UDP port range, `maxSessions` (native games joined at once, 128: one UDP port each) and `maxSessionsPerActor` (from one address, 128: every device behind one router counts as one address). |
 | `publicGames.enabled` / `publicGames.brokers` | The in-game server browser's list of public games, and the MQTT brokers it comes from. |
 | `delta.enabled` / `delta.url` | ChupathingyCE's game list (`https://halo.milenko.org`), which this server asks for the page: the signed legacy table, its live games for the Server Browser, and a player's stats and Link profile. `false` or empty: none (the game then plays with its built-in numbers). |
 | `analytics.umamiScriptUrl` / `analytics.umamiWebsiteId` | Optional Umami page-view tracking: the tracker script's URL and the website ID. Added to the page when served; leave empty for none. |

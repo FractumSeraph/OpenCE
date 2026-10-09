@@ -83,7 +83,7 @@ internet and handles HTTPS):
   "lobby": { "enabled": true, "externalUrl": "", "defaultRoomCapacity": 128, "maxRoomCapacity": 128, "roomHours": 6 },
   "iceServers": [],
   "cloudflareTurn": { "keyId": "", "keySecret": "" },
-  "nativeGateway": { "enabled": true, "publicIp": "auto", "udpPortStart": 40000, "udpPortEnd": 40127, "maxSessions": 64, "allowPrivateIp": false }
+  "nativeGateway": { "enabled": true, "publicIp": "auto", "udpPortStart": 40000, "udpPortEnd": 40127, "maxSessions": 128, "maxSessionsPerActor": 128, "allowPrivateIp": false }
 }
 ```
 

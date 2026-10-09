@@ -62,7 +62,11 @@ const DEFAULT_CONFIG = {
     publicIp: "auto",
     udpPortStart: 40000,
     udpPortEnd: 40127,
-    maxSessions: 64,
+    // native games joined at once: in all (each takes one UDP port of the
+    // range, so the range's 128 ports are the most), and from one address
+    // (everyone behind one router is one address: a household)
+    maxSessions: 128,
+    maxSessionsPerActor: 128,
     allowPrivateIp: false,
   },
   // the in-game server browser (Join Game > Server Browser): native games
@@ -300,6 +304,7 @@ async function startGateway(config, secrets) {
     UDP_PORT_START: String(settings.udpPortStart),
     UDP_PORT_END: String(settings.udpPortEnd),
     MAX_SESSIONS: String(settings.maxSessions),
+    MAX_SESSIONS_PER_ACTOR: String(settings.maxSessionsPerActor),
     RUST_LOG: process.env.RUST_LOG || "warn",
   };
   const state = { port, publicIp, child: null, stopping: false };
