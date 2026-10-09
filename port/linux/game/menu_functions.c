@@ -89,6 +89,10 @@ their handlers open opens.
 #endif
 /* (its games on Halo PC maps: server_browser.c) */
 #include "halo_map_families.h"
+#include "network_voice.h"
+#include "text/draw_string.h"
+/* (cache_files.c: a map file's header checksum, its version) */
+unsigned long cache_files_map_version(char const *map_name);
 #include "halo_server_browser.h"
 
 #include <stdlib.h>
@@ -4945,7 +4949,6 @@ void menu_functions_text_box_drawn(struct widget_instance *widget, rectangle2d c
 			draw_unicode_string_compute_bounds(bounds, widget->parameters.text_box.text, &text, &cursor);
 			if (text.x0 - size - 6 >= bounds->x0)
 				icon.x1 = (short)(text.x0 - 6);
-			icon.y0 = (short)(draw_unicode_string_capital_middle(bounds, widget->parameters.text_box.text) - size / 2);
 		}
 		icon.x0 = (short)(icon.x1 - size);
 		icon.y1 = (short)(icon.y0 + size);

@@ -125,7 +125,6 @@ void dsound_sdl_output_device_check(void);
 /* updater.c's: the desktop self-updater */
 void updater_start(void);
 void updater_poll(SDL_Window *window);
-static void screen_keyboard_update(void);
 /* the windows' icon, a PNG (tools/embed_assets.py, from port/assets/icon) */
 extern const unsigned int platform_window_icon[];
 extern const unsigned long platform_window_icon_size;
@@ -541,7 +540,7 @@ static BOOL data_download(struct data_extraction *extraction)
 	}
 	snprintf(url, sizeof(url), "%smaps.txt", extraction->url);
 	snprintf(partial, sizeof(partial), "%s" DATA_PATH_SEPARATOR "maps.txt.partial", folder);
-	if (!update_download(url, partial, NULL, NULL, extraction->error, sizeof(extraction->error)))
+	if (!update_download(url, partial, 1ULL << 20, NULL, NULL, extraction->error, sizeof(extraction->error)))
 		return FALSE;
 	list = fopen(partial, "r");
 	while (list && fgets(line, sizeof(line), list) && count < DATA_DOWNLOAD_FILES)
@@ -585,7 +584,7 @@ static BOOL data_download(struct data_extraction *extraction)
 		snprintf(url, sizeof(url), "%s%s", extraction->url, files[which].name);
 		snprintf(partial, sizeof(partial), "%s.partial", path);
 		platform_log("downloading %s", url);
-		if (!update_download(url, partial, data_download_received, &progress, extraction->error,
+		if (!update_download(url, partial, files[which].size, data_download_received, &progress, extraction->error,
 			sizeof(extraction->error)))
 		{
 			update_delete_file(partial);
@@ -2140,7 +2139,6 @@ void platform_pump_events(void)
 	updater_poll(platform_window);
 	/* (Settings > Audio's output device, as it changes: dsound_sdl.c) */
 	dsound_sdl_output_device_check();
-	screen_keyboard_update();
 #endif
 	map_torrents_poll();
 	pthread_mutex_lock(&input_lock);

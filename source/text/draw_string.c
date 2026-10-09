@@ -1459,51 +1459,6 @@ void draw_unicode_string_compute_bounds(
 	return;
 }
 
-/* port: the middle of a string's capitals as it is drawn in the bounds
-(the draw mode's font: the rows of its H with ink, on the line's baseline),
-for what is drawn beside it, centred on it (voice chat's speakers:
-port/linux/game/network_voice.c) */
-short draw_unicode_string_capital_middle(
-	rectangle2d const *bounds,
-	wchar_t const *string)
-{
-	rectangle2d text_bounds;
-	rectangle2d cursor_bounds;
-	struct font_header *font;
-	struct font_character *capital;
-	short baseline;
-	short top = NONE;
-	short bottom = NONE;
-	short row;
-
-	draw_unicode_string_compute_bounds(bounds, string, &text_bounds, &cursor_bounds);
-	font = text_bounds_globals.last_font_header;
-	if (!font)
-		return (short)((bounds->y0 + bounds->y1) / 2);
-	baseline = (short)(cursor_bounds.y0 + font->ascending_height);
-	capital = font_get_character_by_ascii_code(font, 'H');
-	for (row = 0; capital && row < capital->bitmap_height; row++)
-	{
-		byte const *pixels = (byte const *)font->pixels.address + capital->pixels_offset + row * capital->bitmap_width;
-		short column;
-
-		for (column = 0; column < capital->bitmap_width; column++)
-		{
-			if (pixels[column])
-			{
-				if (top == NONE)
-					top = row;
-				bottom = row;
-				break;
-			}
-		}
-	}
-	/* (no H: the middle of the font's height above the baseline) */
-	if (top == NONE)
-		return (short)(baseline - font->ascending_height / 2);
-	return (short)(baseline - capital->bitmap_origin_y + (top + bottom + 1) / 2);
-}
-
 short draw_string_pick(
 	rectangle2d const *bounds,
 	char const *string,
@@ -1575,4 +1530,22 @@ void bitmap_draw_string(
 		string);
 
 	return;
+}
+
+/* port: where a string's capitals are centred vertically within bounds, for
+an icon beside it (OpenCE's: the scoreboard's and the lobby's voice icons,
+game_engine.c, hud.c, menu_functions.c): the middle of the drawn text's
+box (ChupathingyCE's text code keeps no font of the last bounds, which
+OpenCE's measured its H in) */
+short draw_unicode_string_capital_middle(
+	rectangle2d const *bounds,
+	wchar_t const *string)
+{
+	rectangle2d text_bounds;
+	rectangle2d cursor_bounds;
+
+	draw_unicode_string_compute_bounds(bounds, string, &text_bounds, &cursor_bounds);
+	if (text_bounds.y1 <= text_bounds.y0)
+		return (short)((bounds->y0 + bounds->y1) / 2);
+	return (short)((text_bounds.y0 + text_bounds.y1) / 2);
 }

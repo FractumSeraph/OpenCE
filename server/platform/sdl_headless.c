@@ -9,6 +9,7 @@ SDL 3's does for what those units ask of it. Built with the host's ABI, as
 SDL is; only SDL's headers are needed, for the declarations.
 */
 
+#include <time.h>
 #include <SDL3/SDL.h>
 
 #include <errno.h>
@@ -243,4 +244,65 @@ bool SDL_PutAudioStreamData(SDL_AudioStream *stream, const void *buffer, int len
 	(void)buffer;
 	(void)length;
 	return false;
+}
+
+/* (OpenCE's voice chat, which the game's network code carries: the server
+neither talks nor listens, port/linux/src/voice_audio.c, so its streams
+are never opened and these never get one) */
+void SDL_DestroyAudioStream(SDL_AudioStream *stream)
+{
+	(void)stream;
+}
+
+int SDL_GetAudioStreamAvailable(SDL_AudioStream *stream)
+{
+	(void)stream;
+	return 0;
+}
+
+int SDL_GetAudioStreamData(SDL_AudioStream *stream, void *buffer, int length)
+{
+	(void)stream;
+	(void)buffer;
+	(void)length;
+	return 0;
+}
+
+Uint64 SDL_GetTicks(void)
+{
+	struct timespec now;
+
+	clock_gettime(CLOCK_MONOTONIC, &now);
+	return (Uint64)now.tv_sec * 1000 + (Uint64)now.tv_nsec / 1000000;
+}
+
+/* (sdl_platform.c's and xinput_sdl.c's, which the server leaves out: no
+audio devices, no push to talk, no scoreboard pointer) */
+int platform_audio_devices(int recording, char (*names)[128], int maximum)
+{
+	(void)recording;
+	(void)names;
+	(void)maximum;
+	return 0;
+}
+
+SDL_AudioDeviceID platform_audio_device(int recording, const char *name)
+{
+	(void)recording;
+	(void)name;
+	return 0;
+}
+
+int halo_push_to_talk_held(void)
+{
+	return 0;
+}
+
+struct platform_ui_pointer;
+
+int platform_scoreboard_pointer(int offered, struct platform_ui_pointer *pointer)
+{
+	(void)offered;
+	(void)pointer;
+	return 0;
 }

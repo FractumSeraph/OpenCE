@@ -618,7 +618,8 @@ static void tracker_failed(struct torrent_tracker *tracker, struct torrent_track
 	if (wait > ANNOUNCE_RETRY_MAXIMUM)
 		wait = ANNOUNCE_RETRY_MAXIMUM;
 	state->next_time = torrent_now() + wait;
-	torrent_log("the tracker %s: %s (asking again in %lu s)", tracker->url, reason, wait / TORRENT_SECOND);
+	torrent_log("the tracker %s: %s (asking again in %u s)", tracker->url, reason,
+		(unsigned int)(wait / TORRENT_SECOND));
 }
 
 static void tracker_answered(struct torrent *torrent, struct torrent_tracker *tracker,
@@ -996,8 +997,8 @@ static void web_seed_failed(struct torrent *torrent, struct torrent_web_seed_sta
 	if (state->piece >= 0)
 		torrent_piece_unrequested(torrent, state->piece);
 	state->piece = -1;
-	torrent_log("%s: the web seed %s: %s (trying again in %lu s)", torrent->name, url, reason,
-		wait / TORRENT_SECOND);
+	torrent_log("%s: the web seed %s: %s (trying again in %u s)", torrent->name, url, reason,
+		(unsigned int)(wait / TORRENT_SECOND));
 }
 
 void torrent_web_seeds_tick(struct torrent *torrent)

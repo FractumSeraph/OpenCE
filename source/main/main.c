@@ -380,7 +380,6 @@ symbols in this file:
 #include "networking/network_game_manager.h"
 #include "networking/network_server_manager.h" /* port: a co-op game's level won */
 #include "network_coop.h" /* port: port/linux/game/network_coop.c */
-#include "network_voice.h" /* port: port/linux/game/network_voice.c */
 #include "camera/director.h"
 #include "camera/observer.h"
 #include "cutscene/cinematics.h"
@@ -392,12 +391,6 @@ symbols in this file:
 #include "text/draw_string.h"
 #include "text/font_group.h"
 #include "tag_files/files.h"
-#ifdef HALO_64BIT
-#include "input/input_abstraction.h"
-#include "interface/player_ui.h"
-#include "interface/marketing_and_strategic_business_development.h"
-#endif
-
 #ifdef HALO_WEB
 #include <emscripten/emscripten.h>
 #include "../../port/web/src/web_online_ui.h"
@@ -409,16 +402,10 @@ void platform_web_frame_stopped(long connection);
 void platform_log(const char *format, ...);
 #endif
 
-/* (not the browser's, which also defines HALO_ANDROID: it ends its runtime
-on a fatal error) */
-#if (defined(HALO_WINDOWS) || defined(HALO_ANDROID) || defined(__linux__)) && !defined(HALO_WEB)
-#define HALO_NATIVE_BUILD_INFO 1
-#ifndef HALO_BUILD_NUMBER
-#define HALO_BUILD_NUMBER 0
-#endif
-#ifndef HALO_BUILD_FLAVOR
-#define HALO_BUILD_FLAVOR "local"
-#endif
+#ifdef HALO_64BIT
+#include "input/input_abstraction.h"
+#include "interface/player_ui.h"
+#include "interface/marketing_and_strategic_business_development.h"
 #endif
 
 /* ---------- constants */
@@ -3026,10 +3013,6 @@ void halt_and_catch_fire(
 	struct scenario *scenario;
 	struct rasterizer_frame_begin_parameters frame_parameters;
 	struct rasterizer_window_begin_parameters window_parameters;
-	#ifdef HALO_NATIVE_BUILD_INFO
-	char banner[256];
-	char label[96];
-	#endif
 
 #ifdef HALO_WEB
 	platform_log("web halt: %s", error_get());
@@ -3068,13 +3051,6 @@ void halt_and_catch_fire(
 				FONT_GROUP_TAG,
 				"old tags\\internal system plain");
 		}
-		#ifdef HALO_NATIVE_BUILD_INFO
-		main_native_build_label(label, sizeof(label));
-		_snprintf(banner, sizeof(banner) - 1,
-			"%s\r\nCompiled: %s %s\r\nFull log: debug.txt (game data folder)\r\nRecent messages (newest first):",
-			label, __DATE__, __TIME__);
-		banner[sizeof(banner) - 1] = 0;
-		#endif
 
 		while (TRUE)
 		{
@@ -3137,11 +3113,7 @@ void halt_and_catch_fire(
 					NULL,
 					&cursor,
 					-4,
-					#ifdef HALO_NATIVE_BUILD_INFO
-					main_native_error_tail(error_get()));
-				#else
 					error_get());
-				#endif
 			}
 
 			rasterizer_transparent_geometry_draw(TRUE);
@@ -3394,7 +3366,11 @@ static boolean main_loop_iteration(
 			}
 #endif
 			/* port: voice chat, in the lobby and in game (port/linux/game/network_voice.c) */
-			network_voice_update();
+			{
+				void network_voice_update(void);
+
+				network_voice_update();
+			}
 			connection = main_globals.connection;
 			if (connection==_game_connection_network_client)
 			{
@@ -3446,11 +3422,7 @@ static boolean main_loop_iteration(
 #endif
 			bink_playback_update();
 
-			/* port: not the Xbox debug keyboard's End and Escape, which stop
-			the movie and restart the map: this keyboard reaches the game only
-			through the console and the menus' text boxes, whose End and Escape
-			they are (port/linux/src/xinput_sdl.c) */
-			if (editor_should_exit())
+			if ((!game_in_editor() && (input_key_is_down(_key_end) || input_key_is_down(_key_escape))) || editor_should_exit())
 			{
 				main_movie_stop();
 

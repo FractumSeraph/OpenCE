@@ -81,7 +81,24 @@ UNSIGNED_APK = "port/android/app/build/outputs/apk/release/app-release-unsigned.
 
 def run(command, cwd=ROOT):
     print("+", " ".join(str(part) for part in command), flush=True)
-    subprocess.run([str(part) for part in command], cwd=cwd, check=True)
+    if not os.environ.get("GITHUB_ACTIONS"):
+        subprocess.run([str(part) for part in command], cwd=cwd, check=True)
+        return
+    # (on GitHub Actions: its output passed on as it comes, and a failed
+    # command's compiler and linker errors made annotations too, which the
+    # run's page shows, and the checks API gives without signing in)
+    errors = []
+    process = subprocess.Popen([str(part) for part in command], cwd=cwd, stdout=subprocess.PIPE,
+                               stderr=subprocess.STDOUT, text=True, errors="replace")
+    for line in process.stdout:
+        sys.stdout.write(line)
+        if re.search(r"error[:\s]|undefined (reference|symbol)|FAILED:", line) and len(errors) < 40:
+            errors.append(line.strip())
+    sys.stdout.flush()
+    if process.wait():
+        for line in errors:
+            print(f"::error::{line[:400]}", flush=True)
+        raise subprocess.CalledProcessError(process.returncode, command)
 
 
 def main() -> int:
