@@ -103,6 +103,9 @@ static unsigned long keystroke_head, keystroke_count;
 void updater_start(void);
 void updater_poll(SDL_Window *window);
 #endif
+/* map_torrents.c's: Custom Edition maps downloaded and seeded */
+void map_torrents_initialize(void);
+void map_torrents_poll(void);
 
 BOOL platform_sdl_initialize(void)
 {
@@ -149,6 +152,7 @@ BOOL platform_sdl_initialize(void)
 	updater_start();
 	#endif
 #endif
+	map_torrents_initialize();
 	return TRUE;
 }
 
@@ -1371,6 +1375,7 @@ void platform_pump_events(void)
 #ifndef HALO_ANDROID
 	updater_poll(platform_window);
 #endif
+	map_torrents_poll();
 	pthread_mutex_lock(&input_lock);
 	while (SDL_PollEvent(&event))
 	{

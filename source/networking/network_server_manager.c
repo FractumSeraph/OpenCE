@@ -475,6 +475,9 @@ symbols in this file:
 #include "interface/player_ui.h"
 #include "tag_files/tag_files.h"
 
+/* port: the map the hosted game is on, seeded for players joining it
+(port/linux/src/map_torrents.c) */
+void map_torrents_playing(const char *level_name, unsigned long version, int hosting);
 /* port: internet play's Discord presence (port/linux/src/p2p.c), and the
 server browser's listing of a public game (p2p_lobby.c) */
 void p2p_set_game_player_counts(int count, int maximum);
@@ -1241,6 +1244,8 @@ void network_game_server_dispose(
 
 	/* port: a won co-op round's next level belongs to this server alone */
 	network_game_server_cooperative_next_map[0] = 0;
+	/* port: its map no longer seeded as the host's */
+	map_torrents_playing(NULL, 0, 1);
 
 	switch (server->state)
 	{
@@ -1415,6 +1420,8 @@ static void network_game_server_list(
 	/* (the scenario's name, not its path: the listing has 32 characters) */
 	p2p_set_game_listing(name, tag_name_strip_path(game->map.name), gametype, game->variant.game_engine_index, open,
 		in_progress, game->variant.universal_variant.teams);
+	/* port: the map seeded for those joining (costs little when unchanged) */
+	map_torrents_playing(game->map.name, (unsigned long)game->map.version, 1);
 }
 
 boolean network_game_server_idle(

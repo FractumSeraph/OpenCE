@@ -259,6 +259,10 @@ The game can play system link games on a local network and on the internet:
 - The netcode is new. Each machine moves its own player at once,
   and the host makes the decisions for the game. Refer to
   [port/linux/NETCODE.md](port/linux/NETCODE.md).
+- A Custom Edition map that a machine does not have is downloaded when
+  it joins a game on it, over BitTorrent, from the other players and
+  from seed boxes; the host seeds the map it plays. Refer to
+  [docs/map_torrents.md](docs/map_torrents.md).
 
 ## Build the game
 

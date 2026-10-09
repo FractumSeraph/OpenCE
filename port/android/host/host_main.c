@@ -293,6 +293,16 @@ static void *game_main(void *unused)
 			host_logf(HOST_LOG_ERROR, "cannot write %s: %s", path, SDL_GetError());
 		SDL_free(brokers);
 	}
+	/* the Custom Edition maps' torrents (maps.torrent_index), likewise */
+	{
+		size_t index_size = 0;
+		void *index = SDL_LoadFile("map_torrents.txt", &index_size);
+
+		snprintf(path, sizeof(path), "%s/map_torrents.txt", data_root);
+		if (!index || !SDL_SaveFile(path, index, index_size))
+			host_logf(HOST_LOG_ERROR, "cannot write %s: %s", path, SDL_GetError());
+		SDL_free(index);
+	}
 	snprintf(path, sizeof(path), "%s/config.toml", data_root);
 
 	image = SDL_LoadFile("halo_guest.elf", &image_size);
