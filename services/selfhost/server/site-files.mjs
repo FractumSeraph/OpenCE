@@ -93,3 +93,20 @@ export function customMapList(folder, mapHashes) {
   }
   return files;
 }
+
+// The game's own maps (public/assets/maps) as maps.txt, for the desktop and
+// Android games' first start, which can download the maps folder from here
+// (data.download_url, port/linux/src/sdl_platform.c; LauncherActivity.java):
+// a line each, the file's name, a tab, its size in bytes.
+export function gameMapList(folder) {
+  let lines = [];
+  try {
+    lines = fs.readdirSync(folder, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && /^[A-Za-z0-9_.-]{1,60}\.map$/.test(entry.name))
+      .map((entry) => `${entry.name}\t${fs.statSync(path.join(folder, entry.name)).size}`)
+      .sort();
+  } catch {
+    // (no maps here: players bring their own)
+  }
+  return lines.length ? lines.join("\n") + "\n" : "";
+}

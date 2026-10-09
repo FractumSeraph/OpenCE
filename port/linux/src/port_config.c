@@ -294,6 +294,12 @@ static const struct config_setting config_settings[] =
 		"A Halo Custom Edition install whose maps folder is looked in after the\n"
 		"custom_maps folder for Custom Edition maps and their bitmaps.map,\n"
 		"sounds.map and loc.map (game.custom_edition); empty for none." },
+	{ "data.download_url", _config_string, "\"https://halo.fractumseraph.net/assets/maps/\"", "HALO_DATA_DOWNLOAD_URL",
+		_environment_value, _platform_desktop,
+		"Where the first start offers to download the maps folder from, when\n"
+		"there is none: an https:// folder holding its files and maps.txt (the\n"
+		"files' names and sizes, a line each; services/selfhost's\n"
+		"assets/maps/). Empty offers only an Xbox disc image." },
 
 	{ "network.address", _config_string, "\"\"", "HALO_NET_ADDRESS", _environment_value, _platform_all,
 		"This machine's IPv4 address for system link, for a machine on several\n"

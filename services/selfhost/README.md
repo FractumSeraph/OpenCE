@@ -182,6 +182,11 @@ hangemhigh longest prisoner putput ratrace sidewinder wizard (multiplayer)
 If `ui.map` is missing, the page falls back to asking each player for their
 own XISO.
 
+The server also lists them as `assets/maps/maps.txt` (each file's name and
+size; `server/static-site.mjs` writes it for a static host). The desktop and
+Android games' first start can download the maps folder from such a folder
+(`data.download_url` in their `config.toml`).
+
 ### Halo Custom Edition maps
 
 Custom Edition maps (Coldsnap, Extinction, Halo PC's Ice Fields, Death Island

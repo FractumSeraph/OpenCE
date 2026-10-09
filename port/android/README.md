@@ -73,15 +73,20 @@ of the whole `save` folder stops there.
 
 ## Game data
 
-The game needs the `maps/` folder from an Xbox disc image (`.xiso` or
-`.iso`) of any version of the game. The app extracts `maps/` from the disc
-image. The app keeps the data in `/sdcard/Android/data/com.halo.decomp/files`.
+The game needs the `maps/` folder of the game. The app downloads it from
+this fork's site (https://halo.fractumseraph.net/assets/maps/, about 1.8 GB),
+or extracts it from an Xbox disc image (`.xiso` or `.iso`) of any version of
+the game. The app keeps the data in `/sdcard/Android/data/com.halo.decomp/files`.
 
-To install the data with the app:
+To download the data: start the app and push **Download the maps**. The game
+starts when the download is done; a download stopped part way goes on from
+where it was the next time.
+
+To install the data from a disc image:
 
 1. Copy the disc image to the phone.
 2. Start the app.
-3. Push the button. The file picker of the system opens.
+3. Push **Choose disc image**. The file picker of the system opens.
 4. Select the disc image.
 5. Wait while the app extracts the data (approximately 1.8 GB). Then the
    game starts.

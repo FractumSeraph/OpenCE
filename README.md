@@ -209,14 +209,17 @@ That project is a fork of [punpckhdq/halo](https://github.com/punpckhdq/halo).
 
 ## Download
 
-GitHub Actions builds the game for each commit. These links download the
-builds of the latest release:
+GitHub Actions builds the game for each commit. These links download this
+fork's builds of the latest release (the browser version is at
+[halo.fractumseraph.net](https://halo.fractumseraph.net/)). They download the
+game's maps at the first start (see [Game data](#game-data)), and Custom
+Edition maps as they are needed ([docs/map_torrents.md](docs/map_torrents.md)):
 
 | Platform | Release | Debug |
 | --- | --- | --- |
-| Linux | [halo-linux-release.zip](https://github.com/OpenCommunityEdition/OpenCE/releases/latest/download/halo-linux-release.zip) | [halo-linux-debug.zip](https://github.com/OpenCommunityEdition/OpenCE/releases/latest/download/halo-linux-debug.zip) |
-| Windows | [halo-windows-release.zip](https://github.com/OpenCommunityEdition/OpenCE/releases/latest/download/halo-windows-release.zip) | [halo-windows-debug.zip](https://github.com/OpenCommunityEdition/OpenCE/releases/latest/download/halo-windows-debug.zip) |
-| Android | [halo-android-release.zip](https://github.com/OpenCommunityEdition/OpenCE/releases/latest/download/halo-android-release.zip) | [halo-android-debug.zip](https://github.com/OpenCommunityEdition/OpenCE/releases/latest/download/halo-android-debug.zip) |
+| Linux | [halo-linux-release.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/halo-linux-release.zip) | [halo-linux-debug.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/halo-linux-debug.zip) |
+| Windows | [halo-windows-release.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/halo-windows-release.zip) | [halo-windows-debug.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/halo-windows-debug.zip) |
+| Android | [halo-android-release.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/halo-android-release.zip) | [halo-android-debug.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/halo-android-debug.zip) |
 
 Use the release build to play. The debug build stops at the first failed
 assertion and writes it to the log. Use the debug build to find and report
@@ -229,25 +232,29 @@ releases of the GitHub repository it was built in: a fork's builds update
 from the fork.
 
 Each build of the `main` branch that passes on all three platforms is a new
-release. The [Releases](https://github.com/OpenCommunityEdition/OpenCE/releases)
+release. The [Releases](https://github.com/FractumSeraph/OpenCE/releases)
 page keeps the last five releases. If the latest build has a problem, get
 an older build from that page.
 
 ## Game data
 
-The port does not include the game data. Download an Xbox disc image
-(`.xiso` or `.iso`) of Halo: Combat Evolved. All versions of the game
-operate. The maps of the European (PAL) version were made for a slower
-console. The port changes them to play as the North American (NTSC) maps do,
-so players of the two versions can play together.
+The port does not include the game data. At the first start, the game
+offers to download its `maps/` folder (about 1.8 GB) from this fork's site,
+https://halo.fractumseraph.net/assets/maps/ (the setting `data.download_url`;
+empty turns it off), or to extract it from an Xbox disc image (`.xiso` or
+`.iso`) of Halo: Combat Evolved. All versions of the game operate. The maps
+of the European (PAL) version were made for a slower console. The port
+changes them to play as the North American (NTSC) maps do, so players of the
+two versions can play together.
 
 1. Start the game.
-2. At the first start, the game asks for the disc image. Select it.
-3. The game extracts the `maps/` folder. Then the game starts.
+2. At the first start, choose **Download**, or **Disc image...** and select
+   the disc image.
+3. The game downloads or extracts the `maps/` folder. Then the game starts.
 
 On Linux and Windows, the game puts `maps/` next to the executable. On
-Android, copy the disc image to the phone first. The app puts `maps/` in its
-data folder. Refer to [port/android/README.md](port/android/README.md).
+Android, the app downloads it the same way, or, for a disc image, copy the
+image to the phone first. The app puts `maps/` in its data folder. Refer to [port/android/README.md](port/android/README.md).
 
 ## Platforms
 

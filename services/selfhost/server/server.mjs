@@ -33,7 +33,7 @@ import selfsigned from "selfsigned";
 import { PublicGames } from "./public-games.mjs";
 import { DeltaList } from "./delta-list.mjs";
 import { MapHashes } from "./map-hashes.mjs";
-import { customMapList, pageHtml } from "./site-files.mjs";
+import { customMapList, gameMapList, pageHtml } from "./site-files.mjs";
 
 const SERVER_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(SERVER_DIR, "..");
@@ -74,7 +74,8 @@ const DEFAULT_CONFIG = {
   // listed on internet play's brokers (the game's port/assets/network/brokers.txt)
   publicGames: {
     enabled: true,
-    brokers: ["opence.milenko.org:1883", "broker.emqx.io:1883", "broker.hivemq.com:1883", "test.mosquitto.org:1883"],
+    brokers: ["halovps.fractumseraph.net:1883", "opence.milenko.org:1883", "broker.emqx.io:1883", "broker.hivemq.com:1883",
+      "test.mosquitto.org:1883"],
   },
   // Delta, ChupathingyCE's game list (delta-list.mjs): the page's requests to
   // it go through this server, which has no CORS to work around. Empty url
@@ -515,6 +516,13 @@ function serveStatic(req, res, config) {
   }
   if (/\/assets\/custom_maps\/index\.json$/.test(url.pathname)) {
     serveCustomMapList(req, res);
+    return;
+  }
+  if (/\/assets\/maps\/maps\.txt$/.test(url.pathname)) {
+    const body = Buffer.from(gameMapList(path.join(PUBLIC_DIR, "assets", "maps")));
+    isolationHeaders(res);
+    res.writeHead(body.length ? 200 : 404, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-cache" });
+    res.end(req.method === "HEAD" ? undefined : body);
     return;
   }
   const found = resolveStatic(url.pathname);

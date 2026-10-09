@@ -645,6 +645,7 @@ controls while it is connected.
           <button type="button" class="touch-ui-button" data-install hidden>Install app</button>
         </div>
         <p class="small">Drag on the right side to aim. Press START (Pause) for the game's own menu.</p>
+        <p class="small"><a href="https://github.com/FractumSeraph/OpenCE#download" target="_blank" rel="noopener noreferrer">Get the Android, Windows &amp; Linux version</a>: faster, with direct internet play.</p>
         <div class="row">
           <button type="button" class="touch-ui-button primary" data-close>Back to the game</button>
           <button type="button" class="touch-ui-button" data-leave>Leave touch mode</button>

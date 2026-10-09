@@ -9,6 +9,8 @@
 //   index.html, halo.html            the page, with the lobby's address
 //                                    (--signaling-url, else the config's
 //                                    lobby.externalUrl) and the analytics
+//   assets/maps/maps.txt             the game's maps, for the desktop and
+//                                    Android games' first-start download
 //   assets/custom_maps/index.json    the Custom Edition maps' list, with
 //                                    their BLAKE2b hashes (hashed once, kept
 //                                    in ../data like the server's)
@@ -20,7 +22,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { MapHashes } from "./map-hashes.mjs";
-import { customMapList, pageHtml } from "./site-files.mjs";
+import { customMapList, gameMapList, pageHtml } from "./site-files.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PUBLIC_DIR = path.join(ROOT, "public");
@@ -65,6 +67,9 @@ const write = (name, data) => {
 for (const name of ["index.html", "halo.html"]) {
   write(name, pageHtml(fs.readFileSync(path.join(PUBLIC_DIR, name), "utf8"), config));
 }
+
+const gameMaps = gameMapList(path.join(PUBLIC_DIR, "assets", "maps"));
+if (gameMaps) write("assets/maps/maps.txt", gameMaps);
 
 const hashes = new MapHashes(CUSTOM_MAPS_DIR, path.join(ROOT, "data", "custom-map-hashes.json"), log);
 hashes.scan();

@@ -592,3 +592,6 @@ body.halo-touch-mode .touch-menu-button { display: block; }
 
 /* the shell's footer button that turns touch mode on */
 #touch-mode-toggle[hidden] { display: none; }
+
+/* the native builds' download link (the menu's) */
+.touch-menu a { color: #78bfe7; text-underline-offset: .18em; }

@@ -19,6 +19,9 @@ and the debug keyboard that the game's console reads.
 #include "port_config.h"
 #include "p2p.h"
 #include "xiso.h"
+#ifndef HALO_ANDROID
+#include "update.h"
+#endif
 
 #include <SDL3/SDL.h>
 #include <stdio.h>
@@ -177,10 +180,19 @@ BOOL platform_sdl_initialize(void)
 #ifndef HALO_ANDROID
 /* ---------- first start without game data (xbox_files.c) */
 
+#ifdef _WIN32
+#define DATA_PATH_SEPARATOR "\\"
+#else
+#define DATA_PATH_SEPARATOR "/"
+#endif
+
 struct data_extraction
 {
 	pthread_mutex_t lock;
+	/* the disc image the maps folder is copied out of, or "" when it is
+	downloaded from url instead (data_download) */
 	char image[1024];
+	char url[1024];
 	char destination[1024];
 	char file[256];
 	unsigned long long done;
@@ -202,11 +214,176 @@ static void data_extraction_progress(void *context, const char *file, unsigned l
 	pthread_mutex_unlock(&extraction->lock);
 }
 
+/* ---------- the maps folder from a web server (data.download_url)
+
+The folder at the URL holds the maps folder's files and maps.txt, a line
+each: the file's name, a tab, its size in bytes (the self-hosted site's
+assets/maps/, services/selfhost). Each file is fetched over HTTPS into
+<name>.partial and renamed once its size is right; files already here at
+their size are kept, so a download stopped part way goes on from the next
+file. */
+
+#define DATA_DOWNLOAD_FILES 64
+
+struct data_download_file
+{
+	char name[64];
+	unsigned long long size;
+};
+
+struct data_download_progress
+{
+	struct data_extraction *extraction;
+	const char *name;
+	unsigned long long before;
+	unsigned long long received;
+};
+
+static void data_download_received(void *context, unsigned long long received, unsigned long long total)
+{
+	struct data_download_progress *progress = context;
+
+	(void)total;
+	progress->received = received;
+	pthread_mutex_lock(&progress->extraction->lock);
+	snprintf(progress->extraction->file, sizeof(progress->extraction->file), "%s", progress->name);
+	progress->extraction->done = progress->before + received;
+	pthread_mutex_unlock(&progress->extraction->lock);
+}
+
+/* a name of the list a file of the maps folder may have: no folders, no
+dots in front */
+static BOOL data_download_name_valid(const char *name)
+{
+	const char *character;
+
+	if (!name[0] || name[0] == '.' || strlen(name) >= sizeof(((struct data_download_file *)0)->name))
+		return FALSE;
+	for (character = name; *character; character++)
+	{
+		if (!((*character >= 'a' && *character <= 'z') || (*character >= 'A' && *character <= 'Z') ||
+			(*character >= '0' && *character <= '9') || *character == '_' || *character == '-' || *character == '.'))
+		{
+			return FALSE;
+		}
+	}
+	return TRUE;
+}
+
+static long long data_file_size(const char *path)
+{
+	FILE *file = fopen(path, "rb");
+	long long size = -1;
+
+	if (!file)
+		return -1;
+#ifdef _WIN32
+	if (_fseeki64(file, 0, SEEK_END) == 0)
+		size = _ftelli64(file);
+#else
+	if (fseeko(file, 0, SEEK_END) == 0)
+		size = (long long)ftello(file);
+#endif
+	fclose(file);
+	return size;
+}
+
+static BOOL data_download(struct data_extraction *extraction)
+{
+	static struct data_download_file files[DATA_DOWNLOAD_FILES];
+	char folder[1100];
+	char path[1200];
+	char partial[1300];
+	char url[1200];
+	char line[256];
+	unsigned long long total = 0;
+	unsigned long long done = 0;
+	int count = 0;
+	int which;
+	FILE *list;
+
+	snprintf(folder, sizeof(folder), "%s" DATA_PATH_SEPARATOR "maps", extraction->destination);
+	if (!update_make_directory(folder))
+	{
+		snprintf(extraction->error, sizeof(extraction->error), "Could not make the folder %s.", folder);
+		return FALSE;
+	}
+	snprintf(url, sizeof(url), "%smaps.txt", extraction->url);
+	snprintf(partial, sizeof(partial), "%s" DATA_PATH_SEPARATOR "maps.txt.partial", folder);
+	if (!update_download(url, partial, NULL, NULL, extraction->error, sizeof(extraction->error)))
+		return FALSE;
+	list = fopen(partial, "r");
+	while (list && fgets(line, sizeof(line), list) && count < DATA_DOWNLOAD_FILES)
+	{
+		char *tab = strchr(line, '\t');
+		unsigned long long size;
+
+		if (!tab || line[0] == '#')
+			continue;
+		*tab = 0;
+		size = strtoull(tab + 1, NULL, 10);
+		if (!data_download_name_valid(line) || !size)
+			continue;
+		snprintf(files[count].name, sizeof(files[count].name), "%s", line);
+		files[count].size = size;
+		total += size;
+		count++;
+	}
+	if (list)
+		fclose(list);
+	update_delete_file(partial);
+	if (!count)
+	{
+		snprintf(extraction->error, sizeof(extraction->error), "%s lists no files.", url);
+		return FALSE;
+	}
+	pthread_mutex_lock(&extraction->lock);
+	extraction->total = total;
+	pthread_mutex_unlock(&extraction->lock);
+
+	for (which = 0; which < count; which++)
+	{
+		struct data_download_progress progress = { extraction, files[which].name, done, 0 };
+
+		snprintf(path, sizeof(path), "%s" DATA_PATH_SEPARATOR "%s", folder, files[which].name);
+		if (data_file_size(path) == (long long)files[which].size)
+		{
+			done += files[which].size;
+			continue;
+		}
+		snprintf(url, sizeof(url), "%s%s", extraction->url, files[which].name);
+		snprintf(partial, sizeof(partial), "%s.partial", path);
+		platform_log("downloading %s", url);
+		if (!update_download(url, partial, data_download_received, &progress, extraction->error,
+			sizeof(extraction->error)))
+		{
+			update_delete_file(partial);
+			return FALSE;
+		}
+		if (data_file_size(partial) != (long long)files[which].size)
+		{
+			update_delete_file(partial);
+			snprintf(extraction->error, sizeof(extraction->error), "%s did not arrive whole; try again.",
+				files[which].name);
+			return FALSE;
+		}
+		update_delete_file(path);
+		if (rename(partial, path) != 0)
+		{
+			snprintf(extraction->error, sizeof(extraction->error), "Could not put %s in place.", files[which].name);
+			return FALSE;
+		}
+		done += files[which].size;
+	}
+	return TRUE;
+}
+
 static void *data_extraction_thread(void *context)
 {
 	struct data_extraction *extraction = context;
-	BOOL succeeded = xiso_extract_maps(extraction->image, extraction->destination, data_extraction_progress,
-		extraction, extraction->error, sizeof(extraction->error)) != 0;
+	BOOL succeeded = extraction->url[0] ? data_download(extraction) :
+		xiso_extract_maps(extraction->image, extraction->destination, data_extraction_progress,
+			extraction, extraction->error, sizeof(extraction->error)) != 0;
 
 	pthread_mutex_lock(&extraction->lock);
 	extraction->succeeded = succeeded;
@@ -215,8 +392,9 @@ static void *data_extraction_thread(void *context)
 	return NULL;
 }
 
-/* copies the maps, showing how far it has got; closing the window quits */
-static BOOL data_extract(const char *image, const char *destination, char *error, int error_size)
+/* copies the maps out of the disc image, or downloads them from url when
+image is NULL, showing how far it has got; closing the window quits */
+static BOOL data_extract(const char *image, const char *url, const char *destination, char *error, int error_size)
 {
 	static struct data_extraction extraction;
 	SDL_Window *window;
@@ -226,7 +404,8 @@ static BOOL data_extract(const char *image, const char *destination, char *error
 
 	memset(&extraction, 0, sizeof(extraction));
 	pthread_mutex_init(&extraction.lock, NULL);
-	snprintf(extraction.image, sizeof(extraction.image), "%s", image);
+	snprintf(extraction.image, sizeof(extraction.image), "%s", image ? image : "");
+	snprintf(extraction.url, sizeof(extraction.url), "%s", image ? "" : url);
 	snprintf(extraction.destination, sizeof(extraction.destination), "%s", destination);
 	if (pthread_create(&thread, NULL, data_extraction_thread, &extraction) != 0)
 	{
@@ -273,7 +452,8 @@ static BOOL data_extract(const char *image, const char *destination, char *error
 			SDL_RenderClear(renderer);
 			SDL_SetRenderDrawColor(renderer, 230, 230, 230, 255);
 			SDL_SetRenderScale(renderer, 2.0f, 2.0f);
-			SDL_RenderDebugText(renderer, 10.0f, 10.0f, "Extracting the maps folder...");
+			SDL_RenderDebugText(renderer, 10.0f, 10.0f,
+				extraction.url[0] ? "Downloading the maps folder..." : "Extracting the maps folder...");
 			SDL_SetRenderScale(renderer, 1.0f, 1.0f);
 			snprintf(line, sizeof(line), "%s  (%llu of %llu MB)", file, done >> 20, total >> 20);
 			SDL_RenderDebugText(renderer, 20.0f, 70.0f, line);
@@ -338,11 +518,22 @@ static BOOL data_choose_image(char *path, int size)
 
 BOOL platform_offer_game_data(const char *destination)
 {
-	static const SDL_MessageBoxButtonData buttons[] =
+	/* (with a download URL: download, or a disc image, or quit; without:
+	a disc image, or quit) */
+	static const SDL_MessageBoxButtonData download_buttons[] =
+	{
+		{ SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, 2, "Download" },
+		{ 0, 1, "Disc image..." },
+		{ SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, 0, "Quit" },
+	};
+	static const SDL_MessageBoxButtonData image_buttons[] =
 	{
 		{ SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, 1, "Yes" },
 		{ SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, 0, "No" },
 	};
+	const char *url = config_string("data.download_url");
+	BOOL download = !strncmp(url, "https://", 8) && url[strlen(url) - 1] == '/';
+	char host[128] = "";
 	char message[1400];
 
 	/* not for runs nobody is watching */
@@ -351,29 +542,57 @@ BOOL platform_offer_game_data(const char *destination)
 	{
 		return FALSE;
 	}
-	snprintf(message, sizeof(message),
-		"Halo's game data (its maps folder) was not found.\n\n"
-		"Extract the maps folder from an Xbox disc image (.iso) of Halo: Combat Evolved? "
-		"It is copied to %s/maps (about 2 GB).\n\n"
-		"(Or put the maps folder there yourself, or set paths.data in config.toml.)",
-		destination);
+	if (download)
+	{
+		const char *start = url + 8;
+		const char *end = strchr(start, '/');
+
+		snprintf(host, sizeof(host), "%.*s", (int)(end - start), start);
+		snprintf(message, sizeof(message),
+			"Halo's game data (its maps folder) was not found.\n\n"
+			"Download it from %s (about 1.8 GB)? It goes into %s/maps.\n\n"
+			"Or choose Disc image to copy it out of an Xbox disc image (.iso) of Halo: Combat Evolved instead.",
+			host, destination);
+	}
+	else
+	{
+		snprintf(message, sizeof(message),
+			"Halo's game data (its maps folder) was not found.\n\n"
+			"Extract the maps folder from an Xbox disc image (.iso) of Halo: Combat Evolved? "
+			"It is copied to %s/maps (about 2 GB).\n\n"
+			"(Or put the maps folder there yourself, or set paths.data in config.toml.)",
+			destination);
+	}
 	for (;;)
 	{
-		SDL_MessageBoxData question = { SDL_MESSAGEBOX_INFORMATION, NULL, "Halo", message, 2, buttons, NULL };
+		SDL_MessageBoxData question = { SDL_MESSAGEBOX_INFORMATION, NULL, "Halo", message,
+			download ? 3 : 2, download ? download_buttons : image_buttons, NULL };
 		char image[1024];
 		char error[512];
 		int answer = 0;
 
-		if (!SDL_ShowMessageBox(&question, &answer) || answer != 1)
+		if (!SDL_ShowMessageBox(&question, &answer) || answer == 0)
 		{
 			platform_log("no game data: quitting");
 			exit(EXIT_SUCCESS);
+		}
+		if (answer == 2)
+		{
+			platform_log("downloading the maps folder from %s to %s", url, destination);
+			if (data_extract(NULL, url, destination, error, sizeof(error)))
+			{
+				platform_log("downloaded the maps folder");
+				return TRUE;
+			}
+			platform_log("download failed: %s", error);
+			SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Halo", error, NULL);
+			continue;
 		}
 		/* no image picked: ask again */
 		if (!data_choose_image(image, sizeof(image)))
 			continue;
 		platform_log("extracting the maps folder from %s to %s", image, destination);
-		if (data_extract(image, destination, error, sizeof(error)))
+		if (data_extract(image, NULL, destination, error, sizeof(error)))
 		{
 			platform_log("extracted the maps folder");
 			return TRUE;

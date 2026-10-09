@@ -79,7 +79,7 @@ answered it in a while.
 
 enum
 {
-	MAXIMUM_BROKERS = 4,
+	MAXIMUM_BROKERS = 5,
 	/* the joiners a host made sessions for, so a repeated request gets the
 	same session: as many as it takes */
 	MAXIMUM_JOINERS = P2P_MAXIMUM_PEERS + 1,
