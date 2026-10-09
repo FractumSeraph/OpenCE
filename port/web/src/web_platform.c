@@ -98,23 +98,35 @@ files of the server's custom_maps folder, beside maps, which the server lists
 in its index.json (services/selfhost/server/server.mjs), as FetchFS cannot
 list a folder. Smaller pieces than the Xbox maps': a Custom Edition map's
 game reads are scattered through it and bitmaps.map and sounds.map, which
-are hundreds of megabytes, and every piece read stays in memory; and the
-game lists the maps by reading each one's 2 KB header, which costs a whole
-piece of each of what can be a hundred maps or more. */
+are hundreds of megabytes, and every piece read stays in memory. Listing
+the maps costs no piece: a file's size comes from the index (the page
+answers FetchFS's HEADs: fetch_path_normalization.js; library_web_fetchfs.js
+then fetches nothing for a size alone), and a map's header too
+(web_custom_map_header below). */
 #define CUSTOM_MAP_PIECE_BYTES (256 * 1024)
 
-/* each map's size and BLAKE2b-256, as the server's index.json says (the
-server hashes them once: map-hashes.mjs), for Delta's map identity
-(web_delta_peer.c): the browser has not the whole file to hash */
-#define MAXIMUM_CUSTOM_MAP_IDENTITIES 1024
+/* what the server's index.json says of each custom_maps file besides its
+name: its size, a map's BLAKE2b-256 (the server hashes them once:
+map-hashes.mjs), for Delta's map identity (web_delta_peer.c), the browser
+having not the whole file to hash; and a map's header, its first 2048
+bytes, from which the game lists the maps (custom_edition_cache.c,
+HALO_WEB: web_custom_map_header) instead of reading each one's first piece
+from the server, which for a hundred maps was over 30 MB before the menus
+answered on a phone */
+#define MAXIMUM_CUSTOM_MAP_FILES 1024
+#define CUSTOM_MAP_HEADER_BYTES 2048
 
 static struct
 {
 	char name[104];
 	unsigned long long size;
+	int has_hash;
 	unsigned char hash[32];
-} custom_map_identities[MAXIMUM_CUSTOM_MAP_IDENTITIES];
-static int custom_map_identity_count;
+	/* (malloc'd; NULL: none said) */
+	unsigned char *header;
+	unsigned int header_size;
+} custom_map_files[MAXIMUM_CUSTOM_MAP_FILES];
+static int custom_map_file_count;
 
 static int identity_hex_digit(char c)
 {
@@ -125,48 +137,135 @@ static int identity_hex_digit(char c)
 	return -1;
 }
 
-static void custom_map_identity_add(const char *name, const char *size_text, const char *hash_text)
+static int base64_value(char c)
 {
-	unsigned char hash[32];
+	if (c >= 'A' && c <= 'Z')
+		return c - 'A';
+	if (c >= 'a' && c <= 'z')
+		return c - 'a' + 26;
+	if (c >= '0' && c <= '9')
+		return c - '0' + 52;
+	if (c == '+')
+		return 62;
+	if (c == '/')
+		return 63;
+	return -1;
+}
+
+/* base64 text into bytes (at most size): their count, or -1 if it is not
+base64 or does not fit */
+static int base64_decode(const char *text, unsigned char *bytes, int size)
+{
+	unsigned long bits = 0;
+	int count = 0, used = 0;
+
+	for (; *text && *text != '='; text++)
+	{
+		int value = base64_value(*text);
+
+		if (value < 0)
+			return -1;
+		bits = (bits << 6 | (unsigned long)value) & 0xFFFFFF;
+		count += 6;
+		if (count >= 8)
+		{
+			count -= 8;
+			if (used >= size)
+				return -1;
+			bytes[used++] = (unsigned char)(bits >> count);
+		}
+	}
+	return used;
+}
+
+static void custom_map_file_add(const char *name, const char *size_text, const char *hash_text,
+	const char *header_text)
+{
 	char *end;
 	unsigned long long size = strtoull(size_text, &end, 10);
 	int index;
 
-	if (!*size_text || *end || strlen(hash_text) != 64 || strlen(name) >= sizeof(custom_map_identities[0].name) ||
-		custom_map_identity_count >= MAXIMUM_CUSTOM_MAP_IDENTITIES)
+	if (!*size_text || *end || strlen(name) >= sizeof(custom_map_files[0].name) ||
+		custom_map_file_count >= MAXIMUM_CUSTOM_MAP_FILES)
 	{
 		return;
 	}
-	for (index = 0; index < 32; index++)
+	memset(&custom_map_files[custom_map_file_count], 0, sizeof(custom_map_files[0]));
+	snprintf(custom_map_files[custom_map_file_count].name, sizeof(custom_map_files[0].name), "%s", name);
+	custom_map_files[custom_map_file_count].size = size;
+	if (strlen(hash_text) == 64)
 	{
-		int high = identity_hex_digit(hash_text[2 * index]), low = identity_hex_digit(hash_text[2 * index + 1]);
+		custom_map_files[custom_map_file_count].has_hash = 1;
+		for (index = 0; index < 32; index++)
+		{
+			int high = identity_hex_digit(hash_text[2 * index]), low = identity_hex_digit(hash_text[2 * index + 1]);
 
-		if (high < 0 || low < 0)
-			return;
-		hash[index] = (unsigned char)(high << 4 | low);
+			if (high < 0 || low < 0)
+			{
+				custom_map_files[custom_map_file_count].has_hash = 0;
+				break;
+			}
+			custom_map_files[custom_map_file_count].hash[index] = (unsigned char)(high << 4 | low);
+		}
 	}
-	snprintf(custom_map_identities[custom_map_identity_count].name, sizeof(custom_map_identities[0].name), "%s", name);
-	custom_map_identities[custom_map_identity_count].size = size;
-	memcpy(custom_map_identities[custom_map_identity_count].hash, hash, sizeof(hash));
-	custom_map_identity_count++;
+	/* (a header is the file's whole first 2048 bytes, or the whole file) */
+	if (*header_text)
+	{
+		unsigned char *header = malloc(CUSTOM_MAP_HEADER_BYTES);
+		int header_size = header ? base64_decode(header_text, header, CUSTOM_MAP_HEADER_BYTES) : -1;
+
+		if (header_size > 0 &&
+			(unsigned long long)header_size == (size < CUSTOM_MAP_HEADER_BYTES ? size : CUSTOM_MAP_HEADER_BYTES))
+		{
+			custom_map_files[custom_map_file_count].header = header;
+			custom_map_files[custom_map_file_count].header_size = (unsigned int)header_size;
+		}
+		else
+			free(header);
+	}
+	custom_map_file_count++;
+}
+
+/* (a custom_maps file by its name, any case; -1 if the index has none) */
+static int custom_map_file_find(const char *file_name)
+{
+	int index;
+
+	for (index = 0; index < custom_map_file_count; index++)
+	{
+		if (!strcasecmp(custom_map_files[index].name, file_name))
+			return index;
+	}
+	return -1;
 }
 
 /* a custom_maps file's size and hash (its name: "coldsnap.map", any case):
 1 if the server said them, else 0 */
 int web_custom_map_identity(const char *file_name, unsigned long long *size, unsigned char *hash)
 {
-	int index;
+	int index = custom_map_file_find(file_name);
 
-	for (index = 0; index < custom_map_identity_count; index++)
-	{
-		if (!strcasecmp(custom_map_identities[index].name, file_name))
-		{
-			*size = custom_map_identities[index].size;
-			memcpy(hash, custom_map_identities[index].hash, 32);
-			return 1;
-		}
-	}
-	return 0;
+	if (index < 0 || !custom_map_files[index].has_hash)
+		return 0;
+	*size = custom_map_files[index].size;
+	memcpy(hash, custom_map_files[index].hash, 32);
+	return 1;
+}
+
+/* a custom_maps file's header as the server's index has it (its file name,
+any case): 1, its first min(size, 2048) bytes and the file's size; 0 if the
+index has none, and the file must be read */
+int web_custom_map_header(const char *file_name, const unsigned char **header, unsigned int *header_size,
+	unsigned long long *size)
+{
+	int index = custom_map_file_find(file_name);
+
+	if (index < 0 || !custom_map_files[index].header)
+		return 0;
+	*header = custom_map_files[index].header;
+	*header_size = custom_map_files[index].header_size;
+	*size = custom_map_files[index].size;
+	return 1;
 }
 
 static void web_custom_maps_mount(void)
@@ -187,15 +286,16 @@ static void web_custom_maps_mount(void)
 			request.open("GET", UTF8ToString($0) + "/index.json", false);
 			request.send();
 			const files = request.status === 200 ? JSON.parse(request.responseText) : [];
-			/* (each a name, or its name with its size and version, and a map's
-			BLAKE2b-256 once the server has made it: one a line, name, size
-			and hash between tabs) */
+			/* (each a name, or its name with its size and version, a map's
+			BLAKE2b-256 once the server has made it, and a map's header: one
+			a line, name, size, hash and header (base64) between tabs) */
 			const text = value => typeof value === "string" || typeof value === "number" ? String(value) : "";
 			return stringToNewUTF8(Array.isArray(files) ? files
 				.map(file => typeof file === "string" ? { name: file } : file || {})
 				.filter(file => typeof file.name === "string" && file.name.indexOf(String.fromCharCode(9)) < 0 &&
 					file.name.indexOf(String.fromCharCode(10)) < 0)
-				.map(file => [file.name, text(file.size), /^[0-9a-f]{64}$/.test(file.blake2b) ? file.blake2b : ""]
+				.map(file => [file.name, text(file.size), /^[0-9a-f]{64}$/.test(file.blake2b) ? file.blake2b : "",
+					typeof file.header === "string" && file.header.length <= 4096 ? file.header : ""]
 					.join(String.fromCharCode(9)))
 				.join(String.fromCharCode(10)) : "");
 		}
@@ -210,7 +310,7 @@ static void web_custom_maps_mount(void)
 	for (name = list; name && *name; name = next)
 	{
 		char path[160];
-		char *size_text, *hash_text;
+		char *size_text, *hash_text, *header_text;
 		int descriptor;
 
 		next = strchr(name, '\n');
@@ -220,12 +320,15 @@ static void web_custom_maps_mount(void)
 			next = name + strlen(name);
 		size_text = strchr(name, '\t');
 		hash_text = size_text ? strchr(size_text + 1, '\t') : NULL;
+		header_text = hash_text ? strchr(hash_text + 1, '\t') : NULL;
 		if (size_text)
 			*size_text++ = '\0';
 		if (hash_text)
 			*hash_text++ = '\0';
-		if (size_text && hash_text)
-			custom_map_identity_add(name, size_text, hash_text);
+		if (header_text)
+			*header_text++ = '\0';
+		if (size_text && hash_text && header_text)
+			custom_map_file_add(name, size_text, hash_text, header_text);
 		if (!*name || strlen(name) > 100 || strchr(name, '/') || strchr(name, '\\') || !strcmp(name, ".."))
 			continue;
 		snprintf(path, sizeof(path), "/assets/custom_maps/%s", name);

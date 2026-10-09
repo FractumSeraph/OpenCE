@@ -1459,7 +1459,7 @@
    * assets/custom_maps/index.json). */
   function customMapPictures() {
     if (!global.fetch || !elements.mapOptions) return;
-    global.fetch("assets/custom_maps/index.json", { cache: "no-store" })
+    global.fetch("assets/custom_maps/index.json", { cache: "no-cache" })
       .then(function(response) { return response.ok ? response.json() : []; })
       .then(function(files) {
         var pictures = {};

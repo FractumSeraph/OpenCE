@@ -399,6 +399,7 @@ def generate_web_build(n: Writer, sln: Any) -> None:
             WEB_DIR / "fetch_path_normalization.js",
             WEB_DIR / "online_client.js",
             WEB_DIR / "library_web_transport.js",
+            WEB_DIR / "library_web_fetchfs.js",
         ],
         variables={
             "link_rsp": " ".join(
@@ -407,7 +408,9 @@ def generate_web_build(n: Writer, sln: Any) -> None:
             "ldflags": " ".join(link_flags),
             "libs": (
                 f"-lfetchfs.js -lopfs.js "
-                f"--js-library {WEB_DIR}/library_web_transport.js"
+                f"--js-library {WEB_DIR}/library_web_transport.js "
+                # (WasmFS's fetch backend with a size that costs no download)
+                f"--js-library {WEB_DIR}/library_web_fetchfs.js"
             ),
         },
     )

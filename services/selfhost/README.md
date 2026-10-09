@@ -202,11 +202,12 @@ shows up the next time a player loads the page. Updates (`update.ps1`)
 leave the folder alone.
 
 The server lists the folder for the game at `assets/custom_maps/index.json`
-(each file's name, size and version, and a map's BLAKE2b-256 hash once the
-server has made it: Delta's map check), so the game reads only each map's
-header to list it, in 256 KB pieces (about 35 MB for a hundred maps on a
-player's first visit, nothing after: the browser keeps them). A static web
-host without this server needs that file made beside the maps.
+(each file's name, size and version, each map's header, its first 2 KB,
+and a map's BLAKE2b-256 hash once the server has made it: Delta's map
+check), so the game lists the maps without downloading any of them (about
+400 KB for 130 maps); a map is read, in 256 KB pieces, only when it is
+played. A static web host without this server needs that file made beside
+the maps.
 
 The lobby artwork in `public/assets/ui/` is placeholder art. Replace any image
 with your own, keeping the same file name.

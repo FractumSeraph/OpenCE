@@ -469,6 +469,59 @@ static boolean custom_edition_cache_tags_convert(
 		custom_edition_cache_models_convert(tag_cache, report);
 }
 
+#ifdef HALO_WEB
+/* web: the header the site's index has of a custom_maps file
+(port/web/src/web_platform.c), identified as the file's own would be:
+cache_file_identify reads only the header and the file's size, so the maps
+listed need no piece of each file from the server (for a hundred maps, over
+30 MB before the menus answered on a phone). Its status, or -1 when the
+index has no header for the path (the file is read then) */
+struct web_header_source
+{
+	unsigned char const *header;
+	unsigned int header_size;
+};
+
+static int web_header_read(
+	void *context,
+	uint32_t offset,
+	uint32_t size,
+	void *buffer)
+{
+	struct web_header_source const *source = context;
+
+	if (offset > source->header_size || size > source->header_size - offset)
+		return FALSE;
+	csmemcpy(buffer, source->header + offset, size);
+	return TRUE;
+}
+
+static int web_identify_path(
+	char const *path,
+	struct cache_file_identity *identity)
+{
+	int web_custom_map_header(char const *file_name, unsigned char const **header, unsigned int *header_size,
+		unsigned long long *size);
+	struct web_header_source web_source;
+	struct cache_file_source source;
+	char const *file_name = path + csstrlen(path);
+	unsigned long long size;
+
+	while (file_name > path && file_name[-1] != '\\' && file_name[-1] != '/')
+		file_name--;
+	if (!strstr(path, "custom_maps") ||
+		!web_custom_map_header(file_name, &web_source.header, &web_source.header_size, &size) ||
+		size > 0xFFFFFFFFull)
+	{
+		return -1;
+	}
+	source.context = &web_source;
+	source.read = web_header_read;
+	source.size = (uint32_t)size;
+	return (int)cache_file_identify(&source, identity);
+}
+#endif
+
 /* Whether Custom Edition maps may run (game.custom_edition) and the map
 `map_name` names is a Custom Edition cache, whose header is then described
 in `identity`. */
@@ -481,8 +534,19 @@ static boolean custom_edition_cache_identify(
 	boolean identified = FALSE;
 
 	if (!halo_custom_edition_tag_cache() ||
-		!custom_edition_map_path(map_name, path) ||
-		!custom_edition_file_open(&file, path))
+		!custom_edition_map_path(map_name, path))
+	{
+		return FALSE;
+	}
+#ifdef HALO_WEB
+	{
+		int status = web_identify_path(path, identity);
+
+		if (status >= 0)
+			return status == _cache_file_status_ok && identity->format == _cache_file_format_custom_edition_cache;
+	}
+#endif
+	if (!custom_edition_file_open(&file, path))
 	{
 		return FALSE;
 	}
@@ -584,6 +648,19 @@ unsigned long custom_edition_map_checksum(
 	struct cache_file_identity identity;
 	unsigned long checksum = 0;
 
+#ifdef HALO_WEB
+	/* web: from the header the site's index has (web_identify_path) */
+	if (custom_edition_map_path(level_name, path))
+	{
+		int status = web_identify_path(path, &identity);
+
+		if (status >= 0)
+		{
+			return status == _cache_file_status_ok && identity.format == _cache_file_format_custom_edition_cache ?
+				identity.checksum : 0;
+		}
+	}
+#endif
 	if (custom_edition_map_path(level_name, path) && custom_edition_file_open(&file, path))
 	{
 		if (cache_file_identify(&file.source, &identity) == _cache_file_status_ok &&

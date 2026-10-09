@@ -489,10 +489,40 @@ function resolveStatic(urlPath) {
 // and .bmp): the game cannot list a folder on the server, so it reads this.
 // Each file's size and ETag (serveStatic's) come with it, so that the game
 // need not ask for each one's size before it lists them (the page's fetch
-// shim answers from this), and a map's BLAKE2b-256 once it is known
-// (map-hashes.mjs: Delta's map identity).
+// shim answers from this), a map's BLAKE2b-256 once it is known
+// (map-hashes.mjs: Delta's map identity), and a map's header (mapHeader).
 const CUSTOM_MAPS_DIR = path.join(PUBLIC_DIR, "assets", "custom_maps");
 let mapHashes = null;
+
+// A map's header (its first 2048 bytes, a cache file's whole header), by its
+// name, size and time: the game lists the maps from these
+// (custom_edition_cache.c, HALO_WEB) instead of reading each one's first
+// 256 KB piece from the server, which for a hundred maps was over 30 MB
+// before the menus answered on a phone.
+const MAP_HEADER_BYTES = 2048;
+const mapHeaders = new Map();
+
+function mapHeader(name, stat) {
+  if (!/\.map$/i.test(name)) return null;
+  const key = `${name}|${stat.size}|${Math.floor(stat.mtimeMs)}`;
+  if (mapHeaders.has(key)) return mapHeaders.get(key);
+  let header = null;
+  try {
+    const descriptor = fs.openSync(path.join(CUSTOM_MAPS_DIR, name), "r");
+    try {
+      const bytes = Buffer.alloc(Math.min(MAP_HEADER_BYTES, stat.size));
+      const read = fs.readSync(descriptor, bytes, 0, bytes.length, 0);
+      if (read === bytes.length) header = bytes.toString("base64");
+    } finally {
+      fs.closeSync(descriptor);
+    }
+  } catch {
+    // (unreadable: the game reads the file itself)
+  }
+  if (mapHeaders.size > 4096) mapHeaders.clear();
+  mapHeaders.set(key, header);
+  return header;
+}
 
 function serveCustomMapList(req, res) {
   let files = [];
@@ -509,6 +539,8 @@ function serveCustomMapList(req, res) {
         };
         const hash = mapHashes && mapHashes.get(entry.name, stat);
         if (hash) file.blake2b = hash;
+        const header = mapHeader(entry.name, stat);
+        if (header) file.header = header;
         return file;
       })
       .sort((a, b) => a.name.localeCompare(b.name));
@@ -516,9 +548,16 @@ function serveCustomMapList(req, res) {
     // No folder: no Custom Edition maps.
   }
   const body = Buffer.from(JSON.stringify(files));
+  // (an ETag, so that the page's other readers of it are answered 304)
+  const etag = `"${crypto.createHash("sha1").update(body).digest("hex").slice(0, 20)}"`;
   isolationHeaders(res);
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("ETag", etag);
+  if (req.headers["if-none-match"] === etag) {
+    res.writeHead(304).end();
+    return;
+  }
   res.setHeader("Content-Length", body.length);
   res.writeHead(200);
   res.end(req.method === "HEAD" ? undefined : body);

@@ -72,7 +72,7 @@
   function customMapEntry(path) {
     if (!customMapIndex) {
       const url = scope.location.origin + path.replace(/[^/]*$/, "index.json");
-      customMapIndex = nativeFetch(url, { cache: "no-store" })
+      customMapIndex = nativeFetch(url, { cache: "no-cache" })
         .then(response => response.ok ? response.json() : [])
         .then(files => new Map((Array.isArray(files) ? files : [])
           .filter(file => file && typeof file.name === "string" && Number.isFinite(file.size) && file.etag)
