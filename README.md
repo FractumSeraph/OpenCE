@@ -224,7 +224,9 @@ problems.
 
 The game updates itself. At start-up it looks for a newer release, and asks
 if you want to install it. Refer to "Updates" in
-[port/linux/README.md](port/linux/README.md#updates).
+[port/linux/README.md](port/linux/README.md#updates). A build looks in the
+releases of the GitHub repository it was built in: a fork's builds update
+from the fork.
 
 Each build of the `main` branch that passes on all three platforms is a new
 release. The [Releases](https://github.com/OpenCommunityEdition/OpenCE/releases)

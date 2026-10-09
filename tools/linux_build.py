@@ -149,7 +149,13 @@ def updater_defines(release: bool) -> str:
     if not number.isdigit():
         number = "0"
     flavor = "release" if release else "debug"
-    return f'-DHALO_BUILD_NUMBER={number} -DHALO_BUILD_FLAVOR=\\"{flavor}\\"'
+    defines = f'-DHALO_BUILD_NUMBER={number} -DHALO_BUILD_FLAVOR=\\"{flavor}\\"'
+    # (HALO_UPDATE_REPOSITORY: the GitHub repository whose releases it
+    # updates from, owner/name; tools/ci_build.py gives the one it is built in)
+    repository = os.environ.get("HALO_UPDATE_REPOSITORY", "")
+    if re.fullmatch(r"[A-Za-z0-9-]+/[A-Za-z0-9._-]+", repository):
+        defines += f' -DHALO_UPDATE_REPOSITORY=\\"{repository}\\"'
+    return defines
 
 PLATFORM_FLAGS = [
     "-std=gnu11",

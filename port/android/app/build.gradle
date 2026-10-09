@@ -12,6 +12,13 @@ def staged = new File(rootDir, "../../build/android")
 def buildNumberText = System.getenv("HALO_BUILD_NUMBER") ?: "0"
 def buildNumber = buildNumberText.isInteger() ? buildNumberText.toInteger() : 0
 
+// the GitHub repository whose releases it updates from (tools/ci_build.py:
+// the one it is built in, so a fork's builds update from the fork)
+def updateRepository = System.getenv("HALO_UPDATE_REPOSITORY") ?: ""
+if (!(updateRepository ==~ /[A-Za-z0-9-]+\/[A-Za-z0-9._-]+/)) {
+    updateRepository = "OpenCommunityEdition/OpenCE"
+}
+
 // the workflow's signing key (.github/workflows/build.yml): every build of
 // main signed with it can install over the one before; without it, the
 // debug key of the computer that builds
@@ -28,6 +35,7 @@ android {
         versionCode Math.max(1, buildNumber)
         versionName buildNumber > 0 ? "build " + buildNumber : "1.0"
         buildConfigField "int", "HALO_BUILD_NUMBER", "${buildNumber}"
+        buildConfigField "String", "HALO_UPDATE_REPOSITORY", "\"${updateRepository}\""
         ndk {
             abiFilters "arm64-v8a"
         }

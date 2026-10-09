@@ -46,7 +46,13 @@ update.h's: posix_update.c on Linux, win32_update.c on Windows.
 #define HALO_BUILD_FLAVOR "release"
 #endif
 
+/* (the GitHub repository whose releases are this build's: the one it was
+built in, which a fork's builds make the fork's; tools/ci_build.py) */
+#ifdef HALO_UPDATE_REPOSITORY
+#define UPDATE_REPOSITORY HALO_UPDATE_REPOSITORY
+#else
 #define UPDATE_REPOSITORY "OpenCommunityEdition/OpenCE"
+#endif
 #ifdef _WIN32
 #define UPDATE_PLATFORM "windows"
 #define PATH_SEPARATOR "\\"

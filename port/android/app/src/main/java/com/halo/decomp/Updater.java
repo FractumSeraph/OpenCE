@@ -47,7 +47,10 @@ import java.util.zip.ZipInputStream;
  * app must keep for Android to install a new version over it.
  */
 final class Updater {
-    private static final String REPOSITORY = "OpenCommunityEdition/OpenCE";
+    /* the GitHub repository whose releases are this build's: the one it was
+       built in (HALO_UPDATE_REPOSITORY, tools/ci_build.py), so a fork's builds
+       update from the fork */
+    private static final String REPOSITORY = BuildConfig.HALO_UPDATE_REPOSITORY;
     private static final String USER_AGENT = "halo-ce-universal-updater";
     private static final int TIMEOUT_MILLISECONDS = 20000;
 

@@ -16,6 +16,7 @@ self-updater compares.
 """
 
 import argparse
+import re
 import os
 import shutil
 import subprocess
@@ -63,6 +64,12 @@ def main() -> int:
     if os.environ.get("GITHUB_REF") == "refs/heads/main" and os.environ.get("GITHUB_RUN_NUMBER", "").isdigit():
         os.environ["HALO_BUILD_NUMBER"] = os.environ["GITHUB_RUN_NUMBER"]
         print(f"build number {os.environ['HALO_BUILD_NUMBER']}", flush=True)
+        # (the repository whose releases are these builds: a fork's builds
+        # look for updates in the fork's releases, not this project's)
+        repository = os.environ.get("GITHUB_REPOSITORY", "")
+        if re.fullmatch(r"[A-Za-z0-9-]+/[A-Za-z0-9._-]+", repository):
+            os.environ["HALO_UPDATE_REPOSITORY"] = repository
+            print(f"updates from {repository}", flush=True)
     run(configure)
 
     if args.platform == "android":

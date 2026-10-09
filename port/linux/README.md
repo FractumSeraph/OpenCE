@@ -402,7 +402,8 @@ Mesa. To stop this, set the environment variable `mesa_glthread=false`.
 
 The builds from GitHub Actions (refer to the main [README](../../README.md#download))
 can update themselves. At start-up, the game asks GitHub for the latest
-release. The game does not wait for the answer. If the latest release is not
+release of the repository it was built in (a fork's builds, the fork's:
+`HALO_UPDATE_REPOSITORY`, from `tools/ci_build.py`). The game does not wait for the answer. If the latest release is not
 newer, the game does nothing.
 
 If the latest release is newer, the game asks: "Do you want to update?"
