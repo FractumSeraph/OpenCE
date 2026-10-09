@@ -105,6 +105,16 @@ WEB_EXCLUDED_PLATFORM_SOURCES = {
     "posix_update.c",
     "posix_upnp.c",
     "updater.c",
+    # The Custom Edition maps' BitTorrent client (docs/map_torrents.md): a
+    # browser has no TCP or UDP sockets for BitTorrent, so the engine is left
+    # out and port/web/src/web_map_torrents.c stands in for map_torrents.h.
+    "map_torrents.c",
+    "torrent.c",
+    "torrent_peer.c",
+    "torrent_tracker.c",
+    "torrent_dht.c",
+    "torrent_bencode.c",
+    "torrent_sha1.c",
 }
 
 

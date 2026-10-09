@@ -90,6 +90,12 @@ OpenCE's own CI.
   file's version (its ETag), so a map loads without a download the next time
   and even when the server cannot be reached; Game settings shows how much
   is kept and can clear it.
+- **No map torrents in the browser:** the native ports download missing
+  Custom Edition maps over BitTorrent (docs/map_torrents.md), but a page has
+  no TCP or UDP sockets, so the web build leaves the client out
+  (`WEB_EXCLUDED_PLATFORM_SOURCES` in `tools/web_build.py`) and
+  `port/web/src/web_map_torrents.c` stands in for it: the browser plays
+  the Custom Edition maps its site serves, as with `maps.torrents` off.
 - **ChupathingyCE's Delta** (`port/web/src/delta`, and its README): the
   browser joins hosts of OpenCE network versions 11 to 24 as ChupathingyCE's
   builds do, checks their signed legacy table, shows their game list's
