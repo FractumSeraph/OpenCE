@@ -54,6 +54,9 @@ WEB_SDL_FLAG = f"--use-port={WEB_SDL_PORT}"
 # assumptions shared by the other ports.
 WEB_ABI_FLAGS = [
     "-DHALO_WEB=1",
+    # (ChupathingyCE's Custom Edition maps, as every native build has them:
+    # linux_build.py's CUSTOM_EDITION_DEFINES)
+    "-DHALO_CUSTOM_EDITION",
     "-DHALO_ANDROID=1",
     "-fms-extensions",
     "-fshort-wchar",
@@ -117,6 +120,10 @@ WEB_EXCLUDED_PLATFORM_SOURCES = {
     "torrent_dht.c",
     "torrent_bencode.c",
     "torrent_sha1.c",
+    # ChupathingyCE's Android touchscreen (its host's events): the page has its
+    # own touch controls (port/web/assets/touch); port/web/src/web_touch_input.c
+    # stands in for touch_input.h
+    "touch_input.c",
 }
 
 
@@ -322,10 +329,6 @@ def generate_web_build(n: Writer, sln: Any) -> None:
             source,
             posix_cflags if source.name == "web_loopback_net.c" else platform_cflags,
         )
-    # Delta Peer's wire format and sessions, ChupathingyCE's code as it is
-    # (port/web/src/delta/README.md): plain C, no platform
-    for source in sorted((WEB_DIR / "src" / "delta").glob("*.c")):
-        add_object(source, f"{abi_flags} -std=gnu11 -I{WEB_DIR}/src/delta -I{MONOCYPHER_DIR}")
 
     # the high-res HUD's textures, the menus' titles, fonts and XML menus
     # (port/assets; port/linux/src/hud_hires.c), generated as C data

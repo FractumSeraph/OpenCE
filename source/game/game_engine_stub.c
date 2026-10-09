@@ -76,6 +76,7 @@ struct stub_game_engine
 
 typedef char verify_stub_game_engine_size[sizeof(struct stub_game_engine) == 0x88 ? 1 : -1];
 #endif
+#endif
 
 /* ---------- prototypes */
 

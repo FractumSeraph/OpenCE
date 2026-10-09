@@ -620,26 +620,13 @@ static void sound_cache_start_loading_sound(
 		sound->cache_base_address = (unsigned long)cache_address;
 #endif
 		cache_sound->sound = sound;
-		/* port: or, the sound of a tag file played over the map's, from
-		memory, at once (port/linux/game/loose_sounds.c) */
-		{
-			extern boolean loose_sounds_read(struct sound_permutation const *permutation, void *buffer);
-
-			if (loose_sounds_read(sound, cache_address))
-			{
-				cache_sound->loaded = TRUE;
-			}
-			else
-			{
-				cache_file_read(
-					sound->cache_tag_index,
-					sound->samples.file_offset,
-					sound->samples.size,
-					cache_address,
-					&cache_sound->loaded,
-					FALSE);
-			}
-		}
+		cache_file_read(
+			sound->cache_tag_index,
+			sound->samples.file_offset,
+			sound->samples.size,
+			cache_address,
+			&cache_sound->loaded,
+			FALSE);
 	}
 	else if (
 		system_milliseconds() -

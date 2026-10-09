@@ -3353,7 +3353,7 @@ it: the native gateway's virtual address), whether its advertisement has
 Delta's flag, this machine's index and each player's machine. Nothing of the
 game changes here, and the game never waits for Delta; a dedicated server's
 notices for this player go to the HUD */
-#include "../../port/web/src/delta/delta.h"
+#include "../../port/linux/include/delta.h"
 
 void web_delta_peer_client_frame(int joined, unsigned int host_ipv4, int host_speaks_delta, int machine_index,
 	const signed char *player_machines);

@@ -20,7 +20,7 @@ is trusted for anything but showing: a listing's own signed details win,
 and joining checks the host as any join does. */
 
 #include "p2p.h"
-#include "delta/delta.h"
+#include "delta.h"
 #include "web_delta_list.h"
 
 #include <emscripten/emscripten.h>

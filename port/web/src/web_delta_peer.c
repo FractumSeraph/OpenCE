@@ -26,8 +26,8 @@ changes the game but leaving on a map that is not the host's. */
 #include "platform.h"
 #include "posix.h"
 #include "halo_port_limits.h"
-#include "delta/delta.h"
-#include "delta/delta_peer.h"
+#include "delta.h"
+#include "delta_peer.h"
 
 #include <stdio.h>
 #include <string.h>

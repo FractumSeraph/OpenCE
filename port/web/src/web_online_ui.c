@@ -6,6 +6,7 @@
 #include <emscripten/emscripten.h>
 #include <stdatomic.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 /* This browser adapter is compiled as platform code, so it must not include
@@ -30,11 +31,11 @@ struct network_game_server *global_network_game_server_get(void);
 struct network_game_client *global_network_game_client_get(void);
 unsigned char create_global_network_game_client(void);
 void network_game_accept_remote_connections(unsigned char accept_remote_connections);
-/* custom_edition_maps.h (boolean and short as scalars, wchar_t 16-bit) */
-short custom_edition_maps_count(unsigned char campaign);
-short custom_edition_maps_display_index_of(unsigned char campaign, short index);
-const char *custom_edition_maps_level_name(short display_index);
-unsigned short *custom_edition_maps_name(short display_index);
+/* halo_map_families.h, halo_ui_map_list.h (ChupathingyCE's map families: a
+Custom Edition map is <file>@ce; short as a scalar, wchar_t 16-bit) */
+enum { WEB_MAP_FAMILY_CUSTOM_EDITION = 1 };
+void map_family_list(short family, void (*found)(char const *file, void *context), void *context);
+void ui_map_list_family_name(short family, char const *file, unsigned short *name, long size);
 /* ui_widget.h */
 unsigned char filesystem_check_thread_is_active(void);
 void player_ui_clear_multiplayer_joins(void);
@@ -314,23 +315,60 @@ const char *web_online_custom_map_level(long index)
 multiplayer maps, sorted by name as the game lists them: each one's level
 name and display name. Once, with the main menu: the maps are in the
 server's custom_maps folder, which a session does not see change. */
+/* (the Custom Edition maps the families find, map_family_list: each one's
+level name, <file>@ce, and its name as the menus show it) */
+static struct
+{
+	char level[LEVEL_BYTES];
+	unsigned short name[NAME_BYTES / 2];
+} custom_maps_found[MAXIMUM_CUSTOM_MAPS];
+static int custom_maps_found_count;
+
+static void custom_map_found(char const *file, void *context)
+{
+	(void)context;
+	if (custom_maps_found_count >= MAXIMUM_CUSTOM_MAPS || strlen(file) + 4 >= LEVEL_BYTES)
+		return;
+	snprintf(custom_maps_found[custom_maps_found_count].level, LEVEL_BYTES, "%s@ce", file);
+	ui_map_list_family_name(WEB_MAP_FAMILY_CUSTOM_EDITION, file, custom_maps_found[custom_maps_found_count].name,
+		NAME_BYTES / 2);
+	custom_maps_found_count++;
+}
+
+/* (by name, letters' case aside) */
+static int custom_map_compare(const void *a, const void *b)
+{
+	const unsigned short *x = ((const unsigned short *)a) + LEVEL_BYTES / 2;
+	const unsigned short *y = ((const unsigned short *)b) + LEVEL_BYTES / 2;
+
+	for (; *x && *y; x++, y++)
+	{
+		unsigned short cx = *x >= 'A' && *x <= 'Z' ? *x + 32 : *x;
+		unsigned short cy = *y >= 'A' && *y <= 'Z' ? *y + 32 : *y;
+
+		if (cx != cy)
+			return cx < cy ? -1 : 1;
+	}
+	return *x ? 1 : *y ? -1 : 0;
+}
+
 static void publish_custom_maps(void)
 {
 	static const char *levels[MAXIMUM_CUSTOM_MAPS];
 	static char names[MAXIMUM_CUSTOM_MAPS][NAME_BYTES];
 	static const char *name_pointers[MAXIMUM_CUSTOM_MAPS];
-	int count = custom_edition_maps_count(0), index, listed = 0;
+	int index, listed = 0;
 
-	for (index = 0; index < count && listed < MAXIMUM_CUSTOM_MAPS; index++)
+	custom_maps_found_count = 0;
+	map_family_list(WEB_MAP_FAMILY_CUSTOM_EDITION, custom_map_found, NULL);
+	qsort(custom_maps_found, (size_t)custom_maps_found_count, sizeof(custom_maps_found[0]), custom_map_compare);
+	for (index = 0; index < custom_maps_found_count && listed < MAXIMUM_CUSTOM_MAPS; index++)
 	{
-		short display_index = custom_edition_maps_display_index_of(0, (short)index);
-		const char *level = custom_edition_maps_level_name(display_index);
-		const unsigned short *name = custom_edition_maps_name(display_index);
+		const char *level = custom_maps_found[index].level;
+		const unsigned short *name = custom_maps_found[index].name;
 		char *out = names[listed];
 		int length = 0;
 
-		if (!level || !name || strlen(level) >= LEVEL_BYTES)
-			continue;
 		/* (UTF-16 to UTF-8: the names are the files', of the BMP) */
 		for (; *name && length < NAME_BYTES - 4; name++)
 		{

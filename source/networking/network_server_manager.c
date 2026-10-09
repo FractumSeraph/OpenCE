@@ -1146,6 +1146,37 @@ boolean network_game_server_kick_player(
 	return TRUE;
 }
 
+/* port: a kick or ban by machine (OpenCE's vote kick, network_votekick.c):
+the machine of the player at the network machine index it has, kicked or
+banned as the commands do; FALSE (said) for none, or the host's own */
+boolean network_game_server_kick_machine_of_player(
+	long machine_index,
+	boolean ban)
+{
+	struct network_game_server *server = global_network_game_server_get();
+	char names[96];
+
+	if (!server)
+	{
+		console_warning("%s: only the host of a game does this", ban ? "ban" : "kick");
+		return FALSE;
+	}
+	if (!VALID_INDEX(machine_index, MAXIMUM_NETWORK_MACHINE_COUNT) ||
+		!network_game_server_client_machine_is_joined_to_game(server, &server->client_machines[machine_index]) ||
+		network_game_server_client_machine_is_local(server, &server->client_machines[machine_index]))
+	{
+		console_warning("%s: not a player of the host's own machine, nor one not joined", ban ? "ban" : "kick");
+		return FALSE;
+	}
+	network_game_server_machine_names(server, machine_index, names, sizeof(names));
+	if (ban)
+		network_game_server_ban_machine(machine_index, names);
+	else
+		network_game_server_kick_named_machine(machine_index, names);
+	network_game_server_kick_rejection_codes[machine_index] = _rejection_code_blacklisted_machine;
+	return TRUE;
+}
+
 /* port: a client machine's hardware id as it told it joining (its join
 request: network_server_message_handler.c), kept as hex only */
 void network_game_server_set_machine_hardware_id(

@@ -25,9 +25,13 @@ status line shows the download ("Downloading hugeass.map: 34 MB of 92 MB
 (1.2 MB/s, 5 peers)"); when it is there, the join goes ahead by itself.
 Custom Edition's `bitmaps.map`, `sounds.map` and `loc.map`, which every
 Custom Edition map needs, are downloaded the same way when missing. The
-map goes into `custom_maps` (a map of the same name already there is kept
-as `<name>.map.old`); a download interrupted goes on from where it was,
-next time, from `custom_maps\downloads`.
+map goes into `maps_ce`, ChupathingyCE's folder of Custom Edition maps (a
+map of the same name already there is kept as `<name>.map.old`), and is
+marked downloaded (its scripts held to ChupathingyCE's tighter rules); a
+download interrupted goes on from where it was, next time, from
+`maps_ce\downloads`. What is missing is what ChupathingyCE's map families
+(`halo_map_families.h`) do not find: the map in `maps_ce`, OpenCE's
+`custom_maps` or the older folders, and the resource maps beside them.
 
 A game hosted on a Custom Edition map is seeded while it is hosted, at
 `maps.upload_limit` KB a second at most (512 by default), whatever the

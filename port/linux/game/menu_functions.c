@@ -2148,7 +2148,7 @@ void p2p_set_hosting_allowed(int allowed);
 int p2p_peer_address(unsigned char const *identifier, unsigned long *address);
 int platform_clipboard_get(char *text, int size);
 void platform_clipboard_set(char const *text);
-void platform_text_field(int typing, int password);
+void platform_text_field(int typing);
 int config_boolean(char const *name);
 void ui_widget_port_post_button(short controller_index, short button_index);
 /* the map torrents (port/linux/src/map_torrents.c) */
@@ -2245,7 +2245,7 @@ static void text_field_open(struct widget_instance *row, char const *text, short
 	text_field_shown_time = system_milliseconds();
 	while (input_get_key(&key))
 		;
-	platform_text_field(TRUE, masked);
+	platform_text_field(TRUE);
 }
 
 static void text_field_begin(struct widget_instance *row, char const *text, short maximum,
@@ -2265,7 +2265,7 @@ static void text_field_end(boolean keep)
 {
 	void (*done)(char const *text) = text_field.done;
 
-	platform_text_field(FALSE, FALSE);
+	platform_text_field(FALSE);
 	text_field.row = NULL;
 	text_field.done = NULL;
 	if (!keep)
@@ -4294,13 +4294,25 @@ there (map_fetch, declared with the browser's state) */
 boolean ui_widget_port_join_map_fetch(void *advertised_game)
 {
 	struct advertised_game *game = advertised_game;
-	char files[256];
+	char map[0x80];
+	char file[64];
+	char path[256];
+	/* (the map as ChupathingyCE's map families name it: <file>@ce for a Custom
+	Edition map, custom_maps\<file> in the protocol) */
+	short family = map_family_from_wire_name(game->map_name, map, sizeof(map));
 
-	if (!custom_edition_level_name(game->map_name))
+	if (family != _map_family_custom_edition)
 		return FALSE;
-	if (custom_edition_cache_files_missing(game->map_name, (unsigned long)game->map_version, files, sizeof(files)) <= 0)
+	map_family_parse(map, file, sizeof(file));
+	/* (here already, and the host's version: the join goes ahead) */
+	if (map_family_find(family, file, path, sizeof(path)) &&
+		(!game->map_version || cache_files_map_version(map) == (unsigned long)game->map_version))
+	{
 		return FALSE;
-	if (!map_torrents_fetch(game->map_name, (unsigned long)game->map_version, files))
+	}
+	/* (the map torrents find what is missing: the map, and Custom Edition's
+	resource maps) */
+	if (!map_torrents_fetch(file, (unsigned long)game->map_version, NULL))
 		return FALSE;
 	csmemcpy(map_fetch.identifier, game->xnaddr + 2, sizeof(map_fetch.identifier));
 	map_fetch.pending = TRUE;

@@ -295,9 +295,32 @@ static boolean cache_file_is(
 {
 	unsigned long header[(CACHE_HEADER_TYPE_OFFSET + 4) / 4];
 	unsigned long bytes_read = 0;
-	HANDLE file = CreateFileA(path, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+	HANDLE file;
 	boolean result = FALSE;
 
+#ifdef HALO_WEB
+	/* (the browser: a custom_maps file's header as the site's index has it,
+	port/web/src/web_platform.c, rather than a download of the file's first
+	piece for each map listed, which made phones wait minutes) */
+	{
+		int web_custom_map_header(const char *file_name, const unsigned char **header, unsigned int *header_size,
+			unsigned long long *size);
+		char const *name = strrchr(path, '\\');
+		const unsigned char *known;
+		unsigned int known_size;
+		unsigned long long file_size;
+
+		if (strstr(path, "custom_maps\\") &&
+			web_custom_map_header(name ? name + 1 : path, &known, &known_size, &file_size) &&
+			known_size >= sizeof(header))
+		{
+			memcpy(header, known, sizeof(header));
+			return header[0] == CACHE_HEADER_SIGNATURE && header[1] == (unsigned long)version &&
+				(!multiplayer || (header[CACHE_HEADER_TYPE_OFFSET / 4] & 0xffff) == CACHE_TYPE_MULTIPLAYER);
+		}
+	}
+#endif
+	file = CreateFileA(path, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 	if (file == INVALID_HANDLE_VALUE)
 		return FALSE;
 	if (ReadFile(file, header, sizeof(header), &bytes_read, NULL) && bytes_read == sizeof(header))

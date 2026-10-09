@@ -980,15 +980,6 @@ static void upload(GLuint texture, GLenum target, const struct xgpu_texture_desc
 
 						rgba[pixel * 4] = rgba[pixel * 4 + 2];
 						rgba[pixel * 4 + 2] = blue;
-						if (channel_order != _custom_edition_channels_xbox)
-						{
-							unsigned char stored[4];
-							unsigned long channel;
-
-							memcpy(stored, rgba + pixel * 4, 4);
-							for (channel = 0; channel < 4; channel++)
-								rgba[pixel * 4 + channel] = stored[custom_edition_channel_sources[channel_order][channel]];
-						}
 					}
 				}
 #endif
@@ -1285,7 +1276,7 @@ GLuint xgpu_texture_get(const DWORD *resource, const D3DCOLOR *palette, GLenum *
 			}
 			if (entry->override < 0)
 				upload(entry->texture, entry->target, &entry->description,
-					(const unsigned char *)entry->address, palette, custom_edition_texels_order(entry->address));
+					(const unsigned char *)entry->address, palette);
 		}
 	}
 	#else

@@ -172,8 +172,6 @@ void render_initialize(
 void render_initialize_for_new_map(
 	void)
 {
-	/* port: preserve retail's energy-then-two-sided-glass compositing. */
-	models_fix_transparent_part_links();
 	render_objects_initialize_for_new_map();
 }
 

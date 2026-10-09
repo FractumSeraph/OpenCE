@@ -5651,7 +5651,7 @@ void game_engine_load_stage(
 
 #ifdef HALO_WEB
 /* web: Delta Stats, a joined game's report (ChupathingyCE's game list,
-halo.milenko.org; port/web/src/delta/README.md). A few seconds after a game
+halo.milenko.org; port/web/src/DELTA.md). A few seconds after a game
 this browser joined as a client ends (the host's last statistics in), its
 carnage report as this machine has it (the host's statistics and scores,
 which every client is sent), as their builds' client reports have it

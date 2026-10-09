@@ -704,7 +704,6 @@ static unsigned long long platform_clock_nanoseconds(void)
 	value = clock_gettime_nsec_np(CLOCK_MONOTONIC_RAW);
 #else
 	struct timespec now;
-	unsigned long long value, expected = 0;
 
 	clock_gettime(CLOCK_MONOTONIC, &now);
 	value = (unsigned long long)now.tv_sec * 1000000000ULL + (unsigned long long)now.tv_nsec;

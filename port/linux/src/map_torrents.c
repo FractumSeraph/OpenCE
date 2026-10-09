@@ -5,19 +5,21 @@ Custom Edition maps over BitTorrent (map_torrents.h), with the client of
 torrent.h.
 
 A machine joining a game on a Custom Edition map it lacks (or has another
-version of; or without Custom Edition's bitmaps.map, sounds.map and
-loc.map) asks here for the files (ui_widget_port_join, through
-custom_edition_cache_files_missing). Each is looked up in the index of the
-maps' torrents (maps.torrent_index: the file name and, for the map, the
-header checksum the host sent, which is the game record's map version),
-and downloaded into custom_maps\downloads; a file that arrives whole is
-moved into custom_maps (one of its name there becoming <name>.old), and
-once every file is there the menus try the join again
-(map_torrents_take_ready). The menus show how it goes
+version of) asks here for it (ui_widget_port_join_map_fetch in
+menu_functions.c, and cache_files_map_present: ChupathingyCE's map
+families, halo_map_families.h, find what is there), with Custom Edition's
+bitmaps.map, sounds.map and loc.map when they are missing. Each is looked
+up in the index of the maps' torrents (maps.torrent_index: the file name
+and, for the map, the header checksum the host sent, which is the game
+record's map version), and downloaded into maps_ce\downloads; a file that
+arrives whole is moved into maps_ce (one of its name there becoming
+<name>.old) and marked downloaded (map_downloaded_mark: its scripts held to
+the tighter rules), and once every file is there the menus try the join
+again (map_torrents_take_ready). The menus show how it goes
 (map_torrents_fetching).
 
-The map a machine's network game is on is seeded meanwhile, from where it
-is (custom_maps, or the Custom Edition install's maps), when maps.seed
+The map a machine's network game is on is seeded meanwhile, from where the
+families find it, when maps.seed
 allows: "host" (the default) seeds only while hosting, "all" also while
 joined, "off" never. The upload limit (maps.upload_limit) is for the whole
 client, however many are downloading: the game's own traffic comes first.
@@ -32,6 +34,13 @@ web seeds and DHT of the [maps] settings, and stopped with the game.
 #include "map_torrents.h"
 #include "torrent.h"
 
+/* halo_map_families.h's (the game's boolean is a byte) */
+enum { MAP_FAMILY_XBOX, MAP_FAMILY_CUSTOM_EDITION };
+short map_family_parse(char const *map, char *file, long size);
+unsigned char map_family_find(short family, char const *file, char *path, long size);
+unsigned char map_family_resource(char const *name, char *path, long size);
+void map_downloaded_mark(char const *map_name);
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -44,8 +53,8 @@ web seeds and DHT of the [maps] settings, and stopped with the game.
 #endif
 
 #define INDEX_FORMAT "# halo map torrents v1"
-#define CUSTOM_MAPS_XBOX_PATH "d:\\custom_maps\\"
-#define INSTALL_MAPS_XBOX_PATH "h:\\maps\\"
+/* (ChupathingyCE's folder of Custom Edition maps: halo_map_families.h) */
+#define CUSTOM_MAPS_XBOX_PATH "d:\\maps_ce\\"
 #define DOWNLOADS_FOLDER "downloads"
 #define MAP_FILE_EXTENSION ".map"
 #define FETCH_MAXIMUM_FILES 4
@@ -259,7 +268,7 @@ static int engine_start(void)
 
 /* ---------- paths */
 
-/* the custom_maps folder (made if missing), with its separator */
+/* the maps_ce folder (made if missing), with its separator */
 static int custom_maps_folder(char *path, int size)
 {
 	size_t length;
@@ -312,36 +321,52 @@ static int file_present(const char *path)
 	return posix_stat(path, &information) == 0 && !(information.flags & _posix_file_is_directory);
 }
 
-/* the map's file name from its level name: custom_maps\<name> is
-<name>.map */
+/* the map's file name from its name: <file>@ce (ChupathingyCE's), a level's
+path (custom_maps\<file>, OpenCE's protocol) or the file's name alone is
+<file>.map; "" for a map of another family (the Xbox's, HaloMD's) */
 static void level_file_name(const char *level_name, char *file_name, int size)
 {
-	const char *name = level_name;
-	const char *separator;
+	char file[NAME_SIZE];
+	short family = map_family_parse(level_name, file, sizeof(file));
 
-	while ((separator = strpbrk(name, "\\/")) != NULL)
-		name = separator + 1;
-	snprintf(file_name, (size_t)size, "%s" MAP_FILE_EXTENSION, name);
+	if (family == MAP_FAMILY_XBOX && !strpbrk(level_name, "\\/"))
+		family = MAP_FAMILY_CUSTOM_EDITION;
+	if (family == MAP_FAMILY_XBOX && !strncmp(level_name, "custom_maps", 11))
+		family = MAP_FAMILY_CUSTOM_EDITION;
+	if (family != MAP_FAMILY_CUSTOM_EDITION || !file[0])
+	{
+		file_name[0] = 0;
+		return;
+	}
+	snprintf(file_name, (size_t)size, "%s" MAP_FILE_EXTENSION, file);
 }
 
-/* where the map named is: custom_maps, else the Custom Edition install's
-maps; 0 if it is in neither */
+/* where the file named (<file>.map, or a resource map) is, where the map
+families find it (maps_ce, OpenCE's custom_maps, maps\ce...): the host's
+path; 0 if it is nowhere */
 static int map_file_path(const char *file_name, char *path, int size)
 {
 	char xbox_path[256];
+	char file[NAME_SIZE];
+	size_t length = strlen(file_name);
+	int found;
 
-	snprintf(xbox_path, sizeof(xbox_path), CUSTOM_MAPS_XBOX_PATH "%s", file_name);
-	platform_translate_path(xbox_path, path, (unsigned long)size);
-	if (file_present(path))
-		return 1;
-	if (platform_custom_edition_root()[0])
+	if (length <= strlen(MAP_FILE_EXTENSION) || length >= sizeof(file))
+		return 0;
+	if (same_name(file_name, "bitmaps.map") || same_name(file_name, "sounds.map") || same_name(file_name, "loc.map"))
 	{
-		snprintf(xbox_path, sizeof(xbox_path), INSTALL_MAPS_XBOX_PATH "%s", file_name);
-		platform_translate_path(xbox_path, path, (unsigned long)size);
-		if (file_present(path))
-			return 1;
+		snprintf(file, sizeof(file), "%.*s", (int)(length - strlen(MAP_FILE_EXTENSION)), file_name);
+		found = map_family_resource(file, xbox_path, sizeof(xbox_path));
 	}
-	return 0;
+	else
+	{
+		snprintf(file, sizeof(file), "%.*s", (int)(length - strlen(MAP_FILE_EXTENSION)), file_name);
+		found = map_family_find(MAP_FAMILY_CUSTOM_EDITION, file, xbox_path, sizeof(xbox_path));
+	}
+	if (!found)
+		return 0;
+	platform_translate_path(xbox_path, path, (unsigned long)size);
+	return file_present(path);
 }
 
 /* ---------- downloading */
@@ -400,7 +425,33 @@ int map_torrents_fetch(const char *level_name, unsigned long version, const char
 	} wanted[FETCH_MAXIMUM_FILES];
 	int which;
 
-	if (!config_boolean("maps.torrents") || !level_name || !files || !files[0])
+	char computed[256];
+
+	if (!config_boolean("maps.torrents") || !level_name)
+		return 0;
+	if (!files)
+	{
+		/* (asked for a map alone: it, and Custom Edition's resource maps
+		that this machine lacks) */
+		static const char *const resources[] = { "bitmaps.map", "sounds.map", "loc.map" };
+		char path[1024];
+		int resource;
+
+		level_file_name(level_name, map_file, sizeof(map_file));
+		if (!map_file[0])
+			return 0;
+		snprintf(computed, sizeof(computed), "%s", map_file);
+		for (resource = 0; resource < (int)(sizeof(resources) / sizeof(resources[0])); resource++)
+		{
+			size_t used = strlen(computed);
+
+			if (!map_file_path(resources[resource], path, sizeof(path)))
+				snprintf(computed + used, sizeof(computed) - used, ",%s", resources[resource]);
+		}
+		files = computed;
+		text = files;
+	}
+	if (!files[0])
 		return 0;
 	if (fetch.active)
 	{
@@ -517,6 +568,21 @@ static int fetch_file_done(int which)
 	torrent_remove(fetch.files[which].handle);
 	fetch.files[which].done = 1;
 	platform_log("map torrents: %s is in %s", fetch.files[which].name, folder);
+	/* (a map, not a resource map: a downloaded one, whose scripts are held to
+	the tighter rules: map_downloaded_mark, ChupathingyCE's hs.c) */
+	if (!same_name(fetch.files[which].name, "bitmaps.map") && !same_name(fetch.files[which].name, "sounds.map") &&
+		!same_name(fetch.files[which].name, "loc.map"))
+	{
+		char marked[NAME_SIZE + 4];
+		size_t length = strlen(fetch.files[which].name);
+
+		if (length > strlen(MAP_FILE_EXTENSION))
+		{
+			snprintf(marked, sizeof(marked), "%.*s@ce", (int)(length - strlen(MAP_FILE_EXTENSION)),
+				fetch.files[which].name);
+			map_downloaded_mark(marked);
+		}
+	}
 	return 1;
 }
 

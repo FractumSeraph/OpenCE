@@ -145,9 +145,6 @@ struct nv2a_pixel_shader_key
 	behind it only where it covers it (the Xbox's point-sampled meters stop
 	at their texels' edges; filtered ones have a fringe of faint texels) */
 	unsigned char coverage_alpha;
-	/* Discrete meter thresholds in texture 0's red are read at level zero,
-	without filtering. Coverage/brightness still use the filtered lookup. */
-	unsigned char point_threshold;
 	/* a model lighting program's draw lit for each pixel
 	(display.per_pixel_lighting): nv2a_vertex_lighting's lights, or 0 for
 	the diffuse color the vertex shader computed */

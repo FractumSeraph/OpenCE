@@ -201,6 +201,21 @@ static const struct config_setting config_settings[] =
 		"Reverberate the world's sounds as the place the player is in does (the\n"
 		"maps' sound environments, as the Xbox's I3DL2 reverb did); false keeps\n"
 		"them dry." },
+	{ "audio.voice_chat", _config_string, "\"push_to_talk\"", "HALO_VOICE_CHAT", _environment_value, _platform_all,
+		"Talking in network games' voice chat: \"push_to_talk\" (while\n"
+		"controls.push_to_talk is held; the microphone opens the first time),\n"
+		"\"open_mic\" (whenever the microphone hears speech), or \"off\". Others'\n"
+		"voices play whatever this is (audio.voice_volume 0 silences them)." },
+	{ "audio.voice_volume", _config_real, "1.0", "HALO_VOICE_VOLUME", _environment_value, _platform_all,
+		"The volume of the other players' voices (0 to 2)." },
+	{ "audio.output_device", _config_string, "\"default\"", "HALO_AUDIO_OUTPUT_DEVICE", _environment_value,
+		_platform_desktop,
+		"Where the game's sound and the voices play: a device's name as Settings >\n"
+		"Audio lists it, or \"default\" for the system's (also if it is not found)." },
+	{ "audio.input_device", _config_string, "\"default\"", "HALO_AUDIO_INPUT_DEVICE", _environment_value,
+		_platform_desktop,
+		"The microphone voice chat listens to: a device's name as Settings >\n"
+		"Audio lists it, or \"default\" for the system's (also if it is not found)." },
 	{ "audio.resampling", _config_string, "\"sinc\"", "HALO_AUDIO_RESAMPLING", _environment_value, _platform_all,
 		"How sounds recorded at another rate (most are 22 kHz) are played at the\n"
 		"output's 48 kHz: \"sinc\" keeps their band and nothing above it;\n"
@@ -284,6 +299,12 @@ static const struct config_setting config_settings[] =
 	{ "controls.push_to_talk", _config_string, "\"V\"", "HALO_KEY_PUSH_TO_TALK", _environment_value, _platform_all,
 		"Voice chat: talk while it is held (audio.voice_chat \"push_to_talk\")." },
 
+	{ "game.enhanced_animations", _config_boolean, "true", "HALO_ENHANCED_ANIMATIONS", _environment_value, _platform_all,
+		"The player bipeds' grenade throws keep their legs moving (crouched,\n"
+		"in the air and in a vehicle's seat too), riders' hands leave the grips\n"
+		"to throw and reload, and a player turns with the aim while throwing;\n"
+		"false: the original animations, which freeze the legs and stand a\n"
+		"rider up." },
 	{ "game.console_log", _config_string, "\"important\"", "HALO_CONSOLE_LOG", _environment_value, _platform_all,
 		"What the game's console shows on screen of what it logs: \"important\"\n"
 		"(bans, players dropped for cheating, what refuses a command, and the\n"

@@ -754,12 +754,17 @@ static boolean player_ui_configure_network_server_game_internal(
 	if (multiplayer_level_index >= (long)(sizeof(multiplayer_levels) / sizeof(multiplayer_levels[0])))
 	{
 		extern char const *web_online_custom_map_level(long index);
-		extern short custom_edition_maps_display_index(char const *level_name);
+		extern short map_family_parse(char const *map, char *file, long size);
+		extern boolean map_family_find(short family, char const *file, char *path, long size);
+		char file[64];
+		char path[256];
 
 		map_name = web_online_custom_map_level(
 			multiplayer_level_index - (long)(sizeof(multiplayer_levels) / sizeof(multiplayer_levels[0])));
 		/* (this machine has it) */
-		if (!map_name || custom_edition_maps_display_index(map_name) == NONE)
+		/* (a Custom Edition map, <file>@ce: ChupathingyCE's map families) */
+		if (!map_name || map_family_parse(map_name, file, sizeof(file)) == 0 ||
+			!map_family_find(map_family_parse(map_name, NULL, 0), file, path, sizeof(path)))
 			return FALSE;
 	}
 #endif
