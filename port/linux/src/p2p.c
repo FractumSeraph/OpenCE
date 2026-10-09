@@ -624,7 +624,38 @@ static int hardware_id_source(char *text, int size)
 	int path_count = 0;
 	int index;
 
-#ifdef HALO_ANDROID
+#if defined(HALO_WEB)
+	/* web: a browser has no machine id to read, so each keeps its own: 16
+	random bytes made the first time, in its save root (the browser's
+	storage for this site), so that a host can tell browser players apart
+	by it although they all reach it from one address (the native
+	gateway's). Clearing the site's data makes a new one */
+	snprintf(android_path, sizeof(android_path), "%s/hardware_id.txt", platform_save_root());
+	{
+		FILE *file = fopen(android_path, "rb");
+
+		if (!file)
+		{
+			unsigned char bytes[16];
+			char hex[2 * sizeof(bytes) + 2];
+			int index;
+
+			posix_random_bytes(bytes, sizeof(bytes));
+			for (index = 0; index < (int)sizeof(bytes); index++)
+				snprintf(hex + 2 * index, 3, "%02x", bytes[index]);
+			file = fopen(android_path, "wb");
+			if (file)
+			{
+				fprintf(file, "%s\n", hex);
+				fclose(file);
+				platform_log("web: this browser's hardware id made (kept in %s)", android_path);
+			}
+		}
+		else
+			fclose(file);
+	}
+	paths[path_count++] = android_path;
+#elif defined(HALO_ANDROID)
 	snprintf(android_path, sizeof(android_path), "%s/hardware_id.txt", platform_data_root());
 	paths[path_count++] = android_path;
 #else
