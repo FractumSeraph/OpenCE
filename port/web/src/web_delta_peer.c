@@ -1,5 +1,5 @@
 /* Delta Peer in the browser (ChupathingyCE's docs/delta.md, "Delta Peer";
-src/delta/README.md here): the client's side alone, as their
+port/web/src/DELTA.md here): the client's side alone, as their
 delta_peer_game.c has it, over a UDP socket of the game's own Winsock layer
 (xnet.c: in the browser, the virtual sockets of web_loopback_net.c), so it
 goes where the game's datagrams go: to a ChupathingyCE host through the
@@ -9,8 +9,9 @@ A browser joins a ChupathingyCE host the game's way (unchanged); if the
 host's advertisement has Delta's flag, the client says HELLO on its Delta
 port (5160) and the host answers WELCOME, or nothing (then the legacy
 protocol alone, after 4 seconds; the game never waits for any of it). The
-sessions are ChupathingyCE's own code (delta/delta_peer.c and
-delta/delta_wire.c, as they are). What the browser offers:
+sessions are ChupathingyCE's own code, the native builds' too
+(port/linux/src/delta_peer.c and delta_wire.c, with
+port/linux/include/delta.h). What the browser offers:
 - platform: its platform key, which says "unknown" (Delta's registry has no
   browser) and that it hosts no Delta games;
 - ce_maps: the host says its Custom Edition map's file size and BLAKE2b-256

@@ -40,8 +40,8 @@ index's piece lengths at least 256 KB (tools/map_torrents.py) */
 #define TORRENT_MAXIMUM_PIPELINE 32
 #define TORRENT_MAXIMUM_QUEUED_REQUESTS 64
 #define TORRENT_MAXIMUM_TRACKERS 8
-/* web seed connections (each web seed given has WEB_SEED_CONNECTIONS of
-them: torrent_tracker.c) */
+/* web seed connections (shared out among the web seeds given, at least
+one each: torrent_trackers_configure) */
 #define TORRENT_MAXIMUM_WEB_SEEDS 8
 /* a message from a peer: a piece message's block and its header, or a
 bitfield of the most pieces; anything longer ends the connection */
@@ -168,6 +168,9 @@ struct torrent_http
 	unsigned char in[TORRENT_HTTP_HEADER_SIZE];
 	int in_size;
 	int status;
+	/* a Range asked for: answered only by 206 from its first byte */
+	int ranged;
+	long long range_first;
 	long long content_length;
 	long long body_received;
 	/* a response read whole (NULL: streamed) */
@@ -225,6 +228,9 @@ struct torrent_active_piece
 	unsigned char received[TORRENT_MAXIMUM_BLOCKS_PER_PIECE / 8];
 	unsigned char requested[TORRENT_MAXIMUM_BLOCKS_PER_PIECE / 8];
 	unsigned long started;
+	/* a web seed connection is fetching it (torrent_piece_to_request_whole
+	until torrent_piece_unrequested): the endgame does not hand it on */
+	int web_seed;
 };
 
 struct torrent
@@ -269,6 +275,8 @@ struct torrent
 	unsigned char web_whole_have[TORRENT_MAXIMUM_PIECES / 8];
 	unsigned char web_whole_requested[TORRENT_MAXIMUM_PIECES / 8];
 	int web_whole_count;
+	/* answers to it in a row that were not the piece (torrent_tracker.c) */
+	int web_whole_failures;
 	unsigned long dht_next_lookup;
 	unsigned long dht_last_announce;
 	unsigned long long downloaded;
@@ -302,6 +310,10 @@ struct torrent_session
 	int tracker_count;
 	char web_seeds[TORRENT_MAXIMUM_WEB_SEEDS][256];
 	int web_seed_count;
+	/* each web seed connection's server, looked up once in a while (0: not
+	yet, or it could not be) */
+	unsigned long web_seed_addresses[TORRENT_MAXIMUM_WEB_SEEDS];
+	unsigned long web_seed_resolved_times[TORRENT_MAXIMUM_WEB_SEEDS];
 	long upload_limit;
 	long download_limit;
 	double upload_tokens;
@@ -358,7 +370,8 @@ void torrent_block_unrequested(struct torrent *torrent, int piece, int begin);
 /* a whole piece to fetch (a web seed's), every block of it marked
 requested; 1 and the piece, or 0 if there is none to start */
 int torrent_piece_to_request_whole(struct torrent *torrent, int *piece);
-/* a piece's blocks not received, open to asking again */
+/* a piece's blocks not received, open to asking again (a web seed's fetch
+of it ended) */
 void torrent_piece_unrequested(struct torrent *torrent, int piece);
 /* whether a peer with this bitfield has a piece this torrent wants */
 int torrent_wants_from(const struct torrent *torrent, const unsigned char *bitfield);

@@ -159,7 +159,8 @@ names have spaces, brackets or letters beyond ASCII).
   asked for again. Rate limits are token buckets over the whole client.
   Peers come from the DHT, the trackers, other peers (PEX) and incoming
   connections on the listening port; web seeds fetch whole pieces by byte
-  range.
+  range (a server must answer 206 with the range asked for), over eight
+  connections shared out among the web seeds given, at least one each.
 
 ## Tests
 

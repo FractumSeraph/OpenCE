@@ -26,7 +26,10 @@ that draw the first-person weapon (rasterizer and render sources).
 #include "units/unit_definitions.h"
 #include "units/units.h"
 
+/* (tan and atan: the game's, halo_math.h, the same on every port; never
+the C library's tanf and atanf, which some ports do not declare) */
 #include <math.h>
+#include "../../include/halo_math.h"
 
 /* (the window's rasterizer target, as the rasterizer's sources number it) */
 enum
@@ -86,7 +89,7 @@ static real render_fov_adjust(short local_player_index, real native_vertical_fie
 		return native_vertical_field_of_view;
 	}
 	unzoomed_tangent = 0.75f * render_camera_get_adjusted_field_of_view_tangent(unzoomed_angle);
-	native_tangent = tanf(native_vertical_field_of_view * 0.5f);
+	native_tangent = (real)tan(native_vertical_field_of_view * 0.5f);
 	if (requested_tangent < unzoomed_tangent)
 	{
 		/* (a view narrower than the stock one: the zoom narrows it further) */
@@ -119,7 +122,7 @@ static real render_fov_adjust(short local_player_index, real native_vertical_fie
 			return native_vertical_field_of_view;
 		adjusted_tangent = native_tangent + (requested_tangent - unzoomed_tangent) * blend;
 	}
-	return 2.0f * atanf(adjusted_tangent);
+	return 2.0f * (real)atan(adjusted_tangent);
 }
 
 real render_fov_vertical(short local_player_index, real native_vertical_field_of_view)
@@ -134,7 +137,7 @@ real render_fov_vertical(short local_player_index, real native_vertical_field_of
 			native_vertical_field_of_view > 0.0f && native_vertical_field_of_view < _pi &&
 			adjusted > 0.0f && adjusted < _pi)
 		{
-			scale = tanf(native_vertical_field_of_view * 0.5f) / tanf(adjusted * 0.5f);
+			scale = (real)tan(native_vertical_field_of_view * 0.5f) / (real)tan(adjusted * 0.5f);
 			if (!(scale > 0.0f && scale < 1000.0f))
 				scale = 1.0f;
 		}

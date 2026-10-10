@@ -3408,6 +3408,7 @@ static boolean main_loop_iteration(
 
 				network_voice_update();
 			}
+			profile_scope_enter(main_network_start_frame_section)
 			connection = main_globals.connection;
 			if (connection==_game_connection_network_client)
 			{
@@ -3435,6 +3436,7 @@ static boolean main_loop_iteration(
 			}
 			else if (connection==_game_connection_film_playback)
 			{
+				profile_scope_exit(main_network_start_frame_section)
 				return FALSE;
 			}
 			profile_scope_exit(main_network_start_frame_section)

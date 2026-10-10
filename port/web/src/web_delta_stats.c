@@ -1,5 +1,5 @@
 /* Delta Stats in the browser (ChupathingyCE's game list, halo.milenko.org;
-src/delta/README.md): a joined game's report (game_engine.c, HALO_WEB)
+port/web/src/DELTA.md): a joined game's report (game_engine.c, HALO_WEB)
 handed to the page, which sends it (online_client.js, deltaGameReport) with
 this browser's player key, if the game was joined through an invite and the
 player shares their results; and then confirms the local players' lines. */

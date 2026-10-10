@@ -244,7 +244,8 @@ uint32_t host_sdl_gamepad_from_id(uint32_t id)
 	return handle_new(_handle_gamepad, SDL_GetGamepadFromID((SDL_JoystickID)id));
 }
 
-/* (the event thread, when the controller goes: sdl_platform.c) */
+/* (the game's thread, as it handles the controller's going:
+SDL_EVENT_GAMEPAD_REMOVED in sdl_platform.c) */
 void host_sdl_close_gamepad(uint32_t gamepad)
 {
 	SDL_Gamepad *object = handle_release(gamepad, _handle_gamepad, NULL);

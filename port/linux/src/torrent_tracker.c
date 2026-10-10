@@ -28,8 +28,10 @@ platform. An https:// tracker or web seed is logged and left out.
 /* how long a download waits for the metadata from peers before it fetches
 the whole file from the web seeds (checked against the info hash after) */
 #define WEB_WHOLE_WAIT (10 * TORRENT_SECOND)
-/* connections to each web seed at once */
-#define WEB_SEED_CONNECTIONS 4
+/* answers that were not the piece asked for (shorter, or refused), in a
+row, for each web seed connection, after which the whole file is no
+longer fetched from the web seeds */
+#define WEB_WHOLE_FAILURES 3
 #define ANNOUNCE_DEFAULT (30 * TORRENT_MINUTE)
 #define ANNOUNCE_RETRY_MAXIMUM (30 * TORRENT_MINUTE)
 #define WEB_SEED_RETRY (5 * TORRENT_SECOND)
@@ -112,9 +114,12 @@ void torrent_trackers_configure(void)
 {
 	const char *text = torrent_session.trackers_text;
 	char item[256];
+	int web_seeds;
+	int connections;
 
 	torrent_session.tracker_count = 0;
 	torrent_session.web_seed_count = 0;
+	memset(torrent_session.web_seed_addresses, 0, sizeof(torrent_session.web_seed_addresses));
 	for (;;)
 	{
 		struct torrent_tracker *tracker;
@@ -139,9 +144,27 @@ void torrent_trackers_configure(void)
 		tracker->udp = !strncmp(item, "udp://", 6);
 		torrent_session.tracker_count++;
 	}
+	/* (the web seeds counted first: the connections are shared out among
+	them, a few to each, a piece on each. One piece at a time from a server
+	far away was a piece a round trip or so, some 250 KB a second; four
+	connections to each of two web seeds left a third none) */
+	text = torrent_session.web_seeds_text;
+	web_seeds = 0;
+	for (;;)
+	{
+		text_list_next(&text, item, sizeof(item));
+		if (!item[0])
+			break;
+		web_seeds += !strncmp(item, "http://", 7);
+	}
+	connections = web_seeds ? TORRENT_MAXIMUM_WEB_SEEDS / web_seeds : 0;
+	if (connections < 1)
+		connections = 1;
 	text = torrent_session.web_seeds_text;
 	for (;;)
 	{
+		int connection;
+
 		text_list_next(&text, item, sizeof(item));
 		if (!item[0])
 			break;
@@ -155,18 +178,11 @@ void torrent_trackers_configure(void)
 			torrent_log("too many web seeds: %s left out", item);
 			continue;
 		}
-		/* (a few connections to each, a piece on each: one piece at a time
-		from a server far away was a piece a round trip or so, some 250 KB a
-		second) */
+		for (connection = 0; connection < connections &&
+			torrent_session.web_seed_count < TORRENT_MAXIMUM_WEB_SEEDS; connection++)
 		{
-			int connection;
-
-			for (connection = 0; connection < WEB_SEED_CONNECTIONS &&
-				torrent_session.web_seed_count < TORRENT_MAXIMUM_WEB_SEEDS; connection++)
-			{
-				snprintf(torrent_session.web_seeds[torrent_session.web_seed_count++],
-					sizeof(torrent_session.web_seeds[0]), "%s", item);
-			}
+			snprintf(torrent_session.web_seeds[torrent_session.web_seed_count++],
+				sizeof(torrent_session.web_seeds[0]), "%s", item);
 		}
 	}
 }
@@ -182,6 +198,19 @@ static unsigned long tracker_address(struct torrent_tracker *tracker)
 			torrent_log("the tracker %s cannot be resolved", tracker->host);
 	}
 	return tracker->address;
+}
+
+/* a web seed's address, looked up once in a while (blocking briefly), as a
+tracker's is */
+static unsigned long web_seed_address(int index, const char *host)
+{
+	if (!torrent_session.web_seed_addresses[index] ||
+		torrent_elapsed(torrent_session.web_seed_resolved_times[index], RESOLVE_LIFETIME))
+	{
+		torrent_session.web_seed_addresses[index] = posix_resolve_ipv4(host);
+		torrent_session.web_seed_resolved_times[index] = torrent_now();
+	}
+	return torrent_session.web_seed_addresses[index];
 }
 
 /* ---------- the HTTP client */
@@ -225,7 +254,11 @@ int torrent_http_start(struct torrent_http *http, unsigned long address, unsigne
 	http->started = torrent_now();
 	range[0] = 0;
 	if (last >= 0)
+	{
 		snprintf(range, sizeof(range), "Range: bytes=%lld-%lld\r\n", first, last);
+		http->ranged = 1;
+		http->range_first = first;
+	}
 	{
 		char host_header[160];
 
@@ -316,6 +349,9 @@ static void http_body_bytes(struct torrent_http *http, const unsigned char *byte
 	if (http->stream)
 	{
 		http->stream(http->context, bytes, size);
+		/* (the stream may have failed it, or closed it with its torrent) */
+		if (http->state != _torrent_http_body)
+			return;
 	}
 	else
 	{
@@ -367,7 +403,16 @@ static void http_headers_received(struct torrent_http *http, int header_size)
 	}
 	if (http_header_value((char *)http->in, "Content-Length", value, sizeof(value)))
 		http->content_length = atoll(value);
-	if (http->status != 200 && http->status != 206)
+	/* (a range (a web seed's piece) must be answered with that range: a
+	server that ignores Range sends the whole file, 200, for every piece) */
+	if (http->ranged && http->status == 206 &&
+		(!http_header_value((char *)http->in, "Content-Range", value, sizeof(value)) ||
+		!starts_with_nocase(value, "bytes ", 6) || atoll(value + 6) != http->range_first))
+	{
+		http_fail(http, "the answer is not the range asked for");
+		return;
+	}
+	if (http->ranged ? http->status != 206 : http->status != 200 && http->status != 206)
 	{
 		snprintf(http->error, sizeof(http->error), "HTTP %d", http->status);
 		http->state = _torrent_http_failed;
@@ -984,11 +1029,17 @@ static void web_seed_bytes(void *context, const unsigned char *bytes, int size)
 	{
 		if (size > piece_size - state->received)
 			size = piece_size - state->received;
-		if (size > 0 && torrent_file_write(torrent, (unsigned long long)state->piece * torrent->piece_length +
+		if (size <= 0)
+			return;
+		/* (a write that failed ends the fetch: the bytes after it went to the
+		wrong place) */
+		if (!torrent_file_write(torrent, (unsigned long long)state->piece * torrent->piece_length +
 			(unsigned long long)state->received, bytes, size))
 		{
-			state->received += size;
+			http_fail(&state->http, "the file could not be written");
+			return;
 		}
+		state->received += size;
 		return;
 	}
 	while (size > 0 && state->received < piece_size)
@@ -1007,6 +1058,10 @@ static void web_seed_bytes(void *context, const unsigned char *bytes, int size)
 		if (state->block_size == block_length)
 		{
 			torrent_block_received(torrent, state->piece, begin, state->block, block_length);
+			/* (a write or read back that failed failed the torrent, which
+			closed this fetch) */
+			if (state->http.state != _torrent_http_body)
+				return;
 			state->block_size = 0;
 		}
 	}
@@ -1032,6 +1087,27 @@ static void web_seed_failed(struct torrent *torrent, struct torrent_web_seed_sta
 		(unsigned int)(wait / TORRENT_SECOND));
 }
 
+/* an answer to the whole file's fetch that was not the piece (shorter, the
+server's file being shorter than the torrent's, or refused): after
+WEB_WHOLE_FAILURES for each connection in a row the whole file is given
+up and its pieces set aside, as when the file fetched is not the
+torrent's (checking_tick, torrent.c); the metadata is looked for from
+peers */
+static void web_whole_answer_wrong(struct torrent *torrent)
+{
+	if (torrent->web_whole <= 0 ||
+		++torrent->web_whole_failures < WEB_WHOLE_FAILURES * torrent_session.web_seed_count)
+	{
+		return;
+	}
+	torrent_log("%s: the web seeds' answers are not this torrent's pieces (%d in a row); looking to peers",
+		torrent->name, torrent->web_whole_failures);
+	torrent->web_whole = -1;
+	torrent->web_whole_count = 0;
+	memset(torrent->web_whole_have, 0, sizeof(torrent->web_whole_have));
+	memset(torrent->web_whole_requested, 0, sizeof(torrent->web_whole_requested));
+}
+
 void torrent_web_seeds_tick(struct torrent *torrent)
 {
 	int index;
@@ -1049,24 +1125,30 @@ void torrent_web_seeds_tick(struct torrent *torrent)
 			torrent_http_tick(http);
 			if (http->state == _torrent_http_done)
 			{
-				int whole = torrent->state == _torrent_state_metadata;
+				int whole = torrent->state == _torrent_state_metadata && torrent->web_whole > 0;
 
 				if (state->received == torrent_piece_size(torrent, state->piece))
 				{
 					state->failures = 0;
+					if (whole)
+						torrent->web_whole_failures = 0;
 					if (whole && !torrent_bit_test(torrent->web_whole_have, state->piece))
 					{
 						torrent_bit_set(torrent->web_whole_have, state->piece);
 						torrent->web_whole_count++;
 					}
-				}
-				else if (whole)
-				{
-					torrent_bit_clear(torrent->web_whole_requested, state->piece);
+					/* (a piece still under way, some block of it not taken:
+					open to asking again, and no longer this web seed's) */
+					else if (!whole)
+						torrent_piece_unrequested(torrent, state->piece);
 				}
 				else
 				{
-					torrent_piece_unrequested(torrent, state->piece);
+					/* (a short answer: the server's file is shorter than the
+					torrent's, which asking again at once does not change) */
+					web_seed_failed(torrent, state, url, "the answer is shorter than the piece");
+					if (whole)
+						web_whole_answer_wrong(torrent);
 				}
 				state->piece = -1;
 				torrent_http_close(http);
@@ -1074,7 +1156,14 @@ void torrent_web_seeds_tick(struct torrent *torrent)
 			}
 			else if (http->state == _torrent_http_failed)
 			{
+				/* (the server's answer was not the piece: refused, or the
+				whole file for a range) */
+				int refused = http->status == 200 || (http->status >= 400 && http->status < 500);
+				int whole = torrent->state == _torrent_state_metadata && torrent->web_whole > 0;
+
 				web_seed_failed(torrent, state, url, http->error);
+				if (whole && refused)
+					web_whole_answer_wrong(torrent);
 				torrent_http_close(http);
 				http->state = _torrent_http_idle;
 			}
@@ -1132,12 +1221,8 @@ void torrent_web_seeds_tick(struct torrent *torrent)
 				web_seed_failed(torrent, state, url, "not a URL");
 				continue;
 			}
-			address = posix_resolve_ipv4(host);
-			if (!address)
-			{
-				web_seed_failed(torrent, state, url, "cannot be resolved");
-				continue;
-			}
+			/* (the piece chosen first: an idle connection with nothing to
+			fetch looks up no address) */
 			if (whole)
 			{
 				/* (the next piece of the file not had nor asked for) */
@@ -1161,6 +1246,13 @@ void torrent_web_seeds_tick(struct torrent *torrent)
 			state->piece = piece;
 			state->received = 0;
 			state->block_size = 0;
+			address = web_seed_address(index, host);
+			if (!address)
+			{
+				/* (the piece open to asking again) */
+				web_seed_failed(torrent, state, url, "cannot be resolved");
+				continue;
+			}
 			web_seed_contexts[torrent_index][index].torrent = torrent;
 			web_seed_contexts[torrent_index][index].state = state;
 			if (!torrent_http_start(http, address, port, host, path, (long long)piece * torrent->piece_length,
