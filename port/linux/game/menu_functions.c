@@ -3144,6 +3144,9 @@ static void browser_focus(struct widget_instance *list)
 /* (the server browser's: below) */
 static void lobby_browser_begin(struct widget_instance *screen);
 static void lobby_browser_update(struct widget_instance *list);
+#ifdef HALO_WEB
+static void lobby_browser_web_join_update(void);
+#endif
 static void map_fetch_update(struct widget_instance *list);
 static boolean lobby_browser_select(struct widget_instance *widget, short controller, short row,
 	boolean *widget_deleted);
@@ -3905,6 +3908,11 @@ static void lobby_browser_update(struct widget_instance *list)
 	short chosen;
 	boolean message;
 
+#ifdef HALO_WEB
+	/* (a game waiting for its map: joined once it is fetched) */
+	lobby_browser_web_join_update();
+#endif
+
 	lobby_browser.count = lobby_browser_valid_games(lobby_browser.games, lobby_browser_games_found());
 	lobby_browser_add_listed();
 	/* (a map's download for a join under way: map_torrents.c) */
@@ -4111,8 +4119,57 @@ static void lobby_browser_update(struct widget_instance *list)
 
 /* the game's host reached by its invite (joined, once it is reached:
 lobby_browser_update) */
+#ifdef HALO_WEB
+/* a game whose Custom Edition map is being fetched onto this device before
+the browser joins it (web_map_torrents.c: a host gives a joining machine
+only moments to load the map, a native host 15 seconds, which reading it
+from the site piece by piece can overrun the first time); joined once it is
+here (lobby_browser_web_join_update) */
+static struct
+{
+	boolean pending;
+	struct p2p_listing game;
+} web_join;
+
+static boolean lobby_browser_web_map_fetch(struct p2p_listing const *game)
+{
+	char map[0x80];
+	char file[64];
+
+	if (map_family_from_wire_name(game->map, map, sizeof(map)) != _map_family_custom_edition)
+		return FALSE;
+	map_family_parse(map, file, sizeof(file));
+	if (!*file || !map_torrents_fetch(file, 0, NULL))
+		return FALSE;
+	web_join.game = *game;
+	web_join.pending = TRUE;
+	platform_log("menus: joining %s waits for its map, %s, to be fetched", game->name, file);
+	return TRUE;
+}
+
+static void lobby_browser_web_join_update(void)
+{
+	char level_name[0x80];
+
+	if (!web_join.pending || !map_torrents_take_ready(level_name, sizeof(level_name)))
+		return;
+	web_join.pending = FALSE;
+	if (!p2p_join_invite(web_join.game.invite))
+		ui_play_audio_feedback_sound(SOUND_ERROR);
+}
+#endif
+
 static boolean lobby_browser_join(struct p2p_listing const *game, short controller)
 {
+#ifdef HALO_WEB
+	if (web_join.pending)
+		return FALSE;
+	if (lobby_browser_web_map_fetch(game))
+	{
+		ui_play_audio_feedback_sound(SOUND_FORWARD);
+		return TRUE;
+	}
+#endif
 	if (!p2p_join_invite(game->invite))
 		return FALSE;
 #ifdef HALO_WEB
@@ -4336,6 +4393,11 @@ boolean ui_widget_port_join_map_fetch(void *advertised_game)
 	{
 		return FALSE;
 	}
+#ifdef HALO_WEB
+	/* (the browser has the site's maps, fetched before the Server Browser
+	joins: lobby_browser_join; one the site lacks is said to be missing) */
+	return FALSE;
+#endif
 	/* (the map torrents find what is missing: the map, and Custom Edition's
 	resource maps) */
 	if (!map_torrents_fetch(file, (unsigned long)game->map_version, NULL))

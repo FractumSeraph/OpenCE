@@ -179,15 +179,21 @@
   const PREFETCH_PIECES = 16;
   const PREFETCH_PARALLEL = 6;
   const RESOURCE_MAPS = ["bitmaps.map", "sounds.map", "loc.map"];
-  const prefetched = new Set();
+  /* (each file's prefetch, by its path: one at a time) */
+  const prefetched = new Map();
   const isResourceMap = path => RESOURCE_MAPS.includes(decodeURIComponent(path.split("/").pop()).toLowerCase());
 
-  async function prefetchFile(path) {
-    if (prefetched.has(path)) return;
-    prefetched.add(path);
+  /* a file fetched onto this device, adding what it fetches to job's
+   * total and done (bytes); FALSE if the site does not list it */
+  function prefetchFile(path, job) {
+    if (!prefetched.has(path)) prefetched.set(path, prefetchFileNow(path, job));
+    return prefetched.get(path);
+  }
+
+  async function prefetchFileNow(path, job) {
     const storage = cacheStorage();
     const entry = await customMapEntry(path);
-    if (!storage || !entry) return;
+    if (!storage || !entry) return false;
     await keepVersion(path, entry.etag, entry.size);
     const version = entry.etag;
     const cache = await storage.open(MAP_CACHE);
@@ -200,6 +206,7 @@
       const range = `bytes=${start}-${start + PIECE_BYTES - 1}`;
       if (!await cache.match(pieceKey(path, version, range))) wanted.push({ start, end, range });
     }
+    if (job) job.total += wanted.reduce((total, piece) => total + piece.end - piece.start + 1, 0);
     /* (runs of missing pieces, each fetched in one request) */
     const runs = [];
     for (const piece of wanted) {
@@ -224,6 +231,7 @@
         });
         await cache.put(pieceKey(path, version, piece.range), new Response(body.slice(), { status: 200, headers }));
       }
+      if (job) job.done += last - first + 1;
     };
     let next = 0;
     const worker = async () => {
@@ -233,6 +241,17 @@
       }
     };
     await Promise.all(Array.from({ length: Math.min(PREFETCH_PARALLEL, runs.length) }, worker));
+    return true;
+  }
+
+  /* a Custom Edition map (its path) and the resource maps it draws on;
+   * resolves FALSE if the site does not list the map */
+  async function prefetchMapAndResources(path, job) {
+    const folder = path.replace(/[^/]*$/, "");
+    /* (the map first, then the resource maps) */
+    if (!await prefetchFile(path, job)) return false;
+    await Promise.all(RESOURCE_MAPS.map(name => prefetchFile(folder + encodeURIComponent(name), job)));
+    return true;
   }
 
   function prefetchCustomMap(path) {
@@ -240,12 +259,31 @@
     try {
       if (scope.navigator && scope.navigator.connection && scope.navigator.connection.saveData) return;
     } catch (_error) { /* (no Network Information API) */ }
-    /* (the map first, then the resource maps it draws on) */
-    const folder = path.replace(/[^/]*$/, "");
-    prefetchFile(path)
-      .then(() => Promise.all(RESOURCE_MAPS.map(name => prefetchFile(folder + encodeURIComponent(name)))))
-      .catch(() => { /* (read as before) */ });
+    prefetchMapAndResources(path, null).catch(() => { /* (read as before) */ });
   }
+
+  /* For the game (port/web/src/web_map_torrents.c): a Custom Edition map
+   * the Server Browser is about to join a game on, fetched onto this device
+   * first, so that it loads in the moments a host gives a joining machine
+   * (a native host refuses one that has not added its player within 15
+   * seconds) whatever this connection's speed. start(file) begins it (the
+   * map's file name in custom_maps), status() tells how it goes: state 0
+   * under way, 1 done, 2 the site has no such map (or it failed). */
+  let mapJob = null;
+  scope.HaloMapPrefetch = {
+    start(file) {
+      const path = new URL("assets/custom_maps/" + encodeURIComponent(file), scope.location.href).pathname;
+      const job = { state: 0, done: 0, total: 0 };
+      mapJob = job;
+      prefetchMapAndResources(path, job)
+        .then(listed => { job.state = listed ? 1 : 2; })
+        .catch(() => { job.state = 2; });
+      return 1;
+    },
+    status() {
+      return mapJob ? { state: mapJob.state, done: mapJob.done, total: mapJob.total } : { state: 2, done: 0, total: 0 };
+    },
+  };
 
   scope.fetch = async function haloFetch(resource, options) {
     const originalUrl = typeof resource === "string" || resource instanceof URL
