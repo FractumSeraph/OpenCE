@@ -1396,7 +1396,7 @@ BOOL platform_video_initialize(unsigned long width, unsigned long height)
 	SDL_SyncWindow(platform_window);
 #endif
 	platform_gl_context = SDL_GL_CreateContext(platform_window);
-#ifdef HALO_ANDROID
+#ifdef HALO_GLES
 	/* ES 3.2 where the driver has it, otherwise the renderer makes do with
 	3.0 plus extensions */
 	if (!platform_gl_context)
@@ -2390,7 +2390,7 @@ void platform_pump_events(void)
 			break;
 #endif
 		case SDL_EVENT_GAMEPAD_ADDED:
-#ifdef HALO_ANDROID
+#ifdef HALO_ARM64_GUEST
 			/* (the guest reaches SDL only through host_imports.list, which
 			has no SDL_GetGamepadName) */
 			SDL_OpenGamepad(event.gdevice.which);

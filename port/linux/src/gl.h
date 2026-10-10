@@ -16,7 +16,7 @@ Windows it is __stdcall too, and SDL would include windows.h without it) */
 #ifndef _WIN32
 #undef APIENTRY
 #endif
-#ifdef HALO_ANDROID
+#ifdef HALO_GLES
 #include <GLES3/gl32.h>
 #include <GLES2/gl2ext.h>
 #define GLAPIENTRY GL_APIENTRY
@@ -25,7 +25,7 @@ Windows it is __stdcall too, and SDL would include windows.h without it) */
 #endif
 #pragma pop_macro("APIENTRY")
 
-#ifdef HALO_ANDROID
+#ifdef HALO_GLES
 /* OpenGL ES 3.2 (port/android/README.md); tools/android_gl_stubs.py reads
 this list to generate the guest's entry points */
 /* ANDROID_GL_FUNCTIONS_BEGIN */
@@ -89,6 +89,7 @@ this list to generate the guest's entry points */
 	X(glBlitFramebuffer) \
 	X(glDrawBuffers) \
 	X(glGenRenderbuffers) \
+	X(glDeleteRenderbuffers) \
 	X(glBindRenderbuffer) \
 	X(glRenderbufferStorageMultisample) \
 	X(glFramebufferRenderbuffer) \
@@ -202,6 +203,7 @@ this list to generate the guest's entry points */
 	X(glBlitFramebuffer) \
 	X(glDrawBuffers) \
 	X(glGenRenderbuffers) \
+	X(glDeleteRenderbuffers) \
 	X(glBindRenderbuffer) \
 	X(glRenderbufferStorageMultisample) \
 	X(glFramebufferRenderbuffer) \
@@ -329,6 +331,7 @@ pointers, sees the declarations without these aliases */
 #define glBlitFramebuffer halo_glBlitFramebuffer
 #define glDrawBuffers halo_glDrawBuffers
 #define glGenRenderbuffers halo_glGenRenderbuffers
+#define glDeleteRenderbuffers halo_glDeleteRenderbuffers
 #define glBindRenderbuffer halo_glBindRenderbuffer
 #define glRenderbufferStorageMultisample halo_glRenderbufferStorageMultisample
 #define glFramebufferRenderbuffer halo_glFramebufferRenderbuffer
@@ -440,6 +443,7 @@ pointers, sees the declarations without these aliases */
 #define glBlitFramebuffer halo_glBlitFramebuffer
 #define glDrawBuffers halo_glDrawBuffers
 #define glGenRenderbuffers halo_glGenRenderbuffers
+#define glDeleteRenderbuffers halo_glDeleteRenderbuffers
 #define glBindRenderbuffer halo_glBindRenderbuffer
 #define glRenderbufferStorageMultisample halo_glRenderbufferStorageMultisample
 #define glFramebufferRenderbuffer halo_glFramebufferRenderbuffer

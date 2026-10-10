@@ -57,6 +57,12 @@ WEB_ABI_FLAGS = [
     # (ChupathingyCE's Custom Edition maps, as every native build has them:
     # linux_build.py's CUSTOM_EDITION_DEFINES)
     "-DHALO_CUSTOM_EDITION",
+    # (OpenCE's three parts of what HALO_ANDROID meant, all of which the
+    # browser build is: the 32-bit guest's code paths, the OpenGL ES
+    # renderer (WebGL 2), and the app's; ChupathingyCE's code still says
+    # HALO_ANDROID for all three)
+    "-DHALO_ARM64_GUEST=1",
+    "-DHALO_GLES=1",
     "-DHALO_ANDROID=1",
     "-fms-extensions",
     "-fshort-wchar",
@@ -305,6 +311,8 @@ def generate_web_build(n: Writer, sln: Any) -> None:
     posix_cflags = " ".join(
         [
             "-DHALO_WEB=1",
+            "-DHALO_ARM64_GUEST=1",
+            "-DHALO_GLES=1",
             "-DHALO_ANDROID=1",
             "-std=gnu11",
             "-D_GNU_SOURCE",

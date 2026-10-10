@@ -1509,7 +1509,10 @@ struct transport_endpoint *accept_endpoint(
 			ep->flags |= 1;
 		}
 		else
+		{
+			closesocket(socket);
 			listening_endpoint->error = _transport_error_out_of_memory;
+		}
 	}
 	else
 	{

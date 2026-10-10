@@ -2845,6 +2845,9 @@ symbols in this file:
 #include "units/units.h"
 #include "units/vehicles.h"
 #include "coop_scripts.h" /* port: port/linux/game/coop_scripts.c */
+#ifdef HALO_PROFILE
+#include "profile_console.h" /* port: port/linux/game/profile_console.c */
+#endif
 
 /* ---------- constants */
 
@@ -15089,7 +15092,7 @@ static void player_effect_screen_fade_in_evaluate(
 		double value1 = arguments->value1;
 		double value2 = arguments->value2;
 
-#ifdef HALO_ANDROID
+#ifdef HALO_ARM64_GUEST
 		player_effect_screen_fade_in(*(real const *)&arguments->value0, (real)value1, (real)value2, arguments->value3);
 #else
 		player_effect_screen_fade_in(arguments->value0, value1, value2, arguments->value3);
@@ -15112,7 +15115,7 @@ static void player_effect_screen_fade_out_evaluate(
 		double value1 = arguments->value1;
 		double value2 = arguments->value2;
 
-#ifdef HALO_ANDROID
+#ifdef HALO_ARM64_GUEST
 		player_effect_screen_fade_out(*(real const *)&arguments->value0, (real)value1, (real)value2, arguments->value3);
 #else
 		player_effect_screen_fade_out(arguments->value0, value1, value2, arguments->value3);
@@ -15909,6 +15912,12 @@ static boolean hs_compile_and_evaluate_command(
 	char buffer[1024];
 	char expanded[1024];
 
+#ifdef HALO_PROFILE
+	/* port: the profiling build's commands change nothing of the game: a client
+	may give them, and they are no scripts */
+	if (profile_console_command(expression))
+		return TRUE;
+#endif
 	/* port: the co-op host's bringto, which brings every player to the host
 	(players.c; a client is told it is the host's) */
 	if (hs_host_player_command(expression, "bringto"))

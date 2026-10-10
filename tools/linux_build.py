@@ -163,6 +163,25 @@ def updater_defines(release: bool) -> str:
         defines += f' -DHALO_UPDATE_REPOSITORY=\\"{repository}\\"'
     return defines
 
+def configuration_defines(sln: Any) -> List[str]:
+    """what configure.py's options define for every unit of a native build:
+    --release (no assertions), --profile (the profiling build's recording,
+    port/linux/src/profile_trace.c)"""
+    defines = []
+    if getattr(sln, "port_release", False):
+        defines.append("-DHALO_RELEASE")
+    if getattr(sln, "port_profile", False):
+        defines.append("-DHALO_PROFILE")
+    return defines
+
+
+def check_profile_options(profile: bool, pgo: str) -> None:
+    """A profiling build is optimised with the committed profiles or none:
+    trained, a profile would record the profiling code's own paths."""
+    if profile and pgo == "train":
+        raise ValueError("--profile cannot be used with --pgo=train: train profiles with a normal build")
+
+
 PLATFORM_FLAGS = [
     "-std=gnu11",
     "-D_GNU_SOURCE",

@@ -474,6 +474,9 @@ long first_person_weapon_get_local_index(
 void first_person_weapon_draw(
 	void)
 {
+	/* port: not drawn with display.viewmodel_visible off (view_fov.c) */
+	if (!viewmodel_is_visible())
+		return;
 	if (render.local_player_index!=NONE)
 	{
 		struct first_person_weapon *first_person_weapon= first_person_weapon_get(render.local_player_index);

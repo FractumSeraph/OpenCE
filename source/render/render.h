@@ -96,7 +96,8 @@ struct render_globals
 	struct rendered_cluster rendered_clusters[MAXIMUM_RENDERED_CLUSTERS];
 	short rendered_cluster_count;
 	unsigned long environment_surface_flags[MAXIMUM_SURFACES_PER_STRUCTURE];
-	short environment_surface_count;
+	/* port: a long, as a short would wrap at the raised count */
+	long environment_surface_count;
 	long environment_surface_indices[MAXIMUM_RENDERED_ENVIRONMENT_SURFACES];
 };
 
