@@ -179,21 +179,36 @@
   const PREFETCH_PIECES = 16;
   const PREFETCH_PARALLEL = 6;
   const RESOURCE_MAPS = ["bitmaps.map", "sounds.map", "loc.map"];
-  /* (each file's prefetch, by its path: one at a time) */
+  /* (a map the game's reads found incomplete is prefetched again no sooner
+   * than this) */
+  const PREFETCH_RETRY_MS = 60 * 1000;
+  /* (each file's prefetch, by its path: one at a time; one that ended with
+   * pieces missing, or failed, is forgotten, so a later call fetches what is
+   * missing) */
   const prefetched = new Map();
+  const prefetchTried = new Map();
   const isResourceMap = path => RESOURCE_MAPS.includes(decodeURIComponent(path.split("/").pop()).toLowerCase());
 
   /* a file fetched onto this device, adding what it fetches to job's
-   * total and done (bytes); FALSE if the site does not list it */
+   * total and done (bytes); FALSE if the site does not list it (TRUE if it
+   * does, even when some pieces could not be fetched: the game reads those
+   * as before) */
   function prefetchFile(path, job) {
-    if (!prefetched.has(path)) prefetched.set(path, prefetchFileNow(path, job));
+    if (!prefetched.has(path)) {
+      const forget = () => { if (prefetched.get(path) === run) prefetched.delete(path); };
+      const run = prefetchFileNow(path, job).then(result => {
+        if (result.listed && !result.complete) forget();
+        return result.listed;
+      }, error => { forget(); throw error; });
+      prefetched.set(path, run);
+    }
     return prefetched.get(path);
   }
 
   async function prefetchFileNow(path, job) {
     const storage = cacheStorage();
     const entry = await customMapEntry(path);
-    if (!storage || !entry) return false;
+    if (!storage || !entry) return { listed: false, complete: false };
     await keepVersion(path, entry.etag, entry.size);
     const version = entry.etag;
     const cache = await storage.open(MAP_CACHE);
@@ -218,7 +233,10 @@
     const fetchRun = async run => {
       const first = run[0].start, last = run[run.length - 1].end;
       const response = await nativeFetch(url, { headers: { Range: `bytes=${first}-${last}` } });
-      if (response.status !== 206) return;
+      if (response.status !== 206) {
+        complete = false;
+        return;
+      }
       const bytes = new Uint8Array(await response.arrayBuffer());
       for (const piece of run) {
         const body = bytes.subarray(piece.start - first, piece.end - first + 1);
@@ -234,14 +252,20 @@
       if (job) job.done += last - first + 1;
     };
     let next = 0;
+    let complete = true;
     const worker = async () => {
       while (next < runs.length) {
         const run = runs[next++];
-        try { await fetchRun(run); } catch (_error) { /* (read as before when the game asks) */ }
+        try {
+          await fetchRun(run);
+        } catch (_error) {
+          /* (read as before when the game asks) */
+          complete = false;
+        }
       }
     };
     await Promise.all(Array.from({ length: Math.min(PREFETCH_PARALLEL, runs.length) }, worker));
-    return true;
+    return { listed: true, complete };
   }
 
   /* a Custom Edition map (its path) and the resource maps it draws on;
@@ -259,6 +283,11 @@
     try {
       if (scope.navigator && scope.navigator.connection && scope.navigator.connection.saveData) return;
     } catch (_error) { /* (no Network Information API) */ }
+    /* (each of the game's reads of the map comes here: one that ended
+     * incomplete is tried again once in a while, not at every read) */
+    const now = Date.now();
+    if (prefetchTried.has(path) && now - prefetchTried.get(path) < PREFETCH_RETRY_MS) return;
+    prefetchTried.set(path, now);
     prefetchMapAndResources(path, null).catch(() => { /* (read as before) */ });
   }
 
@@ -268,7 +297,8 @@
    * (a native host refuses one that has not added its player within 15
    * seconds) whatever this connection's speed. start(file) begins it (the
    * map's file name in custom_maps), status() tells how it goes: state 0
-   * under way, 1 done, 2 the site has no such map (or it failed). */
+   * under way, 1 done (perhaps with pieces missing, which the game reads as
+   * before, and which a later start fetches), 2 the site has no such map. */
   let mapJob = null;
   scope.HaloMapPrefetch = {
     start(file) {
@@ -277,7 +307,7 @@
       mapJob = job;
       prefetchMapAndResources(path, job)
         .then(listed => { job.state = listed ? 1 : 2; })
-        .catch(() => { job.state = 2; });
+        .catch(() => { job.state = 1; });
       return 1;
     },
     status() {
