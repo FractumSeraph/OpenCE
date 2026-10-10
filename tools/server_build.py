@@ -239,9 +239,12 @@ def generate_server_build(n: Writer, sln: Any) -> None:
     # (the game's 16-bit wchar_t over musl's: port/linux/include/halo_linux_prefix.h)
     defines = [*SERVER_DEFINES, *(["-DHALO_MUSL"] if static else [])]
     cc = sln.linux_cc or "clang"
-    # the server always has the game list and the dedicated server's director
+    # the server always has the game list and the dedicated server's director,
+    # and is never a profiling build (configure.py --profile: the 32-bit
+    # Linux and Windows builds' and Android's; linux_build.configuration_defines)
     server_sln = SimpleNamespace(**vars(sln))
     server_sln.game_browser = True
+    server_sln.port_profile = False
     libs = "-lm -lpthread"
     # (SDL's headers; Monocypher's, for the control API's credentials; Mbed
     # TLS's, for its HTTPS beyond the machine: control_tls.c, whose library

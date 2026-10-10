@@ -1,4 +1,5 @@
-/* halo.exe's resources (tools/windows_build.py): its icon (tools/app_icon.py),
+/* halo.exe's resources (tools/windows_build.py): its icon, ChupathingyCE's
+(tools/android_icon.py; OpenCE's is opence-icon.ico, tools/app_icon.py),
 which Explorer and the taskbar show and SDL's windows take, as the first icon
 of the executable */
-1 ICON "opence-icon.ico"
+1 ICON "chupathingyce-icon.ico"

@@ -28,11 +28,13 @@ import urllib.request
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
 
 from .version import VERSION_SOURCES, identity_defines, release_build, version
 from .linux_build import (CUSTOM_EDITION_DEFINES, LINUX_PROFILE, MBEDTLS_DIR, MINIUPNPC_DIR, OPTIMISATION, STB_DIR, WINDOWS_PROFILE,
-                          XDK_INCLUDE, game_browser_defines, lto_mode, march_flag, miniupnpc_sources, pgo_mode, compile_launcher, game_defines_and_includes,
+                          XDK_INCLUDE, configuration_defines, game_browser_defines, lto_mode, march_flag, miniupnpc_sources, pgo_mode,
+                          compile_launcher, game_defines_and_includes,
                           game_sources, musl_math_cflags, musl_math_sources, opus_cflags, opus_sources, pgo_profile,
                           profile_use_flags, xdk_headers)
 from .lp64_build import lp64_excluded
@@ -41,6 +43,10 @@ from .ninja_syntax import Writer
 
 LINUX_DIR = Path("port/linux")
 PORT_DIR = Path("port/windows")
+# halo.exe's icon, which port/windows/halo.rc names: ChupathingyCE's
+# (tools/android_icon.py makes it; tools/app_icon.py makes OpenCE's,
+# opence-icon.ico)
+WINDOWS_ICON = PORT_DIR / "chupathingyce-icon.ico"
 PORT_CONFIG = PORT_DIR / "port.json"
 BUILD = Path("build/windows")
 
@@ -189,6 +195,8 @@ class WindowsTarget:
     pgo: bool = True
     # leaves out what the 64-bit builds do (port/linux/port.json "lp64")
     lp64_exclusions: bool = False
+    # built as the profiling build with configure.py --profile (HALO_PROFILE)
+    profile: bool = True
 
     @property
     def build(self) -> Path:
@@ -262,6 +270,7 @@ WINDOWS64 = WindowsTarget(
     comment="Native 64-bit Windows build (ninja windows64)",
     pgo=False,
     lp64_exclusions=True,
+    profile=False,
 )
 
 
@@ -313,6 +322,15 @@ PROFILE_RUNTIME_HEADERS = [
     "lib/profile/InstrProfilingUtil.h", "lib/profile/WindowsMMap.h", "include/profile/InstrProfData.inc",
     "include/profile/instr_prof_interface.h", "include/profile/MIBEntryDef.inc", "include/profile/MemProfData.inc",
 ]
+
+
+def windows_rc(cc: str) -> str:
+    """LLVM's resource compiler of the clang named cc: beside it, where cc is
+    a path, else the one on the PATH"""
+    path = Path(cc)
+    if path.parent == Path("."):
+        return "llvm-rc"
+    return str(path.with_name("llvm-rc" + path.suffix))
 
 
 def clang_release(cc: str) -> Optional[str]:
@@ -387,7 +405,10 @@ def generate_windows_build(n: Writer, sln: Any) -> None:
         print(f"Windows build disabled: cannot fetch SDL3 ({error})", file=sys.stderr)
         return
     for target in (WINDOWS32, WINDOWS64):
-        generate_windows_target(n, sln, target)
+        # (the profiling build, configure.py --profile, is the 32-bit one's,
+        # as OpenCE's: linux_build.configuration_defines)
+        target_sln = sln if target.profile else SimpleNamespace(**{**vars(sln), "port_profile": False})
+        generate_windows_target(n, target_sln, target)
 
 
 def generate_windows_target(n: Writer, sln: Any, target: WindowsTarget) -> None:
@@ -441,6 +462,16 @@ def generate_windows_target(n: Writer, sln: Any, target: WindowsTarget) -> None:
         command="$python -c \"import shutil,sys; shutil.copyfile(sys.argv[1], sys.argv[2])\" $in $out",
         description=f"{label} COPY $out",
     )
+    # the executable's resources (port/windows/halo.rc: its icon, which
+    # Explorer and the taskbar show and SDL's window takes), compiled by
+    # LLVM's resource compiler, beside the clang that builds the game
+    n.rule(
+        name=f"{prefix}_rc",
+        command=f"{_quote(windows_rc(cc))} /no-preprocess /FO $out $in",
+        description=f"{label} RC $out",
+    )
+    resources = build / "halo.res"
+    n.build(outputs=resources, rule=f"{prefix}_rc", inputs=PORT_DIR / "halo.rc", implicit=[WINDOWS_ICON])
 
     # the high-res HUD's textures (port/assets/hud; port/linux/src/hud_hires.c)
     embedded_assets = (hud_assets_build(n, prefix, build / "generated" / "hud_hires_assets.c")
@@ -451,8 +482,8 @@ def generate_windows_target(n: Writer, sln: Any, target: WindowsTarget) -> None:
     # checks its stack frames (/GS), and stops at the first one overrun, as
     # at the first failed assertion; a release build does not, so that an
     # overrun nobody has met cannot end a game)
-    abi = " ".join(target.abi_flags + [march_flag(sln)] + (["-DHALO_RELEASE"] if getattr(sln, "port_release", False)
-                                                           else ["-fstack-protector-strong"])
+    abi = " ".join(target.abi_flags + [march_flag(sln)] + configuration_defines(sln)
+                   + ([] if getattr(sln, "port_release", False) else ["-fstack-protector-strong"])
                    + game_browser_defines(sln))
     sdl_include = SDL_DIR / "include"
     libs = " ".join(
@@ -609,7 +640,7 @@ def generate_windows_target(n: Writer, sln: Any, target: WindowsTarget) -> None:
         n.build(
             outputs=output,
             rule=f"{prefix}_link",
-            inputs=objects + extra_objects,
+            inputs=objects + extra_objects + [resources],
             variables={"ldflags": " ".join(base_ldflags + extra_ldflags), "libs": libs},
         )
 

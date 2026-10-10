@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, List
 
 from .embed_assets import hud_assets_build, hud_configure_inputs, ui_fonts_build
-from .linux_build import OPTIMISATION, lto_flags, march_flag
+from .linux_build import OPTIMISATION, TRACE_MARKER_LDFLAGS, lto_flags, march_flag
 from .lp64_build import (
     LINUX_PORT_CONFIG,
     Lp64Build,
@@ -100,7 +100,8 @@ def generate_linux64_build(n: Writer, sln: Any) -> None:
             # (not position-independent, as the 32-bit build: the addresses
             # of a crash report's calls, in debug.txt, are the executable's
             # own, the same from run to run)
-            "ldflags": " ".join([LINUX64_TARGET, "-g", "-no-pie", *lto_ldflags]),
+            # (and posix_trace_marker.c's open, for the GPU driver: TRACE_MARKER_LDFLAGS)
+            "ldflags": " ".join([LINUX64_TARGET, "-g", "-no-pie", *lto_ldflags, *TRACE_MARKER_LDFLAGS]),
             "libs": " ".join(f"-l{lib}" for lib in config.get("libraries", [])),
         },
         implicit=[Path("tools/linux_link_check.py")],

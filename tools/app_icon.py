@@ -1,7 +1,14 @@
 #!/usr/bin/env python3
-"""Makes the game's icons from its artwork, port/assets/icon:
+"""Makes OpenCE's icons from its artwork, port/assets/icon (ORION's):
 
     python tools/app_icon.py
+
+ChupathingyCE's builds have their own icon (tools/android_icon.py makes it,
+for Android and the desktop builds): this script writes OpenCE's, for a
+build that takes it instead. Its Android layers replace ChupathingyCE's in
+port/android/app/src/main/res; the desktop builds take OpenCE's when
+tools/embed_assets.py's WINDOW_ICON and port/windows/halo.rc name the files
+below.
 
 - opence-icon.png, the helmet on its background (512x512): the Windows
   executable's icon (port/windows/opence-icon.ico, which port/windows/halo.rc
