@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
-"""Makes the Android app's launcher icon from its artwork,
+"""Makes ChupathingyCE's icons from its artwork,
 port/android/art/android-icon.png (an emblem on a solid background; drawn
-from port/art/icon.svg):
+from port/art/icon.svg): the Android app's launcher icon, and the desktop
+builds' (the window's icon, port/assets/icon/chupathingyce-icon-256.png,
+which tools/embed_assets.py embeds and sdl_platform.c gives the window; and
+halo.exe's, port/windows/chupathingyce-icon.ico, which port/windows/halo.rc
+puts in it). macOS's is port/macos/AppIcon.icns, from the same SVG.
+(tools/app_icon.py makes OpenCE's icon, ORION's, from port/assets/icon.)
 
     python tools/android_icon.py
 
@@ -24,6 +29,9 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parent.parent
 ARTWORK = ROOT / "port/android/art/android-icon.png"
 RESOURCES = ROOT / "port/android/app/src/main/res"
+WINDOW_ICON = ROOT / "port/assets/icon/chupathingyce-icon-256.png"
+WINDOWS_ICON = ROOT / "port/windows/chupathingyce-icon.ico"
+WINDOWS_SIZES = [16, 20, 24, 32, 40, 48, 64, 128, 256]
 
 # the layers' size, and the safe zone's diameter, in dp
 LAYER_DP = 108
@@ -36,6 +44,12 @@ def main() -> None:
     artwork = Image.open(ARTWORK).convert("RGBA")
     width, height = artwork.size
     background = artwork.getpixel((0, 0))[:3]
+
+    # the desktop's icons: the artwork as it is
+    artwork.resize((256, 256), Image.LANCZOS).save(WINDOW_ICON, optimize=True)
+    print(f"{WINDOW_ICON.relative_to(ROOT)}: 256x256")
+    artwork.save(WINDOWS_ICON, sizes=[(size, size) for size in WINDOWS_SIZES])
+    print(f"{WINDOWS_ICON.relative_to(ROOT)}: {', '.join(str(size) for size in WINDOWS_SIZES)}")
 
     # the emblem on transparency: each pixel's opacity is how far it is from
     # the background, against the emblem's colour closest to the background

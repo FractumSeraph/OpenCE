@@ -43,6 +43,10 @@ from .ninja_syntax import Writer
 
 LINUX_DIR = Path("port/linux")
 PORT_DIR = Path("port/windows")
+# halo.exe's icon, which port/windows/halo.rc names: ChupathingyCE's
+# (tools/android_icon.py makes it; tools/app_icon.py makes OpenCE's,
+# opence-icon.ico)
+WINDOWS_ICON = PORT_DIR / "chupathingyce-icon.ico"
 PORT_CONFIG = PORT_DIR / "port.json"
 BUILD = Path("build/windows")
 
@@ -320,6 +324,15 @@ PROFILE_RUNTIME_HEADERS = [
 ]
 
 
+def windows_rc(cc: str) -> str:
+    """LLVM's resource compiler of the clang named cc: beside it, where cc is
+    a path, else the one on the PATH"""
+    path = Path(cc)
+    if path.parent == Path("."):
+        return "llvm-rc"
+    return str(path.with_name("llvm-rc" + path.suffix))
+
+
 def clang_release(cc: str) -> Optional[str]:
     """the release (22.1.0) of the clang named cc, or None"""
     try:
@@ -449,6 +462,16 @@ def generate_windows_target(n: Writer, sln: Any, target: WindowsTarget) -> None:
         command="$python -c \"import shutil,sys; shutil.copyfile(sys.argv[1], sys.argv[2])\" $in $out",
         description=f"{label} COPY $out",
     )
+    # the executable's resources (port/windows/halo.rc: its icon, which
+    # Explorer and the taskbar show and SDL's window takes), compiled by
+    # LLVM's resource compiler, beside the clang that builds the game
+    n.rule(
+        name=f"{prefix}_rc",
+        command=f"{_quote(windows_rc(cc))} /no-preprocess /FO $out $in",
+        description=f"{label} RC $out",
+    )
+    resources = build / "halo.res"
+    n.build(outputs=resources, rule=f"{prefix}_rc", inputs=PORT_DIR / "halo.rc", implicit=[WINDOWS_ICON])
 
     # the high-res HUD's textures (port/assets/hud; port/linux/src/hud_hires.c)
     embedded_assets = (hud_assets_build(n, prefix, build / "generated" / "hud_hires_assets.c")
@@ -617,7 +640,7 @@ def generate_windows_target(n: Writer, sln: Any, target: WindowsTarget) -> None:
         n.build(
             outputs=output,
             rule=f"{prefix}_link",
-            inputs=objects + extra_objects,
+            inputs=objects + extra_objects + [resources],
             variables={"ldflags": " ".join(base_ldflags + extra_ldflags), "libs": libs},
         )
 
