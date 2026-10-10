@@ -73,6 +73,12 @@ void hud_hires_map_loaded(const long *assets, long count);
 void hud_hires_map_unloaded(void);
 /* whether its green is its coverage (d3d8_gl.c, nv2a_psh.c: coverage_alpha) */
 int hud_hires_override_coverage(long asset);
+/* the GL texture of the texture drawn for some of a bitmap's sprites whose
+placeholder's D3D texture has this Data, and the number of its mip levels;
+0 if data is no placeholder's */
+unsigned int hud_hires_placeholder_texture(unsigned long data, unsigned long *levels);
+/* whether its red holds exact segment thresholds, read unfiltered (d3d8_gl.c,
+nv2a_psh.c: point_threshold) */
 int hud_hires_override_point_threshold(long asset);
 
 #endif

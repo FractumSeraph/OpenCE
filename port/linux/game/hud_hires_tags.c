@@ -147,8 +147,8 @@ void hud_hires_tags_loaded(
 			hires_bitmap_count++;
 		}
 	}
-	platform_log("high-res hud: %ld of %ld bitmaps in this map (%ld not in it)",
-		hires_bitmap_count, asset_count, missing);
+	platform_log("high-res hud: %ld of %ld bitmaps in this map, %ld for some of their sprites (%ld not in it)",
+		hires_bitmap_count + hires_sprite_bitmap_count, asset_count, hires_sprite_bitmap_count, missing);
 	/* (their PNGs decoded now, ahead of the HUD's first frame: not the main
 	menu's, which draws no HUD) */
 	if (scenario_definition_get(scenario_index)->type != _scenario_type_main_menu)
@@ -168,6 +168,7 @@ void hud_hires_tags_unloaded(
 	void)
 {
 	hires_bitmap_count = 0;
+	hud_hires_sprite_bitmaps_forget();
 	hud_hires_map_unloaded();
 
 	return;
