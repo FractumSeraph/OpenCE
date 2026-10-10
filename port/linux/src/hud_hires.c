@@ -74,7 +74,19 @@ static unsigned char *png_decode(const unsigned char *data, unsigned long size, 
 
 long hud_hires_asset_count(void)
 {
-	return hud_hires_embedded_count < MAXIMUM_TEXTURES ? (long)hud_hires_embedded_count : MAXIMUM_TEXTURES;
+	static int said;
+
+	if (hud_hires_embedded_count <= MAXIMUM_TEXTURES)
+		return (long)hud_hires_embedded_count;
+	/* (some 113 are embedded: the ones past the cap are never drawn, which
+	is said once, so that raising it is not forgotten) */
+	if (!said)
+	{
+		said = 1;
+		platform_log("high-res hud: %lu textures are embedded but only %d are kept (MAXIMUM_TEXTURES): "
+			"the rest are drawn as the map's own", (unsigned long)hud_hires_embedded_count, MAXIMUM_TEXTURES);
+	}
+	return MAXIMUM_TEXTURES;
 }
 
 char const *hud_hires_asset_tag(long asset)
