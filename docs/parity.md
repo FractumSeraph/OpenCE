@@ -108,7 +108,8 @@ From the `_platform_*` flags in `port_config.c`:
     (`posix_net.c:916-919`).
   - Accidental: Android's PC menus still offer Mouse Settings (see below).
 - **Android only.** `display.screen_width`, `input.touch_controls`,
-  `debug.sample_seconds` (`:113`, `:202`, `:489`). Required.
+  `input.touch_aim_assist`, `debug.sample_seconds`, `debug.memory_watch`.
+  Required.
 - **Desktop only.** `crash_reports.upload`. Android has no crash reports
   yet. See "Left to schedule".
 - **Different defaults.** These are chosen, and the reason is in a comment:
@@ -155,7 +156,8 @@ the server. No build script names them and none excludes them.
 2. **The macOS self-updater** (`updater.c:53-57`). Replacing a signed
    `.app` bundle (directory swap, quarantine attribute, codesign) differs
    from the flat-file `.old` scheme. About 1-2 days with testing. It should
-   follow the update-signing work in `docs/builds.md`.
+   follow the update-signing work (`port/linux/src/update_signature.c`,
+   `tools/update_sign.py`).
 3. **Console screenshots on 64-bit builds.** `screenshot_count` uses
    libtiff, which the LP64 builds leave out (`source/bitmaps/tiff_file.c`;
    `port/linux/port.json` "lp64"). Writing the frame with stb_image_write

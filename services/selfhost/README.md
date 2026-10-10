@@ -74,7 +74,7 @@ of its host leaving.
 
 **ChupathingyCE (Delta):** the browser also speaks the parts of
 [Delta](https://halo.milenko.org/delta), ChupathingyCE's network family, that
-a player needs (`port/web/src/delta/README.md`): it joins hosts of OpenCE
+a player needs (`port/web/src/DELTA.md`): it joins hosts of OpenCE
 network versions 11 to 24 as their builds do; the Server Browser shows what
 their game list (halo.milenko.org) says of each game (the host's platform,
 dedicated servers, who is playing); it shakes hands with their hosts (Delta

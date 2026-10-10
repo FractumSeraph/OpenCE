@@ -6,8 +6,10 @@ protocol, which stays OpenCE's byte for byte. Its specification is
 `docs/delta.md` in [ChupathingyCE/chupathingyce](https://github.com/ChupathingyCE/chupathingyce)
 (CC0, like OpenCE), and every part of it falls back silently to plain OpenCE
 when the other side does not speak it. The browser build speaks the parts
-below. All of it is browser-only (`port/web`, or inside `#ifdef HALO_WEB`):
-the native builds stay exactly OpenCE's.
+below. It compiles ChupathingyCE's own Delta code (`port/linux/src/delta*.c`,
+`port/linux/include/delta.h`), as this fork's native builds, which are
+ChupathingyCE's, do; what is the browser's own is in `port/web` or inside
+`#ifdef HALO_WEB`.
 
 | Part | In the browser |
 | --- | --- |
@@ -24,24 +26,18 @@ shared in games), signing in as a server's moderator, chat, event logs.
 
 ## What is here
 
-| File | From | What it is |
-| --- | --- | --- |
-| `delta.h` | their `port/linux/include/delta.h` | Delta's numbers: the capability and platform registries, the compatibility table of OpenCE's network versions (`DELTA_LEGACY_VERSIONS`). Changed: `DELTA_WIRE` and the calls marked "web" at the end. |
-| `delta_key.h` | their `port/linux/src/delta_key.h`, as it is | The Ed25519 public keys a signed legacy table must be signed with. |
-| `delta_wire.c`, `.h` | theirs, as they are | Delta Peer's wire format: every message encoded and decoded, as hostile input. |
-| `delta_peer.c`, `.h` | theirs, as they are | Delta Peer's sessions (no sockets, no platform). |
-| `../web_delta.c` | their `port/linux/src/delta.c`, adapted | The legacy number in use, and the signed legacy table: checked, cached in the save root, its kill switch. |
-| `../web_delta_peer.c` | their `port/linux/src/delta_peer_game.c`, the client's part | One session over a socket of the game's Winsock layer; the map identity check; notices. |
-| `../web_delta_list.c` | (ours) | Delta List's games for the Server Browser (`menu_functions.c`). |
-| `../web_delta_stats.c` | (ours) | A joined game's report (`game_engine.c`, HALO_WEB) to the page. |
+| File | What it is |
+| --- | --- |
+| `port/linux/include/delta.h`, `port/linux/src/delta*.c` | ChupathingyCE's own, as their builds compile them: the registries, the compatibility table of OpenCE's network versions (`DELTA_LEGACY_VERSIONS`), the signed legacy table, Delta Peer's wire format and sessions. |
+| `web_delta.c` | Hands the signed legacy table that the page fetched to `delta.c` (`web_delta_offer_table`), which checks it and keeps it as it keeps any other. |
+| `web_delta_peer.c` | Delta Peer's client side, over a socket of the game's Winsock layer; the map identity check; notices. |
+| `web_delta_list.c` | Delta List's games for the Server Browser (`menu_functions.c`). |
+| `web_delta_stats.c` | A joined game's report (`game_engine.c`, HALO_WEB) to the page. |
 
-Taken from their commit `b78e6cfa` (October 8, 2026). The archive
-(`S:\WebHalo\archive\git\ChupathingyCE-chupathingyce.git`) keeps their whole
-history; to see what changed in a file since:
-`git -C build\opence-web fetch S:\WebHalo\archive\git\ChupathingyCE-chupathingyce.git main:refs/remotes/chupa/main`,
-then `git -C build\opence-web diff b78e6cfa chupa/main -- port/linux/src/delta_peer.c`.
-A new message type or capability there is ignored by this copy (Delta's
-rule) until the file is copied again.
+The shared files come with each merge of ChupathingyCE (UPDATING.md in the
+build folder): nothing is copied by hand. Until October 9, 2026 the
+browser had copies of their files in `port/web/src/delta/`; the merge that
+built the browser on ChupathingyCE's code (7adb9436) removed them.
 
 The hooks in shared files, all under `HALO_WEB`: `network_client_manager.c`
 (the join range; Delta Peer's frame, its stop, the joined game's
@@ -61,21 +57,21 @@ under `HALO_WEB`) use `delta_legacy_minimum()` and `delta_legacy_maximum()`.
 So the in-game Server Browser lists, and joins, OpenCE and ChupathingyCE
 games of versions 11 to 24 (24 being this build's own).
 
-**When OpenCE raises its network version**, this build's version has no row
-in `DELTA_LEGACY_VERSIONS` until someone adds one, and until then the
-browser joins its own version alone, exactly as OpenCE does. Add the row
-(additive or breaking, as ChupathingyCE's `delta.h` has it once their
-automation has classified the raise) to bring the range back. The nightly
-update says so (`CHECK: Delta`).
+**When OpenCE raises its network version**, the new version has no row in
+`DELTA_LEGACY_VERSIONS` (`port/linux/include/delta.h`, ChupathingyCE's
+file) until ChupathingyCE adds one, once their automation has classified
+the raise as additive or breaking; the fork takes it in with their next
+merge. The nightly update says so (`CHECK: Delta`).
 
 ## The signed legacy table
 
 ChupathingyCE publishes a JSON table, signed with their Ed25519 key
 (`delta_key.h`), at `https://halo.milenko.org/v1/delta/legacy` (and `.sig`),
 and on GitHub (`delta-table` branch). Its rows are by *wire* (the revision of
-the game protocol a build speaks); the browser build's wire, `opence-web`,
-has no row, so the table never changes its numbers. What the browser takes
-from it is its **kill switch** (`disabled_capabilities`: a Delta capability
+the game protocol a build speaks); the browser build has ChupathingyCE's
+wire (`DELTA_WIRE` in `port/linux/include/delta.h`), so the table's row for
+it sets the browser's numbers as it does their builds'. The browser also
+takes its **kill switch** (`disabled_capabilities`: a Delta capability
 found unsafe, which this build then never uses) and its serial, which Delta
 Peer passes on to hosts with an older one (as theirs do).
 

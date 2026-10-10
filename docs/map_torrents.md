@@ -11,8 +11,12 @@ ordinary seed box.
 
 The client is the port's own, in C (`port/linux/src/torrent.c` and the
 `torrent_*.c` files beside it): a few thousand lines on the platform
-layer's sockets and threads, built into every port as `p2p.c` is, so Linux,
-Windows and Android all download and seed. It speaks the peer wire protocol
+layer's sockets and threads, built into every native port as `p2p.c` is,
+so the Linux, Windows, macOS and Android builds all download and seed. The
+browser build leaves it out (a page has no TCP or UDP sockets:
+`WEB_EXCLUDED_PLATFORM_SOURCES` in `tools/web_build.py`, with
+`port/web/src/web_map_torrents.c` in its place); it reads the site's maps
+instead. It speaks the peer wire protocol
 (BEP 3), the extension protocol (BEP 10) with the metadata exchange (BEP 9)
 and peer exchange (BEP 11), the DHT (BEP 5), UDP and HTTP trackers (BEP 15,
 BEP 3) and HTTP web seeds (BEP 19). It does not speak the obfuscation
@@ -66,8 +70,8 @@ archives (5,829 maps, with the three resource maps) by
 `tools/map_torrents.py`.
 
 A host's game record names its map and carries the map file's header
-checksum as the map version (`cache_files_map_version`;
-docs/custom_edition_caches.md), which is what a client checks its own copy
+checksum as the map version (`cache_files_map_version`,
+source/cache/cache_files.c), which is what a client checks its own copy
 against. So a map is identified here by its file name and that checksum,
 and two versions of a map with one name are two entries. The three
 resource maps have a checksum of 0 and are found by name.
@@ -110,7 +114,8 @@ box, tracker and web seed are these, and the settings' defaults:
   the index's torrents);
 - web seed: `http://halomaps.fractumseraph.net/maps/` (every map of the
   index under its file name; plain HTTP, as the client has no TLS);
-- seed box: the same machine's Transmission, seeding all of them; the
+- seed box: the same machine, seeding all of them with a libtorrent
+  seeder (Transmission could not keep up with some 6,000 torrents); the
   `.torrent` files are in `http://halomaps.fractumseraph.net/torrents/`.
 
 A web seed's file names are percent-encoded in its URLs (some 600 maps'
@@ -118,12 +123,13 @@ names have spaces, brackets or letters beyond ASCII).
 
 ## How it works in the game
 
-- **Joining** (`ui_widget_port_join`, source/interface; the check itself in
-  `port/linux/game/menu_functions.c`): before the join starts, the
-  advertised game's map name and version are checked
-  (`custom_edition_cache_files_missing`): the map absent, not a Custom
-  Edition cache or another version, and each resource map absent. If
-  anything is missing and the index has it all, `map_torrents_fetch` starts
+- **Joining** (`ui_widget_port_join`, source/interface; the check itself,
+  `ui_widget_port_join_map_fetch`, in `port/linux/game/menu_functions.c`):
+  before the join starts, the advertised game's map is looked for in its
+  family's folders (`map_family_find`) and its version compared with the
+  host's; `map_torrents_fetch` then finds what is missing, the map (absent
+  or another version) and each resource map. If anything is missing and
+  the index has it all, `map_torrents_fetch` starts
   the downloads and the join waits; the browser (LAN, Direct Link or the
   server browser) shows the status line, and once every file is in place
   `map_fetch_update` focuses the game's row and posts the join again. The

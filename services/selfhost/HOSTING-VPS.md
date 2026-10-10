@@ -130,10 +130,11 @@ journalctl -u halo -f          # live log (Ctrl+C to leave)
 
 ## 6. HTTPS with Caddy (automatic Let's Encrypt certificate)
 
+Ubuntu 24.04 and Debian 12 have Caddy in their own repositories. Caddy's
+cloudsmith repository, which Caddy's documentation names, answered 402
+when this was set up (October 2026), so use the distribution's package:
+
 ```bash
-sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
 sudo apt update && sudo apt install -y caddy
 ```
 
