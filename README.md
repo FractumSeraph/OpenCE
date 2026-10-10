@@ -1,16 +1,53 @@
 # Halo in the browser and on every platform (FractumSeraph's fork)
 
-This fork is [ChupathingyCE](https://github.com/ChupathingyCE/chupathingyce)
-(a community build of [OpenCE](https://github.com/OpenCommunityEdition/OpenCE),
-with its dedicated servers and the Delta network family), kept up to date with
-both, with a browser version added: the same game compiled to WebAssembly,
-playable in Chrome, Edge, Firefox and on phones, online with other browsers
-and with the native builds of ChupathingyCE and OpenCE. The browser port comes
-from [web-halo](https://github.com/ecumene/web-halo). It runs at
-[halo.fractumseraph.net](https://halo.fractumseraph.net/).
+**Play it now in your browser: [halo.fractumseraph.net](https://halo.fractumseraph.net/)**, or
+[download it](#download) for Windows, Mac, Linux and Android.
 
-Where ChupathingyCE and OpenCE differ, ChupathingyCE's code is this fork's;
-this fork's own features are added on top of it.
+This fork combines [ChupathingyCE](https://github.com/ChupathingyCE/chupathingyce)
+and [OpenCE](https://github.com/OpenCommunityEdition/OpenCE), the ports of the
+Halo: Combat Evolved decompilation, keeps up with both, and adds its own
+features on top. This page lists them in that order: [this fork's](#what-this-fork-adds),
+then [ChupathingyCE's](#chupathingyce), then [OpenCE's](#opence).
+
+## What this fork adds
+
+- **Halo in your browser.** The whole game, compiled to WebAssembly: no
+  install, on computers, phones and tablets, with touch controls, and it
+  installs as an app. Play online with other browsers and with the
+  Windows, Mac, Linux and Android builds, from the game's own menus (Create
+  Game, the Server Browser) or with an invite link; voice chat; ChupathingyCE's
+  stats on [halo.milenko.org](https://halo.milenko.org). The site's Custom
+  Edition maps download the first time they are played and stay in the
+  browser.
+- **Every Custom Edition map, downloaded when a game needs it.** All 5,829
+  maps of the HaloMaps.org and HaloNet archives are unpacked at
+  [halomaps.fractumseraph.net](https://halomaps.fractumseraph.net/maps/),
+  each with a torrent, seeded around the clock. Join a game on a map you
+  don't have and the game downloads it, from other players over BitTorrent
+  and from the site, checks it against its index, and joins: nothing to
+  find or install by hand. The maps page also has every `.torrent` in one
+  download.
+- **The game's maps at the first start.** The Windows, Mac, Linux and
+  Android builds offer to download the Xbox maps (about 1.8 GB) instead of
+  asking for a disc image (see [Game data](#game-data)).
+- **The newest of both projects.** ChupathingyCE's features, plus OpenCE's
+  newest work that ChupathingyCE hasn't taken in yet: in-game Settings in
+  the campaign, field of view and viewmodel settings, OpenCE's touch
+  controls (profile buttons, gyroscope aiming, aim assist, opacity), the
+  high-resolution controller buttons, a screenshot key (F10), the portable
+  Linux build for SteamOS, and the profiling build.
+- **Servers of its own.** An internet-play broker (`halovps.fractumseraph.net:1883`,
+  the fifth in every build's list), the maps' BitTorrent tracker, the
+  browser lobby and the gateway that lets a browser join native games, and
+  a dedicated server, **FractumSeraph** (Capture the Flag on Coldsnap).
+- **Its own releases.** Every change that builds on every platform is a
+  release of this repository, and the game updates itself from them.
+- **Host it yourself.** The browser version comes as a kit to run on your
+  own computer, a VPS or a plain web host (see [Download](#download)).
+
+Where the two projects do the same thing two ways, the fork keeps one
+working version; nothing sent over the network differs from theirs, so
+players of all three play together.
 
 ## Download
 
@@ -54,7 +91,42 @@ an Xbox disc image of Halo: Combat Evolved, as ChupathingyCE's builds do (see
 "You need your own copy of Halo" below). On Android the launcher has a
 **Download the maps** button.
 
-## What this fork adds to ChupathingyCE
+## The browser build
+
+The browser build is the same game and platform layer compiled to
+WebAssembly with Emscripten (`tools/web_build.py`; `HALO_WEB`, which also
+selects the Android OpenGL ES code paths). It comes from the web-halo port
+(github.com/ecumene/web-halo) merged onto this repository, with:
+
+- touch controls for phones and tablets (`port/web/assets/touch`, after Halo
+  Mobile's), aiming through the mouse path (`platform_web_touch_look`);
+- installing as an app (`port/web/manifest.webmanifest`, `port/web/assets/pwa`);
+- online games through a lobby service (`services/signaling`) and WebRTC,
+  and joining native hosts' `halo://join` invites through
+  `services/native-gateway`, which speaks this port's internet-play protocol.
+
+Build it with Emscripten 6:
+
+```
+python configure.py --release --web-cc /path/to/emsdk/upstream/emscripten/emcc
+ninja web
+```
+
+The page needs cross-origin isolation (COOP/COEP headers) and the maps
+beside it in `assets/maps/` (served with byte ranges), or the player chooses
+an Xbox disc image in the browser. Custom Edition maps come from
+`assets/custom_maps/` (listed in its `index.json`) and are kept in the
+browser once read (Cache Storage). The first time a map is played, the page
+fetches it and `bitmaps.map`, `sounds.map` and `loc.map` whole, a few large
+ranges at a time (`port/web/fetch_path_normalization.js`); joining from the
+Server Browser waits for that before connecting, the status line showing
+it, because a host gives a joining machine only moments to load the map (a
+native host, 15 seconds; a browser host waits 120). `tools/web_serve.py`
+serves a checkout for development. The link refuses WebAssembly signature mismatches
+(`-Wl,--fatal-warnings`): a C function called through a prototype that does
+not match its definition traps in a browser.
+
+### Where the fork's parts are
 
 - **The browser build** (`ninja web`, `tools/web_build.py`, `port/web`): the
   game in WebAssembly with WebGL 2, the page and its online play (rooms,
@@ -62,7 +134,7 @@ an Xbox disc image of Halo: Combat Evolved, as ChupathingyCE's builds do (see
   touch controls, installing as an app, Custom Edition maps served by the
   site, maps kept in the browser, voice chat, and ChupathingyCE's Delta
   (Delta List, Delta Peer and Delta Stats) through the site's relay. Its
-  details are in [Browser build](#browser-build) at the end.
+  details are in [The browser build](#the-browser-build) above.
 - **Online services** (`services/`): the lobby service for browser games
   (`services/signaling`), the native gateway that lets a browser join a
   native `halo://join` invite (`services/native-gateway`, Rust), and the
@@ -72,7 +144,9 @@ an Xbox disc image of Halo: Combat Evolved, as ChupathingyCE's builds do (see
   a map missing when joining (`cache_files_map_present`, ChupathingyCE's
   check) is downloaded from other players, this fork's seed box and web
   seed (http://halomaps.fractumseraph.net/maps/) and tracker
-  (halovps.fractumseraph.net:6969), and a hosted map is seeded.
+  (halovps.fractumseraph.net:6969), or from the web seed alone when no peer
+  has it (the whole file, checked against the index), and a hosted map is
+  seeded.
 - **The maps downloaded at the first start** (`sdl_platform.c`,
   `LauncherActivity.java`; `data.download_url`).
 - **Voice chat** (OpenCE's, with the Opus codec built into every port).
@@ -91,6 +165,7 @@ build compiles); nothing sent over the network is changed.
 
 ---
 
+<a id="chupathingyce"></a>
 <p align="center"><img src="docs/icon-160.png" width="120" alt=""></p>
 
 <h1 align="center">ChupathingyCE</h1>
@@ -148,7 +223,7 @@ out our own releases. Expect rough edges, and please report them.
 | HaloMD maps | Yes | Yes | Yes | Yes, see below |
 | Server Browser in the PC menus | Yes | Yes | Yes | Yes |
 
-## Download
+## ChupathingyCE's own releases
 
 Get the latest release from the [Releases page](https://github.com/ChupathingyCE/chupathingyce/releases/latest):
 
@@ -406,45 +481,9 @@ Useful `configure.py` options:
 | `--portable` | A Linux or Windows build that runs on any x86-64 computer, or a universal Mac application, to give to others. The 32-bit Linux build also runs on older distributions and on SteamOS: see "Portable build" in [port/linux/README.md](port/linux/README.md#portable-build). |
 | `--no-game-browser` | Leaves out the server list, stats and dedicated servers, as OpenCE's builds are. |
 | `--pgo=off`, `--lto=off` | Faster builds, without profile-guided or link-time optimisation. |
-| `--profile` | A profiling build, which records where the game spends its time. See "Profiling builds" below. |
+| `--profile` | A profiling build, which records where the game spends its time. See ["Profiling builds"](#profiling-builds-opence) below. |
 
-### Profiling builds
 
-A profiling build records where the game spends its time, for
-[Perfetto](https://ui.perfetto.dev/) and `tools/net_report.py`. The 32-bit
-Linux and Windows builds and the Android app have one; the 64-bit builds,
-the dedicated server and the browser build are built as without the option.
-
-1. Enter `python configure.py --profile`, then build as usual (not with
-   `--pgo=train`).
-2. Start a recording: enter `profile_record` in the console (or the telnet
-   console), or set `debug.profile_record = true` in `config.toml`. To
-   record each game of a session, also set
-   `debug.profile_record_when = "game"`.
-3. Stop it: enter `profile_stop`, load another map, or quit.
-
-| Command | Result |
-| --- | --- |
-| `profile_record [seconds]` | Starts a recording. With a number of seconds, it stops after that time. |
-| `profile_stop` | Stops the recording. |
-
-The game writes numbered `.part<n>.json` files under `profiles/` in its data
-folder and logs their paths; they stay after the recording stops. Logs go to
-standard error; a Windows release build without standard error writes them
-to `halo.log` next to `halo.exe`. `python tools/net_report.py
-<recording.part1.json>` reads a recording as tables, and writes
-`<recording>.summary.txt`, a short text file.
-
-`debug.profile_memory` sets a recording's memory in MB (default 256, from 4
-to 1024). A recording has no length limit: the game writes a part each time
-the memory is full. See the settings in
-[port/linux/README.md](port/linux/README.md). On Android, the files are in
-`/sdcard/Android/data/dev.horrible.chupathingyce/files/profiles/` (copy them with
-`adb pull`). A profiling build plays with normal builds.
-
-`python tools/ci_build.py linux profile` builds it as the GitHub workflow
-does; the workflow builds it only in a run started by hand with its
-`profile` box ticked.
 
 The version being made is in `VERSION`. Releases are built and published by
 the project's release workflow; the builds on this repository's Actions page
@@ -522,37 +561,79 @@ Halo is a trademark of Microsoft. ChupathingyCE is a fan project, not made or
 endorsed by Microsoft, Bungie or 343 Industries, and includes none of the
 game's content. The code is released under [CC0](LICENSE.md).
 
-## Browser build
+---
 
-The browser build is the same game and platform layer compiled to
-WebAssembly with Emscripten (`tools/web_build.py`; `HALO_WEB`, which also
-selects the Android OpenGL ES code paths). It comes from the web-halo port
-(github.com/ecumene/web-halo) merged onto this repository, with:
+<a id="opence"></a>
+## OpenCE
 
-- touch controls for phones and tablets (`port/web/assets/touch`, after Halo
-  Mobile's), aiming through the mouse path (`platform_web_touch_look`);
-- installing as an app (`port/web/manifest.webmanifest`, `port/web/assets/pwa`);
-- online games through a lobby service (`services/signaling`) and WebRTC,
-  and joining native hosts' `halo://join` invites through
-  `services/native-gateway`, which speaks this port's internet-play protocol.
+[OpenCE](https://github.com/OpenCommunityEdition/OpenCE) is the port of the
+Halo: Combat Evolved decompilation (the Xbox build 2342, from
+[bnunu/halo-1](https://github.com/bnunu/halo-1), a fork of
+[punpckhdq/halo](https://github.com/punpckhdq/halo)) to Linux, Windows and
+Android, which ChupathingyCE and this fork build on. Everything here comes
+from it first:
 
-Build it with Emscripten 6:
+- **The game, running natively** (no emulator): the decompiled game's C
+  sources, compiled as they are, on a platform layer that stands in for the
+  Xbox (Direct3D 8 on OpenGL, DirectSound and XInput on SDL3, files,
+  threads, sockets), on Linux, Windows and Android (an ILP32 AArch64 guest
+  in a 64-bit app).
+- **Multiplayer**: system link games of up to 128 players on up to 128
+  machines, Linux, Windows and Android together; internet play by invite
+  link with no server of the project's; a new netcode in which each machine
+  moves its own player at once and the host decides
+  ([port/linux/NETCODE.md](port/linux/NETCODE.md)); voice chat; votes to
+  kick; network co-op.
+- **The PC version's menus**, the Server Browser, high-resolution HUD, text
+  and controller buttons, widescreen, frame interpolation, field of view
+  and viewmodel settings, and every setting in `config.toml`
+  ([port/linux/README.md](port/linux/README.md#settings)).
+- **Halo PC Custom Edition maps**, refused with a clear reason when they
+  need OpenSauce.
+- **Touch controls** on Android, and the menus by touch.
+- **Updates itself** from its releases.
 
-```
-python configure.py --release --web-cc /path/to/emsdk/upstream/emscripten/emcc
-ninja web
-```
+Its own documents: [port/linux/README.md](port/linux/README.md) (controls,
+menus, settings, internet play, how the port operates),
+[port/windows/README.md](port/windows/README.md),
+[port/android/README.md](port/android/README.md) and
+[AGENTS.md](AGENTS.md) (the project's layout and rules). Its Discord:
+[discord.gg/9gqcHyr5km](https://discord.gg/9gqcHyr5km).
 
-The page needs cross-origin isolation (COOP/COEP headers) and the maps
-beside it in `assets/maps/` (served with byte ranges), or the player chooses
-an Xbox disc image in the browser. Custom Edition maps come from
-`assets/custom_maps/` (listed in its `index.json`) and are kept in the
-browser once read (Cache Storage). The first time a map is played, the page
-fetches it and `bitmaps.map`, `sounds.map` and `loc.map` whole, a few large
-ranges at a time (`port/web/fetch_path_normalization.js`); joining from the
-Server Browser waits for that before connecting, the status line showing
-it, because a host gives a joining machine only moments to load the map (a
-native host, 15 seconds; a browser host waits 120). `tools/web_serve.py`
-serves a checkout for development. The link refuses WebAssembly signature mismatches
-(`-Wl,--fatal-warnings`): a C function called through a prototype that does
-not match its definition traps in a browser.
+### Profiling builds (OpenCE)
+
+A profiling build records where the game spends its time, for
+[Perfetto](https://ui.perfetto.dev/) and `tools/net_report.py`. The 32-bit
+Linux and Windows builds and the Android app have one; the 64-bit builds,
+the dedicated server and the browser build are built as without the option.
+
+1. Enter `python configure.py --profile`, then build as usual (not with
+   `--pgo=train`).
+2. Start a recording: enter `profile_record` in the console (or the telnet
+   console), or set `debug.profile_record = true` in `config.toml`. To
+   record each game of a session, also set
+   `debug.profile_record_when = "game"`.
+3. Stop it: enter `profile_stop`, load another map, or quit.
+
+| Command | Result |
+| --- | --- |
+| `profile_record [seconds]` | Starts a recording. With a number of seconds, it stops after that time. |
+| `profile_stop` | Stops the recording. |
+
+The game writes numbered `.part<n>.json` files under `profiles/` in its data
+folder and logs their paths; they stay after the recording stops. Logs go to
+standard error; a Windows release build without standard error writes them
+to `halo.log` next to `halo.exe`. `python tools/net_report.py
+<recording.part1.json>` reads a recording as tables, and writes
+`<recording>.summary.txt`, a short text file.
+
+`debug.profile_memory` sets a recording's memory in MB (default 256, from 4
+to 1024). A recording has no length limit: the game writes a part each time
+the memory is full. See the settings in
+[port/linux/README.md](port/linux/README.md). On Android, the files are in
+`/sdcard/Android/data/dev.horrible.chupathingyce/files/profiles/` (copy them with
+`adb pull`). A profiling build plays with normal builds.
+
+`python tools/ci_build.py linux profile` builds it as the GitHub workflow
+does; the workflow builds it only in a run started by hand with its
+`profile` box ticked.
