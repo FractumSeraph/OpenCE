@@ -22,7 +22,8 @@ In the menus the keys drive the controller, to move about them:
 on-screen keyboard takes what is typed, and the mouse is free and drives a
 pointer
 (port/linux/include/halo_ui_pointer.h, source/interface/ui_widget.c).
-F11 switches between fullscreen and the window, and F12 releases or
+The screenshot key (controls.screenshot, F10) saves a PNG, in the menus
+too. F11 switches between fullscreen and the window, and F12 releases or
 recaptures the mouse, always.
 
 Mouse aim does not go through the right stick: the game's look code asks
@@ -591,9 +592,9 @@ static BOOL input_held(const struct platform_input_state *input, int code)
 	return wheel && wheel_direction == (code == INPUT_WHEEL_UP ? 1 : -1);
 }
 
-/* in the game: the actions held, and the controller's Start and Back for
-the pause menu and the scoreboard */
-static void keyboard_controls(const struct platform_input_state *input, XINPUT_GAMEPAD *pad)
+/* the actions whose bindings are held (the game's, and the screenshot key's
+in the menus too) */
+static unsigned long keyboard_bound_actions(const struct platform_input_state *input)
 {
 	unsigned long held = 0;
 	int action, slot;
@@ -607,6 +608,25 @@ static void keyboard_controls(const struct platform_input_state *input, XINPUT_G
 				held |= 1UL << action;
 		}
 	}
+	return held;
+}
+
+/* one capture per press of the screenshot key, however long it is held
+(written at the next presentation: d3d8_gl.c) */
+static void keyboard_screenshot(unsigned long held)
+{
+	static BOOL was_down;
+	BOOL down = (held & (1UL << HALO_KEYBOARD_SCREENSHOT)) != 0;
+
+	if (down && !was_down)
+		platform_screenshot_request();
+	was_down = down;
+}
+
+/* in the game: the actions held, and the controller's Start and Back for
+the pause menu and the scoreboard */
+static void keyboard_controls(unsigned long held, XINPUT_GAMEPAD *pad)
+{
 	if (held & (1UL << HALO_KEYBOARD_PAUSE))
 		pad->wButtons |= XINPUT_GAMEPAD_START;
 	if (held & (1UL << HALO_KEYBOARD_SCOREBOARD))
@@ -1122,6 +1142,8 @@ DWORD WINAPI XInputGetState(HANDLE device, PXINPUT_STATE state)
 	if (port == 0)
 	{
 		struct platform_input_state input;
+		unsigned long held;
+		BOOL console_active;
 
 		platform_input_read(&input, TRUE);
 		mouse_poll(&input);
@@ -1129,12 +1151,15 @@ DWORD WINAPI XInputGetState(HANDLE device, PXINPUT_STATE state)
 		keyboard_actions_held = 0;
 		keys_held_over_switch(&input);
 		test_input_menu_keys(&input);
-		if (!console_is_active())
+		console_active = console_is_active() != 0;
+		held = console_active ? 0 : keyboard_bound_actions(&input);
+		keyboard_screenshot(held);
+		if (!console_active)
 		{
 			if (input.menus)
 				keyboard_gamepad(&input, &state->Gamepad);
 			else
-				keyboard_controls(&input, &state->Gamepad);
+				keyboard_controls(held, &state->Gamepad);
 		}
 		if (port_gamepad(gamepads, count, 0))
 			sdl_gamepad_state(gamepads[0], &state->Gamepad);

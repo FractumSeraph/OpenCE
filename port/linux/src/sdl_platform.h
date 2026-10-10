@@ -105,6 +105,10 @@ elsewhere; on Android this is where finger events reach touch_input.c, which
 is why that module's state is only touched from the main thread */
 void platform_pump_events(void);
 void platform_show_message(const char *title, const char *message);
+/* the screenshot key asks for a capture of the next frame presented
+(xinput_sdl.c); taken, the request is cleared (d3d8_gl.c, at presentation) */
+void platform_screenshot_request(void);
+BOOL platform_screenshot_take_request(void);
 /* a snapshot of the input state; consume_motion resets the mouse deltas */
 void platform_input_read(struct platform_input_state *state, BOOL consume_motion);
 /* the pointer in the menus (d3d8_gl.c, halo_ui_pointer_update) */
