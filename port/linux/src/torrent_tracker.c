@@ -32,8 +32,6 @@ the whole file from the web seeds (checked against the info hash after) */
 row, for each web seed connection, after which the whole file is no
 longer fetched from the web seeds */
 #define WEB_WHOLE_FAILURES 3
-/* connections to each web seed at once */
-#define WEB_SEED_CONNECTIONS 4
 #define ANNOUNCE_DEFAULT (30 * TORRENT_MINUTE)
 #define ANNOUNCE_RETRY_MAXIMUM (30 * TORRENT_MINUTE)
 #define WEB_SEED_RETRY (5 * TORRENT_SECOND)
@@ -116,6 +114,8 @@ void torrent_trackers_configure(void)
 {
 	const char *text = torrent_session.trackers_text;
 	char item[256];
+	int web_seeds;
+	int connections;
 
 	torrent_session.tracker_count = 0;
 	torrent_session.web_seed_count = 0;
@@ -144,9 +144,27 @@ void torrent_trackers_configure(void)
 		tracker->udp = !strncmp(item, "udp://", 6);
 		torrent_session.tracker_count++;
 	}
+	/* (the web seeds counted first: the connections are shared out among
+	them, a few to each, a piece on each. One piece at a time from a server
+	far away was a piece a round trip or so, some 250 KB a second; four
+	connections to each of two web seeds left a third none) */
+	text = torrent_session.web_seeds_text;
+	web_seeds = 0;
+	for (;;)
+	{
+		text_list_next(&text, item, sizeof(item));
+		if (!item[0])
+			break;
+		web_seeds += !strncmp(item, "http://", 7);
+	}
+	connections = web_seeds ? TORRENT_MAXIMUM_WEB_SEEDS / web_seeds : 0;
+	if (connections < 1)
+		connections = 1;
 	text = torrent_session.web_seeds_text;
 	for (;;)
 	{
+		int connection;
+
 		text_list_next(&text, item, sizeof(item));
 		if (!item[0])
 			break;
@@ -160,18 +178,11 @@ void torrent_trackers_configure(void)
 			torrent_log("too many web seeds: %s left out", item);
 			continue;
 		}
-		/* (a few connections to each, a piece on each: one piece at a time
-		from a server far away was a piece a round trip or so, some 250 KB a
-		second) */
+		for (connection = 0; connection < connections &&
+			torrent_session.web_seed_count < TORRENT_MAXIMUM_WEB_SEEDS; connection++)
 		{
-			int connection;
-
-			for (connection = 0; connection < WEB_SEED_CONNECTIONS &&
-				torrent_session.web_seed_count < TORRENT_MAXIMUM_WEB_SEEDS; connection++)
-			{
-				snprintf(torrent_session.web_seeds[torrent_session.web_seed_count++],
-					sizeof(torrent_session.web_seeds[0]), "%s", item);
-			}
+			snprintf(torrent_session.web_seeds[torrent_session.web_seed_count++],
+				sizeof(torrent_session.web_seeds[0]), "%s", item);
 		}
 	}
 }

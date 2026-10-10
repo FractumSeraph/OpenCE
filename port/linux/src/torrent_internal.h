@@ -40,8 +40,8 @@ index's piece lengths at least 256 KB (tools/map_torrents.py) */
 #define TORRENT_MAXIMUM_PIPELINE 32
 #define TORRENT_MAXIMUM_QUEUED_REQUESTS 64
 #define TORRENT_MAXIMUM_TRACKERS 8
-/* web seed connections (each web seed given has WEB_SEED_CONNECTIONS of
-them: torrent_tracker.c) */
+/* web seed connections (shared out among the web seeds given, at least
+one each: torrent_trackers_configure) */
 #define TORRENT_MAXIMUM_WEB_SEEDS 8
 /* a message from a peer: a piece message's block and its header, or a
 bitfield of the most pieces; anything longer ends the connection */
