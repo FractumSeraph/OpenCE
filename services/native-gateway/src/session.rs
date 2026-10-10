@@ -7,6 +7,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use axum::extract::ws::{Message, WebSocket};
 use kcp::{Kcp, get_conv};
 use rumqttc::{AsyncClient, Event, Incoming, MqttOptions, QoS};
+use subtle::ConstantTimeEq;
 use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
 use tokio::time::{MissedTickBehavior, interval};
@@ -24,6 +25,14 @@ const PUNCH_TIMEOUT: Duration = Duration::from_secs(30);
 const PEER_TIMEOUT: Duration = Duration::from_secs(20);
 const SESSION_TTL: Duration = Duration::from_secs(6 * 60 * 60);
 const STREAM_LINGER: Duration = Duration::from_secs(10);
+/* A browser that stops reading its WebSocket must not stall the session (its
+UDP, its MQTT, its timers) for good: a send that waits this long ends it. */
+const WEBSOCKET_SEND_TIMEOUT: Duration = Duration::from_secs(10);
+/* KCP segments (of at most 1 KiB) waiting on one stream, sent or not: the
+browser has no back-pressure, so a stream the host is not draining ends the
+session rather than queueing without bound. The native build stops reading
+its socket at 128 (STREAM_WINDOW, port/linux/src/p2p.c). */
+const MAX_STREAM_QUEUE: usize = 512;
 
 pub struct SessionTicket {
     pub actor_id: String,
@@ -150,18 +159,23 @@ async fn bind_udp(start: u16, end: u16) -> Result<UdpSocket, String> {
     Err("no UDP gateway ports are available".into())
 }
 
+/* The session's MQTT connections. Each broker's task holds a clone of its
+client, so the connection lives as long as the task: dropping the hub (however
+the session ends, with an error, a panic or not) aborts every task, which
+drops its event loop and closes the broker's TCP connection. */
 struct MqttHub {
     clients: Vec<AsyncClient>,
     tasks: Vec<tokio::task::JoinHandle<()>>,
 }
 
 impl MqttHub {
-    async fn publish(&self, topic: &str, payload: Vec<u8>) -> Result<(), String> {
+    /* (try_publish: a broker that is still connecting, or reconnecting, must
+    not hold the session's loop while its request queue is full) */
+    fn publish(&self, topic: &str, payload: Vec<u8>) -> Result<(), String> {
         let mut accepted = false;
         for client in &self.clients {
             if client
-                .publish(topic, QoS::AtMostOnce, false, payload.clone())
-                .await
+                .try_publish(topic, QoS::AtMostOnce, false, payload.clone())
                 .is_ok()
             {
                 accepted = true;
@@ -173,9 +187,11 @@ impl MqttHub {
             Err("all MQTT signaling queues are unavailable".into())
         }
     }
+}
 
-    fn abort(self) {
-        for task in self.tasks {
+impl Drop for MqttHub {
+    fn drop(&mut self) {
+        for task in &self.tasks {
             task.abort();
         }
     }
@@ -188,8 +204,12 @@ async fn mqtt(
     let _ = peer_id;
     let brokers = brokers();
     let (sender, receiver) = mpsc::channel(32);
-    let mut clients = Vec::with_capacity(brokers.len());
-    let mut tasks = Vec::with_capacity(brokers.len());
+    // (built as the tasks start, so an error part way drops the hub and
+    // aborts the ones already running)
+    let mut hub = MqttHub {
+        clients: Vec::with_capacity(brokers.len()),
+        tasks: Vec::with_capacity(brokers.len()),
+    };
     for (index, (host, port)) in brokers.into_iter().enumerate() {
         // a fresh 64-bit id per broker, as the native build uses: two
         // sessions with the same id would knock each other off the broker
@@ -202,7 +222,7 @@ async fn mqtt(
         let broker = format!("{host}:{port}");
         let resubscribe = client.clone();
         let topic = join_topic.clone();
-        tasks.push(tokio::spawn(async move {
+        hub.tasks.push(tokio::spawn(async move {
             loop {
                 match event_loop.poll().await {
                     // (re)subscribe on every connection: a clean session
@@ -227,10 +247,10 @@ async fn mqtt(
                 }
             }
         }));
-        clients.push(client);
+        hub.clients.push(client);
     }
     drop(sender);
-    Ok((MqttHub { clients, tasks }, receiver))
+    Ok((hub, receiver))
 }
 
 /* The MQTT brokers of internet play, as the native build's brokers.txt
@@ -367,6 +387,9 @@ fn browser_to_tunnel(
             if stream.local_closed {
                 return Err("native stream is already closed".into());
             }
+            if stream.kcp.wait_snd() + data.len().div_ceil(1_024) > MAX_STREAM_QUEUE {
+                return Err("native stream send queue is full".into());
+            }
             for chunk in data.chunks(1_024) {
                 let mut message = Vec::with_capacity(chunk.len() + 1);
                 message.push(b'D');
@@ -472,6 +495,44 @@ fn tunnel_to_browser(
     }
 }
 
+/* The tunnel's ping (type 1) carries four bytes that the native host's pong
+(type 2) sends back unchanged, to the address the ping came from
+(tunnel_received, port/linux/src/p2p.c). Before the endpoint is known the
+gateway puts a random value per candidate there instead of the clock: the
+invite, and so the candidates and the tunnel's keys, are the browser's to
+choose, so a sealed packet that merely claims to come from a candidate proves
+nothing (its source can be forged). A pong carrying the value sent only to
+that address proves that whoever answers receives packets there. */
+fn probe_nonces(candidates: &[SocketAddrV4]) -> Result<HashMap<SocketAddrV4, [u8; 4]>, String> {
+    let mut nonces = HashMap::with_capacity(candidates.len());
+    for candidate in candidates {
+        let mut nonce = [0_u8; 4];
+        getrandom::fill(&mut nonce).map_err(|_| "random generator failed".to_string())?;
+        nonces.insert(*candidate, nonce);
+    }
+    Ok(nonces)
+}
+
+/// Whether a packet (opened) from `source` is the pong to the probe sent there.
+fn answers_probe(
+    nonces: &HashMap<SocketAddrV4, [u8; 4]>,
+    source: SocketAddrV4,
+    inner: &[u8],
+) -> bool {
+    inner.len() >= 5
+        && inner[0] == 2
+        && nonces
+            .get(&source)
+            .is_some_and(|nonce| bool::from(nonce.ct_eq(&inner[1..5])))
+}
+
+async fn websocket_send(websocket: &mut WebSocket, message: Message) -> Result<(), String> {
+    match tokio::time::timeout(WEBSOCKET_SEND_TIMEOUT, websocket.send(message)).await {
+        Ok(result) => result.map_err(|error| error.to_string()),
+        Err(_) => Err("browser stopped reading its WebSocket".into()),
+    }
+}
+
 pub async fn run(
     mut websocket: WebSocket,
     ticket: SessionTicket,
@@ -486,14 +547,16 @@ pub async fn run(
         &ticket.invite.host_identifier,
     );
     let join_topic = topic(&ticket.invite.token, b"joiner", &ticket.identity.identifier);
+    // (the hub's Drop aborts its broker tasks on every way out of here)
     let (mqtt, mut mqtt_messages) = mqtt(&ticket.peer_id, join_topic).await?;
     let first_join =
         initial_join(&ticket.invite, &ticket.identity, local_candidate).map_err(str::to_owned)?;
-    mqtt.publish(&host_topic, first_join.clone()).await?;
+    mqtt.publish(&host_topic, first_join.clone())?;
 
     let mut accepted = None;
     let mut proof = None;
     let mut crypto = None;
+    let mut probes = HashMap::new();
     let mut endpoint = None;
     let mut streams = HashMap::new();
     let mut meter = RateMeter::default();
@@ -505,7 +568,7 @@ pub async fn run(
     let mut tick = interval(Duration::from_millis(10));
     tick.set_missed_tick_behavior(MissedTickBehavior::Skip);
     let mut udp_buffer = [0_u8; 2_048];
-    let result = 'session: loop {
+    let result: Result<(), String> = 'session: loop {
         if started.elapsed() > SESSION_TTL {
             break Err("native session expired".into());
         }
@@ -537,7 +600,7 @@ pub async fn run(
                         if !meter.allow(value.len()) || !config.global_meter.allow(value.len()) {
                             break Err("native session bandwidth limit exceeded".into());
                         }
-                        websocket.send(Message::Pong(value)).await.map_err(|error| error.to_string())?;
+                        websocket_send(&mut websocket, Message::Pong(value)).await?;
                     }
                     Some(Ok(Message::Close(_))) | None => break Ok(()),
                     Some(Ok(Message::Text(value))) => {
@@ -557,7 +620,7 @@ pub async fn run(
                 };
                 let Some(cipher) = crypto.as_mut() else { continue; };
                 let safe_source = endpoint.map_or_else(
-                    || accepted.as_ref().is_some_and(|value: &crate::protocol::AcceptedSession| value.candidates.contains(&source)),
+                    || probes.contains_key(&source),
                     |current| current == source,
                 );
                 if !safe_source { continue; }
@@ -565,14 +628,20 @@ pub async fn run(
                 if !meter.allow(size) || !config.global_meter.allow(size) {
                     break 'session Err("native session bandwidth limit exceeded".into());
                 }
-                last_heard = Instant::now();
                 if endpoint.is_none() {
+                    // (only the pong to the probe sent to that very address
+                    // makes it the endpoint; anything else is dropped, and the
+                    // host's own pings are not answered before then)
+                    if !answers_probe(&probes, source, &inner) { continue; }
                     endpoint = Some(source);
-                    websocket.send(Message::Text(
+                    last_heard = Instant::now();
+                    websocket_send(&mut websocket, Message::Text(
                         serde_json::json!({"type":"ready","v":1}).to_string().into(),
-                    )).await.map_err(|error| error.to_string())?;
+                    )).await?;
                     info!(actor_id = %ticket.actor_id, peer_id = %ticket.peer_id, "native tunnel connected");
+                    continue;
                 }
+                last_heard = Instant::now();
                 if inner.first() == Some(&1) && inner.len() >= 5 {
                     inner[0] = 2;
                     send_inner(
@@ -589,7 +658,7 @@ pub async fn run(
                     if !meter.allow(frame.len()) || !config.global_meter.allow(frame.len()) {
                         break 'session Err("native session bandwidth limit exceeded".into());
                     }
-                    websocket.send(Message::Binary(frame.into())).await.map_err(|error| error.to_string())?;
+                    websocket_send(&mut websocket, Message::Binary(frame.into())).await?;
                 }
             }
             message = mqtt_messages.recv() => {
@@ -603,11 +672,12 @@ pub async fn run(
                             ticket.invite.host_identifier,
                             &new_accepted,
                         ));
+                        probes = probe_nonces(&new_accepted.candidates)?;
                         accepted = Some(new_accepted);
                         proof = Some(new_proof);
                     }
                     if let Some(value) = &proof {
-                        mqtt.publish(&host_topic, value.clone()).await?;
+                        mqtt.publish(&host_topic, value.clone())?;
                         last_join = Instant::now();
                     }
                 }
@@ -619,14 +689,16 @@ pub async fn run(
                 }
                 if endpoint.is_none() && last_join.elapsed() >= Duration::from_secs(2) {
                     let join = proof.as_ref().unwrap_or(&first_join);
-                    mqtt.publish(&host_topic, join.clone()).await?;
+                    mqtt.publish(&host_topic, join.clone())?;
                     last_join = now;
                 }
                 if endpoint.is_none() && last_punch.elapsed() >= Duration::from_millis(200) {
-                    if let (Some(value), Some(cipher)) = (&accepted, crypto.as_mut()) {
-                        for destination in &value.candidates {
+                    if let Some(cipher) = crypto.as_mut() {
+                        // (at most four public candidates, five times a second,
+                        // for at most PUNCH_TIMEOUT: as the native build punches)
+                        for (destination, nonce) in &probes {
                             let mut ping = vec![1];
-                            ping.extend_from_slice(&now_millis().to_le_bytes());
+                            ping.extend_from_slice(nonce);
                             send_inner(
                                 &udp,
                                 *destination,
@@ -672,6 +744,57 @@ pub async fn run(
         peer_id = %ticket.peer_id,
         "native session closed"
     );
-    mqtt.abort();
+    drop(mqtt);
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+    use std::net::{Ipv4Addr, SocketAddrV4};
+
+    use super::{MAX_STREAM_QUEUE, answers_probe, browser_to_tunnel, probe_nonces};
+    use crate::protocol::browser_frame;
+
+    #[test]
+    fn only_the_probed_address_echoing_its_nonce_is_adopted() {
+        let first = SocketAddrV4::new(Ipv4Addr::new(203, 0, 114, 1), 2302);
+        let second = SocketAddrV4::new(Ipv4Addr::new(198, 51, 101, 2), 2302);
+        let probes = probe_nonces(&[first, second]).expect("random nonces");
+        let nonce = probes[&first];
+        let mut pong = vec![2];
+        pong.extend_from_slice(&nonce);
+        assert!(answers_probe(&probes, first, &pong));
+        // (another candidate's nonce, a ping, a short packet, an address
+        // that was never probed)
+        assert!(!answers_probe(&probes, second, &pong) || probes[&second] == nonce);
+        let mut ping = pong.clone();
+        ping[0] = 1;
+        assert!(!answers_probe(&probes, first, &ping));
+        assert!(!answers_probe(&probes, first, &pong[..4]));
+        let stranger = SocketAddrV4::new(Ipv4Addr::new(192, 0, 2, 9), 2302);
+        assert!(!answers_probe(&probes, stranger, &pong));
+        let mut wrong = pong.clone();
+        wrong[4] ^= 1;
+        assert!(!answers_probe(&probes, first, &wrong));
+        assert!(!answers_probe(&HashMap::new(), first, &pong));
+    }
+
+    #[test]
+    fn a_stream_the_host_does_not_drain_is_refused() {
+        let mut streams = HashMap::new();
+        browser_to_tunnel(&browser_frame(2, 7, [0, 1], [0, 2], &[]), &mut streams)
+            .expect("stream opens");
+        let data = browser_frame(3, 7, [0, 0], [0, 0], &[0x55; 16_384]);
+        let mut accepted = 0;
+        let error = loop {
+            match browser_to_tunnel(&data, &mut streams) {
+                Ok(_) => accepted += 1,
+                Err(error) => break error,
+            }
+            assert!(accepted <= MAX_STREAM_QUEUE / 16, "queue unbounded");
+        };
+        assert_eq!(error, "native stream send queue is full");
+        assert!(streams[&7].kcp.wait_snd() <= MAX_STREAM_QUEUE);
+    }
 }

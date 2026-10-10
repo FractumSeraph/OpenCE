@@ -201,6 +201,35 @@ impl Store {
     }
 }
 
+/* A session's reserved slot (Store::release_session), held from the moment its
+ticket is redeemed: dropping the guard gives the slot back, whether the
+session ends, its WebSocket upgrade never completes (axum then drops the
+upgrade callback unrun), or the session panics. */
+struct Reservation {
+    actor_id: String,
+    store: Arc<Mutex<Store>>,
+}
+
+impl Drop for Reservation {
+    fn drop(&mut self) {
+        let actor_id = std::mem::take(&mut self.actor_id);
+        if let Ok(mut store) = self.store.try_lock() {
+            store.release_session(&actor_id);
+            return;
+        }
+        let store = self.store.clone();
+        match tokio::runtime::Handle::try_current() {
+            Ok(runtime) => {
+                runtime.spawn(async move {
+                    store.lock().await.release_session(&actor_id);
+                });
+            }
+            // (no runtime: the process is shutting down)
+            Err(_) => error!(%actor_id, "native session slot could not be released"),
+        }
+    }
+}
+
 #[derive(Clone)]
 struct AppState {
     config: Config,
@@ -536,13 +565,17 @@ async fn connect(
         ));
     }
     drop(store);
+    let reservation = Reservation {
+        actor_id: pending.session.actor_id.clone(),
+        store: state.store.clone(),
+    };
     let session_state = state.clone();
     Ok(upgrade
         .max_message_size(crate::protocol::FRAME_MAX_SIZE)
         .max_frame_size(crate::protocol::FRAME_MAX_SIZE)
         .protocols(["halo-native-v1"])
         .on_upgrade(move |socket| async move {
-            let actor_id = pending.session.actor_id.clone();
+            let _reservation = reservation;
             let peer_id = pending.session.peer_id.clone();
             let config = SessionConfig {
                 global_meter: session_state.global_meter.clone(),
@@ -553,7 +586,8 @@ async fn connect(
             if let Err(error) = session::run(socket, pending.session, config).await {
                 error!(%error, %peer_id, "native session ended with error");
             }
-            session_state.store.lock().await.release_session(&actor_id);
+            // (the slot is given back as _reservation drops, here or on a
+            // panic above)
         }))
 }
 
@@ -593,7 +627,51 @@ async fn main() {
 mod tests {
     use axum::http::{HeaderMap, HeaderValue};
 
-    use super::{PublicWebsocketUrl, public_websocket_url};
+    use std::sync::Arc;
+
+    use tokio::sync::Mutex;
+
+    use super::{PublicWebsocketUrl, Reservation, Store, public_websocket_url};
+
+    fn reserved_store() -> Arc<Mutex<Store>> {
+        Arc::new(Mutex::new(Store {
+            actor_sessions: [("actor".to_string(), 1)].into(),
+            reserved_sessions: 1,
+            ..Store::default()
+        }))
+    }
+
+    #[test]
+    fn a_dropped_reservation_gives_its_slot_back() {
+        let store = reserved_store();
+        drop(Reservation {
+            actor_id: "actor".into(),
+            store: store.clone(),
+        });
+        let store = store.try_lock().expect("unlocked");
+        assert_eq!(store.reserved_sessions, 0);
+        assert!(store.actor_sessions.is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_reservation_dropped_while_the_store_is_busy_gives_its_slot_back_later() {
+        let store = reserved_store();
+        let held = store.lock().await;
+        drop(Reservation {
+            actor_id: "actor".into(),
+            store: store.clone(),
+        });
+        drop(held);
+        for _ in 0..100 {
+            if store.lock().await.reserved_sessions == 0 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        let store = store.lock().await;
+        assert_eq!(store.reserved_sessions, 0);
+        assert!(store.actor_sessions.is_empty());
+    }
 
     #[test]
     fn derives_cloudfront_websocket_url_from_request_host() {

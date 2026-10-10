@@ -17,8 +17,25 @@ signed session request here. The gateway then:
 
 Browser frames cannot select an IP address. Before authentication, the gateway
 sends only a five-byte ping to at most four public-unicast candidates signed by
-the invited host. After authentication, it pins one endpoint. Private, loopback,
-link-local, multicast, benchmark, and documentation ranges are rejected.
+the invited host, five times a second for at most 30 seconds. Private,
+loopback, link-local, multicast, benchmark, and documentation ranges are
+rejected.
+
+The invite, and so the host's key, its candidates and the tunnel's keys, are
+the browser's to choose, so a sealed packet that claims to come from a
+candidate proves nothing: its source address can be forged. Each candidate's
+ping therefore carries four random bytes in place of the clock, and the
+gateway pins as its endpoint only the candidate whose pong (which the native
+host sends back to the ping's source with those four bytes unchanged,
+`tunnel_received` in `port/linux/src/p2p.c`) echoes the bytes sent to that
+very address. Until then it answers nothing and drops every other packet.
+Native hosts need no change for this.
+
+A session ends, and gives back its slot, its UDP port and its MQTT broker
+connections however it ends (an error, a WebSocket upgrade that never
+completes, a panic). A browser that stops reading its WebSocket for 10 seconds
+ends it, as does a stream with more than 512 KCP segments (of at most 1 KiB)
+waiting for the host.
 
 ## Configuration
 
