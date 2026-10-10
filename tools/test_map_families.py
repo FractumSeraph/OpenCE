@@ -27,7 +27,13 @@ STUB_WINDOWS = """
 HARNESS = r"""
 #include <stdio.h>
 #include <string.h>
+#include "cseries.h" /* (first, as the game's sources include it: the header uses its types) */
 #include "halo_map_families.h"
+/* (the settings, port_config.c: game.downloaded_maps names none) */
+const char *config_string(const char *name)
+{
+	return "";
+}
 int main(int argc, char **argv)
 {
 	char out[256];

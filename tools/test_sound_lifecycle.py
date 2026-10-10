@@ -40,6 +40,7 @@ typedef int boolean;
 #define TRUE 1
 #define FALSE 0
 #define MAX(a,b) ((a)>(b)?(a):(b))
+#define NUMBEROF(a) (sizeof(a)/sizeof((a)[0]))
 #define PIN(x,a,b) ((x)<(a)?(a):((x)>(b)?(b):(x)))
 #define TEST_FLAG(x,b) (((x)&(1u<<(b)))!=0)
 #define SET_FLAG(x,b,v) ((x)=(v)?((x)|(1u<<(b))):((x)&~(1u<<(b))))
@@ -274,6 +275,8 @@ def main():
     args = parser.parse_args()
     source = args.source.read_text(encoding="utf-8")
     compiler = [args.cc, "-std=c11", "-O2", "-fuse-ld=lld", "-Wno-void-pointer-to-int-cast"]
+    # (the C library's maths: the fades' pow)
+    libraries = [] if sys.platform == "win32" else ["-lm"]
     if sys.platform == "win32":
         compiler.append("--target=i686-pc-windows-msvc")
     names = ["sound_calculate_fade", "sound_start_fade"]
@@ -285,12 +288,12 @@ def main():
         unit = path / "sound_lifecycle.c"
         executable = path / "sound_lifecycle.exe"
         unit.write_text(PRELUDE + "\n".join(function(source, name) for name in names) + TESTS, encoding="utf-8")
-        subprocess.run([*compiler, str(unit), "-o", str(executable)], check=True)
+        subprocess.run([*compiler, str(unit), "-o", str(executable), *libraries], check=True)
         subprocess.run([str(executable)], check=True)
         backend = args.backend_source.read_text(encoding="utf-8")
         unit.write_text(BACKEND_PRELUDE + function(backend, "dsound_channel_callback") +
                         function(backend, "channel_stop") + BACKEND_TESTS, encoding="utf-8")
-        subprocess.run([*compiler, str(unit), "-o", str(executable)], check=True)
+        subprocess.run([*compiler, str(unit), "-o", str(executable), *libraries], check=True)
         subprocess.run([str(executable)], check=True)
 
 
