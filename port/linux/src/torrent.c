@@ -380,6 +380,8 @@ static int metadata_take(struct torrent *torrent, unsigned char *bytes, int size
 	return 1;
 }
 
+static void metadata_discard(struct torrent *torrent);
+
 int torrent_metadata_piece_to_request(struct torrent *torrent)
 {
 	int piece;
@@ -398,8 +400,6 @@ int torrent_metadata_piece_to_request(struct torrent *torrent)
 	}
 	return -1;
 }
-
-static void metadata_discard(struct torrent *torrent);
 
 /* the metadata's buffer, for the size a peer tells: TRUE once there is one
 of that size. The info dictionary holds the pieces' hashes (piece_count of
