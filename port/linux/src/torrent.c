@@ -179,6 +179,23 @@ static void bit_clear(unsigned char *bits, int index)
 	bits[index >> 3] &= (unsigned char)~(0x80 >> (index & 7));
 }
 
+static int bit_test(const unsigned char *bits, int index);
+
+int torrent_bit_test(const unsigned char *bits, int index)
+{
+	return bit_test(bits, index);
+}
+
+void torrent_bit_set(unsigned char *bits, int index)
+{
+	bit_set(bits, index);
+}
+
+void torrent_bit_clear(unsigned char *bits, int index)
+{
+	bit_clear(bits, index);
+}
+
 static int bit_test(const unsigned char *bits, int index)
 {
 	return (bits[index >> 3] & (0x80 >> (index & 7))) != 0;
@@ -451,6 +468,16 @@ static void checking_start(struct torrent *torrent)
 	torrent->active_count = 0;
 }
 
+/* the whole file fetched from the web seeds (torrent_web_seeds_tick):
+hashed as a seeding torrent's file is, its hashes making the info
+dictionary, which must have the info hash (checking_tick) */
+void torrent_web_whole_check(struct torrent *torrent)
+{
+	metadata_discard(torrent);
+	torrent_log("%s: the whole file came from the web seeds; checking it against the info hash", torrent->name);
+	checking_start(torrent);
+}
+
 static void download_complete(struct torrent *torrent)
 {
 	torrent->state = _torrent_state_seeding;
@@ -536,6 +563,18 @@ static void checking_tick(struct torrent *torrent)
 		if (!metadata_take(torrent, info, size))
 		{
 			free(info);
+			if (!torrent->seeding)
+			{
+				/* (the web seeds' file, another version of the map, say: the
+				metadata and the pieces looked for from peers, as before) */
+				torrent_log("%s: the web seeds' file is not this torrent's; looking to peers", torrent->name);
+				metadata_discard(torrent);
+				torrent->web_whole = -1;
+				torrent->have_count = 0;
+				memset(torrent->have, 0, sizeof(torrent->have));
+				torrent->state = _torrent_state_metadata;
+				return;
+			}
 			torrent_fail(torrent, "the file is not this torrent's");
 			return;
 		}
@@ -1376,6 +1415,16 @@ int torrent_status_get(int handle, struct torrent_status *status)
 				status->have_bytes += (unsigned long long)torrent_piece_size(torrent, piece);
 		}
 	}
+	else if (torrent->web_whole > 0)
+	{
+		int piece;
+
+		for (piece = 0; piece < torrent->piece_count; piece++)
+		{
+			if (bit_test(torrent->web_whole_have, piece))
+				status->have_bytes += (unsigned long long)torrent_piece_size(torrent, piece);
+		}
+	}
 	status->uploaded_bytes = torrent->uploaded;
 	status->peers_connected = torrent_peers_count(torrent, &seeds);
 	status->seeds_connected = seeds;
@@ -1385,8 +1434,12 @@ int torrent_status_get(int handle, struct torrent_status *status)
 	switch (torrent->state)
 	{
 	case _torrent_state_metadata:
-		snprintf(status->detail, sizeof(status->detail), "looking for peers: %d connected, %d known, DHT %d nodes",
-			status->peers_connected, status->peers_known, torrent_dht_node_count());
+		if (torrent->web_whole > 0)
+			snprintf(status->detail, sizeof(status->detail), "from the web seeds (no peer yet): %d of %d pieces",
+				torrent->web_whole_count, torrent->piece_count);
+		else
+			snprintf(status->detail, sizeof(status->detail), "looking for peers: %d connected, %d known, DHT %d nodes",
+				status->peers_connected, status->peers_known, torrent_dht_node_count());
 		break;
 	case _torrent_state_checking:
 		snprintf(status->detail, sizeof(status->detail), "checking the file: %d of %d pieces", torrent->check_piece,

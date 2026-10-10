@@ -25,6 +25,11 @@ platform. An https:// tracker or web seed is logged and left out.
 #define HTTP_BODY_MAXIMUM (256 * 1024)
 #define RESOLVE_LIFETIME (10 * TORRENT_MINUTE)
 #define ANNOUNCE_MINIMUM (60 * TORRENT_SECOND)
+/* how long a download waits for the metadata from peers before it fetches
+the whole file from the web seeds (checked against the info hash after) */
+#define WEB_WHOLE_WAIT (10 * TORRENT_SECOND)
+/* connections to each web seed at once */
+#define WEB_SEED_CONNECTIONS 4
 #define ANNOUNCE_DEFAULT (30 * TORRENT_MINUTE)
 #define ANNOUNCE_RETRY_MAXIMUM (30 * TORRENT_MINUTE)
 #define WEB_SEED_RETRY (5 * TORRENT_SECOND)
@@ -150,8 +155,19 @@ void torrent_trackers_configure(void)
 			torrent_log("too many web seeds: %s left out", item);
 			continue;
 		}
-		snprintf(torrent_session.web_seeds[torrent_session.web_seed_count++], sizeof(torrent_session.web_seeds[0]),
-			"%s", item);
+		/* (a few connections to each, a piece on each: one piece at a time
+		from a server far away was a piece a round trip or so, some 250 KB a
+		second) */
+		{
+			int connection;
+
+			for (connection = 0; connection < WEB_SEED_CONNECTIONS &&
+				torrent_session.web_seed_count < TORRENT_MAXIMUM_WEB_SEEDS; connection++)
+			{
+				snprintf(torrent_session.web_seeds[torrent_session.web_seed_count++],
+					sizeof(torrent_session.web_seeds[0]), "%s", item);
+			}
+		}
 	}
 }
 
@@ -962,6 +978,19 @@ static void web_seed_bytes(void *context, const unsigned char *bytes, int size)
 	int piece_size = torrent_piece_size(torrent, state->piece);
 
 	torrent_downloaded(torrent, size);
+	/* (the whole file, no metadata yet: written as it comes, checked once
+	it is all here) */
+	if (torrent->state == _torrent_state_metadata)
+	{
+		if (size > piece_size - state->received)
+			size = piece_size - state->received;
+		if (size > 0 && torrent_file_write(torrent, (unsigned long long)state->piece * torrent->piece_length +
+			(unsigned long long)state->received, bytes, size))
+		{
+			state->received += size;
+		}
+		return;
+	}
 	while (size > 0 && state->received < piece_size)
 	{
 		int begin = state->received - state->block_size;
@@ -994,7 +1023,9 @@ static void web_seed_failed(struct torrent *torrent, struct torrent_web_seed_sta
 		wait = WEB_SEED_RETRY_MAXIMUM;
 	state->failures++;
 	state->retry_time = torrent_now() + wait;
-	if (state->piece >= 0)
+	if (state->piece >= 0 && torrent->state == _torrent_state_metadata)
+		torrent_bit_clear(torrent->web_whole_requested, state->piece);
+	else if (state->piece >= 0)
 		torrent_piece_unrequested(torrent, state->piece);
 	state->piece = -1;
 	torrent_log("%s: the web seed %s: %s (trying again in %u s)", torrent->name, url, reason,
@@ -1011,15 +1042,27 @@ void torrent_web_seeds_tick(struct torrent *torrent)
 		struct torrent_web_seed_state *state = &torrent->web_seeds[index];
 		struct torrent_http *http = &state->http;
 		const char *url = torrent_session.web_seeds[index];
+		int whole;
 
 		if (state->piece >= 0)
 		{
 			torrent_http_tick(http);
 			if (http->state == _torrent_http_done)
 			{
+				int whole = torrent->state == _torrent_state_metadata;
+
 				if (state->received == torrent_piece_size(torrent, state->piece))
 				{
 					state->failures = 0;
+					if (whole && !torrent_bit_test(torrent->web_whole_have, state->piece))
+					{
+						torrent_bit_set(torrent->web_whole_have, state->piece);
+						torrent->web_whole_count++;
+					}
+				}
+				else if (whole)
+				{
+					torrent_bit_clear(torrent->web_whole_requested, state->piece);
 				}
 				else
 				{
@@ -1037,7 +1080,17 @@ void torrent_web_seeds_tick(struct torrent *torrent)
 			}
 			continue;
 		}
-		if (torrent->state != _torrent_state_downloading || !torrent->piece_hashes ||
+		/* (the whole file from the web seeds while no peer has given the
+		metadata: once all here, checked against the info hash) */
+		if (torrent->state == _torrent_state_metadata && torrent->web_whole > 0 &&
+			torrent->web_whole_count == torrent->piece_count)
+		{
+			torrent_web_whole_check(torrent);
+			return;
+		}
+		whole = torrent->state == _torrent_state_metadata && torrent->web_whole >= 0 &&
+			torrent_elapsed(torrent->added_time, WEB_WHOLE_WAIT);
+		if ((!whole && (torrent->state != _torrent_state_downloading || !torrent->piece_hashes)) ||
 			!torrent_reached(state->retry_time) || torrent_download_allowance() < TORRENT_BLOCK_SIZE)
 		{
 			continue;
@@ -1085,7 +1138,25 @@ void torrent_web_seeds_tick(struct torrent *torrent)
 				web_seed_failed(torrent, state, url, "cannot be resolved");
 				continue;
 			}
-			if (!torrent_piece_to_request_whole(torrent, &piece))
+			if (whole)
+			{
+				/* (the next piece of the file not had nor asked for) */
+				for (piece = 0; piece < torrent->piece_count; piece++)
+				{
+					if (!torrent_bit_test(torrent->web_whole_have, piece) &&
+						!torrent_bit_test(torrent->web_whole_requested, piece))
+					{
+						break;
+					}
+				}
+				if (piece >= torrent->piece_count)
+					continue;
+				if (!torrent->web_whole)
+					torrent_log("%s: no peer has given the metadata: the whole file from the web seeds", torrent->name);
+				torrent->web_whole = 1;
+				torrent_bit_set(torrent->web_whole_requested, piece);
+			}
+			else if (!torrent_piece_to_request_whole(torrent, &piece))
 				continue;
 			state->piece = piece;
 			state->received = 0;

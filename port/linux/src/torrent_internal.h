@@ -40,7 +40,9 @@ index's piece lengths at least 256 KB (tools/map_torrents.py) */
 #define TORRENT_MAXIMUM_PIPELINE 32
 #define TORRENT_MAXIMUM_QUEUED_REQUESTS 64
 #define TORRENT_MAXIMUM_TRACKERS 8
-#define TORRENT_MAXIMUM_WEB_SEEDS 4
+/* web seed connections (each web seed given has WEB_SEED_CONNECTIONS of
+them: torrent_tracker.c) */
+#define TORRENT_MAXIMUM_WEB_SEEDS 8
 /* a message from a peer: a piece message's block and its header, or a
 bitfield of the most pieces; anything longer ends the connection */
 #define TORRENT_RECEIVE_BUFFER (TORRENT_BLOCK_SIZE + 4096)
@@ -259,6 +261,14 @@ struct torrent
 	unsigned long last_connect_time;
 	struct torrent_tracker_state trackers[TORRENT_MAXIMUM_TRACKERS];
 	struct torrent_web_seed_state web_seeds[TORRENT_MAXIMUM_WEB_SEEDS];
+	/* the whole file from the web seeds, with no metadata (no peer has given
+	it a while into a download: torrent_web_seeds_tick): its pieces fetched
+	unchecked, then the file hashed, which must make the info hash. -1:
+	not again (the web seeds' file was not this torrent's) */
+	int web_whole;
+	unsigned char web_whole_have[TORRENT_MAXIMUM_PIECES / 8];
+	unsigned char web_whole_requested[TORRENT_MAXIMUM_PIECES / 8];
+	int web_whole_count;
 	unsigned long dht_next_lookup;
 	unsigned long dht_last_announce;
 	unsigned long long downloaded;
@@ -307,6 +317,12 @@ extern pthread_mutex_t torrent_lock;
 unsigned long torrent_now(void);
 int torrent_elapsed(unsigned long since, unsigned long milliseconds);
 int torrent_reached(unsigned long when);
+/* the file, hashed, as a seeding torrent's: the whole file fetched from the
+web seeds checked against the info hash (torrent.c) */
+void torrent_web_whole_check(struct torrent *torrent);
+int torrent_bit_test(const unsigned char *bits, int index);
+void torrent_bit_set(unsigned char *bits, int index);
+void torrent_bit_clear(unsigned char *bits, int index);
 void torrent_log(const char *format, ...) __attribute__((format(printf, 1, 2)));
 const char *torrent_address_text(unsigned long address, unsigned short port, char *text);
 unsigned long torrent_network_long(unsigned long value);
