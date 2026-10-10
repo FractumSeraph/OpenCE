@@ -16,6 +16,33 @@ def read(relative):
     return (ROOT / relative).read_text(encoding="latin-1")
 
 
+def configured(source, defined=(), names=("HALO_64BIT",)):
+    """The source as a build compiles it with the macros in defined and without the rest of names: their #ifdef and
+    #ifndef resolved (the harness builds the 32-bit game, without HALO_64BIT), every other conditional kept."""
+    lines, stack = [], []  # each open conditional: None if kept, else whether its branch is taken
+    for line in source.splitlines(keepends=True):
+        directive = re.match(r"\s*#\s*(ifdef|ifndef|if|elif|else|endif)\b\s*(\w*)", line)
+        kind, name = directive.groups() if directive else (None, None)
+        if kind in ("ifdef", "ifndef") and name in names:
+            stack.append((name in defined) == (kind == "ifdef"))
+            continue
+        if kind in ("else", "elif", "endif") and stack and stack[-1] is not None:
+            if kind == "elif":
+                raise LookupError(f"#elif of {names} not resolved: {line.strip()}")
+            if kind == "else":
+                stack[-1] = not stack[-1]
+            else:
+                stack.pop()
+            continue
+        if kind in ("ifdef", "ifndef", "if"):
+            stack.append(None)
+        elif kind == "endif":
+            stack.pop()
+        if all(taken is not False for taken in stack):
+            lines.append(line)
+    return "".join(lines)
+
+
 def function(source, name):
     """A function's definition (static, inline or not), taken by matching braces; LookupError if not found."""
     match = re.search(r"^(?:static |__inline )?[\w *]+?\b" + re.escape(name) + r"\(\s*[^;{]*\)\s*\{", source, re.M)
