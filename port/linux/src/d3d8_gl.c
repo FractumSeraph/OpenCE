@@ -5571,6 +5571,7 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 #endif
 		platform_video_swap();
 		xgpu_gl_state_invalidate();
+		memory_watch_begin_frame();
 		xgpu_texture_cache_begin_frame();
 #if defined(HALO_ANDROID) && !defined(HALO_WEB)
 		if (xgpu_capabilities.atomic_counters)
