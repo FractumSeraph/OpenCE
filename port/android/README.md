@@ -6,8 +6,9 @@
 
 The game shows its graphics with OpenGL ES 3. It plays sound through SDL3
 (AAudio). It accepts input from game controllers, for example a PlayStation
-5 DualSense on Bluetooth, and from the touchscreen (refer to "Controls"). The app needs Android 9 (API 28) or later. It
-operates on 64-bit-only devices, for example the Pixel 9 Pro XL.
+5 DualSense on Bluetooth, and from the touchscreen (refer to "Controls").
+The app needs Android 9 (API 28) or later. It operates on 64-bit-only
+devices, for example the Pixel 9 Pro XL.
 
 The Android build uses the platform layer of the Linux build
 (`port/linux/src`). Refer to [port/linux/README.md](../linux/README.md).
@@ -189,14 +190,16 @@ Gamepads): with "Swap triggers", the right trigger's button says "Grenade".
 The stick moves the player with every "Stick layout", southpaw too.
 
 A finger that holds a button can also swipe to look, so you can fire and
-aim with one thumb. No control is smaller than a finger (48 dp across),
-whatever the size of the screen. A short tap reaches the game even when it is shorter
-than one frame. Swipes that start in the edge-gesture zones of Android do
-not turn the view. The swipe aims as the controller's stick does, not as
-a mouse: the aim slows over a target and follows a moving one, as with a
-controller, and it follows the profile's "invert look" (the setting
-`input.touch_aim_assist` turns the aim assist off). "Look sensitivity" sets
-how far a swipe turns; the mouse settings do not apply.
+aim with one thumb. The controls are a finger wide (48 dp) or larger, but
+on a small screen of high density they stay apart rather than reach that
+size. A short tap reaches the game even when it is shorter than one frame.
+Swipes that start in the edge-gesture zones of Android do not turn the
+view. The swipe aims as the controller's stick does, not as a mouse: the
+aim slows over a target and follows a moving one, as with a controller,
+and it follows the profile's "invert look" (the gyroscope turns the view
+as the phone turns, never inverted). The setting `input.touch_aim_assist`
+turns the aim assist off. "Look sensitivity" sets how far a swipe turns;
+the mouse settings do not apply.
 
 The touch controls show only in a game. In the menus and during
 cinematics they hide, and the touchscreen operates the menus as described
@@ -207,8 +210,8 @@ them. The setting `input.touch_controls` changes this (refer to
 
 The buttons at the top of the screen:
 
-- "Hide" removes the controls until you push "Touch"; the app remembers
-  it.
+- "Hide" removes the controls (and stops the gyroscope aiming and the
+  vibration) until you push "Touch"; the app remembers it.
 - "Options" opens these items:
   - "General": the phone's vibration (on by default; it follows the
     vibration setting of the game's profile), aiming with the gyroscope

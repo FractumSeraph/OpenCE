@@ -47,11 +47,13 @@ int touch_input_move(float *forward, float *strafe)
 	return 0;
 }
 
-void touch_input_look(float scale, float *yaw, float *pitch)
+void touch_input_look(float scale, float *yaw, float *pitch, float *gyro_yaw, float *gyro_pitch)
 {
 	(void)scale;
 	(void)yaw;
 	(void)pitch;
+	(void)gyro_yaw;
+	(void)gyro_pitch;
 }
 
 int touch_input_aim_assist(void)

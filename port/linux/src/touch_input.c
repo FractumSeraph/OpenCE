@@ -13,6 +13,7 @@ finger down (host_gesture_insets).
 #include "touch_menu.h"
 #include "port_config.h"
 
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -305,19 +306,41 @@ void touch_input_controls(XINPUT_GAMEPAD *pad, int menus)
 
 int touch_input_move(float *forward, float *strafe)
 {
+	float x = move_x;
+	float y = move_y;
+	float largest = fabsf(x) > fabsf(y) ? fabsf(x) : fabsf(y);
+
+	if (largest == 0.0f)
+	{
+		*forward = 0.0f;
+		*strafe = 0.0f;
+		return FALSE;
+	}
+	/* the overlay's circle onto the square a controller's stick gives
+	(input_abstraction_update): a full diagonal is full on both axes */
+	{
+		float scale = sqrtf(x * x + y * y) / largest;
+
+		x *= scale;
+		y *= scale;
+		x = x < -1.0f ? -1.0f : x > 1.0f ? 1.0f : x;
+		y = y < -1.0f ? -1.0f : y > 1.0f ? 1.0f : y;
+	}
 	/* (SDL's y runs down; strafe is positive to the left) */
-	*forward = -move_y;
-	*strafe = -move_x;
-	return move_x != 0.0f || move_y != 0.0f;
+	*forward = -y;
+	*strafe = -x;
+	return TRUE;
 }
 
-void touch_input_look(float scale, float *yaw, float *pitch)
+void touch_input_look(float scale, float *yaw, float *pitch, float *gyro_yaw, float *gyro_pitch)
 {
-	float delta[2];
+	float delta[4];
 
 	host_touch_look_read(delta);
 	*yaw -= delta[0] * scale;
 	*pitch -= delta[1] * scale;
+	*gyro_yaw -= delta[2] * scale;
+	*gyro_pitch -= delta[3] * scale;
 }
 
 int touch_input_aim_assist(void)
