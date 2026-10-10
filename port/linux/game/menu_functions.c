@@ -3204,6 +3204,7 @@ static void lobby_browser_begin(struct widget_instance *screen);
 static void lobby_browser_update(struct widget_instance *list);
 #ifdef HALO_WEB
 static void lobby_browser_web_join_update(void);
+static void lobby_browser_web_join_cancel(void);
 #endif
 static void map_fetch_update(struct widget_instance *list);
 static boolean lobby_browser_select(struct widget_instance *widget, short controller, short row,
@@ -3446,6 +3447,10 @@ static void lobby_browser_begin(struct widget_instance *screen)
 static void lobby_browser_end(void)
 {
 	lobby_browser.joining = lobby_browser.ready = FALSE;
+#ifdef HALO_WEB
+	/* (a game left with its map still being fetched is not joined later) */
+	lobby_browser_web_join_cancel();
+#endif
 	p2p_lobby_browse(FALSE);
 }
 
@@ -4191,6 +4196,9 @@ static struct
 {
 	boolean pending;
 	struct p2p_listing game;
+	/* the map's file name the fetch is for (another fetch, as a map the
+	game reads is missing, may be the one that ends) */
+	char file[64];
 } web_join;
 
 static boolean lobby_browser_web_map_fetch(struct p2p_listing const *game)
@@ -4204,6 +4212,7 @@ static boolean lobby_browser_web_map_fetch(struct p2p_listing const *game)
 	if (!*file || !map_torrents_fetch(file, 0, NULL))
 		return FALSE;
 	web_join.game = *game;
+	snprintf(web_join.file, sizeof(web_join.file), "%s", file);
 	web_join.pending = TRUE;
 	platform_log("menus: joining %s waits for its map, %s, to be fetched", game->name, file);
 	return TRUE;
@@ -4215,9 +4224,24 @@ static void lobby_browser_web_join_update(void)
 
 	if (!web_join.pending || !map_torrents_take_ready(level_name, sizeof(level_name)))
 		return;
+	if (strcmp(level_name, web_join.file))
+	{
+		/* (another map's fetch ended: this one's is begun again) */
+		if (!map_torrents_fetch(web_join.file, 0, NULL))
+			web_join.pending = FALSE;
+		return;
+	}
 	web_join.pending = FALSE;
 	if (!p2p_join_invite(web_join.game.invite))
 		ui_play_audio_feedback_sound(SOUND_ERROR);
+}
+
+static void lobby_browser_web_join_cancel(void)
+{
+	if (!web_join.pending)
+		return;
+	web_join.pending = FALSE;
+	map_torrents_cancel();
 }
 #endif
 
@@ -4226,11 +4250,7 @@ static boolean lobby_browser_join(struct p2p_listing const *game, short controll
 #ifdef HALO_WEB
 	/* (another game chosen while one's map is fetched: that one is let go,
 	so a fetch that never ends cannot keep the browser from joining) */
-	if (web_join.pending)
-	{
-		web_join.pending = FALSE;
-		map_torrents_cancel();
-	}
+	lobby_browser_web_join_cancel();
 	if (lobby_browser_web_map_fetch(game))
 	{
 		ui_play_audio_feedback_sound(SOUND_FORWARD);
