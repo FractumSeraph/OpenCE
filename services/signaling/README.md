@@ -78,7 +78,14 @@ has applied its existing ban, rate-limit, and Turnstile checks.
 
 The configured rate-limit bindings cap room creation at 20 per minute and
 session creation at 512 per minute for one connecting address in one Cloudflare
-location. They are an abuse backstop, not billing or quota accounting.
+location (the reads `GET /v1/public-rooms` and `GET /v1/presence` share the
+session limiter, each under its own key). They are an abuse backstop, not
+billing or quota accounting. A connecting address is an IPv4 address, or an
+IPv6 address's /64 (one subscriber's network is usually a whole /64): rate
+limits, bans, TURN accounting and presence all key on that, so rotating
+addresses within a /64 gives no fresh identity. An IPv4-mapped IPv6 address
+counts as its IPv4 address. (Bans made before this keyed IPv6 visitors on
+their full address and no longer match them.)
 
 ### Optional TURN
 
@@ -300,6 +307,13 @@ A listing comes from the room's host (the `listing` message below), lapses
 90 seconds after its last refresh, and goes at once when its host's socket
 closes or the room ends.
 
+Every room's pings and listings reach the one global presence object, so each
+socket's are throttled: a `ping` refreshes the player's presence lease (150
+seconds) at most every 30 seconds (the page pings every 40), and a host's
+listings go through a bucket of five refilled one every 10 seconds. A listing
+over the bucket is not dropped: the latest one is sent when the next token
+comes.
+
 ## WebSocket protocol
 
 Messages are UTF-8 JSON text. Binary frames and text frames above 65,536
@@ -398,7 +412,8 @@ It is independent of the host/guest WebRTC star topology:
 
 ### Client to server
 
-Optional application heartbeat:
+Optional application heartbeat (answered with a `pong` every time; it
+refreshes the global presence at most every 30 seconds):
 
 ```json
 { "v": 1, "type": "ping", "nonce": "optional-opaque-value" }

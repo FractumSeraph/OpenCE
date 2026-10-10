@@ -43,11 +43,21 @@ interface SocketAttachment {
   departed?: boolean;
   identifier: string;
   joinedAt: number;
+  /** (listingDelay's bucket: tokens left, and when last counted) */
+  listingTokens?: number;
+  listingTokensAt?: number;
   messageCount?: number;
   messageWindowStartedAt?: number;
   peerId: string;
+  /** when a ping last refreshed the global presence lease */
+  presenceRefreshedAt?: number;
   profile?: PlayerProfile;
   role: PeerRole;
+}
+
+interface PendingListing {
+  guestTicket: string;
+  listing: GameListing | null;
 }
 
 interface PreparedSession {
@@ -149,7 +159,40 @@ function jsonMessage(value: unknown): string {
 const MAX_GUEST_WEBSOCKET_MESSAGES_PER_MINUTE = 240;
 const MAX_HOST_WEBSOCKET_MESSAGES_PER_MINUTE = 16_384;
 
+/* Pings and listings reach the one global presence object, which every room
+shares, so each socket's are throttled: a ping refreshes the presence lease
+(150 s) at most every 30 s (the page pings every 40 s), and a host's listings
+go through a bucket of five, refilled one every 10 s (the page sends one when
+its game changes and every 30 s). A listing over the bucket is not lost: the
+latest one waits for the next token. */
+const PRESENCE_REFRESH_MILLISECONDS = 30_000;
+const LISTING_BURST = 5;
+const LISTING_REFILL_MILLISECONDS = 10_000;
+
+/**
+ * Takes a listing token from the socket's bucket (updating it in place):
+ * 0 when one was taken, otherwise how long until one will be there.
+ */
+export function listingDelay(
+  state: { listingTokens?: number; listingTokensAt?: number },
+  now: number,
+): number {
+  const tokens = typeof state.listingTokens === "number" ? state.listingTokens : LISTING_BURST;
+  const since = typeof state.listingTokensAt === "number" ? Math.max(0, now - state.listingTokensAt) : 0;
+  const available = Math.min(LISTING_BURST, tokens + since / LISTING_REFILL_MILLISECONDS);
+  state.listingTokensAt = now;
+  if (available >= 1) {
+    state.listingTokens = available - 1;
+    return 0;
+  }
+  state.listingTokens = available;
+  return Math.max(1, Math.ceil((1 - available) * LISTING_REFILL_MILLISECONDS));
+}
+
 export class SignalingRoom extends DurableObject<Env> {
+  /** a host's latest listing that waits for a token, by peer */
+  private readonly pendingListings = new Map<string, PendingListing>();
+
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
   }
@@ -399,6 +442,7 @@ export class SignalingRoom extends DurableObject<Env> {
       messageCount: 0,
       messageWindowStartedAt: now,
       peerId: session.peer_id,
+      presenceRefreshedAt: now,
       role: session.role,
     };
 
@@ -519,7 +563,16 @@ export class SignalingRoom extends DurableObject<Env> {
     const message = parsed.value;
     if (message.type === "ping") {
       const room = this.getRoom();
-      if (room !== null) {
+      if (
+        room !== null &&
+        !(typeof sender.presenceRefreshedAt === "number" &&
+          now - sender.presenceRefreshedAt >= 0 &&
+          now - sender.presenceRefreshedAt < PRESENCE_REFRESH_MILLISECONDS)
+      ) {
+        sender.presenceRefreshedAt = now;
+        if (!this.persistAttachment(socket, sender)) {
+          return;
+        }
         this.updatePresence(room.room_id, sender.peerId, true);
       }
       try {
@@ -550,14 +603,18 @@ export class SignalingRoom extends DurableObject<Env> {
         this.sendError(socket, "LISTING_FORBIDDEN", "Only the host lists its game.");
         return;
       }
-      void this.listGame(message.guestTicket, message.listing).catch((error) => {
-        console.error(
-          JSON.stringify({
-            error: error instanceof Error ? error.message : String(error),
-            message: "failed to list the room's game",
-          }),
-        );
+      const pending = this.pendingListings.get(sender.peerId);
+      if (pending !== undefined) {
+        // (already waiting for a token: the latest listing goes then)
+        pending.guestTicket = message.guestTicket;
+        pending.listing = message.listing;
+        return;
+      }
+      this.pendingListings.set(sender.peerId, {
+        guestTicket: message.guestTicket,
+        listing: message.listing,
       });
+      this.flushListing(socket, sender.peerId);
       return;
     }
 
@@ -799,6 +856,56 @@ export class SignalingRoom extends DurableObject<Env> {
    * code, which the host proves by sending the room's guest ticket; or
    * (null) no longer listed.
    */
+  /** sends the peer's pending listing if its bucket has a token, otherwise
+   * once it will have */
+  private flushListing(socket: WebSocket, peerId: string): void {
+    const pending = this.pendingListings.get(peerId);
+    if (pending === undefined) {
+      return;
+    }
+    const attachment = safeAttachment(socket);
+    if (attachment === null || attachment.departed === true || attachment.peerId !== peerId) {
+      this.pendingListings.delete(peerId);
+      return;
+    }
+    const delay = listingDelay(attachment, Date.now());
+    if (!this.persistAttachment(socket, attachment)) {
+      this.pendingListings.delete(peerId);
+      return;
+    }
+    if (delay > 0) {
+      setTimeout(() => this.flushListing(socket, peerId), delay);
+      return;
+    }
+    this.pendingListings.delete(peerId);
+    void this.listGame(pending.guestTicket, pending.listing).catch((error) => {
+      console.error(
+        JSON.stringify({
+          error: error instanceof Error ? error.message : String(error),
+          message: "failed to list the room's game",
+        }),
+      );
+    });
+  }
+
+  /** (false: the state could not be kept, and the socket is retired) */
+  private persistAttachment(socket: WebSocket, attachment: SocketAttachment): boolean {
+    try {
+      socket.serializeAttachment(attachment);
+      return true;
+    } catch (error) {
+      console.error(
+        JSON.stringify({
+          error: error instanceof Error ? error.message : String(error),
+          message: "failed to persist room WebSocket state",
+          peerId: attachment.peerId,
+        }),
+      );
+      this.retireSocket(socket, 1011, "Connection state failed.");
+      return false;
+    }
+  }
+
   private async listGame(guestTicket: string, listing: GameListing | null): Promise<void> {
     const room = this.getRoom();
     if (room === null) {

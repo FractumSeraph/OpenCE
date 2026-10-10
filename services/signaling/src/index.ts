@@ -3,6 +3,7 @@ import {
   activeTurnUsernames,
   actorIdFor,
   actorIdIsValid,
+  clientNetwork,
   presenceIdFor,
   recordTurnEvent,
   rememberTurnUsernames,
@@ -54,6 +55,7 @@ const ROOM_ROUTE = /^\/v1\/rooms\/([^/]+)$/u;
 const SESSION_ROUTE = /^\/v1\/rooms\/([^/]+)\/sessions$/u;
 const WEBSOCKET_ROUTE = /^\/v1\/rooms\/([^/]+)\/ws$/u;
 const NATIVE_SESSION_ROUTE = "/v1/native/sessions";
+const NATIVE_GATEWAY_TIMEOUT_MILLISECONDS = 10_000;
 const ADMIN_BAN_ROUTE = /^\/v1\/admin\/bans\/([0-9a-f]{32})$/u;
 const NATIVE_INVITE_PATTERN = /^halo:\/\/join\/([0-9a-f]{64})$/u;
 const IDENTIFIER_PATTERN = /^[0-9a-f]{12}$/u;
@@ -131,8 +133,9 @@ async function requireValidRoomId(
   }
 }
 
+/** (an IPv6 client's whole /64 is one actor: abuse.ts, networkKey) */
 function requestActor(request: Request): string {
-  return request.headers.get("CF-Connecting-IP") ?? "local-development";
+  return clientNetwork(request);
 }
 
 async function requireAllowedActor(
@@ -291,6 +294,9 @@ async function createNativeSession(
         "X-Halo-Timestamp": timestamp,
       },
       method: "POST",
+      // (a gateway that accepts the connection and never answers must not
+      // hold the request open until the runtime gives up on it)
+      signal: AbortSignal.timeout(NATIVE_GATEWAY_TIMEOUT_MILLISECONDS),
     });
   } catch {
     throw new HttpError(503, "NATIVE_GATEWAY_UNAVAILABLE", "Native game joining is temporarily unavailable.");
@@ -305,7 +311,12 @@ async function createNativeSession(
         "Native game joining is temporarily unavailable.",
     );
   }
-  const value: unknown = await gatewayResponse.json();
+  let value: unknown;
+  try {
+    value = await gatewayResponse.json();
+  } catch {
+    throw new HttpError(502, "NATIVE_GATEWAY_INVALID_RESPONSE", "The native gateway returned an invalid response.");
+  }
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new HttpError(502, "NATIVE_GATEWAY_INVALID_RESPONSE", "The native gateway returned an invalid response.");
   }
@@ -831,6 +842,9 @@ async function route(request: Request, env: RuntimeEnv): Promise<Response> {
     // by intent: a page's GET from its own origin carries no Origin, and one
     // that does is held to ALLOWED_ORIGINS as everywhere else.
     const listOrigin = request.headers.has("Origin") ? allowedOrigin(request, env) : null;
+    // (every request reaches the one global presence object: rate limited
+    // per network as the other routes are)
+    await requireRateLimit(env.SESSION_CREATE_LIMITER, request, "public-rooms");
     const build = url.searchParams.get("build");
     const games = (await env.PRESENCE.getByName("global").publicGames(Date.now()))
       .filter((game) => build === null || game.buildId === build);
@@ -839,6 +853,7 @@ async function route(request: Request, env: RuntimeEnv): Promise<Response> {
 
   const origin = allowedOrigin(request, env);
   if (request.method === "GET" && url.pathname === "/v1/presence") {
+    await requireRateLimit(env.SESSION_CREATE_LIMITER, request, "presence-summary");
     const summary = await env.PRESENCE.getByName("global").summary(Date.now());
     return withCors(jsonResponse({
       ...summary,

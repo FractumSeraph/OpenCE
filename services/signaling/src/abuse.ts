@@ -37,8 +37,63 @@ export function actorIdIsValid(actorId: string): boolean {
   return ACTOR_ID_PATTERN.test(actorId);
 }
 
+/**
+ * The network an address belongs to, for abuse and rate-limit keys: an IPv4
+ * address as it is, an IPv6 address as its /64 (one subscriber's network is
+ * usually a whole /64, so keying on the full address would let one machine
+ * take a fresh identity for every request). An IPv4-mapped IPv6 address
+ * counts as its IPv4 address. Anything unparseable is used as it is.
+ */
+export function networkKey(address: string): string {
+  let value = address.trim().toLowerCase();
+  if (!value.includes(":")) {
+    return value;
+  }
+  const zone = value.indexOf("%");
+  if (zone >= 0) {
+    value = value.slice(0, zone);
+  }
+  if (value.startsWith("[") && value.endsWith("]")) {
+    value = value.slice(1, -1);
+  }
+  // (an embedded IPv4 tail is the last two groups)
+  const tail = /^(.*:)(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/u.exec(value);
+  if (tail !== null) {
+    const octets = tail.slice(2, 6).map(Number);
+    if (octets.some((octet) => octet > 255)) {
+      return address;
+    }
+    value = `${tail[1]}${((octets[0]! << 8) | octets[1]!).toString(16)}:${((octets[2]! << 8) | octets[3]!).toString(16)}`;
+  }
+  const halves = value.split("::");
+  if (halves.length > 2) {
+    return address;
+  }
+  const head = halves[0] === "" ? [] : halves[0]!.split(":");
+  const rest = halves.length === 2 ? (halves[1] === "" ? [] : halves[1]!.split(":")) : [];
+  const missing = 8 - head.length - rest.length;
+  if ((halves.length === 2 && missing < 1) || (halves.length === 1 && missing !== 0)) {
+    return address;
+  }
+  const groups = [...head, ...Array<string>(halves.length === 2 ? missing : 0).fill("0"), ...rest]
+    .map((group) => Number.parseInt(group, 16));
+  if (![...head, ...rest].every((group) => /^[0-9a-f]{1,4}$/u.test(group))) {
+    return address;
+  }
+  if (groups.slice(0, 5).every((group) => group === 0) && groups[5] === 0xffff) {
+    return [groups[6]! >> 8, groups[6]! & 0xff, groups[7]! >> 8, groups[7]! & 0xff].join(".");
+  }
+  return `${groups.slice(0, 4).map((group) => group.toString(16).padStart(4, "0")).join(":")}::/64`;
+}
+
+/** The requesting network (networkKey of CF-Connecting-IP). */
+export function clientNetwork(request: Request): string {
+  const address = request.headers.get("CF-Connecting-IP");
+  return address === null ? "local-development" : networkKey(address);
+}
+
 function clientAddress(request: Request): string {
-  return request.headers.get("CF-Connecting-IP") ?? "local-development";
+  return clientNetwork(request);
 }
 
 async function opaqueId(env: RuntimeEnv, value: string): Promise<string> {
