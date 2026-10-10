@@ -40,6 +40,13 @@ void touch_input_controls(XINPUT_GAMEPAD *pad, int menus)
 	(void)menus;
 }
 
+int touch_input_move(float *forward, float *strafe)
+{
+	*forward = 0.0f;
+	*strafe = 0.0f;
+	return 0;
+}
+
 void touch_input_look(float scale, float *yaw, float *pitch)
 {
 	(void)scale;

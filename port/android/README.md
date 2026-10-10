@@ -170,7 +170,7 @@ join it. Drag to scroll the list, tap the left or right half of "PAGE 1 OF
 ### Touch controls
 
 In a game, the app shows touch controls over the picture. They are a
-controller for player 1:
+controller for player 1. With the default buttons of the profile:
 
 | Control | Function in the game |
 | --- | --- |
@@ -184,8 +184,13 @@ controller for player 1:
 | Pause, Back | start, back |
 | Up, Down, Left, Right | D-pad |
 
+The names on the buttons follow the profile's "Button layout" (Settings >
+Gamepads): with "Swap triggers", the right trigger's button says "Grenade".
+The stick moves the player with every "Stick layout", southpaw too.
+
 A finger that holds a button can also swipe to look, so you can fire and
-aim with one thumb. A short tap reaches the game even when it is shorter
+aim with one thumb. No control is smaller than a finger (48 dp across),
+whatever the size of the screen. A short tap reaches the game even when it is shorter
 than one frame. Swipes that start in the edge-gesture zones of Android do
 not turn the view. The swipe aims as the controller's stick does, not as
 a mouse: the aim slows over a target and follows a moving one, as with a
@@ -202,16 +207,22 @@ them. The setting `input.touch_controls` changes this (refer to
 
 The buttons at the top of the screen:
 
-- "Hide" removes the controls until you push "Touch".
+- "Hide" removes the controls until you push "Touch"; the app remembers
+  it.
 - "Options" opens these items:
   - "General": the phone's vibration (on by default; it follows the
     vibration setting of the game's profile), aiming with the gyroscope
-    (off by default), "Hide or add buttons" (hide a button, add a copy of
-    a button) and "Edit buttons size".
+    (off by default), a floating move stick (off by default: the stick goes
+    where your thumb lands in the lower left of the screen), the opacity of
+    the controls, "Hide or add buttons" (hide a button, add a copy of a
+    button) and "Edit buttons size".
   - "Edit buttons layout": drag the controls to new positions, then push
-    "Save and exit". "Export" and "Import" write and read a layout file
-    with the file picker of the system.
+    "Save". "Export" and "Import" write and read a layout file with the
+    file picker of the system.
   - "Look sensitivity".
+
+"Hide" and "Options" act when the finger lifts on them: a swipe that
+starts on them turns the view instead.
 
 The app keeps the layout in its own preferences, not in `config.toml`.
 Removing the app's data or the app removes the layout.
@@ -584,7 +595,8 @@ assembly of the port is necessary:
   `0x80000000` to `0x8c000000`. If ART uses them, the app shows a message
   (refer to "The fixed addresses").
 - The size of the touch controls follows the height of the screen. On a
-  tablet they are larger than on a phone.
+  tablet they are larger than on a phone. They are never smaller than a
+  finger.
 - Kernels with 16 KB pages (a developer option of Android 15) do not
   operate. The Xbox memory uses 4 KB pages.
 - The x86 Android emulator runs the app through its ARM translation. The
