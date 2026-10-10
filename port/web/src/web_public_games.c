@@ -14,6 +14,8 @@ build runs without p2p.c's thread (HALO_NET_ONLINE is off: no UDP), so:
 #include "p2p_internal.h"
 
 #include <emscripten/emscripten.h>
+
+void platform_log(const char *format, ...);
 #include <stdio.h>
 #include <string.h>
 
@@ -137,6 +139,30 @@ EMSCRIPTEN_KEEPALIVE void web_public_rooms_add(int players, int maximum, int ope
 	room->open = open != 0;
 	room->in_progress = in_progress != 0;
 	room->has_teams = has_teams != 0;
+	/* (its engine, from the game type's name the page has: the Server
+	Browser's Game column names a listing by its engine, ChupathingyCE's
+	menu_functions.c, which takes 0 for network co-op) */
+	{
+		static const struct { const char *word; unsigned char engine; } engines[] = {
+			{ "co-op", 0 }, { "coop", 0 }, { "ctf", 1 }, { "capture", 1 }, { "slayer", 2 }, { "oddball", 3 },
+			{ "ball", 3 }, { "king", 4 }, { "hill", 4 }, { "race", 5 },
+		};
+		char lower[sizeof(room->gametype)];
+		size_t index;
+
+		for (index = 0; index + 1 < sizeof(lower) && gametype[index]; index++)
+			lower[index] = (char)(gametype[index] >= 'A' && gametype[index] <= 'Z' ? gametype[index] + 32 : gametype[index]);
+		lower[index] = 0;
+		room->engine_type = 2;
+		for (index = 0; index < sizeof(engines) / sizeof(engines[0]); index++)
+		{
+			if (strstr(lower, engines[index].word))
+			{
+				room->engine_type = engines[index].engine;
+				break;
+			}
+		}
+	}
 	room->ping = -1;
 	/* (its identifier, which the browser marks a failed join by: the room
 	id's first bytes) */
@@ -192,6 +218,7 @@ int web_join_invite(const char *text)
 		static char room_id[P2P_LISTING_INVITE_SIZE];
 
 		snprintf(room_id, sizeof(room_id), "%s", text + 4);
+		platform_log("web online: joining the public room %s", room_id);
 		/* (sync: room_id is reused) */
 		MAIN_THREAD_EM_ASM({
 			if (typeof window !== "undefined" && window.HaloOnline && window.HaloOnline.joinPublicRoom)

@@ -2996,7 +2996,10 @@
      * (src/web_public_games.c): its room, joined as an invite to it is */
     joinPublicRoom: function(roomId) {
       var code = session.publicRooms && session.publicRooms.get(roomId);
-      if (!code) return Promise.resolve();
+      if (!code) {
+        console.warn("web online: the public room " + roomId + " is not one this page has listed");
+        return Promise.resolve();
+      }
       return join(makeInviteUrl(code)).catch(fail);
     },
     join: join,

@@ -3428,6 +3428,17 @@ static long lobby_browser_compare(struct p2p_listing const *a, struct p2p_listin
 {
 	long order;
 
+#ifdef HALO_WEB
+	/* (the browser build: games hosted in browsers, the page's rooms
+	(web_public_games.c, "web:<room>"), first, whatever the column) */
+	{
+		boolean a_web = !strncmp(a->invite, "web:", 4);
+		boolean b_web = !strncmp(b->invite, "web:", 4);
+
+		if (a_web != b_web)
+			return a_web ? -1 : 1;
+	}
+#endif
 	switch (lobby_browser.sort)
 	{
 	case _lobby_browser_sort_name: order = lobby_browser_compare_text(a->name, b->name); break;
