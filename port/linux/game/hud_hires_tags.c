@@ -30,6 +30,8 @@ When the texture cannot be drawn, the sprites are drawn from their bitmap.
 
 /* hud_hires.c's */
 void hud_hires_register_placeholder(long asset, unsigned long const *texture);
+unsigned long hud_hires_asset_sprites(long asset);
+int hud_hires_sprites_drawable(long asset, unsigned long address, unsigned long level0_size);
 
 /* the platform layer's (port/linux/src) */
 void platform_log(char const *format, ...);
@@ -218,7 +220,7 @@ struct bitmap_data const *hud_hires_sprite_bitmap(
 			{
 				hud_hires_register_placeholder(
 					hires_sprite_bitmaps[index].asset,
-					(unsigned long const *)placeholder->hardware_format);
+					(unsigned long const *)xbox_pointer(placeholder->hardware_format));
 			}
 			else
 			{

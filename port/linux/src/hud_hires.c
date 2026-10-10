@@ -181,7 +181,12 @@ int hud_hires_sprites_drawable(long asset, unsigned long address, unsigned long 
 	{
 		return 0;
 	}
+#ifdef HALO_64BIT
+	/* (an Xbox address: the texture's pixels in the contiguous memory) */
+	if (crc32(0L, (const Bytef *)xbox_pointer(address), (uInt)level0_size) != hud_hires_embedded[asset].crc)
+#else
 	if (crc32(0L, (const Bytef *)address, (uInt)level0_size) != hud_hires_embedded[asset].crc)
+#endif
 	{
 		if (!textures[asset].other_pixels_logged)
 		{

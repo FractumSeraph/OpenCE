@@ -1793,7 +1793,7 @@ static char const *const pause_settings_hidden_items[] =
 for SETTINGS, back to its own size) */
 static void pause_list_fit(struct ui_widget_definition *list, short span)
 {
-	struct ui_widget_child_reference *children = list->child_widgets.address;
+	struct ui_widget_child_reference *children = xbox_pointer(list->child_widgets.address);
 	long count = list->child_widgets.count, child;
 
 	for (child = 1; child < count; child++)
@@ -1831,7 +1831,7 @@ static void pause_settings_patch(void)
 	if (list_widget == NONE || ok_widget == NONE)
 		return;
 	list = tag_get(UI_WIDGET_DEFINITION_TAG, build.widget_tags[list_widget]);
-	children = list->child_widgets.address;
+	children = xbox_pointer(list->child_widgets.address);
 	for (child = 0; child < list->child_widgets.count && place_count < (long)NUMBEROF(places); child++)
 	{
 		struct ui_widget_definition *item = tag_get(UI_WIDGET_DEFINITION_TAG, children[child].widget_tag.index);
