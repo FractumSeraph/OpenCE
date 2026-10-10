@@ -307,6 +307,10 @@ struct torrent_session
 	int tracker_count;
 	char web_seeds[TORRENT_MAXIMUM_WEB_SEEDS][256];
 	int web_seed_count;
+	/* each web seed connection's server, looked up once in a while (0: not
+	yet, or it could not be) */
+	unsigned long web_seed_addresses[TORRENT_MAXIMUM_WEB_SEEDS];
+	unsigned long web_seed_resolved_times[TORRENT_MAXIMUM_WEB_SEEDS];
 	long upload_limit;
 	long download_limit;
 	double upload_tokens;

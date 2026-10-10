@@ -119,6 +119,7 @@ void torrent_trackers_configure(void)
 
 	torrent_session.tracker_count = 0;
 	torrent_session.web_seed_count = 0;
+	memset(torrent_session.web_seed_addresses, 0, sizeof(torrent_session.web_seed_addresses));
 	for (;;)
 	{
 		struct torrent_tracker *tracker;
@@ -186,6 +187,19 @@ static unsigned long tracker_address(struct torrent_tracker *tracker)
 			torrent_log("the tracker %s cannot be resolved", tracker->host);
 	}
 	return tracker->address;
+}
+
+/* a web seed's address, looked up once in a while (blocking briefly), as a
+tracker's is */
+static unsigned long web_seed_address(int index, const char *host)
+{
+	if (!torrent_session.web_seed_addresses[index] ||
+		torrent_elapsed(torrent_session.web_seed_resolved_times[index], RESOLVE_LIFETIME))
+	{
+		torrent_session.web_seed_addresses[index] = posix_resolve_ipv4(host);
+		torrent_session.web_seed_resolved_times[index] = torrent_now();
+	}
+	return torrent_session.web_seed_addresses[index];
 }
 
 /* ---------- the HTTP client */
@@ -1176,12 +1190,8 @@ void torrent_web_seeds_tick(struct torrent *torrent)
 				web_seed_failed(torrent, state, url, "not a URL");
 				continue;
 			}
-			address = posix_resolve_ipv4(host);
-			if (!address)
-			{
-				web_seed_failed(torrent, state, url, "cannot be resolved");
-				continue;
-			}
+			/* (the piece chosen first: an idle connection with nothing to
+			fetch looks up no address) */
 			if (whole)
 			{
 				/* (the next piece of the file not had nor asked for) */
@@ -1205,6 +1215,13 @@ void torrent_web_seeds_tick(struct torrent *torrent)
 			state->piece = piece;
 			state->received = 0;
 			state->block_size = 0;
+			address = web_seed_address(index, host);
+			if (!address)
+			{
+				/* (the piece open to asking again) */
+				web_seed_failed(torrent, state, url, "cannot be resolved");
+				continue;
+			}
 			web_seed_contexts[torrent_index][index].torrent = torrent;
 			web_seed_contexts[torrent_index][index].state = state;
 			if (!torrent_http_start(http, address, port, host, path, (long long)piece * torrent->piece_length,
