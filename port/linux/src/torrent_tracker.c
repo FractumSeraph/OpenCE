@@ -709,7 +709,7 @@ static void udp_tracker_tick(struct torrent *torrent, struct torrent_tracker *tr
 			tracker_failed(tracker, state, "no answer");
 		return;
 	}
-	if (!torrent_elapsed(state->next_time, 0))
+	if (!torrent_reached(state->next_time))
 		return;
 	if (!tracker_address(tracker))
 	{
@@ -889,7 +889,7 @@ static void http_tracker_tick(struct torrent *torrent, struct torrent_tracker *t
 		}
 		return;
 	}
-	if (!torrent_elapsed(state->next_time, 0))
+	if (!torrent_reached(state->next_time))
 		return;
 	if (!tracker_address(tracker))
 	{
@@ -1038,7 +1038,7 @@ void torrent_web_seeds_tick(struct torrent *torrent)
 			continue;
 		}
 		if (torrent->state != _torrent_state_downloading || !torrent->piece_hashes ||
-			!torrent_elapsed(state->retry_time, 0) || torrent_download_allowance() < TORRENT_BLOCK_SIZE)
+			!torrent_reached(state->retry_time) || torrent_download_allowance() < TORRENT_BLOCK_SIZE)
 		{
 			continue;
 		}

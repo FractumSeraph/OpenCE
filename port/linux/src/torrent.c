@@ -33,6 +33,9 @@ responsive: a 300 MB map is checked in a second or two) */
 #define CHECK_BYTES_PER_TICK (16UL << 20)
 /* a block asked for that has not come after this long is asked again */
 #define REQUEST_TIMEOUT (20 * TORRENT_SECOND)
+/* how long a peer has a piece before a web seed may take it over (the endgame:
+torrent_piece_to_request_whole) */
+#define ENDGAME_WAIT (5 * TORRENT_SECOND)
 #define SELECT_WAIT_MILLISECONDS 100
 #define TOKENS_CAP_SECONDS 2.0
 
@@ -46,6 +49,14 @@ unsigned long torrent_now(void)
 int torrent_elapsed(unsigned long since, unsigned long milliseconds)
 {
 	return torrent_now() - since >= milliseconds;
+}
+
+/* whether a time to come (torrent_now() + a wait) has come: torrent_elapsed
+(when, 0) is always true, the difference being unsigned, so every wait
+until a time was none (trackers announced to many times a second) */
+int torrent_reached(unsigned long when)
+{
+	return (long)(torrent_now() - when) >= 0;
 }
 
 void torrent_log(const char *format, ...)
@@ -725,15 +736,12 @@ int torrent_piece_to_request_whole(struct torrent *torrent, int *piece)
 	int start;
 	int count;
 
-	if (torrent->state != _torrent_state_downloading || !torrent->piece_hashes ||
-		torrent->active_count >= TORRENT_MAXIMUM_ACTIVE_PIECES)
-	{
+	if (torrent->state != _torrent_state_downloading || !torrent->piece_hashes)
 		return 0;
-	}
 	/* (from the end: the peers' random starts are as likely anywhere, and a
 	web seed is fastest at the pieces no peer is on) */
 	start = torrent_random(torrent->piece_count);
-	for (count = 0; count < torrent->piece_count; count++)
+	for (count = 0; count < torrent->piece_count && torrent->active_count < TORRENT_MAXIMUM_ACTIVE_PIECES; count++)
 	{
 		int candidate = (start + torrent->piece_count - count) % torrent->piece_count;
 
@@ -750,7 +758,34 @@ int torrent_piece_to_request_whole(struct torrent *torrent, int *piece)
 			return 1;
 		}
 	}
-	return 0;
+	/* (the endgame: every piece left is a peer's. A busy or gone peer held
+	the last of them for ever, the web seed taking only pieces no peer was
+	on: it takes the one waited on longest, once a peer has had it a while;
+	blocks that come twice are taken once) */
+	{
+		struct torrent_active_piece *oldest = NULL;
+		int index;
+		int block;
+
+		for (index = 0; index < torrent->active_count; index++)
+		{
+			struct torrent_active_piece *active = &torrent->active[index];
+
+			if (active->received_count < active->block_count &&
+				torrent_elapsed(active->started, ENDGAME_WAIT) &&
+				(!oldest || (long)(active->started - oldest->started) < 0))
+			{
+				oldest = active;
+			}
+		}
+		if (!oldest)
+			return 0;
+		for (block = 0; block < oldest->block_count; block++)
+			bit_set(oldest->requested, block);
+		oldest->started = torrent_now();
+		*piece = oldest->piece;
+		return 1;
+	}
 }
 
 void torrent_piece_unrequested(struct torrent *torrent, int piece)
@@ -905,14 +940,14 @@ static void torrent_tick(struct torrent *torrent)
 	case _torrent_state_downloading:
 		active_pieces_tick(torrent);
 		torrent_trackers_tick(torrent);
-		if (torrent_session.dht && torrent_elapsed(torrent->dht_next_lookup, 0))
+		if (torrent_session.dht && torrent_reached(torrent->dht_next_lookup))
 			torrent_dht_lookup(torrent);
 		torrent_web_seeds_tick(torrent);
 		torrent_peers_tick(torrent);
 		break;
 	case _torrent_state_seeding:
 		torrent_trackers_tick(torrent);
-		if (torrent_session.dht && torrent_elapsed(torrent->dht_next_lookup, 0))
+		if (torrent_session.dht && torrent_reached(torrent->dht_next_lookup))
 			torrent_dht_lookup(torrent);
 		torrent_peers_tick(torrent);
 		break;

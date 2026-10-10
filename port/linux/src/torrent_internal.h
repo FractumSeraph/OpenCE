@@ -26,7 +26,9 @@ Addresses and ports are in network byte order, as sockaddr_in holds them.
 #define TORRENT_MAXIMUM_PEERS 24
 /* addresses known of one torrent's peers */
 #define TORRENT_MAXIMUM_CANDIDATES 256
-#define TORRENT_MAXIMUM_ACTIVE_PIECES 8
+/* (pieces under way at once: peers' and a web seed's; at 8 a slow peer's
+pieces left a web seed nothing to take) */
+#define TORRENT_MAXIMUM_ACTIVE_PIECES 24
 #define TORRENT_BLOCK_SIZE 16384
 /* a Custom Edition cache is at most 768 MB (cache_file_formats.h), and the
 index's piece lengths at least 256 KB (tools/map_torrents.py) */
@@ -304,6 +306,7 @@ extern pthread_mutex_t torrent_lock;
 
 unsigned long torrent_now(void);
 int torrent_elapsed(unsigned long since, unsigned long milliseconds);
+int torrent_reached(unsigned long when);
 void torrent_log(const char *format, ...) __attribute__((format(printf, 1, 2)));
 const char *torrent_address_text(unsigned long address, unsigned short port, char *text);
 unsigned long torrent_network_long(unsigned long value);
