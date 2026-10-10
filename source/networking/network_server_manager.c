@@ -865,7 +865,15 @@ player is asked for as it joins) */
 static unsigned long network_game_server_client_machine_join_times[MAXIMUM_NETWORK_MACHINE_COUNT];
 enum
 {
+#ifdef HALO_WEB
+	/* (a browser host: a browser joining it loads a Custom Edition map's
+	pieces from the site, over the internet, before it adds its player,
+	which can take well past a native machine's 15 seconds the first time;
+	port/web/fetch_path_normalization.js) */
+	NETWORK_GAME_SERVER_PLAYERLESS_MACHINE_TIMEOUT = 120 * MILLISECONDS_PER_SECOND,
+#else
 	NETWORK_GAME_SERVER_PLAYERLESS_MACHINE_TIMEOUT = 15 * MILLISECONDS_PER_SECOND,
+#endif
 	/* the connections of one address that have not joined yet a server
 	takes (network_game_server_add_new_client) */
 	MAXIMUM_WAITING_CONNECTIONS_PER_ADDRESS = 2,

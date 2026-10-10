@@ -116,6 +116,42 @@
     }
   }
 
+  /* a read of several whole pieces, from the pieces kept (prefetched ones),
+   * when all are */
+  async function cachedPieces(path, range) {
+    const match = /^bytes=(\d+)-(\d+)$/.exec(range);
+    const version = mapVersions.get(path);
+    const storage = cacheStorage();
+    if (!match || !version || !storage) return null;
+    const first = Number(match[1]), last = Number(match[2]);
+    if (first % PIECE_BYTES || (last + 1) % PIECE_BYTES || last - first + 1 <= PIECE_BYTES ||
+        last - first + 1 > 64 * PIECE_BYTES) {
+      return null;
+    }
+    try {
+      const cache = await storage.open(MAP_CACHE);
+      const parts = [];
+      let size = "";
+      for (let start = first; start < last; start += PIECE_BYTES) {
+        const kept = await cache.match(pieceKey(path, version, `bytes=${start}-${start + PIECE_BYTES - 1}`));
+        if (!kept) return null;
+        size = (kept.headers.get("Content-Range") || "").split("/")[1] || size;
+        parts.push(new Uint8Array(await kept.arrayBuffer()));
+        /* (a short piece is the file's last) */
+        if (parts[parts.length - 1].byteLength < PIECE_BYTES) break;
+      }
+      const length = parts.reduce((total, part) => total + part.byteLength, 0);
+      const body = new Uint8Array(length);
+      let offset = 0;
+      for (const part of parts) { body.set(part, offset); offset += part.byteLength; }
+      return new Response(body, { status: 206, headers: {
+        "Content-Type": "application/octet-stream", "Content-Length": String(length),
+        "Content-Range": `bytes ${first}-${first + length - 1}/${size || "*"}`, "ETag": version } });
+    } catch (_error) {
+      return null;
+    }
+  }
+
   function keepPiece(path, range, response) {
     const version = mapVersions.get(path);
     const storage = cacheStorage();
@@ -126,6 +162,89 @@
     storage.open(MAP_CACHE)
       .then(cache => cache.put(pieceKey(path, version, range), new Response(copy.body, { status: 200, headers })))
       .catch(() => { /* (no room: downloaded again next time) */ });
+  }
+
+  /* Prefetching a Custom Edition map as the game starts reading it. FetchFS
+   * reads a map one 256 KB piece at a time, waiting for each: a few hundred
+   * pieces of the map and of bitmaps.map and sounds.map (which every Custom
+   * Edition map draws on). From a host far away (the site's maps are on a
+   * seedbox in Europe: some 150-300 ms a request) that took minutes, and a
+   * host refuses a joining machine that has not added its player in a while.
+   * So the first read of a map fetches it, and the resource maps, whole, a
+   * few large ranges at a time, into the pieces (and keys) FetchFS asks for:
+   * its reads then come from this device, now and in later sessions. A piece
+   * the game asks for before it arrives is fetched as before. Not with the
+   * browser's data saver on. */
+  const PIECE_BYTES = 256 * 1024;
+  const PREFETCH_PIECES = 16;
+  const PREFETCH_PARALLEL = 6;
+  const RESOURCE_MAPS = ["bitmaps.map", "sounds.map", "loc.map"];
+  const prefetched = new Set();
+  const isResourceMap = path => RESOURCE_MAPS.includes(decodeURIComponent(path.split("/").pop()).toLowerCase());
+
+  async function prefetchFile(path) {
+    if (prefetched.has(path)) return;
+    prefetched.add(path);
+    const storage = cacheStorage();
+    const entry = await customMapEntry(path);
+    if (!storage || !entry) return;
+    await keepVersion(path, entry.etag, entry.size);
+    const version = entry.etag;
+    const cache = await storage.open(MAP_CACHE);
+    const pieces = Math.ceil(entry.size / PIECE_BYTES);
+    const wanted = [];
+    for (let piece = 0; piece < pieces; piece++) {
+      const start = piece * PIECE_BYTES;
+      const end = Math.min(start + PIECE_BYTES, entry.size) - 1;
+      /* (FetchFS asks for whole pieces, the last one past the file's end) */
+      const range = `bytes=${start}-${start + PIECE_BYTES - 1}`;
+      if (!await cache.match(pieceKey(path, version, range))) wanted.push({ start, end, range });
+    }
+    /* (runs of missing pieces, each fetched in one request) */
+    const runs = [];
+    for (const piece of wanted) {
+      const run = runs[runs.length - 1];
+      if (run && run.length < PREFETCH_PIECES && run[run.length - 1].start + PIECE_BYTES === piece.start) run.push(piece);
+      else runs.push([piece]);
+    }
+    const url = scope.location.origin + path;
+    const fetchRun = async run => {
+      const first = run[0].start, last = run[run.length - 1].end;
+      const response = await nativeFetch(url, { headers: { Range: `bytes=${first}-${last}` } });
+      if (response.status !== 206) return;
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      for (const piece of run) {
+        const body = bytes.subarray(piece.start - first, piece.end - first + 1);
+        const headers = new Headers({
+          "Content-Type": "application/octet-stream",
+          "Content-Length": String(body.byteLength),
+          "Content-Range": `bytes ${piece.start}-${piece.end}/${entry.size}`,
+          "ETag": version,
+          "X-Halo-Status": "206",
+        });
+        await cache.put(pieceKey(path, version, piece.range), new Response(body.slice(), { status: 200, headers }));
+      }
+    };
+    let next = 0;
+    const worker = async () => {
+      while (next < runs.length) {
+        const run = runs[next++];
+        try { await fetchRun(run); } catch (_error) { /* (read as before when the game asks) */ }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(PREFETCH_PARALLEL, runs.length) }, worker));
+  }
+
+  function prefetchCustomMap(path) {
+    if (prefetched.has(path) || isResourceMap(path)) return;
+    try {
+      if (scope.navigator && scope.navigator.connection && scope.navigator.connection.saveData) return;
+    } catch (_error) { /* (no Network Information API) */ }
+    /* (the map first, then the resource maps it draws on) */
+    const folder = path.replace(/[^/]*$/, "");
+    prefetchFile(path)
+      .then(() => Promise.all(RESOURCE_MAPS.map(name => prefetchFile(folder + encodeURIComponent(name)))))
+      .catch(() => { /* (read as before) */ });
   }
 
   scope.fetch = async function haloFetch(resource, options) {
@@ -161,8 +280,9 @@
     const range = mapPath && (options && options.headers && new Headers(options.headers).get("Range") ||
       resource instanceof Request && resource.headers.get("Range")) || "";
     if (mapPath && method === "GET") {
-      const kept = await cachedPiece(mapPath, range);
+      const kept = await cachedPiece(mapPath, range) || await cachedPieces(mapPath, range);
       if (kept) return kept;
+      if (isCustomMapRequest) prefetchCustomMap(mapPath);
     }
     if (isCustomMapRequest && method === "HEAD") {
       const entry = await customMapEntry(mapPath);
