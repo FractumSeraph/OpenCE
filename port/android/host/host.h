@@ -50,6 +50,10 @@ int host_memory_initialize(uint32_t image_base, uint32_t image_size);
 int host_memory_fixed_unavailable(void);
 /* lists the mappings below 4 GB in logcat and, if file is not NULL, in it */
 void host_memory_report_low_mappings(FILE *file);
+/* Makes the write tracking compare page contents instead of catching page
+faults (host_watch_hash.h), for when the app cannot receive its own
+SIGSEGV (ARM translation). Call before the guest starts. */
+void host_memory_watch_use_hashes(void);
 /* page-granular allocations below 4 GB; NULL on failure */
 void *host_low_map(size_t size, int protection);
 void host_low_unmap(void *address, size_t size);
