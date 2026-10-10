@@ -12,6 +12,7 @@ game. The platform layer cannot see the game's types, so it asks here
 #include "bink/bink_playback.h"
 #include "input/input.h"
 #include "input/input_abstraction.h"
+#include "interface/ui_widget.h"
 
 /* asks whether a cinematic is playing that A would skip
 (player_control.c, player_control_action_test_check_reset_input_blob); tests
@@ -31,12 +32,15 @@ int touch_game_cinematic_playing(void)
 	return cinematic_globals && game_in_progress() && cinematic_in_progress();
 }
 
-/* asks whether a game is up to play: a map running (the main menu's too,
-whose menus hide the controls anyway) and no movie over it; not while the
-game starts, before its first map */
+/* asks whether a game is being played: not while the game starts, nor
+between maps, nor at the main menu (whose ui.map is a game too), nor while
+a movie plays over it, where the on-screen touch controls do not show
+(touch_input.c); cinematic_globals first, as touch_game_cinematic_skippable
+has it */
 int touch_game_playing(void)
 {
-	return cinematic_globals && game_in_progress() && !bink_playback_in_progress();
+	return cinematic_globals && game_in_progress() && !main_menu_is_active() &&
+		!bink_playback_in_progress();
 }
 
 /* the game control on each of player 1's 16 controller buttons, as the

@@ -257,8 +257,9 @@ void touch_input_controls(XINPUT_GAMEPAD *pad, int menus)
 	int scene;
 	int index;
 
-	/* (the controller is read from the first frames, before the main menu
-	is up: no game yet is no place for the controls either) */
+	/* (the controls show only in a game: not while it starts, at the main
+	menu, in a menu, during a cinematic or a movie; the controller is read
+	from the first frames, before the main menu is up) */
 	scene = _touch_scene_known | touch_controls_setting() |
 		(menus || !touch_game_playing() || touch_game_cinematic_playing() ? _touch_scene_menus : 0);
 	if (scene != last_scene)
