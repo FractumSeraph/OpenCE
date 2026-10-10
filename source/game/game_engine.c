@@ -1230,7 +1230,7 @@ static void game_engine_generate_title_string(
 			}
 			else
 				outcome_string = L"";
-			ustrncpy_terminated(title_string, outcome_string, 80);
+			ustrncpy(title_string, outcome_string, 80);
 			break;
 
 		case FALSE:
@@ -1246,7 +1246,7 @@ static void game_engine_generate_title_string(
 				}
 				else
 					outcome_string = L"";
-				ustrncpy_terminated(title_string, outcome_string, 80);
+				ustrncpy(title_string, outcome_string, 80);
 			}
 			else
 			{
@@ -1260,7 +1260,7 @@ static void game_engine_generate_title_string(
 				}
 				else
 					outcome_string = L"";
-				ustrncpy_terminated(title_string, outcome_string, 80);
+				ustrncpy(title_string, outcome_string, 80);
 			}
 			break;
 
@@ -1277,7 +1277,7 @@ static void game_engine_generate_title_string(
 				}
 				else
 					outcome_string = L"";
-				ustrncpy_terminated(title_string, outcome_string, 80);
+				ustrncpy(title_string, outcome_string, 80);
 			}
 			else
 			{
@@ -1291,7 +1291,7 @@ static void game_engine_generate_title_string(
 				}
 				else
 					outcome_string = L"";
-				ustrncpy_terminated(title_string, outcome_string, 80);
+				ustrncpy(title_string, outcome_string, 80);
 			}
 			break;
 		}
@@ -2315,6 +2315,7 @@ static void game_engine_rasterize_scoreboard(
 	/* port: bounded (the map's column names) */
 	usnprintf(row_string, NUMBEROF(row_string), L"\t%s\t%s\t%s\t%s", column_name, score_name, score_string,
 		network ? L"Ping" : L"");
+	row_string[NUMBEROF(row_string) - 1] = 0;
 	{
 		long column;
 
@@ -2606,6 +2607,7 @@ static void game_engine_rasterize_in_game_score(
 
 	game_engine->format_score_name(score_string);
 	usnprintf(row_string, NUMBEROF(row_string), L"\t%s\t%s\t%s", column_name, score_name, score_string);
+	row_string[NUMBEROF(row_string) - 1] = 0;
 	rasterize_in_game_score_draw_line(row_string, FALSE, &color, 1);
 
 	for (entry_index = 0; entry_index < entry_count; entry_index++)

@@ -4069,7 +4069,11 @@ static void lobby_browser_update(struct widget_instance *list)
 				L"Looking for public games..." : L"No public games found");
 		}
 		else if (lobby_browser.message[0] && now - lobby_browser.message_time < LOBBY_BROWSER_MESSAGE_TIME)
+		{
+			/* (terminated here: usnprintf, as MSVC's, is not when it fits exactly) */
 			usnprintf(text, NUMBEROF(text) - 1, L"%s", lobby_browser.message);
+			text[NUMBEROF(text) - 1] = 0;
+		}
 		/* (what stops the chosen game being joined here: its Halo PC map) */
 		else if (chosen < lobby_browser.count &&
 			server_browser_map_blocked(lobby_browser.games[chosen].map, text, NUMBEROF(text)))
