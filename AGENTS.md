@@ -95,6 +95,7 @@ python -m pytest -q tools/test_profile.py tools/test_map_families.py tools/test_
 python tools/test_touch_layout.py                           # the Android touch layout (JDK 17+)
 python tools/test_light_storage.py
 python tools/test_death_timing.py
+python tools/test_hud_thresholds.py                         # the HUD meter shader (NumPy, Pillow, SciPy; OpenGL 4.5)
 ```
 
 `tools/harness/README.md` explains how to add an asset-free test: the code
