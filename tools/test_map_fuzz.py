@@ -2,9 +2,9 @@
 through the tag validator, a Custom Edition or HaloMD map through its checks
 and then its conversions, and a Custom Edition sound's Ogg Vorbis stream
 through its decoder. Each is built from the 64-bit build's own units, with
-the macOS build's flags (from build.ninja: `python3 configure.py` first) plus
-libFuzzer, AddressSanitizer and UndefinedBehaviorSanitizer (or linux64's:
-MAP_FUZZ_BUILD=linux64).
+the flags of the platform's build (macOS's, linux64's on Linux; from
+build.ninja: `python3 configure.py` first; MAP_FUZZ_BUILD chooses another)
+plus libFuzzer, AddressSanitizer and UndefinedBehaviorSanitizer.
 
 As a test (pytest), each target runs on maps made here (small, whole, of no
 game's data) and on the inputs in tools/tests/map_fuzz_regressions, then for
@@ -55,7 +55,7 @@ sys.path.insert(0, str(ROOT))
 from tools.test_network_messages import compile_command, object_command  # noqa: E402
 
 # the build whose units and flags are used (ninja macos, or linux64)
-BUILD = os.environ.get("MAP_FUZZ_BUILD", "macos")
+BUILD = os.environ.get("MAP_FUZZ_BUILD", "linux64" if sys.platform.startswith("linux") else "macos")
 HARNESS = ROOT / "tools" / "tests" / "map_fuzz.c"
 REGRESSIONS = ROOT / "tools" / "tests" / "map_fuzz_regressions"
 SANITIZE = ["-DXBOX_ADDRESS_SPACE_BASE=0x300000000000ULL", "-fsanitize=fuzzer-no-link,address,undefined", "-fno-sanitize-recover=all", "-fno-sanitize=alignment,float-cast-overflow", "-fno-omit-frame-pointer",
