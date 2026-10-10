@@ -9,15 +9,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from harness import CHECK_FAILED, build, constant, function, mutated, read, run, structure
 from harness.render_types import transparent_types
 
-try:
-    function(read("source/rasterizer/xbox/rasterizer_xbox_transparent_geometry.c"),
-             "rasterizer_transparent_geometry_order_models")
-except LookupError:
-    # (rasterizer_transparent_geometry.h still declares it)
-    pytest.skip("not in this fork: it builds ChupathingyCE's transparent geometry renderer, without OpenCE's ordering "
-                "of models by planar glass (3b95438a); the test runs again when that code returns",
-                allow_module_level=True)
-
 CASES = ["same-side", "opposite-side", "reverse-normal", "unrelated", "multiple-models",
          "multiple-planes", "conflict", "intersect", "camera-plane", "invalid-plane",
          "invalid-model", "materials", "rigid-transform", "skinned", "compressed-skinning",
