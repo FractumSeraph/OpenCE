@@ -31,7 +31,7 @@ Conventions carried over from the Xbox:
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#ifndef HALO_ANDROID
+#if !defined(HALO_ANDROID) && !defined(HALO_SERVER)
 /* port: the screenshot key's PNG (write_key_screenshot) */
 #include <SDL3/SDL.h>
 #include <limits.h>
@@ -5434,9 +5434,10 @@ void halo_screen_anti_alias(short x0, short y0, short x1, short y1)
 
 /* ---------- presentation */
 
-#ifndef HALO_ANDROID
+#if !defined(HALO_ANDROID) && !defined(HALO_SERVER)
 /* the screenshot key's PNG (controls.screenshot; the Android guest has none
-of the SDL calls it takes, and the browser no folder to write it to) */
+of the SDL calls it takes, the browser no folder to write it to, and the
+dedicated server no window, key or SDL to take it with) */
 static void write_key_screenshot(struct render_target_entry *target)
 {
 	char directory[512], path[640], timestamp[32], filename[64];
@@ -5637,7 +5638,7 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 #endif
 		if (screenshot_every > 0 && device.frame % (unsigned long)screenshot_every == 0)
 			write_screenshot(back_buffer);
-#ifndef HALO_ANDROID
+#if !defined(HALO_ANDROID) && !defined(HALO_SERVER)
 		if (platform_screenshot_take_request())
 			write_key_screenshot(back_buffer);
 #endif
