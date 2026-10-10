@@ -6,8 +6,9 @@
 
 The game shows its graphics with OpenGL ES 3. It plays sound through SDL3
 (AAudio). It accepts input from game controllers, for example a PlayStation
-5 DualSense on Bluetooth, and from the touchscreen (refer to "Controls"). The app needs Android 9 (API 28) or later. It
-operates on 64-bit-only devices, for example the Pixel 9 Pro XL.
+5 DualSense on Bluetooth, and from the touchscreen (refer to "Controls").
+The app needs Android 9 (API 28) or later. It operates on 64-bit-only
+devices, for example the Pixel 9 Pro XL.
 
 The Android build uses the platform layer of the Linux build
 (`port/linux/src`). Refer to [port/linux/README.md](../linux/README.md).
@@ -170,7 +171,7 @@ join it. Drag to scroll the list, tap the left or right half of "PAGE 1 OF
 ### Touch controls
 
 In a game, the app shows touch controls over the picture. They are a
-controller for player 1:
+controller for player 1. With the default buttons of the profile:
 
 | Control | Function in the game |
 | --- | --- |
@@ -184,31 +185,50 @@ controller for player 1:
 | Pause, Back | start, back |
 | Up, Down, Left, Right | D-pad |
 
-A finger that holds a button can also swipe to look, so you can fire and
-aim with one thumb. A short tap reaches the game even when it is shorter
-than one frame. Swipes that start in the edge-gesture zones of Android do
-not turn the view. The view does not use the mouse settings: the swipe
-keeps the aim assist of the controller.
+The names on the buttons follow the profile's "Button layout" (Settings >
+Gamepads): with "Swap triggers", the right trigger's button says "Grenade".
+The stick moves the player with every "Stick layout", southpaw too.
 
-The touch controls show only in a game. In the menus and during
-cinematics they hide, and the touchscreen operates the menus as described
-above. They also show when a controller is connected: push "Hide" to play
-with the controller. A device without a touchscreen (a TV) never shows
-them. The setting `input.touch_controls` changes this (refer to
-"Settings").
+A finger that holds a button can also swipe to look, so you can fire and
+aim with one thumb. The controls are a finger wide (48 dp) or larger, but
+on a small screen of high density they stay apart rather than reach that
+size. A short tap reaches the game even when it is shorter than one frame.
+Swipes that start in the edge-gesture zones of Android do not turn the
+view. The swipe aims as the controller's stick does, not as a mouse: the
+aim slows over a target and follows a moving one, as with a controller,
+and it follows the profile's "invert look" (the gyroscope turns the view
+as the phone turns, never inverted). The setting `input.touch_aim_assist`
+turns the aim assist off. "Look sensitivity" sets how far a swipe turns;
+the mouse settings do not apply.
+
+The touch controls show only while a game is played, from 200 ms after
+it starts. While the game starts, at the main menu, between maps, in the
+menus, during cinematics and while a movie plays they hide, and the
+touchscreen operates the menus as described above. They also show when a
+controller is connected: push "Hide" to play with the controller. A device
+without a touchscreen (a TV) never shows them. The setting
+`input.touch_controls` changes this (refer to "Settings"). The game's log
+has a line `touch: in a game` or `touch: menus`, with the setting's value,
+each time this changes.
 
 The buttons at the top of the screen:
 
-- "Hide" removes the controls until you push "Touch".
+- "Hide" removes the controls (and stops the gyroscope aiming and the
+  vibration) until you push "Touch"; the app remembers it.
 - "Options" opens these items:
   - "General": the phone's vibration (on by default; it follows the
     vibration setting of the game's profile), aiming with the gyroscope
-    (off by default), "Hide or add buttons" (hide a button, add a copy of
-    a button) and "Edit buttons size".
+    (off by default), a floating move stick (off by default: the stick goes
+    where your thumb lands in the lower left of the screen), the opacity of
+    the controls, "Hide or add buttons" (hide a button, add a copy of a
+    button) and "Edit buttons size".
   - "Edit buttons layout": drag the controls to new positions, then push
-    "Save and exit". "Export" and "Import" write and read a layout file
-    with the file picker of the system.
+    "Save". "Export" and "Import" write and read a layout file with the
+    file picker of the system.
   - "Look sensitivity".
+
+"Hide" and "Options" act when the finger lifts on them: a swipe that
+starts on them turns the view instead.
 
 The app keeps the layout in its own preferences, not in `config.toml`.
 Removing the app's data or the app removes the layout.
@@ -231,6 +251,7 @@ These settings are only for Android:
 
 | Setting | Function |
 | --- | --- |
+| `input.touch_aim_assist` | `true` (the default): the touch controls' swipe aiming gets the aim assist of a controller (the aim slows over a target and follows a moving one). `false`: none, as with a mouse; the bullets' own autoaim stays. |
 | `input.touch_controls` | The touch controls in a game. `"on"` (the default): shown on a touchscreen, also with a controller connected. `"auto"`: shown only while no controller is connected. `"off"`: never shown. A device without a touchscreen never shows them. The menus take taps with each value. |
 | `display.screen_width` | The number of columns of the 480-line picture. `0` (the default): the shape of the display (1068 on a 20:9 phone). `640`: the 4:3 shape of the Xbox. |
 | `debug.sample_seconds` | Refer to "Find problems". |
@@ -580,7 +601,8 @@ assembly of the port is necessary:
   `0x80000000` to `0x8c000000`. If ART uses them, the app shows a message
   (refer to "The fixed addresses").
 - The size of the touch controls follows the height of the screen. On a
-  tablet they are larger than on a phone.
+  tablet they are larger than on a phone. They are a finger wide or larger,
+  except on a small screen of high density (refer to "Touch controls").
 - Kernels with 16 KB pages (a developer option of Android 15) do not
   operate. The Xbox memory uses 4 KB pages.
 - The x86 Android emulator runs the app through its ARM translation. The

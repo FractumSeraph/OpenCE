@@ -40,11 +40,25 @@ void touch_input_controls(XINPUT_GAMEPAD *pad, int menus)
 	(void)menus;
 }
 
-void touch_input_look(float scale, float *yaw, float *pitch)
+int touch_input_move(float *forward, float *strafe)
+{
+	*forward = 0.0f;
+	*strafe = 0.0f;
+	return 0;
+}
+
+void touch_input_look(float scale, float *yaw, float *pitch, float *gyro_yaw, float *gyro_pitch)
 {
 	(void)scale;
 	(void)yaw;
 	(void)pitch;
+	(void)gyro_yaw;
+	(void)gyro_pitch;
+}
+
+int touch_input_aim_assist(void)
+{
+	return 0;
 }
 
 void touch_input_rumble(unsigned int left, unsigned int right)

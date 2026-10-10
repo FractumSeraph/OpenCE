@@ -91,10 +91,14 @@ static Uint64 wheel_press_until_ms = 0;
 static BOOL wheel_scrolling = FALSE;
 /* the way the scroll under way turns: 1 up (away), -1 down */
 static int wheel_direction = 0;
-/* when port 0's aim last moved, by the mouse and by the right stick
-(halo_linux_mouse_aiming) */
+/* when port 0's aim last moved, by the mouse, by the right stick, and by
+the touch controls (their swipe, gyroscope or stick: halo_linux_mouse_aiming,
+halo_linux_touch_aiming) */
 static Uint64 mouse_aimed_ms = 0;
 static Uint64 stick_aimed_ms = 0;
+#ifdef HALO_ANDROID
+static Uint64 touch_aimed_ms = 0;
+#endif
 
 /* the right stick's deflection that counts as aiming with it, clear of a
 worn stick's drift */
@@ -147,16 +151,84 @@ int halo_linux_mouse_look(short gamepad_index, float *yaw, float *pitch)
 	mouse_pending_y = 0.0f;
 	mouse_polls_unconsumed = 0;
 	pthread_mutex_unlock(&mouse_lock);
-#ifdef HALO_ANDROID
-	/* the touch controls' swipe; it is not the mouse's aiming
-	(halo_linux_mouse_aiming), so a thumb keeps the stick's magnetism */
-	touch_input_look(scale, yaw, pitch);
-#endif
 	if (x == 0.0f && y == 0.0f)
-		return *yaw != 0.0f || *pitch != 0.0f;
-	*yaw += -x * scale * mouse_sensitivity();
-	*pitch += (invert ? y : -y) * scale * vertical_sensitivity;
+		return FALSE;
+	*yaw = -x * scale * mouse_sensitivity();
+	*pitch = (invert ? y : -y) * scale * vertical_sensitivity;
 	return TRUE;
+}
+
+#ifdef HALO_ANDROID
+/* the touch controls moved the player or the aim (halo_linux_touch_aiming) */
+static void touch_used(void)
+{
+	pthread_mutex_lock(&mouse_lock);
+	touch_aimed_ms = SDL_GetTicks();
+	pthread_mutex_unlock(&mouse_lock);
+}
+#endif
+
+/* the touch controls' stick as the player's movement (input_abstraction.c's
+keyboard_controls_update), forward and strafe -1..1, whatever the
+profile's sticks do; nonzero while it is pushed. Nothing but on Android. */
+int halo_linux_touch_move(short controller_index, float *forward, float *strafe)
+{
+	*forward = 0.0f;
+	*strafe = 0.0f;
+	if (controller_index != 0)
+		return FALSE;
+#ifdef HALO_ANDROID
+	if (!touch_input_move(forward, strafe))
+		return FALSE;
+	touch_used();
+	return TRUE;
+#else
+	return FALSE;
+#endif
+}
+
+/* the touch controls' swipe and gyroscope since the last call, in radians at
+the mouse's rate per pixel (the view applies its own sensitivity), each
+apart: player_control.c inverts the swipe as the profile inverts the stick,
+not the gyroscope, which turns as the phone does, and makes them the
+stick's rate before the magnetism. Nothing but on Android. */
+int halo_linux_touch_look(short gamepad_index, float *yaw, float *pitch, float *gyro_yaw, float *gyro_pitch)
+{
+	*yaw = 0.0f;
+	*pitch = 0.0f;
+	*gyro_yaw = 0.0f;
+	*gyro_pitch = 0.0f;
+	if (gamepad_index != 0)
+		return FALSE;
+#ifdef HALO_ANDROID
+	touch_input_look(0.0022f, yaw, pitch, gyro_yaw, gyro_pitch);
+	if (*yaw == 0.0f && *pitch == 0.0f && *gyro_yaw == 0.0f && *gyro_pitch == 0.0f)
+		return FALSE;
+	touch_used();
+	return TRUE;
+#else
+	return FALSE;
+#endif
+}
+
+/* whether port 0's player aims with the touch controls without their aim
+assist (input.touch_aim_assist false): no magnetism, as for the mouse
+(player_control.c), until a stick moves the aim again */
+int halo_linux_touch_aiming(short gamepad_index)
+{
+#ifdef HALO_ANDROID
+	int aiming;
+
+	if (gamepad_index != 0 || touch_input_aim_assist())
+		return FALSE;
+	pthread_mutex_lock(&mouse_lock);
+	aiming = touch_aimed_ms != 0 && touch_aimed_ms >= stick_aimed_ms;
+	pthread_mutex_unlock(&mouse_lock);
+	return aiming;
+#else
+	(void)gamepad_index;
+	return FALSE;
+#endif
 }
 
 /* whether the player on the gamepad aims with the mouse (it moved after the

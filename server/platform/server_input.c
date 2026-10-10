@@ -48,6 +48,33 @@ int halo_linux_mouse_aiming(short gamepad_index)
 	return FALSE;
 }
 
+/* ---------- the touch controls' (none: xinput_sdl.c's have them only on
+Android) */
+
+int halo_linux_touch_move(short controller_index, float *forward, float *strafe)
+{
+	(void)controller_index;
+	*forward = 0.0f;
+	*strafe = 0.0f;
+	return FALSE;
+}
+
+int halo_linux_touch_look(short gamepad_index, float *yaw, float *pitch, float *gyro_yaw, float *gyro_pitch)
+{
+	(void)gamepad_index;
+	*yaw = 0.0f;
+	*pitch = 0.0f;
+	*gyro_yaw = 0.0f;
+	*gyro_pitch = 0.0f;
+	return FALSE;
+}
+
+int halo_linux_touch_aiming(short gamepad_index)
+{
+	(void)gamepad_index;
+	return FALSE;
+}
+
 int platform_input_scheme(void)
 {
 	return 0;

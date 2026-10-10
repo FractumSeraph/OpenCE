@@ -13,6 +13,7 @@ finger down (host_gesture_insets).
 #include "touch_menu.h"
 #include "port_config.h"
 
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -23,12 +24,17 @@ void host_touch_read(int *state);
 void host_touch_look_read(float *delta);
 void host_touch_rumble(unsigned int low, unsigned int high);
 void host_touch_scene(int scene);
+void host_touch_bindings(const int *controls);
 #endif
 
 /* the game's (port/linux/game/touch_game.c) */
 int touch_game_cinematic_skippable(void);
 int touch_game_cinematic_playing(void);
 int touch_game_playing(void);
+void touch_game_button_controls(int *controls);
+
+/* the gamepad's buttons (input.h), which the touch controls are named by */
+#define TOUCH_BUTTONS 16
 
 /* a tap moves at most this far; a drag of this length is one wheel step */
 #define TOUCH_TAP_SLOP_DP 12.0f
@@ -204,6 +210,9 @@ enum
 	_touch_scene_off = 1 << 3,
 };
 
+/* the touch controls' stick at port 0's last read, -1..1, y down */
+static float move_x, move_y;
+
 /* input.touch_controls as _touch_scene_on, _touch_scene_off or 0 ("auto");
 none, or a value it does not know, is "on": a controller seen where there is
 none would otherwise hide the controls with no way to show them */
@@ -242,13 +251,16 @@ void touch_input_controls(XINPUT_GAMEPAD *pad, int menus)
 		XINPUT_GAMEPAD_A, XINPUT_GAMEPAD_B, XINPUT_GAMEPAD_X, XINPUT_GAMEPAD_Y
 	};
 	static int last_scene = -1;
-	SHORT *sticks[4];
+	static int bindings_sent[TOUCH_BUTTONS];
+	static int bindings_known;
+	int bindings[TOUCH_BUTTONS];
 	int state[7];
 	int scene;
 	int index;
 
-	/* (the controller is read from the first frames, before the main menu
-	is up: no game yet is no place for the controls either) */
+	/* (the controls show only in a game: not while it starts, at the main
+	menu, in a menu, during a cinematic or a movie; the controller is read
+	from the first frames, before the main menu is up) */
 	scene = _touch_scene_known | touch_controls_setting() |
 		(menus || !touch_game_playing() || touch_game_cinematic_playing() ? _touch_scene_menus : 0);
 	if (scene != last_scene)
@@ -258,20 +270,21 @@ void touch_input_controls(XINPUT_GAMEPAD *pad, int menus)
 		last_scene = scene;
 	}
 	host_touch_scene(scene);
-	sticks[0] = &pad->sThumbLX;
-	sticks[1] = &pad->sThumbLY;
-	sticks[2] = &pad->sThumbRX;
-	sticks[3] = &pad->sThumbRY;
+	/* (the profile's mapping, for the buttons' names; only when it changes) */
+	touch_game_button_controls(bindings);
+	if (!bindings_known || memcmp(bindings, bindings_sent, sizeof(bindings)))
+	{
+		memcpy(bindings_sent, bindings, sizeof(bindings));
+		bindings_known = TRUE;
+		host_touch_bindings(bindings);
+	}
 	host_touch_read(state);
+	/* the stick moves the player through the game's input state, whatever
+	the profile's sticks do (touch_input_move), not as the left stick */
+	move_x = state[0] / 32767.0f;
+	move_y = state[1] / 32767.0f;
 	for (index = 0; index < 4; index++)
 	{
-		/* SDL's y runs down, the Xbox's up */
-		int value = index == 1 || index == 3 ? -state[index] - 1 : state[index];
-
-		if (value < -32768) value = -32768;
-		if (value > 32767) value = 32767;
-		if (abs(value) > abs(*sticks[index]))
-			*sticks[index] = (SHORT)value;
 		if (state[6] & (1 << index))
 			pad->bAnalogButtons[analog[index]] = 0xff;
 	}
@@ -291,13 +304,56 @@ void touch_input_controls(XINPUT_GAMEPAD *pad, int menus)
 		pad->bAnalogButtons[XINPUT_GAMEPAD_RIGHT_TRIGGER] = 0xff;
 }
 
-void touch_input_look(float scale, float *yaw, float *pitch)
+int touch_input_move(float *forward, float *strafe)
 {
-	float delta[2];
+	float x = move_x;
+	float y = move_y;
+	float largest = fabsf(x) > fabsf(y) ? fabsf(x) : fabsf(y);
+
+	if (largest == 0.0f)
+	{
+		*forward = 0.0f;
+		*strafe = 0.0f;
+		return FALSE;
+	}
+	/* the overlay's circle onto the square a controller's stick gives
+	(input_abstraction_update): a full diagonal is full on both axes */
+	{
+		float scale = sqrtf(x * x + y * y) / largest;
+
+		x *= scale;
+		y *= scale;
+		x = x < -1.0f ? -1.0f : x > 1.0f ? 1.0f : x;
+		y = y < -1.0f ? -1.0f : y > 1.0f ? 1.0f : y;
+	}
+	/* (SDL's y runs down; strafe is positive to the left) */
+	*forward = -y;
+	*strafe = -x;
+	return TRUE;
+}
+
+void touch_input_look(float scale, float *yaw, float *pitch, float *gyro_yaw, float *gyro_pitch)
+{
+	float delta[4];
 
 	host_touch_look_read(delta);
 	*yaw -= delta[0] * scale;
 	*pitch -= delta[1] * scale;
+	*gyro_yaw -= delta[2] * scale;
+	*gyro_pitch -= delta[3] * scale;
+}
+
+int touch_input_aim_assist(void)
+{
+	static int assisted;
+	static unsigned long read_at = (unsigned long)-1;
+
+	if (read_at != config_changes())
+	{
+		read_at = config_changes();
+		assisted = config_boolean("input.touch_aim_assist") != 0;
+	}
+	return assisted;
 }
 
 void touch_input_rumble(unsigned int left, unsigned int right)
