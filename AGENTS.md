@@ -1,11 +1,15 @@
 # Notes for agents
 
 This repository ports the Halo: Combat Evolved decompilation (Xbox build
-01.01.14.2342, `cachebeta.exe`) to Linux, Windows and Android. The game's C
+01.01.14.2342, `cachebeta.exe`) to Linux, Windows, macOS, Android and the
+browser (WebAssembly), with a dedicated server for Linux. The game's C
 sources are the decompilation; the port adds a platform layer that
 implements the Xbox APIs the game calls, and features the Xbox game did not
 have (a new netcode, internet play, the PC version's menus, Custom Edition
-maps, touch controls). The project is published as OpenCE.
+maps, touch controls). The project is published as OpenCE. This repository
+is FractumSeraph's fork, which combines ChupathingyCE (a community build of
+OpenCE) and OpenCE and adds the browser build (`port/web`), map downloads
+over BitTorrent and its own releases; README.md says what comes from which.
 
 Start with [README.md](README.md). The other documents are listed at the
 end.
@@ -16,19 +20,22 @@ end.
 | --- | --- |
 | `source/` | The game: 466 C files of the decompilation, compiled as they are with few changes (each marked, below) |
 | `port/linux/src/` | The platform layer the three ports share: Direct3D 8 on OpenGL (`d3d8_gl.c`), DirectSound and XInput on SDL3, files, threads, memory, sockets, settings (`port_config.c`), internet play (`p2p*.c`) |
-| `port/linux/game/` | The port's game-side code, compiled as the game's sources are: the distributed netcode (`network_*.c`), co-op, the menus (`menu_tags.c`, `menu_functions.c`), Custom Edition maps (`custom_edition_*.c`, `cache_file_formats.c`), the tag validator (`tag_validate.c`, `tag_schema_*.c`), touch, FOV and more |
+| `port/linux/game/` | The port's game-side code, compiled as the game's sources are: the distributed netcode (`network_*.c`), co-op, the menus (`menu_tags.c`, `menu_functions.c`), Halo PC's maps (`ce_*.c`, `map_families.c`), the tag validator (`tag_validate.c`, `tag_schema_*.c`), touch, FOV and more |
 | `port/linux/include/` | The port's headers: the limits (`halo_port_limits.h`, with `HALO_PORT_NETWORK_VERSION`), capacities (`halo_port_capacity.h`), the prefix header, `halo_linux_source_fixups.h` (port functions the game's sources call) |
 | `port/include/xdk/` | Stand-ins for the Xbox SDK's headers (declarations only) |
 | `port/windows/` | The Windows build's own files (`win32_*.c`, headers) |
+| `port/macos/` | The macOS build's own files (video, Bink through FFmpeg, the application bundle) |
+| `port/web/` | The browser build: the page, its platform code (`src/`), touch controls and app install (`assets/`) |
 | `port/android/` | The Android app: the guest runtime, the host library (`host/`), the Java app (`app/`), host imports (`host_imports.list`) |
 | `port/assets/` | What the builds embed or ship: high-res HUD (`hud/`), fonts, titles, menus (`menus/`), icons, network brokers |
 | `port/third_party/` | Vendored libraries, each with a README naming its upstream, version and checksum |
-| `port/tools/` | Stand-alone tools (`cache_file_report.c`) |
-| `tools/` | Build scripts (`linux_build.py`, `windows_build.py`, `android_build.py`, `ci_build.py`), generators (`ce_menus.py`, `port_settings.py`, `hud_assets.py`, `title_assets.py`, `embed_assets.py`, `xdk_headers.py`) and tests |
-| `docs/` | Longer design notes (`custom_edition_caches.md`) |
+| `server/` | The dedicated server (`tools/server_build.py`), its settings and playlists |
+| `services/` | The browser build's online services: the lobby (`signaling`), the native gateway (`native-gateway`), the self-hosting kits (`selfhost`) |
+| `tools/` | Build scripts (`linux_build.py`, `lp64_build.py`, `windows_build.py`, `macos_build.py`, `android_build.py`, `web_build.py`, `server_build.py`, `ci_build.py`), generators (`ce_menus.py`, `port_settings.py`, `hud_assets.py`, `title_assets.py`, `embed_assets.py`, `xdk_headers.py`) and tests |
+| `docs/` | Longer design notes (`delta.md`, `map_torrents.md`, `parity.md`, `telemetry.md`) |
 | `pgo/` | Profile-guided optimisation profiles |
-| `assets/` | Game data for local runs (gitignored: `maps/`, `custom_maps/`) |
-| `.github/workflows/` | CI: builds every platform on each push, publishes releases from `main` |
+| `assets/` | Game data for local runs (gitignored: `maps/`, `maps_ce/`, `maps_md/`, `maps_pc/`) |
+| `.github/workflows/` | CI: builds every platform on each push, publishes releases from `main` (`build.yml`); the browser build and the self-hosting kits (`web.yml`) |
 
 ## Building
 
@@ -38,12 +45,16 @@ ninja linux                    # build/linux/halo
 ninja android                  # the Android guest image and native libraries
 ninja android_apk              # the APK (Gradle)
 ninja windows                  # on Windows only
+ninja linux64                  # build/linux64/halo, 64-bit; also ninja windows64, ninja macos
+ninja server                   # the dedicated servers, build/server-<arch>/chupathingyce-server
+ninja web                      # the browser build (configure.py --web-cc <emcc>)
 python tools/ci_build.py linux release   # what CI builds
 ```
 
 - `configure.py` writes `build.ninja`; `configure_args` at its top records
   the options it was run with. Restore them after trying other options.
-- The Linux and Windows builds are 32-bit x86 with clang, in MSVC's ABI
+- The Linux and Windows builds are 32-bit x86 (their 64-bit builds,
+  `HALO_64BIT`, x86-64) with clang, in MSVC's ABI
   (`-fms-extensions -fshort-wchar -malign-double -fcommon`), C89 (`gnu89`):
   declarations come before statements.
 - Every native build compiles without fused multiply-add and with the
@@ -64,20 +75,23 @@ python tools/ci_build.py linux release   # what CI builds
 | `HALO_GLES` | Android | The OpenGL ES renderer |
 | `HALO_ARM64_GUEST` | Android | The guest's ABI (ILP32 AArch64) |
 | `HALO_WINDOWS` | Windows (`halo_windows_prefix.h`) | The Windows build |
+| `HALO_WEB` | The browser (`tools/web_build.py`), with `HALO_ANDROID`, `HALO_GLES` and `HALO_ARM64_GUEST` | The browser build: its differences from Android are inside `#ifdef HALO_WEB` |
+| `HALO_64BIT` | Linux x64, Windows x64, macOS, the 64-bit servers | Xbox addresses as 32-bit offsets in a reserved 4 GB (`port/macos/README.md`) |
+| `HALO_SERVER` | The dedicated server (`tools/server_build.py`) | No window, sound or input |
+| `HALO_CUSTOM_EDITION` | Every build (`CUSTOM_EDITION_DEFINES`, `tools/linux_build.py`) | Halo PC's maps: Custom Edition, HaloMD and Halo PC retail |
+| `HALO_GAME_BROWSER` | Every build, unless `--no-game-browser` | The game list and server browser (`port/linux/src/browser.c`) |
 | `HALO_RELEASE` | `--release` | No assertions checked |
 | `HALO_PROFILE` | `--profile` | The profiling build; a normal build must be unchanged by it |
 
-`HALO_LINUX` and `HALO_CUSTOM_EDITION` are **not** defined by any build:
-code guarded by them compiles to nothing. Custom Edition support is a
-setting (`game.custom_edition`), checked at run time with
-`custom_edition_cache_tags_loaded()`.
+`HALO_LINUX` is **not** defined by any build: code guarded by it compiles
+to nothing.
 
 ## Testing
 
 ```sh
 python -m pytest -q tools/harness tools/test_touch_menu.py   # the engine's functions in a fake world
 python -m pytest -q tools/test_linux_port.py                # the build, the maps' checks (needs assets/maps)
-python -m pytest -q tools/test_cache_file_formats.py tools/test_bmp_files.py tools/test_profile.py
+python -m pytest -q tools/test_profile.py tools/test_map_families.py tools/test_map_torrents.py tools/test_delta.py
 python tools/test_touch_layout.py                           # the Android touch layout (JDK 17+)
 python tools/test_light_storage.py
 python tools/test_death_timing.py
@@ -155,13 +169,18 @@ read `xbox/include`. To add a name, follow `port/include/xdk/README.md`.
 
 ### Custom Edition maps
 
-Custom Edition maps live in the data root's `custom_maps` folder with
-`bitmaps.map`, `sounds.map` and `loc.map`; their level names are
-`custom_maps\<name>`. OpenSauce features are not supported and must not be
-added: a map that needs them is refused, and one that only carries
-OpenSauce's header runs as stock Custom Edition runs it. Map files are
-untrusted input: read them through bounds-checked readers. See
-`docs/custom_edition_caches.md`.
+Custom Edition maps live in the data root's `maps_ce` folder with
+`bitmaps.map`, `sounds.map` and `loc.map` (HaloMD's in `maps_md`, Halo PC
+retail's in `maps_pc`); the game names them `<name>@ce` (`@md`, `@pc`), and
+over the network a Custom Edition map is `custom_maps\<name>`, as OpenCE
+names it. OpenCE's `custom_maps` folder and the older `maps\ce` and
+`md_maps` are read too (`port/linux/game/map_families.c`). The browser
+build reads them from the site's `assets/custom_maps`. OpenSauce features
+are not supported and must not be added: a map that needs them is refused,
+and one that only carries OpenSauce's header runs as stock Custom Edition
+runs it. Map files are untrusted input: read them through bounds-checked
+readers. See "Halo PC maps" in README.md, and `docs/map_torrents.md` for
+their downloads.
 
 ### Settings
 
@@ -199,7 +218,12 @@ as documentation of file formats, never copied.
 | [port/windows/README.md](port/windows/README.md) | The Windows build, its headers, inline functions, crash reports |
 | [port/android/README.md](port/android/README.md) | The Android build, the guest and host, touch controls, Android settings, finding problems |
 | [port/include/xdk/README.md](port/include/xdk/README.md) | How the SDK declarations were written and are checked |
-| [docs/custom_edition_caches.md](docs/custom_edition_caches.md) | Loading and converting Custom Edition maps, and the evidence for each layout |
+| [port/macos/README.md](port/macos/README.md) | The macOS build and the 64-bit builds (`HALO_64BIT`) |
+| [server/README.md](server/README.md) | The dedicated server |
+| [docs/delta.md](docs/delta.md) | ChupathingyCE's network family (Delta) |
+| [docs/map_torrents.md](docs/map_torrents.md) | Custom Edition maps over BitTorrent |
+| [docs/parity.md](docs/parity.md) | What differs between the builds, and why |
+| [services/selfhost/README.md](services/selfhost/README.md) | Hosting the browser build |
 | [port/assets/menus/README.md](port/assets/menus/README.md) | The menu files' format and how to write them again |
 | [port/assets/menus/NON_HANDDRAWN.md](port/assets/menus/NON_HANDDRAWN.md) | Menu pictures that are not redraws |
 | [port/assets/menus/UNWIRED.md](port/assets/menus/UNWIRED.md) | Menu functions that do nothing yet |
