@@ -126,9 +126,9 @@ WEB_EXCLUDED_PLATFORM_SOURCES = {
     "torrent_dht.c",
     "torrent_bencode.c",
     "torrent_sha1.c",
-    # ChupathingyCE's Android touchscreen (its host's events): the page has its
-    # own touch controls (port/web/assets/touch); port/web/src/web_touch_input.c
-    # stands in for touch_input.h
+    # OpenCE's bridge to the Android host's touch overlay (the host's events):
+    # the page has its own touch controls (port/web/assets/touch);
+    # port/web/src/web_touch_input.c stands in for touch_input.h
     "touch_input.c",
 }
 
