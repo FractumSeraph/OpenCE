@@ -43,19 +43,20 @@ tools do not accept), builds there, and puts the APK in
 `dist/android/app-debug.apk`. Only the changed files are copied, so the
 next build is incremental. Install the APK with the adb of Windows.
 
-A build that you make yourself has a different signature from the builds
-of GitHub Actions. Android installs it only after you remove the app, and
-removing the app deletes its data folder (`maps/`, `save/` and
-`config.toml`). Thus a change between the builds of GitHub Actions and your
-own builds loses the saved games, unless you copy them first (below).
+A build that you make yourself without `keystore.properties` (refer to
+"Signing") has a different signature from the release builds. Android
+installs it only after you remove the app, and removing the app deletes
+its data folder (`maps/`, `save/` and `config.toml`). Thus a change
+between the release builds and your own builds loses the saved games,
+unless you copy them first (below).
 Your own builds all have the same signature (the debug key of WSL,
 `~/.android`), so they install over each other and keep the data
 (`adb install -r`).
 
 To keep the saved games before you remove the app, enter
-`adb pull /sdcard/Android/data/com.halo.decomp/files/save/u` (the profiles).
+`adb pull /sdcard/Android/data/dev.horrible.chupathingyce/files/save/u` (the profiles).
 After the new install, before the first start of the app, enter
-`adb push u /sdcard/Android/data/com.halo.decomp/files/save/u`. The app reads
+`adb push u /sdcard/Android/data/dev.horrible.chupathingyce/files/save/u`. The app reads
 and overwrites what adb pushes. adb cannot add files to `save/u` or `save/z` once the app made them, or
 change files that the app wrote, so push before the first start. adb cannot read
 some files that the app writes (the `blam.lst` files of `save/z`), so `adb pull`
