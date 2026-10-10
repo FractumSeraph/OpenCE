@@ -50,6 +50,10 @@ on:
         description: An ID that the caller finds this run by (in its name)
         type: string
         default: ""
+      profile:
+        description: Also build the profiling flavour (configure.py --profile) on Linux
+        type: boolean
+        default: false
 
 # (a run started with a version is named for it, so that the release
 # workflows find their run; the others keep GitHub's name)
@@ -141,12 +145,19 @@ jobs:
       - name: Debug
         run: python tools/ci_build.py linux debug
 
+      # (the profiling build, configure.py --profile, which no other step
+      # compiles: only when a run started by hand asks for it, as it costs a
+      # build of its own)
+      - name: Profile
+        if: github.event_name == 'workflow_dispatch' && inputs.profile
+        run: python tools/ci_build.py linux profile
+
       - name: Release
         run: python tools/ci_build.py linux release
 
       - name: Test
         run: |
-          python -m pytest -q tools/test_linux_port.py tools/test_touch_menu.py tools/test_server_control.py tools/test_delta.py tools/test_delta_peer.py
+          python -m pytest -q tools/test_linux_port.py tools/test_touch_menu.py tools/test_server_control.py tools/test_delta.py tools/test_delta_peer.py tools/test_profile.py
           python tools/test_light_storage.py
 
       - name: Compile cache
@@ -162,6 +173,14 @@ jobs:
         with:
           name: chupathingyce-linux-release
           path: dist/chupathingyce-linux-release
+          retention-days: 3
+
+      # (only in a run started by hand, which never publishes a release)
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'workflow_dispatch' && inputs.profile
+        with:
+          name: chupathingyce-linux-profile
+          path: dist/chupathingyce-linux-profile
           retention-days: 3
 
   linux64:

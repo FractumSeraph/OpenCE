@@ -27,9 +27,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .linux_build import (CUSTOM_EDITION_DEFINES, LINUX_PROFILE, MBEDTLS_DIR, MINIUPNPC_DEFINES, MINIUPNPC_DIR, MUSL_MATH_DIR, STB_DIR,
-                          XDK_INCLUDE, compile_launcher, game_browser_defines, game_defines_and_includes, game_sources, miniupnpc_sources,
-                          musl_math_sources, opus_flags, opus_sources, pgo_mode, pgo_profile,
-                          profile_use_flags, updater_defines, xdk_headers)
+                          XDK_INCLUDE, compile_launcher, configuration_defines, game_browser_defines, game_defines_and_includes,
+                          game_sources, miniupnpc_sources, musl_math_sources, opus_flags, opus_sources, pgo_mode,
+                          pgo_profile, profile_use_flags, updater_defines, xdk_headers)
 from .embed_assets import hud_assets_build, hud_configure_inputs, ui_fonts_build
 from .ninja_syntax import Writer
 from .version import VERSION_SOURCES
@@ -390,10 +390,12 @@ def generate_android_build(n: Writer, sln: Any) -> None:
         f"-isystem {libc_include}", f"-isystem {arch}", f"-isystem {MUSL_DIR}/arch/generic",
         f"-isystem {MUSL_DIR}/include",
     ]
-    # (the game browser, the game list and dedicated servers, as every other
-    # build has them: HALO_GAME_BROWSER, configure.py; and Halo PC's Custom
-    # Edition maps, linux_build.py CUSTOM_EDITION_DEFINES)
-    guest_abi = " ".join(GUEST_ABI_FLAGS + (["-DHALO_RELEASE"] if getattr(sln, "port_release", False) else [])
+    # (--release's and --profile's defines, linux_build.py
+    # configuration_defines; the game browser, the game list and dedicated
+    # servers, as every other build has them: HALO_GAME_BROWSER,
+    # configure.py; and Halo PC's Custom Edition maps, linux_build.py
+    # CUSTOM_EDITION_DEFINES)
+    guest_abi = " ".join(GUEST_ABI_FLAGS + configuration_defines(sln)
                          + game_browser_defines(sln) + CUSTOM_EDITION_DEFINES)
     guest_code = " ".join(GUEST_CODE_FLAGS)
     tool_implicit = [Path("tools/android_asm_convert.py"), *generated_headers]

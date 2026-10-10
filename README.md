@@ -406,6 +406,45 @@ Useful `configure.py` options:
 | `--portable` | A Linux or Windows build that runs on any x86-64 computer, or a universal Mac application, to give to others. |
 | `--no-game-browser` | Leaves out the server list, stats and dedicated servers, as OpenCE's builds are. |
 | `--pgo=off`, `--lto=off` | Faster builds, without profile-guided or link-time optimisation. |
+| `--profile` | A profiling build, which records where the game spends its time. See "Profiling builds" below. |
+
+### Profiling builds
+
+A profiling build records where the game spends its time, for
+[Perfetto](https://ui.perfetto.dev/) and `tools/net_report.py`. The 32-bit
+Linux and Windows builds and the Android app have one; the 64-bit builds,
+the dedicated server and the browser build are built as without the option.
+
+1. Enter `python configure.py --profile`, then build as usual (not with
+   `--pgo=train`).
+2. Start a recording: enter `profile_record` in the console (or the telnet
+   console), or set `debug.profile_record = true` in `config.toml`. To
+   record each game of a session, also set
+   `debug.profile_record_when = "game"`.
+3. Stop it: enter `profile_stop`, load another map, or quit.
+
+| Command | Result |
+| --- | --- |
+| `profile_record [seconds]` | Starts a recording. With a number of seconds, it stops after that time. |
+| `profile_stop` | Stops the recording. |
+
+The game writes numbered `.part<n>.json` files under `profiles/` in its data
+folder and logs their paths; they stay after the recording stops. Logs go to
+standard error; a Windows release build without standard error writes them
+to `halo.log` next to `halo.exe`. `python tools/net_report.py
+<recording.part1.json>` reads a recording as tables, and writes
+`<recording>.summary.txt`, a short text file.
+
+`debug.profile_memory` sets a recording's memory in MB (default 256, from 4
+to 1024). A recording has no length limit: the game writes a part each time
+the memory is full. See the settings in
+[port/linux/README.md](port/linux/README.md). On Android, the files are in
+`/sdcard/Android/data/dev.horrible.chupathingyce/files/profiles/` (copy them with
+`adb pull`). A profiling build plays with normal builds.
+
+`python tools/ci_build.py linux profile` builds it as the GitHub workflow
+does; the workflow builds it only in a run started by hand with its
+`profile` box ticked.
 
 The version being made is in `VERSION`. Releases are built and published by
 the project's release workflow; the builds on this repository's Actions page

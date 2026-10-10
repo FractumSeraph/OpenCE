@@ -12,7 +12,7 @@ from types import SimpleNamespace
 
 from tools import ninja_syntax
 from tools.android_build import android_configure_inputs, generate_android_build
-from tools.linux_build import generate_linux_build, linux_configure_inputs
+from tools.linux_build import check_profile_options, generate_linux_build, linux_configure_inputs
 from tools.linux64_build import generate_linux64_build, linux64_configure_inputs
 from tools.macos_build import generate_macos_build, macos_configure_inputs
 from tools.server_build import generate_server_build, server_configure_inputs
@@ -38,6 +38,13 @@ parser.add_argument(
     "--release",
     action="store_true",
     help="release builds (Linux, Windows, Android, Web): assertions are not checked",
+)
+parser.add_argument(
+    "--profile",
+    action="store_true",
+    help="profiling builds (the 32-bit Linux and Windows builds, Android): CPU scopes recorded on a "
+    "console command or launch setting (README, \"Profiling builds\"); not with --pgo=train. The 64-bit "
+    "builds, the dedicated server and the browser's build are built as without it",
 )
 parser.add_argument(
     "--web-cc",
@@ -92,6 +99,10 @@ parser.add_argument(
     help="clang with the arm64_32 target for the Android guest (default: clang)",
 )
 args = parser.parse_args()
+try:
+    check_profile_options(args.profile, args.pgo)
+except ValueError as error:
+    parser.error(str(error))
 
 # the settings the builds read
 sln = SimpleNamespace(
@@ -99,6 +110,7 @@ sln = SimpleNamespace(
     linux_cc=args.linux_cc,
     compiler_launcher=args.compiler_launcher,
     port_release=args.release,
+    port_profile=args.profile,
     game_browser=args.game_browser,
     web_cc=args.web_cc,
     port_lto=args.lto,

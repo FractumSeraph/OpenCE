@@ -5,13 +5,18 @@
     python tools/ci_build.py linux debug
     python tools/ci_build.py android release
     python tools/ci_build.py server-x64 release --alpine
+    python tools/ci_build.py linux profile
 
 Builds are portable (any x86-64 processor; for the arm64 server, any
 64-bit ARM), so they run on other computers. Debug builds skip link-time and profile-guided optimisation,
 which only make the build slower; release builds use both, as a local
 release build does (profile-guided optimisation needs clang 22 or later,
-and is skipped with an older one). CI_COMPILER_LAUNCHER (ccache, say) is
-passed on as --compiler-launcher.
+and is skipped with an older one). A profile build is a debug build with
+configure.py --profile (the profiling build: the 32-bit Linux and Windows
+builds and Android have one), so that the profiling build is built too:
+dist/chupathingyce-<platform>-profile (the Android app's is Gradle's debug
+variant). CI_COMPILER_LAUNCHER (ccache, say) is passed on as
+--compiler-launcher.
 
 The version comes from the environment (tools/version.py), which
 ChupathingyCE's release workflows set: HALO_VERSION (0.5.0b, or
@@ -71,6 +76,9 @@ OUTPUTS = {
 ALPINE_IMAGE = "alpine:3.22"
 ALPINE_PACKAGES = ["clang", "lld", "llvm", "gcc", "musl-dev", "linux-headers", "python3", "samurai", "ccache"]
 DOCKER_PLATFORMS = {"server-x86": "linux/386", "server-x64": "linux/amd64", "server-arm64": "linux/arm64"}
+# the builds that have a profiling build (configure.py --profile:
+# tools/linux_build.py configuration_defines)
+PROFILE_PLATFORMS = {"linux", "windows", "android"}
 APKS = {
     "debug": "port/android/app/build/outputs/apk/debug/app-debug.apk",
     "release": "port/android/app/build/outputs/apk/release/app-release.apk",
@@ -104,7 +112,7 @@ def run(command, cwd=ROOT):
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("platform", choices=sorted(OUTPUTS))
-    parser.add_argument("config", choices=["debug", "release"])
+    parser.add_argument("config", choices=["debug", "release", "profile"])
     parser.add_argument("--alpine", action="store_true",
                         help="a server: build it in Alpine Linux's Docker container (musl, static)")
     args = parser.parse_args()
@@ -116,6 +124,9 @@ def main() -> int:
     if re.fullmatch(r"[A-Za-z0-9-]+/[A-Za-z0-9._-]+", repository):
         os.environ["HALO_UPDATE_REPOSITORY"] = repository
         print(f"updates from {repository}", flush=True)
+    if args.config == "profile" and args.platform not in PROFILE_PLATFORMS:
+        parser.error(f"{args.platform} has no profiling build (configure.py --profile): "
+                     f"{', '.join(sorted(PROFILE_PLATFORMS))} have one")
     if args.alpine:
         if not server:
             parser.error("--alpine builds the servers only")
@@ -130,6 +141,8 @@ def main() -> int:
         configure.append("--release")
     else:
         configure += ["--lto=off", "--pgo=off"]
+    if args.config == "profile":
+        configure.append("--profile")
     launcher = os.environ.get("CI_COMPILER_LAUNCHER")
     if launcher:
         configure += ["--compiler-launcher", launcher]
@@ -154,13 +167,15 @@ def main() -> int:
         # same name), named for its signature
         run(["ninja", "android"])
         gradlew = "gradlew.bat" if os.name == "nt" else "./gradlew"
-        for stale in (APKS[args.config], UNSIGNED_APK):
+        # (a profile build is Gradle's debug variant)
+        variant = "release" if args.config == "release" else "debug"
+        for stale in (APKS[variant], UNSIGNED_APK):
             (ROOT / stale).unlink(missing_ok=True)
-        run([gradlew, "--console=plain", "-q", f"assemble{args.config.capitalize()}"], cwd=ROOT / "port/android")
+        run([gradlew, "--console=plain", "-q", f"assemble{variant.capitalize()}"], cwd=ROOT / "port/android")
         if (ROOT / "port/android/keystore.properties").exists():
-            apk, name = APKS[args.config], f"chupathingyce-android-{args.config}.apk"
-        elif args.config == "debug":
-            apk, name = APKS["debug"], "chupathingyce-android-debug-testkey.apk"
+            apk, name = APKS[variant], f"chupathingyce-android-{args.config}.apk"
+        elif variant == "debug":
+            apk, name = APKS["debug"], f"chupathingyce-android-{args.config}-testkey.apk"
         else:
             apk, name = UNSIGNED_APK, "chupathingyce-android-release-unsigned.apk"
         outputs = [apk]

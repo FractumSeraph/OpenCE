@@ -166,7 +166,11 @@ def updater_defines(release: bool) -> str:
 def configuration_defines(sln: Any) -> List[str]:
     """what configure.py's options define for every unit of a native build:
     --release (no assertions), --profile (the profiling build's recording,
-    port/linux/src/profile_trace.c)"""
+    port/linux/src/profile_trace.c). The profiling build is the 32-bit
+    Linux and Windows builds' and the Android guest's, as OpenCE's: the
+    64-bit builds (linux64, windows64, macOS), the dedicated server and the
+    browser's build leave --profile out, and their profile_*.c compile to
+    nothing (each is within #ifdef HALO_PROFILE)."""
     defines = []
     if getattr(sln, "port_release", False):
         defines.append("-DHALO_RELEASE")
@@ -418,9 +422,10 @@ def linux32_objects(n: Writer, units: Linux32Units, obj_dir: Path, extra_cflags:
     browser_defines = ["-DHALO_GAME_BROWSER"] if units.game_browser else []
     # (a debug build checks its stack frames, and stops at the first one
     # overrun, as it stops at the first failed assertion; a release build
-    # does not, so that an overrun nobody has met cannot end a game)
-    abi = " ".join(_retarget(LINUX_ABI_FLAGS, units.target_flags) + [march_flag(sln)]
-                   + (["-DHALO_RELEASE"] if getattr(sln, "port_release", False) else ["-fstack-protector-strong"])
+    # does not, so that an overrun nobody has met cannot end a game; and
+    # --release's and --profile's defines, configuration_defines)
+    abi = " ".join(_retarget(LINUX_ABI_FLAGS, units.target_flags) + [march_flag(sln)] + configuration_defines(sln)
+                   + ([] if getattr(sln, "port_release", False) else ["-fstack-protector-strong"])
                    + browser_defines + CUSTOM_EDITION_DEFINES + units.extra_flags)
     port_include = PORT_DIR / "include"
     sdk_flags = f"-idirafter {XDK_INCLUDE}"
