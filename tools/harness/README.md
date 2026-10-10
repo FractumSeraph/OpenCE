@@ -6,7 +6,9 @@ graphics, so a fix can carry a test that CI runs.
     python -m pytest -q tools/harness
 
 They need `clang` (or `CC`) and a 32-bit C runtime (`lib32-glibc`, `gcc-multilib`), as the Linux build does. pytest
-finds every `tests/test_*.py`, so a new test needs no change to CI.
+finds every `tests/test_*.py`, so a new test needs no change to CI. `tests/` is a package (`harness.tests`), so a test
+may share its name with one of `tools/test_*.py` and one run collects both (`python -m pytest tools/test_*.py
+tools/harness`).
 
 ## A test
 
