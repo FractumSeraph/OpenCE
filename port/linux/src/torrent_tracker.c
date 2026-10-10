@@ -243,7 +243,11 @@ int torrent_http_start(struct torrent_http *http, unsigned long address, unsigne
 	http->started = torrent_now();
 	range[0] = 0;
 	if (last >= 0)
+	{
 		snprintf(range, sizeof(range), "Range: bytes=%lld-%lld\r\n", first, last);
+		http->ranged = 1;
+		http->range_first = first;
+	}
 	{
 		char host_header[160];
 
@@ -388,7 +392,16 @@ static void http_headers_received(struct torrent_http *http, int header_size)
 	}
 	if (http_header_value((char *)http->in, "Content-Length", value, sizeof(value)))
 		http->content_length = atoll(value);
-	if (http->status != 200 && http->status != 206)
+	/* (a range (a web seed's piece) must be answered with that range: a
+	server that ignores Range sends the whole file, 200, for every piece) */
+	if (http->ranged && http->status == 206 &&
+		(!http_header_value((char *)http->in, "Content-Range", value, sizeof(value)) ||
+		!starts_with_nocase(value, "bytes ", 6) || atoll(value + 6) != http->range_first))
+	{
+		http_fail(http, "the answer is not the range asked for");
+		return;
+	}
+	if (http->ranged ? http->status != 206 : http->status != 200 && http->status != 206)
 	{
 		snprintf(http->error, sizeof(http->error), "HTTP %d", http->status);
 		http->state = _torrent_http_failed;
@@ -1132,7 +1145,14 @@ void torrent_web_seeds_tick(struct torrent *torrent)
 			}
 			else if (http->state == _torrent_http_failed)
 			{
+				/* (the server's answer was not the piece: refused, or the
+				whole file for a range) */
+				int refused = http->status == 200 || (http->status >= 400 && http->status < 500);
+				int whole = torrent->state == _torrent_state_metadata && torrent->web_whole > 0;
+
 				web_seed_failed(torrent, state, url, http->error);
+				if (whole && refused)
+					web_whole_answer_wrong(torrent);
 				torrent_http_close(http);
 				http->state = _torrent_http_idle;
 			}

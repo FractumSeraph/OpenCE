@@ -168,6 +168,9 @@ struct torrent_http
 	unsigned char in[TORRENT_HTTP_HEADER_SIZE];
 	int in_size;
 	int status;
+	/* a Range asked for: answered only by 206 from its first byte */
+	int ranged;
+	long long range_first;
 	long long content_length;
 	long long body_received;
 	/* a response read whole (NULL: streamed) */
