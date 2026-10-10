@@ -113,7 +113,10 @@ From the `_platform_*` flags in `port_config.c`:
   yet. See "Left to schedule".
 - **Different defaults.** These are chosen, and the reason is in a comment:
   - macOS: `display.fullscreen` is false (`:72-77`) and
-    `audio.buffer_frames` is 2048 (`:79-86`).
+    `audio.buffer_frames` is 2048 (`:80-92`).
+  - Android: `audio.buffer_frames` is 1024 (each callback is handed to
+    a thread that can run the guest; 512 broke up the menus' music;
+    `:80-92`).
   - Android: the anti-aliasing values map to cheaper modes
     (`d3d8_gl.c:116-132`).
 - `update.auto` is written on macOS, where nothing reads it, because macOS

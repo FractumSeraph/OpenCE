@@ -78,10 +78,15 @@ struct config_setting
 #endif
 
 /* macOS's audio cuts out with SDL's 512-frame buffer when the mixer is late
-(a 10.6 ms budget at 48 kHz); 2048 frames (43 ms) rides that out. Elsewhere
-512 keeps the latency low. */
+(a 10.6 ms budget at 48 kHz); 2048 frames (43 ms) rides that out. On
+Android each callback is handed to a thread that can run the guest
+(port/android/host/host_sdl.c): 512 left it too little time and the menus'
+music broke up, which 1024 (21 ms) does not. Elsewhere 512 keeps the
+latency low. */
 #ifdef __APPLE__
 #define DEFAULT_AUDIO_BUFFER_FRAMES "2048"
+#elif defined(HALO_ANDROID) && !defined(HALO_WEB)
+#define DEFAULT_AUDIO_BUFFER_FRAMES "1024"
 #else
 #define DEFAULT_AUDIO_BUFFER_FRAMES "512"
 #endif
@@ -217,7 +222,7 @@ static const struct config_setting config_settings[] =
 		_platform_all,
 		"The audio device's buffer, in sample frames at 48 kHz (64 to 8192): larger\n"
 		"rides out stalls that cut the sound out, smaller has less delay. 2048\n"
-		"(43 ms) on macOS, 512 (11 ms) elsewhere." },
+		"(43 ms) on macOS, 1024 (21 ms) on Android, 512 (11 ms) elsewhere." },
 
 	{ "audio.reverb", _config_boolean, "true", "HALO_REVERB", _environment_value, _platform_all,
 		"Reverberate the world's sounds as the place the player is in does (the\n"
