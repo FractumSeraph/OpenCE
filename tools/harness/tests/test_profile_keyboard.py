@@ -28,8 +28,8 @@ def generated(fault=False):
              'analog', 'typing_gamepad', 'keyboard_gamepad', 'keys_held_over_switch']
     code = '\n'.join(function(inputs, name) for name in names) + '\n'
     if fault == 'held-enter':
-        code, count = re.subn(r' \| \(text_typing \? [24] : 0\)', '', code)
-        assert count == 1
+        # (closing the keyboard no longer holds back the Enter that closed it)
+        code = mutated(code, 'text_typing_enter_blocked = TRUE;', 'text_typing_enter_blocked = FALSE;')
     setter = function(vk, 'virtual_keyboard_set_active')
     if fault is True:
         setter = mutated(setter, 'platform_text_typing(active);', 'if (active) platform_text_typing(active);')
