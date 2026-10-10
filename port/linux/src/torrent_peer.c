@@ -462,8 +462,11 @@ static void metadata_message_received(struct torrent *torrent, struct torrent_pe
 	{
 	case 0:
 		/* a request: a piece of our metadata, or a rejection */
+		/* (the piece counted before it is multiplied: a large one would
+		overflow to an offset outside the metadata) */
 		if (torrent->metadata && torrent->piece_hashes && piece >= 0 &&
-			piece * TORRENT_METADATA_PIECE < torrent->metadata_size && peer->ut_metadata)
+			piece < (torrent->metadata_size + TORRENT_METADATA_PIECE - 1) / TORRENT_METADATA_PIECE &&
+			peer->ut_metadata)
 		{
 			int offset = piece * TORRENT_METADATA_PIECE;
 			int length = torrent->metadata_size - offset;
@@ -800,21 +803,9 @@ static void request_metadata(struct torrent *torrent, struct torrent_peer *peer)
 			peer->metadata_piece = -1;
 		return;
 	}
-	if (!torrent->metadata)
-	{
-		/* (the size the peer told starts the fetch) */
-		if (peer->metadata_size > TORRENT_MAXIMUM_METADATA)
-			return;
-		torrent->metadata = malloc((size_t)peer->metadata_size);
-		if (!torrent->metadata)
-			return;
-		torrent->metadata_size = peer->metadata_size;
-		torrent->metadata_piece_count = (peer->metadata_size + TORRENT_METADATA_PIECE - 1) / TORRENT_METADATA_PIECE;
-	}
-	else if (peer->metadata_size != torrent->metadata_size)
-	{
+	/* (the size the peer told starts the fetch) */
+	if (!torrent_metadata_begin(torrent, peer->metadata_size))
 		return;
-	}
 	piece = torrent_metadata_piece_to_request(torrent);
 	if (piece < 0)
 		return;

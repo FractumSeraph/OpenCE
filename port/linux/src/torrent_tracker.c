@@ -187,6 +187,33 @@ void torrent_trackers_configure(void)
 	}
 }
 
+/* a dotted-quad address (a.b.c.d) in the network's order, or 0: a peer's
+in a tracker's answer, never looked up (a host name there would block the
+client while it is looked up) */
+static unsigned long numeric_ipv4(const char *text)
+{
+	unsigned long address = 0;
+	int part;
+
+	for (part = 0; part < 4; part++)
+	{
+		unsigned long value = 0;
+		int digits = 0;
+
+		while (*text >= '0' && *text <= '9' && digits < 3)
+		{
+			value = value * 10 + (unsigned long)(*text++ - '0');
+			digits++;
+		}
+		if (!digits || value > 255 || *text != (part < 3 ? '.' : '\0'))
+			return 0;
+		if (part < 3)
+			text++;
+		address = address << 8 | value;
+	}
+	return torrent_network_long(address);
+}
+
 /* a tracker's address, looked up once in a while (blocking briefly) */
 static unsigned long tracker_address(struct torrent_tracker *tracker)
 {
@@ -252,6 +279,7 @@ int torrent_http_start(struct torrent_http *http, unsigned long address, unsigne
 	http->context = context;
 	http->content_length = -1;
 	http->started = torrent_now();
+	http->begun = http->started;
 	range[0] = 0;
 	if (last >= 0)
 	{
@@ -546,8 +574,12 @@ void torrent_http_tick(struct torrent_http *http)
 		break;
 	case _torrent_http_headers:
 	case _torrent_http_body:
+		/* (a tracker's answer, read whole, has a deadline of its own: one
+		sent a byte at a time would hold the announce) */
 		if (torrent_elapsed(http->started, HTTP_IDLE_TIMEOUT))
 			http_fail(http, "the answer stopped coming");
+		else if (!http->stream && torrent_elapsed(http->begun, HTTP_TRACKER_TIMEOUT))
+			http_fail(http, "the answer took too long");
 		break;
 	default:
 		break;
@@ -901,8 +933,11 @@ static void http_announce_answered(struct torrent *torrent, struct torrent_track
 			else if (node >= 0 && document->nodes[node].type == _bencode_list)
 			{
 				int child;
+				int count = 0;
 
-				for (child = document->nodes[node].child; child >= 0; child = document->nodes[child].next)
+				/* (as many as a compact answer of its most would give) */
+				for (child = document->nodes[node].child; child >= 0 && count < 200;
+					child = document->nodes[child].next, count++)
 				{
 					char ip[64];
 					long long port = bencode_integer(document, bencode_find(document, child, "port"), 0);
@@ -910,7 +945,7 @@ static void http_announce_answered(struct torrent *torrent, struct torrent_track
 					bencode_text(document, bencode_find(document, child, "ip"), ip, sizeof(ip));
 					if (ip[0] && port > 0 && port < 65536)
 					{
-						unsigned long address = posix_resolve_ipv4(ip);
+						unsigned long address = numeric_ipv4(ip);
 
 						if (torrent_candidate_add(torrent, address, torrent_network_short((unsigned short)port),
 							_torrent_source_tracker))
@@ -998,6 +1033,15 @@ void torrent_trackers_stop(struct torrent *torrent)
 		memset(state, 0, sizeof(*state));
 		state->http.socket = -1;
 	}
+	torrent_web_seeds_stop(torrent);
+}
+
+/* the web seeds' connections closed: as the torrent stops, or its download
+is done (a fetch still under way then would be ticked no more) */
+void torrent_web_seeds_stop(struct torrent *torrent)
+{
+	int index;
+
 	for (index = 0; index < TORRENT_MAXIMUM_WEB_SEEDS; index++)
 	{
 		torrent_http_close(&torrent->web_seeds[index].http);

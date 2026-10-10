@@ -61,6 +61,10 @@ bitfield of the most pieces; anything longer ends the connection */
 /* a metadata piece asked of a peer that has not come after this long is
 asked of another */
 #define TORRENT_METADATA_REQUEST_TIMEOUT (10 * TORRENT_SECOND)
+/* metadata of a size no piece of which has come for this long is
+dropped, for the size another peer tells (a peer that told a wrong one
+and sends nothing would otherwise hold it) */
+#define TORRENT_METADATA_STALL_TIMEOUT (30 * TORRENT_SECOND)
 /* Winsock's SO_ERROR, which the XDK's headers do not name; posix_net.c
 and win32_net.c take it */
 #define TORRENT_SO_ERROR 0x1007
@@ -159,7 +163,9 @@ struct torrent_http
 		_torrent_http_done,
 		_torrent_http_failed,
 	} state;
+	/* (when the last bytes came; begun: when the request was) */
 	unsigned long started;
+	unsigned long begun;
 	unsigned long address;
 	unsigned short port;
 	char request[TORRENT_HTTP_REQUEST_SIZE];
@@ -257,6 +263,8 @@ struct torrent
 	int metadata_piece_count;
 	unsigned char metadata_have[TORRENT_MAXIMUM_METADATA_PIECES / 8];
 	int metadata_have_count;
+	/* when the metadata was begun or its last piece came */
+	unsigned long metadata_time;
 	/* checking: the next piece to hash */
 	int check_piece;
 	struct torrent_active_piece active[TORRENT_MAXIMUM_ACTIVE_PIECES];
@@ -376,6 +384,7 @@ void torrent_piece_unrequested(struct torrent *torrent, int piece);
 /* whether a peer with this bitfield has a piece this torrent wants */
 int torrent_wants_from(const struct torrent *torrent, const unsigned char *bitfield);
 /* a piece of the metadata that came from a peer; 1 if it was wanted */
+int torrent_metadata_begin(struct torrent *torrent, int size);
 int torrent_metadata_received(struct torrent *torrent, int piece, const unsigned char *data, int size,
 	int total_size);
 /* the metadata piece to ask a peer for next (-1: none wanted now) */
@@ -409,6 +418,7 @@ int torrent_peers_count(const struct torrent *torrent, int *seeds);
 void torrent_trackers_configure(void);
 void torrent_trackers_tick(struct torrent *torrent);
 void torrent_trackers_stop(struct torrent *torrent);
+void torrent_web_seeds_stop(struct torrent *torrent);
 /* a datagram on the UDP socket that is a tracker's (not the DHT's) */
 void torrent_tracker_udp_received(const unsigned char *data, int size, unsigned long address, unsigned short port);
 void torrent_web_seeds_tick(struct torrent *torrent);

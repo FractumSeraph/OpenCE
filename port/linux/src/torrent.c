@@ -386,12 +386,40 @@ int torrent_metadata_piece_to_request(struct torrent *torrent)
 
 	if (torrent->state != _torrent_state_metadata || !torrent->metadata_piece_count)
 		return -1;
+	if (torrent_elapsed(torrent->metadata_time, TORRENT_METADATA_STALL_TIMEOUT))
+	{
+		metadata_discard(torrent);
+		return -1;
+	}
 	for (piece = 0; piece < torrent->metadata_piece_count; piece++)
 	{
 		if (!bit_test(torrent->metadata_have, piece))
 			return piece;
 	}
 	return -1;
+}
+
+static void metadata_discard(struct torrent *torrent);
+
+/* the metadata's buffer, for the size a peer tells: TRUE once there is one
+of that size. The info dictionary holds the pieces' hashes (piece_count of
+them, the index having told the size and piece length) and a few short
+keys, so a size far from that is refused */
+int torrent_metadata_begin(struct torrent *torrent, int size)
+{
+	int hashes_size = torrent->piece_count * SHA1_DIGEST_SIZE;
+
+	if (torrent->metadata)
+		return size == torrent->metadata_size;
+	if (size < hashes_size || size > hashes_size + 4096 || size > TORRENT_MAXIMUM_METADATA)
+		return 0;
+	torrent->metadata = malloc((size_t)size);
+	if (!torrent->metadata)
+		return 0;
+	torrent->metadata_size = size;
+	torrent->metadata_piece_count = (size + TORRENT_METADATA_PIECE - 1) / TORRENT_METADATA_PIECE;
+	torrent->metadata_time = torrent_now();
+	return 1;
 }
 
 static void metadata_discard(struct torrent *torrent)
@@ -414,20 +442,8 @@ int torrent_metadata_received(struct torrent *torrent, int piece, const unsigned
 
 	if (torrent->state != _torrent_state_metadata)
 		return 0;
-	if (total_size <= 0 || total_size > TORRENT_MAXIMUM_METADATA)
+	if (!torrent_metadata_begin(torrent, total_size))
 		return 0;
-	if (!torrent->metadata)
-	{
-		torrent->metadata = malloc((size_t)total_size);
-		if (!torrent->metadata)
-			return 0;
-		torrent->metadata_size = total_size;
-		torrent->metadata_piece_count = (total_size + TORRENT_METADATA_PIECE - 1) / TORRENT_METADATA_PIECE;
-	}
-	else if (total_size != torrent->metadata_size)
-	{
-		return 0;
-	}
 	if (piece < 0 || piece >= torrent->metadata_piece_count || bit_test(torrent->metadata_have, piece))
 		return 0;
 	expected = piece == torrent->metadata_piece_count - 1 ?
@@ -437,6 +453,7 @@ int torrent_metadata_received(struct torrent *torrent, int piece, const unsigned
 	memcpy(torrent->metadata + piece * TORRENT_METADATA_PIECE, data, (size_t)size);
 	bit_set(torrent->metadata_have, piece);
 	torrent->metadata_have_count++;
+	torrent->metadata_time = torrent_now();
 	if (torrent->metadata_have_count < torrent->metadata_piece_count)
 		return 1;
 	/* whole: taken if right, else fetched again */
@@ -484,6 +501,7 @@ static void download_complete(struct torrent *torrent)
 {
 	torrent->state = _torrent_state_seeding;
 	torrent->active_count = 0;
+	torrent_web_seeds_stop(torrent);
 	torrent_log("%s: complete", torrent->name);
 }
 
@@ -720,6 +738,33 @@ static int active_block_to_request(struct torrent *torrent, struct torrent_activ
 	return 0;
 }
 
+/* with every place for a piece under way taken: one with no block asked of
+anyone (its peers gone), begun a while ago and not a web seed's, given up
+so that a new piece can start (its blocks had are fetched again with it) */
+static void active_evict_abandoned(struct torrent *torrent)
+{
+	int index;
+
+	for (index = 0; index < torrent->active_count; index++)
+	{
+		struct torrent_active_piece *active = &torrent->active[index];
+		int block;
+
+		if (active->web_seed || !torrent_elapsed(active->started, TORRENT_MINUTE))
+			continue;
+		for (block = 0; block < active->block_count; block++)
+		{
+			if (bit_test(active->requested, block) && !bit_test(active->received, block))
+				break;
+		}
+		if (block == active->block_count)
+		{
+			active_remove(torrent, active);
+			return;
+		}
+	}
+}
+
 int torrent_block_to_request(struct torrent *torrent, const unsigned char *bitfield, int *piece, int *begin,
 	int *length)
 {
@@ -741,6 +786,8 @@ int torrent_block_to_request(struct torrent *torrent, const unsigned char *bitfi
 		}
 	}
 	/* else a new piece, from a random start (peers take different ones) */
+	if (torrent->active_count >= TORRENT_MAXIMUM_ACTIVE_PIECES)
+		active_evict_abandoned(torrent);
 	if (torrent->active_count >= TORRENT_MAXIMUM_ACTIVE_PIECES)
 		return 0;
 	start = torrent_random(torrent->piece_count);
@@ -1060,7 +1107,6 @@ static void *torrent_thread(void *context)
 
 	(void)context;
 	pthread_mutex_lock(&torrent_lock);
-	torrent_session.thread_running = 1;
 	while (!torrent_session.stop_requested)
 	{
 		int read_count = 0, write_count = 0, error_count = 0;
@@ -1205,8 +1251,12 @@ int torrent_start(const struct torrent_settings *settings, char *error, int erro
 		torrent_dht_start();
 	torrent_session.running = 1;
 	pthread_cond_init(&torrent_session.stopped, NULL);
+	/* (running before the thread starts: a torrent_stop that takes the
+	lock first waits for it, rather than leaving it to run on alone) */
+	torrent_session.thread_running = 1;
 	if (pthread_create(&torrent_session.thread, NULL, torrent_thread, NULL) != 0)
 	{
+		torrent_session.thread_running = 0;
 		torrent_session.running = 0;
 		posix_socket_close(torrent_session.listen_socket);
 		posix_socket_close(torrent_session.udp_socket);
