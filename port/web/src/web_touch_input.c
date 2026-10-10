@@ -47,6 +47,11 @@ void touch_input_look(float scale, float *yaw, float *pitch)
 	(void)pitch;
 }
 
+int touch_input_aim_assist(void)
+{
+	return 0;
+}
+
 void touch_input_rumble(unsigned int left, unsigned int right)
 {
 	(void)left;

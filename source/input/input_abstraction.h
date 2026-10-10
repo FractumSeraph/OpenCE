@@ -64,6 +64,9 @@ boolean input_abstraction_port_crouch(
 	short controller_index);
 real input_abstraction_port_primary_trigger(
 	short controller_index);
+/* port: the player's look inverted, as its stick is (the touch controls) */
+boolean input_abstraction_port_look_inverted(
+	short controller_index);
 
 /* ---------- globals */
 
