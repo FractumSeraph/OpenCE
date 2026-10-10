@@ -506,7 +506,14 @@ ninja web
 
 The page needs cross-origin isolation (COOP/COEP headers) and the maps
 beside it in `assets/maps/` (served with byte ranges), or the player chooses
-an Xbox disc image in the browser. `tools/web_serve.py` serves a checkout for
-development. The link refuses WebAssembly signature mismatches
+an Xbox disc image in the browser. Custom Edition maps come from
+`assets/custom_maps/` (listed in its `index.json`) and are kept in the
+browser once read (Cache Storage). The first time a map is played, the page
+fetches it and `bitmaps.map`, `sounds.map` and `loc.map` whole, a few large
+ranges at a time (`port/web/fetch_path_normalization.js`); joining from the
+Server Browser waits for that before connecting, the status line showing
+it, because a host gives a joining machine only moments to load the map (a
+native host, 15 seconds; a browser host waits 120). `tools/web_serve.py`
+serves a checkout for development. The link refuses WebAssembly signature mismatches
 (`-Wl,--fatal-warnings`): a C function called through a prototype that does
 not match its definition traps in a browser.
