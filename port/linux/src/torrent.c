@@ -53,10 +53,12 @@ int torrent_elapsed(unsigned long since, unsigned long milliseconds)
 
 /* whether a time to come (torrent_now() + a wait) has come: torrent_elapsed
 (when, 0) is always true, the difference being unsigned, so every wait
-until a time was none (trackers announced to many times a second) */
+until a time was none (trackers announced to many times a second). 0 is
+now: a tracker's or web seed's state zeroed as it starts or stops (after
+2^31 ms of uptime the difference from 0 is negative for weeks) */
 int torrent_reached(unsigned long when)
 {
-	return (long)(torrent_now() - when) >= 0;
+	return !when || (long)(torrent_now() - when) >= 0;
 }
 
 void torrent_log(const char *format, ...)
