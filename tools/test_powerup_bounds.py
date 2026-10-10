@@ -58,6 +58,7 @@ struct tag_iterator {long absolute_index;};
 #define match_assert(file,line,c) CHECK(c)
 #define OBJECTS_H_FILE "test"
 struct test_buffer {byte *data;};
+typedef struct test_buffer IDirect3DVertexBuffer8;
 static void IDirect3DVertexBuffer8_Lock(void *b,int offset,int size,byte **data,int flags){*data=b&&((struct test_buffer*)b)->data?((struct test_buffer*)b)->data+offset:NULL;}
 static void IDirect3DVertexBuffer8_Unlock(void *b){}
 static long rasterizer_geometry_get_vertex_size(short type){return type==5?32:68;}
@@ -220,7 +221,8 @@ def main():
     model_source=read('source/models/models.c');mh=read('source/models/model_definitions.h');rh=read('source/rasterizer/rasterizer_geometry.h')
     harness=re.sub(r'(?<!\.)\bequipment\b','test_equipment',HARNESS)
     tests=re.sub(r'(?<!\.)\bequipment\b','test_equipment',TESTS)
-    unit=PRELUDE+block(mh,'enum\n{\n\tMODELS_GROUP_TAG')+';\n'+block(model_source,'enum\n{\n\t_model_geometry_part_stripped_bit')+';\n'+block(rh,'enum')+';\n'
+    # (XBOX_POINTER: the 64-bit builds' Xbox addresses, nothing in this 32-bit one)
+    unit=PRELUDE+read('source/cseries/xbox_address.h')+block(mh,'enum\n{\n\tMODELS_GROUP_TAG')+';\n'+block(model_source,'enum\n{\n\t_model_geometry_part_stripped_bit')+';\n'+block(rh,'enum')+';\n'
     for src,names in [(rh,['vertex_buffer','triangle_buffer']), (mh,['model_node','model']),
                       (model_source,['model_geometry','model_geometry_part']),
                       (read('source/objects/object_definitions.h'),['_object_definition','object_definition']),
