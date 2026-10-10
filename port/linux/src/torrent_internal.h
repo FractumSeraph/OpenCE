@@ -272,6 +272,8 @@ struct torrent
 	unsigned char web_whole_have[TORRENT_MAXIMUM_PIECES / 8];
 	unsigned char web_whole_requested[TORRENT_MAXIMUM_PIECES / 8];
 	int web_whole_count;
+	/* answers to it in a row that were not the piece (torrent_tracker.c) */
+	int web_whole_failures;
 	unsigned long dht_next_lookup;
 	unsigned long dht_last_announce;
 	unsigned long long downloaded;
