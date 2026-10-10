@@ -62,6 +62,8 @@ SDL_TAG = "release-3.4.16"
 SDL_COMMIT = "fa2c02bb6e21974a89ea9824bc53c9932abe5f9c"
 SDL_DIR = THIRD_PARTY / "SDL3"
 SDL_URL = "https://github.com/libsdl-org/SDL.git"
+SDL_ANDROID_MOUSE_PATCH = Path("port/android/patches/sdl-relative-mouse.patch")
+SDL_ANDROID_MOUSE_LISTENER = "android-project/app/src/main/java/org/libsdl/app/SDLControllerManager.java"
 ANDROID_API = 28
 
 # The guest ABI: AArch64 code with 32-bit pointers (clang's only such target
@@ -208,6 +210,17 @@ def fetch_third_party() -> None:
         subprocess.run(["git", "clone", "-q", "--depth", "1", "--branch", SDL_TAG, SDL_URL, str(SDL_DIR)],
                        check=True)
         check_sdl_commit(SDL_DIR)
+    # SDL 3.4.16's generic mouse listener drops captured relative motion and
+    # button transitions unless they are forwarded from captured pointer events.
+    # A tree patched by another version of the patch (an older checkout, or
+    # CI's cached one) is put back as SDL has it before this one is applied.
+    reverse = subprocess.run(
+        ["git", "-C", str(SDL_DIR), "apply", "--reverse", "--check", str(SDL_ANDROID_MOUSE_PATCH.resolve())],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    if reverse.returncode != 0:
+        subprocess.run(["git", "-C", str(SDL_DIR), "checkout", "--", SDL_ANDROID_MOUSE_LISTENER], check=True)
+        subprocess.run(["git", "-C", str(SDL_DIR), "apply", str(SDL_ANDROID_MOUSE_PATCH.resolve())], check=True)
 
 
 def _musl_sources() -> List[Path]:
@@ -231,7 +244,8 @@ def _musl_sources() -> List[Path]:
 
 
 def android_configure_inputs() -> List[Path]:
-    return [Path(__file__), PORT_DIR / "guest" / "runtime", PORT_DIR / "host", LINUX_DIR / "src", *hud_configure_inputs()]
+    return [Path(__file__), SDL_ANDROID_MOUSE_PATCH, PORT_DIR / "guest" / "runtime", PORT_DIR / "host",
+            LINUX_DIR / "src", *hud_configure_inputs()]
 
 
 def generate_android_build(n: Writer, sln: Any) -> None:
@@ -666,6 +680,7 @@ def generate_android_build(n: Writer, sln: Any) -> None:
         pool="console",
     )
     n.build(outputs=apk, rule="android_gradle",
-            inputs=[libmain, staged_sdl, staged_image, staged_brokers, staged_map_torrents])
+            inputs=[libmain, staged_sdl, staged_image, staged_brokers, staged_map_torrents],
+            implicit=[SDL_DIR / SDL_ANDROID_MOUSE_LISTENER])
     n.build(outputs="android_apk", rule="phony", inputs=apk)
     n.newline()
