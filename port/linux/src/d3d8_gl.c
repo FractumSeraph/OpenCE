@@ -1935,9 +1935,10 @@ HRESULT WINAPI Direct3D_CreateDevice(UINT adapter, D3DDEVTYPE device_type, void 
 
 /* a point in the window, as SDL reports it, in the menus' coordinates: the
 inverse of the letterboxed display blit at presentation, the screen's
-width and the menus' centering (halo_screen_ui_offset); x and y are -1 if
+width and the menus' centering (halo_screen_ui_offset); or, not centered,
+the screen's (the game's drawing: the scoreboard's); x and y are -1 if
 there is no back buffer or window yet */
-static void ui_point_from_window(float window_x, float window_y, short *x, short *y)
+static void ui_point_from_window_on(float window_x, float window_y, int centered, short *x, short *y)
 {
 	struct render_target_entry *back_buffer = render_target_get(&device.back_buffer);
 	int window_width, window_height, pixel_width, pixel_height, width, height, left, top;
@@ -1961,8 +1962,13 @@ static void ui_point_from_window(float window_x, float window_y, short *x, short
 	top = (pixel_height - height) / 2;
 	screen_x = (window_x * pixel_width / window_width - left) * (float)back_buffer->target.width / (float)width;
 	screen_y = (window_y * pixel_height / window_height - top) * (float)back_buffer->target.height / (float)height;
-	*x = (short)floorf(screen_x - (float)(halo_screen_width() - 640) / 2.0f);
+	*x = (short)floorf(screen_x - (centered ? (float)(halo_screen_width() - 640) / 2.0f : 0.0f));
 	*y = (short)floorf(screen_y);
+}
+
+static void ui_point_from_window(float window_x, float window_y, short *x, short *y)
+{
+	ui_point_from_window_on(window_x, window_y, TRUE, x, y);
 }
 
 /* a network game's scoreboard picking players with the mouse (OpenCE's:
@@ -1983,17 +1989,12 @@ BOOL platform_scoreboard_pointer(BOOL offered, struct platform_ui_pointer *point
 int halo_scoreboard_pointer_update(int offered, struct halo_ui_pointer *pointer)
 {
 	struct platform_ui_pointer state;
-	short offset = (short)((halo_screen_width() - 640) / 2);
 
 	memset(pointer, 0, sizeof(*pointer));
 	if (!platform_scoreboard_pointer(offered != 0, &state) || !device.gl_ready)
 		return 0;
-	ui_point_from_window(state.x, state.y, &pointer->x, &pointer->y);
-	ui_point_from_window(state.click_x, state.click_y, &pointer->click_x, &pointer->click_y);
-	if (pointer->x >= 0)
-		pointer->x = (short)(pointer->x + offset);
-	if (pointer->click_x >= 0)
-		pointer->click_x = (short)(pointer->click_x + offset);
+	ui_point_from_window_on(state.x, state.y, FALSE, &pointer->x, &pointer->y);
+	ui_point_from_window_on(state.click_x, state.click_y, FALSE, &pointer->click_x, &pointer->click_y);
 	pointer->moved = state.moved != FALSE;
 	pointer->left_clicks = (unsigned char)(state.left_clicks < 255 ? state.left_clicks : 255);
 	return 1;
