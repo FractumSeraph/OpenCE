@@ -5444,7 +5444,7 @@ static void write_key_screenshot(struct render_target_entry *target)
 	SDL_Time now;
 	SDL_DateTime date;
 	SDL_Surface *surface = NULL;
-	unsigned int collision;
+	unsigned int collision, drained;
 	unsigned long width = target->target.gl_width, height = target->target.gl_height;
 	GLint framebuffer, draw_framebuffer, pack_buffer, alignment, row_length, skip_rows, skip_pixels;
 	GLenum error;
@@ -5484,7 +5484,11 @@ static void write_key_screenshot(struct render_target_entry *target)
 		goto failed;
 
 	/* Read the render target before the display blit's vertical flip. Its
-	row zero is the top of the image. Preserve the caller's readback state. */
+	row zero is the top of the image. Preserve the caller's readback state.
+	Errors left by earlier calls are drained first (a few: a lost context
+	reports one for ever), so only the readback's own fail it. */
+	for (drained = 0; drained < 16 && glGetError() != GL_NO_ERROR; drained++)
+		;
 	glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &framebuffer);
 	glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &draw_framebuffer);
 	glGetIntegerv(GL_PIXEL_PACK_BUFFER_BINDING, &pack_buffer);
