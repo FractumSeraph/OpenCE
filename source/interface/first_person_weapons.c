@@ -127,6 +127,7 @@ symbols in this file:
 #ifdef HALO_64BIT
 #include "rasterizer/rasterizer_model_types.h"
 #endif
+#include "view_fov.h" /* port: port/linux/game/view_fov.c */
 
 /* ---------- constants */
 
