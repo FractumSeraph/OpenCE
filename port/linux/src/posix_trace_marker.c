@@ -20,6 +20,10 @@ HALO_GPU_TRACE_MARKERS=1 lets the driver open it, to capture with gpuvis.
 Built with the host ABI.
 */
 
+/* (Linux only: SteamOS's kernel tracing; macOS has neither it nor
+O_TMPFILE) */
+#ifdef __linux__
+
 /* open and open64 as two functions, not open as glibc's open64 */
 #undef _FILE_OFFSET_BITS
 #include <dlfcn.h>
@@ -116,3 +120,5 @@ OPEN(open)
 OPEN(open64)
 OPENAT(openat)
 OPENAT(openat64)
+
+#endif
