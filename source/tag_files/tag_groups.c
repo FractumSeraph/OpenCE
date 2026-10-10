@@ -123,8 +123,17 @@ void* tag_data_get_pointer(
 	long offset, 
 	long size) 
 {
-	match_assert("c:\\halo\\SOURCE\\tag_files\\tag_groups.c", 3073, size>=0);
-	match_assert("c:\\halo\\SOURCE\\tag_files\\tag_groups.c", 3074, offset>=0 && offset+size<=data->size);
+#ifdef HALO_CUSTOM_EDITION
+	/* port: Halo PC reads a Custom Edition map's tags unchecked, and maps
+	made for it can hold an offset past a tag data's end, which never
+	stopped a game there: it gets the empty data below without an
+	assertion. Xbox maps keep theirs */
+	if (!cache_file_is_ce)
+#endif
+	{
+		match_assert("c:\\halo\\SOURCE\\tag_files\\tag_groups.c", 3073, size>=0);
+		match_assert("c:\\halo\\SOURCE\\tag_files\\tag_groups.c", 3074, offset>=0 && offset+size<=data->size);
+	}
 	/* port: bytes past the data are the empty data's (tag_empty_data), as
 	far as they go */
 	if (size < 0 || offset < 0 || offset > data->size || size > data->size - offset || (size && !data->address))
@@ -162,16 +171,24 @@ void *tag_block_get_element_with_size(
 	match_assert("c:\\halo\\SOURCE\\tag_files\\tag_groups.c", 3086, !block->definition || block->definition->element_size==element_size);
 #endif
 
-	match_vassert("c:\\halo\\SOURCE\\tag_files\\tag_groups.c", 3089, index>=0 && index<block->count,
-		csprintf(temporary,
-			"#%d is not a valid %s index in [#0,#%d)",
-			index,
-#ifdef HALO_64BIT
-			"<unknown>", block->count));
-#else
-			block->definition ? block->definition->name : "<unknown>", block->count));
+#ifdef HALO_CUSTOM_EDITION
+	/* port: as tag_data_get_pointer, a Custom Edition map's index past a
+	block's end (which Halo PC never checked: foundation@ce, 13 seconds in)
+	gets the empty data below without an assertion. Xbox maps keep theirs */
+	if (!cache_file_is_ce)
 #endif
-	match_assert("c:\\halo\\SOURCE\\tag_files\\tag_groups.c", 3090, block->address);
+	{
+		match_vassert("c:\\halo\\SOURCE\\tag_files\\tag_groups.c", 3089, index>=0 && index<block->count,
+			csprintf(temporary,
+				"#%d is not a valid %s index in [#0,#%d)",
+				index,
+#ifdef HALO_64BIT
+				"<unknown>", block->count));
+#else
+				block->definition ? block->definition->name : "<unknown>", block->count));
+#endif
+		match_assert("c:\\halo\\SOURCE\\tag_files\\tag_groups.c", 3090, block->address);
+	}
 	/* port: an element past the block (an index a map's data gave, which
 	nothing checked) is the empty data (tag_empty_data), not whatever lies
 	past the block */
