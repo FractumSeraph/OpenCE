@@ -201,12 +201,15 @@ as the phone turns, never inverted). The setting `input.touch_aim_assist`
 turns the aim assist off. "Look sensitivity" sets how far a swipe turns;
 the mouse settings do not apply.
 
-The touch controls show only in a game. In the menus and during
-cinematics they hide, and the touchscreen operates the menus as described
-above. They also show when a controller is connected: push "Hide" to play
-with the controller. A device without a touchscreen (a TV) never shows
-them. The setting `input.touch_controls` changes this (refer to
-"Settings").
+The touch controls show only while a game is played, from 200 ms after
+it starts. While the game starts, at the main menu, between maps, in the
+menus, during cinematics and while a movie plays they hide, and the
+touchscreen operates the menus as described above. They also show when a
+controller is connected: push "Hide" to play with the controller. A device
+without a touchscreen (a TV) never shows them. The setting
+`input.touch_controls` changes this (refer to "Settings"). The game's log
+has a line `touch: in a game` or `touch: menus`, with the setting's value,
+each time this changes.
 
 The buttons at the top of the screen:
 
@@ -598,8 +601,8 @@ assembly of the port is necessary:
   `0x80000000` to `0x8c000000`. If ART uses them, the app shows a message
   (refer to "The fixed addresses").
 - The size of the touch controls follows the height of the screen. On a
-  tablet they are larger than on a phone. They are never smaller than a
-  finger.
+  tablet they are larger than on a phone. They are a finger wide or larger,
+  except on a small screen of high density (refer to "Touch controls").
 - Kernels with 16 KB pages (a developer option of Android 15) do not
   operate. The Xbox memory uses 4 KB pages.
 - The x86 Android emulator runs the app through its ARM translation. The
