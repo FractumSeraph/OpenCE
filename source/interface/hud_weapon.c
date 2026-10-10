@@ -1493,6 +1493,14 @@ static void render_weapon_hud(
 			_hud_draw_in_multiplayer_bit,
 			local_player_count() > 1);
 		state_flags[5] = flags;
+		/* port: a weapon of one magazine has no secondary ammunition to
+		flash or warn of: its secondary states stay at rest (drawn disabled,
+		as an empty magazine's, as its overlays below are not drawn) */
+		if (weapon_state->magazine_count < 2)
+		{
+			SET_FLAG(state_flags[4], _hud_draw_flashing_bit, FALSE);
+			SET_FLAG(state_flags[5], _hud_draw_flashing_bit, FALSE);
+		}
 
 		for (state_index = 0;
 			state_index < NUMBER_OF_WEAPON_HUD_FLASH_REFERENCES;

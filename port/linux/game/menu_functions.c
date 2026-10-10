@@ -3616,7 +3616,7 @@ static short lobby_browser_rows_place(struct widget_instance *list)
 		focused = (short)(found - lobby_browser.first);
 		lobby_browser_focus_row(list, focused);
 	}
-	else if (focused == BROWSER_ROWS - 1 && lobby_browser.first + BROWSER_ROWS < lobby_browser.count)
+	else if (focused == BROWSER_ROWS - 1 && lobby_browser.first + BROWSER_ROWS < lobby_browser.count && list_scrolls_at_end())
 	{
 		lobby_browser.first++;
 		lobby_browser_focus_row(list, --focused);
@@ -4069,7 +4069,11 @@ static void lobby_browser_update(struct widget_instance *list)
 				L"Looking for public games..." : L"No public games found");
 		}
 		else if (lobby_browser.message[0] && now - lobby_browser.message_time < LOBBY_BROWSER_MESSAGE_TIME)
+		{
+			/* (terminated here: usnprintf, as MSVC's, is not when it fits exactly) */
 			usnprintf(text, NUMBEROF(text) - 1, L"%s", lobby_browser.message);
+			text[NUMBEROF(text) - 1] = 0;
+		}
 		/* (what stops the chosen game being joined here: its Halo PC map) */
 		else if (chosen < lobby_browser.count &&
 			server_browser_map_blocked(lobby_browser.games[chosen].map, text, NUMBEROF(text)))

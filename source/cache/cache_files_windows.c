@@ -1073,7 +1073,9 @@ short cache_file_read(
 short cache_files_precache_map_status(
 	real *progress)
 {
-	short status;
+	/* port: failed, when the copy's status is none of the cases below
+	(it was returned unset) */
+	short status = _cached_map_file_failed;
 	short copy_status;
 
 	match_assert(

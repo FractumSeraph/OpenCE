@@ -3462,7 +3462,11 @@ static boolean main_loop_iteration(
 			bink_playback_update();
 			profile_scope_exit(main_ui_update_section)
 
-			if ((!game_in_editor() && (input_key_is_down(_key_end) || input_key_is_down(_key_escape))) || editor_should_exit())
+			/* port: not the Xbox debug keyboard's End and Escape, which stop
+			the movie and restart the map: this keyboard reaches the game only
+			through the console and the menus' text boxes, whose End and Escape
+			they are (port/linux/src/xinput_sdl.c) */
+			if (editor_should_exit())
 			{
 				main_movie_stop();
 

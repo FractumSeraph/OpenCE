@@ -2984,7 +2984,9 @@ static void dsound_error(
 			break;
 	}
 
-	error(_error_silent, "DirectSound:  '%s' (%s#%d)", message, result_name, result);
+	/* port: (the result as the int its %d reads: an HRESULT is a long, 64
+	bits on the 64-bit builds) */
+	error(_error_silent, "DirectSound:  '%s' (%s#%d)", message, result_name, (int)result);
 
 	return;
 }
