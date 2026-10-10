@@ -3616,7 +3616,7 @@ static short lobby_browser_rows_place(struct widget_instance *list)
 		focused = (short)(found - lobby_browser.first);
 		lobby_browser_focus_row(list, focused);
 	}
-	else if (focused == BROWSER_ROWS - 1 && lobby_browser.first + BROWSER_ROWS < lobby_browser.count)
+	else if (focused == BROWSER_ROWS - 1 && lobby_browser.first + BROWSER_ROWS < lobby_browser.count && list_scrolls_at_end())
 	{
 		lobby_browser.first++;
 		lobby_browser_focus_row(list, --focused);
