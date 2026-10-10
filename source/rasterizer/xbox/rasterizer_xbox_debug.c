@@ -39,17 +39,8 @@ RASTERIZER_XBOX_DEBUG.C
 /* ---------- public code */
 
 void rasterizer_debug_drawing_begin(
-	boolean opaque
-#ifdef HALO_WEB
-	, long zbias
-#endif
-	)
+	boolean opaque)
 {
-#ifdef HALO_WEB
-	/* The original x86 caller passes this extra argument even though the
-	callee reads the configured value.  WebAssembly requires an exact ABI. */
-	(void)zbias;
-#endif
 	match_assert(
 		"c:\\halo\\SOURCE\\rasterizer\\xbox\\rasterizer_xbox_debug.c",
 		19,

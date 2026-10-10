@@ -2179,6 +2179,7 @@ boolean network_game_server_accept_client_machine_into_game(
 					network_game_server_hardware_ids[machine_index] : ""))
 		{
 			network_event("refusing a machine @ %s: kicked by a vote", transport_address_to_string(&address));
+			network_game_server_refusal_code = _rejection_code_blacklisted_machine;
 			return FALSE;
 		}
 	}

@@ -897,7 +897,7 @@ boolean unit_scream(
 	short scream_type)
 {
 	struct unit_datum *unit = unit_get(unit_index);
-	short vocalization_type;
+	short vocalization_type = 0;
 
 	match_assert(
 		"c:\\halo\\SOURCE\\units\\unit_dialogue.c",
@@ -927,10 +927,6 @@ boolean unit_scream(
 	case _unit_scream_resurrection:
 		vocalization_type = _vocalization_resurrect;
 		break;
-	/* vocalization_type is left unassigned only by this default arm. Not reached unassigned: the
-	 * arm's assertion failure calls system_exit, which does not return in January
-	 * (0x47c960 jumps to halt_and_catch_fire 0x4f21c0, which loops or calls exit).
-	 * Source-policy approval pending (2026-09-27 audit). */
 	default:
 		match_assert(
 			"c:\\halo\\SOURCE\\units\\unit_dialogue.c",
@@ -998,12 +994,8 @@ void unit_dialogue_update(
 
 	if (unit->unit.speech.damage_minor_timer > 0)
 		unit->unit.speech.damage_minor_timer--;
-	/* BUG (preserved for exact matching): January decrements damage_minor_timer
-	 * (+0x39C) a second time here and never touches damage_major_timer (+0x39E,
-	 * the field unit_make_damage_sound tests against zero and sets to 60), so a
-	 * unit's major pain vocalization is suppressed for good once one has played.
-	 * A corrected build should decrement damage_major_timer in this statement.
-	 */
+	/* (as the original game, kept: the minor pain timer counts down twice and the major one
+	not at all, so a unit cries out in major pain once) */
 	if (unit->unit.speech.damage_minor_timer > 0)
 		unit->unit.speech.damage_minor_timer--;
 

@@ -458,8 +458,7 @@ static void ai_profile_render_actors(
 {
 	short tab_stops[] = {150, 300};
 
-	/* Preserve January's missing tab marker and final unit-count separator. */
-	sprintf(profilestring, "actors %d/%d/%d|units %d/%d%d",
+	sprintf(profilestring, "actors %d/%d/%d|tunits %d/%d/%d",
 		ai_profile.meters[_ai_meter_actors_active].current_value,
 		ai_profile.meters[_ai_meter_actors_updated].current_value,
 		ai_profile.meters[_ai_meter_actors].current_value,

@@ -2281,7 +2281,7 @@ static void game_options_menu_update_text_desc(
 	struct widget_instance *extended_description;
 	struct widget_instance *spinner_list;
 	struct ui_widget_definition *definition;
-	long description_index;
+	long description_index = 0;
 
 	match_vassert(
 		"c:\\halo\\SOURCE\\interface\\ui_widget_game_data_input_functions.c",
@@ -2355,7 +2355,7 @@ static void game_options_menu_update_pic_desc(
 	struct widget_instance *extended_description;
 	struct widget_instance *spinner_list;
 	struct ui_widget_definition *definition;
-	long description_index;
+	long description_index = 0;
 
 	match_vassert(
 		"c:\\halo\\SOURCE\\interface\\ui_widget_game_data_input_functions.c",
