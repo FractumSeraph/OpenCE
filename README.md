@@ -37,7 +37,7 @@ then [ChupathingyCE's](#chupathingyce), then [OpenCE's](#opence).
   high-resolution controller buttons, a screenshot key (F10), the portable
   Linux build for SteamOS, and the profiling build.
 - **Servers of its own.** An internet-play broker (`halovps.fractumseraph.net:1883`,
-  the fifth in every build's list), the maps' BitTorrent tracker, the
+  the first of the five in every build's list), the maps' BitTorrent tracker, the
   browser lobby and the gateway that lets a browser join native games, and
   a dedicated server, **FractumSeraph** (Capture the Flag on Coldsnap).
 - **Its own releases.** Every change that builds on every platform is a
@@ -53,7 +53,8 @@ players of all three play together.
 
 **The game for Windows, Mac, Linux and Android**, this fork's builds of the
 latest `main` (each push that builds on every platform is a release,
-`v<version>-fs.<run>`; the game updates itself from these releases). At the
+`v<version>-fs.<run>`; the game updates itself from these releases, except
+the Android app: see below the table). At the
 first start it offers to download the game's maps (see
 [Game data](#game-data)), and it downloads Custom Edition maps as a game
 needs them ([docs/map_torrents.md](docs/map_torrents.md)):
@@ -67,9 +68,18 @@ needs them ([docs/map_torrents.md](docs/map_torrents.md)):
 | Mac | [chupathingyce-macos-release.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-macos-release.zip) | [chupathingyce-macos-debug.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-macos-debug.zip) |
 | Android | [chupathingyce-android-release.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-android-release.zip) | [chupathingyce-android-debug.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-android-debug.zip) |
 | Dedicated server (Linux x64) | [chupathingyce-server-linux-x64.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-server-linux-x64.zip) | |
+| Dedicated server (Linux arm64) | [chupathingyce-server-linux-arm64.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-server-linux-arm64.zip) | |
+| Dedicated server (Linux x86) | [chupathingyce-server-linux-x86.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-server-linux-x86.zip) | |
 
-(The Android app of these releases is unsigned, as ChupathingyCE's pull
-requests' are: ChupathingyCE signs only its own releases.)
+**The Android app of these releases is unsigned.** Android does not install
+an unsigned app: sign the APK in `chupathingyce-android-release.zip` with
+your own key (`apksigner`) before you install it. (The debug zip's APK is
+signed with the build machine's own debug key, which can differ from one
+build to the next, and then does not install over an earlier one.) For the
+same reason the Android app does not update itself from this fork's
+releases: that needs the release job to sign the app, with a signing key
+stored as the repository's secrets, which it does not do yet.
+ChupathingyCE's own releases are signed.
 
 **The browser version, to host it yourself** (no game data included):
 
@@ -406,7 +416,7 @@ A few people look for most:
 | `display.mode` | `"fullscreen"`, `"borderless"` or `"windowed"`. F11 switches between a window and the whole screen. |
 | `display.window_scale` | The window's size, as a multiple of 640x480. |
 | `display.vsync`, `display.max_fps` | Vertical sync, and a frame rate cap (0 for none). |
-| `display.menus` | `"xbox"` (the default) or `"pc"`, the Halo PC style menus with their Server Browser. |
+| `display.menus` | `"xbox"` (the default; `"pc"` in the browser) or `"pc"`, the Halo PC style menus with their Server Browser. |
 | `display.player_names` | Names over players' heads: `"all"`, `"allies"`, `"enemies"` or `"none"`. |
 | `audio.volume`, `audio.music_volume`, `audio.effects_volume` | Volumes, from 0.0 to 1.0. |
 | `input.mouse_sensitivity`, `input.invert_mouse` | Mouse aim. |
@@ -485,9 +495,12 @@ Useful `configure.py` options:
 
 
 
-The version being made is in `VERSION`. Releases are built and published by
-the project's release workflow; the builds on this repository's Actions page
-are for checking changes.
+The version being made is in `VERSION`. In this fork, every push to `main`
+that builds on every platform is a release, `v<VERSION>-fs.<run>`, made by
+the release job of `.github/workflows/build.yml` (see [Download](#download));
+the builds of other branches and pull requests on the Actions page are for
+checking changes. ChupathingyCE's own releases come from its release
+workflow.
 
 ## Credits
 
@@ -502,7 +515,7 @@ are for checking changes.
 - HaloMD map names: from [MacGamingMods](https://macgamingmods.com)' public
   HaloMD mod list, so the menus can show each map's own name.
 - Libraries: SDL3, stb, Mbed TLS, miniupnpc, KCP, tomlc17, musl's maths,
-  extract-xiso, Expat, Monocypher, zlib, SMAA, and Project Nayuki's QR Code
+  extract-xiso, Expat, Monocypher, zlib, Opus, SMAA, and Project Nayuki's QR Code
   generator. Their licenses are
   beside them in `port/third_party`.
 
