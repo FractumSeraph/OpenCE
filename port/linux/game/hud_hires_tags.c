@@ -75,7 +75,9 @@ static struct
 	long asset;
 	struct bitmap_data *placeholder;
 	boolean placeholder_failed;
-	void *checked_address;
+	/* (the bitmap's base_address, as its type has it: an Xbox address on
+	the 64-bit builds) */
+	XPTR(void) checked_address;
 	unsigned long checked_at;
 	boolean drawable;
 } hires_sprite_bitmaps[MAXIMUM_HIRES_SPRITE_BITMAPS];

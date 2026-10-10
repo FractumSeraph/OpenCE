@@ -1860,7 +1860,7 @@ static void pause_settings_patch(void)
 		}
 	}
 	ok = tag_get(UI_WIDGET_DEFINITION_TAG, build.widget_tags[ok_widget]);
-	handlers = ok->event_handlers.address;
+	handlers = xbox_pointer(ok->event_handlers.address);
 	for (handler = 0; handler < ok->event_handlers.count; handler++)
 	{
 		if (handlers[handler].function == settings_save)
@@ -1878,7 +1878,7 @@ static void pause_campaign_patch(struct cache_file_tag_instance *instances)
 	if (screen == NONE)
 		return;
 	definition = tag_get(UI_WIDGET_DEFINITION_TAG, screen);
-	children = definition->child_widgets.address;
+	children = xbox_pointer(definition->child_widgets.address);
 	for (child = 0; child < definition->child_widgets.count; child++)
 	{
 		struct ui_widget_definition *list;
@@ -1891,7 +1891,7 @@ static void pause_campaign_patch(struct cache_file_tag_instance *instances)
 		list = tag_get(UI_WIDGET_DEFINITION_TAG, children[child].widget_tag.index);
 		if (list->type != _widget_type_column_list || list->child_widgets.count < 2)
 			continue;
-		rows = list->child_widgets.address;
+		rows = xbox_pointer(list->child_widgets.address);
 		/* (REVERT TO SAVED, by its tag: it opens its confirmation rather
 		than running a function, and a map's list need not have it second) */
 		for (revert = 0; revert < list->child_widgets.count; revert++)
