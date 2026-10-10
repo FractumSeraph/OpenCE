@@ -1960,8 +1960,10 @@ void menu_tags_loaded(
 	boolean game_map = strcmp(map_name, "ui") != 0;
 	boolean campaign = game_map && single_player_campaign_map();
 
-	/* (ui.map, and a multiplayer map: its pause menu's SETTINGS) */
-	if ((game_map && tag_loaded('Soul', MULTIPLAYER_COLLECTION) == NONE) || !menus_pc_chosen())
+	/* (ui.map, and a multiplayer map: its pause menu's SETTINGS; a
+	single-player campaign's too) */
+	if ((game_map && tag_loaded('Soul', MULTIPLAYER_COLLECTION) == NONE && !campaign) ||
+		!menus_pc_chosen())
 	{
 		return;
 	}
