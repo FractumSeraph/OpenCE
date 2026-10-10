@@ -658,6 +658,15 @@ void scenario_tags_unload(
 		hud_hires_tags_unloaded();
 	}
 	sound_cache_close();
+#ifdef HALO_CUSTOM_EDITION
+	/* port: the sounds of tag files go, after the sound cache that held them
+	(port/linux/game/loose_sounds.c) */
+	{
+		extern void loose_sounds_tags_unloaded(void);
+
+		loose_sounds_tags_unloaded();
+	}
+#endif
 	texture_cache_close();
 	/* port: the menus' tags go, and the map's own table comes back
 	(port/linux/game/menu_tags.c): after the texture cache, which writes to
@@ -1441,6 +1450,13 @@ long scenario_tags_load(
 
 				ce_hud_tags_loaded(global_tag_instances, ce_header->tag_count);
 			}
+			/* (and the sounds of tag files played over the map's, as below:
+			port/linux/game/loose_sounds.c) */
+			{
+				extern void loose_sounds_tags_loaded(void);
+
+				loose_sounds_tags_loaded();
+			}
 			return ce_header->scenario_tag_index;
 		}
 #endif
@@ -1539,6 +1555,15 @@ long scenario_tags_load(
 				extern void ui_widget_online_games_tags_loaded(void);
 
 				ui_widget_online_games_tags_loaded();
+			}
+#endif
+#ifdef HALO_CUSTOM_EDITION
+			/* port: the sounds of tag files played over the map's
+			(audio.loose_sounds: port/linux/game/loose_sounds.c) */
+			{
+				extern void loose_sounds_tags_loaded(void);
+
+				loose_sounds_tags_loaded();
 			}
 #endif
 			result = cache_file_globals.tag_header->scenario_tag_index;

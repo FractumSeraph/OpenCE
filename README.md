@@ -34,8 +34,10 @@ then [ChupathingyCE's](#chupathingyce), then [OpenCE's](#opence).
   newest work that ChupathingyCE hasn't taken in yet: in-game Settings in
   the campaign, field of view and viewmodel settings, OpenCE's touch
   controls (profile buttons, gyroscope aiming, aim assist, opacity), the
-  high-resolution controller buttons, a screenshot key (F10), the portable
-  Linux build for SteamOS, and the profiling build.
+  high-resolution controller buttons, a screenshot key (F10), sound tag
+  files played over a map's sounds for those making them
+  (`audio.loose_sounds`), the portable Linux build for SteamOS, and the
+  profiling build.
 - **Servers of its own.** An internet-play broker (`halovps.fractumseraph.net:1883`,
   the first of the five in every build's list), the maps' BitTorrent tracker, the
   browser lobby and the gateway that lets a browser join native games, and

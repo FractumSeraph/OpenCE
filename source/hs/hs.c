@@ -3391,8 +3391,9 @@ typedef void (*hs_token_enumerator)(
 struct hs_function_table_storage
 {
 #ifdef HALO_CUSTOM_EDITION
-	/* port: and Halo PC's functions the Xbox's have none of (below) */
-	struct hs_function_definition const *functions[418 + 3 + 24];
+	/* port: and Halo PC's functions the Xbox's have none of, and the
+	port's loose_sounds (below) */
+	struct hs_function_definition const *functions[418 + 3 + 24 + 2];
 #else
 	struct hs_function_definition const *functions[418];
 #endif
@@ -12111,7 +12112,42 @@ static struct hs_function_definition const sound_eax_enabled_definition=
 	0,
 };
 
-long const hs_function_table_count= 418 + 3 + 24;
+/* port: the sounds of tag files played over the map's, for those making
+them (audio.loose_sounds: port/linux/game/loose_sounds.c), at the console */
+void loose_sounds_reload(void);
+void loose_sounds_enable(boolean enabled);
+
+HS_EVALUATE_NO_ARGUMENTS(hs_loose_sounds_reload_evaluate, loose_sounds_reload)
+HS_EVALUATE_VOID_BOOLEAN(hs_loose_sounds_evaluate, loose_sounds_enable)
+
+static struct hs_function_definition const loose_sounds_reload_definition=
+{
+	_hs_type_void,
+	0,
+	"loose_sounds_reload",
+	hs_macro_function_parse,
+	hs_loose_sounds_reload_evaluate,
+	"reads the sound tag files under the data root's tags folder again (all sounds stop if any changed).",
+	NULL,
+	0,
+};
+
+static struct hs_function_definition_with_1_parameter const loose_sounds_definition=
+{
+	{
+		_hs_type_void,
+		0,
+		"loose_sounds",
+		hs_macro_function_parse,
+		hs_loose_sounds_evaluate,
+		"plays the map's sounds from the tags folder's sound tag files, or (false) from the map, until the map changes.",
+		NULL,
+		1,
+		{ _hs_type_boolean },
+	},
+};
+
+long const hs_function_table_count= 418 + 3 + 24 + 2;
 #else
 long const hs_function_table_count= 418;
 #endif
@@ -12574,6 +12610,8 @@ struct hs_function_table_storage hs_function_table=
 		&sound_set_env_definition.definition,
 		&sound_enable_eax_definition.definition,
 		&sound_eax_enabled_definition,
+		&loose_sounds_reload_definition,
+		&loose_sounds_definition.definition,
 #endif
 	},
 	{
@@ -13102,6 +13140,10 @@ static boolean const hs_function_allowed_in_maps[]=
 	TRUE, /* sound_set_env */
 	TRUE, /* sound_enable_eax */
 	TRUE, /* sound_eax_enabled */
+
+	/* the port's, for those making sounds */
+	FALSE, /* loose_sounds_reload */
+	FALSE, /* loose_sounds */
 #endif
 };
 typedef char verify_hs_function_allowed_in_maps_size[
