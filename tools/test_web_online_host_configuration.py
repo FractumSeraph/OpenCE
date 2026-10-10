@@ -40,8 +40,12 @@ def test_configured_host_uses_one_atomic_request():
         "EMSCRIPTEN_KEEPALIVE int platform_web_online_host_configured(",
     )
 
-    assert "map_index < 0" in body
-    assert "map_index >= _web_online_multiplayer_level_count" in body
+    # (the Xbox's levels, then the Custom Edition maps the page lists, in the request's 8 bits)
+    assert "!host_map_index_valid(map_index)" in body
+    valid = function_body(source, "static int host_map_index_valid(")
+    assert "_web_online_multiplayer_level_count +" in valid
+    assert "&web_online_custom_map_count" in valid
+    assert "map_index >= 0 && map_index < count && map_index <= 0xff" in valid
     assert "mode_index < 0" in body
     assert "mode_index >= _web_online_game_mode_count" in body
     assert body.count("atomic_store_explicit(") == 1
@@ -117,8 +121,10 @@ def test_player_magnetism_setting_crosses_threads_through_an_atomic():
 
     assert "atomic_store_explicit(" in setter
     assert "&web_online_requested_player_magnetism" in setter
-    assert "player_magnetism_flag =" in update
     assert "atomic_load_explicit(" in update
+    # (the player's mouse and touch aim assist; the game-wide player_magnetism_flag is the host's rule)
+    assert 'config_write_boolean("input.mouse_aim_assist", requested_magnetism);' in update
+    assert "player_magnetism_flag =" not in update
 
 
 def test_online_setup_restores_browser_identity_after_halo_clears_profiles():
