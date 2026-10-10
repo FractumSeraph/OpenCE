@@ -12,6 +12,8 @@ that refuse when full, CHECK (exits CHECK_FAILED, 1) and CASE.
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+/* XPTR, the shared structures' pointer fields (source/cseries: a pointer in this 32-bit build) */
+#include "xbox_address.h"
 
 typedef float real;
 typedef int boolean;
