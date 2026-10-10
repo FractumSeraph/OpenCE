@@ -444,6 +444,8 @@ addToLibrary({
       var runtime = HaloWebTransportRuntime;
       var queue = reliable ? record.reliableQueue : record.unreliableQueue;
       if (!queue.length || !runtime.channelsReady(record)) return 1;
+      // The game must know the peer is connected before its frames come.
+      if (record.needsStateSync) return 0;
       var bytes = queue[0];
       var ingress = runtime.moduleFunction('web_net_remote_ingress_buffer')();
       var capacity = runtime.moduleFunction('web_net_remote_ingress_capacity')();

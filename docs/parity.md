@@ -90,7 +90,7 @@ Abbreviations:
 | Gyro aiming | no | no | no | no | no | phone gyro with touch controls | **no (b)** | n/a |
 | Telnet script console | yes | yes | yes | yes | yes | yes, device-local | yes | yes |
 | `sv_*` console, control API, web admin | no | no | no | no | no | no | no | yes (c) |
-| `screenshot_count` (TIFF) | yes | **no (b)** | yes | **no (b)** | **no (b)** | yes | **no (b)** | n/a |
+| Screenshot key (`controls.screenshot`, PNG; `screenshot_count` writes no TIFF on any build) | yes | yes | yes | yes | yes | no (a) | yes | n/a |
 | Debug frame dumps (`debug.screenshot_*`) | yes | yes | yes | yes | yes | yes | yes | n/a |
 | Crash reports (`crash_report.h`, to the site's `/v1/crash`) | minidump + walked stack, sent after the crash (fixed) | same | signal report, sent at the next start (fixed; c) | same | same | logcat only (b) | same as L64 | backtrace in its log (c) |
 | mesa_glthread hint | no (a: Mesa is rare on Windows) | no | yes | yes | yes (ignored) | no | yes | n/a |
@@ -158,12 +158,9 @@ the server. No build script names them and none excludes them.
    from the flat-file `.old` scheme. About 1-2 days with testing. It should
    follow the update-signing work (`port/linux/src/update_signature.c`,
    `tools/update_sign.py`).
-3. **Console screenshots on 64-bit builds.** `screenshot_count` uses
-   libtiff, which the LP64 builds leave out (`source/bitmaps/tiff_file.c`;
-   `port/linux/port.json` "lp64"). Writing the frame with stb_image_write
-   (already in `port/third_party/stb`) as PNG on every build fixes it.
-   About half a day. It changes the 32-bit output format too, so the owner
-   should decide.
+3. **Console screenshots.** Done: the Screenshot key (F10) writes a PNG on
+   every desktop build; `tiff_export` is a stub
+   (`port/linux/game/tiff_file.c`).
 4. **Android `halo://key` links.** Two pieces are needed:
    - The manifest filter accepts `host="join"` only.
    - `poll_invite_file` passes the text to `p2p_invite_received`, which
@@ -205,6 +202,10 @@ the server. No build script names them and none excludes them.
   128 MB guest decide them (`halo_port_capacity.h`, `d3d8_gl.c:116-132`).
 - **macOS starts windowed and uses larger audio buffers.** Both follow
   macOS conventions and an audio dropout fix.
+- **A browser host waits 120 s for a joining machine's first player**
+  (native: 15 s; `NETWORK_GAME_SERVER_PLAYERLESS_MACHINE_TIMEOUT`,
+  `source/networking/network_server_manager.c`), because a browser joining
+  fetches the Custom Edition map from the site first (`HaloMapPrefetch`).
 - **The server has no updater, UI or sound, and skips campaign levels.**
   Its `sv_*` console, control API and web page belong to the server alone.
 - **Port settings screens are in the PC menus only.** The Xbox menus stay

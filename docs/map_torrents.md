@@ -159,8 +159,12 @@ names have spaces, brackets or letters beyond ASCII).
   asked for again. Rate limits are token buckets over the whole client.
   Peers come from the DHT, the trackers, other peers (PEX) and incoming
   connections on the listening port; web seeds fetch whole pieces by byte
-  range (a server must answer 206 with the range asked for), over eight
-  connections shared out among the web seeds given, at least one each.
+  range (a server must answer 206 with the range asked for), over
+  `TORRENT_MAXIMUM_WEB_SEEDS` (8) connections shared out among the web
+  seeds given (those past the eighth are left out). When no peer has given
+  the metadata within 10 seconds, the whole file is fetched from the web
+  seeds and checked against the info hash; three wrong answers in a row on
+  a connection stop that.
 
 ## Tests
 

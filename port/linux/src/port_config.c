@@ -351,7 +351,8 @@ static const struct config_setting config_settings[] =
 		"empty for English. The game data decides what is translated." },
 
 	{ "game.downloaded_maps", _config_string, "\"\"", "HALO_DOWNLOADED_MAPS", _environment_value, _platform_all,
-		"Maps played as downloaded ones (until the game downloads maps itself):\n"
+		"Maps also played as downloaded ones (a map the game downloads is marked\n"
+		"so by itself):\n"
 		"their names, as the game names them (bloodgulch, hugeass@ce), separated\n"
 		"by commas, or \"*\" for every map. A downloaded map's scripts may not\n"
 		"change the player's settings or other players' games (debug.txt names\n"

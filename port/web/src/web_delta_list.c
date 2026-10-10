@@ -21,6 +21,7 @@ and joining checks the host as any join does. */
 
 #include "p2p.h"
 #include "delta.h"
+#include "halo_port_limits.h"
 #include "web_delta_list.h"
 
 #include <emscripten/emscripten.h>

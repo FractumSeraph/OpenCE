@@ -53,7 +53,7 @@ players of all three play together.
 
 **The game for Windows, Mac, Linux and Android**, this fork's builds of the
 latest `main` (each push that builds on every platform is a release,
-`v<version>-fs.<run>`; the game updates itself from these releases, except
+`v<version>-fs.<run>` (the run's number in five digits, as `v0.7.1e-fs.00057`); the game updates itself from these releases, except
 the Android app: see below the table). At the
 first start it offers to download the game's maps (see
 [Game data](#game-data)), and it downloads Custom Edition maps as a game

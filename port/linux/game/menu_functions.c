@@ -2227,6 +2227,7 @@ void ui_widget_port_post_button(short controller_index, short button_index);
 int map_torrents_fetch(char const *level_name, unsigned long version, char const *files);
 int map_torrents_fetching(char *status, int size);
 int map_torrents_take_ready(char *level_name, int size);
+void map_torrents_cancel(void);
 
 /* a Custom Edition map being downloaded before its game is joined
 (ui_widget_port_join_map_fetch, map_fetch_update) */
@@ -4223,8 +4224,13 @@ static void lobby_browser_web_join_update(void)
 static boolean lobby_browser_join(struct p2p_listing const *game, short controller)
 {
 #ifdef HALO_WEB
+	/* (another game chosen while one's map is fetched: that one is let go,
+	so a fetch that never ends cannot keep the browser from joining) */
 	if (web_join.pending)
-		return FALSE;
+	{
+		web_join.pending = FALSE;
+		map_torrents_cancel();
+	}
 	if (lobby_browser_web_map_fetch(game))
 	{
 		ui_play_audio_feedback_sound(SOUND_FORWARD);

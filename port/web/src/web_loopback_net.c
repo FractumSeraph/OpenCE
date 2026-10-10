@@ -1831,10 +1831,16 @@ EMSCRIPTEN_KEEPALIVE int web_net_remote_receive(unsigned long address, int lengt
 	if (pthread_mutex_trylock(&web_sockets_mutex) != 0)
 		return 0;
 	peer = remote_peer_for_address_locked(address);
-	if (!peer || !peer->connected)
+	if (!peer)
 	{
 		pthread_mutex_unlock(&web_sockets_mutex);
 		return -1;
+	}
+	/* (a peer whose channels opened before its state reached us: later) */
+	if (!peer->connected)
+	{
+		pthread_mutex_unlock(&web_sockets_mutex);
+		return 0;
 	}
 	peer_index = (int)(peer - web_remote_peers);
 	connection = frame_get_long(web_remote_ingress + 4);

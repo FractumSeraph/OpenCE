@@ -28,6 +28,15 @@
   /* (v1 kept Custom Edition maps in 4 MB pieces, which v2's 256 KB reads
    * never ask for again) */
   if (cacheStorage()) cacheStorage().delete("halo-maps-v1").catch(() => {});
+  /* (a path's segment decoded, or as it is if it is not well encoded: a
+   * file named with a "%") */
+  const safeDecode = segment => {
+    try { return decodeURIComponent(segment); } catch (_error) { return segment; }
+  };
+  /* A map's path in one form whichever way its URL was written (FetchFS
+   * leaves "[", "]" and "+" as they are, encodeURIComponent does not): the
+   * cache's keys and the maps' versions are by it. */
+  const canonicalMapPath = path => path.split("/").map(segment => encodeURIComponent(safeDecode(segment))).join("/");
   const pieceKey = (path, version, range) => scope.location.origin + path +
     "?halo-piece=" + encodeURIComponent(version) + "&range=" + encodeURIComponent(range || "all");
 
@@ -76,10 +85,12 @@
         .then(response => response.ok ? response.json() : [])
         .then(files => new Map((Array.isArray(files) ? files : [])
           .filter(file => file && typeof file.name === "string" && Number.isFinite(file.size) && file.etag)
-          .map(file => [file.name, file])))
+          .map(file => [file.name.toLowerCase(), file])))
         .catch(() => { customMapIndex = null; return new Map(); });
     }
-    return customMapIndex.then(entries => entries.get(decodeURIComponent(path.split("/").pop())) || null);
+    /* (by name whatever its case, as the game finds a map: a host may name
+     * it otherwise than the site's file) */
+    return customMapIndex.then(entries => entries.get(safeDecode(path.split("/").pop()).toLowerCase()) || null);
   }
 
   /* the size of a map kept here, for FetchFS when the server is unreachable */
@@ -187,7 +198,10 @@
    * missing) */
   const prefetched = new Map();
   const prefetchTried = new Map();
-  const isResourceMap = path => RESOURCE_MAPS.includes(decodeURIComponent(path.split("/").pop()).toLowerCase());
+  const isResourceMap = path => RESOURCE_MAPS.includes(safeDecode(path.split("/").pop()).toLowerCase());
+  /* (one range request of the prefetch given up after this long: the join
+   * waits for the prefetch to end, and the game reads what is missing) */
+  const PREFETCH_RUN_TIMEOUT_MS = 2 * 60 * 1000;
 
   /* a file fetched onto this device, adding what it fetches to job's
    * total and done (bytes); FALSE if the site does not list it (TRUE if it
@@ -232,12 +246,20 @@
     const url = scope.location.origin + path;
     const fetchRun = async run => {
       const first = run[0].start, last = run[run.length - 1].end;
-      const response = await nativeFetch(url, { headers: { Range: `bytes=${first}-${last}` } });
-      if (response.status !== 206) {
-        complete = false;
-        return;
+      const abort = typeof AbortController === "function" ? new AbortController() : null;
+      const timer = abort ? setTimeout(() => abort.abort(), PREFETCH_RUN_TIMEOUT_MS) : null;
+      let bytes;
+      try {
+        const response = await nativeFetch(url, { headers: { Range: `bytes=${first}-${last}` },
+          signal: abort ? abort.signal : undefined });
+        if (response.status !== 206) {
+          complete = false;
+          return;
+        }
+        bytes = new Uint8Array(await response.arrayBuffer());
+      } finally {
+        if (timer) clearTimeout(timer);
       }
-      const bytes = new Uint8Array(await response.arrayBuffer());
       for (const piece of run) {
         const body = bytes.subarray(piece.start - first, piece.end - first + 1);
         const headers = new Headers({
@@ -302,10 +324,13 @@
   let mapJob = null;
   scope.HaloMapPrefetch = {
     start(file) {
-      const path = new URL("assets/custom_maps/" + encodeURIComponent(file), scope.location.href).pathname;
+      const asked = new URL("assets/custom_maps/" + encodeURIComponent(file), scope.location.href).pathname;
       const job = { state: 0, done: 0, total: 0 };
       mapJob = job;
-      prefetchMapAndResources(path, job)
+      /* (the site's file of that name, in its case: the URL the game reads) */
+      customMapEntry(asked)
+        .then(entry => prefetchMapAndResources(
+          entry ? asked.replace(/[^/]*$/, encodeURIComponent(entry.name)) : asked, job))
         .then(listed => { job.state = listed ? 1 : 2; })
         .catch(() => { job.state = 1; });
       return 1;
@@ -343,8 +368,8 @@
       options && options.method || resource instanceof Request && resource.method || "GET"
     ).toUpperCase();
 
-    const mapPath = (isMapRequest || isCustomMapRequest) ? new URL(
-      typeof resource === "string" ? resource : resource.url, scope.location.href).pathname : null;
+    const mapPath = (isMapRequest || isCustomMapRequest) ? canonicalMapPath(new URL(
+      typeof resource === "string" ? resource : resource.url, scope.location.href).pathname) : null;
     const range = mapPath && (options && options.headers && new Headers(options.headers).get("Range") ||
       resource instanceof Request && resource.headers.get("Range")) || "";
     if (mapPath && method === "GET") {

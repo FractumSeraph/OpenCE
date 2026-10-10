@@ -210,8 +210,10 @@ The server lists the folder for the game at `assets/custom_maps/index.json`
 (each file's name, size and version, each map's header, its first 2 KB,
 and a map's BLAKE2b-256 hash once the server has made it: Delta's map
 check), so the game lists the maps without downloading any of them (about
-400 KB for 130 maps); a map is read, in 256 KB pieces, only when it is
-played. A static web host without this server needs that file made beside
+400 KB for 130 maps). The first time a map is played, the page fetches it
+and the three resource maps whole, in ranges of up to 4 MB, six at a time,
+and keeps them in the browser (Cache Storage, as 256 KB pieces); the
+Server Browser waits for that before joining. A static web host without this server needs that file made beside
 the maps.
 
 The lobby artwork in `public/assets/ui/` is placeholder art. Replace any image
