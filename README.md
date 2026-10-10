@@ -403,7 +403,7 @@ Useful `configure.py` options:
 | Option | What it does |
 | --- | --- |
 | `--release` | A release build, as players get. Without it, a failed check stops the game. |
-| `--portable` | A Linux or Windows build that runs on any x86-64 computer, or a universal Mac application, to give to others. |
+| `--portable` | A Linux or Windows build that runs on any x86-64 computer, or a universal Mac application, to give to others. The 32-bit Linux build also runs on older distributions and on SteamOS: see "Portable build" in [port/linux/README.md](port/linux/README.md#portable-build). |
 | `--no-game-browser` | Leaves out the server list, stats and dedicated servers, as OpenCE's builds are. |
 | `--pgo=off`, `--lto=off` | Faster builds, without profile-guided or link-time optimisation. |
 | `--profile` | A profiling build, which records where the game spends its time. See "Profiling builds" below. |
