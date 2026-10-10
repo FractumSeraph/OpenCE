@@ -265,11 +265,10 @@ static void keyboard_controls_update(
 		/* (diagonals on the unit circle) */
 		real length = x && y ? 0.70710678f : 1.f;
 
-		/* port: crouched, below the full stick's 0.98 that stands a grounded
-		biped up (player_control.c), as a stick's crouch walk is */
-		if (TEST_FLAG(held, HALO_KEYBOARD_CROUCH))
-			length *= 0.97f;
-
+		/* port: no "crouched, at 0.97" here, as OpenCE has: the crouch key
+		crouches at full speed through input_abstraction_port_crouch
+		(player_control.c, ChupathingyCE's, which came first in this fork); with
+		both, a crouch walk was also cut to 0.97 of its speed */
 		state->forward_movement = y * length;
 		state->strafe = -x * length;
 	}
