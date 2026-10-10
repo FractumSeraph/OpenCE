@@ -795,6 +795,7 @@ int torrent_piece_to_request_whole(struct torrent *torrent, int *piece)
 				return 0;
 			for (block = 0; block < active->block_count; block++)
 				bit_set(active->requested, block);
+			active->web_seed = 1;
 			*piece = candidate;
 			return 1;
 		}
@@ -802,7 +803,8 @@ int torrent_piece_to_request_whole(struct torrent *torrent, int *piece)
 	/* (the endgame: every piece left is a peer's. A busy or gone peer held
 	the last of them for ever, the web seed taking only pieces no peer was
 	on: it takes the one waited on longest, once a peer has had it a while;
-	blocks that come twice are taken once) */
+	blocks that come twice are taken once. Never one another web seed
+	connection is fetching: that one was handed on every ENDGAME_WAIT) */
 	{
 		struct torrent_active_piece *oldest = NULL;
 		int index;
@@ -812,7 +814,7 @@ int torrent_piece_to_request_whole(struct torrent *torrent, int *piece)
 		{
 			struct torrent_active_piece *active = &torrent->active[index];
 
-			if (active->received_count < active->block_count &&
+			if (active->received_count < active->block_count && !active->web_seed &&
 				torrent_elapsed(active->started, ENDGAME_WAIT) &&
 				(!oldest || (long)(active->started - oldest->started) < 0))
 			{
@@ -823,6 +825,7 @@ int torrent_piece_to_request_whole(struct torrent *torrent, int *piece)
 			return 0;
 		for (block = 0; block < oldest->block_count; block++)
 			bit_set(oldest->requested, block);
+		oldest->web_seed = 1;
 		oldest->started = torrent_now();
 		*piece = oldest->piece;
 		return 1;
@@ -836,6 +839,7 @@ void torrent_piece_unrequested(struct torrent *torrent, int piece)
 
 	if (!active)
 		return;
+	active->web_seed = 0;
 	for (block = 0; block < active->block_count; block++)
 	{
 		if (!bit_test(active->received, block))

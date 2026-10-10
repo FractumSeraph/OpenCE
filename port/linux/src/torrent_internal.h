@@ -225,6 +225,9 @@ struct torrent_active_piece
 	unsigned char received[TORRENT_MAXIMUM_BLOCKS_PER_PIECE / 8];
 	unsigned char requested[TORRENT_MAXIMUM_BLOCKS_PER_PIECE / 8];
 	unsigned long started;
+	/* a web seed connection is fetching it (torrent_piece_to_request_whole
+	until torrent_piece_unrequested): the endgame does not hand it on */
+	int web_seed;
 };
 
 struct torrent
@@ -358,7 +361,8 @@ void torrent_block_unrequested(struct torrent *torrent, int piece, int begin);
 /* a whole piece to fetch (a web seed's), every block of it marked
 requested; 1 and the piece, or 0 if there is none to start */
 int torrent_piece_to_request_whole(struct torrent *torrent, int *piece);
-/* a piece's blocks not received, open to asking again */
+/* a piece's blocks not received, open to asking again (a web seed's fetch
+of it ended) */
 void torrent_piece_unrequested(struct torrent *torrent, int piece);
 /* whether a peer with this bitfield has a piece this torrent wants */
 int torrent_wants_from(const struct torrent *torrent, const unsigned char *bitfield);

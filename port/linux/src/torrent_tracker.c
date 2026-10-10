@@ -1059,6 +1059,10 @@ void torrent_web_seeds_tick(struct torrent *torrent)
 						torrent_bit_set(torrent->web_whole_have, state->piece);
 						torrent->web_whole_count++;
 					}
+					/* (a piece still under way, some block of it not taken:
+					open to asking again, and no longer this web seed's) */
+					else if (!whole)
+						torrent_piece_unrequested(torrent, state->piece);
 				}
 				else if (whole)
 				{
