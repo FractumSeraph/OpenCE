@@ -174,7 +174,7 @@ MENUS = Path(__file__).resolve().parent.parent / "port/assets/menus"
 MENU_ATTRIBUTES = {
     "menus": {"root"},
     "bitmap": {"name", "width", "height", "frames", "platform"},
-    "frame": {"png", "map", "index", "width", "height", "x", "y", "platform"},
+    "frame": {"png", "map", "index", "width", "height", "x", "y", "pc", "pc_index", "platform"},
     "strings": {"name", "platform"},
     "string": {"text", "platform"},
     "widget": {"name", "type", "controller", "flags", "bitmap", "text", "strings", "values", "setting", "font",
@@ -198,7 +198,7 @@ def c_strings(path: Path, start: str, end: str) -> list:
 
 
 # menu_files.c's attributes read as whole numbers (its tables' { name, NULL, &long })
-MENU_INTEGER_ATTRIBUTES = {"auto_close", "auto_close_fade", "height", "index", "left", "string_index", "text_x",
+MENU_INTEGER_ATTRIBUTES = {"auto_close", "auto_close_fade", "height", "index", "pc_index", "left", "string_index", "text_x",
                            "text_y", "top", "width", "x", "y"}
 
 
@@ -250,6 +250,9 @@ def test_menus_are_well_formed():
                     if frame.get("map"):
                         assert "\\" in frame.get("map") and int(frame.get("index")) >= 0, where
                         continue
+                    # (Halo PC's picture, which a png stands in for: its tag and frame)
+                    assert (frame.get("pc") is None) == (frame.get("pc_index") is None), where
+                    assert frame.get("pc") is None or ("\\" in frame.get("pc") and int(frame.get("pc_index")) >= 0), where
                     assert frame.get("png") in listed, where
                     with (MENUS / frame.get("png")).open("rb") as png:
                         header = png.read(24)
