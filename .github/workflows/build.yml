@@ -630,6 +630,86 @@ jobs:
           path: chupathingyce-macos-release.tar
           retention-days: 3
 
+  web:
+    # OpenCE's web build (ninja web, port/web/README.md), as OpenCE builds and
+    # tests it; nothing of it is published here (this fork's site is its own
+    # browser build: web.yml).
+    # Emscripten (emsdk, the version below, cached) builds the web port's
+    # site (port/web/README.md); the tests check its graph, the page's
+    # importer and service worker, its sockets, that it starts in a
+    # headless Chromium (with no game data, as far as the menus' map), and
+    # that two browsers join a room through a local MQTT broker.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      EMSDK_VERSION: 6.0.10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/emsdk
+          key: emsdk-${{ env.EMSDK_VERSION }}-${{ hashFiles('port/web/halo_sdl3.py') }}
+
+      - name: Install the toolchain
+        run: |
+          if [ ! -x ~/emsdk/upstream/emscripten/emcc ]; then
+            rm -rf ~/emsdk
+            git clone --depth 1 https://github.com/emscripten-core/emsdk.git ~/emsdk
+            ~/emsdk/emsdk install "$EMSDK_VERSION"
+          fi
+          ~/emsdk/emsdk activate "$EMSDK_VERSION"
+          sudo apt-get update -q
+          sudo apt-get install -y -q ninja-build ccache python3-pytest mosquitto
+
+      - uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ccache-web-${{ github.sha }}
+          restore-keys: ccache-web-
+
+      - name: Debug
+        run: |
+          source ~/emsdk/emsdk_env.sh
+          python3 tools/ci_build.py web debug
+
+      - name: Release
+        run: |
+          source ~/emsdk/emsdk_env.sh
+          python3 tools/ci_build.py web release
+
+      - name: Test
+        run: |
+          source ~/emsdk/emsdk_env.sh
+          node --test "port/web/tests/*.test.js"
+          python3 -m pytest -q tools/test_web_build.py
+
+      - name: Test in Chromium and Firefox
+        run: |
+          npm install --no-save --prefix "$RUNNER_TEMP/playwright" playwright@1.58
+          "$RUNNER_TEMP/playwright/node_modules/.bin/playwright" install --with-deps chromium firefox
+          NODE_PATH="$RUNNER_TEMP/playwright/node_modules" node port/web/tests/smoke.mjs dist/halo-web-release
+          NODE_PATH="$RUNNER_TEMP/playwright/node_modules" node port/web/tests/rooms.mjs dist/halo-web-release
+          # (the native builds' WebRTC, port/linux/src/p2p_webrtc.c, with both)
+          NODE_PATH="$RUNNER_TEMP/playwright/node_modules" node port/web/tests/webrtc_native.mjs chromium firefox
+
+      - name: Compile cache
+        run: ccache --show-stats
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: halo-web-debug
+          path: dist/halo-web-debug
+          include-hidden-files: true
+          retention-days: 3
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: halo-web-release
+          path: dist/halo-web-release
+          include-hidden-files: true
+          retention-days: 3
+
   release:
     # A fork's own releases (FractumSeraph/OpenCE): every push to its main
     # that builds on every platform is published as v<VERSION>-fs.<run>,
