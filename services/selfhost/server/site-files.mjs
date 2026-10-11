@@ -97,12 +97,14 @@ export function customMapList(folder, mapHashes) {
 // The game's own maps (public/assets/maps) as maps.txt, for the desktop and
 // Android games' first start, which can download the maps folder from here
 // (data.download_url, port/linux/src/sdl_platform.c; LauncherActivity.java):
-// a line each, the file's name, a tab, its size in bytes.
+// a line each, the file's name, a tab, its size in bytes. With them the
+// loading screen's picture, loading.tga, when the folder has it
+// (tools/xiso_extract.py --loading-tga makes it from the disc).
 export function gameMapList(folder) {
   let lines = [];
   try {
     lines = fs.readdirSync(folder, { withFileTypes: true })
-      .filter((entry) => entry.isFile() && /^[A-Za-z0-9_.-]{1,60}\.map$/.test(entry.name))
+      .filter((entry) => entry.isFile() && (/^[A-Za-z0-9_.-]{1,60}\.map$/.test(entry.name) || entry.name === "loading.tga"))
       .map((entry) => `${entry.name}\t${fs.statSync(path.join(folder, entry.name)).size}`)
       .sort();
   } catch {

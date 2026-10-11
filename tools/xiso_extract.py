@@ -51,6 +51,8 @@ class Entry:
 class Catalog:
     partition: int
     files: tuple[Entry, ...]
+    # the root's default.xbe, which holds the loading screen's picture
+    xbe: Entry | None = None
 
     @property
     def total_size(self) -> int:
@@ -218,8 +220,51 @@ def read_catalog(image: Image) -> Catalog:
     if "ui.map" not in folded_names:
         raise XisoError("the maps directory has no ui.map; this is not a Halo disc")
 
+    xbe = [entry for entry in _walk_directory(root, False) if entry.name.casefold() == "default.xbe"]
     image.ensure_unchanged()
-    return Catalog(partition=image.partition, files=files)
+    return Catalog(partition=image.partition, files=files, xbe=xbe[0] if xbe else None)
+
+
+# The loading screen's picture (source/interface/progress_bar.c reads it as
+# maps/loading.tga). The retail game has no such file: its default.xbe holds
+# the picture, 320 by 240, as runs of 4-bit greys (a byte each: the grey's
+# high four bits in its low nibble, the run's length in its high one) after
+# the width and height as 32-bit numbers, and its loading screen decodes them
+# into the texture. Found by those two numbers followed by runs that fill the
+# picture exactly; written as the uncompressed 24-bit TGA progress_bar.c reads.
+LOADING_WIDTH = 320
+LOADING_HEIGHT = 240
+MAXIMUM_XBE_SIZE = 64 << 20
+
+
+def loading_picture(xbe: bytes) -> bytes | None:
+    """the loading screen's picture from a default.xbe, as a TGA, or None"""
+    pixels = LOADING_WIDTH * LOADING_HEIGHT
+    sizes = LOADING_WIDTH.to_bytes(4, "little") + LOADING_HEIGHT.to_bytes(4, "little")
+    at = xbe.find(sizes)
+    while at >= 0:
+        greys = bytearray()
+        for byte in xbe[at + 8 : at + 8 + pixels]:
+            run = byte >> 4
+            if not run:
+                break
+            greys += bytes([(byte & 0x0F) << 4]) * run
+            if len(greys) >= pixels:
+                break
+        if len(greys) == pixels:
+            header = bytes([0, 0, 2]) + bytes(9) + sizes[:2] + sizes[4:6] + bytes([24, 0])
+            # (rows from the bottom; blue, green and red each the grey)
+            rows = (greys[y * LOADING_WIDTH : (y + 1) * LOADING_WIDTH] for y in reversed(range(LOADING_HEIGHT)))
+            return header + b"".join(bytes(grey for grey in row for _ in range(3)) for row in rows)
+        at = xbe.find(sizes, at + 1)
+    return None
+
+
+def read_loading_picture(image: Image, catalog: Catalog) -> bytes | None:
+    if catalog.xbe is None or catalog.xbe.size > MAXIMUM_XBE_SIZE:
+        return None
+    offset = _validate_extent(image, catalog.xbe.sector, catalog.xbe.size, "default.xbe")
+    return loading_picture(image.read_at(offset, catalog.xbe.size, "default.xbe"))
 
 
 def _format_size(size: int) -> str:
@@ -362,6 +407,11 @@ def extract_maps(image_path: Path, destination: Path) -> Catalog:
                     )
                     _copy_entry(image, entry, temporary / entry.name)
 
+                if not any(entry.name.casefold() == "loading.tga" for entry in catalog.files):
+                    picture = read_loading_picture(image, catalog)
+                    if picture:
+                        print("maps/loading.tga (the loading screen's picture, from default.xbe)")
+                        (temporary / "loading.tga").write_bytes(picture)
                 image.ensure_unchanged()
                 _fsync_directory(temporary)
                 # The lock serializes this tool's writers.  The final rename is atomic,
@@ -406,10 +456,22 @@ def main(argv: Iterable[str] | None = None) -> int:
     parser.add_argument(
         "--list-only", action="store_true", help="validate and list files without extracting"
     )
+    parser.add_argument(
+        "--loading-tga",
+        type=Path,
+        help="only write the loading screen's picture (from the disc's default.xbe) to this file",
+    )
     arguments = parser.parse_args(argv)
 
     try:
-        if arguments.list_only:
+        if arguments.loading_tga:
+            with Image(arguments.image.expanduser().resolve(strict=True)) as image:
+                picture = read_loading_picture(image, read_catalog(image))
+            if not picture:
+                raise XisoError("the disc's default.xbe has no loading screen picture this tool knows")
+            arguments.loading_tga.write_bytes(picture)
+            print(f"Wrote {arguments.loading_tga}")
+        elif arguments.list_only:
             _print_catalog(inspect_image(arguments.image))
         else:
             extract_maps(arguments.image, arguments.output)

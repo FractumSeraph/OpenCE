@@ -385,6 +385,15 @@ void platform_web_initialize(void)
 		if (descriptor >= 0)
 			close(descriptor);
 	}
+	/* the loading screen's picture, where the site has it beside the maps
+	(tools/xiso_extract.py --loading-tga; progress_bar.c makes clouds of its
+	own when it cannot be read) */
+	{
+		int descriptor = wasmfs_create_file("/assets/maps/loading.tga", 0444, maps);
+
+		if (descriptor >= 0)
+			close(descriptor);
+	}
 
 	web_custom_maps_mount();
 

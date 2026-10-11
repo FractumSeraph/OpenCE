@@ -187,6 +187,13 @@ size; `server/static-site.mjs` writes it for a static host). The desktop and
 Android games' first start can download the maps folder from such a folder
 (`data.download_url` in their `config.toml`).
 
+Put the loading screen's picture beside them as `loading.tga`, and the game
+draws the Xbox's loading screen (the Halo ring and LOADING...) instead of
+clouds of its own. No disc has it as a file: the game's `default.xbe` holds
+it, and `python tools/xiso_extract.py <disc image> --loading-tga loading.tga`
+takes it out. It is listed in `maps.txt` too, so the games' first start
+downloads it with the maps.
+
 ### Halo Custom Edition maps
 
 Custom Edition maps (Coldsnap, Extinction, Halo PC's Ice Fields, Death Island

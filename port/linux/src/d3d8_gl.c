@@ -530,6 +530,12 @@ struct gl_device
 {
 	D3DPRESENT_PARAMETERS presentation;
 	D3DSurface back_buffer;
+	/* the frame shown last, as the loading screen reads it (GetBackBuffer
+	with -1: front_buffer_ready); the frame it was last asked for in, and
+	the frame its picture was last taken in (front_buffer_take), each + 1 */
+	D3DSurface front_buffer;
+	unsigned long front_buffer_asked;
+	unsigned long front_buffer_taken;
 	D3DSurface depth_buffer;
 	D3DSurface *render_target;
 	D3DSurface *depth_stencil;
@@ -1193,9 +1199,15 @@ void WINAPI D3DDevice_SetVerticalBlankCallback(D3DCALLBACK callback)
 	vertical_blank_start();
 }
 
+static void front_buffer_take(void);
+
 void WINAPI D3DDevice_BlockUntilVerticalBlank(void)
 {
 	unsigned long count;
+
+	/* (the loading screen's last call: its frame, for the next frame's
+	trails) */
+	front_buffer_take();
 
 	vertical_blank_start();
 	pthread_mutex_lock(&vertical_blank_lock);
@@ -2181,10 +2193,19 @@ void WINAPI D3DDevice_GetDeviceCaps(D3DCAPS8 *caps)
 	caps->MaxPixelShaderValue = 1.0f;
 }
 
+static BOOL front_buffer_ready(void);
+
 void WINAPI D3DDevice_GetBackBuffer(INT back_buffer, D3DBACKBUFFER_TYPE type, D3DSurface **result)
 {
-	(void)back_buffer;
 	(void)type;
+	/* -1: the front buffer, the frame shown last, which the loading screen
+	blurs into its light's trails (progress_bar.c) */
+	if (back_buffer == -1 && front_buffer_ready())
+	{
+		device.front_buffer.Common++;
+		*result = &device.front_buffer;
+		return;
+	}
 	/* like Direct3D, the caller gets a reference it must release */
 	device.back_buffer.Common++;
 	*result = &device.back_buffer;
@@ -6330,6 +6351,89 @@ static void visibility_copy_batch(void)
 }
 
 #endif
+/* ---------- the front buffer
+
+The Xbox's front buffer is the frame on the screen, which the loading screen
+reads back (GetBackBuffer with -1, progress_bar.c) and draws again blurred,
+a little larger and fainter, under each new frame: the trails of its light.
+Here it is a render target of the menus' 640x480, which takes the 640
+columns in the middle of the frame (where the loading screen draws, as the
+menus do on a wide screen) once the loading screen has drawn it, while the
+screen asks for it: at its BlockUntilVerticalBlank, its last call, so that
+what is drawn over it after (the download screen's words) leaves no trail. */
+
+enum
+{
+	FRONT_BUFFER_WIDTH = 640,
+	FRONT_BUFFER_HEIGHT = 480,
+};
+
+/* the front buffer, made the first time it is asked for, and black when the
+frame before did not take its picture (a loading screen's first frame) */
+static BOOL front_buffer_ready(void)
+{
+	struct render_target_entry *front;
+
+	if (!device.gl_ready)
+		return FALSE;
+	if (!device.front_buffer.Data)
+		d3d8_surface_initialize(&device.front_buffer, D3DFMT_LIN_A8R8G8B8, FRONT_BUFFER_WIDTH, FRONT_BUFFER_HEIGHT);
+	front = render_target_get(&device.front_buffer);
+	if (!front)
+		return FALSE;
+	if (device.front_buffer_taken != device.frame)
+	{
+		GLuint framebuffer;
+
+		draw_flush();
+		framebuffer = framebuffer_get(front->target.texture, 0);
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, framebuffer);
+		glDisable(GL_SCISSOR_TEST);
+		glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT);
+		gl_check_errors("front buffer clear");
+		xgpu_gl_state_invalidate();
+	}
+	device.front_buffer_asked = device.frame + 1;
+	return TRUE;
+}
+
+/* the frame as the loading screen has drawn it into the front buffer, when
+this frame asked for it (D3DDevice_BlockUntilVerticalBlank) */
+static void front_buffer_take(void)
+{
+	struct render_target_entry *back_buffer, *front;
+	GLuint read, draw;
+	GLint width, left;
+
+	if (!device.gl_ready || !device.front_buffer.Data || device.front_buffer_asked != device.frame + 1)
+		return;
+	back_buffer = render_target_get(&device.back_buffer);
+	front = render_target_get(&device.front_buffer);
+	if (!back_buffer || !front)
+		return;
+	draw_flush();
+	render_target_resolve(&back_buffer->target);
+	read = framebuffer_get(back_buffer->target.texture, 0);
+	draw = framebuffer_get(front->target.texture, 0);
+	width = (GLint)(FRONT_BUFFER_WIDTH * back_buffer->target.scale[0] + 0.5f);
+	left = ((GLint)back_buffer->target.gl_width - width) / 2;
+	if (left < 0)
+	{
+		left = 0;
+		width = (GLint)back_buffer->target.gl_width;
+	}
+	glBindFramebuffer(GL_READ_FRAMEBUFFER, read);
+	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, draw);
+	glDisable(GL_SCISSOR_TEST);
+	glBlitFramebuffer(left, 0, left + width, (GLint)back_buffer->target.gl_height, 0, 0,
+		(GLint)front->target.gl_width, (GLint)front->target.gl_height, GL_COLOR_BUFFER_BIT, GL_LINEAR);
+	gl_check_errors("front buffer copy");
+	xgpu_gl_state_invalidate();
+	device.front_buffer_taken = device.frame + 1;
+}
+
 void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destination_rectangle,
 	void *unused, void *unused2)
 {

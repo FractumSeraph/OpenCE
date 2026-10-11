@@ -2068,7 +2068,15 @@ static void progress_bar_render(
 	IDirect3DDevice8_GetTransform(global_d3d_device, D3DTS_PROJECTION, &progress_bar_globals.saved_projection);
 	IDirect3DDevice8_SetTransform(global_d3d_device, D3DTS_WORLD, &progress_bar_globals.world);
 	IDirect3DDevice8_SetTransform(global_d3d_device, D3DTS_VIEW, &progress_bar_globals.view);
-	IDirect3DDevice8_SetTransform(global_d3d_device, D3DTS_PROJECTION, &progress_bar_globals.projection);
+	/* port: on a wide screen, the 640 columns in its middle, as the menus are
+	drawn (the frame before, which the trails are, is those columns:
+	d3d8_gl.c's front buffer) */
+	{
+		D3DXMATRIX projection= progress_bar_globals.projection;
+
+		projection._11*= 640.f/(real)halo_screen_width();
+		IDirect3DDevice8_SetTransform(global_d3d_device, D3DTS_PROJECTION, &projection);
+	}
 	IDirect3DDevice8_SetRenderState(global_d3d_device, D3DRS_ALPHABLENDENABLE, TRUE);
 	IDirect3DDevice8_SetRenderState(global_d3d_device, D3DRS_SRCBLEND, D3DBLEND_SRCALPHA);
 	IDirect3DDevice8_SetRenderState(global_d3d_device, D3DRS_DESTBLEND, D3DBLEND_ONE);
@@ -2373,9 +2381,11 @@ static void progress_bar_load_loading_texture(
 		}
 		fclose(file);
 	}
-	/* port: no loading.tga (the retail disc has none, and the browser's site
-	serves none): the picture the light sweeps over is made here, clouds,
-	tinted as a loading.tga's grey would be */
+	/* port: no loading.tga (no disc has one as a file: the retail
+	default.xbe holds the picture, which importing a disc writes as
+	loading.tga, port/linux/src/xiso.c and tools/xiso_extract.py): the
+	picture the light sweeps over is made here, clouds, tinted as a
+	loading.tga's grey would be */
 	if (!loaded)
 		progress_bar_make_clouds(pixels, 320, 240);
 	IDirect3DTexture8_UnlockRect(*texture, 0);
