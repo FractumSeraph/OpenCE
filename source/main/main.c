@@ -1730,13 +1730,78 @@ void main_crash(
 }
 
 /* port: the native build's identity (port/linux/src/build_identity.c), for
-the halt screen */
+the halt screen, with where the whole log is (OpenCE 48342f52) */
 static char const *port_build_identity(
 	void)
 {
 	extern char const *build_identity(void);
+	static char banner[256];
 
-	return build_identity();
+	snprintf(banner, sizeof(banner),
+		"%s\r\nFull log: debug.txt (game data folder)\r\nRecent messages (newest first):",
+		build_identity());
+	return banner;
+}
+
+/* port: the halt screen's messages, the newest first, at most 8 lines of at
+most 110 characters, so that the failure shows when older messages run off
+the screen (OpenCE 48342f52) */
+static char const *port_error_tail(
+	char const *messages)
+{
+	enum { MAX_LINES = 8, MAX_LINE_BYTES = 110 };
+	static char recent[MAX_LINES * (MAX_LINE_BYTES + 5) + 1];
+	static char const too_many[] = "[...too many errors to print...]";
+	char const *lines[MAX_LINES];
+	size_t lengths[MAX_LINES];
+	char const *cursor;
+	char const *start;
+	size_t length;
+	size_t copied;
+	size_t used = 0;
+	unsigned int count = 0;
+	unsigned int index;
+
+	for (cursor = messages; *cursor; )
+	{
+		start = cursor;
+		while (*cursor && *cursor != '\r' && *cursor != '\n')
+			cursor++;
+		length = (size_t)(cursor - start);
+		while (*cursor == '\r' || *cursor == '\n')
+			cursor++;
+		if (!length || (length >= sizeof(too_many) - 1 && !strncmp(start, too_many, sizeof(too_many) - 1)))
+			continue;
+		if (count == MAX_LINES)
+		{
+			for (index = 1; index < MAX_LINES; index++)
+			{
+				lines[index - 1] = lines[index];
+				lengths[index - 1] = lengths[index];
+			}
+			count--;
+		}
+		lines[count] = start;
+		lengths[count++] = length;
+	}
+	if (!count)
+		return "No recent messages. See debug.txt for details.\r\n";
+	for (index = count; index > 0; index--)
+	{
+		length = lengths[index - 1];
+		copied = length < MAX_LINE_BYTES ? length : MAX_LINE_BYTES;
+		memcpy(recent + used, lines[index - 1], copied);
+		used += copied;
+		if (copied < length)
+		{
+			memcpy(recent + used, "...", 3);
+			used += 3;
+		}
+		recent[used++] = '\r';
+		recent[used++] = '\n';
+	}
+	recent[used] = 0;
+	return recent;
 }
 
 void main_print_version(
@@ -3134,7 +3199,7 @@ void halt_and_catch_fire(
 					NULL,
 					&cursor,
 					-4,
-					error_get());
+					port_error_tail(error_get()));
 			}
 
 			rasterizer_transparent_geometry_draw(TRUE);
