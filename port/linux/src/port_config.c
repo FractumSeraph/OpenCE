@@ -161,6 +161,21 @@ static const struct config_setting config_settings[] =
 	{ "display.viewmodel_shield", _config_boolean, "false", "HALO_VIEWMODEL_SHIELD", _environment_value, _platform_all,
 		"The energy shield's flare on the first-person arms too, as on the body\n"
 		"(the stock game draws it on the body only)." },
+	{ "display.first_person_legs", _config_boolean, "false", "HALO_FIRST_PERSON_LEGS", _environment_value, _platform_all,
+		"Your own legs in first person, seen looking down: your body as others\n"
+		"see it, drawn from the waist down, moving as it moves." },
+	{ "display.shield_glow", _config_boolean, "false", "HALO_SHIELD_GLOW", _environment_value, _platform_all,
+		"Energy shields light what is around them as they flare, as plasma\n"
+		"does, in the shield's own color." },
+	{ "display.shield_glow_intensity", _config_string, "\"default\"", "HALO_SHIELD_GLOW_INTENSITY", _environment_value, _platform_all,
+		"How far the shield glow reaches: \"default\" or \"light_show\" (three\n"
+		"times as far, and at full strength from a third of the flare)." },
+	{ "display.shield_color", _config_string, "\"default\"", "HALO_SHIELD_COLOR", _environment_value, _platform_all,
+		"Your energy shield's color, as this machine draws it: \"default\" (the\n"
+		"shield's own) or a multiplayer armor color: white, black, red, blue,\n"
+		"gray, yellow, green, pink, purple, cyan, cobalt, orange, teal, sage,\n"
+		"brown, tan, maroon or salmon." },
+
 	{ "display.high_res_hud", _config_boolean, "true", "HALO_HIGH_RES_HUD", _environment_value, _platform_all,
 		"Draw the HUD (meters, counters, panels, motion sensor, reticles,\n"
 		"waypoints, scopes) from the high-res assets (8x the maps' bitmaps);\n"
@@ -390,21 +405,6 @@ static const struct config_setting config_settings[] =
 		"Halo PC's in maps_pc. Their tags are checked as the game's own maps'\n"
 		"are before they run. false: none of them is listed, played or\n"
 		"downloaded (OpenCE's setting)." },
-	{ "display.first_person_legs", _config_boolean, "false", "HALO_FIRST_PERSON_LEGS", _environment_value, _platform_all,
-		"Your own legs in first person, seen looking down: your body as others\n"
-		"see it, drawn from the waist down, moving as it moves." },
-	{ "display.shield_glow", _config_boolean, "false", "HALO_SHIELD_GLOW", _environment_value, _platform_all,
-		"Energy shields light what is around them as they flare, as plasma\n"
-		"does, in the shield's own color." },
-	{ "display.shield_glow_intensity", _config_string, "\"default\"", "HALO_SHIELD_GLOW_INTENSITY", _environment_value, _platform_all,
-		"How far the shield glow reaches: \"default\" or \"light_show\" (three\n"
-		"times as far, and at full strength from a third of the flare)." },
-	{ "display.shield_color", _config_string, "\"default\"", "HALO_SHIELD_COLOR", _environment_value, _platform_all,
-		"Your energy shield's color, as this machine draws it: \"default\" (the\n"
-		"shield's own) or a multiplayer armor color: white, black, red, blue,\n"
-		"gray, yellow, green, pink, purple, cyan, cobalt, orange, teal, sage,\n"
-		"brown, tan, maroon or salmon." },
-
 	{ "paths.data", _config_string, "\"\"", "HALO_DATA_ROOT", _environment_value, _platform_desktop,
 		"The folder holding the game data's maps folder; empty looks in the\n"
 		"working directory and its assets folder. Windows paths are easiest in\n"
