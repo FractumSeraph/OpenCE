@@ -85,9 +85,10 @@ void platform_text_typing(int typing)
 	(void)typing;
 }
 
-void platform_text_field(int typing)
+void platform_text_field(int typing, int password)
 {
 	(void)typing;
+	(void)password;
 }
 
 int halo_input_from_name(const char *name)

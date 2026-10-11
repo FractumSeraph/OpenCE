@@ -140,6 +140,12 @@ BOOL platform_ui_pointer_read(struct platform_ui_pointer *pointer);
 /* returns the window's size in the units that pointer positions come in,
 which differ from the drawable's pixels on displays that scale */
 void platform_video_window_size(int *width, int *height);
+#ifndef HALO_ANDROID
+/* a menu's text field typed into or not (a password's or not): the system's
+on-screen keyboard up while it is, where there is one that text input shows
+(Steam's); each field begun brings it up again */
+void platform_screen_keyboard(BOOL show, BOOL password);
+#endif
 BOOL platform_next_keystroke(struct platform_keystroke *keystroke);
 /* the multiplayer scoreboard (game_engine.c) open or not: while it is, the
 mouse wheel and Page Up/Down scroll it instead of switching weapons; how

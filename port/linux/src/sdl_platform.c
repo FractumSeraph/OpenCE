@@ -125,6 +125,7 @@ void dsound_sdl_output_device_check(void);
 /* updater.c's: the desktop self-updater */
 void updater_start(void);
 void updater_poll(SDL_Window *window);
+static void screen_keyboard_update(void);
 /* the windows' icon, a PNG (tools/embed_assets.py, from port/assets/icon) */
 extern const unsigned int platform_window_icon[];
 extern const unsigned long platform_window_icon_size;
@@ -2139,6 +2140,7 @@ void platform_pump_events(void)
 	updater_poll(platform_window);
 	/* (Settings > Audio's output device, as it changes: dsound_sdl.c) */
 	dsound_sdl_output_device_check();
+	screen_keyboard_update();
 #endif
 	map_torrents_poll();
 	pthread_mutex_lock(&input_lock);
@@ -2576,6 +2578,87 @@ scales the fingers' 0..1 by the drawable's size */
 void platform_video_window_size(int *width, int *height)
 {
 	platform_video_drawable_size(width, height);
+}
+
+#endif
+#ifndef HALO_ANDROID
+/* ---------- the system's on-screen keyboard */
+
+/* A menu's text field is typed into (platform_text_field, xinput_sdl.c).
+Where Steam's on-screen keyboard is there to bring up (in Big Picture and in
+the Steam Deck's Game Mode, which ask for it with
+SDL_ENABLE_STEAM_SCREEN_KEYBOARD), SDL's text input runs while the field is
+typed into: the keyboard comes up with the field and goes with it, and what
+it types arrives as keys. Elsewhere text input stays off, as before, so that
+no input method takes the keys the field reads: a Wayland touch screen's
+keyboard (text-input-v3) would type text events, which the field does not
+read. */
+static SDL_AtomicInt screen_keyboard_wanted;
+/* (each field begun, which brings the keyboard up again: Steam does not say
+when its keyboard goes, by its own Enter or closed by hand, so SDL holds it
+to be up still; after a field ended and another begun in the same frame, as
+the password screen's is after a wrong password, it would not come back) */
+static SDL_AtomicInt screen_keyboard_requests;
+
+void platform_screen_keyboard(BOOL show, BOOL password)
+{
+	SDL_SetAtomicInt(&screen_keyboard_wanted, !show ? 0 : password ? 2 : 1);
+	if (show)
+		SDL_AddAtomicInt(&screen_keyboard_requests, 1);
+}
+
+/* (on the window's thread, as SDL asks: platform_pump_events) */
+static void screen_keyboard_update(void)
+{
+	/* (a keyboard shown again is closed first, as SDL opens none that it
+	holds to be up, and opened a moment later: Steam takes each as a URL,
+	steam://close/keyboard then steam://open/keyboard, which must not
+	arrive the other way round) */
+	enum { REOPEN_DELAY_MS = 500 };
+	static int requests_handled;
+	static Uint64 open_time;
+	int requests = SDL_GetAtomicInt(&screen_keyboard_requests);
+	int wanted = SDL_GetAtomicInt(&screen_keyboard_wanted);
+
+	if (!platform_window)
+		return;
+	if (!wanted)
+	{
+		open_time = 0;
+		if (SDL_TextInputActive(platform_window))
+			SDL_StopTextInput(platform_window);
+		return;
+	}
+	if (requests != requests_handled)
+	{
+		requests_handled = requests;
+		if (!SDL_HasScreenKeyboardSupport() ||
+			!SDL_GetHintBoolean(SDL_HINT_ENABLE_STEAM_SCREEN_KEYBOARD, false))
+		{
+			return;
+		}
+		open_time = SDL_GetTicks();
+		if (SDL_TextInputActive(platform_window))
+		{
+			SDL_StopTextInput(platform_window);
+			open_time += REOPEN_DELAY_MS;
+		}
+	}
+	if (open_time && SDL_GetTicks() >= open_time)
+	{
+		/* one line: the keyboard's Enter ends the field (and Steam's
+		keyboard goes with it); a password's, for the keyboards that hide
+		what is typed into one */
+		SDL_PropertiesID properties = SDL_CreateProperties();
+
+		open_time = 0;
+		platform_log("text field: showing the on-screen keyboard");
+		SDL_SetBooleanProperty(properties, SDL_PROP_TEXTINPUT_MULTILINE_BOOLEAN, false);
+		SDL_SetNumberProperty(properties, SDL_PROP_TEXTINPUT_TYPE_NUMBER,
+			wanted == 2 ? SDL_TEXTINPUT_TYPE_TEXT_PASSWORD_HIDDEN : SDL_TEXTINPUT_TYPE_TEXT);
+		SDL_StartTextInputWithProperties(platform_window, properties);
+		SDL_DestroyProperties(properties);
+	}
 }
 
 #endif

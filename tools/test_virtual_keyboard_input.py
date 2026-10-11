@@ -87,6 +87,7 @@ enum {XINPUT_GAMEPAD_DPAD_UP=1, XINPUT_GAMEPAD_DPAD_DOWN=2,
     XINPUT_GAMEPAD_START=16, XINPUT_GAMEPAD_BACK=32, SDL_BUTTON_X1=4};
 typedef struct {unsigned short wButtons;BYTE bAnalogButtons[8];SHORT sThumbLX,sThumbLY;} XINPUT_GAMEPAD;
 struct platform_input_state {unsigned char keys[32],mouse_buttons[8];int mouse_released;};
+#define platform_screen_keyboard(show,password) ((void)0)
 '''
 
 MAIN = r'''
@@ -136,9 +137,9 @@ int main(int argc,char **argv) {
     if(test==2) virtual_keyboard_close();
     if(test==3) virtual_keyboard_dispose();
     if(test==5) {
-        platform_text_field(TRUE);virtual_keyboard_close();
+        platform_text_field(TRUE,FALSE);virtual_keyboard_close();
         assert(poll_key(key).wButtons&XINPUT_GAMEPAD_START);
-        platform_text_field(FALSE);
+        platform_text_field(FALSE,FALSE);
     }
     if(test==6) {
         name[0]=L'N';unique_name=0;action=1;virtual_keyboard_process();

@@ -99,9 +99,9 @@ int main(int argc, char **argv)
     else CASE("duplicate-name") { unique = FALSE; wcscpy(name,L"Other"); virtual_keyboard_select(); CHECK(errors==1 && !virtual_keyboard_globals.last_exit_saved_text, "duplicate name accepted"); }
     else CASE("field-owner")
     {
-        platform_text_field(TRUE); virtual_keyboard_select();
+        platform_text_field(TRUE, FALSE); virtual_keyboard_select();
         CHECK(!virtual_keyboard_globals.active && text_typing, "closing keyboard cleared text field ownership");
-        platform_text_field(FALSE);
+        platform_text_field(FALSE, FALSE);
     }
     else CASE("reopen")
     {
