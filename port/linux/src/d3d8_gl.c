@@ -413,6 +413,9 @@ struct program_entry
 	GLint bump_matrix, bump_luminance, texture_scale;
 	GLint texture_lod_bias;
 	GLint screen_offset;
+	/* nv2a_pixel_shader_key's source_blend's color, and what it last had */
+	GLint blend_constant;
+	float blend_constant_value[4];
 	/* the lights of a draw lit for each pixel (XGPU_MODEL_LIGHT_COUNT), and
 	constants_serial at their last upload */
 	GLint model_lights;
@@ -560,6 +563,8 @@ struct gl_device
 	float attributes[XGPU_VERTEX_ATTRIBUTE_COUNT][4];
 	BOOL immediate_active;
 	D3DPRIMITIVETYPE immediate_type;
+	/* the input registers written since Begin, a bit each */
+	unsigned long immediate_written;
 	float *immediate_vertices;
 	unsigned long immediate_count;
 	unsigned long immediate_capacity;
@@ -793,13 +798,21 @@ static struct
 	float attribute_values[XGPU_VERTEX_ATTRIBUTE_COUNT][4];
 } gl_state;
 
+#ifdef HALO_WEB
+static void vertex_array_cache_invalidate(void);
+#endif
+
 void xgpu_gl_state_invalidate(void)
 {
 	memset(&gl_state, 0xff, sizeof(gl_state));
+#ifdef HALO_WEB
+	vertex_array_cache_invalidate();
+#endif
 }
 
 /* (a unit the shadows still said had it would never be bound to a new
-texture GL gives its name to: OpenCE's, for menu_files.c's art) */
+texture GL gives its name to; and on ES a stage no draw samples keeps what
+was bound to it: bind_textures. OpenCE's) */
 void xgpu_gl_texture_deleted(unsigned int texture)
 {
 	int unit, slot;
@@ -812,6 +825,29 @@ void xgpu_gl_texture_deleted(unsigned int texture)
 				gl_state.textures[unit][slot] = (GLuint)-1;
 		}
 	}
+}
+
+/* the source blend factor the pixel shader applies (nv2a_pixel_shader_key's
+source_blend), when the draw's blend mixes a constant color factor with a
+constant alpha one, which WebGL refuses (the meters, the ammo counters on
+the weapons, without their second tint mode: shader_transparent_meter);
+0 otherwise, and in every build but the browser's. OpenCE's */
+static unsigned char source_blend_in_shader(void)
+{
+#if defined(HALO_WEB) || defined(HALO_BROWSER)
+	DWORD source = D3D__RenderState[D3DRS_SRCBLEND], destination = D3D__RenderState[D3DRS_DESTBLEND];
+	int source_kind = source == D3DBLEND_CONSTANTCOLOR || source == D3DBLEND_INVCONSTANTCOLOR ? 1 :
+		source == D3DBLEND_CONSTANTALPHA || source == D3DBLEND_INVCONSTANTALPHA ? 2 : 0;
+	int destination_kind = destination == D3DBLEND_CONSTANTCOLOR || destination == D3DBLEND_INVCONSTANTCOLOR ? 1 :
+		destination == D3DBLEND_CONSTANTALPHA || destination == D3DBLEND_INVCONSTANTALPHA ? 2 : 0;
+
+	if (D3D__RenderState[D3DRS_ALPHABLENDENABLE] && source_kind && destination_kind && source_kind != destination_kind)
+	{
+		return source == D3DBLEND_CONSTANTCOLOR ? 1 : source == D3DBLEND_INVCONSTANTCOLOR ? 2 :
+			source == D3DBLEND_CONSTANTALPHA ? 3 : 4;
+	}
+#endif
+	return 0;
 }
 
 static void state_enable(unsigned char *shadow, GLenum capability, BOOL enabled)
@@ -1014,6 +1050,31 @@ static void layout_attribute(struct vertex_layout *layout, unsigned long index, 
 	format->relative_offset = (GLuint)relative_offset;
 	format->binding = binding;
 	layout->enabled |= 1UL << index;
+}
+#endif
+
+#ifdef HALO_WEB
+/* the value a disabled attribute reads (value, or the integer zero), which
+is the context's, not the vertex array's (vertex_array_cache) */
+static void state_attribute_constant(GLuint index, const float *value)
+{
+	unsigned char kind = value ? 0 : 1;
+
+	if (gl_state.attribute_value_kind[index] == kind &&
+		(!value || !memcmp(gl_state.attribute_values[index], value, sizeof(gl_state.attribute_values[index]))))
+	{
+		return;
+	}
+	gl_state.attribute_value_kind[index] = kind;
+	if (value)
+	{
+		memcpy(gl_state.attribute_values[index], value, sizeof(gl_state.attribute_values[index]));
+		glVertexAttrib4fv(index, value);
+	}
+	else
+	{
+		glVertexAttribI4ui(index, 0, 0, 0, 0);
+	}
 }
 #endif
 
@@ -2941,6 +3002,7 @@ static struct program_entry *program_entry_add(GLuint vertex_shader, GLuint frag
 	entry->texture_scale = glGetUniformLocation(entry->program, "texture_scale");
 	entry->texture_lod_bias = glGetUniformLocation(entry->program, "texture_lod_bias");
 	entry->screen_offset = glGetUniformLocation(entry->program, "screen_offset");
+	entry->blend_constant = glGetUniformLocation(entry->program, "blend_constant");
 	entry->model_lights = glGetUniformLocation(entry->program, "model_lights");
 	for (stage = 0; stage < D3DTSS_MAXSTAGES; stage++)
 	{
@@ -3195,6 +3257,7 @@ static void render_target_delete(struct render_target_entry *entry)
 	if (bound_color_texture == entry->target.texture)
 		bound_color_texture = 0;
 #endif
+	xgpu_gl_texture_deleted(entry->target.texture);
 	glDeleteTextures(1, &entry->target.texture);
 	free(entry);
 }
@@ -3537,9 +3600,19 @@ static void bind_textures(struct nv2a_pixel_shader_key *key, float texture_scale
 		}
 	}
 #if defined(HALO_GLES) || defined(__APPLE__)
-	/* (each unit on its own: macOS's OpenGL 4.1 has no multi-bind of 4.4) */
+	/* (each unit on its own: macOS's OpenGL 4.1 has no multi-bind of 4.4.
+	On ES a stage the pixel shader does not sample keeps what it had:
+	unbinding it, to bind it again at the next draw that has it, is two
+	calls, each a call into the browser on the web. Its sampler is not
+	read, nor active, so not part of a feedback loop. OpenCE's) */
 	for (stage = 0; stage < D3DTSS_MAXSTAGES; stage++)
+	{
+#ifdef HALO_GLES
+		if (!gl_textures[stage] && key->sampler_type[stage] == _xgpu_sampler_none)
+			continue;
+#endif
 		state_texture(stage, gl_targets[stage], gl_textures[stage]);
+	}
 #else
 	{
 		/* the units whose texture changes, bound in one call (GL 4.4's
@@ -3683,11 +3756,13 @@ static void apply_raster_state(BOOL has_depth)
 	{
 		GLenum equation = blend_equation(rs[D3DRS_BLENDOP]);
 		float blend_color[4];
+		/* (a constant factor the pixel shader applies: source_blend_in_shader) */
+		GLenum source = source_blend_in_shader() ? GL_ONE : (GLenum)rs[D3DRS_SRCBLEND];
 
-		if (gl_state.blend_source != (GLenum)rs[D3DRS_SRCBLEND] ||
+		if (gl_state.blend_source != source ||
 			gl_state.blend_destination != (GLenum)rs[D3DRS_DESTBLEND])
 		{
-			gl_state.blend_source = (GLenum)rs[D3DRS_SRCBLEND];
+			gl_state.blend_source = source;
 			gl_state.blend_destination = (GLenum)rs[D3DRS_DESTBLEND];
 			glBlendFunc(gl_state.blend_source, gl_state.blend_destination);
 		}
@@ -3936,6 +4011,7 @@ static struct program_entry *prepare_draw(BOOL immediate)
 		key.alpha_test_samples = (unsigned char)target_samples;
 #endif
 	key.fog_enable = D3D__RenderState[D3DRS_FOGENABLE] != 0;
+	key.source_blend = source_blend_in_shader();
 	key.fog_table_mode = (unsigned char)D3D__RenderState[D3DRS_FOGTABLEMODE];
 #ifdef HALO_GLES
 	key.count_samples = device.visibility_test_active && xgpu_capabilities.atomic_counters;
@@ -3972,6 +4048,17 @@ static struct program_entry *prepare_draw(BOOL immediate)
 	draw_flush();
 	state_program(entry->program);
 	gl_check_errors("program bind");
+	if (key.source_blend && entry->blend_constant >= 0)
+	{
+		float blend_constant[4];
+
+		color_to_vec4(D3D__RenderState[D3DRS_BLENDCOLOR], blend_constant);
+		if (memcmp(entry->blend_constant_value, blend_constant, sizeof(blend_constant)))
+		{
+			memcpy(entry->blend_constant_value, blend_constant, sizeof(blend_constant));
+			glUniform4fv(entry->blend_constant, 1, blend_constant);
+		}
+	}
 #ifdef HALO_GLES
 	if (key.count_samples)
 		glBindBufferRange(GL_ATOMIC_COUNTER_BUFFER, 0, device.visibility_counters,
@@ -4641,6 +4728,18 @@ static GLuint web_transient_upload(GLenum target, const void *data, unsigned lon
 }
 #endif
 
+static unsigned long stream_upload(const void *data, unsigned long size);
+
+#if defined(HALO_GLES) && !defined(HALO_BROWSER)
+/* stream_upload, at a multiple of alignment into the buffer (OpenCE's) */
+static unsigned long stream_upload_aligned(const void *data, unsigned long size, unsigned long alignment)
+{
+	stream_reserve(((size + 15) & ~15UL) + alignment);
+	device.stream_offset += (alignment - device.stream_offset % alignment) % alignment;
+	return stream_upload(data, size);
+}
+#endif
+
 static unsigned long stream_upload(const void *data, unsigned long size)
 {
 	unsigned long offset;
@@ -4950,6 +5049,201 @@ static void web_stream_cache_expire(void)
 }
 #endif
 
+#ifdef HALO_WEB
+/* (OpenCE's) Each draw's attributes would be pointed again (a call into the
+browser for each) whenever it reads its streams from another place than the
+draw before it, which is nearly always. The draws whose streams all come
+from the mirror read the same places frame after frame (a model's part, the
+structure's), so each such set of places has a vertex array of its own,
+made the first time, and the draw binds it: one call. Other draws use the
+device's own vertex array, pointed as before (state_attribute_stream's
+shadows are of that one). A vertex array holds the element array buffer's
+binding too, kept here for each. Past VERTEX_ARRAY_CACHE_MAXIMUM, they are
+all deleted and made again. */
+#define VERTEX_ARRAY_CACHE_SLOTS 8192
+#define VERTEX_ARRAY_CACHE_MAXIMUM 4096
+
+struct vertex_array_cache_entry
+{
+	const struct vertex_shader_object *declaration;
+	unsigned long streams;
+	GLuint buffers[16];
+	unsigned long offsets[16];
+	unsigned long strides[16];
+	GLuint vertex_array;
+	/* its element array buffer binding, when known: kept in the epoch */
+	GLuint element_array_buffer;
+	unsigned long element_epoch;
+};
+
+static struct
+{
+	struct vertex_array_cache_entry *slots[VERTEX_ARRAY_CACHE_SLOTS];
+	unsigned long count;
+	/* the vertex array bound: an entry, or NULL for the device's own */
+	struct vertex_array_cache_entry *bound;
+	BOOL bound_known;
+	GLuint device_element_array_buffer;
+	/* the entries' element array buffer bindings are known only from the
+	latest invalidation on (xgpu_gl_state_invalidate) */
+	unsigned long element_epoch;
+} vertex_array_cache;
+
+static void vertex_array_cache_invalidate(void)
+{
+	vertex_array_cache.bound_known = FALSE;
+	vertex_array_cache.device_element_array_buffer = (GLuint)-1;
+	vertex_array_cache.element_epoch++;
+}
+
+/* binds the entry's vertex array (NULL: the device's own) */
+static void vertex_array_cache_bind(struct vertex_array_cache_entry *entry)
+{
+	if (vertex_array_cache.bound_known && vertex_array_cache.bound == entry)
+		return;
+	if (vertex_array_cache.bound_known)
+	{
+		if (vertex_array_cache.bound)
+		{
+			vertex_array_cache.bound->element_array_buffer = gl_state.element_array_buffer;
+			vertex_array_cache.bound->element_epoch = vertex_array_cache.element_epoch;
+		}
+		else
+		{
+			vertex_array_cache.device_element_array_buffer = gl_state.element_array_buffer;
+		}
+	}
+	else
+	{
+		/* (what was bound to the device's own is not known) */
+		vertex_array_cache.device_element_array_buffer = (GLuint)-1;
+	}
+	glBindVertexArray(entry ? entry->vertex_array : device.vertex_array);
+	vertex_array_cache.bound = entry;
+	vertex_array_cache.bound_known = TRUE;
+	gl_state.element_array_buffer = !entry ? vertex_array_cache.device_element_array_buffer :
+		entry->element_epoch == vertex_array_cache.element_epoch ? entry->element_array_buffer : (GLuint)-1;
+}
+
+static void vertex_array_cache_clear(void)
+{
+	unsigned long slot;
+
+	vertex_array_cache_bind(NULL);
+	for (slot = 0; slot < VERTEX_ARRAY_CACHE_SLOTS; slot++)
+	{
+		struct vertex_array_cache_entry *entry = vertex_array_cache.slots[slot];
+
+		if (entry)
+		{
+			glDeleteVertexArrays(1, &entry->vertex_array);
+			free(entry);
+			vertex_array_cache.slots[slot] = NULL;
+		}
+	}
+	vertex_array_cache.count = 0;
+}
+
+/* binds the vertex array of the declaration reading its streams (streams,
+a bit each) from buffers at offsets; FALSE if there is none and none can be
+made */
+static BOOL vertex_array_cache_use(const struct vertex_shader_object *declaration, unsigned long streams,
+	const GLuint *buffers, const unsigned long *offsets)
+{
+	unsigned long hash = 2166136261UL ^ (unsigned long)declaration, stream, slot, probe, index;
+	struct vertex_array_cache_entry *entry = NULL;
+
+	for (stream = 0; stream < 16; stream++)
+	{
+		if (streams & (1UL << stream))
+		{
+			hash = (hash ^ buffers[stream]) * 16777619UL;
+			hash = (hash ^ offsets[stream]) * 16777619UL;
+			hash = (hash ^ device.streams[stream].stride) * 16777619UL;
+		}
+	}
+	hash = (hash ^ streams) * 16777619UL;
+	slot = hash % VERTEX_ARRAY_CACHE_SLOTS;
+	for (probe = 0; probe < VERTEX_ARRAY_CACHE_SLOTS; probe++, slot = (slot + 1) % VERTEX_ARRAY_CACHE_SLOTS)
+	{
+		struct vertex_array_cache_entry *candidate = vertex_array_cache.slots[slot];
+
+		if (!candidate)
+			break;
+		if (candidate->declaration != declaration || candidate->streams != streams)
+			continue;
+		for (stream = 0; stream < 16; stream++)
+		{
+			if ((streams & (1UL << stream)) && (candidate->buffers[stream] != buffers[stream] ||
+				candidate->offsets[stream] != offsets[stream] || candidate->strides[stream] != device.streams[stream].stride))
+			{
+				break;
+			}
+		}
+		if (stream == 16)
+		{
+			entry = candidate;
+			break;
+		}
+	}
+	if (!entry)
+	{
+		if (vertex_array_cache.count >= VERTEX_ARRAY_CACHE_MAXIMUM)
+		{
+			vertex_array_cache_clear();
+			return vertex_array_cache_use(declaration, streams, buffers, offsets);
+		}
+		entry = calloc(1, sizeof(*entry));
+		if (!entry)
+			return FALSE;
+		entry->declaration = declaration;
+		entry->streams = streams;
+		for (stream = 0; stream < 16; stream++)
+		{
+			if (streams & (1UL << stream))
+			{
+				entry->buffers[stream] = buffers[stream];
+				entry->offsets[stream] = offsets[stream];
+				entry->strides[stream] = device.streams[stream].stride;
+			}
+		}
+		glGenVertexArrays(1, &entry->vertex_array);
+		entry->element_array_buffer = 0;
+		entry->element_epoch = vertex_array_cache.element_epoch;
+		vertex_array_cache.slots[slot] = entry;
+		vertex_array_cache.count++;
+		vertex_array_cache_bind(entry);
+		for (index = 0; index < declaration->element_count; index++)
+		{
+			const struct vertex_element *element = &declaration->elements[index];
+			GLint size;
+			GLenum type;
+			GLboolean normalized;
+
+			stream = element->stream;
+			if (!(streams & (1UL << stream)) || element->type == D3DVSDT_NONE)
+				continue;
+			state_array_buffer(buffers[stream]);
+			glEnableVertexAttribArray(element->reg);
+			if (element->type == D3DVSDT_NORMPACKED3)
+			{
+				glVertexAttribIPointer(element->reg, 1, GL_UNSIGNED_INT, (GLsizei)device.streams[stream].stride,
+					(const void *)(offsets[stream] + element->offset));
+			}
+			else
+			{
+				attribute_format(element, &size, &type, &normalized);
+				glVertexAttribPointer(element->reg, size, type, normalized, (GLsizei)device.streams[stream].stride,
+					(const void *)(offsets[stream] + element->offset));
+			}
+		}
+		return TRUE;
+	}
+	vertex_array_cache_bind(entry);
+	return TRUE;
+}
+#endif
+
 static void setup_streams(unsigned long first, unsigned long count)
 {
 	struct vertex_shader_object *declaration = device.vertex_shader;
@@ -4988,6 +5282,36 @@ static void setup_streams(unsigned long first, unsigned long count)
 		stream_buffers[stream] = 0;
 		total += (bytes + 15) & ~15UL;
 	}
+#ifdef HALO_WEB
+	{
+		/* every stream from the mirror: a vertex array of their own
+		(vertex_array_cache) */
+		unsigned long streams = 0;
+
+		for (index = 0; index < 16; index++)
+		{
+			if (placed[index])
+				streams |= 1UL << index;
+		}
+		if (!total && streams && vertex_array_cache_use(declaration, streams, stream_buffers, stream_offsets))
+		{
+			for (index = 0; index < declaration->element_count; index++)
+			{
+				const struct vertex_element *element = &declaration->elements[index];
+
+				if (device.streams[element->stream].data && element->type != D3DVSDT_NONE)
+					enabled[element->reg] = TRUE;
+			}
+			for (index = 0; index < XGPU_VERTEX_ATTRIBUTE_COUNT; index++)
+			{
+				if (!enabled[index])
+					state_attribute_constant(index, declaration->packed_mask & (1UL << index) ? NULL : device.attributes[index]);
+			}
+			return;
+		}
+		vertex_array_cache_bind(NULL);
+	}
+#endif
 	#ifndef HALO_BROWSER
 	stream_reserve(total);
 	#else
@@ -5155,6 +5479,127 @@ void WINAPI D3DDevice_DrawVertices(D3DPRIMITIVETYPE primitive_type, UINT start_v
 	gl_check_errors("draw");
 }
 
+#ifdef HALO_WEB
+/* (OpenCE's) WebGL has no base vertex, so the indices of a draw are rebased
+(less their smallest) and uploaded with it, a call into the browser each and
+a check of their range by it; and the game's index buffers are ordinary
+memory, which the mirror does not hold. An index array drawn twice the same
+is kept instead, rebased, in a buffer of its own: a draw of it compares its
+indices with a copy and draws from the buffer. Arrays that change (the
+structure's visible triangles, made each frame) are never the same twice,
+and are uploaded as before. When the buffer is full, everything kept is
+forgotten. */
+#define INDEX_CACHE_BUFFER_SIZE (8 * 1024 * 1024)
+#define INDEX_CACHE_SLOTS 8192
+#define INDEX_CACHE_PROBES 4
+
+struct index_cache_entry
+{
+	const WORD *address;
+	unsigned long count;
+	/* the indices as last drawn from address, and room for them */
+	WORD *copy;
+	unsigned long capacity;
+	WORD minimum, maximum;
+	/* in the buffer (when kept is the epoch), or not yet: seen once */
+	unsigned long offset;
+	unsigned long kept;
+};
+
+static struct
+{
+	GLuint buffer;
+	unsigned long used;
+	/* entries kept in an earlier epoch are not in the buffer */
+	unsigned long epoch;
+	struct index_cache_entry entries[INDEX_CACHE_SLOTS];
+} index_cache = { 0, 0, 1 };
+
+/* the buffer offset of the rebased indices kept for the array, with their
+extent; FALSE if it is not kept (yet) */
+static BOOL index_cache_get(const WORD *indices, unsigned long count, unsigned long *minimum, unsigned long *maximum,
+	unsigned long *offset)
+{
+	unsigned long slot = (((unsigned long)indices >> 1) ^ (count * 2654435761UL)) % INDEX_CACHE_SLOTS;
+	unsigned long probe, size = count * sizeof(WORD), index;
+	struct index_cache_entry *entry = NULL, *oldest = NULL;
+	WORD *rebased;
+
+	for (probe = 0; probe < INDEX_CACHE_PROBES; probe++)
+	{
+		struct index_cache_entry *candidate = &index_cache.entries[(slot + probe) % INDEX_CACHE_SLOTS];
+
+		if (candidate->address == indices && candidate->count == count)
+		{
+			entry = candidate;
+			break;
+		}
+		if (!oldest || candidate->kept < oldest->kept)
+			oldest = candidate;
+	}
+	if (entry && entry->copy && !memcmp(entry->copy, indices, size))
+	{
+		if (entry->kept == index_cache.epoch)
+		{
+			*minimum = entry->minimum;
+			*maximum = entry->maximum;
+			*offset = entry->offset;
+			return TRUE;
+		}
+		/* the second time the same: kept from now on */
+		if (index_cache.used + ((size + 15) & ~15UL) > INDEX_CACHE_BUFFER_SIZE)
+		{
+			index_cache.epoch++;
+			index_cache.used = 0;
+		}
+		if (!index_cache.buffer)
+		{
+			glGenBuffers(1, &index_cache.buffer);
+			state_element_array_buffer(index_cache.buffer);
+			glBufferData(GL_ELEMENT_ARRAY_BUFFER, INDEX_CACHE_BUFFER_SIZE, NULL, GL_STATIC_DRAW);
+		}
+		rebased = malloc(size + 2);
+		if (!rebased)
+			return FALSE;
+		for (index = 0; index < count; index++)
+			rebased[index] = (WORD)(indices[index] - entry->minimum);
+		state_element_array_buffer(index_cache.buffer);
+		host_gl_buffer_write(GL_ELEMENT_ARRAY_BUFFER, (unsigned int)index_cache.used, (unsigned int)size, rebased);
+		free(rebased);
+		entry->offset = index_cache.used;
+		entry->kept = index_cache.epoch;
+		index_cache.used += (size + 15) & ~15UL;
+		*minimum = entry->minimum;
+		*maximum = entry->maximum;
+		*offset = entry->offset;
+		return TRUE;
+	}
+	/* seen for the first time, or changed: remembered */
+	if (!entry)
+		entry = oldest;
+	if (entry->capacity < count)
+	{
+		WORD *grown = realloc(entry->copy, size);
+
+		if (!grown)
+		{
+			entry->address = NULL;
+			return FALSE;
+		}
+		entry->copy = grown;
+		entry->capacity = count;
+	}
+	memcpy(entry->copy, indices, size);
+	entry->address = indices;
+	entry->count = count;
+	entry->kept = 0;
+	index_extent(indices, count, 0, FALSE, minimum, maximum);
+	entry->minimum = (WORD)*minimum;
+	entry->maximum = (WORD)*maximum;
+	return FALSE;
+}
+#endif
+
 void WINAPI D3DDevice_DrawIndexedVertices(D3DPRIMITIVETYPE primitive_type, UINT vertex_count, CONST WORD *index_data)
 {
 	unsigned long minimum, maximum, index, count, generation = 0, index_offset = 0;
@@ -5173,6 +5618,18 @@ void WINAPI D3DDevice_DrawIndexedVertices(D3DPRIMITIVETYPE primitive_type, UINT 
 		xgpu_capabilities.base_vertex &&
 #endif
 		mirror_range((unsigned long)XBOX_ADDRESS(index_data), vertex_count * sizeof(WORD), &index_buffer, &index_offset, &generation);
+#ifdef HALO_WEB
+	if (!mirrored && primitive_type != D3DPT_QUADLIST &&
+		index_cache_get(index_data, vertex_count, &minimum, &maximum, &index_offset))
+	{
+		trace_draw("indexed", primitive_type, vertex_count, NULL);
+		setup_streams(device.base_vertex_index + minimum, maximum - minimum + 1);
+		state_element_array_buffer(index_cache.buffer);
+		glDrawElements(primitive_mode(primitive_type), (GLsizei)vertex_count, GL_UNSIGNED_SHORT, (const void *)index_offset);
+		gl_check_errors("draw");
+		return;
+	}
+#endif
 	index_extent(index_data, vertex_count, generation, mirrored, &minimum, &maximum);
 	trace_draw("indexed", primitive_type, vertex_count, NULL);
 	/* (the streams from the base vertex on: index i is vertex base + i) */
@@ -5224,6 +5681,7 @@ void WINAPI D3DDevice_Begin(D3DPRIMITIVETYPE primitive_type)
 	device.immediate_active = TRUE;
 	device.immediate_type = primitive_type;
 	device.immediate_count = 0;
+	device.immediate_written = 0;
 }
 
 static void immediate_emit(void)
@@ -5250,6 +5708,23 @@ void WINAPI D3DDevice_End(void)
 	unsigned long stride = XGPU_VERTEX_ATTRIBUTE_COUNT * 4 * sizeof(float);
 	unsigned long offset, index, count = device.immediate_count;
 	D3DPRIMITIVETYPE type = device.immediate_type;
+	/* (the vertices' place in the streaming buffer, where the attributes'
+	pointers start at its beginning) */
+	unsigned long first_vertex = 0;
+	/* Only the registers written since Begin are uploaded, one after another
+	in each vertex; the others are constants, as they were in every vertex
+	(most draws write 3 of the 16, and a vertex of all of them is 256 bytes).
+	On ES the vertices start a whole number of vertices into the streaming
+	buffer and are drawn from there (first_vertex), so that draws of the same
+	registers keep the attributes' pointers: each pointer set is a call into
+	the driver, or the browser. All sixteen would be 256 bytes, more than
+	WebGL's largest stride (255): each attribute then goes in an array of its
+	own there. (OpenCE's) */
+	static float *packed;
+	static unsigned long packed_capacity;
+	unsigned long attribute_size = 4 * sizeof(float);
+	unsigned long registers[XGPU_VERTEX_ATTRIBUTE_COUNT];
+	unsigned long register_count = 0, vertex_size, vertex, slot;
 
 	device.immediate_active = FALSE;
 	if (!count)
@@ -5257,115 +5732,185 @@ void WINAPI D3DDevice_End(void)
 	if (!prepare_draw(TRUE))
 		return;
 	trace_draw("immediate", type, count, device.immediate_vertices);
-#ifdef HALO_BROWSER
+#ifdef HALO_WEB
+	vertex_array_cache_bind(NULL);
+#endif
+	for (index = 0; index < XGPU_VERTEX_ATTRIBUTE_COUNT; index++)
 	{
-		static float *packed;
-		static unsigned long packed_floats;
-		unsigned long required = count * XGPU_VERTEX_ATTRIBUTE_COUNT * 4;
-		unsigned long vertex;
+		if (device.immediate_written & (1UL << index))
+			registers[register_count++] = index;
+	}
+	if (count > packed_capacity)
+	{
+		float *grown = realloc(packed, count * stride);
 
-		/* WebGL limits vertexAttribPointer's stride to 255 bytes.  Xbox
-		immediate vertices contain all 16 four-float registers, for a 256-byte
-		stride, so transpose them into 16 tightly packed attribute arrays. */
-		if (packed_floats < required)
+		/* (out of memory: the draw is dropped) */
+		if (!grown)
+			return;
+		packed = grown;
+		packed_capacity = count;
+	}
+	/* (register 0 completes each vertex: never none written) */
+	if (register_count && register_count < XGPU_VERTEX_ATTRIBUTE_COUNT)
+	{
+		vertex_size = register_count * attribute_size;
+		for (vertex = 0; vertex < count; vertex++)
 		{
-			packed_floats = required;
-			packed = realloc(packed, packed_floats * sizeof(float));
+			for (slot = 0; slot < register_count; slot++)
+			{
+				memcpy(packed + (vertex * register_count + slot) * 4,
+					device.immediate_vertices + (vertex * XGPU_VERTEX_ATTRIBUTE_COUNT + registers[slot]) * 4,
+					attribute_size);
+			}
 		}
+#if defined(HALO_GLES) && !defined(HALO_BROWSER)
+		offset = stream_upload_aligned(packed, count * vertex_size, vertex_size);
+		first_vertex = offset / vertex_size;
+		for (slot = 0; slot < register_count; slot++)
+		{
+			state_attribute_stream(registers[slot], 0, device.stream_buffer, 4, GL_FLOAT, GL_FALSE, FALSE,
+				(GLsizei)vertex_size, 0, slot * attribute_size);
+		}
+#elif defined(HALO_GLES) || defined(__APPLE__)
+		/* (the browser's: a buffer of its own for each upload, web_transient_upload;
+		macOS: at the upload's offset) */
+		offset = stream_upload(packed, count * vertex_size);
+		for (slot = 0; slot < register_count; slot++)
+		{
+			state_attribute_stream(registers[slot], 0, device.stream_buffer, 4, GL_FLOAT, GL_FALSE, FALSE,
+				(GLsizei)vertex_size, offset, slot * attribute_size);
+		}
+#else
+		offset = stream_upload(packed, count * vertex_size);
+		{
+			/* (the vertex array of the last few sets of registers) */
+			static struct
+			{
+				unsigned long written;
+				struct vertex_array_entry *entry;
+			} arrays[8];
+			static unsigned long next_array;
+			struct vertex_array_entry *entry = NULL;
+
+			for (slot = 0; slot < 8; slot++)
+			{
+				if (arrays[slot].entry && arrays[slot].written == device.immediate_written)
+					entry = arrays[slot].entry;
+			}
+			if (!entry)
+			{
+				struct vertex_layout layout;
+
+				memset(&layout, 0, sizeof(layout));
+				for (slot = 0; slot < register_count; slot++)
+					layout_attribute(&layout, registers[slot], 0, 4, GL_FLOAT, GL_FALSE, FALSE, slot * attribute_size);
+				entry = vertex_array_get(&layout);
+				arrays[next_array % 8].written = device.immediate_written;
+				arrays[next_array % 8].entry = entry;
+				next_array++;
+			}
+			state_vertex_array(entry);
+			state_vertex_buffer(0, device.stream_buffer, offset, (GLsizei)vertex_size);
+		}
+#endif
+		for (index = 0; index < XGPU_VERTEX_ATTRIBUTE_COUNT; index++)
+		{
+			if (!(device.immediate_written & (1UL << index)))
+				state_attribute_value(index, device.attributes[index]);
+		}
+	}
+	else
+	{
+#if defined(HALO_WEB) || defined(HALO_BROWSER)
+		/* WebGL limits vertexAttribPointer's stride to 255 bytes: the 16
+		four-float registers (256 bytes) are transposed into 16 tightly
+		packed attribute arrays */
 		for (index = 0; index < XGPU_VERTEX_ATTRIBUTE_COUNT; index++)
 		{
 			for (vertex = 0; vertex < count; vertex++)
 			{
-				memcpy(
-					packed + (index * count + vertex) * 4,
-					device.immediate_vertices + (vertex * XGPU_VERTEX_ATTRIBUTE_COUNT + index) * 4,
-					4 * sizeof(float));
+				memcpy(packed + (index * count + vertex) * 4,
+					device.immediate_vertices + (vertex * XGPU_VERTEX_ATTRIBUTE_COUNT + index) * 4, attribute_size);
 			}
 		}
-		offset = stream_upload(packed, required * sizeof(float));
+		offset = stream_upload(packed, count * stride);
 		gl_check_errors("immediate upload");
 		for (index = 0; index < XGPU_VERTEX_ATTRIBUTE_COUNT; index++)
 		{
 			state_attribute_stream(index, 0, device.stream_buffer, 4, GL_FLOAT, GL_FALSE, FALSE,
-				4 * sizeof(float), offset + index * count * 4 * sizeof(float), 0);
+				(GLsizei)attribute_size, offset, index * count * attribute_size);
 		}
-	}
-#elif defined(HALO_WEB)
-	{
-		/* WebGL takes vertex strides of 255 bytes at most, and this vertex
-		is 256: each attribute goes in an array of its own */
-		static float *transposed;
-		static unsigned long transposed_capacity;
-		unsigned long attribute_size = 4 * sizeof(float);
-		unsigned long vertex;
-
-		if (count > transposed_capacity)
-		{
-			float *grown = realloc(transposed, count * stride);
-
-			/* (out of memory: the draw is dropped) */
-			if (!grown)
-				return;
-			transposed = grown;
-			transposed_capacity = count;
-		}
+#elif defined(HALO_GLES) || defined(__APPLE__)
+		offset = stream_upload(device.immediate_vertices, count * stride);
+		gl_check_errors("immediate upload");
 		for (index = 0; index < XGPU_VERTEX_ATTRIBUTE_COUNT; index++)
 		{
-			for (vertex = 0; vertex < count; vertex++)
+			state_attribute_stream(index, 0, device.stream_buffer, 4, GL_FLOAT, GL_FALSE, FALSE, (GLsizei)stride,
+				offset, index * 4 * sizeof(float));
+		}
+#else
+		offset = stream_upload(device.immediate_vertices, count * stride);
+		{
+			/* every attribute four floats, one after another */
+			static struct vertex_array_entry *immediate_array;
+
+			if (!immediate_array)
 			{
-				memcpy(transposed + (index * count + vertex) * 4,
-					device.immediate_vertices + (vertex * XGPU_VERTEX_ATTRIBUTE_COUNT + index) * 4, attribute_size);
+				struct vertex_layout layout;
+
+				memset(&layout, 0, sizeof(layout));
+				for (index = 0; index < XGPU_VERTEX_ATTRIBUTE_COUNT; index++)
+					layout_attribute(&layout, index, 0, 4, GL_FLOAT, GL_FALSE, FALSE, index * 4 * sizeof(float));
+				immediate_array = vertex_array_get(&layout);
 			}
+			state_vertex_array(immediate_array);
+			state_vertex_buffer(0, device.stream_buffer, offset, (GLsizei)stride);
 		}
-		offset = stream_upload(transposed, count * stride);
-		for (index = 0; index < XGPU_VERTEX_ATTRIBUTE_COUNT; index++)
-		{
-			state_attribute_stream(index, 0, device.stream_buffer, 4, GL_FLOAT, GL_FALSE, FALSE, (GLsizei)attribute_size,
-				offset, index * count * attribute_size);
-		}
-	}
-#else
-	offset = stream_upload(device.immediate_vertices, count * stride);
-	gl_check_errors("immediate upload");
-#if defined(HALO_GLES) || defined(__APPLE__)
-	for (index = 0; index < XGPU_VERTEX_ATTRIBUTE_COUNT; index++)
-	{
-		state_attribute_stream(index, 0, device.stream_buffer, 4, GL_FLOAT, GL_FALSE, FALSE, (GLsizei)stride,
-			offset, index * 4 * sizeof(float));
-	}
-#else
-	offset = stream_upload(device.immediate_vertices, count * stride);
-	{
-		/* every attribute four floats, one after another */
-		static struct vertex_array_entry *immediate_array;
-
-		if (!immediate_array)
-		{
-			struct vertex_layout layout;
-
-			memset(&layout, 0, sizeof(layout));
-			for (index = 0; index < XGPU_VERTEX_ATTRIBUTE_COUNT; index++)
-				layout_attribute(&layout, index, 0, 4, GL_FLOAT, GL_FALSE, FALSE, index * 4 * sizeof(float));
-			immediate_array = vertex_array_get(&layout);
-		}
-		state_vertex_array(immediate_array);
-		state_vertex_buffer(0, device.stream_buffer, offset, (GLsizei)stride);
-	}
 #endif
-#endif
+	}
 	gl_check_errors("immediate attributes");
 	if (type == D3DPT_QUADLIST)
 	{
 		unsigned long index_count;
-		WORD *indices = quad_indices(NULL, count, &index_count);
 
-		glDrawElements(GL_TRIANGLES, (GLsizei)index_count, GL_UNSIGNED_SHORT,
-			(const void *)(uintptr_t)index_upload(indices, index_count * sizeof(WORD)));
-		free(indices);
+		if (first_vertex || count > 0x10000)
+		{
+			/* the indices from the first vertex on, or past what 16 bits hold
+			(a batch of decals: rasterizer_xbox_decals.c), are 32-bit */
+			unsigned long quads = count / 4, quad;
+			GLuint *placed = malloc(quads * 6 * sizeof(GLuint) + 4);
+
+			if (placed)
+			{
+				for (quad = 0; quad < quads; quad++)
+				{
+					GLuint base = (GLuint)(first_vertex + quad * 4);
+
+					placed[quad * 6 + 0] = base;
+					placed[quad * 6 + 1] = base + 1;
+					placed[quad * 6 + 2] = base + 2;
+					placed[quad * 6 + 3] = base;
+					placed[quad * 6 + 4] = base + 2;
+					placed[quad * 6 + 5] = base + 3;
+				}
+				index_count = quads * 6;
+				glDrawElements(GL_TRIANGLES, (GLsizei)index_count, GL_UNSIGNED_INT,
+					(const void *)(uintptr_t)index_upload(placed, index_count * sizeof(GLuint)));
+				free(placed);
+			}
+		}
+		else
+		{
+			WORD *indices = quad_indices(NULL, count, &index_count);
+
+			glDrawElements(GL_TRIANGLES, (GLsizei)index_count, GL_UNSIGNED_SHORT,
+				(const void *)(uintptr_t)index_upload(indices, index_count * sizeof(WORD)));
+			free(indices);
+		}
 	}
 	else
 	{
-		glDrawArrays(primitive_mode(type), 0, (GLsizei)count);
+		glDrawArrays(primitive_mode(type), (GLint)first_vertex, (GLsizei)count);
 	}
 	gl_check_errors("immediate draw");
 }
@@ -5385,6 +5930,8 @@ static void set_attribute(INT reg, float a, float b, float c, float d)
 	device.attributes[reg][1] = b;
 	device.attributes[reg][2] = c;
 	device.attributes[reg][3] = d;
+	if (device.immediate_active)
+		device.immediate_written |= 1UL << reg;
 	/* like the hardware, writing register 0 completes a vertex */
 	if (device.immediate_active && (emit || reg == 0))
 		immediate_emit();
@@ -5419,6 +5966,20 @@ void WINAPI D3DDevice_SetVertexDataColor(INT reg, D3DCOLOR color)
 }
 
 /* ---------- clearing */
+
+/* the state a clear changed, no longer what the shadows say: the masks it
+cleared through, the scissor (left disabled) and its rectangle. The rest of
+the state is as it was (bind_targets keeps its shadows), so the next draw
+sets only these again; all of it again, at every clear, was hundreds of
+calls a frame (OpenCE's) */
+static void clear_state_forget(void)
+{
+	gl_state.color_mask = 0xff;
+	gl_state.depth_mask = 0xff;
+	gl_state.stencil_write_mask = (GLuint)-1;
+	gl_state.scissor_test = 0;
+	memset(gl_state.scissor, 0xff, sizeof(gl_state.scissor));
+}
 
 void WINAPI D3DDevice_Clear(DWORD count, CONST D3DRECT *rectangles, DWORD flags, D3DCOLOR color, float z, DWORD stencil)
 {
@@ -5471,7 +6032,7 @@ void WINAPI D3DDevice_Clear(DWORD count, CONST D3DRECT *rectangles, DWORD flags,
 			target_pixel((float)(device.viewport.Y + device.viewport.Height), 1) - y0);
 		glClear(mask);
 		glDisable(GL_SCISSOR_TEST);
-		xgpu_gl_state_invalidate();
+		clear_state_forget();
 		return;
 	}
 	glEnable(GL_SCISSOR_TEST);
@@ -5494,7 +6055,7 @@ void WINAPI D3DDevice_Clear(DWORD count, CONST D3DRECT *rectangles, DWORD flags,
 		glClear(mask);
 	}
 	glDisable(GL_SCISSOR_TEST);
-	xgpu_gl_state_invalidate();
+	clear_state_forget();
 }
 
 /* ---------- the anti-aliasing passes */

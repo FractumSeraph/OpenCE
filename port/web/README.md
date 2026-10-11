@@ -273,7 +273,7 @@ multiply-adds). `tools/web_build.py` writes the graph.
   - No blend of a constant color factor with a constant alpha one (the
     meters, as the ammo counters on the weapons): the source's factor is
     applied by the pixel shader instead (`nv2a_pixel_shader_key`'s
-    `source_blend`).
+    `source_blend`), in this fork's browser build (`HALO_BROWSER`) too.
   - No `glCopyImageSubData`, `glDrawElementsBaseVertex` or
     `glMemoryBarrier`: the ES renderer's blits and rebased indices. An
     index array drawn twice the same is kept rebased in a buffer of its own
