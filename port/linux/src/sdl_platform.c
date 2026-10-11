@@ -375,10 +375,15 @@ BOOL platform_sdl_initialize(void)
 	game's window opens, and checked to be the Xbox maps */
 	platform_data_root();
 #ifndef HALO_BROWSER
+#ifndef HALO_WEB
+	/* (OpenCE's web page checks the maps it imports itself, and its game
+	looks for them as the game does: port/web/tests/smoke.mjs) */
 	data_check_maps();
+#endif
 	/* (a new version looked for meanwhile, updater_poll asking about it) */
 	updater_start();
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(HALO_WEB)
+	/* (a browser's tab has no crashes of its own to report) */
 	crash_reports_start();
 #endif
 #endif
@@ -1305,7 +1310,8 @@ BOOL platform_video_initialize(unsigned long width, unsigned long height)
 	/* Halo uses destination alpha as scratch data.  The display is opaque, so
 	do not let that alpha mask the ImageBitmap presented by the browser. */
 	SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 0);
-#elif defined(HALO_ANDROID)
+#elif defined(HALO_GLES)
+	/* (Android's, and OpenCE's web build's, HALO_WEB) */
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);

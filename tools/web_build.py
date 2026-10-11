@@ -42,8 +42,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .android_build import VARIADIC_PROTOTYPE_FILES
+from .browser_build import BROWSER_SOURCES
 from .embed_assets import hud_assets_build, hud_configure_inputs
-from .linux_build import (EXPAT_DIR, EXPAT_SOURCES, KCP_DIR, MONOCYPHER_DIR, MUSL_MATH_DIR, TOML_DIR, XDK_INCLUDE,
+from .linux_build import (CUSTOM_EDITION_DEFINES, EXPAT_DIR, EXPAT_SOURCES, KCP_DIR, MONOCYPHER_DIR, MUSL_MATH_DIR, TOML_DIR, XDK_INCLUDE,
                           ZLIB_DEFINES, ZLIB_DIR, ZLIB_SOURCES, compile_launcher, configuration_defines,
                           game_defines_and_includes, game_sources, musl_math_cflags, musl_math_sources,
                           opus_cflags, opus_sources, updater_defines, xdk_headers)
@@ -135,6 +136,13 @@ WEB_EXCLUDE = {
 WEB_POSIX_SOURCES = {"web_main.c", "web_net.c", "web_stubs.c", "web_touch.c"}
 
 
+def web_runtime_sources() -> List[Path]:
+    """port/web/src's units of this build: all but this fork's browser
+    build's (tools/browser_build.py's BROWSER_SOURCES, HALO_BROWSER), which
+    share the folder and define some of the same functions"""
+    return [source for source in sorted((PORT_DIR / "src").glob("*.c")) if source.name not in BROWSER_SOURCES]
+
+
 def _quote(path: Any) -> str:
     text = str(path).replace(os.sep, "/")
     return f'"{text}"' if " " in text else text
@@ -208,7 +216,9 @@ def generate_web_build(n: Writer, sln: Any) -> None:
     )
     n.build(outputs=sdl_stamp, implicit_outputs=[sdl_license], rule="web_sdl3", implicit=[SDL_PORT])
 
-    abi = " ".join(WEB_ABI_FLAGS + configuration_defines(sln))
+    # (Halo PC's maps, as in this fork's every build: linux_build.py's
+    # CUSTOM_EDITION_DEFINES)
+    abi = " ".join(WEB_ABI_FLAGS + configuration_defines(sln) + CUSTOM_EDITION_DEFINES)
     code = " ".join(WEB_CODE_FLAGS)
     implicit_headers = [*xdk_headers(), prefix_header, semantics_header, platform_semantics_header, sdl_stamp]
     objects: List[Path] = []
@@ -266,7 +276,7 @@ def generate_web_build(n: Writer, sln: Any) -> None:
         add_object(source, posix_cflags if source.name.startswith("posix_") else platform_cflags)
     for source in hud_assets_build(n, "web", build_dir / "generated" / "hud_hires_assets.c"):
         add_object(source, platform_cflags)
-    for source in sorted((PORT_DIR / "src").glob("*.c")):
+    for source in web_runtime_sources():
         add_object(source, posix_cflags if source.name in WEB_POSIX_SOURCES else platform_cflags)
     add_object(WATCH_HASH, " ".join([abi, "-std=gnu11", "-w"]))
 

@@ -375,7 +375,7 @@ static GLuint compile(GLenum type, const char *body)
 	const char *pointer = source;
 	GLint status = 0;
 
-#ifdef HALO_ANDROID
+#ifdef HALO_GLES
 	snprintf(source, sizeof(source), "#version %s\nprecision highp float;\n%s", xgpu_capabilities.shading_language,
 		body);
 #elif defined(__APPLE__)

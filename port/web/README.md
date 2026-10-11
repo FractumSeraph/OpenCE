@@ -179,6 +179,15 @@ serves another site (a `halo-web-*.zip` from a release, say).
 `python tools/ci_build.py web release` makes the site in
 `dist/halo-web-release/`, as CI does.
 
+In this fork, `port/web/src` also holds the units of the fork's own browser
+build (`ninja browser`, `HALO_BROWSER`: `BROWSER_SOURCES` in
+`tools/browser_build.py`); `ninja web` leaves those out
+(`web_runtime_sources` in `tools/web_build.py`). It compiles the platform
+layer and renderer the fork shares with its other builds (ChupathingyCE's),
+whose OpenGL ES code is under `HALO_GLES` (Android's and this build's), and
+whose Android app code is under `HALO_ANDROID` (not this build's), with
+Halo PC's maps (`HALO_CUSTOM_EDITION`) as every build of the fork has them.
+
 ### Tests
 
 ```sh

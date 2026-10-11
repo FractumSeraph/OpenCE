@@ -83,9 +83,10 @@ for those maps raise it to 32767 surfaces with a 65536-triangle buffer).
 The desktop builds draw up to 32767 (the count is a short), with twice the
 dynamic triangles, so the BSP's do not leave the rest of a frame's draws
 none. Only what is drawn changes: nothing reaches the network or the game
-state. Android and the Xbox builds keep the Xbox's. */
+state. Android, OpenCE's web build (HALO_WEB: Android's 128 MB window) and
+the Xbox builds keep the Xbox's. */
 
-#if !defined(HALO_ANDROID) && !defined(HALO_XBOX_CONSOLE)
+#if !defined(HALO_ANDROID) && !defined(HALO_WEB) && !defined(HALO_XBOX_CONSOLE)
 #define HALO_PORT_MAXIMUM_RENDERED_ENVIRONMENT_SURFACES 32767 /* (16384) */
 #define HALO_PORT_MAXIMUM_DYNAMIC_TRIANGLES 65536 /* (32768) */
 #else

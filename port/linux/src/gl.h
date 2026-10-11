@@ -272,7 +272,7 @@ GL_FUNCTIONS(GL_DECLARE_FUNCTION)
 /* call sites use the ordinary names; gl_functions.c, which defines the
 pointers, sees the declarations without these aliases */
 #if !defined(GL_FUNCTIONS_DEFINE) && !defined(HALO_BROWSER)
-#ifdef HALO_ANDROID
+#ifdef HALO_GLES
 #define glGetString halo_glGetString
 #define glGetIntegerv halo_glGetIntegerv
 #define glCopyImageSubData halo_glCopyImageSubData
