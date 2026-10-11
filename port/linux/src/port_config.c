@@ -609,6 +609,12 @@ static const struct config_setting config_settings[] =
 		"Download a Custom Edition map this machine lacks when joining a game\n"
 		"on it, from other players and seed boxes (BitTorrent), when the index\n"
 		"of the maps' torrents (torrent_index) has it; false never downloads." },
+	{ "maps.download_screen", _config_boolean, "true", "HALO_MAP_DOWNLOAD_SCREEN", _environment_value,
+		_platform_all,
+		"While a map downloads before its game is joined, show Halo's loading\n"
+		"screen over the menus, its light sweeping across as the map comes (B\n"
+		"stops the download); false leaves the menus up, their status line\n"
+		"saying how the download goes." },
 	{ "maps.seed", _config_string, "\"host\"", "HALO_MAP_SEED", _environment_value, _platform_all,
 		"Seed the Custom Edition map this machine's network game is on, for\n"
 		"the players joining it: \"host\" while hosting, \"all\" also while\n"

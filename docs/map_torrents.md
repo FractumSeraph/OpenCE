@@ -24,9 +24,13 @@ protocol, uTP or HTTPS. `tools/torrent_check.c` runs it outside the game.
 
 ## For players
 
-Nothing to set up. Join a game, and if its map is missing the browser's
-status line shows the download ("Downloading hugeass.map: 34 MB of 92 MB
-(1.2 MB/s, 5 peers)"); when it is there, the join goes ahead by itself.
+Nothing to set up. Join a game, and if its map is missing Halo's loading
+screen covers the menus while it downloads, its light sweeping from left to
+right as the map comes, with the map's name and how much has come ("34 MB of
+92 MB (1.2 MB/s, 5 peers)"); when it is there, the join goes ahead by itself.
+B stops the download. With `maps.download_screen = false` the menus stay up
+and the browser's status line shows the download instead ("Downloading
+hugeass.map: 34 MB of 92 MB (1.2 MB/s, 5 peers)").
 Custom Edition's `bitmaps.map`, `sounds.map` and `loc.map`, which every
 Custom Edition map needs, are downloaded the same way when missing. The
 map goes into `maps_ce`, ChupathingyCE's folder of Custom Edition maps (a
@@ -46,6 +50,7 @@ The settings, in `config.toml`:
 | Setting | Default | Meaning |
 | --- | --- | --- |
 | `maps.torrents` | `true` | Download a map that is missing when joining; `false` never downloads (and never seeds). |
+| `maps.download_screen` | `true` | Halo's loading screen over the menus while a map downloads (B stops it); `false` leaves the menus up, with the status line. |
 | `maps.seed` | `"host"` | Seed the map the game is on: `"host"` while hosting, `"all"` also while joined, `"off"` never. |
 | `maps.upload_limit` | `512` | KB a second the seeding sends at most, in all; `0` for no limit. |
 | `maps.download_limit` | `0` | KB a second a download takes at most; `0` for no limit. |
@@ -130,8 +135,12 @@ names have spaces, brackets or letters beyond ASCII).
   host's; `map_torrents_fetch` then finds what is missing, the map (absent
   or another version) and each resource map. If anything is missing and
   the index has it all, `map_torrents_fetch` starts
-  the downloads and the join waits; the browser (LAN, Direct Link or the
-  server browser) shows the status line, and once every file is in place
+  the downloads and the join waits; the download screen
+  (`port/linux/game/download_screen.c`) covers the menus with Halo's loading
+  screen (`interface/progress_bar.c`) at the download's share, the menus
+  going on behind it without taking presses (with `maps.download_screen`
+  off, the browser, LAN, Direct Link or the server browser, shows the status
+  line), and once every file is in place
   `map_fetch_update` focuses the game's row and posts the join again. The
   map is looked for in the index by its name and the host's version; a host
   whose version is none of the index's (a build that sends another kind of
@@ -139,8 +148,10 @@ names have spaces, brackets or letters beyond ASCII).
   map of that name at all (one it has is that host's other version, which
   a download cannot change). A
   game no longer listed by then is logged. A download that fails shows why
-  for a while. Leaving the browser leaves the download running; it is let
-  go of only when the game quits (what came stays for next time).
+  for a while. B on the download screen stops the download and the join
+  that waited for it (`ui_widget_port_map_fetch_cancel`; what came stays for
+  next time). With the screen off, leaving the browser leaves the download
+  running; it is let go of only when the game quits.
 - **A map changed after joining** (the host changes map in the lobby:
   `cache_files_map_present`, as the host's settings arrive): the files are
   downloaded the same way, and the error the player gets says to join again

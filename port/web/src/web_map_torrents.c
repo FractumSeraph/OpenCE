@@ -93,6 +93,17 @@ int map_torrents_fetching(char *status, int size)
 	return 1;
 }
 
+int map_torrents_download_progress(float *fraction, char *name, int size)
+{
+	int done_mb, total_mb;
+
+	if (!fetch.active || fetch_progress(&done_mb, &total_mb) != 0)
+		return 0;
+	*fraction = total_mb > 0 ? (float)done_mb / (float)total_mb : 0.0f;
+	snprintf(name, (size_t)size, "%s", fetch.name);
+	return 1;
+}
+
 /* the map fetched (or not on the site: the join goes ahead and the game
 says what is missing, as before) */
 int map_torrents_take_ready(char *level_name, int size)

@@ -4737,6 +4737,18 @@ boolean ui_widget_port_join_map_fetch(void *advertised_game)
 	return TRUE;
 }
 
+/* the download stopped by its screen's B (download_screen.c), and the join
+that waited for it let go */
+void ui_widget_port_map_fetch_cancel(void)
+{
+#ifdef HALO_BROWSER
+	lobby_browser_web_join_cancel();
+#endif
+	map_fetch.pending = FALSE;
+	map_torrents_cancel();
+	platform_log("menus: the map's download is stopped (B)");
+}
+
 /* the download done: the game's row focused and its join posted, if it is
 still listed */
 static void map_fetch_update(struct widget_instance *list)

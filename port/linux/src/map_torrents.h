@@ -29,6 +29,10 @@ int map_torrents_fetch(const char *level_name, unsigned long version, const char
 /* what the download is doing, for the menus' status line: 1 and the text
 while one is under way (or just failed), else 0 */
 int map_torrents_fetching(char *status, int size);
+/* how a download under way goes, for the screen it shows over the menus
+(port/linux/game/download_screen.c): 1 while one is, with its share done (0
+to 1; 0 while its size is not known yet) and the map's file name, else 0 */
+int map_torrents_download_progress(float *fraction, char *name, int size);
 /* once, when a download's files are all in place: 1 and the level name
 whose join is to be tried again */
 int map_torrents_take_ready(char *level_name, int size);

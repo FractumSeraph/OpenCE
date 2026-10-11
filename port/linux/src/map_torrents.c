@@ -703,6 +703,28 @@ int map_torrents_fetching(char *status, int size)
 	return 0;
 }
 
+int map_torrents_download_progress(float *fraction, char *name, int size)
+{
+	float done = 0.0f;
+	int which;
+
+	if (!fetch.active)
+		return 0;
+	/* (each file an equal share: the size of one not begun is not known) */
+	for (which = 0; which < fetch.count; which++)
+	{
+		struct torrent_status status;
+
+		if (fetch.files[which].done)
+			done += 1.0f;
+		else if (torrent_status_get(fetch.files[which].handle, &status) && status.total_bytes)
+			done += (float)((double)status.have_bytes / (double)status.total_bytes);
+	}
+	*fraction = fetch.count ? done / (float)fetch.count : 0.0f;
+	snprintf(name, (size_t)size, "%s", fetch.level_name);
+	return 1;
+}
+
 int map_torrents_take_ready(char *level_name, int size)
 {
 	if (!fetch.ready)

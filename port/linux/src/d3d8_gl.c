@@ -540,6 +540,9 @@ struct gl_device
 	D3DSHADERCONSTANTMODE shader_constant_mode;
 
 	struct vertex_shader_object *vertex_shader;
+	/* SetVertexShader chose the fixed-function pipeline (0 or an FVF code):
+	the loading screen's draws (fixed_function_program) */
+	BOOL fixed_function;
 	struct vertex_shader_object *program_slots[VERTEX_PROGRAM_SLOTS];
 	unsigned long program_address;
 	float constants[XGPU_VERTEX_CONSTANT_COUNT][4];
@@ -2748,7 +2751,12 @@ void WINAPI D3DDevice_SetVertexShader(DWORD handle)
 		device.vertex_shader = object;
 		device.program_address = 0;
 		device.program_slots[0] = object;
+		device.fixed_function = FALSE;
 	}
+	/* 0 and the FVF codes (odd): the fixed-function pipeline, which only the
+	loading screen uses (progress_bar.c) */
+	else if (!handle || (handle & 1))
+		device.fixed_function = TRUE;
 }
 
 void WINAPI D3DDevice_LoadVertexShader(DWORD handle, DWORD address)
@@ -2762,7 +2770,10 @@ void WINAPI D3DDevice_SelectVertexShader(DWORD handle, DWORD address)
 	struct vertex_shader_object *object = vertex_shader_from_handle(handle);
 
 	if (object)
+	{
 		device.vertex_shader = object;
+		device.fixed_function = FALSE;
+	}
 	if (address < VERTEX_PROGRAM_SLOTS)
 		device.program_address = address;
 }
@@ -2792,6 +2803,51 @@ static struct vertex_shader_object *current_program(void)
 	struct vertex_shader_object *program = device.program_slots[device.program_address];
 
 	return program ? program : device.vertex_shader;
+}
+
+/* the fixed-function pipeline as a program (SetVertexShader with 0 or an
+FVF code): its immediate-mode draws only, whose positions D3DDevice_End
+transforms by the world, view and projection matrices (nv2a_fixed_function_glsl).
+Draws from vertex buffers have no declaration to read them by, and are not
+drawn (no game draw makes one). */
+static struct vertex_shader_object *fixed_function_program(void)
+{
+	static struct vertex_shader_object program;
+	static DWORD no_instructions[4];
+
+	if (!program.instructions)
+	{
+		char *source = nv2a_fixed_function_glsl();
+
+		program.signature = VERTEX_SHADER_SIGNATURE;
+		program.instructions = no_instructions;
+		program.shader[1] = xgpu_shader_cache_compile(GL_VERTEX_SHADER, source, "fixed-function vertex");
+		/* (vertex_shader_get: neither variant compiled from instructions) */
+		program.shaders_tried = 1 | 2;
+		free(source);
+	}
+	return &program;
+}
+
+/* a position in immediate mode by the fixed-function pipeline's transforms:
+Direct3D's row vectors, times world, view, then projection */
+static void fixed_function_transform(float *position)
+{
+	static const D3DTRANSFORMSTATETYPE order[3] = { D3DTS_WORLD, D3DTS_VIEW, D3DTS_PROJECTION };
+	int which, column;
+
+	for (which = 0; which < 3; which++)
+	{
+		const D3DMATRIX *matrix = &device.transforms[order[which]];
+		float in[4];
+
+		memcpy(in, position, sizeof(in));
+		for (column = 0; column < 4; column++)
+		{
+			position[column] = in[0] * matrix->m[0][column] + in[1] * matrix->m[1][column] +
+				in[2] * matrix->m[2][column] + in[3] * matrix->m[3][column];
+		}
+	}
 }
 
 /* ---------- program cache */
@@ -3935,14 +3991,16 @@ static unsigned long model_light_register(int light)
 
 static struct program_entry *prepare_draw(BOOL immediate)
 {
-	struct vertex_shader_object *program = current_program();
+	struct vertex_shader_object *program = device.fixed_function ? fixed_function_program() : current_program();
 	struct nv2a_pixel_shader_key key;
 	struct program_entry *entry;
 	struct draw_uniforms uniforms;
 	BOOL has_depth = FALSE;
 	int stage;
 
-	if (!device.gl_ready || !program || !device.vertex_shader || !program->instructions)
+	/* (the fixed-function pipeline's draws: immediate mode's only) */
+	if (!device.gl_ready || !program || !(device.vertex_shader || device.fixed_function) || !program->instructions ||
+		(device.fixed_function && !immediate))
 	{
 		stats.skipped_no_program++;
 		return NULL;
@@ -5731,6 +5789,12 @@ void WINAPI D3DDevice_End(void)
 		return;
 	if (!prepare_draw(TRUE))
 		return;
+	/* (the fixed-function pipeline's: positions into clip space) */
+	if (device.fixed_function)
+	{
+		for (index = 0; index < count; index++)
+			fixed_function_transform(device.immediate_vertices + index * XGPU_VERTEX_ATTRIBUTE_COUNT * 4);
+	}
 	trace_draw("immediate", type, count, device.immediate_vertices);
 #ifdef HALO_WEB
 	vertex_array_cache_bind(NULL);

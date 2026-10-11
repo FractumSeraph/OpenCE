@@ -684,6 +684,10 @@ struct widget_instance;
 #ifdef HALO_CUSTOM_EDITION
 #include "halo_ui_map_list.h"
 #endif
+/* port: a map's download screen over the menus (port/linux/game/download_screen.c) */
+boolean download_screen_active(void);
+void download_screen_process(void);
+void download_screen_render(void);
 #ifdef HALO_GAME_BROWSER
 /* the in-game server browser (port/linux/game/browser_screen.c): a screen of
 code over the widgets, as the virtual keyboard is */
@@ -7058,6 +7062,8 @@ static void ui_widgets_process_mouse(
 		/* (nor over Online Games: a click left in the queue would pick a game) */
 		|| browser_screen_active()
 #endif
+		/* port: (nor under a map's download screen, which hides the menus) */
+		|| download_screen_active()
 		)
 	{
 		ui_mouse_press_count = 0;
@@ -7677,6 +7683,9 @@ void render_ui_widgets(
 	if (first_players_render)
 		moderation_screen_render();
 #endif
+	/* port: a map's download screen, over the menus */
+	if (first_players_render)
+		download_screen_render();
 	ui_debug_draw_targets(first_players_render);
 
 	return;
@@ -8761,7 +8770,13 @@ void process_ui_widgets(
 		return;
 	}
 #endif
-	if (attract_mode_should_start())
+	/* port: a map's download screen over the menus
+	(port/linux/game/download_screen.c): the menus go on behind it, so that
+	the join waiting for the map follows, but its presses are its own, and
+	the attract mode does not start while it is up */
+	if (download_screen_active())
+		download_screen_process();
+	else if (attract_mode_should_start())
 	{
 		attract_mode_start();
 
