@@ -179,11 +179,13 @@ short map_family_from_wire_name(
 
 enum
 {
-	/* a cache file's header: 'head', its version, ..., its type (a short
-	at 0x60: 1 multiplayer) */
+	/* a cache file's header: 'head', its version, ..., its scenario's type
+	(a short at 0x60: 0 solo, a campaign map; 1 multiplayer), or any type */
 	CACHE_HEADER_SIGNATURE = 'head',
 	CACHE_HEADER_TYPE_OFFSET = 0x60,
+	CACHE_TYPE_SOLO = 0,
 	CACHE_TYPE_MULTIPLAYER = 1,
+	CACHE_TYPE_ANY = -1,
 	CUSTOM_EDITION_CACHE_VERSION = 609,
 	HALO_PC_CACHE_VERSION = 7,
 };
@@ -325,12 +327,12 @@ static boolean place_folder(
 	return TRUE;
 }
 
-/* whether a file is a cache file of a version (and a multiplayer map's, if
-asked) */
+/* whether a file is a cache file of a version, and of a scenario type
+(CACHE_TYPE_SOLO, _MULTIPLAYER) unless CACHE_TYPE_ANY */
 static boolean cache_file_is(
 	char const *path,
 	long version,
-	boolean multiplayer)
+	short type)
 {
 	unsigned long header[(CACHE_HEADER_TYPE_OFFSET + 4) / 4];
 	unsigned long bytes_read = 0;
@@ -355,7 +357,7 @@ static boolean cache_file_is(
 		{
 			memcpy(header, known, sizeof(header));
 			return header[0] == CACHE_HEADER_SIGNATURE && header[1] == (unsigned long)version &&
-				(!multiplayer || (header[CACHE_HEADER_TYPE_OFFSET / 4] & 0xffff) == CACHE_TYPE_MULTIPLAYER);
+				(type == CACHE_TYPE_ANY || (header[CACHE_HEADER_TYPE_OFFSET / 4] & 0xffff) == (unsigned short)type);
 		}
 	}
 #endif
@@ -365,7 +367,7 @@ static boolean cache_file_is(
 	if (ReadFile(file, header, sizeof(header), &bytes_read, NULL) && bytes_read == sizeof(header))
 	{
 		result = header[0] == CACHE_HEADER_SIGNATURE && header[1] == (unsigned long)version &&
-			(!multiplayer || (header[CACHE_HEADER_TYPE_OFFSET / 4] & 0xffff) == CACHE_TYPE_MULTIPLAYER);
+			(type == CACHE_TYPE_ANY || (header[CACHE_HEADER_TYPE_OFFSET / 4] & 0xffff) == (unsigned short)type);
 	}
 	CloseHandle(file);
 	return result;
@@ -434,15 +436,18 @@ boolean map_family_find(
 		if (!place_folder(&places[index], folder, sizeof(folder)))
 			continue;
 		snprintf(path, (size_t)size, "%s%s%s.map", folder, file, places[index].suffix);
-		if (cache_file_is(path, family_cache_version(family), FALSE))
+		if (cache_file_is(path, family_cache_version(family), CACHE_TYPE_ANY))
 			return TRUE;
 	}
 	path[0] = 0;
 	return FALSE;
 }
 
-void map_family_list(
+/* every map of a family past the Xbox's of a scenario type, in its folders
+(map_family_list, map_family_list_campaigns) */
+static void family_list(
 	short family,
+	short type,
 	void (*found)(char const *file, void *context),
 	void *context)
 {
@@ -493,7 +498,7 @@ void map_family_list(
 			if (other < listed_count || listed_count >= MAXIMUM_LISTED_FILES)
 				continue;
 			snprintf(path, sizeof(path), "%s%s", folder, data.cFileName);
-			if (!cache_file_is(path, family_cache_version(family), TRUE))
+			if (!cache_file_is(path, family_cache_version(family), type))
 				continue;
 			snprintf(listed[listed_count++], MAP_FAMILY_FILE_LENGTH, "%s", file);
 			found(file, context);
@@ -501,6 +506,32 @@ void map_family_list(
 		while (FindNextFileA(find, &data));
 		CloseHandle(find);
 	}
+}
+
+void map_family_list(
+	short family,
+	void (*found)(char const *file, void *context),
+	void *context)
+{
+	family_list(family, CACHE_TYPE_MULTIPLAYER, found, context);
+}
+
+void map_family_list_campaigns(
+	short family,
+	void (*found)(char const *file, void *context),
+	void *context)
+{
+	family_list(family, CACHE_TYPE_SOLO, found, context);
+}
+
+boolean map_family_campaign(
+	char const *map)
+{
+	char file[MAP_FAMILY_FILE_LENGTH], path[384];
+	short family = map_family_parse(map, file, sizeof(file));
+
+	return family != _map_family_xbox && map_family_find(family, file, path, sizeof(path)) &&
+		cache_file_is(path, family_cache_version(family), CACHE_TYPE_SOLO);
 }
 
 #endif

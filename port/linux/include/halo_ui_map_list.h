@@ -4,7 +4,9 @@ HALO_UI_MAP_LIST.H
 The menus' list of multiplayer maps on the native builds
 (port/linux/game/ui_map_list.c): the Xbox's thirteen, as they were, then the
 Custom Edition maps, named with [CE], with Halo PC's names, descriptions and
-pictures of them, then HaloMD's maps, named with [MD] (halo_map_families.h).
+pictures of them (or the picture and description beside a map, <name>.bmp
+and <name>.txt), then HaloMD's maps, named with [MD] (halo_map_families.h);
+and apart from them, those families' campaign maps.
 The multiplayer map list, its rows and the lobby (source/interface) ask it in
 place of the game's fixed thirteen.
 */
@@ -46,6 +48,18 @@ short ui_map_list_picture_index(long row);
 struct bitmap_data *ui_map_list_picture(short frame_index);
 /* the text of a string list index of this list's, or NULL for ui.map's */
 wchar_t const *ui_map_list_text(short string_list_index);
+
+/* the campaign maps (a solo scenario's) of the families past the Xbox's,
+found as the list is filled (ui_map_list_refresh), apart from its rows: how
+many; one's map name (<file>@ce, ...), or NULL; the one of a map name, or
+NONE; its string list index for one of its strings, and its bitmap frame,
+as a row's (ui_map_list_text, ui_map_list_picture). The PC menus list them
+as CUSTOM SINGLEPLAYER (menu_functions.c) */
+long ui_map_list_campaign_count(void);
+char const *ui_map_list_campaign_name(long index);
+long ui_map_list_campaign_find(char const *map_name);
+short ui_map_list_campaign_string_index(long index, short kind);
+short ui_map_list_campaign_picture_index(long index);
 
 /* a Custom Edition or HaloMD map (a family of halo_map_families.h), by its
 file's name (the server browser's): its name (Halo PC's own, HaloMD's mod

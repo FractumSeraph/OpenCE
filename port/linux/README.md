@@ -304,6 +304,21 @@ version's. ChupathingyCE starts on the Xbox's menus (`display.menus = "xbox"`),
 which start every kind of game and have Online Games; `display.menus = "pc"`
 gives these.
 
+The map lists (New Game's and Create Game's Map screen) choose, in their
+first row, SINGLEPLAYER (the campaign's levels), MULTIPLAYER (the Xbox's
+maps), CUSTOM SINGLEPLAYER or CUSTOM MULTIPLAYER, as OpenCE has them. CUSTOM
+MULTIPLAYER lists the Halo PC maps (`maps_ce`, `maps_md`, `maps_pc`: those
+the Xbox's menus list after the Xbox maps, marked [CE], [MD] or [PC]); CUSTOM
+SINGLEPLAYER lists their campaign maps (a map whose scenario is a solo one,
+which the multiplayer lists leave out). A campaign map is played as a level
+is, at the difficulty chosen next, or from the Map screen hosted as network
+co-op (Server Setup, then the lobby; split screen hosts only multiplayer
+maps). A `<name>.bmp` beside a map is its picture in the lists and the lobby
+(the middle of it, in the lists' picture shape; uncompressed 24-bit or 32-bit
+colour, up to 8192 pixels a side), and `<name>.txt` its description, line by
+line (`game/ui_map_list.c`, `game/bmp_files.c`); the browser build's page
+shows the site's pictures itself.
+
 Multiplayer > CO-OP CAMPAIGN is the Xbox's cooperative play, which the PC
 version does not have: two players on this computer play the campaign in
 split screen. Player 1 is the player who chose it, on the current profile.
@@ -1202,7 +1217,7 @@ Other changes:
 | `networking/`, `game/`, `interface/`, `bungie_net/network/` and the pools of objects, effects and sounds | The system link limits and the memory for them. |
 | `game/`, `objects/`, `units/`, `networking/` | The distributed netcode. Refer to `NETCODE.md`. |
 | `cache/cache_files.c` | When a map's tags load and unload, the port finds the bitmaps that the high-res HUD replaces (`game/hud_hires_tags.c`), and adds the tags of the menus to the menus' map (`game/menu_tags.c`). |
-| `interface/ui_widget.c`, `interface/ui_widget_event_handler_functions.c`, `interface/ui_widget_game_data_input_functions.c` | The main menu is the PC version's from `port/assets/menus` (`display.menus`); the menus' widgets can call the port's functions (`game/menu_functions.c`) and send the PC version's custom activation event; the widgets' memory is 256 KB, not 16 KB; the main menu and Multiplayer clear co-op's controllers, so that a gamepad going back to controller 1 is not a controller unplugged; the lobby's split screen players leave alone, and one who quits in game is not joined to the next game (`interface/player_ui.c`). |
+| `interface/ui_widget.c`, `interface/ui_widget_event_handler_functions.c`, `interface/ui_widget_game_data_input_functions.c` | The main menu is the PC version's from `port/assets/menus` (`display.menus`); the menus' widgets can call the port's functions (`game/menu_functions.c`) and send the PC version's custom activation event; the widgets' memory is 256 KB, not 16 KB; the main menu and Multiplayer clear co-op's controllers, so that a gamepad going back to controller 1 is not a controller unplugged; the lobby's split screen players leave alone, and one who quits in game is not joined to the next game (`interface/player_ui.c`); the PC menus' map lists choose the Halo PC maps of the menus' map list (`game/ui_map_list.c`), and a Halo PC campaign map is hosted as network co-op. |
 | `input/input_abstraction.c`, `game/player_control.c`, `game/players.c`, `game/player_queues_new.c`, `units/units.h` | The keyboard and mouse's actions (`src/xinput_sdl.c`, `include/halo_keyboard.h`) join controller 1's game controls; their reload key reloads on its own, and their action key only acts (a control flag of the port's, sent with the player's action, stops the reload the controller's X falls back to). |
 | `sound/sound_manager.c`, `interface/hud.c`, `game/game_engine.c` | The music's and the other sounds' volumes; the HUD's and the scoreboard's settings are read again when Settings changes them. |
 | `rasterizer/xbox/rasterizer_xbox_shadows.c` | With larger shadow maps (`display.shadow_resolution`), the blur's taps stay half a texel apart, and more passes widen it to cover the same part of the map as on the Xbox. |

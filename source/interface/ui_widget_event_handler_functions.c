@@ -939,6 +939,7 @@ boolean playlist_profile_get_options(long playlist_profile_index, struct game_va
 
 #ifdef HALO_CUSTOM_EDITION
 #include "halo_ui_map_list.h"
+#include "halo_map_families.h" /* port: map_family_campaign */
 #endif
 
 /* ---------- constants */
@@ -6041,7 +6042,10 @@ on our lists rather than the Xbox's spinners: */
 
 /* the multiplayer maps (the Xbox's 13), and the one used last (else 0),
 unless last_used is NULL: it is read from a file of the save root, which the
-menus that name maps each frame need not do */
+menus that name maps each frame need not do. With last_used (a map list
+opening), the menus' map list is filled anew too, and the one used last may
+be a Halo PC map's row past the Xbox's (13 and up: halo_ui_map_list.h, the
+map lists' CUSTOM MULTIPLAYER) */
 short ui_widget_port_multiplayer_maps(
 	char const *const **names,
 	short *last_used)
@@ -6053,6 +6057,9 @@ short ui_widget_port_multiplayer_maps(
 	if (!last_used)
 		return 13;
 	*last_used = 0;
+#ifdef HALO_CUSTOM_EDITION
+	ui_map_list_refresh(event_handler_functions.multiplayer_levels);
+#endif
 	if (saved_game_file_retrieve_last_used_multiplayer_map(map_name))
 	{
 		for (level_index = 0; level_index < 13; level_index++)
@@ -6060,6 +6067,14 @@ short ui_widget_port_multiplayer_maps(
 			if (!_stricmp(map_name, event_handler_functions.multiplayer_levels[level_index]))
 				*last_used = level_index;
 		}
+#ifdef HALO_CUSTOM_EDITION
+		{
+			long row = ui_map_list_find(map_name);
+
+			if (row >= 13 && row < 0x7fff)
+				*last_used = (short)row;
+		}
+#endif
 	}
 	return 13;
 }
@@ -6072,9 +6087,17 @@ boolean ui_widget_port_multiplayer_map_choose(
 	char const *map_name;
 	void *server = global_network_game_server_get();
 
+#ifdef HALO_CUSTOM_EDITION
+	/* (or a row of the menus' map list past the Xbox's: a Halo PC map,
+	ui_map_list.c) */
+	if (level_index < 0 || level_index >= ui_map_list_count())
+		return FALSE;
+	map_name = ui_map_list_names()[level_index];
+#else
 	if (level_index < 0 || level_index >= 13)
 		return FALSE;
 	map_name = event_handler_functions.multiplayer_levels[level_index];
+#endif
 	{
 		char build[0x20];
 
@@ -6089,7 +6112,7 @@ boolean ui_widget_port_multiplayer_map_choose(
 	game_engine_override_map_name(map_name);
 	if (server)
 		network_game_server_change_map_name(server, map_name);
-	saved_game_file_remember_last_used_multiplayer_map(event_handler_functions.multiplayer_levels[level_index]);
+	saved_game_file_remember_last_used_multiplayer_map(map_name);
 	return TRUE;
 }
 
@@ -6122,7 +6145,10 @@ short ui_widget_port_gametypes(
 /* port: sets up the server for co-op (port/linux/game/menu_functions.c):
 the campaign level, the difficulty, and a gametype with no game engine,
 which is what makes a network game co-op (game.c, players.c). Returns FALSE
-without a server or a campaign level. */
+without a server or a campaign level. A Halo PC campaign map (<name>@ce, a
+solo scenario's: map_family_campaign) is one, as OpenCE has it: in the
+game's protocol it is named as any Custom Edition map is, and every machine
+plays it as co-op by its scenario's type (network_coop.c) */
 boolean ui_widget_port_cooperative_level_choose(
 	char const *map_name,
 	short difficulty)
@@ -6130,8 +6156,15 @@ boolean ui_widget_port_cooperative_level_choose(
 	struct network_game_server *server = global_network_game_server_get();
 	struct game_variant variant;
 
-	if (!server || !map_name || main_get_solo_level_from_name(map_name) == NONE)
+	if (!server || !map_name)
 		return FALSE;
+#ifdef HALO_CUSTOM_EDITION
+	if (main_get_solo_level_from_name(map_name) == NONE && !map_family_campaign(map_name))
+		return FALSE;
+#else
+	if (main_get_solo_level_from_name(map_name) == NONE)
+		return FALSE;
+#endif
 	csmemset(&variant, 0, sizeof(variant));
 	ustrncpy(variant.human_readable_game_description, L"Co-op",
 		NUMBEROF(variant.human_readable_game_description) - 1);

@@ -104,6 +104,14 @@ boolean map_family_find(short family, char const *file, char *path, long size);
 /* every multiplayer map of a family past the Xbox's, in its folders: each
 one's file's name (without the suffix, each once), passed to found */
 void map_family_list(short family, void (*found)(char const *file, void *context), void *context);
+
+/* the same of its campaign maps (a solo scenario's: OpenCE's CUSTOM
+SINGLEPLAYER, played alone or hosted as network co-op) */
+void map_family_list_campaigns(short family, void (*found)(char const *file, void *context), void *context);
+
+/* whether a map (<file>@ce, @md, @pc) is a campaign map in its family's
+folders: its file's header says its scenario is a solo one */
+boolean map_family_campaign(char const *map);
 #endif
 
 #endif

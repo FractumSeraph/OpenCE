@@ -36,8 +36,10 @@ then [ChupathingyCE's](#chupathingyce), then [OpenCE's](#opence).
   controls (profile buttons, gyroscope aiming, aim assist, opacity), the
   high-resolution controller buttons, a screenshot key (F10), sound tag
   files played over a map's sounds for those making them
-  (`audio.loose_sounds`), the portable Linux build for SteamOS, and the
-  profiling build.
+  (`audio.loose_sounds`), the portable Linux build for SteamOS, the
+  profiling build, and its CUSTOM SINGLEPLAYER and CUSTOM MULTIPLAYER map
+  lists (Custom Edition campaign maps alone or as network co-op, a map's
+  own `.bmp` picture and `.txt` description).
 - **Servers of its own.** An internet-play broker (`halovps.fractumseraph.net:1883`,
   the first of the five in every build's list), the maps' BitTorrent tracker, the
   browser lobby and the gateway that lets a browser join native games, and
@@ -310,6 +312,17 @@ marked [CE], [MD] or [PC]. In Online Games, a game on a Halo PC map is
 badged, and it can be joined only by players who have that map: the game
 says which file is missing and where it goes. The Xbox maps from your disc
 image are still needed. ChupathingyCE doesn't come with any of these files.
+
+**Campaign maps, pictures and descriptions (OpenCE's).** In the PC
+version's menus (`display.menus = "pc"`, the browser build's), New Game and
+Create Game's Map screen list the Halo PC maps as CUSTOM MULTIPLAYER, and
+their campaign maps (a single-player scenario's, which the multiplayer list
+leaves out) as CUSTOM SINGLEPLAYER: a campaign map is played as a campaign
+level, at a difficulty, or hosted from the Map screen as network co-op,
+which players who have the map join (it is named online as any Custom
+Edition map is). A `<name>.bmp` picture (uncompressed 24-bit or 32-bit) and
+a `<name>.txt` description beside a map are shown for it in the map lists
+and the lobby, on Windows, Mac, Linux and Android.
 
 **Playing with OpenCE players.** OpenCE (build-147) plays Custom Edition
 maps from its `custom_maps` folder. A game on a Custom Edition map is named
