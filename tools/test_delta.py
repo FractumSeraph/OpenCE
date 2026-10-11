@@ -436,9 +436,25 @@ def test_loader_ignores_older_and_equal(keys, checker, tmp_path):
     assert f" {floor()['maximum'] + 1} serial 10 " in state_line(output)[0]
 
 
+# (this fork follows OpenCE's raises before ChupathingyCE's table does: a
+# table behind the build's numbers is taken, its capabilities' switches with
+# it, and the build's wider numbers kept: delta.c's delta_keep_built_in_newest)
+@pytest.mark.parametrize("name,row", [
+    ("narrows", lambda: dict(floor(), minimum=floor()["minimum"] + 1)),
+    ("announces older", lambda: dict(floor(), announce=floor()["minimum"])),
+    ("behind", lambda: dict(floor(), announce=floor()["announce"] - 1, maximum=floor()["maximum"] - 1)),
+])
+def test_loader_keeps_the_builds_wider_numbers(keys, checker, tmp_path, name, row):
+    table = write_signed(keys, tmp_path / "behind", document(row=row()))
+    output = run_checker(checker, tmp_path, "offer", table, "state")
+    assert "offer 1" in output, name
+    assert "behind this build's numbers" in output, name
+    base = floor()
+    assert state_line(output)[0].startswith(f"state {base['announce']} {base['minimum']} {base['maximum']} "
+                                            "serial 10 "), name
+
+
 @pytest.mark.parametrize("name,make", [
-    ("narrows", lambda: document(row=dict(floor(), minimum=floor()["minimum"] + 1))),
-    ("announces older", lambda: document(row=dict(floor(), announce=floor()["minimum"]))),
     ("too large", lambda: document(padding="x" * delta_table.DOCUMENT_SIZE)),
     ("trailing", lambda: document() + b" x"),
     ("format 2", lambda: document(delta_legacy=2)),

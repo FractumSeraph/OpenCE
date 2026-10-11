@@ -612,6 +612,11 @@ static int delta_keep_built_in_newest(void)
 {
 	int kept = 0;
 
+	if (delta.minimum > HALO_PORT_NETWORK_VERSION_MINIMUM)
+	{
+		delta.minimum = HALO_PORT_NETWORK_VERSION_MINIMUM;
+		kept = 1;
+	}
 	if (delta.maximum < HALO_PORT_NETWORK_VERSION_MAXIMUM)
 	{
 		delta.maximum = HALO_PORT_NETWORK_VERSION_MAXIMUM;
@@ -694,12 +699,13 @@ static enum delta_result delta_take(const char *document, size_t size, const cha
 			table.serial, source, DELTA_EPOCH(table.serial), (unsigned int)delta_key_last_epochs[signer]);
 		return _delta_invalid;
 	}
+	/* port (this fork): a table that would narrow this build's numbers is
+	taken (its capabilities' switches, passed on to other machines) with
+	this build's numbers kept where they are wider (delta_keep_built_in_newest):
+	this fork follows OpenCE's raises before ChupathingyCE's table does */
 	if (!delta_table_widens(&table))
-	{
-		platform_log("Delta: dropped the legacy table %u from %s: it narrows this build's numbers", table.serial,
-			source);
-		return _delta_invalid;
-	}
+		platform_log("Delta: the legacy table %u from %s is behind this build's numbers: they are kept",
+			table.serial, source);
 	signed_size = DELTA_SIGNATURE_SIZE * 2 + 1 + (int)size;
 	signed_table = malloc((size_t)signed_size);
 	if (!signed_table)
