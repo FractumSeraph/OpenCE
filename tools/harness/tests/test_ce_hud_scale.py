@@ -1,7 +1,8 @@
 """The real Custom Edition HUD conversion of ce_hud.c: the placements drawn at half their scale (Halo PC's high
 resolution scale flag, a bitmap's half HUD scale and force HUD high resolution scale flags), numbers keeping their flag
 for hud_draw_numbers, and what the maps Chimera lists rely on (OpenCE's custom_edition_behaviours.inc): the digits
-halved, the bitmaps' flags cleared, the overlays' blend functions and overlays not drawn."""
+halved, the bitmaps' flags cleared, the overlays' blend functions and overlays not drawn, the model shaders' detail
+after reflection flipped."""
 
 import re
 import sys
@@ -13,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from harness import CHECK_FAILED, build, enum_with, function, mutated, read, run, structure  # noqa: E402
 
 CASES = ["elements", "numbers-keep-flag", "items", "digits-kept", "digits-halved", "bitmap-flags-cleared",
-         "behaviours"]
+         "detail-after-reflection", "behaviours"]
 FUNCTIONS = ("ce_range_within", "ce_hud_read_long", "ce_hud_tag_cache_pointer", "ce_hud_reference_tag",
              "ce_hud_bitmap_halves_scale", "ce_hud_placement", "ce_hud_element", "ce_hud_block_placements",
              "ce_hud_items_placements", "ce_hud_bitmap_scale_flags_clear", "ce_hud_digits_halve",
@@ -34,6 +35,9 @@ NEGATIVE_CONTROLS = {
                         "ce_hud_block_placements(hud + WEAPON_HUD_NUMBERS_OFFSET, WEAPON_HUD_NUMBER_SIZE, "
                         "WEAPON_HUD_ELEMENT_OFFSET, NO_ELEMENT_BITMAP, FALSE);\n\tce_hud_items_placements(hud + "
                         "WEAPON_HUD_CROSSHAIRS_OFFSET"), "ce_hud_weapon_interface", "numbers-keep-flag"),
+    "shaders-by-another-behaviour": (("BEHAVIOUR_FLAG(_ce_behaviour_invert_detail_after_reflection))\n",
+                                      "BEHAVIOUR_FLAG(_ce_behaviour_hud_number_scale))\n"),
+                                     "ce_hud_tags_loaded", "detail-after-reflection"),
 }
 
 

@@ -5,8 +5,9 @@ The real Custom Edition HUD conversion of port/linux/game/ce_hud.c: which
 placements are drawn at half their scale (Halo PC's high resolution scale
 flag, and a bitmap's half HUD scale or force HUD high resolution scale
 flags), that numbers keep their flag for hud_draw_numbers, the HUD digits
-halved and the bitmaps' flags cleared on the maps that rely on it, and what
-a map relies on found by its name and tag data checksum
+halved and the bitmaps' flags cleared on the maps that rely on it, a model
+shader's detail after reflection flipped on those that rely on that, and
+what a map relies on found by its name and tag data checksum
 (custom_edition_behaviours.inc). test_ce_hud_scale.py takes the constants,
 the tag instance's structure and the behaviours (config.inc) and the code
 (under_test.inc).
@@ -40,6 +41,7 @@ enum
 	GRENADE_HUD = 0x3000,
 	GLOBALS = 0x4000,
 	DIGITS = 0x5000,
+	MODEL_SHADER = 0x6000,
 };
 
 enum
@@ -52,6 +54,7 @@ enum
 	_tag_grenade_hud,
 	_tag_globals,
 	_tag_digits,
+	_tag_model_shader,
 	NUMBER_OF_FAKE_TAGS
 };
 
@@ -169,6 +172,9 @@ static void world(
 	put_instance(_tag_grenade_hud, 'grhi', GRENADE_HUD);
 	put_instance(_tag_globals, 'matg', GLOBALS);
 	put_instance(_tag_digits, 'hud#', DIGITS);
+	put_instance(_tag_model_shader, 'soso', MODEL_SHADER);
+	/* (a model shader two-sided, its detail after reflection not set) */
+	*(unsigned short *)at(MODEL_SHADER + MODEL_SHADER_FLAGS_OFFSET) = 1 << 1;
 	*(unsigned short *)at(BITMAP_HALF + BITMAP_GROUP_FLAGS_OFFSET) = BITMAP_GROUP_HALF_HUD_SCALE_FLAG | 1;
 	*(unsigned short *)at(BITMAP_PLAIN + BITMAP_GROUP_FLAGS_OFFSET) = 1;
 	*(unsigned short *)at(BITMAP_FORCE + BITMAP_GROUP_FLAGS_OFFSET) = BITMAP_GROUP_FORCE_HUD_HIGH_RESOLUTION_SCALE_FLAG;
@@ -314,6 +320,24 @@ int main(int argc, char **argv)
 			scale_of(statics), scale_of(CROSSHAIR_ITEMS));
 		CHECK(scale_of(statics + WEAPON_HUD_STATIC_SIZE) == 0.5f, "a flagged static: %g",
 			scale_of(statics + WEAPON_HUD_STATIC_SIZE));
+		return 0;
+	}
+	/* invert_detail_after_reflection (cmt_cliffrun, by name and checksum):
+	the model shaders' detail after reflection flipped, their other flags
+	kept; another map's, or another checksum's, as they were */
+	CASE("detail-after-reflection")
+	{
+		unsigned short flags;
+
+		load("cmt_cliffrun", 0x4D01139C);
+		flags = *(unsigned short *)at(MODEL_SHADER + MODEL_SHADER_FLAGS_OFFSET);
+		CHECK(flags == ((1 << 1) | MODEL_SHADER_DETAIL_AFTER_REFLECTION_FLAG), "cmt_cliffrun: %04x", flags);
+		load("cmt_cliffrun", 0x4D01139D);
+		flags = *(unsigned short *)at(MODEL_SHADER + MODEL_SHADER_FLAGS_OFFSET);
+		CHECK(flags == 1 << 1, "cmt_cliffrun of another checksum: %04x", flags);
+		load("bigass_v3", 0x852EE757);
+		flags = *(unsigned short *)at(MODEL_SHADER + MODEL_SHADER_FLAGS_OFFSET);
+		CHECK(flags == 1 << 1, "bigass_v3: %04x", flags);
 		return 0;
 	}
 	/* what hud_draw.c asks: by name and checksum, for the map loaded only */

@@ -34,7 +34,12 @@ generated from Chimera's map_hacks_config.json). Those this build follows
 are its HUD's: digits drawn at the Xbox's size, not twice it (their metrics
 halved and their bitmap given the half HUD scale), bitmaps whose half HUD
 scale flags were set by mistake (cleared), overlays' blend functions in Halo
-PC's order and overlays not drawn at all (hud_draw.c).
+PC's order and overlays not drawn at all (hud_draw.c); and one of its model
+shaders': a model shader's "detail after reflection" flag, which Halo PC
+read the other way round (Gearbox's), is flipped for the maps made around
+that (invert_detail_after_reflection, as OpenCE's cache_file_formats.c
+flips it), so that their detail maps are drawn in the order Halo PC drew
+them (rasterizer_xbox_models.c).
 
 Offsets are those of unit_hud_interface_definition.h, hud_definitions.h and
 hud_weapon.c's weapon and grenade HUD interfaces (OpenSauce's
@@ -136,6 +141,12 @@ enum
 	HUD_NUMBER_SIZE = 0x64,
 	HUD_NUMBER_METRICS_OFFSET = 0x10,
 	HUD_NUMBER_METRIC_COUNT = 6,
+
+	/* a model shader (shader_model_definition, after the shader's 0x28
+	bytes): its flags, the first "detail after reflection" (every shader is
+	CE_SHADER_SIZE long at least: ce_shaders_check) */
+	MODEL_SHADER_FLAGS_OFFSET = 0x28,
+	MODEL_SHADER_DETAIL_AFTER_REFLECTION_FLAG = 1 << 0,
 
 	/* the most meter bitmaps listed (Blood Gulch has 2) */
 	MAXIMUM_CE_HUD_METER_BITMAPS = 64,
@@ -517,6 +528,7 @@ void ce_hud_tags_loaded(
 	long tag_count)
 {
 	long index;
+	long model_shaders_inverted = 0;
 
 	ce_hud_tag_instances = tag_instances;
 	ce_hud_tag_count = tag_count;
@@ -551,10 +563,24 @@ void ce_hud_tags_loaded(
 		case 'hudg':
 			ce_hud_placement(hud + HUD_GLOBALS_MESSAGING_PLACEMENT_OFFSET, FALSE);
 			break;
+		case 'soso':
+			/* (a map made around Halo PC's reading of its model shaders'
+			flag: invert_detail_after_reflection) */
+			if (ce_hud_behaviours & BEHAVIOUR_FLAG(_ce_behaviour_invert_detail_after_reflection))
+			{
+				*(unsigned short *)(hud + MODEL_SHADER_FLAGS_OFFSET) ^= MODEL_SHADER_DETAIL_AFTER_REFLECTION_FLAG;
+				model_shaders_inverted++;
+			}
+			break;
 		}
 	}
 	error(_error_silent, "Custom Edition maps: %ld HUD placements at half their scale, %ld meter bitmaps sampled in "
 		"Halo PC's channels", ce_hud_placements_halved, ce_hud_meter_bitmap_count);
+	if (model_shaders_inverted)
+	{
+		error(_error_silent, "Custom Edition maps: %ld model shaders' detail after reflection flipped, as Halo PC read "
+			"it", model_shaders_inverted);
+	}
 	ce_hud_tag_instances = NULL;
 	ce_hud_tag_count = 0;
 }
@@ -592,13 +618,15 @@ void ce_hud_map_identity(
 		{
 			ce_hud_behaviours = ce_hud_behaviour_maps[index].behaviours;
 			error(_error_silent, "Custom Edition map %s: Halo PC's HUD followed where it relies on it (%08lx: "
-				"digits %s, bitmaps' HUD scale %s, overlays' blend functions %s, overlays %s)", lower,
+				"digits %s, bitmaps' HUD scale %s, overlays' blend functions %s, overlays %s, model shaders' detail "
+				"after reflection %s)", lower,
 				(unsigned long)ce_hud_behaviours,
 				ce_hud_behaviours & BEHAVIOUR_FLAG(_ce_behaviour_hud_number_scale) ? "halved" : "kept",
 				ce_hud_behaviours & BEHAVIOUR_FLAG(_ce_behaviour_disable_bitmap_hud_scale_flags) ? "cleared" : "kept",
 				ce_hud_behaviours & BEHAVIOUR_FLAG(_ce_behaviour_gearbox_multitexture_blend_modes) ? "Halo PC's" :
 					"the Xbox's",
-				ce_hud_behaviours & BEHAVIOUR_FLAG(_ce_behaviour_block_multitexture_overlays) ? "not drawn" : "drawn");
+				ce_hud_behaviours & BEHAVIOUR_FLAG(_ce_behaviour_block_multitexture_overlays) ? "not drawn" : "drawn",
+				ce_hud_behaviours & BEHAVIOUR_FLAG(_ce_behaviour_invert_detail_after_reflection) ? "flipped" : "kept");
 			return;
 		}
 	}
