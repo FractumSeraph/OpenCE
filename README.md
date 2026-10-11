@@ -27,6 +27,13 @@ then [ChupathingyCE's](#chupathingyce), then [OpenCE's](#opence).
   and from the site, checks it against its index, and joins: nothing to
   find or install by hand. The maps page also has every `.torrent` in one
   download.
+- **Plays with OpenCE's newest builds before ChupathingyCE does.** OpenCE's
+  network version 26 changed how machines find each other on the internet
+  (each says its WebRTC, so that browsers join), which ChupathingyCE's
+  builds don't speak yet. This fork's builds speak both: they join hosts of
+  versions 11 to 26, ask a host in both forms and answer each machine in
+  its own, and their hosts announce 26. ChupathingyCE's signed table of
+  versions still applies once it is newer than that (`docs/delta.md`).
 - **The game's maps at the first start.** The Windows, Mac, Linux and
   Android builds offer to download the Xbox maps (about 1.8 GB) instead of
   asking for a disc image (see [Game data](#game-data)).
@@ -39,7 +46,10 @@ then [ChupathingyCE's](#chupathingyce), then [OpenCE's](#opence).
   (`audio.loose_sounds`), the portable Linux build for SteamOS, the
   profiling build, and its CUSTOM SINGLEPLAYER and CUSTOM MULTIPLAYER map
   lists (Custom Edition campaign maps alone or as network co-op, a map's
-  own `.bmp` picture and `.txt` description).
+  own `.bmp` picture and `.txt` description), your own legs in first
+  person, energy shields that glow and take your armor's color, the
+  shield's flare on your arms, and native builds that play with OpenCE's
+  browser build over WebRTC.
 - **Servers of its own.** An internet-play broker (`halovps.fractumseraph.net:1883`,
   the first of the five in every build's list), the maps' BitTorrent tracker, the
   browser lobby and the gateway that lets a browser join native games, and
@@ -50,8 +60,9 @@ then [ChupathingyCE's](#chupathingyce), then [OpenCE's](#opence).
   own computer, a VPS or a plain web host (see [Download](#download)).
 
 Where the two projects do the same thing two ways, the fork keeps one
-working version; nothing sent over the network differs from theirs, so
-players of all three play together.
+working version; nothing sent over the network differs from theirs (it
+speaks both projects' forms where they differ), so players of all three
+play together.
 
 ## Download
 
@@ -626,6 +637,13 @@ from it first:
 - **Halo PC Custom Edition maps**, refused with a clear reason when they
   need OpenSauce.
 - **Touch controls** on Android, and the menus by touch.
+- **Its own browser build** (`ninja web`, `tools/web_build.py`,
+  [port/web/README.md](port/web/README.md)), played at
+  [halocombatevolved.com](https://halocombatevolved.com/): browsers play
+  each other in rooms over WebRTC, and the native builds take a browser's
+  WebRTC on their internet play's socket. It is in this repository beside
+  this fork's browser build (`ninja browser`), which is the one this fork's
+  site plays.
 - **Updates itself** from its releases.
 
 Its own documents: [port/linux/README.md](port/linux/README.md) (controls,

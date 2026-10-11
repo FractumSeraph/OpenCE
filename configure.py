@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 
 # root build script: writes build.ninja for the native ports (Linux, Windows,
-# Android, macOS) and the dedicated server (Linux)
+# Android, macOS), the dedicated server (Linux) and the browser (this fork's,
+# ninja browser, and OpenCE's, ninja web)
 
 import argparse
 import io
@@ -18,6 +19,7 @@ from tools.macos_build import generate_macos_build, macos_configure_inputs
 from tools.server_build import generate_server_build, server_configure_inputs
 from tools.version import commit_inputs
 from tools.browser_build import generate_browser_build, browser_configure_inputs
+from tools.web_build import generate_web_build, web_configure_inputs
 from tools.windows_build import generate_windows_build, windows_configure_inputs
 
 # arguments
@@ -102,6 +104,11 @@ parser.add_argument(
     type=str,
     help="clang with the arm64_32 target for the Android guest (default: clang)",
 )
+parser.add_argument(
+    "--web-emcc",
+    type=str,
+    help="Emscripten's emcc for `ninja web` (default: emcc on the PATH, then EMSDK's or ~/emsdk's)",
+)
 args = parser.parse_args()
 try:
     check_profile_options(args.profile, args.pgo)
@@ -123,6 +130,7 @@ sln = SimpleNamespace(
     port_pgo_profile=args.pgo_profile,
     android_ndk=args.android_ndk,
     android_guest_cc=args.android_guest_cc,
+    web_emcc=args.web_emcc,
 )
 
 
@@ -152,6 +160,7 @@ generate_windows_build(n, sln)
 generate_macos_build(n, sln)
 generate_server_build(n, sln)
 generate_browser_build(n, sln)
+generate_web_build(n, sln)
 
 n.comment("Reconfigure on change")
 n.rule(
@@ -175,6 +184,7 @@ n.build(
         *browser_configure_inputs(),
         # (the commit the builds record: tools/version.py)
         *commit_inputs(),
+        *web_configure_inputs(),
     ],
 )
 n.newline()

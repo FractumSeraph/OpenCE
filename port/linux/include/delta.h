@@ -186,7 +186,9 @@ command repository's watch adds a row when it follows OpenCE's raise
 	X(21, "build-141", additive) /* killing blows and resting bodies resent, co-op BSP switches by the host's crossing */ \
 	X(22, "build-145", additive) /* a Custom Edition map named custom_maps\\<name> in the game's settings */ \
 	X(23, "build-147", additive) /* a Custom Edition map's blocks past the Xbox tools' limits kept, its version in the game's settings; Xbox maps as 22 */ \
-	X(24, "build-149", additive) /* the gametype's PC vehicle set: every vehicle the map places */
+	X(24, "build-149", additive) /* the gametype's PC vehicle set: every vehicle the map places */ \
+	X(25, "build-169", additive) /* units' integrated lights in the object states, with a bit saying each was sent */ \
+	X(26, "build-184", additive) /* (this fork's row, until ChupathingyCE's table has it) internet play's signalling says each machine's WebRTC (message 4), the game's messages as 25 */
 
 /* ---------- the legacy table (port/linux/src/delta.c)
 

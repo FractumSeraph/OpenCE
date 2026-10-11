@@ -864,6 +864,11 @@ static void upload(GLuint texture, GLenum target, const struct xgpu_texture_desc
 #endif
 	if (information.kind == _texel_bc7)
 		decode_compressed = TRUE;
+#ifdef HALO_WEB
+	/* WebGL's S3TC takes 2D textures whose sides are multiples of 4 */
+	decode_compressed |= description->compressed &&
+		(target == GL_TEXTURE_3D || (description->width & 3) || (description->height & 3));
+#endif
 	converted = description->compressed && !decode_compressed ? NULL : malloc(largest * sizeof(unsigned long));
 	if (!converted && !(description->compressed && !decode_compressed))
 	{
@@ -873,9 +878,11 @@ static void upload(GLuint texture, GLenum target, const struct xgpu_texture_desc
 	}
 	glBindTexture(target, texture);
 	xgpu_gl_state_invalidate();
-#ifndef HALO_BROWSER
+#if !defined(HALO_BROWSER) && !defined(HALO_WEB)
 	/* the channel each channel is sampled from, set on every upload: a
-	texture object is reused for whatever pixels arrive at its address */
+	texture object is reused for whatever pixels arrive at its address (WebGL
+	2 has no texture swizzle: the browser builds put the channels in order
+	before they are uploaded instead) */
 	{
 		GLint channels[4] = { GL_RED, GL_GREEN, GL_BLUE, GL_ALPHA };
 
@@ -980,6 +987,19 @@ static void upload(GLuint texture, GLenum target, const struct xgpu_texture_desc
 
 						rgba[pixel * 4] = rgba[pixel * 4 + 2];
 						rgba[pixel * 4 + 2] = blue;
+					}
+				}
+#endif
+#ifdef HALO_WEB
+				{
+					/* BGRA (32-bit ARGB words) to the RGBA WebGL takes */
+					unsigned long texel, count = (unsigned long)width * (unsigned long)height * (unsigned long)depth;
+
+					for (texel = 0; texel < count; texel++)
+					{
+						unsigned long value = converted[texel];
+
+						converted[texel] = (value & 0xff00ff00UL) | ((value >> 16) & 0xffUL) | ((value & 0xffUL) << 16);
 					}
 				}
 #endif

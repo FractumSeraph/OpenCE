@@ -76,6 +76,8 @@ EXPAT_SOURCES = ("xmlparse.c", "xmlrole.c", "xmltok.c", "random_rand_s.c")
 KCP_DIR = Path("port/third_party/kcp")
 QRCODEGEN_DIR = Path("port/third_party/qrcodegen")
 MONOCYPHER_DIR = Path("port/third_party/monocypher")
+# internet play's DTLS with browsers (port/linux/src/posix_dtls.c)
+MBEDTLS_DIR = Path("port/third_party/mbedtls")
 # the port's zlib (port/third_party/zlib/zlib_prefixed.h), which inflates
 # the maps, the menus' and the HUD's PNGs and the updates
 ZLIB_DIR = Path("port/third_party/zlib")
@@ -578,10 +580,15 @@ def generate_windows_target(n: Writer, sln: Any, target: WindowsTarget) -> None:
             f"-I{_quote(sdl_include)}",
         ])
         replaced = set(config.get("replaced_platform_sources", []))
+        mbedtls_include = f"-I{MBEDTLS_DIR / 'include'}"
         for source in sorted(linux_platform.glob("*.c")):
             if source.name in replaced:
                 continue
-            if source.name in VERSION_SOURCES:
+            if source.name == "posix_dtls.c":
+                # (internet play's DTLS with browsers: Mbed TLS sees the
+                # Windows SDK, as the win32_*.c do)
+                add_object(source, f"{win32_cflags} {mbedtls_include}")
+            elif source.name in VERSION_SOURCES:
                 add_object(source, f"{platform_cflags} {updater_defines(getattr(sln, 'port_release', False))}")
             elif source.name == "posix_browser.c":
                 # (the game list's requests: on Winsock, with Mbed TLS, as
@@ -592,12 +599,6 @@ def generate_windows_target(n: Writer, sln: Any, target: WindowsTarget) -> None:
                 add_object(source, f"{platform_cflags} -I{STB_DIR}")
             else:
                 add_object(source, platform_cflags)
-        # the game list's TLS (port/third_party/mbedtls; posix_browser.c), on
-        # Winsock
-        if getattr(sln, "game_browser", False):
-            for source in sorted((MBEDTLS_DIR / "library").glob("*.c")):
-                add_object(source, " ".join([abi, *WIN32_FLAGS, f"-I{MBEDTLS_DIR / 'include'}",
-                                             f"-I{MBEDTLS_DIR / 'library'}", "-D_CRT_SECURE_NO_WARNINGS", "-w"]))
         miniupnpc_include = f"-I{MINIUPNPC_DIR / 'include'} -DMINIUPNP_STATICLIB"
         for source in sorted((PORT_DIR / "src").glob("*.c")):
             if source.name == "win32_upnp.c":
@@ -620,6 +621,12 @@ def generate_windows_target(n: Writer, sln: Any, target: WindowsTarget) -> None:
             add_object(EXPAT_DIR / name, " ".join([abi, "-std=gnu11", f"-I{EXPAT_DIR}", "-w"]))
         # internet play's reliable streams (port/third_party/kcp; p2p.c)
         add_object(KCP_DIR / "ikcp.c", " ".join([abi, "-std=gnu11", "-w"]))
+        # internet play's DTLS with browsers and the game list's TLS
+        # (port/third_party/mbedtls; posix_dtls.c, posix_browser.c), on the
+        # Windows SDK (its entropy is BCryptGenRandom)
+        for source in sorted((MBEDTLS_DIR / "library").glob("*.c")):
+            add_object(source, " ".join([abi, *WIN32_FLAGS, mbedtls_include, f"-I{MBEDTLS_DIR / 'library'}",
+                                         "-D_CRT_SECURE_NO_WARNINGS", "-w"]))
         # voice chat's codec (port/third_party/opus)
         for source in opus_sources():
             add_object(source, opus_cflags(abi))

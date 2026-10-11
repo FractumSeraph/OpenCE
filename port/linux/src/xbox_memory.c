@@ -35,6 +35,12 @@ virtual window at start-up and allocates page-granular blocks inside it:
 placed requests at exactly the address asked for, the rest top-down as the
 Xbox kernel does.
 #endif
+
+OpenCE's web build (HALO_WEB) has no pages to map or protect: WebAssembly's
+memory is one block, made large enough that the window is its top 128 MB
+(tools/web_build.py), and the C heap stays below it (port/web/src/web_main.c).
+A block is cleared when it is allocated, as fresh pages would be, and
+protection is only remembered. Custom Edition maps do not run there.
 */
 
 #include "platform.h"
@@ -50,6 +56,11 @@ Xbox kernel does.
 #include <unistd.h>
 #endif
 #include <string.h>
+
+#ifdef HALO_WEB
+/* the memory's size: whether it covers the window */
+#define web_memory_bytes() ((unsigned long long)__builtin_wasm_memory_size(0) << 16)
+#endif
 
 #ifdef HALO_64BIT
 #define PAGE_SIZE_BYTES 0x1000U
@@ -72,7 +83,7 @@ int platform_ce_tag_cache_ready = FALSE;
 unsigned int platform_host_page_size = PAGE_SIZE_BYTES;
 #endif
 
-#ifndef HALO_BROWSER
+#if !defined(HALO_BROWSER) && !defined(HALO_WEB)
 static int protection_to_host(DWORD protect)
 {
 	switch (protect & 0xff)
@@ -125,6 +136,18 @@ static void contiguous_arena_reserve(void)
 	(void)brk;
 	(void)below;
 #endif
+}
+#elif defined(HALO_WEB)
+/* OpenCE's web build: its WebAssembly memory is made large enough that the
+window is its top 128 MB (tools/web_build.py) */
+__attribute__((constructor(101)))
+static void contiguous_arena_reserve(void)
+{
+	if (web_memory_bytes() >= (unsigned long long)PLATFORM_CONTIGUOUS_BASE + PLATFORM_CONTIGUOUS_SIZE)
+		arena_reserved = TRUE;
+	else
+		platform_log("the WebAssembly memory (%llu bytes) does not cover the Xbox contiguous memory window",
+			web_memory_bytes());
 }
 #else
 /* Reserve the window before anything else can map into it. */
@@ -401,7 +424,7 @@ void *platform_contiguous_alloc(unsigned long size, unsigned long alignment,
 	address = (void *)(PLATFORM_CONTIGUOUS_BASE + first * PAGE_SIZE_BYTES);
 #endif
 	memory_watch_forget(address, count * PAGE_SIZE_BYTES);
-#if defined(HALO_BROWSER)
+#if defined(HALO_BROWSER) || defined(HALO_WEB)
 	/* (no mmap in a Wasm linear memory: the allocation's records place it,
 	and clearing makes a reused range what fresh pages would be) */
 	memset(address, 0, count * PAGE_SIZE_BYTES);
@@ -446,7 +469,7 @@ void platform_contiguous_free(void *address)
 	if (count)
 	{
 		memory_watch_forget(address, count * PAGE_SIZE_BYTES);
-#if defined(HALO_BROWSER)
+#if defined(HALO_BROWSER) || defined(HALO_WEB)
 		memset(address, 0, count * PAGE_SIZE_BYTES);
 #elif !defined(HALO_64BIT)
 		mmap(address, count * PAGE_SIZE_BYTES, PROT_NONE,
@@ -578,7 +601,7 @@ BOOL WINAPI VirtualProtect(LPVOID address, SIZE_T size, DWORD new_protect, PDWOR
 		*old_protect = platform_is_contiguous(address) ?
 			page_protection[(start - PLATFORM_CONTIGUOUS_BASE) / PAGE_SIZE_BYTES] : PAGE_READWRITE;
 	memory_watch_forget((void *)start, end - start);
-#ifndef HALO_BROWSER
+#if !defined(HALO_BROWSER) && !defined(HALO_WEB)
 	if (mprotect((void *)start, end - start, protection_to_host(new_protect)) != 0)
 	{
 		platform_set_last_error_from_errno(errno);

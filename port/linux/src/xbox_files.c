@@ -137,7 +137,7 @@ const char *platform_data_root(void)
 				}
 #endif
 			}
-#ifndef HALO_ANDROID
+#if !defined(HALO_ANDROID) && !defined(HALO_WEB)
 			{
 				/* (the macOS application's data goes in its folder in
 				Application Support, not in the application: port_config.c) */

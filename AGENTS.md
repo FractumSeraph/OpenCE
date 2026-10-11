@@ -25,8 +25,9 @@ end.
 | `port/include/xdk/` | Stand-ins for the Xbox SDK's headers (declarations only) |
 | `port/windows/` | The Windows build's own files (`win32_*.c`, headers) |
 | `port/macos/` | The macOS build's own files (video, Bink through FFmpeg, the application bundle) |
-| `port/web/` | The browser build: the page, its platform code (`src/`), touch controls and app install (`assets/`) |
+| `port/web/` | Both browser builds. This fork's (`ninja browser`, `HALO_BROWSER`): the page (`shell.html`, `online_client.js`), its platform code (`src/`, the files `tools/browser_build.py` names in `BROWSER_SOURCES`), touch controls and app install (`assets/`). OpenCE's (`ninja web`, `HALO_WEB`): below |
 | `port/android/` | The Android app: the guest runtime, the host library (`host/`), the Java app (`app/`), host imports (`host_imports.list`) |
+| `port/web/` (OpenCE's) | OpenCE's web build: its runtime (`src/web_main.c`, `web_net.c`, `web_p2p.c` and the rest `BROWSER_SOURCES` does not name), the page and its service worker (`site/`), the SDL port, tests (`*.test.js`, `*.mjs`) |
 | `port/assets/` | What the builds embed or ship: high-res HUD (`hud/`), fonts, titles, menus (`menus/`), icons, network brokers |
 | `port/third_party/` | Vendored libraries, each with a README naming its upstream, version and checksum |
 | `server/` | The dedicated server (`tools/server_build.py`), its settings and playlists |
@@ -45,6 +46,7 @@ python configure.py            # debug build; add --release, --portable, --profi
 ninja linux                    # build/linux/halo
 ninja android                  # the Android guest image and native libraries
 ninja android_apk              # the APK (Gradle)
+ninja web                      # OpenCE's browser build, build/web/site (Emscripten: port/web/README.md)
 ninja windows                  # on Windows only
 ninja linux64                  # build/linux64/halo, 64-bit; also ninja windows64, ninja macos
 ninja server                   # the dedicated servers, build/server-<arch>/chupathingyce-server
@@ -67,14 +69,19 @@ python tools/ci_build.py linux release   # what CI builds
   and only the SDL functions `guest_sdl.c` bridges. Run `ninja android`
   after changing anything it compiles: `port/linux/src`, `port/linux/game`,
   `port/android`, `source/`, the build scripts.
+- Web: the game is `wasm32` (also ILP32), run on a Web Worker; calls must
+  match their callee's type exactly (the link fails on a mismatch), and
+  WebGL 2 is ES 3.0. Run `ninja web` after changing what it compiles (as
+  for Android, and `port/web`). Refer to [port/web/README.md](port/web/README.md).
 
 ### Defines
 
 | Define | Set by | Meaning |
 | --- | --- | --- |
 | `HALO_ANDROID` | Android | The app: its display, input, files and lifecycle |
-| `HALO_GLES` | Android | The OpenGL ES renderer |
+| `HALO_GLES` | Android, web | The OpenGL ES renderer |
 | `HALO_ARM64_GUEST` | Android | The guest's ABI (ILP32 AArch64) |
+| `HALO_WEB` | OpenCE's web build (`tools/web_build.py`) | The browser: its frames, storage, sockets and WebGL 2's limits (with `HALO_GLES`, not `HALO_ANDROID`). Not this fork's browser build, which is `HALO_BROWSER`: code for both says both |
 | `HALO_WINDOWS` | Windows (`halo_windows_prefix.h`) | The Windows build |
 | `HALO_BROWSER` | The browser (`tools/browser_build.py`), with `HALO_ANDROID`, `HALO_GLES` and `HALO_ARM64_GUEST` | The browser build: its differences from Android are inside `#ifdef HALO_BROWSER` |
 | `HALO_64BIT` | Linux x64, Windows x64, macOS, the 64-bit servers | Xbox addresses as 32-bit offsets in a reserved 4 GB (`port/macos/README.md`) |
@@ -97,6 +104,9 @@ python tools/test_touch_layout.py                           # the Android touch 
 python tools/test_light_storage.py
 python tools/test_death_timing.py
 python tools/test_hud_thresholds.py                         # the HUD meter shader (NumPy, Pillow, SciPy; OpenGL 4.5)
+python -m pytest -q tools/test_web_build.py                 # the web build's graph, sockets, menus
+node --test "port/web/tests/*.test.js"                      # the web page's importer and service worker
+node port/web/tests/webrtc_native.mjs chromium firefox      # the native builds' WebRTC with browsers (Playwright)
 ```
 
 `tools/harness/README.md` explains how to add an asset-free test: the code
@@ -144,6 +154,11 @@ read `xbox/include`. To add a name, follow `port/include/xdk/README.md`.
   do not play together.
 - Only the host decides; clients predict their own players. Read
   `port/linux/NETCODE.md` before changing the netcode.
+- Internet play is the same code in every build, the web's too: a browser's
+  tunnel is a WebRTC data channel (`port/web/src/web_p2p.c`), which the
+  native builds take on their tunnel's socket (`p2p_webrtc.c`, `posix_dtls.c`).
+  Check a change with both (`port/web/tests/webrtc_native.mjs`, and with the
+  maps `port/web/tests/internet.mjs`).
 - Anything another machine sends is untrusted: check sizes, indices and
   rates, as the existing handlers do. `debug.network_corrupt` tests this.
 
@@ -223,6 +238,7 @@ as documentation of file formats, never copied.
 | [port/linux/NETCODE.md](port/linux/NETCODE.md) | The distributed netcode, network versions, joining a game in progress, transport, testing |
 | [port/windows/README.md](port/windows/README.md) | The Windows build, its headers, inline functions, crash reports |
 | [port/android/README.md](port/android/README.md) | The Android build, the guest and host, touch controls, Android settings, finding problems |
+| [port/web/README.md](port/web/README.md) | The web build, the page, the game data in the browser, limits, how it operates, hosting on GitHub Pages |
 | [port/include/xdk/README.md](port/include/xdk/README.md) | How the SDK declarations were written and are checked |
 | [port/macos/README.md](port/macos/README.md) | The macOS build and the 64-bit builds (`HALO_64BIT`) |
 | [server/README.md](server/README.md) | The dedicated server |

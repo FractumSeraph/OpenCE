@@ -631,18 +631,21 @@ def generate_android_build(n: Writer, sln: Any) -> None:
         n.build(outputs=obj, rule="android_host_cc", inputs=source,
                 variables={"cflags": miniupnpc_cflags + (" -w" if source.name != "posix_upnp.c" else "")})
         host_objects.append(obj)
-    # the game list's requests (posix_browser.c, with port/third_party/mbedtls
-    # and Android's certificate authorities), as the other posix_*.c in the
-    # host
-    if getattr(sln, "game_browser", False):
-        mbedtls_cflags = " ".join([host_cflags, *game_browser_defines(sln), f"-I{MBEDTLS_DIR / 'include'}"])
-        for source in [LINUX_DIR / "src" / "posix_browser.c", *sorted((MBEDTLS_DIR / "library").glob("*.c"))]:
-            obj = host_obj_dir / ("mbedtls_" + source.name + ".o" if source.parent.parent == MBEDTLS_DIR
-                                  else source.name + ".o")
-            n.build(outputs=obj, rule="android_host_cc", inputs=source,
-                    variables={"cflags": mbedtls_cflags + (f" -I{MBEDTLS_DIR / 'library'} -w"
-                                                           if source.name != "posix_browser.c" else "")})
-            host_objects.append(obj)
+    # internet play's DTLS with browsers (posix_dtls.c) and the game list's
+    # requests (posix_browser.c, with Android's certificate authorities), with
+    # port/third_party/mbedtls, as the other posix_*.c in the host
+    game_browser = getattr(sln, "game_browser", False)
+    mbedtls_cflags = " ".join([host_cflags, *(game_browser_defines(sln) if game_browser else []),
+                               f"-I{MBEDTLS_DIR / 'include'}", f"-I{MBEDTLS_DIR / 'library'}"])
+    tls_sources = [LINUX_DIR / "src" / "posix_dtls.c"]
+    if game_browser:
+        tls_sources.append(LINUX_DIR / "src" / "posix_browser.c")
+    for source in [*tls_sources, *sorted((MBEDTLS_DIR / "library").glob("*.c"))]:
+        obj = host_obj_dir / ("mbedtls_" + source.name + ".o" if source.parent.parent == MBEDTLS_DIR
+                              else source.name + ".o")
+        n.build(outputs=obj, rule="android_host_cc", inputs=source,
+                variables={"cflags": mbedtls_cflags + (" -w" if source.parent.parent == MBEDTLS_DIR else "")})
+        host_objects.append(obj)
     table_obj = host_obj_dir / "host_import_table.c.o"
     n.build(outputs=table_obj, rule="android_host_cc", inputs=host_table_c, variables={"cflags": host_cflags})
     host_objects.append(table_obj)

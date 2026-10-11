@@ -19,7 +19,19 @@ pub const KCP_MTU: usize = 1_200;
 const TUNNEL_MAGIC: u8 = 0x69;
 const TUNNEL_HEADER_SIZE: usize = 1 + IDENTIFIER_SIZE + 8;
 const TAG_SIZE: usize = 16;
-const SIGNAL_VERSION: u8 = 3;
+// Internet play's signalling messages (port/linux/src/p2p_signal.c): 4 since
+// OpenCE's network version 26 (each machine says its WebRTC after its
+// addresses), 3 before it (ChupathingyCE's and older OpenCE hosts). A host
+// reads only its own, so the first request goes in both, and the rest in
+// the version the host answered in.
+const SIGNAL_VERSION: u8 = 4;
+const SIGNAL_VERSION_OLD: u8 = 3;
+// (version 4's WebRTC: none, a native build, a browser; its fields' limits)
+const WEBRTC_NONE: u8 = 0;
+const WEBRTC_NATIVE: u8 = 1;
+const WEBRTC_BROWSER: u8 = 2;
+const WEBRTC_FINGERPRINT_SIZE: usize = 32;
+const WEBRTC_MAXIMUM_NAMES: usize = 2;
 
 #[derive(Clone, Debug)]
 pub struct Invite {
@@ -127,6 +139,8 @@ impl JoinIdentity {
 #[derive(Clone)]
 pub struct AcceptedSession {
     pub candidates: Vec<SocketAddrV4>,
+    /// the signalling version the host answered in
+    pub version: u8,
     pub host_nonce: [u8; 8],
     pub receive_key: [u8; 32],
     pub send_key: [u8; 32],
@@ -164,17 +178,65 @@ fn append_candidates(message: &mut Vec<u8>, candidates: &[SocketAddrV4]) {
     }
 }
 
-pub fn initial_join(
+/// a request's addresses in the version's form: version 4 then says the
+/// gateway has no WebRTC (its tunnel is the native one)
+fn append_join_addresses(message: &mut Vec<u8>, candidates: &[SocketAddrV4], version: u8) {
+    append_candidates(message, candidates);
+    if version != SIGNAL_VERSION_OLD {
+        message.push(WEBRTC_NONE);
+    }
+}
+
+fn join_message(identity: &JoinIdentity, local_candidate: SocketAddrV4, version: u8) -> Vec<u8> {
+    let mut message = Vec::with_capacity(64);
+    message.extend_from_slice(&[b'J', version]);
+    message.extend_from_slice(&identity.public_key);
+    message.extend_from_slice(&identity.nonce);
+    append_join_addresses(&mut message, &[local_candidate], version);
+    message
+}
+
+/// the first request, in both versions (a host reads only its own)
+pub fn initial_joins(
     invite: &Invite,
     identity: &JoinIdentity,
     local_candidate: SocketAddrV4,
-) -> Result<Vec<u8>, &'static str> {
-    let mut message = Vec::with_capacity(64);
-    message.extend_from_slice(&[b'J', SIGNAL_VERSION]);
-    message.extend_from_slice(&identity.public_key);
-    message.extend_from_slice(&identity.nonce);
-    append_candidates(&mut message, &[local_candidate]);
-    seal_signal(&invite.token, &message)
+) -> Result<Vec<Vec<u8>>, &'static str> {
+    [SIGNAL_VERSION, SIGNAL_VERSION_OLD]
+        .iter()
+        .map(|&version| seal_signal(&invite.token, &join_message(identity, local_candidate, version)))
+        .collect()
+}
+
+/// the length of version 4's WebRTC after a host's addresses, or None if
+/// it is malformed (p2p_signal.c's get_addresses)
+fn webrtc_length(bytes: &[u8]) -> Option<usize> {
+    let kind = *bytes.first()?;
+    if kind == WEBRTC_NONE {
+        return Some(1);
+    }
+    if kind != WEBRTC_NATIVE && kind != WEBRTC_BROWSER {
+        return None;
+    }
+    let mut offset = 1 + WEBRTC_FINGERPRINT_SIZE;
+    // (the ICE username fragment and password, each after its length)
+    for _ in 0..2 {
+        let length = *bytes.get(offset)? as usize;
+        offset += 1 + length;
+    }
+    let names = *bytes.get(offset)? as usize;
+    offset += 1;
+    if names > WEBRTC_MAXIMUM_NAMES {
+        return None;
+    }
+    for _ in 0..names {
+        let length = *bytes.get(offset)? as usize;
+        offset += 1 + length + 2;
+    }
+    if offset > bytes.len() {
+        return None;
+    }
+    Some(offset)
 }
 
 pub fn accept_and_proof(
@@ -185,9 +247,13 @@ pub fn accept_and_proof(
 ) -> Result<(AcceptedSession, Vec<u8>), &'static str> {
     let message = open_signal(&invite.token, sealed)?;
     const FIXED: usize = 2 + 32 + 8 + 8;
-    if message.len() < FIXED + 1 + TAG_SIZE || message[0] != b'A' || message[1] != SIGNAL_VERSION {
+    if message.len() < FIXED + 1 + TAG_SIZE
+        || message[0] != b'A'
+        || (message[1] != SIGNAL_VERSION && message[1] != SIGNAL_VERSION_OLD)
+    {
         return Err("accept signal is malformed");
     }
+    let version = message[1];
     let mut host_public = [0_u8; 32];
     host_public.copy_from_slice(&message[2..34]);
     if message[34..42].ct_eq(&identity.nonce).unwrap_u8() != 1
@@ -199,7 +265,17 @@ pub fn accept_and_proof(
         return Err("accept signal is not from the invited host");
     }
     let count = message[FIXED] as usize;
-    if count > 4 || message.len() != FIXED + 1 + count * 6 + TAG_SIZE {
+    let addresses_end = FIXED + 1 + count * 6;
+    if count > 4 || message.len() < addresses_end + TAG_SIZE {
+        return Err("accept signal candidates are malformed");
+    }
+    let webrtc = if version == SIGNAL_VERSION_OLD {
+        0
+    } else {
+        webrtc_length(&message[addresses_end..message.len() - TAG_SIZE])
+            .ok_or("accept signal WebRTC is malformed")?
+    };
+    if message.len() != addresses_end + webrtc + TAG_SIZE {
         return Err("accept signal candidates are malformed");
     }
     let base = pair_base(identity, &host_public)?;
@@ -237,15 +313,16 @@ pub fn accept_and_proof(
     let session_secret = hmac(&base, &secret_input);
     let accepted = AcceptedSession {
         candidates,
+        version,
         host_nonce,
         receive_key: hmac(&session_secret, b"host"),
         send_key: hmac(&session_secret, b"joiner"),
     };
     let mut proof = Vec::with_capacity(88);
-    proof.extend_from_slice(&[b'J', SIGNAL_VERSION]);
+    proof.extend_from_slice(&[b'J', version]);
     proof.extend_from_slice(&identity.public_key);
     proof.extend_from_slice(&identity.nonce);
-    append_candidates(&mut proof, &[local_candidate]);
+    append_join_addresses(&mut proof, &[local_candidate], version);
     proof.extend_from_slice(&accepted.host_nonce);
     let tag = message_tag(&base, b"join", &proof);
     proof.extend_from_slice(&tag);
@@ -506,6 +583,7 @@ mod tests {
     fn tunnel_rejects_replay() {
         let accepted = AcceptedSession {
             candidates: vec![],
+            version: SIGNAL_VERSION,
             host_nonce: [0; 8],
             receive_key: [7; 32],
             send_key: [7; 32],
@@ -519,6 +597,38 @@ mod tests {
 
     #[test]
     fn completes_the_native_v3_accept_and_proof_exchange() {
+        exchange(SIGNAL_VERSION_OLD, &[]);
+    }
+
+    #[test]
+    fn completes_the_native_v4_accept_and_proof_exchange() {
+        // (an OpenCE host of network version 26: a native build's WebRTC,
+        // its certificate's hash, no ICE text of its own and no names)
+        let mut webrtc = vec![WEBRTC_NATIVE];
+        webrtc.extend_from_slice(&[3_u8; WEBRTC_FINGERPRINT_SIZE]);
+        webrtc.extend_from_slice(&[0, 0, 0]);
+        exchange(SIGNAL_VERSION, &webrtc);
+    }
+
+    #[test]
+    fn sends_the_first_request_in_both_versions() {
+        let identity = JoinIdentity::generate().unwrap();
+        let invite = Invite {
+            host_hash: [1_u8; 16],
+            host_identifier: [2_u8; IDENTIFIER_SIZE],
+            token: [5_u8; 16],
+        };
+        let joins = initial_joins(&invite, &identity, SocketAddrV4::new(Ipv4Addr::new(8, 8, 8, 8), 40_000))
+            .unwrap();
+        let first = open_signal(&invite.token, &joins[0]).unwrap();
+        let second = open_signal(&invite.token, &joins[1]).unwrap();
+        assert_eq!(&first[..2], &[b'J', SIGNAL_VERSION]);
+        assert_eq!(*first.last().unwrap(), WEBRTC_NONE);
+        assert_eq!(first.len(), second.len() + 1);
+        assert_eq!(&second[..2], &[b'J', SIGNAL_VERSION_OLD]);
+    }
+
+    fn exchange(version: u8, webrtc: &[u8]) {
         let identity = JoinIdentity::generate().unwrap();
         let host_secret = StaticSecret::from([9_u8; 32]);
         let host_public = PublicKey::from(&host_secret).to_bytes();
@@ -535,7 +645,7 @@ mod tests {
         };
         let host_nonce = [7_u8; 8];
         let base = pair_base(&identity, &host_public).unwrap();
-        let mut accept = vec![b'A', SIGNAL_VERSION];
+        let mut accept = vec![b'A', version];
         accept.extend_from_slice(&host_public);
         accept.extend_from_slice(&identity.nonce);
         accept.extend_from_slice(&host_nonce);
@@ -543,6 +653,7 @@ mod tests {
             &mut accept,
             &[SocketAddrV4::new(Ipv4Addr::new(1, 1, 1, 1), 2302)],
         );
+        accept.extend_from_slice(webrtc);
         let accept_tag = message_tag(&base, b"accept", &accept);
         accept.extend_from_slice(&accept_tag);
         let sealed = seal_signal(&invite.token, &accept).unwrap();
@@ -554,12 +665,14 @@ mod tests {
         )
         .unwrap();
         assert_eq!(accepted.host_nonce, host_nonce);
+        assert_eq!(accepted.version, version);
         assert_eq!(accepted.candidates[0].port(), 2302);
         let proof = open_signal(&invite.token, &proof).unwrap();
-        assert_eq!(&proof[..2], &[b'J', SIGNAL_VERSION]);
+        assert_eq!(&proof[..2], &[b'J', version]);
         assert_eq!(&proof[2..34], &identity.public_key);
         assert_eq!(&proof[34..42], &identity.nonce);
-        assert_eq!(&proof[49..57], &host_nonce);
+        let nonce_at = if version == SIGNAL_VERSION_OLD { 49 } else { 50 };
+        assert_eq!(&proof[nonce_at..nonce_at + 8], &host_nonce);
         let expected = message_tag(&base, b"join", &proof[..proof.len() - TAG_SIZE]);
         assert_eq!(&proof[proof.len() - TAG_SIZE..], expected);
     }

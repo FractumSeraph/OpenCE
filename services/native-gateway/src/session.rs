@@ -15,7 +15,7 @@ use tracing::{info, warn};
 
 use crate::protocol::{
     BrowserFrame, Invite, JoinIdentity, KCP_MTU, KcpOutput, TunnelCrypto, accept_and_proof,
-    browser_frame, initial_join, parse_browser_frame, topic,
+    browser_frame, initial_joins, parse_browser_frame, topic,
 };
 
 const MAX_STREAMS: usize = 4;
@@ -549,9 +549,12 @@ pub async fn run(
     let join_topic = topic(&ticket.invite.token, b"joiner", &ticket.identity.identifier);
     // (the hub's Drop aborts its broker tasks on every way out of here)
     let (mqtt, mut mqtt_messages) = mqtt(&ticket.peer_id, join_topic).await?;
-    let first_join =
-        initial_join(&ticket.invite, &ticket.identity, local_candidate).map_err(str::to_owned)?;
-    mqtt.publish(&host_topic, first_join.clone())?;
+    // (in both signalling versions until the host answers in one)
+    let first_joins =
+        initial_joins(&ticket.invite, &ticket.identity, local_candidate).map_err(str::to_owned)?;
+    for join in &first_joins {
+        mqtt.publish(&host_topic, join.clone())?;
+    }
 
     let mut accepted = None;
     let mut proof = None;
@@ -688,8 +691,14 @@ pub async fn run(
                     break Err("native host could not be reached".into());
                 }
                 if endpoint.is_none() && last_join.elapsed() >= Duration::from_secs(2) {
-                    let join = proof.as_ref().unwrap_or(&first_join);
-                    mqtt.publish(&host_topic, join.clone())?;
+                    match &proof {
+                        Some(value) => mqtt.publish(&host_topic, value.clone())?,
+                        None => {
+                            for join in &first_joins {
+                                mqtt.publish(&host_topic, join.clone())?;
+                            }
+                        }
+                    }
                     last_join = now;
                 }
                 if endpoint.is_none() && last_punch.elapsed() >= Duration::from_millis(200) {

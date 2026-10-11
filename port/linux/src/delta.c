@@ -601,6 +601,31 @@ static void delta_use_built_in(void)
 	delta.disabled = 0;
 }
 
+/* port (this fork): a signed table behind this build's own numbers. The
+table is ChupathingyCE's, which follows OpenCE's raises only once its CI has
+played the new build; this fork follows them itself first (delta.h's rows,
+HALO_PORT_NETWORK_VERSION), so a table's row is taken only as far as it is
+newer: its numbers raise this build's, never lower them. A local table
+(network.legacy_table) is taken as it is. Returns whether the build's own
+were kept. */
+static int delta_keep_built_in_newest(void)
+{
+	int kept = 0;
+
+	if (delta.maximum < HALO_PORT_NETWORK_VERSION_MAXIMUM)
+	{
+		delta.maximum = HALO_PORT_NETWORK_VERSION_MAXIMUM;
+		kept = 1;
+	}
+	if (delta.announce < HALO_PORT_NETWORK_VERSION)
+	{
+		delta.announce = HALO_PORT_NETWORK_VERSION;
+		delta.follows[0] = 0;
+		kept = 1;
+	}
+	return kept;
+}
+
 static void delta_cache_path(char *path, size_t size)
 {
 	snprintf(path, size, "%s/%s", platform_save_root(), DELTA_CACHE_NAME);
@@ -703,14 +728,19 @@ static enum delta_result delta_take(const char *document, size_t size, const cha
 		memcpy(delta.follows, table.follows, sizeof(delta.follows));
 	}
 	delta.disabled = table.disabled;
-	pthread_mutex_unlock(&delta_lock);
+	{
+		int kept = delta_keep_built_in_newest();
+		int announce = delta.announce, minimum = delta.minimum, maximum = delta.maximum;
+		char follows[sizeof(delta.follows)];
 
-	platform_log("Delta: legacy table %u from %s: announcing %d, joining %d to %d%s%s%s", table.serial, source,
-		table.has_row ? table.announce : HALO_PORT_NETWORK_VERSION,
-		table.has_row ? table.minimum : HALO_PORT_NETWORK_VERSION_MINIMUM,
-		table.has_row ? table.maximum : HALO_PORT_NETWORK_VERSION_MAXIMUM,
-		table.has_row ? "" : " (no row for " DELTA_WIRE ": the built-in numbers)",
-		table.has_row && table.follows[0] ? "; following OpenCE " : "", table.has_row ? table.follows : "");
+		memcpy(follows, delta.follows, sizeof(follows));
+		pthread_mutex_unlock(&delta_lock);
+		platform_log("Delta: legacy table %u from %s: announcing %d, joining %d to %d%s%s%s%s", table.serial, source,
+			announce, minimum, maximum,
+			table.has_row ? "" : " (no row for " DELTA_WIRE ": the built-in numbers)",
+			kept ? " (this build's own newer numbers kept)" : "",
+			follows[0] ? "; following OpenCE " : "", follows);
+	}
 	/* (from the cache's own copy, and only while the table is still the
 	one in use: another thread may take a newer one, and free this one,
 	meanwhile) */

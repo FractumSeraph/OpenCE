@@ -188,7 +188,13 @@ and switches co-op's BSP on the host's crossing alone; version 22 names a
 Halo Custom Edition map `custom_maps\<name>` in the game's settings, and a
 client without the map it names is told which map it misses and where to
 put it; version 24 sends the gametype's PC vehicle set, with which every
-machine places all of the map's vehicles.
+machine places all of the map's vehicles; version 25 carries units'
+integrated lights in the object states; version 26 has each machine say
+its WebRTC in internet play's signalling (a native build's certificate, a
+browser's ICE credentials too), so that browsers play (port/linux/README.md,
+"Browsers"). This fork's machines read and write the signalling of 26 and
+of the versions before it (p2p_signal.c, MESSAGE_VERSION_OLD), so they join
+both.
 
 A host never checks a joining client's version: the client reads the
 host's from its advertisement and joins only a version it plays with. That
@@ -634,7 +640,10 @@ swap the bots' wandering does not reach (`debug.network_test_pickup_weapon`
 picks the weapon: the first whose tag name has it in it, as "sniper"), and `debug.network_test_score`
 shortens the game, to test the next (`host:<map>:<variant>,<variant>...`
 plays the variants in turn, the next once a game is over, as the host's
-button on the scores does). `debug.network_latency` and
+button on the scores does). `debug.network_test_public` lists the host's
+game in the server browser, and `browse` joins the first game listed there,
+as the server browser does (port/web/tests/internet.mjs plays the native
+build and browsers so). `debug.network_latency` and
 `debug.network_loss` hold back what a machine receives and drop some of its
 datagrams, to test as over the internet. `debug.network_corrupt` damages
 that share of the datagrams a machine receives at random (bytes changed,

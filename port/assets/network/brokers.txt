@@ -3,7 +3,9 @@
 # them. The game uses every one at once (up to 5), so any one working is
 # enough. One host:port on each line; "#" starts a comment.
 # (The game reads this file beside config.toml: network.brokers_file. An
-# update replaces it; keep a list of your own under another name.)
+# update replaces it; keep a list of your own under another name. OpenCE's
+# web build reaches the public ones over their secure WebSockets:
+# port/linux/src/p2p_signal.c.)
 # (halovps.fractumseraph.net: this fork's own, Mosquitto, the game's hceu/
 # topics only)
 halovps.fractumseraph.net:1883

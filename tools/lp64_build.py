@@ -309,7 +309,7 @@ class Lp64Build:
         for source in sorted(platform_dir.glob("*.c")):
             if str(source) in excluded:
                 continue
-            if source.name in ("posix_update.c", "posix_browser.c"):
+            if source.name in ("posix_update.c", "posix_browser.c", "posix_dtls.c"):
                 add(source, f"{posix_cflags} {mbedtls_include}", native=True)
             elif source.name == "posix_upnp.c":
                 add(source, f"{posix_cflags} -I{MINIUPNPC_DIR / 'include'} -DMINIUPNP_STATICLIB", native=True)

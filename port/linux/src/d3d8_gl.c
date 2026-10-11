@@ -3397,6 +3397,41 @@ static void feedback_snapshot_copy(void)
 }
 #endif
 
+#ifdef HALO_WEB
+/* WebGL refuses a draw that samples a texture of the framebuffer it draws
+into (a feedback loop), which desktop GL and ES drivers draw, sampling the
+pixels as they were: a copy of the target is sampled instead, made again
+only once the target has been drawn into since */
+static GLuint feedback_copy(struct xgpu_render_target *target)
+{
+	static GLuint copy;
+	static GLsizei copy_width, copy_height;
+	static unsigned long copied_texture, copied_written;
+
+	if (target->depth)
+		return target->texture;
+	if (!copy || copy_width != (GLsizei)target->gl_width || copy_height != (GLsizei)target->gl_height)
+	{
+		if (!copy)
+			glGenTextures(1, &copy);
+		copy_width = (GLsizei)target->gl_width;
+		copy_height = (GLsizei)target->gl_height;
+		glBindTexture(GL_TEXTURE_2D, copy);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, copy_width, copy_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+		xgpu_gl_state_invalidate();
+		copied_texture = 0;
+	}
+	if (copied_texture != target->texture || copied_written != target->written)
+	{
+		copy_level_by_blit(target->texture, copy, 0, copy_width, copy_height);
+		copied_texture = target->texture;
+		copied_written = target->written;
+	}
+	return copy;
+}
+#endif
+
 static void bind_textures(struct nv2a_pixel_shader_key *key, float texture_scale[4][4])
 {
 	/* Bind only after resolving every stage, since texture uploads can
@@ -3451,6 +3486,14 @@ static void bind_textures(struct nv2a_pixel_shader_key *key, float texture_scale
 #ifdef HALO_BROWSER
 				if (gl_texture == bound_color_texture)
 					gl_texture = feedback_snapshot_texture;
+#endif
+#ifdef HALO_WEB
+				{
+					struct render_target_entry *drawn = render_target_get(device.render_target);
+
+					if (drawn && gl_texture == drawn->target.texture)
+						gl_texture = feedback_copy(target);
+				}
 #endif
 			}
 			else
@@ -5231,6 +5274,40 @@ void WINAPI D3DDevice_End(void)
 				4 * sizeof(float), offset + index * count * 4 * sizeof(float), 0);
 		}
 	}
+#elif defined(HALO_WEB)
+	{
+		/* WebGL takes vertex strides of 255 bytes at most, and this vertex
+		is 256: each attribute goes in an array of its own */
+		static float *transposed;
+		static unsigned long transposed_capacity;
+		unsigned long attribute_size = 4 * sizeof(float);
+		unsigned long vertex;
+
+		if (count > transposed_capacity)
+		{
+			float *grown = realloc(transposed, count * stride);
+
+			/* (out of memory: the draw is dropped) */
+			if (!grown)
+				return;
+			transposed = grown;
+			transposed_capacity = count;
+		}
+		for (index = 0; index < XGPU_VERTEX_ATTRIBUTE_COUNT; index++)
+		{
+			for (vertex = 0; vertex < count; vertex++)
+			{
+				memcpy(transposed + (index * count + vertex) * 4,
+					device.immediate_vertices + (vertex * XGPU_VERTEX_ATTRIBUTE_COUNT + index) * 4, attribute_size);
+			}
+		}
+		offset = stream_upload(transposed, count * stride);
+		for (index = 0; index < XGPU_VERTEX_ATTRIBUTE_COUNT; index++)
+		{
+			state_attribute_stream(index, 0, device.stream_buffer, 4, GL_FLOAT, GL_FALSE, FALSE, (GLsizei)attribute_size,
+				offset, index * count * attribute_size);
+		}
+	}
 #else
 	offset = stream_upload(device.immediate_vertices, count * stride);
 	gl_check_errors("immediate upload");
@@ -5241,6 +5318,7 @@ void WINAPI D3DDevice_End(void)
 			offset, index * 4 * sizeof(float));
 	}
 #else
+	offset = stream_upload(device.immediate_vertices, count * stride);
 	{
 		/* every attribute four floats, one after another */
 		static struct vertex_array_entry *immediate_array;

@@ -580,7 +580,7 @@ def linux32_objects(n: Writer, units: Linux32Units, obj_dir: Path, extra_cflags:
     for source in sorted(platform_dir.glob("*.c")):
         if source.as_posix() in units.excluded:
             continue
-        if source.name in ("posix_update.c", "posix_browser.c"):
+        if source.name in ("posix_update.c", "posix_browser.c", "posix_dtls.c"):
             add_object(source, f"{posix_cflags} {mbedtls_include}", posix=True)
         elif source.name == "posix_upnp.c":
             add_object(source, f"{posix_cflags} -I{MINIUPNPC_DIR / 'include'} -DMINIUPNP_STATICLIB", posix=True)

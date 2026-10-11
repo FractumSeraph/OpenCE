@@ -39,7 +39,7 @@ macos_build.py; the Android app's version is its own, build.gradle) */
 #define HALO_VERSION "dev"
 #endif
 
-#ifndef HALO_ANDROID
+#if !defined(HALO_ANDROID) && !defined(HALO_WEB)
 
 #include "zlib_prefixed.h"
 
@@ -933,6 +933,16 @@ void updater_poll(SDL_Window *window)
 void updater_start(void)
 {
 }
+
+#ifdef HALO_WEB
+#include <SDL3/SDL.h>
+
+/* (the site updates itself: port/web/site/sw.js) */
+void updater_poll(SDL_Window *window)
+{
+	(void)window;
+}
+#endif
 
 #endif
 

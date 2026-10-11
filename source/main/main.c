@@ -384,6 +384,9 @@ symbols in this file:
 #ifdef HALO_PROFILE
 #include "profile_trace.h" /* port: port/linux/src/profile_trace.c */
 #endif
+#ifdef HALO_WEB
+#include <emscripten.h> /* port: the browser runs the main loop (port/web/README.md) */
+#endif
 #include "camera/director.h"
 #include "camera/observer.h"
 #include "cutscene/cinematics.h"
@@ -3112,6 +3115,13 @@ void halt_and_catch_fire(
 	emscripten_force_exit(EXIT_FAILURE);
 #endif
 
+#ifdef HALO_WEB
+	/* port: a browser shows only what a frame of its own main loop drew, and
+	this screen never returns to it: the game stops, and the page shows the
+	error from the log, where it already is (port/web/README.md) */
+	emscripten_cancel_main_loop();
+	abort();
+#endif
 	if (!global_screenshot_count.halt_recursion_lock)
 	{
 		scenario = global_scenario_try_and_get();
@@ -3624,20 +3634,29 @@ static boolean main_loop_iteration(
 	return TRUE;
 }
 
-#ifdef HALO_BROWSER
+#if defined(HALO_BROWSER) || defined(HALO_WEB)
+/* port: in a browser, the page's frames call the main loop one iteration at a
+time, and what an iteration drew shows once it returns (OpenCE's web build,
+HALO_WEB, as this fork's, HALO_BROWSER) */
 static void main_loop_web_iteration(
 	void *unused)
 {
 	boolean keep_running;
 
 	(void)unused;
+#ifdef HALO_BROWSER
 	platform_web_frame_begin();
+#endif
 	keep_running = main_loop_iteration();
+#ifdef HALO_BROWSER
 	platform_web_frame_end();
+#endif
 	if (!keep_running)
 	{
+#ifdef HALO_BROWSER
 		platform_web_frame_stopped((long)main_globals.connection);
 		platform_log("web main loop stopped (connection %ld)", (long)main_globals.connection);
+#endif
 		emscripten_cancel_main_loop();
 		error(_error_silent, "end of saved film");
 		main_exit();
@@ -3665,7 +3684,7 @@ void main_loop(
 	main_setup_connection();
 	main_initialize_time();
 
-#ifdef HALO_BROWSER
+#if defined(HALO_BROWSER) || defined(HALO_WEB)
 	/* Let the worker return to its event loop after each frame.  That is when
 	an implicit-swap OffscreenCanvas publishes its WebGL drawing buffer.  A
 	zero-rate Emscripten loop follows requestAnimationFrame. */

@@ -544,6 +544,20 @@ Known history, from `port/linux/NETCODE.md` and OpenCE's commits:
 | 22 | build-145 | a Custom Edition map named `custom_maps\<name>` in the game's settings (a joining machine without it is told which map it misses) | additive |
 | 23 | build-147 | a Custom Edition map's blocks past the Xbox tools' limits kept whole, its vehicles placed by their spawn flags, and its header checksum sent as the map's version (a client of another version leaves); Xbox maps play as 22 | additive |
 | 24 | build-149 | the gametype's PC vehicle set (0xFE), every vehicle the map places; on a Custom Edition map every placement whose spawn flags name the game type (a client of 23 places none of it) | additive |
+| 25 | build-169 | units' integrated lights in the object states, with a bit saying each was sent | additive |
+| 26 | build-184 | internet play's signalling says each machine's WebRTC (its JOIN and ACCEPT, message version 4), so that browsers play; the game's messages as 25 | additive (this fork's row: see below) |
+
+**This fork follows OpenCE ahead of the table.** FractumSeraph's fork
+has the rows of 25 and 26 itself, and its builds announce 26 and join 11
+to 26 (`halo_port_limits.h`). A signed table's row only raises those
+numbers, never lowers them (`delta_keep_built_in_newest`, `delta.c`), so
+ChupathingyCE's table takes over again once it follows 26 or later; a
+local table (`network.legacy_table`) is taken as it is, for a host that
+would rather announce 25 to ChupathingyCE's clients of the table before.
+Version 26's signalling is spoken both ways (`p2p_signal.c`,
+`MESSAGE_VERSION_OLD`; the native gateway's `protocol.rs` too): a host
+answers a request in its own version, and a joiner asks in both until
+the host answers.
 
 ### Automation
 

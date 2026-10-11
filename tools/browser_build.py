@@ -125,9 +125,13 @@ BROWSER_SOURCES = (
     "web_public_games.c",
     "web_touch_input.c",
     "web_upnp.c",
+    "web_webrtc_none.c",
 )
 
 WEB_EXCLUDED_PLATFORM_SOURCES = {
+    # internet play's WebRTC with browsers: none here (port/web/src/web_webrtc_none.c)
+    "p2p_webrtc.c",
+    "posix_dtls.c",
     "posix_trace_marker.c",
     "posix_update.c",
     "posix_upnp.c",

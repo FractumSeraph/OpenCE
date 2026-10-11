@@ -1470,7 +1470,7 @@ static void audio_start(void)
 		/* (not in the browser: SDL's Emscripten backend doubles its default
 		frames for the main thread's scheduling, and a smaller buffer there
 		broke up the sound in some browsers) */
-#ifndef HALO_BROWSER
+#if !defined(HALO_BROWSER) && !defined(HALO_WEB)
 		SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, frames);
 #endif
 		audio_stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, audio_callback, NULL);
