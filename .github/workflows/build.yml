@@ -167,7 +167,7 @@ jobs:
 
       - name: Test
         run: |
-          python -m pytest -q tools/test_linux_port.py tools/test_touch_menu.py tools/test_server_control.py tools/test_delta.py tools/test_delta_peer.py tools/test_profile.py tools/test_map_torrents.py tools/test_map_families.py tools/test_host_watch_hash.py tools/test_virtual_keyboard_input.py tools/harness
+          python -m pytest -q tools/test_linux_port.py tools/test_touch_menu.py tools/test_server_control.py tools/test_delta.py tools/test_delta_peer.py tools/test_profile.py tools/test_map_torrents.py tools/test_map_families.py tools/test_bmp_files.py tools/test_host_watch_hash.py tools/test_virtual_keyboard_input.py tools/harness
           python tools/test_light_storage.py
 
       - name: Compile cache

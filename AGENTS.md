@@ -92,7 +92,7 @@ to nothing.
 ```sh
 python -m pytest -q tools/harness tools/test_touch_menu.py   # the engine's functions in a fake world
 python -m pytest -q tools/test_linux_port.py                # the build, the maps' checks (needs assets/maps)
-python -m pytest -q tools/test_profile.py tools/test_map_families.py tools/test_map_torrents.py tools/test_delta.py
+python -m pytest -q tools/test_profile.py tools/test_map_families.py tools/test_map_torrents.py tools/test_delta.py tools/test_bmp_files.py
 python tools/test_touch_layout.py                           # the Android touch layout (JDK 17+)
 python tools/test_light_storage.py
 python tools/test_death_timing.py
