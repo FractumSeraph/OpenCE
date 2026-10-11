@@ -330,6 +330,13 @@ and stays where it is. `game.move_old_map_folders` in `config.toml` says
 named `<name>@ce.map` (`@md`, `@pc`), as some other builds name them, is
 found in its folder or in `maps/` itself.
 
+**Other folders, or none.** `paths.custom_edition` in `config.toml` names
+one more folder of Custom Edition maps (desktop builds), looked in after
+the others: a folder of maps, or a Halo Custom Edition install, whose `maps`
+folder is used, with its `bitmaps.map`, `sounds.map` and `loc.map`.
+`game.custom_edition = false` turns Halo PC maps off: none is listed,
+played or downloaded. Both are OpenCE's settings.
+
 **Common mistake:** don't point `maps` itself at a Halo PC maps folder, or copy
 Halo PC maps straight into it. The game can't start with Halo PC's `ui.map`
 in place of the Xbox one, and Halo PC maps in `maps/` itself don't play. Keep

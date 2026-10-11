@@ -241,6 +241,36 @@ const char *platform_save_root(void)
 	return root;
 }
 
+const char *platform_custom_edition_root(void)
+{
+	static char root[MAX_PATH];
+	static int found;
+
+	if (!found)
+	{
+		char on_disk[256];
+
+		found = 1;
+		snprintf(root, sizeof(root), "%s", config_string("paths.custom_edition"));
+		trim_separators(root);
+		if (root[0] && !directory_exists(root))
+		{
+			platform_log("Custom Edition maps: %s (paths.custom_edition) is not a folder; not using it", root);
+			root[0] = 0;
+		}
+		/* (a Halo Custom Edition install: its maps folder) */
+		if (root[0] && posix_find_entry_case_insensitive(root, "maps", on_disk, sizeof(on_disk)) &&
+			strlen(root) + 1 + strlen(on_disk) < sizeof(root))
+		{
+			strcat(root, "/");
+			strcat(root, on_disk);
+		}
+		if (root[0])
+			platform_log("Custom Edition maps: also read from %s (paths.custom_edition)", root);
+	}
+	return root;
+}
+
 void platform_translate_path(const char *xbox_path, char *host_path, unsigned long host_path_size)
 {
 	char resolved[1024];
@@ -252,7 +282,13 @@ void platform_translate_path(const char *xbox_path, char *host_path, unsigned lo
 	{
 		char drive = (char)(cursor[0] | 0x20);
 
-		if (drive != 'd')
+		/* h:\ is the folder of Custom Edition maps paths.custom_edition
+		names, when it names one (else a save root drive, as any other) */
+		if (drive == 'h' && platform_custom_edition_root()[0])
+		{
+			snprintf(resolved, sizeof(resolved), "%s", platform_custom_edition_root());
+		}
+		else if (drive != 'd')
 		{
 			struct posix_file_information information;
 

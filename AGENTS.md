@@ -178,7 +178,9 @@ Custom Edition maps live in the data root's `maps_ce` folder with
 retail's in `maps_pc`); the game names them `<name>@ce` (`@md`, `@pc`), and
 over the network a Custom Edition map is `custom_maps\<name>`, as OpenCE
 names it. OpenCE's `custom_maps` folder and the older `maps\ce` and
-`md_maps` are read too (`port/linux/game/map_families.c`). The browser
+`md_maps` are read too (`port/linux/game/map_families.c`), and last the
+folder OpenCE's `paths.custom_edition` names (the Xbox drive `h:\`);
+OpenCE's `game.custom_edition = false` turns Halo PC maps off. The browser
 build reads them from the site's `assets/custom_maps`. OpenSauce features
 are not supported and must not be added: a map that needs them is refused,
 and one that only carries OpenSauce's header runs as stock Custom Edition

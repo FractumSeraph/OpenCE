@@ -373,6 +373,13 @@ static const struct config_setting config_settings[] =
 		"(each folder moved whole, never copied; one that cannot be moved stays\n"
 		"where it is); \"yes\": moved without asking; \"no\": left where they are.\n"
 		"Android moves them unless this is \"no\"." },
+	{ "game.custom_edition", _config_boolean, "true", "HALO_CUSTOM_EDITION", _environment_value, _platform_all,
+		"Play Halo PC maps (not those that need OpenSauce): Custom Edition's in\n"
+		"maps_ce (with Custom Edition's bitmaps.map, sounds.map and loc.map),\n"
+		"OpenCE's custom_maps or paths.custom_edition, HaloMD's in maps_md and\n"
+		"Halo PC's in maps_pc. Their tags are checked as the game's own maps'\n"
+		"are before they run. false: none of them is listed, played or\n"
+		"downloaded (OpenCE's setting)." },
 
 	{ "paths.data", _config_string, "\"\"", "HALO_DATA_ROOT", _environment_value, _platform_desktop,
 		"The folder holding the game data's maps folder; empty looks in the\n"
@@ -381,6 +388,11 @@ static const struct config_setting config_settings[] =
 	{ "paths.saves", _config_string, "\"\"", "HALO_SAVE_ROOT", _environment_value, _platform_desktop,
 		"Where saved games and profiles go; empty for the usual place\n"
 		"(~/.local/share/halo-linux, or %APPDATA%\\halo on Windows)." },
+	{ "paths.custom_edition", _config_string, "\"\"", "HALO_CUSTOM_EDITION_ROOT", _environment_value, _platform_desktop,
+		"A folder of Custom Edition maps, or a Halo Custom Edition install\n"
+		"(its maps folder), looked in after maps_ce and custom_maps for\n"
+		"Custom Edition maps and their bitmaps.map, sounds.map and loc.map\n"
+		"(game.custom_edition); empty for none (OpenCE's setting)." },
 	{ "data.download_url", _config_string, "\"https://halo.fractumseraph.net/assets/maps/\"", "HALO_DATA_DOWNLOAD_URL",
 		_environment_value, _platform_desktop,
 		"Where the first start offers to download the maps folder from, when\n"

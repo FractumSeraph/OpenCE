@@ -17,7 +17,9 @@ its file's name, and each with a folder of its own beside maps\:
 A file named for its family (<name>@ce.map) is played from its family's
 folder or from maps\ itself. The older places are read too: maps\ce
 (ChupathingyCE 0.6 and 0.7.0b: Custom Edition's and HaloMD's maps), md_maps
-(HaloMD's) and OpenCE's custom_maps (Custom Edition's). A map past the
+(HaloMD's) and OpenCE's custom_maps (Custom Edition's), and last the folder
+paths.custom_edition names, if any (a Halo Custom Edition install's maps
+folder, or a folder of Custom Edition maps). A map past the
 Xbox's is found by its family's folders and checked to be a cache file of
 its family's version, so a Custom Edition map and a HaloMD map of the same
 file name are told apart. Their resource maps (bitmaps.map, sounds.map,
@@ -82,6 +84,11 @@ void map_downloaded_mark(char const *map_name);
 /* a family's cache version: 609 for Custom Edition's, 7 for HaloMD's and
 Halo PC retail's */
 long map_family_cache_version(short family);
+
+/* whether the families past the Xbox's are played (game.custom_edition,
+OpenCE's setting; on unless turned off): when not, none of their maps is
+found or listed */
+boolean map_families_enabled(void);
 
 /* the path of a Custom Edition resource map (bitmaps, sounds, loc; or
 Halo PC's ui), in maps_ce or its older places: FALSE if there is none (path

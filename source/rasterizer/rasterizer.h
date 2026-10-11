@@ -706,6 +706,10 @@ void rasterizer_dynamic_lit_geometry_draw(
 void rasterizer_psuedo_dynamic_screen_quad_draw(
 	struct rasterizer_dynamic_screen_geometry_parameters *parameters,
 	struct dynamic_screen_vertex *vertices);
+/* port: the next screen quad's maps' color is weighted by their alpha
+before the framebuffer blend (a Halo PC map's HUD overlays, hud_draw.c);
+FALSE again after it (rasterizer_xbox_dynavobgeom.c) */
+extern boolean rasterizer_screen_quad_alpha_weighted;
 #ifndef RASTERIZER_WIDGET_SIGNATURES_OWNED
 #endif
 void rasterizer_profile_enable(

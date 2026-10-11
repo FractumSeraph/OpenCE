@@ -1189,7 +1189,14 @@ boolean cache_files_map_present(
 		int map_torrents_fetch(const char *level_name, unsigned long version, const char *files);
 		char path[256];
 
-		if (map_family_find(family, file, path, sizeof(path)))
+		/* port: (none played with game.custom_edition off, nor downloaded) */
+		if (!map_families_enabled())
+		{
+			snprintf(message, sizeof(message),
+				"The map %.63s is a %s map, and Halo PC maps are turned off (game.custom_edition in config.toml).",
+				file, map_family_badge(family));
+		}
+		else if (map_family_find(family, file, path, sizeof(path)))
 		{
 			unsigned long own = cache_files_map_version(map_name);
 
@@ -1211,7 +1218,7 @@ boolean cache_files_map_present(
 		(port/linux/src/map_torrents.c; the host changed map after this machine
 		joined, say: a join from the browser downloads first): the player told
 		to join again once it is there */
-		if (family == _map_family_custom_edition && map_torrents_fetch(file, version, NULL))
+		if (family == _map_family_custom_edition && map_families_enabled() && map_torrents_fetch(file, version, NULL))
 		{
 			snprintf(message, sizeof(message),
 				"The host's map %.63s is being downloaded (Join Game shows how it goes). Join again when it is there.",
@@ -1446,8 +1453,13 @@ long scenario_tags_load(
 			scale halved, meters' bitmaps sampled in Halo PC's channels
 			(port/linux/game/ce_hud.c) */
 			{
+				extern void ce_hud_map_identity(char const *name, long name_size, unsigned long tags_checksum);
 				extern void ce_hud_tags_loaded(void *tag_instances, long tag_count);
 
+				/* (and what the map relies on Halo PC's HUD for, by its name
+				and tag data checksum, as Chimera lists them) */
+				ce_hud_map_identity(cache_file_globals.header.name, sizeof(cache_file_globals.header.name),
+					ce_header->checksum);
 				ce_hud_tags_loaded(global_tag_instances, ce_header->tag_count);
 			}
 			/* (and the sounds of tag files played over the map's, as below:

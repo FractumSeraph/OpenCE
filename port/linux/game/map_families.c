@@ -189,64 +189,82 @@ enum
 };
 
 /* each family's places, in the order they are looked in: a folder (under
-the maps folder, or the data root's) and the suffix its files' names have.
-Each family's own folder beside maps first; then the older places, read as
-they were: maps\\ce (ChupathingyCE 0.6 and 0.7.0b's Custom Edition maps, and
-HaloMD's first), md_maps (their HaloMD maps), OpenCE's custom_maps (its
-Custom Edition maps, since build-145), and a file named for its family in
-maps itself (<name>@ce.map). The older folders are offered a move into the
-new ones (platform_old_map_folders, xbox_files.c) */
+the data root, the maps folder, or the folder paths.custom_edition names)
+and the suffix its files' names have. Each family's own folder beside maps
+first; then the older places, read as they were: maps\\ce (ChupathingyCE 0.6
+and 0.7.0b's Custom Edition maps, and HaloMD's first), md_maps (their HaloMD
+maps), OpenCE's custom_maps (its Custom Edition maps, since build-145), and
+a file named for its family in maps itself (<name>@ce.map). Custom Edition's
+last place is the folder paths.custom_edition names, if it names one
+(OpenCE's setting: a Halo Custom Edition install's maps folder, looked in
+after custom_maps). The older folders are offered a move into the new ones
+(platform_old_map_folders, xbox_files.c) */
+enum
+{
+	_place_data_root,
+	_place_maps,
+	/* the Xbox drive h:\ (xbox_files.c) */
+	_place_custom_edition_folder,
+};
+
 struct map_family_place
 {
-	boolean under_maps;
+	short root;
 	char const *folder;
 	char const *suffix;
 };
 
 static struct map_family_place const custom_edition_places[] =
 {
-	{ FALSE, "maps_ce\\", "" },
-	{ FALSE, "maps_ce\\", "@ce" },
-	{ TRUE, "ce\\", "" },
-	{ TRUE, "ce\\", "@ce" },
-	{ FALSE, "custom_maps\\", "" },
-	{ TRUE, "", "@ce" },
+	{ _place_data_root, "maps_ce\\", "" },
+	{ _place_data_root, "maps_ce\\", "@ce" },
+	{ _place_maps, "ce\\", "" },
+	{ _place_maps, "ce\\", "@ce" },
+	{ _place_data_root, "custom_maps\\", "" },
+	{ _place_maps, "", "@ce" },
+	{ _place_custom_edition_folder, "", "" },
+	{ _place_custom_edition_folder, "", "@ce" },
 };
 
 static struct map_family_place const halomd_places[] =
 {
-	{ FALSE, "maps_md\\", "" },
-	{ FALSE, "maps_md\\", "@md" },
-	{ FALSE, "md_maps\\", "" },
-	{ FALSE, "md_maps\\", "@md" },
-	{ TRUE, "", "@md" },
+	{ _place_data_root, "maps_md\\", "" },
+	{ _place_data_root, "maps_md\\", "@md" },
+	{ _place_data_root, "md_maps\\", "" },
+	{ _place_data_root, "md_maps\\", "@md" },
+	{ _place_maps, "", "@md" },
 	/* (where they were first played, beside Custom Edition's) */
-	{ FALSE, "maps_ce\\", "" },
-	{ FALSE, "maps_ce\\", "@md" },
-	{ TRUE, "ce\\", "" },
-	{ TRUE, "ce\\", "@md" },
+	{ _place_data_root, "maps_ce\\", "" },
+	{ _place_data_root, "maps_ce\\", "@md" },
+	{ _place_maps, "ce\\", "" },
+	{ _place_maps, "ce\\", "@md" },
 };
 
 static struct map_family_place const halo_pc_places[] =
 {
-	{ FALSE, "maps_pc\\", "" },
-	{ FALSE, "maps_pc\\", "@pc" },
-	{ TRUE, "", "@pc" },
+	{ _place_data_root, "maps_pc\\", "" },
+	{ _place_data_root, "maps_pc\\", "@pc" },
+	{ _place_maps, "", "@pc" },
 };
 
 /* where Custom Edition's resource maps (bitmaps.map, sounds.map, loc.map)
 and Halo PC's ui.map are, for every family past the Xbox's: Custom
-Edition's maps folder, then its older places */
+Edition's maps folder, then its older places, then the folder
+paths.custom_edition names */
 static struct map_family_place const resource_places[] =
 {
-	{ FALSE, "maps_ce\\", "" },
-	{ TRUE, "ce\\", "" },
-	{ FALSE, "custom_maps\\", "" },
+	{ _place_data_root, "maps_ce\\", "" },
+	{ _place_maps, "ce\\", "" },
+	{ _place_data_root, "custom_maps\\", "" },
+	{ _place_custom_edition_folder, "", "" },
 };
 
 /* ---------- prototypes */
 
 char const *cache_files_map_directory(void);
+/* (xbox_files.c, port_config.c) */
+const char *platform_custom_edition_root(void);
+int config_boolean(const char *name);
 
 /* ---------- private code */
 
@@ -277,13 +295,34 @@ static long family_cache_version(
 	return family == _map_family_custom_edition ? CUSTOM_EDITION_CACHE_VERSION : HALO_PC_CACHE_VERSION;
 }
 
-/* a place's folder, as a path ending in its separator */
-static void place_folder(
+/* a place's folder, as a path ending in its separator: FALSE for the
+folder paths.custom_edition names when it names none */
+static boolean place_folder(
 	struct map_family_place const *place,
 	char *path,
 	long size)
 {
-	snprintf(path, (size_t)size, "%s%s", place->under_maps ? cache_files_map_directory() : "d:\\", place->folder);
+	char const *root;
+
+	switch (place->root)
+	{
+	case _place_maps:
+		root = cache_files_map_directory();
+		break;
+	case _place_custom_edition_folder:
+		if (!platform_custom_edition_root()[0])
+		{
+			path[0] = 0;
+			return FALSE;
+		}
+		root = "h:\\";
+		break;
+	default:
+		root = "d:\\";
+		break;
+	}
+	snprintf(path, (size_t)size, "%s%s", root, place->folder);
+	return TRUE;
 }
 
 /* whether a file is a cache file of a version (and a multiplayer map's, if
@@ -340,6 +379,12 @@ long map_family_cache_version(
 	return family_cache_version(family);
 }
 
+boolean map_families_enabled(
+	void)
+{
+	return config_boolean("game.custom_edition") != 0;
+}
+
 boolean map_family_resource(
 	char const *name,
 	char *path,
@@ -352,7 +397,8 @@ boolean map_family_resource(
 		char folder[256];
 		HANDLE file;
 
-		place_folder(&resource_places[index], folder, sizeof(folder));
+		if (!place_folder(&resource_places[index], folder, sizeof(folder)))
+			continue;
 		snprintf(path, (size_t)size, "%s%s.map", folder, name);
 		file = CreateFileA(path, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 		if (file != INVALID_HANDLE_VALUE)
@@ -375,8 +421,9 @@ boolean map_family_find(
 	long count, index;
 	struct map_family_place const *places = family_places(family, &count);
 
-	if (!file[0] || strlen(file) >= MAP_FAMILY_FILE_LENGTH || strchr(file, '\\') || strchr(file, '/') ||
-		strchr(file, ':'))
+	/* (none with game.custom_edition off) */
+	if (!map_families_enabled() || !file[0] || strlen(file) >= MAP_FAMILY_FILE_LENGTH || strchr(file, '\\') ||
+		strchr(file, '/') || strchr(file, ':'))
 	{
 		return FALSE;
 	}
@@ -384,7 +431,8 @@ boolean map_family_find(
 	{
 		char folder[256];
 
-		place_folder(&places[index], folder, sizeof(folder));
+		if (!place_folder(&places[index], folder, sizeof(folder)))
+			continue;
 		snprintf(path, (size_t)size, "%s%s%s.map", folder, file, places[index].suffix);
 		if (cache_file_is(path, family_cache_version(family), FALSE))
 			return TRUE;
@@ -404,6 +452,9 @@ void map_family_list(
 	long count, index;
 
 	places = family_places(family, &count);
+	/* (none with game.custom_edition off) */
+	if (!map_families_enabled())
+		count = 0;
 	for (index = 0; index < count; index++)
 	{
 		char folder[256], pattern[288];
@@ -411,7 +462,8 @@ void map_family_list(
 		HANDLE find;
 		size_t suffix_length = strlen(places[index].suffix);
 
-		place_folder(&places[index], folder, sizeof(folder));
+		if (!place_folder(&places[index], folder, sizeof(folder)))
+			continue;
 		snprintf(pattern, sizeof(pattern), "%s*.map", folder);
 		find = FindFirstFileA(pattern, &data);
 		if (find == INVALID_HANDLE_VALUE)

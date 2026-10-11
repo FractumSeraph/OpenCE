@@ -152,6 +152,12 @@ other systems). An application's own files are not written: it is signed,
 and may be where its player cannot write (port_config.c) */
 int platform_app_folder(char *path, unsigned long size);
 const char *platform_save_root(void);
+/* the folder of Custom Edition maps paths.custom_edition names, which the
+Xbox drive h:\ is (map_families.c looks in it after maps_ce and the older
+places): a Halo Custom Edition install's maps folder, when it names an
+install, else the folder itself; "" for none. (OpenCE's setting, which
+names an install) */
+const char *platform_custom_edition_root(void);
 #ifdef HALO_GAME_BROWSER
 /* a web page opened in the web browser (from any thread: the main thread
 opens it) */

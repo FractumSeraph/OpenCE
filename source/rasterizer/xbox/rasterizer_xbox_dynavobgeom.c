@@ -237,6 +237,8 @@ static void submit_screen_vertex(
 
 /* ---------- globals */
 
+/* port: (rasterizer.h) */
+boolean rasterizer_screen_quad_alpha_weighted = FALSE;
 
 /* ---------- public code */
 
@@ -636,7 +638,10 @@ void _rasterizer_psuedo_dynamic_screen_quad_draw(
 		}
 
 		pixel_shader.combiner_count = combiner_index | 0x00011100;
-		pixel_shader.final_combiner_inputs_abcd = 0x0000000C;
+		/* port: r0 times its alpha, as the meters' final combiner takes r0
+		times t0's, for a Halo PC map's HUD overlays (rasterizer.h;
+		OpenCE's) */
+		pixel_shader.final_combiner_inputs_abcd = rasterizer_screen_quad_alpha_weighted ? 0x0C1C0000 : 0x0000000C;
 		pixel_shader.final_combiner_inputs_efg = 0x00001C00;
 	}
 
