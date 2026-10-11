@@ -53,8 +53,8 @@ def test_limits_follow_the_table():
     last_breaking = max(number for number, _, kind in table if kind == "breaking")
     assert define(limits, "HALO_PORT_NETWORK_VERSION") == newest, \
         "hosts must announce the table's newest version"
-    assert define(limits, "HALO_PORT_NETWORK_VERSION_MAXIMUM") == newest, \
-        "clients must join hosts up to the table's newest version"
+    assert define(limits, "HALO_PORT_NETWORK_VERSION_MAXIMUM") >= newest, \
+        "clients must join hosts up to the table's newest version, at least"
     assert define(limits, "HALO_PORT_NETWORK_VERSION_MINIMUM") == last_breaking, \
         "clients must join hosts back to the table's newest breaking version"
 

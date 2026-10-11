@@ -71,12 +71,14 @@ Raise it with any change to what the machines send each other. */
 from it only in what the other machines leave out (a message a machine of
 the other version does not know it drops). Which are which is delta.h's
 table (DELTA_LEGACY_VERSIONS): the minimum is its newest breaking version,
-the maximum and the version above its newest (tools/test_delta.py checks
-them; they stay numbers here, which the command repository reads). A host
+the maximum its newest or above it: hosts of OpenCE's next versions are
+joined before a release follows them, as most of its raises leave the game's
+messages as they were (tools/test_delta.py checks them; they stay numbers
+here, which the command repository reads). A host
 never checks a client's version: the client does (network_client_manager.c),
 so the range is the client's. */
 #define HALO_PORT_NETWORK_VERSION_MINIMUM 11
-#define HALO_PORT_NETWORK_VERSION_MAXIMUM 26
+#define HALO_PORT_NETWORK_VERSION_MAXIMUM 30
 /* ... the numbers in use (port/linux/src/delta.c): the three above, until a
 legacy table (docs/delta.md) widens them; code asks these, not the numbers */
 int delta_legacy_announce(void);

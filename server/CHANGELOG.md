@@ -4,6 +4,15 @@ What changed in the ChupathingyCE Dedicated Server. The server is released
 with the game and has its version; the game's own changes are in its
 release notes.
 
+## 0.7.2e
+
+- OpenCE's network version 26 (build-184): its internet play's signalling
+  is version 4, which OpenCE reads alone. The server reads and answers both
+  3 and 4, so OpenCE's players of build-184 join it over the internet again,
+  as do older builds'. OpenCE's browser players can't (no WebRTC).
+- Announces network version 26; joins as a client hosts of 11 through 30.
+  Redeploy: a legacy table can't follow this one (wire `chupa-26a`).
+
 ## 0.7.1b
 
 - Delta Control: moderators for every server, no site needed
