@@ -15,13 +15,16 @@ use tracing::{info, warn};
 
 use crate::protocol::{
     BrowserFrame, Invite, JoinIdentity, KCP_MTU, KcpOutput, TunnelCrypto, accept_and_proof,
-    browser_frame, initial_joins, parse_browser_frame, topic,
+    browser_frame, initial_joins, parse_browser_frame, public_unicast, topic,
 };
 
 const MAX_STREAMS: usize = 4;
 const MAX_WS_BYTES_PER_SECOND: u64 = 2 * 1024 * 1024;
 const MAX_SESSION_BYTES: u64 = 1024 * 1024 * 1024;
 const PUNCH_TIMEOUT: Duration = Duration::from_secs(30);
+// Addresses a host answered from that it did not list (a NAT that gives each
+// destination its own port), probed as its candidates are: at most these.
+const MAXIMUM_REFLEXIVE_PROBES: usize = 4;
 const PEER_TIMEOUT: Duration = Duration::from_secs(20);
 const SESSION_TTL: Duration = Duration::from_secs(6 * 60 * 60);
 const STREAM_LINGER: Duration = Duration::from_secs(10);
@@ -561,6 +564,8 @@ pub async fn run(
     let mut crypto = None;
     let mut probes = HashMap::new();
     let mut endpoint = None;
+    let mut reflexive_probes = 0_usize;
+    let mut unlisted_packets = 0_u32;
     let mut streams = HashMap::new();
     let mut meter = RateMeter::default();
     let started = Instant::now();
@@ -626,7 +631,27 @@ pub async fn run(
                     || probes.contains_key(&source),
                     |current| current == source,
                 );
-                if !safe_source { continue; }
+                if !safe_source {
+                    // (before the endpoint is known: a sealed packet from an
+                    // address the host did not list is its NAT's mapping for
+                    // this gateway, as ICE's peer-reflexive candidates are. It
+                    // is probed with a value of its own, and only its echo
+                    // makes it the endpoint: a forged source gets nothing but
+                    // the few probes, as a listed candidate does)
+                    if endpoint.is_none() {
+                        unlisted_packets = unlisted_packets.saturating_add(1);
+                        if reflexive_probes < MAXIMUM_REFLEXIVE_PROBES
+                            && public_unicast(*source.ip())
+                            && cipher.open(&udp_buffer[..size]).is_ok()
+                        {
+                            let mut nonce = [0_u8; 4];
+                            getrandom::fill(&mut nonce).map_err(|_| "random generator failed".to_string())?;
+                            probes.insert(source, nonce);
+                            reflexive_probes += 1;
+                        }
+                    }
+                    continue;
+                }
                 let Ok(mut inner) = cipher.open(&udp_buffer[..size]) else { continue; };
                 if !meter.allow(size) || !config.global_meter.allow(size) {
                     break 'session Err("native session bandwidth limit exceeded".into());
@@ -688,6 +713,14 @@ pub async fn run(
             _ = tick.tick() => {
                 let now = Instant::now();
                 if endpoint.is_none() && started.elapsed() > PUNCH_TIMEOUT {
+                    warn!(
+                        peer_id = %ticket.peer_id,
+                        answered = accepted.is_some(),
+                        probed = probes.len(),
+                        reflexive = reflexive_probes,
+                        unlisted_packets,
+                        "native host not reached"
+                    );
                     break Err("native host could not be reached".into());
                 }
                 if endpoint.is_none() && last_join.elapsed() >= Duration::from_secs(2) {
