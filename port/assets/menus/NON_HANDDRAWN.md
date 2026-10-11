@@ -43,8 +43,10 @@ picture of Gamepad Setup: the Xbox's Controller Setup's pictures of the button s
 
 ## Placeholders, to be redrawn
 
-The Xbox's map has none of these (or other pictures under the name), so each frame is a placeholder
-until it is redrawn.
+The Xbox's map has none of these (or other pictures under the name). Each frame is drawn as Halo PC's
+picture where the player has Halo PC's `ui.map` (in `maps_ce`, with `bitmaps.map`: the player's own;
+its `<frame pc=... pc_index=...>`, `port/linux/game/ui_map_list.c`), else as a placeholder until it
+is redrawn.
 
 | File | Size | The PC version's picture |
 | --- | --- | --- |

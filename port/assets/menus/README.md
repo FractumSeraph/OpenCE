@@ -205,5 +205,9 @@ ui-svg-handmade) at up to 4x its size. A picture with no redraw is the
 Xbox's map's, where it has the same one (a whole bitmap, or a `<frame
 map=...>`), else a placeholder, placed where the PC version's picture is in
 its frame (`--pictures`: only where, not the picture, is read);
-`NON_HANDDRAWN.md` lists both. It needs `rsvg-convert`, Pillow, NumPy and
+`NON_HANDDRAWN.md` lists both. A placeholder's frame names the PC version's
+picture it stands for (`<frame png=... pc="ui\shell\..." pc_index="N">`):
+where the player has Halo PC's `ui.map` (in `maps_ce`, with its
+`bitmaps.map`; the player's own, nothing is shipped), the game draws that
+picture instead (`port/linux/game/ui_map_list.c`, `ui_map_list_pc_frame`). It needs `rsvg-convert`, Pillow, NumPy and
 SciPy.

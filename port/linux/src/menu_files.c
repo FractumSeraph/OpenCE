@@ -544,10 +544,12 @@ static void read_frame(struct reader *reader, const XML_Char **attributes, long 
 		{ "png", &frame.png }, { "map", &frame.map }, { "index", NULL, &frame.index },
 		{ "width", NULL, &frame.width }, { "height", NULL, &frame.height },
 		{ "x", NULL, &frame.x }, { "y", NULL, &frame.y },
+		{ "pc", &frame.pc }, { "pc_index", NULL, &frame.pc_index },
 	};
 
 	memset(&frame, 0, sizeof(frame));
 	frame.index = -1;
+	frame.pc_index = -1;
 	read_attributes(reader, "frame", attributes, table, sizeof(table) / sizeof(*table));
 	if (!reader->failed && (frame.png != NULL) == (frame.map != NULL))
 		reader_error(reader, "a <frame> has a png or a map bitmap, not both");
@@ -559,6 +561,10 @@ static void read_frame(struct reader *reader, const XML_Char **attributes, long 
 		reader_error(reader, "a <frame> of a map bitmap is scaled to a width and a height, or neither");
 	else if (!reader->failed && (frame.x || frame.y) && (!frame.map || !frame.width))
 		reader_error(reader, "only a scaled <frame> of a map bitmap is placed at an x and y");
+	else if (!reader->failed && (frame.pc != NULL) != (frame.pc_index >= 0))
+		reader_error(reader, "a <frame> of Halo PC's bitmap needs its pc_index");
+	else if (!reader->failed && frame.pc && !frame.png)
+		reader_error(reader, "a <frame> of Halo PC's bitmap has a png, for players without it");
 	if (!reader->failed && reader->bitmap_frames_attribute)
 		reader_error(reader, "a bitmap's <frame>s and frames= cannot be mixed");
 	if (frame.index < 0)

@@ -200,10 +200,13 @@ Custom Edition maps (Coldsnap, Extinction, Halo PC's Ice Fields, Death Island
 and so on) are served from **`public/assets/custom_maps/`**, beside `maps/`.
 Put there the maps, and the three resource maps every Custom Edition map
 needs, from a Halo Custom Edition install's `maps` folder: `bitmaps.map`,
-`sounds.map` and `loc.map`. A map's optional `<name>.txt` (its description)
-and `<name>.bmp` (its picture in the game's menus) can go beside it. Players
-download nothing themselves: the game reads what it needs from the server,
-as it does the Xbox maps.
+`sounds.map` and `loc.map`. Its `ui.map` (Halo PC's menus) can go there
+too: the game then shows Halo PC's own pictures where its menus have no
+redraw (the Multiplayer, gametype and profile screens' pictures) and Halo
+PC's names and pictures of its maps, and lists no map for it. A map's
+optional `<name>.txt` (its description) and `<name>.bmp` (its picture in the
+game's menus) can go beside it. Players download nothing themselves: the
+game reads what it needs from the server, as it does the Xbox maps.
 
 The game's menus list them as CUSTOM MULTIPLAYER (and CUSTOM SINGLEPLAYER)
 maps (Create Game's map list has them, with their pictures), the Play online

@@ -12,8 +12,9 @@ import path from "node:path";
 import { Worker, isMainThread, parentPort } from "node:worker_threads";
 import { Blake2b } from "./blake2b.mjs";
 
-// (Custom Edition's shared resources are no game's map)
-const SHARED = new Set(["bitmaps.map", "sounds.map", "loc.map"]);
+// (Custom Edition's shared resources, and Halo PC's menus' ui.map, are no
+// game's map)
+const SHARED = new Set(["bitmaps.map", "sounds.map", "loc.map", "ui.map"]);
 
 if (!isMainThread) {
   // the worker: each file asked for, hashed, answered

@@ -41,6 +41,9 @@ pause it as its pause menu does.
 #include "rasterizer/xbox/rasterizer_xbox_hardware_bitmaps.h"
 
 #include "halo_menus.h"
+#ifdef HALO_CUSTOM_EDITION
+#include "halo_ui_map_list.h"
+#endif
 
 #include <stdlib.h>
 #include <string.h>
@@ -903,6 +906,21 @@ static void *bitmap_build(struct halo_menu_bitmap const *source, long tag_index)
 			}
 			continue;
 		}
+#ifdef HALO_CUSTOM_EDITION
+		/* (Halo PC's picture, where the player has its ui.map: a copy of its
+		frame there, whose pixels and texture ui_map_list.c made; else the
+		png) */
+		if (data->pc)
+		{
+			struct bitmap_data const *pc = ui_map_list_pc_frame(data->pc, data->pc_index);
+
+			if (pc)
+			{
+				memcpy(bitmap, pc, sizeof(*bitmap));
+				continue;
+			}
+		}
+#endif
 
 		if (width <= 0 || height <= 0 || width > 2048 || height > 2048)
 		{

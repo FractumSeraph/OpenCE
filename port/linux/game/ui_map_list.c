@@ -23,7 +23,9 @@ descriptions (...\mp_map_select\map_data) and their pictures
 the map's by Halo PC's order of its maps (ce_maps); a map of another's
 making is named by its file, with Halo PC's picture for an unknown level.
 Without Halo PC's ui.map, the names are ce_maps' and an Xbox map's picture
-stands in. A HaloMD map is named as HaloMD's mod list names it (by its
+stands in. The menus draw other pictures of Halo PC's from it too, those
+they have no redraw of (menu_tags.c's frames with pc=, ui_map_list_pc_frame),
+its tags kept once read. A HaloMD map is named as HaloMD's mod list names it (by its
 file's name: halomd_map_names.h, written by tools/halomd_map_names.py), or
 by its file's name made readable, with Halo PC's picture for an unknown
 level.
@@ -220,6 +222,10 @@ enum
 	CE_UNKNOWN_LEVEL = 19,
 	MAXIMUM_CE_STRINGS = 24,
 	MAXIMUM_CE_PICTURES = 24,
+	/* Halo PC's bitmaps the menus draw frames of (ui_map_list_pc_frame), and
+	the frames of each */
+	MAXIMUM_PC_BITMAPS = 16,
+	MAXIMUM_PC_FRAMES = 16,
 	/* its bitmaps' pixels kept in bitmaps.map */
 	CE_BITMAP_EXTERNAL_FLAG = 0x100,
 	/* (the bitmaps' type of a 2D texture, as the game's) */
@@ -307,7 +313,18 @@ static struct
 	struct bitmap_data pictures[MAXIMUM_CE_PICTURES];
 } ce_ui;
 
-/* Halo PC's ui.map's tags, while they are read (ce_ui_read) */
+/* the bitmaps of Halo PC's ui.map the menus have asked for frames of
+(ui_map_list_pc_frame), each read the first time it is: its frames, as
+many from the first as could be read */
+static struct
+{
+	char tag[128];
+	long count;
+	struct bitmap_data frames[MAXIMUM_PC_FRAMES];
+} ce_bitmaps[MAXIMUM_PC_BITMAPS];
+static long ce_bitmap_count;
+
+/* Halo PC's ui.map's tags, once read (ce_ui_open) */
 static byte *ce_tags;
 static unsigned long ce_tags_size;
 
@@ -431,29 +448,33 @@ static long ce_string_list_read(
 	return count;
 }
 
-/* the map list's pictures: each made a bitmap of its own, its pixels and its
-Direct3D texture in contiguous memory, as the texture cache would make it */
-static void ce_pictures_read(
-	HANDLE ui_file)
+/* a bitmap of Halo PC's ui.map: each of its frames (up to maximum) made a
+bitmap of its own, its pixels and its Direct3D texture in contiguous memory,
+as the texture cache would make it; how many, from the first, could be */
+static long ce_bitmap_read(
+	HANDLE ui_file,
+	char const *tag,
+	struct bitmap_data *frames,
+	long maximum)
 {
-	byte *group = ce_tag_find('bitm', "ui\\shell\\bitmaps\\mp_map_grafix", 0x6c);
+	byte *group = ce_tag_find('bitm', tag, 0x6c);
 	HANDLE bitmaps_file = INVALID_HANDLE_VALUE;
 	unsigned long *block;
 	byte *elements;
-	long count, index;
+	long count, index, read = 0;
 
 	if (!group)
-		return;
+		return 0;
 	/* (its bitmaps block) */
 	block = (unsigned long *)(group + 0x60);
-	count = MIN((long)block[0], MAXIMUM_CE_PICTURES);
+	count = MIN((long)block[0], maximum);
 	elements = ce_tags_pointer(block[1], count * 0x30);
 	if (!elements)
-		return;
+		return 0;
 	for (index = 0; index < count; index++)
 	{
 		byte *element = elements + index * 0x30;
-		struct bitmap_data *bitmap = &ce_ui.pictures[index];
+		struct bitmap_data *bitmap = &frames[index];
 		unsigned short flags = *(unsigned short *)(element + 0xe);
 		unsigned long pixels_offset = *(unsigned long *)(element + 0x18);
 		unsigned long pixels_size = *(unsigned long *)(element + 0x1c);
@@ -529,28 +550,36 @@ static void ce_pictures_read(
 		IDirect3DBaseTexture8_Register(texture, pixels);
 		bitmap->base_address = xbox_address(pixels);
 		bitmap->hardware_format = xbox_address(texture);
-		ce_ui.picture_count = index + 1;
+		read = index + 1;
 	}
 	if (bitmaps_file != INVALID_HANDLE_VALUE)
 		CloseHandle(bitmaps_file);
+	return read;
 }
 
-/* what Halo PC's ui.map (maps_ce\ui.map) has of its map list, read the first
-time it is asked for */
-static void ce_ui_read(
+/* the map list's pictures */
+static void ce_pictures_read(
+	HANDLE ui_file)
+{
+	ce_ui.picture_count = ce_bitmap_read(ui_file, "ui\\shell\\bitmaps\\mp_map_grafix", ce_ui.pictures,
+		MAXIMUM_CE_PICTURES);
+}
+
+/* Halo PC's ui.map (maps_ce\ui.map) opened and its tags read (ce_tags), or
+INVALID_HANDLE_VALUE. The tags (about 2 MB) are kept once read: the menus
+ask for several of its bitmaps as they are built, and in the browser each
+read of them is fetched from the site */
+static HANDLE ce_ui_open(
 	void)
 {
 	char path[512];
 	unsigned long header[6];
 	HANDLE file;
 
-	if (ce_ui.read)
-		return;
-	ce_ui.read = TRUE;
 	map_family_resource("ui", path, sizeof(path));
 	file = CreateFileA(path, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-	if (file == INVALID_HANDLE_VALUE)
-		return;
+	if (file == INVALID_HANDLE_VALUE || ce_tags)
+		return file;
 	/* ('head', its version, its size, ..., its tags' offset and size) */
 	if (file_read(file, 0, header, sizeof(header)) && header[0] == 'head' && header[1] == CE_CACHE_VERSION &&
 		header[5] >= 0x10 && header[5] <= 0x4000000)
@@ -558,19 +587,41 @@ static void ce_ui_read(
 		ce_tags = malloc(header[5]);
 		ce_tags_size = header[5];
 		if (ce_tags && file_read(file, header[4], ce_tags, header[5]))
-		{
-			ce_ui.name_count = ce_string_list_read("ui\\shell\\main_menu\\mp_map_list", ce_ui.names[0],
-				DISPLAY_NAME_LENGTH, MAXIMUM_CE_STRINGS);
-			ce_ui.description_count = ce_string_list_read(
-				"ui\\shell\\main_menu\\multiplayer_type_select\\mp_map_select\\map_data", ce_ui.descriptions[0],
-				DESCRIPTION_LENGTH, MAXIMUM_CE_STRINGS);
-			ce_pictures_read(file);
-		}
+			return file;
 		free(ce_tags);
 		ce_tags = NULL;
 		ce_tags_size = 0;
 	}
 	CloseHandle(file);
+	return INVALID_HANDLE_VALUE;
+}
+
+static void ce_ui_close(
+	HANDLE file)
+{
+	CloseHandle(file);
+}
+
+/* what Halo PC's ui.map (maps_ce\ui.map) has of its map list, read the first
+time it is asked for */
+static void ce_ui_read(
+	void)
+{
+	HANDLE file;
+
+	if (ce_ui.read)
+		return;
+	ce_ui.read = TRUE;
+	file = ce_ui_open();
+	if (file == INVALID_HANDLE_VALUE)
+		return;
+	ce_ui.name_count = ce_string_list_read("ui\\shell\\main_menu\\mp_map_list", ce_ui.names[0],
+		DISPLAY_NAME_LENGTH, MAXIMUM_CE_STRINGS);
+	ce_ui.description_count = ce_string_list_read(
+		"ui\\shell\\main_menu\\multiplayer_type_select\\mp_map_select\\map_data", ce_ui.descriptions[0],
+		DESCRIPTION_LENGTH, MAXIMUM_CE_STRINGS);
+	ce_pictures_read(file);
+	ce_ui_close(file);
 }
 
 /* a row added to the multiplayer maps' list, or the campaign maps': NULL
@@ -1165,6 +1216,43 @@ wchar_t const *ui_map_list_text(
 /* Halo PC's picture of a Custom Edition or HaloMD map, by its file's name:
 its own of Halo PC's maps, its unknown level's for another's (and for every
 HaloMD map); NULL without Halo PC's ui.map */
+/* a frame of one of Halo PC's bitmaps (its ui.map's, in maps_ce: the
+player's own), for the menus' pictures that are not redrawn
+(menu_tags.c, a <frame pc=...>): its bitmap, its pixels and texture made as
+the texture cache would make them (read the first time the bitmap is asked
+for), or NULL without that ui.map or such a frame */
+struct bitmap_data const *ui_map_list_pc_frame(
+	char const *tag,
+	long index)
+{
+	long which;
+
+	if (!tag || strlen(tag) >= sizeof(ce_bitmaps[0].tag) || index < 0)
+		return NULL;
+	for (which = 0; which < ce_bitmap_count; which++)
+	{
+		if (!strcmp(ce_bitmaps[which].tag, tag))
+			break;
+	}
+	if (which == ce_bitmap_count)
+	{
+		HANDLE file;
+
+		if (ce_bitmap_count == MAXIMUM_PC_BITMAPS)
+			return NULL;
+		ce_bitmap_count++;
+		strcpy(ce_bitmaps[which].tag, tag);
+		ce_bitmaps[which].count = 0;
+		file = ce_ui_open();
+		if (file != INVALID_HANDLE_VALUE)
+		{
+			ce_bitmaps[which].count = ce_bitmap_read(file, tag, ce_bitmaps[which].frames, MAXIMUM_PC_FRAMES);
+			ce_ui_close(file);
+		}
+	}
+	return index < ce_bitmaps[which].count ? &ce_bitmaps[which].frames[index] : NULL;
+}
+
 struct bitmap_data *ui_map_list_family_picture(
 	short family,
 	char const *file)

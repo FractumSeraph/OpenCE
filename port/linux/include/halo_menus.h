@@ -35,6 +35,10 @@ struct halo_menu_frame
 	long index;
 	long width, height;
 	long x, y;
+	/* a png's frame drawn as Halo PC's picture, where the player has its
+	ui.map: its bitmap there and its frame (ui_map_list_pc_frame) */
+	char const *pc;
+	long pc_index;
 };
 
 struct halo_menu_bitmap

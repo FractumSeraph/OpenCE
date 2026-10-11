@@ -364,9 +364,12 @@ class Art:
                 lines.append(f"\t\t<frame{attributes([('map', tag), ('index', XBOX_FRAMES[name])])}/>")
                 continue
             png = f"ce/{relative}__{index}.png"
-            self.draw(relative, index, len(data), width, height, MENUS / png, self.shown.get(tag, []))
+            placeholder = self.draw(relative, index, len(data), width, height, MENUS / png, self.shown.get(tag, []))
             self.pngs.append(png)
-            lines.append(f"\t\t<frame{attributes([('png', png), ('width', width), ('height', height)])}/>")
+            # (a placeholder: Halo PC's picture, where the player has its
+            # ui.map, menu_tags.c; the placeholder where not)
+            pc = [('pc', tag), ('pc_index', index)] if placeholder else []
+            lines.append(f"\t\t<frame{attributes([('png', png), ('width', width), ('height', height)] + pc)}/>")
         # (the port's frames after them: the Xbox map's, scaled)
         for source, index, width, height, x, y in port_settings.BITMAP_FRAMES.get(our_name(tag), []):
             self.added_frames.append((our_name(tag), source, index))
@@ -375,7 +378,8 @@ class Art:
         return "\n".join(lines)
 
     def draw(self, relative: str, index: int, count: int, width: int, height: int, output: Path,
-             shown: list) -> None:
+             shown: list) -> bool:
+        """the frame drawn from its redraw (False), else the placeholder (True)"""
         output.parent.mkdir(parents=True, exist_ok=True)
         for name in self.frame_sources(relative, index, count):
             svg = self.redraws / f"{name}.svg"
@@ -389,7 +393,7 @@ class Art:
                 if image.shape[:2] != (height * scale, width * scale):
                     sys.exit(f"{svg}: {image.shape[1]}x{image.shape[0]}, not {scale}x {width}x{height}")
                 Image.fromarray(bleed(image), "RGBA").save(output, optimize=True)
-                return
+                return False
         # (no redraw: the placeholder, as large as fits, in the middle of where
         # the PC version's picture is (only its bounds are read), else of the
         # part the widgets show: a widget draws its bitmap from the top left,
@@ -410,6 +414,7 @@ class Art:
         image.paste(picture, ((area[0] + area[2] - picture.width) // 2, (area[1] + area[3] - picture.height) // 2))
         image.save(output, optimize=True)
         self.pictures.append((output.relative_to(MENUS).as_posix(), width, height, f"{name}.png"))
+        return True
 
 
 # ---------- the widgets
@@ -678,8 +683,10 @@ def main() -> None:
         "",
         "## Placeholders, to be redrawn",
         "",
-        "The Xbox's map has none of these (or other pictures under the name), so each frame is a placeholder",
-        "until it is redrawn.",
+        "The Xbox's map has none of these (or other pictures under the name). Each frame is drawn as Halo PC's",
+        "picture where the player has Halo PC's `ui.map` (in `maps_ce`, with `bitmaps.map`: the player's own;",
+        "its `<frame pc=... pc_index=...>`, `port/linux/game/ui_map_list.c`), else as a placeholder until it",
+        "is redrawn.",
         "",
         "| File | Size | The PC version's picture |",
         "| --- | --- | --- |",
