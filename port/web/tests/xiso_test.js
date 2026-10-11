@@ -6,7 +6,7 @@ const path = require('node:path');
 
 const repository = path.join(__dirname, '..', '..', '..');
 const shell = fs.readFileSync(path.join(repository, 'port', 'web', 'shell.html'), 'utf8');
-const buildRules = fs.readFileSync(path.join(repository, 'tools', 'web_build.py'), 'utf8');
+const buildRules = fs.readFileSync(path.join(repository, 'tools', 'browser_build.py'), 'utf8');
 const stage = fs.readFileSync(path.join(repository, 'tools', 'web_stage_cloudflare.py'), 'utf8');
 const worker = fs.readFileSync(path.join(repository, 'services', 'web', 'src', 'index.js'), 'utf8');
 const wrangler = fs.readFileSync(path.join(repository, 'services', 'web', 'wrangler.jsonc'), 'utf8');

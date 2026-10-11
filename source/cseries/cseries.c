@@ -430,7 +430,7 @@ void display_assert(
 	boolean fatal)
 {
 #ifdef HALO_RELEASE
-	#ifdef HALO_WEB
+	#ifdef HALO_BROWSER
 	if (fatal)
 	{
 		fprintf(stderr, "halo-web assertion in %s,#%ld: %s\n",

@@ -1,8 +1,8 @@
-"""Ninja rules for the browser build (``ninja web``).
+"""Ninja rules for the browser build (``ninja browser``).
 
 The browser port is the same 32-bit game code and SDL platform layer used by
 the native ports, compiled to WebAssembly with Emscripten.  ``HALO_ANDROID``
-selects the existing ILP32/OpenGL ES code paths while ``HALO_WEB`` lets the
+selects the existing ILP32/OpenGL ES code paths while ``HALO_BROWSER`` lets the
 small browser-specific parts of the platform layer distinguish themselves
 from Android.
 
@@ -53,7 +53,7 @@ WEB_SDL_FLAG = f"--use-port={WEB_SDL_PORT}"
 # Xbox code expects.  The remaining flags reproduce the source-level MSVC ABI
 # assumptions shared by the other ports.
 WEB_ABI_FLAGS = [
-    "-DHALO_WEB=1",
+    "-DHALO_BROWSER=1",
     # (ChupathingyCE's Custom Edition maps, as every native build has them:
     # linux_build.py's CUSTOM_EDITION_DEFINES)
     "-DHALO_CUSTOM_EDITION",
@@ -111,6 +111,22 @@ PLATFORM_FLAGS = [
 # kernel's trace marker (SteamOS), which a browser has neither of. The xiso
 # unit is empty when the HALO_ANDROID data-import path is selected, so leaving
 # it in is harmless.
+# this build's own sources in port/web/src (the others there are OpenCE's
+# browser build's)
+BROWSER_SOURCES = (
+    "web_delta.c",
+    "web_delta_list.c",
+    "web_delta_peer.c",
+    "web_delta_stats.c",
+    "web_loopback_net.c",
+    "web_map_torrents.c",
+    "web_online_ui.c",
+    "web_platform.c",
+    "web_public_games.c",
+    "web_touch_input.c",
+    "web_upnp.c",
+)
+
 WEB_EXCLUDED_PLATFORM_SOURCES = {
     "posix_trace_marker.c",
     "posix_update.c",
@@ -153,7 +169,7 @@ def _load_port_config() -> Dict[str, Any]:
         return json.load(file)
 
 
-def web_configure_inputs() -> List[Path]:
+def browser_configure_inputs() -> List[Path]:
     """Files whose changes must regenerate ``build.ninja``."""
     if not PORT_CONFIG.is_file():
         return [Path(__file__)]
@@ -175,12 +191,12 @@ def web_configure_inputs() -> List[Path]:
     ]
 
 
-def generate_web_build(n: Writer, sln: Any) -> None:
+def generate_browser_build(n: Writer, sln: Any) -> None:
     if not PORT_CONFIG.is_file() or not (WEB_DIR / "shell.html").is_file():
         return
 
     config = _load_port_config()
-    build_dir: Path = sln.build_dir / "web"
+    build_dir: Path = sln.build_dir / "browser"
     obj_dir = build_dir / "obj"
     output = build_dir / "halo.html"
     javascript_output = build_dir / "halo.js"
@@ -192,15 +208,15 @@ def generate_web_build(n: Writer, sln: Any) -> None:
     port_include = LINUX_DIR / "include"
     platform_dir = Path(config["platform_sources"])
 
-    n.comment("Browser WebAssembly build (ninja web)")
+    n.comment("Browser WebAssembly build (ninja browser)")
     # Windows: CreateProcess cannot start emcc.bat by itself; run it via cmd.
     if os.name == "nt" and str(cc).lower().endswith((".bat", ".cmd")):
-        n.variable("web_cc", "cmd /c " + str(cc).replace("/", "\\"))
+        n.variable("browser_cc", "cmd /c " + str(cc).replace("/", "\\"))
     else:
-        n.variable("web_cc", _quote(cc))
+        n.variable("browser_cc", _quote(cc))
 
     n.rule(
-        name="web_msvc_semantics",
+        name="browser_msvc_semantics",
         command="$python tools/linux_msvc_semantics.py --output $out $scan",
         description="WEB MSVC SEMANTICS $out",
         restat=True,
@@ -210,7 +226,7 @@ def generate_web_build(n: Writer, sln: Any) -> None:
     )
     n.build(
         outputs=semantics_header,
-        rule="web_msvc_semantics",
+        rule="browser_msvc_semantics",
         implicit=[Path("tools/linux_msvc_semantics.py"), *xdk_headers(), *game_headers],
         variables={
             "scan": f"--all-inlines --tags source --inlines source --inlines {XDK_INCLUDE}"
@@ -218,21 +234,21 @@ def generate_web_build(n: Writer, sln: Any) -> None:
     )
     n.build(
         outputs=platform_semantics_header,
-        rule="web_msvc_semantics",
+        rule="browser_msvc_semantics",
         implicit=[Path("tools/linux_msvc_semantics.py"), *xdk_headers()],
         variables={"scan": f"--inlines {XDK_INCLUDE}"},
     )
 
     n.rule(
-        name="web_cc",
-        command=f"{compile_launcher(sln)}$web_cc -MMD -MF $out.d $cflags -c $in -o $out",
+        name="browser_cc",
+        command=f"{compile_launcher(sln)}$browser_cc -MMD -MF $out.d $cflags -c $in -o $out",
         description="WEB CC $out",
         depfile="$out.d",
         deps="gcc",
     )
     n.rule(
-        name="web_link",
-        command="$web_cc $ldflags -o $out @$out.rsp $libs",
+        name="browser_link",
+        command="$browser_cc $ldflags -o $out @$out.rsp $libs",
         description="WEB LINK $out",
         rspfile="$out.rsp",
         # emcc splits response files with POSIX shell rules, so Windows
@@ -259,7 +275,7 @@ def generate_web_build(n: Writer, sln: Any) -> None:
         objects.append(obj)
         n.build(
             outputs=obj,
-            rule="web_cc",
+            rule="browser_cc",
             inputs=source,
             implicit=implicit_headers,
             variables={"cflags": cflags},
@@ -310,7 +326,7 @@ def generate_web_build(n: Writer, sln: Any) -> None:
     # system structures and inline definitions retain their normal ABI.
     posix_cflags = " ".join(
         [
-            "-DHALO_WEB=1",
+            "-DHALO_BROWSER=1",
             "-DHALO_ARM64_GUEST=1",
             "-DHALO_GLES=1",
             "-DHALO_ANDROID=1",
@@ -329,8 +345,9 @@ def generate_web_build(n: Writer, sln: Any) -> None:
         add_object(source, posix_cflags if source.name.startswith("posix_") else platform_cflags)
 
     # Browser-only adapters live beside the shell and use the same platform
-    # ABI.  The glob intentionally works when that directory is still empty.
-    for source in sorted((WEB_DIR / "src").glob("*.c")):
+    # ABI. Named one by one: OpenCE's own browser build (tools/web_build.py,
+    # HALO_WEB) keeps its sources in the same folder.
+    for source in (WEB_DIR / "src" / name for name in BROWSER_SOURCES):
         # The loopback socket backend is part of the libc boundary and needs
         # the host sockaddr ABI, just like posix_net.c.
         add_object(
@@ -340,7 +357,7 @@ def generate_web_build(n: Writer, sln: Any) -> None:
 
     # the high-res HUD's textures, the menus' titles, fonts and XML menus
     # (port/assets; port/linux/src/hud_hires.c), generated as C data
-    for source in hud_assets_build(n, "web", build_dir / "generated" / "hud_hires_assets.c"):
+    for source in hud_assets_build(n, "browser", build_dir / "generated" / "hud_hires_assets.c"):
         add_object(source, platform_cflags)
     add_object(TOML_DIR / "tomlc17.c", f"{abi_flags} -std=gnu11 -w")
     # the menus' XML parser (menu_files.c)
@@ -407,7 +424,7 @@ def generate_web_build(n: Writer, sln: Any) -> None:
     n.build(
         outputs=output,
         implicit_outputs=[javascript_output, wasm_output],
-        rule="web_link",
+        rule="browser_link",
         inputs=objects,
         implicit=[
             WEB_DIR / "shell.html",
@@ -433,7 +450,7 @@ def generate_web_build(n: Writer, sln: Any) -> None:
     )
 
     n.rule(
-        name="web_copy_asset",
+        name="browser_copy_asset",
         command=(
             "$python -c \"from pathlib import Path; import shutil,sys; "
             "Path(sys.argv[2]).parent.mkdir(parents=True, exist_ok=True); "
@@ -445,9 +462,9 @@ def generate_web_build(n: Writer, sln: Any) -> None:
     for source in sorted(path for path in (WEB_DIR / "assets").rglob("*") if path.is_file()):
         asset_output = build_dir / source.relative_to(WEB_DIR)
         ui_asset_outputs.append(asset_output)
-        n.build(outputs=asset_output, rule="web_copy_asset", inputs=source)
+        n.build(outputs=asset_output, rule="browser_copy_asset", inputs=source)
     n.build(
-        outputs="web",
+        outputs="browser",
         rule="phony",
         inputs=[output, javascript_output, wasm_output, *ui_asset_outputs],
     )

@@ -119,7 +119,7 @@ void system_exit(
 		return;
 	}
 #endif
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	fprintf(stderr, "halo-web fatal exit %ld: %s\n", code, error_get());
 #endif
 	halt_and_catch_fire();

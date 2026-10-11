@@ -279,7 +279,7 @@ static void stop(void)
 	web_delta.state_said = 0;
 }
 
-/* ---------- the hooks (network_client_manager.c, HALO_WEB) */
+/* ---------- the hooks (network_client_manager.c, HALO_BROWSER) */
 
 void web_delta_peer_client_frame(int joined, unsigned int host_ipv4, int host_speaks_delta, int machine_index,
 	const signed char *player_machines)

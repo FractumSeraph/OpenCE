@@ -51,7 +51,7 @@ alone peers reach.
 #include "p2p.h"
 #include "log_address.h"
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 #include "../../web/src/web_loopback_net.h"
 #endif
 
@@ -1184,7 +1184,7 @@ INT WSAAPI XNetXnAddrToInAddr(const XNADDR *address, const XNKID *key_identifier
 		return -1;
 #endif
 	/* an internet play peer's XNADDR carries its identifier */
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	if (web_net_peer_address(address->abEnet, &peer))
 		result->s_addr = peer;
 	else
@@ -1233,7 +1233,7 @@ DWORD WSAAPI XNetGetTitleXnAddr(XNADDR *address)
 	memset(address, 0, sizeof(*address));
 	address->bSizeOfStruct = sizeof(*address);
 	address->ina.s_addr = ip;
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	web_net_local_identifier(address->abEnet, sizeof(address->abEnet));
 #else
 	memcpy(address->abEnet, p2p_identifier(), sizeof(address->abEnet));

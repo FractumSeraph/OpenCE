@@ -865,7 +865,7 @@ player is asked for as it joins) */
 static unsigned long network_game_server_client_machine_join_times[MAXIMUM_NETWORK_MACHINE_COUNT];
 enum
 {
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	/* (a browser host: a browser joining it loads a Custom Edition map's
 	pieces from the site, over the internet, before it adds its player,
 	which can take well past a native machine's 15 seconds the first time;

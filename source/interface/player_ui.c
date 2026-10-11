@@ -658,7 +658,7 @@ void player_ui_fast_setup_network_server(
 	dispose_global_network_game_server();
 	dispose_global_network_game_client();
 	game_connection_set(_game_connection_local);
-#ifndef HALO_WEB
+#ifndef HALO_BROWSER
 	main_set_multiplayer_map_name("");
 #else
 	/* The native empty-name reset synchronously ends any background map
@@ -754,7 +754,7 @@ static boolean player_ui_configure_network_server_game_internal(
 	stale mailbox must still result in a real playable game rather than an
 	arbitrary path or an all-zero variant. */
 	map_name = NULL;
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	/* after the Xbox's levels, a Custom Edition multiplayer map, by the level
 	name the page chose it by (port/web/src/web_online_ui.c: the list the
 	page has, which a later scan of the maps folders may have reordered) */

@@ -873,7 +873,7 @@ static void upload(GLuint texture, GLenum target, const struct xgpu_texture_desc
 	}
 	glBindTexture(target, texture);
 	xgpu_gl_state_invalidate();
-#ifndef HALO_WEB
+#ifndef HALO_BROWSER
 	/* the channel each channel is sampled from, set on every upload: a
 	texture object is reused for whatever pixels arrive at its address */
 	{
@@ -964,7 +964,7 @@ static void upload(GLuint texture, GLenum target, const struct xgpu_texture_desc
 					free(converted);
 					return;
 				}
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 				/* WebGL 2 does not expose texture swizzles.  Convert the Xbox's
 				BGRA byte order to RGBA before uploading instead, and take each
 				channel from where a Custom Edition map keeps it. (Compressed
@@ -1006,7 +1006,7 @@ struct texture_entry
 	struct xgpu_texture_description description;
 	unsigned long address, size;
 	unsigned long generation;
-	#ifdef HALO_WEB
+	#ifdef HALO_BROWSER
 	unsigned long content_hash;
 	unsigned long content_hash_frame;
 	unsigned long content_hash_interval;
@@ -1042,7 +1042,7 @@ static struct
 static unsigned long texture_drop_serial = 1;
 static unsigned long texture_frame = 0;
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 /* Browser Wasm has no page protection, so it cannot use memory_watch.c's
 fault-driven dirty tracking.  Back off to one content check every eight frames
 for textures that stay unchanged; a changing texture immediately returns to
@@ -1162,7 +1162,7 @@ GLuint xgpu_texture_get(const DWORD *resource, const D3DCOLOR *palette, GLenum *
 	unsigned long variant_count = 0;
 	static int no_cache = -1;
 	unsigned long recent = bucket_index(data, format_word, size_word) % RECENT_TEXTURE_COUNT;
-	#ifndef HALO_WEB
+	#ifndef HALO_BROWSER
 	unsigned long watch_serial = memory_watch_serial();
 
 	/* (a texture that is not palettized has the one entry, until one is
@@ -1244,7 +1244,7 @@ GLuint xgpu_texture_get(const DWORD *resource, const D3DCOLOR *palette, GLenum *
 
 	if (no_cache < 0)
 		no_cache = config_boolean("debug.texture_no_cache");
-	#ifdef HALO_WEB
+	#ifdef HALO_BROWSER
 	if (platform_is_contiguous((void *)entry->address) &&
 		platform_is_contiguous((void *)(entry->address + entry->size - 1)))
 	{
@@ -1358,7 +1358,7 @@ GLuint xgpu_texture_get(const DWORD *resource, const D3DCOLOR *palette, GLenum *
 	}
 	#endif
 	entry->last_used_frame = texture_frame;
-	#ifndef HALO_WEB
+	#ifndef HALO_BROWSER
 	if (!palettized && !no_cache)
 	{
 		recent_textures[recent].data = data;

@@ -134,7 +134,7 @@ void game_initialize(
 void game_dispose(void);
 void game_precache_new_map(char *map_name, boolean blocking);
 boolean game_map_loading_in_progress(real *progress);
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 const char *game_map_loading_name(void);
 #endif
 void game_unload(

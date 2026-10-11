@@ -114,7 +114,7 @@ static long terminal_new_line(void);
 
 /* ---------- globals */
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 /* Browser diagnostics live behind the shell's Logs button.  Keeping the
 in-game terminal hidden avoids covering menus and drawing hundreds of glyph
 quads for routine platform notices. */

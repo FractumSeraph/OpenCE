@@ -11,7 +11,7 @@ Run-time resolution of the OpenGL entry points listed in gl.h.
 #include <SDL3/SDL.h>
 #include <string.h>
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 
 int gl_functions_load(void)
 {

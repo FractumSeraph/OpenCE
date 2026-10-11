@@ -38,7 +38,7 @@ with the host ABI.
 #include <unistd.h>
 
 #include "posix.h"
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 #include "../../web/src/web_loopback_net.h"
 #endif
 
@@ -205,7 +205,7 @@ int posix_socket_last_error(void)
 
 int posix_socket(int family, int type, int protocol)
 {
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	return succeed(web_net_socket(family, type, protocol));
 #else
 #ifdef SOCK_CLOEXEC
@@ -229,7 +229,7 @@ int posix_socket(int family, int type, int protocol)
 
 int posix_socket_close(int socket)
 {
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	return succeed(web_net_close(socket));
 #else
 	return succeed(close(socket));
@@ -238,7 +238,7 @@ int posix_socket_close(int socket)
 
 int posix_socket_bind(int socket, const void *address, int address_length)
 {
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	return succeed(web_net_bind(socket, address, address_length));
 #else
 #ifdef __APPLE__
@@ -254,7 +254,7 @@ int posix_socket_bind(int socket, const void *address, int address_length)
 
 int posix_socket_connect(int socket, const void *address, int address_length)
 {
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	return succeed(web_net_connect(socket, address, address_length));
 #else
 	int result;
@@ -279,7 +279,7 @@ int posix_socket_connect(int socket, const void *address, int address_length)
 
 int posix_socket_listen(int socket, int backlog)
 {
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	return succeed(web_net_listen(socket, backlog));
 #else
 	return succeed(listen(socket, backlog));
@@ -288,7 +288,7 @@ int posix_socket_listen(int socket, int backlog)
 
 int posix_socket_accept(int socket, void *address, int *address_length)
 {
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	return succeed(web_net_accept(socket, address, address_length));
 #else
 	socklen_t length = address_length ? (socklen_t)*address_length : 0;
@@ -320,7 +320,7 @@ int posix_socket_accept(int socket, void *address, int *address_length)
 
 int posix_socket_send(int socket, const void *buffer, int length, int flags)
 {
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	return succeed(web_net_send(socket, buffer, length, flags));
 #else
 	return succeed((int)send(socket, buffer, (size_t)length, flags | MSG_NOSIGNAL));
@@ -330,7 +330,7 @@ int posix_socket_send(int socket, const void *buffer, int length, int flags)
 int posix_socket_sendto(int socket, const void *buffer, int length, int flags,
 	const void *address, int address_length)
 {
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	return succeed(web_net_sendto(socket, buffer, length, flags, address, address_length));
 #else
 	int result;
@@ -361,7 +361,7 @@ int posix_socket_sendto(int socket, const void *buffer, int length, int flags,
 
 int posix_socket_recv(int socket, void *buffer, int length, int flags)
 {
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	return succeed(web_net_recv(socket, buffer, length, flags));
 #else
 	return succeed((int)recv(socket, buffer, (size_t)length, flags));
@@ -371,7 +371,7 @@ int posix_socket_recv(int socket, void *buffer, int length, int flags)
 int posix_socket_recvfrom(int socket, void *buffer, int length, int flags,
 	void *address, int *address_length)
 {
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	return succeed(web_net_recvfrom(socket, buffer, length, flags, address, address_length));
 #else
 	struct iovec vector;
@@ -405,7 +405,7 @@ int posix_socket_recvfrom(int socket, void *buffer, int length, int flags,
 
 int posix_socket_shutdown(int socket, int how)
 {
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	return succeed(web_net_shutdown(socket, how));
 #else
 	return succeed(shutdown(socket, how));
@@ -414,7 +414,7 @@ int posix_socket_shutdown(int socket, int how)
 
 int posix_socket_set_nonblocking(int socket, int nonblocking)
 {
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	return succeed(web_net_set_nonblocking(socket, nonblocking));
 #else
 	int flags = fcntl(socket, F_GETFL);
@@ -428,7 +428,7 @@ int posix_socket_set_nonblocking(int socket, int nonblocking)
 
 int posix_socket_set_nodelay(int socket)
 {
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	int value = 1;
 
 	/* (browser sockets have no Nagle delay: the option is accepted) */
@@ -442,7 +442,7 @@ int posix_socket_set_nodelay(int socket)
 
 int posix_socket_bytes_available(int socket, posix_ulong *count)
 {
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	return succeed(web_net_bytes_available(socket, count));
 #else
 	int available = 0;
@@ -488,7 +488,7 @@ int posix_socket_setsockopt(int socket, int level, int name, const void *value, 
 		last_error = 0;
 		return 0;
 	}
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	return succeed(web_net_setsockopt(socket, host_level, host_name, value, length));
 #else
 	return succeed(setsockopt(socket, host_level, host_name, value, (socklen_t)length));
@@ -506,7 +506,7 @@ int posix_socket_getsockopt(int socket, int level, int name, void *value, int *l
 		last_error = WSAENOPROTOOPT;
 		return -1;
 	}
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	(void)socket_length;
 	result = web_net_getsockopt(socket, host_level, host_name, value, length);
 #else
@@ -518,7 +518,7 @@ int posix_socket_getsockopt(int socket, int level, int name, void *value, int *l
 
 int posix_socket_getsockname(int socket, void *address, int *address_length)
 {
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	return succeed(web_net_getsockname(socket, address, address_length));
 #else
 	socklen_t length = address_length ? (socklen_t)*address_length : 0;
@@ -536,7 +536,7 @@ int posix_socket_getsockname(int socket, void *address, int *address_length)
 
 int posix_socket_getpeername(int socket, void *address, int *address_length)
 {
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	return succeed(web_net_getpeername(socket, address, address_length));
 #else
 	socklen_t length = address_length ? (socklen_t)*address_length : 0;
@@ -555,7 +555,7 @@ int posix_socket_getpeername(int socket, void *address, int *address_length)
 int posix_socket_select(int *read, int *read_count, int *write, int *write_count,
 	int *error, int *error_count, posix_long timeout_seconds, posix_long timeout_microseconds, int infinite)
 {
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	int result;
 
 	result = web_net_select(read, read_count, write, write_count, error, error_count,
@@ -671,7 +671,7 @@ int posix_socket_select(int *read, int *read_count, int *write, int *write_count
 #endif
 }
 
-#ifndef HALO_WEB
+#ifndef HALO_BROWSER
 /* the first IPv4 address of an interface that is up, running, not
 loopback and has these flags; or 0 */
 static posix_ulong interface_address(unsigned int flags)
@@ -703,7 +703,7 @@ static posix_ulong interface_address(unsigned int flags)
 
 posix_ulong posix_local_ipv4_address(void)
 {
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	return htonl(INADDR_LOOPBACK);
 #else
 	struct sockaddr_in route;
@@ -756,7 +756,7 @@ void posix_random_bytes(void *buffer, posix_ulong size)
 
 	while (size)
 	{
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 		size_t wanted = size > 256 ? 256 : (size_t)size;
 		ssize_t count = getentropy(cursor, wanted) == 0 ? (ssize_t)wanted : -1;
 #else
@@ -871,7 +871,7 @@ posix_ulong posix_process_id(void)
 
 int posix_user_secret(unsigned char *secret, int size)
 {
-#if defined(__ANDROID__) || defined(HALO_WEB)
+#if defined(__ANDROID__) || defined(HALO_BROWSER)
 	(void)secret;
 	(void)size;
 	return 0;
@@ -930,7 +930,7 @@ int posix_user_secret(unsigned char *secret, int size)
 #endif
 }
 
-#if !defined(__ANDROID__) && !defined(__APPLE__) && !defined(HALO_WEB)
+#if !defined(__ANDROID__) && !defined(__APPLE__) && !defined(HALO_BROWSER)
 /* runs a program with its arguments and waits for it; its exit status, or -1 */
 static int run_program(char *const arguments[])
 {
@@ -948,7 +948,7 @@ static int run_program(char *const arguments[])
 
 int posix_register_url_scheme(const char *scheme, const char *description)
 {
-#if defined(__ANDROID__) || defined(__APPLE__) || defined(HALO_WEB)
+#if defined(__ANDROID__) || defined(__APPLE__) || defined(HALO_BROWSER)
 	(void)scheme;
 	(void)description;
 #ifdef __APPLE__
@@ -1017,7 +1017,7 @@ int posix_register_url_scheme(const char *scheme, const char *description)
 
 int posix_discord_connect(void)
 {
-#if defined(__ANDROID__) || defined(HALO_WEB)
+#if defined(__ANDROID__) || defined(HALO_BROWSER)
 	return -1;
 #else
 	/* where Discord (and its Flatpak and Snap packages) put discord-ipc-N */

@@ -36,7 +36,7 @@ HALO_BUILD_FLAVOR.
 #define BUILD_IDENTITY_NAME "ChupathingyCE"
 #endif
 
-#if defined(HALO_WEB)
+#if defined(HALO_BROWSER)
 /* (the browser build: compiled with the Android build's game flags) */
 #define BUILD_IDENTITY_PLATFORM "Web"
 #elif defined(HALO_ANDROID)

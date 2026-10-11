@@ -214,7 +214,7 @@ struct memory_status
 
 /* ---------- prototypes */
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 #define _ReadWriteBarrier() __asm__ __volatile__("" ::: "memory")
 #else
 void _ReadWriteBarrier(

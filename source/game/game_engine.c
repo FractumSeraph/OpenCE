@@ -5651,7 +5651,7 @@ void game_engine_load_stage(
 	return;
 }
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 /* web: Delta Stats, a joined game's report (ChupathingyCE's game list,
 halo.milenko.org; port/web/src/DELTA.md). A few seconds after a game
 this browser joined as a client ends (the host's last statistics in), its

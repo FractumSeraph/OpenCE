@@ -660,7 +660,7 @@ static int hardware_id_source(char *text, int size)
 	int path_count = 0;
 	int index;
 
-#if defined(HALO_WEB)
+#if defined(HALO_BROWSER)
 	/* web: a browser has no machine id to read, so each keeps its own: 16
 	random bytes made the first time, in its save root (the browser's
 	storage for this site), so that a host can tell browser players apart
@@ -2425,7 +2425,7 @@ static int join_invite(const char *text)
 	return 1;
 }
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 /* (the browser build's internet play is the page's: port/web/src/web_public_games.c) */
 int web_join_invite(const char *text);
 #endif
@@ -2535,7 +2535,7 @@ int p2p_join_invite(const char *text)
 {
 	int result;
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	return web_join_invite(text);
 #endif
 #ifdef HALO_GAME_BROWSER
@@ -2721,7 +2721,7 @@ int p2p_invite_link(char *link, int size)
 {
 	int hosting;
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	/* (the page's invite to its room for this game: web_online_ui.c) */
 	{
 		extern int web_online_invite_link(char *link, int size);
@@ -2750,7 +2750,7 @@ void p2p_set_game_player_counts(int count, int maximum)
 	pthread_mutex_unlock(&p2p_lock);
 }
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 /* (the hosted game's players and its most, for the browser's own list of
 public games: port/web/src/web_online_ui.c) */
 void p2p_web_game_player_counts(int *count, int *maximum)

@@ -14,7 +14,7 @@ The client is the port's own, in C (`port/linux/src/torrent.c` and the
 layer's sockets and threads, built into every native port as `p2p.c` is,
 so the Linux, Windows, macOS and Android builds all download and seed. The
 browser build leaves it out (a page has no TCP or UDP sockets:
-`WEB_EXCLUDED_PLATFORM_SOURCES` in `tools/web_build.py`, with
+`WEB_EXCLUDED_PLATFORM_SOURCES` in `tools/browser_build.py`, with
 `port/web/src/web_map_torrents.c` in its place); it reads the site's maps
 instead. It speaks the peer wire protocol
 (BEP 3), the extension protocol (BEP 10) with the metadata exchange (BEP 9)

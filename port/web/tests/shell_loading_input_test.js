@@ -133,7 +133,7 @@ const connectedGamepads = xinput.match(
   /static DWORD connected_gamepads\(void\)[\s\S]*?\n\}/);
 assert(connectedGamepads, 'missing connected_gamepads');
 assert.match(connectedGamepads[0], /first pad shares port 0 with the keyboard/);
-assert.doesNotMatch(connectedGamepads[0], /HALO_WEB/,
+assert.doesNotMatch(connectedGamepads[0], /HALO_BROWSER/,
   'web must not shift the first physical controller away from player one');
 assert.match(xinput,
   /if \(port_gamepad\(gamepads, count, 0\)\)\s+sdl_gamepad_state\(gamepads\[0\], &state->Gamepad\);/,
@@ -142,7 +142,7 @@ assert.match(xinput,
 const portConfig = fs.readFileSync(
   path.join(webDirectory, '..', 'linux', 'src', 'port_config.c'), 'utf8');
 assert.match(portConfig,
-  /#ifdef HALO_WEB[\s\S]*?\{ "controls\.crouch", _config_string, "\\"C\\""[\s\S]*?#else[\s\S]*?\{ "controls\.crouch", _config_string, "\\"Left Ctrl, C\\""/,
+  /#ifdef HALO_BROWSER[\s\S]*?\{ "controls\.crouch", _config_string, "\\"C\\""[\s\S]*?#else[\s\S]*?\{ "controls\.crouch", _config_string, "\\"Left Ctrl, C\\""/,
   'web crouch must use C without exposing Ctrl movement shortcuts');
 assert.match(shell,
   /function lockFullscreenMovementKeys\(\)[\s\S]*?navigator\.keyboard\.lock\(\["KeyW", "KeyA", "KeyS", "KeyD"\]\)[\s\S]*?fullscreenchange[\s\S]*?lockFullscreenMovementKeys\(\)/,
@@ -157,7 +157,7 @@ assert.match(shell,
   /controllerSummary[\s\S]*?mouse capture optional/,
   'a controller must remain usable without mouse capture');
 assert.match(dsound,
-  /#ifndef HALO_WEB\s*SDL_SetHint\(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, frames\);\s*#endif/,
+  /#ifndef HALO_BROWSER\s*SDL_SetHint\(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, frames\);\s*#endif/,
   'web audio must keep SDL Emscripten\'s larger browser-safe default buffer');
 assert.match(dsound,
   /web_audio_record_callback[\s\S]*?platform_web_audio_callback_count[\s\S]*?platform_web_audio_late_callback_count[\s\S]*?platform_web_audio_maximum_callback_gap_ms/,

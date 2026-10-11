@@ -17,7 +17,7 @@ from tools.linux64_build import generate_linux64_build, linux64_configure_inputs
 from tools.macos_build import generate_macos_build, macos_configure_inputs
 from tools.server_build import generate_server_build, server_configure_inputs
 from tools.version import commit_inputs
-from tools.web_build import generate_web_build, web_configure_inputs
+from tools.browser_build import generate_browser_build, browser_configure_inputs
 from tools.windows_build import generate_windows_build, windows_configure_inputs
 
 # arguments
@@ -49,7 +49,7 @@ parser.add_argument(
 parser.add_argument(
     "--web-cc",
     type=str,
-    help="Emscripten compiler for `ninja web` (default: build/emsdk's emcc, then emcc on PATH)",
+    help="Emscripten compiler for `ninja browser` (default: build/emsdk's emcc, then emcc on PATH)",
 )
 parser.add_argument(
     "--game-browser",
@@ -151,7 +151,7 @@ generate_android_build(n, sln)
 generate_windows_build(n, sln)
 generate_macos_build(n, sln)
 generate_server_build(n, sln)
-generate_web_build(n, sln)
+generate_browser_build(n, sln)
 
 n.comment("Reconfigure on change")
 n.rule(
@@ -172,7 +172,7 @@ n.build(
         *windows_configure_inputs(),
         *macos_configure_inputs(),
         *server_configure_inputs(),
-        *web_configure_inputs(),
+        *browser_configure_inputs(),
         # (the commit the builds record: tools/version.py)
         *commit_inputs(),
     ],

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Package a finished `ninja web` build as a zip that runs anywhere.
+"""Package a finished `ninja browser` build as a zip that runs anywhere.
 
     python tools/web_package.py [--output dist/halo-web.zip]
 
@@ -67,15 +67,15 @@ def stamp(html: bytes, build_id: str) -> bytes:
 
 
 def server_script() -> bytes:
-    """tools/web_serve.py, serving its own folder and opening index.html."""
-    text = (REPOSITORY / "tools" / "web_serve.py").read_text(encoding="utf-8")
+    """tools/browser_serve.py, serving its own folder and opening index.html."""
+    text = (REPOSITORY / "tools" / "browser_serve.py").read_text(encoding="utf-8")
     replacements = [
         ("repository = Path(__file__).resolve().parents[1]", "repository = Path(__file__).resolve().parent"),
-        ('url = f"http://{browser_host}:{port}/build/web/halo.html"', 'url = f"http://{browser_host}:{port}/"'),
+        ('url = f"http://{browser_host}:{port}/build/browser/halo.html"', 'url = f"http://{browser_host}:{port}/"'),
     ]
     for old, new in replacements:
         if text.count(old) != 1:
-            sys.exit(f"tools/web_serve.py changed; update web_package.py ({old!r})")
+            sys.exit(f"tools/browser_serve.py changed; update web_package.py ({old!r})")
         text = text.replace(old, new)
     return text.encode("utf-8")
 
@@ -98,14 +98,14 @@ def main() -> int:
     parser.add_argument("--output", type=Path, default=REPOSITORY / "dist" / "halo-web.zip")
     arguments = parser.parse_args()
 
-    web = REPOSITORY / "build" / "web"
+    web = REPOSITORY / "build" / "browser"
     port_web = REPOSITORY / "port" / "web"
     game = {}
     digest = hashlib.sha256()
     for name in ("halo.html", "halo.js", "halo.wasm"):
         path = web / name
         if not path.is_file():
-            sys.exit(f"missing {path}: run `ninja web` first")
+            sys.exit(f"missing {path}: run `ninja browser` first")
         game[name] = path.read_bytes()
         digest.update(game[name])
     build_id = f"selfhost-{digest.hexdigest()[:20]}"

@@ -12,7 +12,7 @@ Do not add proprietary Halo game data to Static Assets, R2, or this repository.
 Build and validate from the repository root:
 
 ```sh
-ninja web
+ninja browser
 cd services/web
 npm ci
 npm run check

@@ -24,7 +24,7 @@ renderer can protect the pages again before the kernel writes them.
 
 #include "platform.h"
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 
 /* Browsers do not expose mprotect or synchronous fault handlers.  WebGL
 uploads therefore use an always-changing generation and bypass the large

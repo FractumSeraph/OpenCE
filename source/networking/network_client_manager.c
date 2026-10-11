@@ -829,7 +829,7 @@ struct network_game_client network_game_client_dont_use_directly;
 boolean allow_out_of_sync = FALSE;
 boolean network_game_client_dont_use_directly_in_use = FALSE;
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 /* web: Delta Peer's client (port/web/src/web_delta_peer.c, ChupathingyCE's
 network family): the joined game's advertisement's flags, whose
 DELTA_ADVERTISED_FLAG says its host speaks it (0 for the host's own game) */
@@ -944,7 +944,7 @@ void network_game_client_dispose(
 		network_game_client_dont_use_directly_in_use = FALSE;
 	}
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	web_delta_peer_stop();
 #endif
 #ifdef HALO_GAME_BROWSER
@@ -1288,7 +1288,7 @@ boolean network_game_client_idle(
 		break;
 	}
 
-#if defined(HALO_GAME_BROWSER) || defined(HALO_WEB)
+#if defined(HALO_GAME_BROWSER) || defined(HALO_BROWSER)
 	network_game_client_delta_frame(client);
 #endif
 
@@ -2108,7 +2108,7 @@ boolean network_game_client_initiate_join_game(
 	client->join_in_progress = TRUE;
 	client->connect_process = 0;
 	client->connection_attempt_time = system_milliseconds();
-#if defined(HALO_GAME_BROWSER) || defined(HALO_WEB)
+#if defined(HALO_GAME_BROWSER) || defined(HALO_BROWSER)
 	/* (an advertised game's flags; the host's own game, joined through
 	127.0.0.1, is no advertised one) */
 	{
@@ -3277,7 +3277,7 @@ boolean network_game_client_join_first_available_game(
 	return FALSE;
 }
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 /* web: whether the server's authoritative game record has acknowledged one of
 this machine's local players.  Successfully writing an add-player request is
 not the same thing: a pregame request can cross the server's transition into
@@ -3345,7 +3345,7 @@ boolean network_game_client_set_team(
 }
 
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 /* web: Delta Peer's view of the joined game (port/web/src/web_delta_peer.c,
 as ChupathingyCE's network_game_client_delta_frame): whether this client is
 in another machine's game, the host's address (as the game's sockets have

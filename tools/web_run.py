@@ -73,9 +73,9 @@ def _require_web_outputs(repository: Path) -> None:
     missing = [
         path
         for path in (
-            repository / "build" / "web" / "halo.html",
-            repository / "build" / "web" / "halo.js",
-            repository / "build" / "web" / "halo.wasm",
+            repository / "build" / "browser" / "halo.html",
+            repository / "build" / "browser" / "halo.js",
+            repository / "build" / "browser" / "halo.wasm",
         )
         if not path.is_file()
     ]
@@ -156,14 +156,14 @@ def main(argv: Iterable[str] | None = None) -> int:
                 repository,
                 arguments.dry_run,
             )
-        _run([ninja, "web"], repository, arguments.dry_run)
+        _run([ninja, "browser"], repository, arguments.dry_run)
 
     if not arguments.dry_run:
         _require_web_outputs(repository)
 
     server = [
         sys.executable,
-        repository / "tools" / "web_serve.py",
+        repository / "tools" / "browser_serve.py",
         "--port",
         arguments.port,
     ]

@@ -153,7 +153,7 @@ extern	void TIFFUnmapFileContents();
 #ifdef applec
 #define	lseek	mpw_lseek
 extern long mpw_lseek(int, long, int);
-#elif defined(HALO_WEB)
+#elif defined(HALO_BROWSER)
 #include <unistd.h>
 #else
 extern	long lseek();

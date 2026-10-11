@@ -138,7 +138,7 @@ typedef char pixel_shader_definition_size_assert[
 
 /* ---------- prototypes */
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 /* (web: the definition's real return type, rasterizer_xbox.h; wasm traps
 on a call through a prototype whose signature does not match) */
 union point2d *rasterizer_set_texture(

@@ -412,7 +412,7 @@ static void CALLBACK cache_file_read_io_completion_routine(
 	unsigned long error_code,
 	unsigned long bytes_transferred,
 	OVERLAPPED *overlapped);
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 static DWORD WINAPI cache_file_windows_thread_proc(
 	void *context);
 #else
@@ -1327,7 +1327,7 @@ static void CALLBACK cache_file_read_io_completion_routine(
 	return;
 }
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 static DWORD WINAPI cache_file_windows_thread_proc(
 	void *context)
 #else
@@ -1335,7 +1335,7 @@ static void cache_file_windows_thread_proc(
 	void)
 #endif
 {
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	(void)context;
 #endif
 	while (TRUE)
@@ -1396,7 +1396,7 @@ static void cache_file_windows_thread_proc(
 		}
 	}
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	return ERROR_SUCCESS;
 #else
 	return;

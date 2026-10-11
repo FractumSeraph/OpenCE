@@ -48,7 +48,7 @@ device; audio.buffer_frames sets the device's buffer (port_config.c).
 #include <time.h>
 #include <unistd.h>
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 #include <emscripten/emscripten.h>
 #include <stdatomic.h>
 #endif
@@ -169,7 +169,7 @@ static struct
 
 static float configured_master_volume = 1.0f;
 static float master_volume = 1.0f;
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 static BOOL master_muted = TRUE;
 #else
 static BOOL master_muted = FALSE;
@@ -1342,7 +1342,7 @@ static const char *audio_device_setting(void)
 	return name && name[0] ? name : "default";
 }
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 static _Atomic unsigned long web_audio_callback_count;
 static _Atomic unsigned long web_audio_late_callback_count;
 static _Atomic unsigned long web_audio_last_callback_ms;
@@ -1399,7 +1399,7 @@ static void SDLCALL audio_callback(void *userdata, SDL_AudioStream *stream, int 
 
 	(void)userdata;
 	(void)total_amount;
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	web_audio_record_callback(additional_amount);
 #endif
 	while (additional_amount > 0)
@@ -1470,7 +1470,7 @@ static void audio_start(void)
 		/* (not in the browser: SDL's Emscripten backend doubles its default
 		frames for the main thread's scheduling, and a smaller buffer there
 		broke up the sound in some browsers) */
-#ifndef HALO_WEB
+#ifndef HALO_BROWSER
 		SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, frames);
 #endif
 		audio_stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, audio_callback, NULL);

@@ -263,7 +263,7 @@ this list to generate the guest's entry points */
 	X(glDebugMessageCallback)
 #endif
 
-#ifndef HALO_WEB
+#ifndef HALO_BROWSER
 #define GL_DECLARE_FUNCTION(name) extern __typeof__(&name) halo_##name;
 GL_FUNCTIONS(GL_DECLARE_FUNCTION)
 #undef GL_DECLARE_FUNCTION
@@ -271,7 +271,7 @@ GL_FUNCTIONS(GL_DECLARE_FUNCTION)
 
 /* call sites use the ordinary names; gl_functions.c, which defines the
 pointers, sees the declarations without these aliases */
-#if !defined(GL_FUNCTIONS_DEFINE) && !defined(HALO_WEB)
+#if !defined(GL_FUNCTIONS_DEFINE) && !defined(HALO_BROWSER)
 #ifdef HALO_ANDROID
 #define glGetString halo_glGetString
 #define glGetIntegerv halo_glGetIntegerv

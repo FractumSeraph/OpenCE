@@ -9,7 +9,7 @@ when the other side does not speak it. The browser build speaks the parts
 below. It compiles ChupathingyCE's own Delta code (`port/linux/src/delta*.c`,
 `port/linux/include/delta.h`), as this fork's native builds, which are
 ChupathingyCE's, do; what is the browser's own is in `port/web` or inside
-`#ifdef HALO_WEB`.
+`#ifdef HALO_BROWSER`.
 
 | Part | In the browser |
 | --- | --- |
@@ -32,14 +32,14 @@ shared in games), signing in as a server's moderator, chat, event logs.
 | `web_delta.c` | Hands the signed legacy table that the page fetched to `delta.c` (`web_delta_offer_table`), which checks it and keeps it as it keeps any other. |
 | `web_delta_peer.c` | Delta Peer's client side, over a socket of the game's Winsock layer; the map identity check; notices. |
 | `web_delta_list.c` | Delta List's games for the Server Browser (`menu_functions.c`). |
-| `web_delta_stats.c` | A joined game's report (`game_engine.c`, HALO_WEB) to the page. |
+| `web_delta_stats.c` | A joined game's report (`game_engine.c`, HALO_BROWSER) to the page. |
 
 The shared files come with each merge of ChupathingyCE (UPDATING.md in the
 build folder): nothing is copied by hand. Until October 9, 2026 the
 browser had copies of their files in `port/web/src/delta/`; the merge that
 built the browser on ChupathingyCE's code (7adb9436) removed them.
 
-The hooks in shared files, all under `HALO_WEB`: `network_client_manager.c`
+The hooks in shared files, all under `HALO_BROWSER`: `network_client_manager.c`
 (the join range; Delta Peer's frame, its stop, the joined game's
 advertisement flags, notices to the HUD), `p2p_lobby.c` (the listings'
 range), `menu_functions.c` (the Server Browser's Delta List), `game_engine.c`
@@ -53,7 +53,7 @@ builds join every version back to the newest *breaking* one of the
 compatibility table (version 11 today), because the changes since were
 additive: messages an older machine drops. The browser build does the same:
 `network_client_manager.c`'s join check and `p2p_lobby.c`'s listings (both
-under `HALO_WEB`) use `delta_legacy_minimum()` and `delta_legacy_maximum()`.
+under `HALO_BROWSER`) use `delta_legacy_minimum()` and `delta_legacy_maximum()`.
 So the in-game Server Browser lists, and joins, OpenCE and ChupathingyCE
 games of versions 11 to 24 (24 being this build's own).
 

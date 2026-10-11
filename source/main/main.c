@@ -395,7 +395,7 @@ symbols in this file:
 #include "text/draw_string.h"
 #include "text/font_group.h"
 #include "tag_files/files.h"
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 #include <emscripten/emscripten.h>
 #include "../../port/web/src/web_online_ui.h"
 
@@ -3100,7 +3100,7 @@ void halt_and_catch_fire(
 	struct rasterizer_frame_begin_parameters frame_parameters;
 	struct rasterizer_window_begin_parameters window_parameters;
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	platform_log("web halt: %s", error_get());
 
 	// A fatal error can arrive inside Emscripten's proxied main-loop callback.
@@ -3456,7 +3456,7 @@ static boolean main_loop_iteration(
 
 			/* automated system link tests (port/linux/game/network_test.c) */
 			network_test_update(main_globals.main_menu_scenario_loaded, main_globals.seconds_elapsed);
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 			/* Invite links request menu changes from the browser thread through an
 			atomic mailbox; all game state is changed here on Halo's thread. */
 			web_online_ui_update(main_globals.main_menu_scenario_loaded, main_globals.seconds_elapsed);
@@ -3624,7 +3624,7 @@ static boolean main_loop_iteration(
 	return TRUE;
 }
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 static void main_loop_web_iteration(
 	void *unused)
 {
@@ -3665,7 +3665,7 @@ void main_loop(
 	main_setup_connection();
 	main_initialize_time();
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	/* Let the worker return to its event loop after each frame.  That is when
 	an implicit-swap OffscreenCanvas publishes its WebGL drawing buffer.  A
 	zero-rate Emscripten loop follows requestAnimationFrame. */

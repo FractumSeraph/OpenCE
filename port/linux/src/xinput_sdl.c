@@ -255,7 +255,7 @@ int halo_linux_mouse_aiming(short gamepad_index)
 	return aiming;
 }
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 #include <emscripten/emscripten.h>
 
 /* Touch aiming (port/web/assets/touch/touch-controls.js): a finger dragged
@@ -454,7 +454,7 @@ static void keyboard_gamepad(const struct platform_input_state *input, XINPUT_GA
 		(enter && !text_typing_enter_blocked));
 	pad->bAnalogButtons[XINPUT_GAMEPAD_B] |= analog(k[SDL_SCANCODE_ESCAPE] || k[SDL_SCANCODE_BACKSPACE] ||
 		(mouse && m[SDL_BUTTON_X1]));
-	#if defined(HALO_ANDROID) && !defined(HALO_WEB)
+	#if defined(HALO_ANDROID) && !defined(HALO_BROWSER)
 	/* the system back key (gesture or button) backs out of menus */
 	pad->bAnalogButtons[XINPUT_GAMEPAD_B] |= analog(k[SDL_SCANCODE_AC_BACK]);
 #endif
@@ -953,7 +953,7 @@ static int sdl_gamepads(SDL_Gamepad *gamepads[PORT_COUNT])
 	ids = SDL_GetGamepads(&count);
 	if (!ids)
 		return 0;
-	#if defined(HALO_ANDROID) && !defined(HALO_WEB)
+	#if defined(HALO_ANDROID) && !defined(HALO_BROWSER)
 	{
 		/* Android can list input devices with a few gamepad buttons (the
 		emulator's keyboard, some phones' key devices) as generic gamepads:

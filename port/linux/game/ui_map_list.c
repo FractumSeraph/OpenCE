@@ -639,7 +639,7 @@ static void entries_forget(
 	}
 }
 
-#ifndef HALO_WEB
+#ifndef HALO_BROWSER
 /* the path of a file beside a map (its file's, with another extension in
 place of .map): FALSE if it has none, or it does not fit */
 static boolean beside_path(
@@ -818,7 +818,7 @@ Xbox's in its place from then on if it cannot be shown */
 static struct bitmap_data *entry_picture(
 	struct ui_map_entry *entry)
 {
-#ifndef HALO_WEB
+#ifndef HALO_BROWSER
 	if (!entry->picture_read)
 	{
 		entry->picture_read = TRUE;
@@ -912,7 +912,7 @@ static void add_pc_entry(
 	wide_append(display_name, DISPLAY_NAME_LENGTH, L"]");
 	snprintf(map_name, sizeof(map_name), "%s%s", file, map_family_suffix(family));
 	entry = entry_add(campaign, map_name, display_name, lobby_name, description, NONE, picture_index);
-#ifndef HALO_WEB
+#ifndef HALO_BROWSER
 	/* (its own description and picture, beside it) */
 	if (!entry || !map_family_find(family, file, entry->path, sizeof(entry->path)))
 		return;

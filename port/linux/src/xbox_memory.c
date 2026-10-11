@@ -39,7 +39,7 @@ Xbox kernel does.
 
 #include "platform.h"
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 #include <emscripten/heap.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -72,7 +72,7 @@ int platform_ce_tag_cache_ready = FALSE;
 unsigned int platform_host_page_size = PAGE_SIZE_BYTES;
 #endif
 
-#ifndef HALO_WEB
+#ifndef HALO_BROWSER
 static int protection_to_host(DWORD protect)
 {
 	switch (protect & 0xff)
@@ -87,7 +87,7 @@ static int protection_to_host(DWORD protect)
 }
 #endif
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 /* WebAssembly has one already-reserved linear address space: the web link
 keeps its initial memory above the Xbox window, so fixed guest pointers such
 as 0x803a6000 are usable at once. Custom Edition maps' tag cache
@@ -401,7 +401,7 @@ void *platform_contiguous_alloc(unsigned long size, unsigned long alignment,
 	address = (void *)(PLATFORM_CONTIGUOUS_BASE + first * PAGE_SIZE_BYTES);
 #endif
 	memory_watch_forget(address, count * PAGE_SIZE_BYTES);
-#if defined(HALO_WEB)
+#if defined(HALO_BROWSER)
 	/* (no mmap in a Wasm linear memory: the allocation's records place it,
 	and clearing makes a reused range what fresh pages would be) */
 	memset(address, 0, count * PAGE_SIZE_BYTES);
@@ -446,7 +446,7 @@ void platform_contiguous_free(void *address)
 	if (count)
 	{
 		memory_watch_forget(address, count * PAGE_SIZE_BYTES);
-#if defined(HALO_WEB)
+#if defined(HALO_BROWSER)
 		memset(address, 0, count * PAGE_SIZE_BYTES);
 #elif !defined(HALO_64BIT)
 		mmap(address, count * PAGE_SIZE_BYTES, PROT_NONE,
@@ -578,7 +578,7 @@ BOOL WINAPI VirtualProtect(LPVOID address, SIZE_T size, DWORD new_protect, PDWOR
 		*old_protect = platform_is_contiguous(address) ?
 			page_protection[(start - PLATFORM_CONTIGUOUS_BASE) / PAGE_SIZE_BYTES] : PAGE_READWRITE;
 	memory_watch_forget((void *)start, end - start);
-#ifndef HALO_WEB
+#ifndef HALO_BROWSER
 	if (mprotect((void *)start, end - start, protection_to_host(new_protect)) != 0)
 	{
 		platform_set_last_error_from_errno(errno);

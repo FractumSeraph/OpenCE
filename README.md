@@ -108,7 +108,7 @@ an Xbox disc image of Halo: Combat Evolved, as ChupathingyCE's builds do (see
 ## The browser build
 
 The browser build is the same game and platform layer compiled to
-WebAssembly with Emscripten (`tools/web_build.py`; `HALO_WEB`, which also
+WebAssembly with Emscripten (`tools/browser_build.py`; `HALO_BROWSER`, which also
 selects the Android OpenGL ES code paths). It comes from the web-halo port
 (github.com/ecumene/web-halo) merged onto this repository, with:
 
@@ -123,7 +123,7 @@ Build it with Emscripten 6:
 
 ```
 python configure.py --release --web-cc /path/to/emsdk/upstream/emscripten/emcc
-ninja web
+ninja browser
 ```
 
 The page needs cross-origin isolation (COOP/COEP headers) and the maps
@@ -135,14 +135,14 @@ fetches it and `bitmaps.map`, `sounds.map` and `loc.map` whole, a few large
 ranges at a time (`port/web/fetch_path_normalization.js`); joining from the
 Server Browser waits for that before connecting, the status line showing
 it, because a host gives a joining machine only moments to load the map (a
-native host, 15 seconds; a browser host waits 120). `tools/web_serve.py`
+native host, 15 seconds; a browser host waits 120). `tools/browser_serve.py`
 serves a checkout for development. The link refuses WebAssembly signature mismatches
 (`-Wl,--fatal-warnings`): a C function called through a prototype that does
 not match its definition traps in a browser.
 
 ### Where the fork's parts are
 
-- **The browser build** (`ninja web`, `tools/web_build.py`, `port/web`): the
+- **The browser build** (`ninja browser`, `tools/browser_build.py`, `port/web`): the
   game in WebAssembly with WebGL 2, the page and its online play (rooms,
   invites, quick games, joining native hosts through the native gateway),
   touch controls, installing as an app, Custom Edition maps served by the
@@ -174,7 +174,7 @@ not match its definition traps in a browser.
   builds the page and the self-hosting kits and puts them on the
   `web-latest` release.
 
-Browser-only code is inside `#ifdef HALO_WEB` (or in files only the browser
+Browser-only code is inside `#ifdef HALO_BROWSER` (or in files only the browser
 build compiles); nothing sent over the network is changed.
 
 ---

@@ -37,7 +37,7 @@ symbols in this file:
 #include "main.h"
 #include "rasterizer/xbox/rasterizer_xbox.h"
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 void platform_web_initialize(void);
 #endif
 
@@ -105,7 +105,7 @@ shell_idle(
 	return;
 }
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 int main(
 	int argc,
 	char **argv)
@@ -114,7 +114,7 @@ int main(
 	void)
 #endif
 {
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	(void)argc;
 	(void)argv;
 	platform_web_initialize();

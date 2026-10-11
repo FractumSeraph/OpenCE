@@ -16,7 +16,7 @@ follows xbox_textures.c, so locks and uploads agree.
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 /* WebAssembly cannot use page faults to detect guest writes.  The Lock word
 is otherwise unused by this port, so give every vertex-buffer mutation a
 process-wide serial that the WebGL stream cache can check without rescanning
@@ -124,7 +124,7 @@ void WINAPI D3DResource_Register(D3DResource *resource, void *base)
 #else
 	fields[1] = PLATFORM_VIRTUAL_TO_PHYSICAL((unsigned long)base + fields[1]);
 #endif
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	if ((fields[0] & D3DCOMMON_TYPE_MASK) == D3DCOMMON_TYPE_VERTEXBUFFER)
 		web_vertex_buffer_mark_dirty((D3DVertexBuffer *)resource);
 #endif
@@ -404,7 +404,7 @@ HRESULT WINAPI D3DDevice_CreateVertexBuffer(UINT length, DWORD usage, DWORD fvf,
 	}
 	buffer->Common = D3DCOMMON_TYPE_VERTEXBUFFER | D3DCOMMON_D3DCREATED | 1;
 	buffer->Data = PLATFORM_VIRTUAL_TO_PHYSICAL(memory);
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	web_vertex_buffer_mark_dirty(buffer);
 #endif
 	*result = buffer;
@@ -415,7 +415,7 @@ void WINAPI D3DVertexBuffer_Lock(D3DVertexBuffer *buffer, UINT offset, UINT size
 {
 	(void)size;
 	(void)flags;
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	/* Mark on Lock rather than Unlock: the XDK Unlock wrapper is intentionally
 	an inline no-op, and drawing a still-locked buffer is invalid D3D usage. */
 	web_vertex_buffer_mark_dirty(buffer);

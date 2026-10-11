@@ -194,7 +194,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     server = ThreadingHTTPServer((arguments.bind, arguments.port), handler)
     host, port = server.server_address[:2]
     browser_host = "127.0.0.1" if host == "0.0.0.0" else str(host)
-    url = f"http://{browser_host}:{port}/build/web/halo.html"
+    url = f"http://{browser_host}:{port}/build/browser/halo.html"
     print(f"Serving {root}", flush=True)
     print(f"Halo URL: {url}", flush=True)
     if arguments.open:

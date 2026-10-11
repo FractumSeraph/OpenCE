@@ -12,7 +12,7 @@ asks it (server/delta-list.mjs, GET /v1/delta/games); online_client.js
 reads that while the Server Browser is open and hands each game here, one
 at a time between web_delta_games_begin and _end.
 
-The Server Browser (menu_functions.c, HALO_WEB) shows the listings as ever,
+The Server Browser (menu_functions.c, HALO_BROWSER) shows the listings as ever,
 and from here: a game the listings do not have (one only announced to the
 site), joined by its invite like any; and for every game, by its invite's
 token, the host line, the players line and the score to win. Nothing here

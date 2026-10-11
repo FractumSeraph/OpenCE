@@ -34,7 +34,7 @@ export function pageHtml(html, config) {
 
 // A map's header (its first 2048 bytes, a cache file's whole header), by its
 // name, size and time: the game lists the maps from these
-// (custom_edition_cache.c, HALO_WEB) instead of reading each one's first
+// (custom_edition_cache.c, HALO_BROWSER) instead of reading each one's first
 // 256 KB piece from the server, which for a hundred maps was over 30 MB
 // before the menus answered on a phone.
 const MAP_HEADER_BYTES = 2048;

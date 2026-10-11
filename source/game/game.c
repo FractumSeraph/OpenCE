@@ -242,7 +242,7 @@ typedef char verify_game_runtime_globals_difficulty_offset[
 /* ---------- globals */
 
 static struct game_runtime_globals_prefix *game_globals = NULL;
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 static char web_map_loading_name[32];
 #endif
 extern struct game_variant game_variant_global;
@@ -745,7 +745,7 @@ boolean game_map_loading_in_progress(
 	return globals->map_load_in_progress;
 }
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 const char *game_map_loading_name(
 	void)
 {
@@ -874,7 +874,7 @@ void game_precache_new_map(
 		{
 			struct game_runtime_globals_prefix *globals = game_globals;
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 			csstrncpy(web_map_loading_name, tag_name_strip_path(map_name),
 				NUMBEROF(web_map_loading_name) - 1);
 			web_map_loading_name[NUMBEROF(web_map_loading_name) - 1] = '\0';

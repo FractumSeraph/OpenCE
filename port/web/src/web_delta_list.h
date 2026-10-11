@@ -1,5 +1,5 @@
 /* Delta List in the browser: ChupathingyCE's game list (halo.milenko.org's
-/v1/games), for the in-game Server Browser (menu_functions.c, HALO_WEB).
+/v1/games), for the in-game Server Browser (menu_functions.c, HALO_BROWSER).
 See web_delta_list.c. Text crosses as UTF-16 (unsigned short): the game's
 wide characters, whatever this unit's wchar_t is. */
 

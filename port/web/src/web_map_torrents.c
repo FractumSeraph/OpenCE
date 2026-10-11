@@ -1,6 +1,6 @@
 /* Custom Edition maps for the browser build: no BitTorrent (a web page cannot
  * open the TCP and UDP sockets it needs: map_torrents.c and the torrent_*.c
- * client are left out of the build, tools/web_build.py), as the browser has
+ * client are left out of the build, tools/browser_build.py), as the browser has
  * every Custom Edition map the site serves (custom_maps, read from the site
  * as needed). Nothing is seeded.
  *

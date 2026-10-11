@@ -339,7 +339,7 @@ static boolean cache_file_is(
 	HANDLE file;
 	boolean result = FALSE;
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	/* (the browser: a custom_maps file's header as the site's index has it,
 	port/web/src/web_platform.c, rather than a download of the file's first
 	piece for each map listed, which made phones wait minutes) */

@@ -134,7 +134,7 @@ static const struct
 	{ "smaa", _anti_aliasing_smaa, 0 },
 	{ "ssaa2x", _anti_aliasing_ssaa, 0 },
 #endif
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	/* (the browser binds a draw's targets before its textures: prepare_draw.
 	A multisampled target's resolve, as its texture is bound, would unbind
 	them: FXAA in multisampling's place) */
@@ -192,7 +192,7 @@ static void screen_mode_choose(long *width, float scale[2])
 {
 	/* (the browser as the desktop: the page's canvas is its window,
 	platform_screen_mode in sdl_platform.c) */
-#if defined(HALO_ANDROID) && !defined(HALO_WEB)
+#if defined(HALO_ANDROID) && !defined(HALO_BROWSER)
 	/* display.screen_width, or 0 for the display's shape, which the app
 	passes (port/android/host/host_main.c) */
 	const char *display = getenv("HALO_DISPLAY_WIDTH");
@@ -488,7 +488,7 @@ static struct framebuffer_entry *framebuffers;
 
 static void render_targets_evict(void);
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 /* WebGL rejects a draw that samples the texture attached to its framebuffer.
 The Xbox permits that pattern: a draw reads the target as it looked before
 the draw and writes the result back into it.  Keep one scratch texture for a
@@ -547,7 +547,7 @@ struct gl_device
 	{
 		DWORD data;
 		UINT stride;
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 		D3DVertexBuffer *buffer;
 #endif
 	} streams[16];
@@ -1557,7 +1557,7 @@ static BOOL bind_targets(BOOL *has_depth)
 		state_framebuffer(framebuffer_get(color ? color->target.texture : 0, depth ? depth->target.texture : 0));
 		target_samples = 1;
 	}
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	bound_color_texture = color ? color->target.texture : 0;
 	bound_color_width = color ? (GLsizei)color->target.gl_width : 0;
 	bound_color_height = color ? (GLsizei)color->target.gl_height : 0;
@@ -1621,7 +1621,7 @@ static void gl_initialize(void)
 #endif
 	glGenVertexArrays(1, &device.vertex_array);
 	glBindVertexArray(device.vertex_array);
-#if defined(HALO_ANDROID) && !defined(HALO_WEB)
+#if defined(HALO_ANDROID) && !defined(HALO_BROWSER)
 	{
 		int ring;
 
@@ -1638,7 +1638,7 @@ static void gl_initialize(void)
 		device.index_buffer = device.index_buffers[0];
 	}
 #endif
-#if !defined(HALO_ANDROID) && !defined(HALO_WEB)
+#if !defined(HALO_ANDROID) && !defined(HALO_BROWSER)
 	glGenBuffers(1, &device.stream_buffer);
 	glBindBuffer(GL_ARRAY_BUFFER, device.stream_buffer);
 	glBufferData(GL_ARRAY_BUFFER, STREAM_BUFFER_SIZE, NULL, GL_STREAM_DRAW);
@@ -1862,7 +1862,7 @@ HRESULT WINAPI Direct3D_CreateDevice(UINT adapter, D3DDEVTYPE device_type, void 
 			device.presentation = *presentation_parameters;
 		width = device.presentation.BackBufferWidth ? device.presentation.BackBufferWidth : 640;
 		height = device.presentation.BackBufferHeight ? device.presentation.BackBufferHeight : 480;
-#if defined(HALO_ANDROID) && !defined(HALO_WEB)
+#if defined(HALO_ANDROID) && !defined(HALO_BROWSER)
 		d3d8_surface_initialize(&device.back_buffer, D3DFMT_LIN_A8R8G8B8, width, height);
 		d3d8_surface_initialize(&device.depth_buffer, D3DFMT_LIN_D24S8, width, height);
 #else
@@ -1976,7 +1976,7 @@ game_engine.c, a right click frees the pointer, platform_scoreboard_pointer
 in sdl_platform.c): in the screen's coordinates, which the scoreboard is
 drawn in (the menus' centering undone); -1 where there is no such pointer
 (the Android app) */
-#if defined(HALO_ANDROID) && !defined(HALO_WEB)
+#if defined(HALO_ANDROID) && !defined(HALO_BROWSER)
 int halo_scoreboard_pointer_update(int offered, struct halo_ui_pointer *pointer)
 {
 	(void)offered;
@@ -2057,7 +2057,7 @@ long halo_screen_commit(void)
 		screen_width = width;
 		screen_scale[0] = scale[0];
 		screen_scale[1] = scale[1];
-#if !defined(HALO_ANDROID) || defined(HALO_WEB)
+#if !defined(HALO_ANDROID) || defined(HALO_BROWSER)
 		if (device.created)
 		{
 			device.presentation.BackBufferWidth = (UINT)width;
@@ -3174,7 +3174,7 @@ static void render_target_delete(struct render_target_entry *entry)
 			}
 		}
 	}
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	/* port: no longer the target the feedback snapshot copies (bind_targets) */
 	if (bound_color_texture == entry->target.texture)
 		bound_color_texture = 0;
@@ -3315,7 +3315,7 @@ static GLuint mip_composite_get(const struct xgpu_texture_description *descripti
 		composite->level_sources[level] = target->texture;
 		composite->level_written[level] = target->written;
 		render_target_resolve(target);
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 		copy_level_by_blit(target->texture, composite->texture, (GLint)level, width, height);
 #else
 #if defined(HALO_ANDROID) || defined(__APPLE__)
@@ -3342,7 +3342,7 @@ static GLuint mip_composite_get(const struct xgpu_texture_description *descripti
 	return composite->texture;
 }
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 static BOOL feedback_snapshot_needed(void)
 {
 	int stage;
@@ -3405,7 +3405,7 @@ static void bind_textures(struct nv2a_pixel_shader_key *key, float texture_scale
 	GLuint gl_textures[D3DTSS_MAXSTAGES];
 	int stage;
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	/* Take the copy before binding any draw textures.  Several stages may
 	read the target, but they all use this one pre-draw snapshot. */
 	if (feedback_snapshot_needed())
@@ -3448,7 +3448,7 @@ static void bind_textures(struct nv2a_pixel_shader_key *key, float texture_scale
 					gl_texture = mip_composite_get(&description, texture->Data);
 				else
 					description.levels = 1;
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 				if (gl_texture == bound_color_texture)
 					gl_texture = feedback_snapshot_texture;
 #endif
@@ -3825,7 +3825,7 @@ static struct program_entry *prepare_draw(BOOL immediate)
 				skip++;
 		}
 	}
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	/* (the browser: the targets before the textures, for bind_textures'
 	feedback snapshot of the bound target; it has no multisampling, whose
 	resolve there would unbind them: anti_aliasing_values) */
@@ -3852,7 +3852,7 @@ static struct program_entry *prepare_draw(BOOL immediate)
 	sampled and drawn into */
 	bind_textures(&key, uniforms.texture_scale);
 	gl_check_errors("bind textures");
-#ifndef HALO_WEB
+#ifndef HALO_BROWSER
 	if (!bind_targets(&has_depth))
 	{
 		stats.skipped_no_target++;
@@ -4381,7 +4381,7 @@ the range is outside the window, spans two segments or is volatile */
 static BOOL mirror_range(unsigned long address, unsigned long size, GLuint *buffer, unsigned long *offset,
 	unsigned long *generation)
 {
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	/* Wasm cannot use page protection to notice arbitrary guest writes.
 	The normal streaming-buffer path is slower but always correct. */
 	(void)address;
@@ -4525,7 +4525,7 @@ static void stream_reserve(unsigned long size)
 	}
 }
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 /* WebGL/ANGLE can treat a buffer update as a whole-resource hazard.  A large
 buffer with nonoverlapping subranges then serializes every upload behind the
 draw before it.  Give each dynamic upload its own small buffer, and keep three
@@ -4588,7 +4588,7 @@ static unsigned long stream_upload(const void *data, unsigned long size)
 	/* (as index_upload: the vertices' own bytes, in room rounded up to 16) */
 	unsigned long length = size;
 
-	#ifdef HALO_WEB
+	#ifdef HALO_BROWSER
 	device.stream_buffer = web_transient_upload(GL_ARRAY_BUFFER, data, size);
 	device.stream_offset = 0;
 	return 0;
@@ -4659,7 +4659,7 @@ static unsigned long index_upload(const void *data, unsigned long size)
 	past the caller's indices) */
 	unsigned long length = size;
 
-	#ifdef HALO_WEB
+	#ifdef HALO_BROWSER
 	device.index_buffer = web_transient_upload(GL_ELEMENT_ARRAY_BUFFER, data, size);
 	device.index_offset = 0;
 	return 0;
@@ -4734,7 +4734,7 @@ static BOOL stream_has_colors(const struct vertex_shader_object *declaration, un
 }
 #endif
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 /* ANGLE may serialize glBufferSubData against any earlier draw that used the
 same buffer, even when the byte ranges do not overlap.  Halo reuses almost all
 of its vertex ranges unchanged, so keep exact ranges in separate GL buffers
@@ -4929,7 +4929,7 @@ static void setup_streams(unsigned long first, unsigned long count)
 		stream_buffers[stream] = 0;
 		total += (bytes + 15) & ~15UL;
 	}
-	#ifndef HALO_WEB
+	#ifndef HALO_BROWSER
 	stream_reserve(total);
 	#else
 	(void)total;
@@ -4950,7 +4950,7 @@ static void setup_streams(unsigned long first, unsigned long count)
 			const unsigned char *base = PLATFORM_PHYSICAL_TO_VIRTUAL(device.streams[stream].data);
 			unsigned long bytes = stride ? stride * count : 64;
 
-		#ifdef HALO_WEB
+		#ifdef HALO_BROWSER
 			stream_buffers[stream] = web_stream_buffer_get(declaration, stream,
 				base + first * stride, bytes, stride,
 				device.streams[stream].buffer ? device.streams[stream].buffer->Lock : 0);
@@ -4960,7 +4960,7 @@ static void setup_streams(unsigned long first, unsigned long count)
 #else
 			stream_offsets[stream] = stream_upload(base + first * stride, bytes);
 #endif
-		#ifndef HALO_WEB
+		#ifndef HALO_BROWSER
 			stream_buffers[stream] = device.stream_buffer;
 			stats.streamed_bytes += bytes;
 		#endif
@@ -5061,7 +5061,7 @@ void WINAPI D3DDevice_SetStreamSource(UINT stream_number, D3DVertexBuffer *strea
 		return;
 	device.streams[stream_number].data = stream_data ? stream_data->Data : 0;
 	device.streams[stream_number].stride = stride;
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	device.streams[stream_number].buffer = stream_data;
 #endif
 }
@@ -5118,7 +5118,7 @@ void WINAPI D3DDevice_DrawIndexedVertices(D3DPRIMITIVETYPE primitive_type, UINT 
 	trace_draw("indexed", primitive_type, vertex_count, NULL);
 	/* (the streams from the base vertex on: index i is vertex base + i) */
 	setup_streams(device.base_vertex_index + minimum, maximum - minimum + 1);
-	#ifndef HALO_WEB
+	#ifndef HALO_BROWSER
 	if (mirrored)
 	{
 		/* the attributes start at vertex minimum */
@@ -5151,7 +5151,7 @@ void WINAPI D3DDevice_DrawIndexedVertices(D3DPRIMITIVETYPE primitive_type, UINT 
 	}
 	#endif
 	(void)index;
-	#ifndef HALO_WEB
+	#ifndef HALO_BROWSER
 	glDrawElementsBaseVertex(primitive_mode(primitive_type), (GLsizei)count, GL_UNSIGNED_SHORT,
 		(const void *)(uintptr_t)index_upload(source, count * sizeof(WORD)), -(GLint)minimum);
 	free(indices);
@@ -5198,7 +5198,7 @@ void WINAPI D3DDevice_End(void)
 	if (!prepare_draw(TRUE))
 		return;
 	trace_draw("immediate", type, count, device.immediate_vertices);
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	{
 		static float *packed;
 		static unsigned long packed_floats;
@@ -5626,7 +5626,7 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 	if (device.gl_ready)
 	{
 		struct render_target_entry *back_buffer = render_target_get(&device.back_buffer);
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 		/* (looked up before the default framebuffer is bound for the blit: a
 		new framebuffer_get entry binds itself) */
 		GLuint back_buffer_framebuffer = framebuffer_get(back_buffer->target.texture, 0);
@@ -5663,13 +5663,13 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 		glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, back_buffer_framebuffer);
 #else
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, framebuffer_get(back_buffer->target.texture, 0));
 #endif
 		/* row 0 of the render target is the top of the picture */
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 		/* WebGL rejects a framebuffer blit whose destination rectangle is
 		vertically reversed.  Its canvas presentation already uses the same
 		top-left convention as the ES shader path. */
@@ -5689,7 +5689,7 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 		xgpu_gl_state_invalidate();
 		memory_watch_begin_frame();
 		xgpu_texture_cache_begin_frame();
-#if defined(HALO_ANDROID) && !defined(HALO_WEB)
+#if defined(HALO_ANDROID) && !defined(HALO_BROWSER)
 		if (xgpu_capabilities.atomic_counters)
 		{
 			/* this frame's counts, for when the GPU is done with it (the
@@ -5726,13 +5726,13 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 		device.index_buffer = device.index_buffers[device.buffer_ring];
 		device.stream_offset = 0;
 		device.index_offset = 0;
-	#elif !defined(HALO_WEB)
+	#elif !defined(HALO_BROWSER)
 		device.stream_offset = STREAM_BUFFER_SIZE; /* orphan next frame */
 		device.index_offset = INDEX_BUFFER_SIZE;
 #endif
 	}
 	device.frame++;
-	#ifdef HALO_WEB
+	#ifdef HALO_BROWSER
 	web_stream_cache_expire();
 	#endif
 	stats.presents++;

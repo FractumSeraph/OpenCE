@@ -6,7 +6,7 @@ const path = require('node:path');
 
 const repository = path.join(__dirname, '..', '..', '..');
 const buildRules = fs.readFileSync(
-  path.join(repository, 'tools', 'web_build.py'), 'utf8');
+  path.join(repository, 'tools', 'browser_build.py'), 'utf8');
 const sdlPort = fs.readFileSync(
   path.join(repository, 'port', 'web', 'halo_sdl3.py'), 'utf8');
 

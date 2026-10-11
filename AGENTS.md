@@ -32,7 +32,7 @@ end.
 | `server/` | The dedicated server (`tools/server_build.py`), its settings and playlists |
 | `services/` | The browser build's online services: the lobby (`signaling`), the native gateway (`native-gateway`), the self-hosting kits (`selfhost`), the Cloudflare static hosting (`web`) |
 | `infra/` | Deployment templates (`aws-native-gateway`: the native gateway on AWS) |
-| `tools/` | Build scripts (`linux_build.py`, `lp64_build.py`, `windows_build.py`, `macos_build.py`, `android_build.py`, `web_build.py`, `server_build.py`, `ci_build.py`), generators (`ce_menus.py`, `port_settings.py`, `hud_assets.py`, `title_assets.py`, `embed_assets.py`, `xdk_headers.py`) and tests |
+| `tools/` | Build scripts (`linux_build.py`, `lp64_build.py`, `windows_build.py`, `macos_build.py`, `android_build.py`, `browser_build.py` (the browser build: `ninja browser`), `web_build.py` (OpenCE's), `server_build.py`, `ci_build.py`), generators (`ce_menus.py`, `port_settings.py`, `hud_assets.py`, `title_assets.py`, `embed_assets.py`, `xdk_headers.py`) and tests |
 | `docs/` | Longer design notes (`delta.md`, `map_torrents.md`, `parity.md`, `telemetry.md`, `bug-sweep.md`, `dedicated-server.md`) |
 | `pgo/` | Profile-guided optimisation profiles |
 | `assets/` | Game data for local runs (gitignored: `maps/`, `maps_ce/`, `maps_md/`, `maps_pc/`) |
@@ -48,7 +48,7 @@ ninja android_apk              # the APK (Gradle)
 ninja windows                  # on Windows only
 ninja linux64                  # build/linux64/halo, 64-bit; also ninja windows64, ninja macos
 ninja server                   # the dedicated servers, build/server-<arch>/chupathingyce-server
-ninja web                      # the browser build (configure.py --web-cc <emcc>)
+ninja browser                  # the browser build (configure.py --web-cc <emcc>)
 python tools/ci_build.py linux release   # what CI builds
 ```
 
@@ -76,7 +76,7 @@ python tools/ci_build.py linux release   # what CI builds
 | `HALO_GLES` | Android | The OpenGL ES renderer |
 | `HALO_ARM64_GUEST` | Android | The guest's ABI (ILP32 AArch64) |
 | `HALO_WINDOWS` | Windows (`halo_windows_prefix.h`) | The Windows build |
-| `HALO_WEB` | The browser (`tools/web_build.py`), with `HALO_ANDROID`, `HALO_GLES` and `HALO_ARM64_GUEST` | The browser build: its differences from Android are inside `#ifdef HALO_WEB` |
+| `HALO_BROWSER` | The browser (`tools/browser_build.py`), with `HALO_ANDROID`, `HALO_GLES` and `HALO_ARM64_GUEST` | The browser build: its differences from Android are inside `#ifdef HALO_BROWSER` |
 | `HALO_64BIT` | Linux x64, Windows x64, macOS, the 64-bit servers | Xbox addresses as 32-bit offsets in a reserved 4 GB (`port/macos/README.md`) |
 | `HALO_SERVER` | The dedicated server (`tools/server_build.py`) | No window, sound or input |
 | `HALO_CUSTOM_EDITION` | Every build (`CUSTOM_EDITION_DEFINES`, `tools/linux_build.py`) | Halo PC's maps: Custom Edition, HaloMD and Halo PC retail |

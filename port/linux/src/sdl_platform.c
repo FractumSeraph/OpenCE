@@ -12,7 +12,7 @@ and the debug keyboard that the game's console reads.
 #include "platform.h"
 #include "sdl_platform.h"
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 #include <emscripten/emscripten.h>
 #endif
 #include "gl.h"
@@ -42,7 +42,7 @@ static SDL_GLContext platform_gl_context;
 static SDL_ThreadID platform_event_thread;
 static BOOL platform_sdl_started = FALSE;
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 static struct
 {
 	double callback_start;
@@ -66,7 +66,7 @@ static BOOL screenshot_requested;
 /* likewise the mouse buttons pressed since the last read, so that a click
 quicker than a frame still counts */
 static unsigned char mouse_buttons_pressed[PLATFORM_MOUSE_BUTTON_COUNT];
-#if !defined(HALO_ANDROID) || defined(HALO_WEB)
+#if !defined(HALO_ANDROID) || defined(HALO_BROWSER)
 /* the menus' pointer (platform_ui_pointer_set_active), under input_lock */
 static struct platform_ui_pointer ui_pointer;
 static float ui_pointer_wheel;
@@ -103,7 +103,7 @@ static Uint64 scoreboard_open_until_ms;
 static float scoreboard_wheel;
 static long scoreboard_notches;
 static long scoreboard_pages;
-#if !defined(HALO_ANDROID) || defined(HALO_WEB)
+#if !defined(HALO_ANDROID) || defined(HALO_BROWSER)
 /* the scoreboard's pointer (platform_scoreboard_pointer): while the game
 offers it (a network game's scoreboard is open), a right click frees the
 mouse, whose pointer then picks a player; its motion and clicks go to it,
@@ -329,7 +329,7 @@ BOOL platform_sdl_initialize(void)
 	/* a copy of the game started to open an invite link hands it to the
 	one already running, and goes */
 	if (
-#ifndef HALO_WEB
+#ifndef HALO_BROWSER
 		p2p_hand_off_invite()
 #else
 		FALSE
@@ -342,7 +342,7 @@ BOOL platform_sdl_initialize(void)
 	Command-W does not quit) */
 	SDL_SetHint(SDL_HINT_QUIT_ON_LAST_WINDOW_CLOSE, "0");
 #endif
-#if defined(HALO_ANDROID) && !defined(HALO_WEB)
+#if defined(HALO_ANDROID) && !defined(HALO_BROWSER)
 	/* landscape only; the back key arrives as a key event (xinput_sdl.c)
 	instead of closing the activity */
 	SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
@@ -368,11 +368,11 @@ BOOL platform_sdl_initialize(void)
 	platform_sdl_started = TRUE;
 	/* which build this is, first in its log (build_identity.c) */
 	build_identity_log();
-#if !defined(HALO_ANDROID) || defined(HALO_WEB)
+#if !defined(HALO_ANDROID) || defined(HALO_BROWSER)
 	/* found (or offered to the player, platform_offer_game_data) before the
 	game's window opens, and checked to be the Xbox maps */
 	platform_data_root();
-#ifndef HALO_WEB
+#ifndef HALO_BROWSER
 	data_check_maps();
 	/* (a new version looked for meanwhile, updater_poll asking about it) */
 	updater_start();
@@ -384,7 +384,7 @@ BOOL platform_sdl_initialize(void)
 	/* (the desktop's are moved from data_check_maps) */
 	old_map_folders_offer(TRUE);
 #endif
-#ifndef HALO_WEB
+#ifndef HALO_BROWSER
 	/* (the legacy table: a newer one fetched meanwhile; the browser's is the
 	page's, port/web/src/web_delta.c) */
 	delta_legacy_start();
@@ -1163,7 +1163,7 @@ int platform_window_sizes(long *widths, long *heights, int maximum)
 	return 0;
 }
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 /* The browser draws as the desktop does (d3d8_gl.c's screen_mode_choose):
 the canvas's shape and its pixels. The page sizes the canvas to the game's
 box on the page, in as many pixels as the player's resolution setting asks
@@ -1295,7 +1295,7 @@ BOOL platform_video_initialize(unsigned long width, unsigned long height)
 	if (!platform_sdl_initialize())
 		return FALSE;
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
@@ -1348,7 +1348,7 @@ BOOL platform_video_initialize(unsigned long width, unsigned long height)
 
 		if (scale < 1)
 			scale = 1;
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 		/* (the page's canvas, which the page sizes and makes fullscreen) */
 		platform_window = SDL_CreateWindow("Halo", (int)(width * scale), (int)(height * scale),
 			SDL_WINDOW_OPENGL);
@@ -1414,7 +1414,7 @@ BOOL platform_video_initialize(unsigned long width, unsigned long height)
 	SDL_GL_MakeCurrent(platform_window, platform_gl_context);
 	if (!gl_functions_load())
 		return FALSE;
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	/* The browser publishes the OffscreenCanvas when each timed main-loop
 	callback returns. */
 	version = 0;
@@ -1467,7 +1467,7 @@ void platform_display_apply(void)
 	if (!platform_window)
 		return;
 #endif
-#ifndef HALO_WEB
+#ifndef HALO_BROWSER
 	/* (the browser presents when each main-loop callback returns: no swap
 	interval, platform_video_initialize) */
 #ifdef __APPLE__
@@ -1520,7 +1520,7 @@ static Uint64 frame_interval_ns(void)
 }
 
 #endif
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 void platform_web_frame_begin(void)
 {
 	web_canvas_size_apply();
@@ -1595,7 +1595,7 @@ void platform_video_swap(void)
 	Uint64 interval, now;
 
 #endif
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	web_frame_meter.swaps++;
 	/* Returning from the browser's main-loop callback presents this canvas. */
 #else
@@ -1768,7 +1768,7 @@ BOOL platform_next_keystroke(struct platform_keystroke *keystroke)
 
 /* ---------- internet play's invite links (p2p.c) */
 
-#if defined(HALO_ANDROID) && !defined(HALO_WEB)
+#if defined(HALO_ANDROID) && !defined(HALO_BROWSER)
 /* SDL declares it for Android builds only, which the guest is not
 (guest/runtime/guest_sdl.c passes it to the host) */
 bool SDL_ShowAndroidToast(const char *message, int duration, int gravity, int xoffset, int yoffset);
@@ -1829,7 +1829,7 @@ static void platform_invite_clipboard(BOOL look)
 		SDL_SetClipboardText(invite);
 		snprintf(seen, sizeof(seen), "%s", invite);
 		platform_log("Internet play: the invite link is on the clipboard");
-	#if defined(HALO_ANDROID) && !defined(HALO_WEB)
+	#if defined(HALO_ANDROID) && !defined(HALO_BROWSER)
 		SDL_ShowAndroidToast("Hosting: the invite link is on the clipboard", 1, -1, 0, 0);
 #endif
 	}
@@ -1844,7 +1844,7 @@ static void platform_invite_clipboard(BOOL look)
 			checksum copied for something else) */
 			if (platform_text_has_invite_link(text) && p2p_join_invite(text))
 			{
-			#if defined(HALO_ANDROID) && !defined(HALO_WEB)
+			#if defined(HALO_ANDROID) && !defined(HALO_BROWSER)
 				SDL_ShowAndroidToast("Joining the invite on the clipboard", 1, -1, 0, 0);
 #endif
 			}
@@ -2007,7 +2007,7 @@ void platform_request_quit(void)
 #endif
 }
 
-#if !defined(HALO_ANDROID) || defined(HALO_WEB)
+#if !defined(HALO_ANDROID) || defined(HALO_BROWSER)
 /* (under input_lock, on the event thread) the scoreboard's pointer on: the
 mouse freed, at the window's middle, and nothing held for the triggers */
 static void scoreboard_pointer_start(void)
@@ -2065,7 +2065,7 @@ void platform_scoreboard_scroll(int open, long *notches, long *pages)
 		scoreboard_pages = 0;
 	}
 	scoreboard_open_until_ms = open ? now + SCOREBOARD_OPEN_MS : 0;
-#if !defined(HALO_ANDROID) || defined(HALO_WEB)
+#if !defined(HALO_ANDROID) || defined(HALO_BROWSER)
 	if (!open)
 		scoreboard_pointer_offered = FALSE;
 #endif
@@ -2144,7 +2144,7 @@ void platform_pump_events(void)
 #endif
 	map_torrents_poll();
 	pthread_mutex_lock(&input_lock);
-#if !defined(HALO_ANDROID) || defined(HALO_WEB)
+#if !defined(HALO_ANDROID) || defined(HALO_BROWSER)
 	/* (the scoreboard closed, or no longer offering it: the pointer goes) */
 	if (scoreboard_pointer_active && (SDL_GetTicks() >= scoreboard_open_until_ms || !scoreboard_pointer_offered ||
 		input_state.ui_pointer))
@@ -2222,12 +2222,12 @@ void platform_pump_events(void)
 				/* (the pointer shows while released, hidden again in play) */
 				show_pointer(input_state.mouse_released || input_state.ui_pointer);
 			}
-		#if !defined(HALO_ANDROID) || defined(HALO_WEB)
+		#if !defined(HALO_ANDROID) || defined(HALO_BROWSER)
 			/* F11 switches between fullscreen and the window (SDL keeps the
 			window's size and place while fullscreen) */
 			if (event.key.down && !event.key.repeat && event.key.scancode == SDL_SCANCODE_F11)
 			{
-			#ifdef HALO_WEB
+			#ifdef HALO_BROWSER
 				SDL_SetWindowFullscreen(platform_window,
 					(SDL_GetWindowFlags(platform_window) & SDL_WINDOW_FULLSCREEN) ? false : true);
 			#else
@@ -2237,7 +2237,7 @@ void platform_pump_events(void)
 #endif
 			break;
 		case SDL_EVENT_MOUSE_MOTION:
-		#if !defined(HALO_ANDROID) || defined(HALO_WEB)
+		#if !defined(HALO_ANDROID) || defined(HALO_BROWSER)
 			if (scoreboard_pointer_active)
 			{
 				scoreboard_pointer.x = event.motion.x;
@@ -2275,7 +2275,7 @@ void platform_pump_events(void)
 				binding_captured_input = INPUT_MOUSE + event.button.button;
 				break;
 			}
-#if !defined(HALO_ANDROID) || defined(HALO_WEB)
+#if !defined(HALO_ANDROID) || defined(HALO_BROWSER)
 			/* the open scoreboard's pointer: a right click frees it (and
 			fires nothing), and another takes it back; its clicks pick */
 			if (!input_state.ui_pointer && SDL_GetTicks() < scoreboard_open_until_ms && scoreboard_pointer_offered &&
@@ -2346,7 +2346,7 @@ void platform_pump_events(void)
 				}
 				break;
 			}
-#if !defined(HALO_ANDROID) || defined(HALO_WEB)
+#if !defined(HALO_ANDROID) || defined(HALO_BROWSER)
 			if (input_state.ui_pointer)
 			{
 				/* whole notches: smooth-scrolling wheels send fractions */
@@ -2378,7 +2378,7 @@ void platform_pump_events(void)
 		case SDL_EVENT_WINDOW_FOCUS_GAINED:
 			input_state.focused = TRUE;
 			look_at_clipboard = TRUE;
-#if !defined(HALO_ANDROID) || defined(HALO_WEB)
+#if !defined(HALO_ANDROID) || defined(HALO_BROWSER)
 			if (!input_state.mouse_released && !input_state.ui_pointer && !scoreboard_pointer_active)
 				platform_mouse_capture(TRUE);
 #endif
@@ -2449,7 +2449,7 @@ void platform_pump_events(void)
 	}
 	pthread_mutex_unlock(&input_lock);
 	looked_at_clipboard = TRUE;
-	#ifndef HALO_WEB
+	#ifndef HALO_BROWSER
 	platform_invite_clipboard(look_at_clipboard);
 	#endif
 }
@@ -2486,7 +2486,7 @@ int platform_binding_capture_poll(int *input)
 	return result;
 }
 
-#if !defined(HALO_ANDROID) || defined(HALO_WEB)
+#if !defined(HALO_ANDROID) || defined(HALO_BROWSER)
 /* ---------- the menus' pointer */
 
 /* While a menu is up the mouse is released, its pointer shows (centered when

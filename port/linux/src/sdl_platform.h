@@ -63,7 +63,7 @@ struct platform_keystroke
 BOOL platform_sdl_initialize(void);
 /* creates the window and makes its OpenGL context current on this thread */
 BOOL platform_video_initialize(unsigned long width, unsigned long height);
-#if !defined(HALO_ANDROID) || defined(HALO_WEB)
+#if !defined(HALO_ANDROID) || defined(HALO_BROWSER)
 BOOL platform_screen_mode(long *width, long *height);
 #endif
 /* Video Setup's resolutions (port/linux/game/menu_tags.c), in pixels: the
@@ -88,7 +88,7 @@ void platform_video_drawable_size(int *width, int *height);
 just written it (the main thread's) */
 void platform_display_apply(void);
 void platform_video_swap(void);
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 /* Browser performance meter: the main-loop callback brackets one sample;
 platform_video_swap counts frames produced inside it. */
 void platform_web_frame_begin(void);

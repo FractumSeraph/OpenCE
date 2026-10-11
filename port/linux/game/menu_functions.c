@@ -2639,7 +2639,7 @@ static boolean multiplayer_host(struct widget_instance *widget, struct event_rec
 	multiplayer.game_private = !config_boolean("network.host_public");
 	p2p_set_hosting_public(multiplayer.mode == _multiplayer_mode_host_internet && !multiplayer.game_private);
 	multiplayer.cooperative_maximum_players_set = FALSE;
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	/* (in the browser the server is reached through a room of the page's,
 	which this opens: port/web/src/web_online_ui.c) */
 	{
@@ -3130,7 +3130,7 @@ static void server_settings_update(struct widget_instance *list)
 			NUMBEROF(maximum_players) - 1);
 	wide_to_text(multiplayer.game_name, text, sizeof(text));
 	text_field_show(named(list, "server_name_value", 0), text, text_field_editing(row));
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	/* (a LAN game and an INTERNET one alike: the page's room, its invite) */
 	if (!p2p_invite_link(text, sizeof(text)))
 		snprintf(text, sizeof(text), "OPENING A ROOM...");
@@ -3171,7 +3171,7 @@ static void server_settings_update(struct widget_instance *list)
 	}
 	/* LISTING (an internet game's): PUBLIC, listed in everyone's server
 	browser, or PRIVATE, for this game. Its help is its choice's */
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	/* (the browser's public games are the lobby service's list, not internet
 	play's: web_online_ui.c) */
 	visible_set(named(list, "op_listing", 0), multiplayer.mode == _multiplayer_mode_host_internet &&
@@ -3192,7 +3192,7 @@ static void server_settings_update(struct widget_instance *list)
 	}
 	/* PASSWORD (a PUBLIC internet game's): its stars, NONE if it has none */
 	row = named(list, "op_password", 0);
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	/* (a browser's room has no password to ask for: its invite is the key) */
 	visible_set(row, FALSE);
 #else
@@ -3293,7 +3293,7 @@ static boolean server_start(void)
 	}
 	else if (!gametype_setup_apply())
 		return campaign_fail();
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	/* (its settings final: a PUBLIC game is listed from now on, as internet
 	play lists its games once the lobby opens: web_online_ui.c) */
 	{
@@ -3422,7 +3422,7 @@ static void browser_focus(struct widget_instance *list)
 /* (the server browser's: below) */
 static void lobby_browser_begin(struct widget_instance *screen);
 static void lobby_browser_update(struct widget_instance *list);
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 static void lobby_browser_web_join_update(void);
 static void lobby_browser_web_join_cancel(void);
 #endif
@@ -3637,7 +3637,7 @@ in the browser build the page's (port/web/src/web_public_games.c: through the
 native gateway, without p2p.c's thread) */
 static boolean lobby_browser_online(void)
 {
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	return TRUE;
 #else
 	return config_boolean("network.online");
@@ -3686,7 +3686,7 @@ static void lobby_browser_begin(struct widget_instance *screen)
 static void lobby_browser_end(void)
 {
 	lobby_browser.joining = lobby_browser.ready = FALSE;
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	/* (a game left with its map still being fetched is not joined later) */
 	lobby_browser_web_join_cancel();
 #endif
@@ -3744,7 +3744,7 @@ static long lobby_browser_compare(struct p2p_listing const *a, struct p2p_listin
 {
 	long order;
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	/* (the browser build: games hosted in browsers, the page's rooms
 	(web_public_games.c, "web:<room>"), first, whatever the column) */
 	{
@@ -3837,7 +3837,7 @@ static short lobby_browser_valid_games(struct p2p_listing *games, short count)
 	return written;
 }
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 /* the browser's: Delta List, ChupathingyCE's game list
 (port/web/src/web_delta_list.c) */
 #include "../../web/src/web_delta_list.h"
@@ -3848,7 +3848,7 @@ first, those other browsers host (port/web/src/web_public_games.c), and
 last, those only ChupathingyCE's game list has (web_delta_list.c) */
 static short lobby_browser_games_found(void)
 {
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	extern int web_public_rooms_games(struct p2p_listing *games, int maximum_count);
 	short count = (short)web_public_rooms_games(lobby_browser.games, LOBBY_BROWSER_GAMES);
 
@@ -4210,7 +4210,7 @@ static void lobby_browser_update(struct widget_instance *list)
 	short chosen;
 	boolean message;
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	/* (a game waiting for its map: joined once it is fetched) */
 	lobby_browser_web_join_update();
 #endif
@@ -4288,7 +4288,7 @@ static void lobby_browser_update(struct widget_instance *list)
 			if (lock)
 				lock->animation.current_frame_index = 1;
 		}
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 		/* (a dedicated server's game, as Delta List says) */
 		visible_set(named(row, "server_item_dedicated", 0), web_delta_list_dedicated(game->invite) != 0);
 #else
@@ -4425,7 +4425,7 @@ static void lobby_browser_update(struct widget_instance *list)
 
 /* the game's host reached by its invite (joined, once it is reached:
 lobby_browser_update) */
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 /* a game whose Custom Edition map is being fetched onto this device before
 the browser joins it (web_map_torrents.c: a host gives a joining machine
 only moments to load the map, a native host 15 seconds, which reading it
@@ -4486,7 +4486,7 @@ static void lobby_browser_web_join_cancel(void)
 
 static boolean lobby_browser_join(struct p2p_listing const *game, short controller)
 {
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	/* (another game chosen while one's map is fetched: that one is let go,
 	so a fetch that never ends cannot keep the browser from joining) */
 	lobby_browser_web_join_cancel();
@@ -4498,7 +4498,7 @@ static boolean lobby_browser_join(struct p2p_listing const *game, short controll
 #endif
 	if (!p2p_join_invite(game->invite))
 		return FALSE;
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	/* (the page joins it and shows its lobby: nothing to wait for here) */
 	ui_play_audio_feedback_sound(SOUND_FORWARD);
 	return TRUE;
@@ -4719,7 +4719,7 @@ boolean ui_widget_port_join_map_fetch(void *advertised_game)
 	{
 		return FALSE;
 	}
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	/* (the browser has the site's maps, fetched before the Server Browser
 	joins: lobby_browser_join; one the site lacks is said to be missing) */
 	return FALSE;
@@ -5461,7 +5461,7 @@ static void lobby_update(struct widget_instance *list)
 		{
 			size_t length = ustrlen(text);
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 			/* (a page copies only when clicked: its Copy link, beside the game) */
 			usnprintf(text + length, NUMBEROF(text) - 1 - length, L"\r\n\r\nInvite friends: Copy link,\r\nbeside the game");
 #else

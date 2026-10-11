@@ -1,7 +1,7 @@
 name: Web build
 
 # The browser version and the kits to host it:
-# - halo-web.zip: `ninja web` with Emscripten, after the browser tests
+# - halo-web.zip: `ninja browser` with Emscripten, after the browser tests
 #   (tools/web_package.py: the page, the game, touch controls and app icons,
 #   ready to serve; no game data);
 # - halo-server-linux-x64.zip and halo-server-windows-x64.zip: the same game
@@ -61,7 +61,7 @@ jobs:
           source ~/emsdk/emsdk_env.sh
           emcc --version | head -1
           python3 configure.py --release --pgo=off --lto=off --web-cc ~/emsdk/upstream/emscripten/emcc
-          ninja web
+          ninja browser
 
       - name: Test
         run: |

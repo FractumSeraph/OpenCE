@@ -301,7 +301,7 @@ static unsigned short msvc_to_control_word(unsigned int value, unsigned short wo
 	return word;
 }
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 /* WebAssembly currently exposes no mutable hardware floating-point control
 word.  Keep the value the game expects to read back; Wasm arithmetic remains
 round-to-nearest and has no observable sticky exception register. */

@@ -107,7 +107,7 @@ enum
 static const char signature_label[] = "hceu-lobby-1";
 
 /* the listings shown: this machine's network version's */
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 /* web: Delta's join range (port/web/src/web_delta.c), as ChupathingyCE's
 browsers: every version back to the newest breaking one */
 int delta_legacy_minimum(void);
@@ -910,7 +910,7 @@ void p2p_lobby_mark_failed(const unsigned char *identifier)
 	pthread_mutex_unlock(&p2p_lock);
 }
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 /* The hosted game as its server last told it (p2p_set_game_listing,
 p2p_set_hosting_public and _password), for the browser's own list of public
 games (port/web/src/web_online_ui.c), which it is listed on instead of

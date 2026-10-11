@@ -1,7 +1,7 @@
 /* The browser build's stand-ins for the Android touchscreen
 (port/linux/src/touch_input.c, OpenCE's bridge to the Android host's touch
 overlay, which reads the host's events and is left out of the web build:
-WEB_EXCLUDED_PLATFORM_SOURCES in tools/web_build.py). The page has touch
+WEB_EXCLUDED_PLATFORM_SOURCES in tools/browser_build.py). The page has touch
 controls of its own (port/web/assets/touch), which press keys and move the
 mouse; so these do nothing, as on a desktop with no touchscreen. And the updater's version,
 which the window's title asks for (updater.c, also left out). */

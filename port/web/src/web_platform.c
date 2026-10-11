@@ -110,7 +110,7 @@ name: its size, a map's BLAKE2b-256 (the server hashes them once:
 map-hashes.mjs), for Delta's map identity (web_delta_peer.c), the browser
 having not the whole file to hash; and a map's header, its first 2048
 bytes, from which the game lists the maps (custom_edition_cache.c,
-HALO_WEB: web_custom_map_header) instead of reading each one's first piece
+HALO_BROWSER: web_custom_map_header) instead of reading each one's first piece
 from the server, which for a hundred maps was over 30 MB before the menus
 answered on a phone */
 #define MAXIMUM_CUSTOM_MAP_FILES 1024

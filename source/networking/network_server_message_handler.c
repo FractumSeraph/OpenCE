@@ -1058,7 +1058,7 @@ boolean network_game_server_send_player_joined_info_ingame(
 	return FALSE;
 }
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 /* web: an add-player retry can mean that this client missed the authoritative
 in-game add after loading. Send the existing player back only to that client
 so it can rebuild its local player/camera mapping without duplicating the
@@ -2722,7 +2722,7 @@ static boolean network_game_server_handle_message_client_add_player_request_inga
 			&packet_version,
 			_network_game_packet_class_client_ingame))
 		{
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 			/* web: the machine's player already in the game, asked for again:
 			the client may have missed its in-game add, so send it back to that
 			client alone (the queue below would only ignore the repeat) */

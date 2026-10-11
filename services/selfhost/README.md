@@ -318,7 +318,7 @@ commands for a Linux VPS.
 ## Building it yourself
 
 The kit is built by the repository's `Web build` workflow
-(`.github/workflows/web.yml`): the game (`ninja web` with Emscripten), the
+(`.github/workflows/web.yml`): the game (`ninja browser` with Emscripten), the
 lobby service (`services/signaling`, bundled with `wrangler deploy --dry-run`),
 the gateway (`services/native-gateway`, `cargo build --release`), Node.js,
 and this server (`services/selfhost`), put together by
@@ -327,7 +327,7 @@ and this server (`services/selfhost`), put together by
 To run the server from a checkout (Node.js 22 or newer):
 
 ```
-# the game: unzip dist/halo-web.zip (tools/web_package.py, after ninja web)
+# the game: unzip dist/halo-web.zip (tools/web_package.py, after ninja browser)
 # and rename its halo-web folder to services/selfhost/public
 # the lobby service
 cd services/signaling

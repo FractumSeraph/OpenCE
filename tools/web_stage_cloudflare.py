@@ -68,7 +68,7 @@ def stamp_build_id(path: Path, build_id: str) -> None:
 
 def main() -> int:
     repository = Path(__file__).resolve().parents[1]
-    web_build = repository / "build" / "web"
+    web_build = repository / "build" / "browser"
     output = repository / "build" / "cloudflare-web"
 
     if output.exists():

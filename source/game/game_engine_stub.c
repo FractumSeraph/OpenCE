@@ -42,7 +42,7 @@ symbols in this file:
 
 #include "cseries/cseries.h"
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 /* (web: the stub engine is a struct game_engine whose callbacks carry
 their real parameters, game_engine.h: wasm's call_indirect traps on a call
 through a pointer whose signature does not match the function's) */
@@ -51,7 +51,7 @@ through a pointer whose signature does not match the function's) */
 
 /* ---------- constants */
 
-#ifndef HALO_WEB
+#ifndef HALO_BROWSER
 enum
 {
 	_game_engine_type_stub = 7,
@@ -63,7 +63,7 @@ enum
 
 /* ---------- structures */
 
-#ifndef HALO_WEB
+#ifndef HALO_BROWSER
 typedef void (*stub_game_engine_callback)(void);
 
 struct stub_game_engine
@@ -80,7 +80,7 @@ typedef char verify_stub_game_engine_size[sizeof(struct stub_game_engine) == 0x8
 
 /* ---------- prototypes */
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 static void stub_engine_dispose(void);
 static boolean stub_engine_initialize_for_new_map(void);
 static void stub_engine_dispose_from_old_map(void);
@@ -129,7 +129,7 @@ static void stub_engine_player_killed_player(void);
 
 /* ---------- globals */
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 struct game_engine stub_engine =
 {
 	"stub",
@@ -224,7 +224,7 @@ static void stub_engine_dispose_from_old_map(void)
 {
 }
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 static void stub_engine_player_added(
 	long player_index)
 {
@@ -244,7 +244,7 @@ static void stub_engine_game_starting(void)
 {
 }
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 static void stub_engine_statistics_append(
 	long statistic)
 {
@@ -288,7 +288,7 @@ static void stub_engine_update(void)
 {
 }
 
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 static boolean stub_engine_allow_pick_up(
 	long unit_index,
 	long weapon_index)

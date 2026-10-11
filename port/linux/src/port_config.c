@@ -85,7 +85,7 @@ music broke up, which 1024 (21 ms) does not. Elsewhere 512 keeps the
 latency low. */
 #ifdef __APPLE__
 #define DEFAULT_AUDIO_BUFFER_FRAMES "2048"
-#elif defined(HALO_ANDROID) && !defined(HALO_WEB)
+#elif defined(HALO_ANDROID) && !defined(HALO_BROWSER)
 #define DEFAULT_AUDIO_BUFFER_FRAMES "1024"
 #else
 #define DEFAULT_AUDIO_BUFFER_FRAMES "512"
@@ -163,7 +163,7 @@ static const struct config_setting config_settings[] =
 		_platform_all,
 		"The size the objects' shadows are drawn at, in pixels each way: 128 as\n"
 		"on the Xbox, or 256, 512 or 1024 for smoother edges, as soft." },
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	/* (the browser build's online play, the page's rooms and the native
 	gateway, is wired into the PC screens: Create Game and the Server Browser) */
 	{ "display.menus", _config_string, "\"pc\"", "HALO_MENUS", _environment_value, _platform_all,
@@ -299,7 +299,7 @@ static const struct config_setting config_settings[] =
 		"Moving right." },
 	{ "controls.jump", _config_string, "\"Space\"", "HALO_KEY_JUMP", _environment_value, _platform_all,
 		"Jumping (and skipping cutscenes)." },
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	/* (in a browser, Ctrl makes Ctrl+W and the like a slip of the finger
 	away from closing the tab) */
 	{ "controls.crouch", _config_string, "\"C\"", "HALO_KEY_CROUCH", _environment_value, _platform_all,
@@ -770,7 +770,7 @@ static const struct config_setting config_settings[] =
 
 #define NUMBER_OF_CONFIG_SETTINGS (sizeof(config_settings) / sizeof(config_settings[0]))
 
-#if defined(HALO_ANDROID) && !defined(HALO_WEB)
+#if defined(HALO_ANDROID) && !defined(HALO_BROWSER)
 #define CONFIG_PLATFORM _platform_android
 #elif defined(_WIN32)
 #define CONFIG_PLATFORM (_platform_desktop | _platform_windows)
@@ -812,7 +812,7 @@ int platform_app_folder(char *path, unsigned long size)
 
 static void config_path(char *path, size_t size)
 {
-#ifdef HALO_WEB
+#ifdef HALO_BROWSER
 	snprintf(path, size, "/storage/config.toml");
 	return;
 #endif
@@ -1012,7 +1012,7 @@ static void config_append_setting(struct config_text *text, const struct config_
 		if (*line)
 			line++;
 	}
-#if !defined(HALO_ANDROID) || defined(HALO_WEB)
+#if !defined(HALO_ANDROID) || defined(HALO_BROWSER)
 	/* (Android apps have no environment to set) */
 	switch (setting->environment_style)
 	{
@@ -1039,7 +1039,7 @@ static char *config_default_text(void)
 	char section[32] = "";
 	size_t index;
 
-#if defined(HALO_ANDROID) && !defined(HALO_WEB)
+#if defined(HALO_ANDROID) && !defined(HALO_BROWSER)
 	config_append(&text,
 		"# Halo settings\n"
 		"#\n"
