@@ -798,6 +798,22 @@ void xgpu_gl_state_invalidate(void)
 	memset(&gl_state, 0xff, sizeof(gl_state));
 }
 
+/* (a unit the shadows still said had it would never be bound to a new
+texture GL gives its name to: OpenCE's, for menu_files.c's art) */
+void xgpu_gl_texture_deleted(unsigned int texture)
+{
+	int unit, slot;
+
+	for (unit = 0; unit < D3DTSS_MAXSTAGES; unit++)
+	{
+		for (slot = 0; slot < 3; slot++)
+		{
+			if (gl_state.textures[unit][slot] == texture)
+				gl_state.textures[unit][slot] = (GLuint)-1;
+		}
+	}
+}
+
 static void state_enable(unsigned char *shadow, GLenum capability, BOOL enabled)
 {
 	unsigned char value = enabled ? 1 : 0;

@@ -705,12 +705,17 @@ static BOOL read_at(struct platform_file *file, LPVOID buffer, DWORD count, LPDW
 		if (result == 0)
 			break;
 		if (bounce)
+		{
+			/* (where pages are watched by their hashes, port/web, so that a
+			page long unchanged is checked again in the next frame) */
+			memory_watch_prepare_write((char *)buffer + total, (unsigned long)result);
 #ifdef HALO_64BIT
 			/* (read-only guest pages, which a host page holds with others) */
 			platform_contiguous_write((char *)buffer + total, staging, (size_t)result);
 #else
 			memcpy((char *)buffer + total, staging, (size_t)result);
 #endif
+		}
 		total += (DWORD)result;
 	}
 	free(staging);

@@ -17,6 +17,9 @@ threads, asynchronous procedure calls, time, memory and debug output.
 #include <sys/mman.h>
 #include <time.h>
 #include <unistd.h>
+#ifdef HALO_WEB
+#include <emscripten.h>
+#endif
 
 #define PLATFORM_HANDLE_SIGNATURE 0x686e646cUL /* 'hndl' */
 
@@ -702,6 +705,10 @@ static unsigned long long platform_clock_nanoseconds(void)
 	the cost of its raw clock; the game reads the clock hundreds of times a
 	frame) */
 	value = clock_gettime_nsec_np(CLOCK_MONOTONIC_RAW);
+#elif defined(HALO_WEB)
+	/* (the browser's clock, in milliseconds, which clock_gettime reads too,
+	without the 64-bit conversions of its way there) */
+	value = (unsigned long long)(emscripten_get_now() * 1000000.0);
 #else
 	struct timespec now;
 
