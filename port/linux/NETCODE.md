@@ -187,9 +187,32 @@ times (a client waits for a player's blow before its body dies without one),
 and switches co-op's BSP on the host's crossing alone; version 26 has each
 machine say its WebRTC in internet play's signalling (a native build's
 certificate, a browser's ICE credentials too), so that browsers play
-(port/linux/README.md, "Browsers"); version 27 shares Custom Edition maps
-(below, "Map sharing"): a client asks the host for a map it lacks, and the
-game's players reach each other to send it.
+(port/linux/README.md, "Browsers"); version 27 shared Custom Edition maps
+through the game's connections (builds 189 and 190: a client asked the
+host for a map it lacked, and the players reached each other to send it).
+Later builds are version 27 too, without its map sharing: a client
+downloads a Custom Edition map it lacks before it joins, from the map
+archives or over BitTorrent (docs/map_torrents.md), which sends nothing
+over the game's connections, and a version 27 machine of builds 189 and 190
+plays with them as with a version 27 machine that does not share maps:
+
+- its request for a map is answered as such a host answers it ("off":
+  `port/linux/game/map_share_decline.c`), and its other map sharing
+  messages (83 to 86) are dropped, as any message of a type not known is;
+- its players' sessions with each other (signalling's join and accept
+  messages, between players) are not answered: those builds reach other
+  players only to fetch maps;
+- its host's level names have the map's hash after them
+  (`custom_maps\<name>_<8 hexadecimal digits>`: it named each map for its
+  contents' hash), and a client of these builds, which renames no map,
+  finds `<name>.map` for them, checked against the host's checksum as any
+  map is (`custom_edition_cache.c`, `map_torrents.c`);
+- the maps those builds renamed in a player's `custom_maps`
+  (`<name>_<hash>.map`) stay as they are, and play: hosted under their
+  file's name as any map is, found for a host's `custom_maps\<name>` when
+  their header's checksum is the host's (`renamed_file_find`), and listed
+  without the hash, unless two versions of the map are listed
+  (`custom_edition_maps.c`).
 
 A client plays by its host's rules: in another's game (searching for it,
 in its lobby, or playing it) the developer console, the telnet console
@@ -322,70 +345,6 @@ Until it has loaded, the machine hears none of the game's messages (which a
 machine in the pregame refuses, and which the others no longer need), only
 a pregame keep-alive every five seconds from the host
 (`network_server_manager.c`, `network_server_message_handler.c`).
-
-## Map sharing
-
-A client may join a game on a Custom Edition map it does not have
-(`port/linux/game/map_share.c`, `map_share_files.c`). Every map in the
-custom_maps folder is named for its contents: once the map lists (or a host
-picking it) find it, `hugeass.map` is renamed `hugeass_<8 hex digits>.map`,
-the first digits of its hash, with its picture and description, so a game's
-level name (`custom_maps\hugeass_0e2b3ee4`) says which version of the map it
-is, and two versions never meet. A file's hash is BLAKE2b's (32 bytes) of a
-label, its size and the BLAKE2b hashes of its pieces (256 KiB each). The
-menus show a map without its hash, unless two versions are listed.
-
-- **Asking.** A client whose settings name a map it lacks
-  (`cache_files_map_present`), or one whose resource maps it lacks, asks the
-  host over its connection (`_distributed_message_map_share_request`: the
-  level, and which of the map, bitmaps.map, sounds.map and loc.map it
-  lacks) instead of leaving, if `network.map_download` lets it; the map must
-  be named for its hash. Its players wait to join until the host's settings
-  have named the map, and for a game in progress until it is downloaded; in
-  the lobby they join at once, and the host's start waits for the machine to
-  precache the map, as it waits for any machine.
-- **The offer.** A host that shares maps (`network.map_share`) hashes the
-  map, and the resource maps the map needs (its tag index says which: a tag
-  whose entry's word at 0x18 is set is held whole by bitmaps.map for a
-  bitmap, sounds.map for a sound, loc.map for a font, string list or HUD
-  message text) that the client lacks, on a thread of their own, and
-  answers with each file's size and hash (`_offer`, or why it does not:
-  sharing off, or not the game's map), and which of its other machines may
-  have them (`_sources`: an address on a LAN, internet play's key hash on the
-  internet), again every ten seconds. A map whose hash is not its name's is
-  not offered. The client checks that the map's hash is its name's, and
-  that no file is larger than the cache loader takes.
-- **The swarm.** The client connects to the host and up to eight of the
-  others on port 5153 (of two downloading, the one of the lower machine
-  connects). Each end says which files it has, whole or by piece, and tells
-  the other of each piece it gets; the client asks for the rarest pieces
-  first (from a random place, so that clients ask for different pieces), two
-  at a time from each connection, sixteen in all, and the last few again of
-  whoever is quicker. The pieces' hashes come from any end that has them,
-  checked against the file's hash; each piece is checked against its own as
-  it arrives, and an end that sends a wrong one is not asked again. A machine
-  sends of the game's files (its map, the resource maps the map needs, a
-  download's pieces) no faster than `network.map_share_upload` (the host,
-  1024 KB/s) or `network.map_seed_upload` (a player, 256 KB/s), round all
-  its connections a 16 KiB block at a time, so that the game's own traffic
-  keeps the rest of the upload; `network.map_seed = false` sends none. A
-  player that has downloaded the map sends it on at once.
-- **Internet play.** The players of an internet game reach its host alone.
-  A player that shares answers the holders of the invite it joined with as
-  its host does (`p2p_set_answering_players`), and a downloading client asks
-  another player, by the key hash the host told, for a session as it asked
-  the host (`p2p_reach_player`: up to eight at once, alongside the request to
-  the host, in one topic of the invite's token). Its map sharing connection
-  then goes through their tunnel, as the game's connections go.
-- **Writing.** A download is written to `<file>.part` beside its file in
-  custom_maps, and renamed when every piece is had. A part file found again
-  is checked piece by piece on the hashing thread and taken up where it was.
-  The client checks the map again once it has it (`custom_edition_cache_present`),
-  and tells the host its progress every two seconds (`_progress`); the host
-  does not drop a machine downloading (and for 20 seconds after) for adding
-  no players or loading slowly. A download that brings nothing for a minute,
-  or a host that does not answer in 30 seconds, leaves the game, saying why.
-- The download's progress is drawn at the top of the screen.
 
 ## Stages
 
