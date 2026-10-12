@@ -392,6 +392,7 @@ symbols in this file:
 #include "networking/network_server_manager.h"
 #include "text/unicode.h"
 #include "halo_map_families.h" /* port: map_family_from_wire_name */
+#include "map_share.h" /* port: port/linux/game/map_share.c */
 
 /* ---------- constants */
 
@@ -933,6 +934,11 @@ void network_game_client_dispose(
 		void map_torrents_playing(const char *level_name, unsigned long version, int hosting);
 
 		map_torrents_playing(NULL, 0, 0);
+		/* port: the versions of maps found for the game (a host's, beside
+		this machine's own) no longer the maps' (halo_map_families.h) */
+#ifdef HALO_CUSTOM_EDITION
+		map_family_aliases_forget();
+#endif
 		if (client->connection)
 			network_connection_delete(client->connection);
 
@@ -1557,6 +1563,12 @@ boolean network_game_client_add_player(
 	  if (dedicated_server_active())
 		return TRUE; }
 #endif
+
+	/* port: not until the host's settings name the game's map, and a game
+	in progress whose map is being downloaded not until it is (map sharing:
+	port/linux/game/map_share.c); asked again each frame */
+	if (map_share_holds_players())
+		return TRUE;
 
 	/* port: the pregame screen asks each frame until the host's settings
 	have the player: once every half second, not each frame (the host

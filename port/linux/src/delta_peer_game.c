@@ -458,6 +458,14 @@ static void client_map(void)
 		delta_game.map_checked = generation;
 		return;
 	}
+	/* (being downloaded from the game, map sharing's: compared once it is
+	there, the host's version then the one this game plays, map_share.c) */
+	{
+		unsigned char map_share_downloading(char const *level_name);
+
+		if (map_share_downloading(name))
+			return;
+	}
 	result = delta_maps_identity(name, &mine);
 	/* (being hashed: asked again next frame) */
 	if (!result)

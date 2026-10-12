@@ -100,6 +100,21 @@ the suffix), as cache_files_windows.c opens it: the path (for CreateFileA)
 of the first of the family's places that is a cache file of the family's
 version; FALSE if there is none */
 boolean map_family_find(short family, char const *file, char *path, long size);
+/* the same of a version (the checksum in its header, as a network game's
+settings name it; 0: any): this machine's own file of the name, or another
+version's beside it (<file>_<hash>.map, OpenCE's map sharing's name), or for
+a name with a hash (<base>_<8 hex digits>) its base's file of that version.
+The file found is the name's for the rest of the game (map_family_find
+finds it), until map_family_aliases_forget. No file is renamed. */
+boolean map_family_find_version(short family, char const *file, unsigned long version, char *path, long size);
+/* a Custom Edition name's file from now on (map_family_find's): for the
+game (lasting FALSE: forgotten by map_family_aliases_forget, when this
+machine leaves a network game), or for good (a host's hash-named level,
+map_share_level_name_hash) */
+void map_family_alias(char const *file, char const *path, boolean lasting);
+void map_family_aliases_forget(void);
+/* a Custom Edition cache file's checksum (its version); 0 if it is not one */
+unsigned long map_family_file_checksum(char const *path);
 
 /* every multiplayer map of a family past the Xbox's, in its folders: each
 one's file's name (without the suffix, each once), passed to found */

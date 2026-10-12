@@ -137,6 +137,7 @@ symbols in this file:
 #include "tag_schema.h"
 #include "halo_map_families.h"
 #include "models/models.h"
+#include "map_share.h" /* port: port/linux/game/map_share.c */
 
 /* ---------- constants */
 
@@ -1167,7 +1168,10 @@ next, rather than the damaged disc error that precaching a map that is not
 there gives (cache_files_give_time_to_precache). A Halo PC map (<file>@ce,
 @pc or @md) is looked for in its family's folders (halo_map_families.h), an
 Xbox map in maps. (After OpenCE's build-145, which tells its players so.) A Halo PC map must be the host's version
-(version, cache_files_map_version's on the host; 0 for any). */
+(version, cache_files_map_version's on the host; 0 for any). A Custom
+Edition map this machine lacks (or whose resource maps it lacks) is asked of
+the host instead, if it may be (map sharing: port/linux/game/map_share.c):
+it is taken as present, and downloaded before it is precached. */
 boolean cache_files_map_present(
 	char const *map_name,
 	unsigned long version)
@@ -1196,22 +1200,39 @@ boolean cache_files_map_present(
 				"The map %.63s is a %s map, and Halo PC maps are turned off (game.custom_edition in config.toml).",
 				file, map_family_badge(family));
 		}
-		else if (map_family_find(family, file, path, sizeof(path)))
+		/* port: the host's version of it, when the host says which: this
+		machine's own file, or another version's beside it, or for a name with
+		its hash (OpenCE's map sharing's, custom_maps\<name>_<hash>) the base
+		name's file of that version (map_family_find_version: the file the
+		game then plays, never renamed); a Custom Edition map's resource maps
+		too (map_share_maps.c) */
+		else if (family == _map_family_custom_edition ?
+			custom_edition_map_present(map_name, version, message, sizeof(message)) :
+			map_family_find_version(family, file, version, path, sizeof(path)))
 		{
-			unsigned long own = cache_files_map_version(map_name);
-
-			/* (the host's version of it, when the host says which) */
-			if (!version || own == version)
-				return TRUE;
-			platform_log("map version: %s is %08lx here, %08lx on the host", map_name, own, version);
+			return TRUE;
+		}
+		else if (family != _map_family_custom_edition && map_family_find(family, file, path, sizeof(path)))
+		{
+			platform_log("map version: %s is %08lx here, %08lx on the host", map_name,
+				cache_files_map_version(map_name), version);
 			snprintf(message, sizeof(message),
 				"Your %s map %.63s is another version than the host's. Copy the host's %.63s.map into %s.",
 				map_family_badge(family), file, file, map_family_folder(family));
 		}
-		else
+		else if (family != _map_family_custom_edition)
 		{
 			snprintf(message, sizeof(message), "You don't have the %s map %.63s. If you have it, copy %.63s.map into %s.",
 				map_family_badge(family), file, file, map_family_folder(family));
+		}
+		/* port: a Custom Edition map missing here (or another version than
+		the host's, or one whose resource maps are missing) asked of the host
+		instead, if it shares it (map sharing: port/linux/game/map_share.c):
+		taken as present, and downloaded before it is precached */
+		if (family == _map_family_custom_edition && map_families_enabled() &&
+			map_share_download_begin(map_name, version, message))
+		{
+			return TRUE;
 		}
 		/* port: a Custom Edition map missing here, or another version than the
 		host's, downloaded if the maps' torrent index has it
@@ -1284,6 +1305,10 @@ boolean cache_files_give_time_to_precache(
 	the main menu and three multiplayer maps played) matched none, so was
 	taken for a map missing from the disc (the damaged disc error) */
 	if (!map_name || !map_name[0])
+		return FALSE;
+	/* port: a map being downloaded (port/linux/game/map_share.c) is not
+	there yet: precached once it is */
+	if (map_share_downloading(map_name))
 		return FALSE;
 	if (cache_files_precache_map_loaded(map_name))
 	{

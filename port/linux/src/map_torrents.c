@@ -12,8 +12,10 @@ bitmaps.map, sounds.map and loc.map when they are missing. Each is looked
 up in the index of the maps' torrents (maps.torrent_index: the file name
 and, for the map, the header checksum the host sent, which is the game
 record's map version), and downloaded into maps_ce\downloads; a file that
-arrives whole is moved into maps_ce (one of its name there becoming
-<name>.old) and marked downloaded (map_downloaded_mark: its scripts held to
+arrives whole is moved into maps_ce (beside one of its name there, as
+<name>_<hash>.map, OpenCE's map sharing's name: a map is never renamed or
+replaced, map_families.c finds the version a game plays) and marked
+downloaded (map_downloaded_mark: its scripts held to
 the tighter rules), and once every file is there the menus try the join
 again (map_torrents_take_ready). The menus show how it goes
 (map_torrents_fetching).
@@ -539,25 +541,42 @@ int map_torrents_fetch(const char *level_name, unsigned long version, const char
 	return 1;
 }
 
-/* a file that arrived: into custom_maps, the one of its name there kept
-as <name>.old */
+/* a file that arrived: into maps_ce; beside one of its name there (another
+version), as <name>_<hash>.map, the one there never touched */
 static int fetch_file_done(int which)
 {
+	/* (map_share_files.c's) */
+	unsigned char map_share_file_digits(const char *path, char *digits);
 	char folder[1024];
 	char destination[1200];
-	char old[1200];
+	const char *name = fetch.files[which].name;
+	size_t length = strlen(name);
 
 	if (!custom_maps_folder(folder, sizeof(folder)))
 		return 0;
-	snprintf(destination, sizeof(destination), "%s%s", folder, fetch.files[which].name);
+	snprintf(destination, sizeof(destination), "%s%s", folder, name);
 	if (file_present(destination))
 	{
-		snprintf(old, sizeof(old), "%s.old", destination);
-		unlink(old);
-		if (rename(destination, old) != 0)
+		char download[1200];
+		char digits[16];
+
+		/* (the download's own hash, from where it is: maps_ce\downloads) */
+		snprintf(download, sizeof(download), "%s%s\\%s", CUSTOM_MAPS_XBOX_PATH, DOWNLOADS_FOLDER, name);
+		if (length <= strlen(MAP_FILE_EXTENSION) || !map_share_file_digits(download, digits))
 		{
-			platform_log("map torrents: %s could not be renamed to %s", destination, old);
+			platform_log("map torrents: %s is there already, and the download could not be hashed to go beside it",
+				destination);
 			return 0;
+		}
+		snprintf(destination, sizeof(destination), "%s%.*s_%s%s", folder, (int)(length - strlen(MAP_FILE_EXTENSION)),
+			name, digits, MAP_FILE_EXTENSION);
+		/* (that version there already: the download is it) */
+		if (file_present(destination))
+		{
+			torrent_remove(fetch.files[which].handle);
+			fetch.files[which].done = 1;
+			platform_log("map torrents: %s is there already", destination);
+			return 1;
 		}
 	}
 	if (!torrent_move(fetch.files[which].handle, destination))

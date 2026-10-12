@@ -180,9 +180,11 @@ short map_family_from_wire_name(
 enum
 {
 	/* a cache file's header: 'head', its version, ..., its scenario's type
-	(a short at 0x60: 0 solo, a campaign map; 1 multiplayer), or any type */
+	(a short at 0x60: 0 solo, a campaign map; 1 multiplayer), or any type,
+	and its checksum (0x64: the map's version, as network games compare it) */
 	CACHE_HEADER_SIGNATURE = 'head',
 	CACHE_HEADER_TYPE_OFFSET = 0x60,
+	CACHE_HEADER_CHECKSUM_OFFSET = 0x64,
 	CACHE_TYPE_SOLO = 0,
 	CACHE_TYPE_MULTIPLAYER = 1,
 	CACHE_TYPE_ANY = -1,
@@ -329,12 +331,13 @@ static boolean place_folder(
 
 /* whether a file is a cache file of a version, and of a scenario type
 (CACHE_TYPE_SOLO, _MULTIPLAYER) unless CACHE_TYPE_ANY */
-static boolean cache_file_is(
+static boolean cache_file_header_is(
 	char const *path,
 	long version,
-	short type)
+	short type,
+	unsigned long *checksum)
 {
-	unsigned long header[(CACHE_HEADER_TYPE_OFFSET + 4) / 4];
+	unsigned long header[(CACHE_HEADER_CHECKSUM_OFFSET + 4) / 4];
 	unsigned long bytes_read = 0;
 	HANDLE file;
 	boolean result = FALSE;
@@ -356,6 +359,8 @@ static boolean cache_file_is(
 			known_size >= sizeof(header))
 		{
 			memcpy(header, known, sizeof(header));
+			if (checksum)
+				*checksum = header[CACHE_HEADER_CHECKSUM_OFFSET / 4];
 			return header[0] == CACHE_HEADER_SIGNATURE && header[1] == (unsigned long)version &&
 				(type == CACHE_TYPE_ANY || (header[CACHE_HEADER_TYPE_OFFSET / 4] & 0xffff) == (unsigned short)type);
 		}
@@ -368,9 +373,221 @@ static boolean cache_file_is(
 	{
 		result = header[0] == CACHE_HEADER_SIGNATURE && header[1] == (unsigned long)version &&
 			(type == CACHE_TYPE_ANY || (header[CACHE_HEADER_TYPE_OFFSET / 4] & 0xffff) == (unsigned short)type);
+		if (checksum)
+			*checksum = header[CACHE_HEADER_CHECKSUM_OFFSET / 4];
 	}
 	CloseHandle(file);
 	return result;
+}
+
+static boolean cache_file_is(
+	char const *path,
+	long version,
+	short type)
+{
+	return cache_file_header_is(path, version, type, NULL);
+}
+
+/* ---------- a map's versions
+
+Two versions of a Custom Edition map have one name, and a network game says
+which it plays by its header's checksum (its settings' map version). This
+machine's own is in its folders under the map's name; another version (a
+host's, downloaded) is beside it as <name>_<8 hex digits>.map, the digits
+the start of its hash as OpenCE's map sharing makes it (map_share.h), as
+OpenCE's builds since build-189 name every map in custom_maps. No file is
+ever renamed, moved or replaced: the version a game plays is found by its
+checksum, and remembered for the game (an alias of the name), as is the
+file of a name with its hash (custom_maps\<name>_<hash>, a host's level
+name) found by the hash. */
+
+enum
+{
+	MAXIMUM_ALIASES = 32,
+	/* _ and the digits of a hash-named file (map_share.h's
+	MAP_SHARE_NAME_DIGITS) */
+	HASHED_NAME_DIGITS = 8,
+};
+
+static struct map_family_alias
+{
+	char file[MAP_FAMILY_FILE_LENGTH];
+	char path[256];
+	/* a host's hash-named level's, kept; else a game's, forgotten when it
+	ends (map_family_aliases_forget) */
+	boolean lasting;
+} map_family_aliases[MAXIMUM_ALIASES];
+static long map_family_alias_count;
+
+/* whether a name ends in _ and HASHED_NAME_DIGITS hex digits: its length
+without them, else 0 */
+static size_t hashed_name_base_length(
+	char const *file)
+{
+	size_t length = strlen(file);
+	size_t index;
+
+	if (length <= HASHED_NAME_DIGITS + 1 || file[length - HASHED_NAME_DIGITS - 1] != '_')
+		return 0;
+	for (index = length - HASHED_NAME_DIGITS; index < length; index++)
+	{
+		char c = file[index];
+
+		if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')))
+			return 0;
+	}
+	return length - HASHED_NAME_DIGITS - 1;
+}
+
+static long alias_find(
+	char const *file)
+{
+	long index;
+
+	for (index = 0; index < map_family_alias_count; index++)
+	{
+		if (!_stricmp(map_family_aliases[index].file, file))
+			return index;
+	}
+	return -1;
+}
+
+void map_family_alias(
+	char const *file,
+	char const *path,
+	boolean lasting)
+{
+	long index = alias_find(file);
+
+	if (strlen(file) >= MAP_FAMILY_FILE_LENGTH || strlen(path) >= sizeof(map_family_aliases[0].path))
+		return;
+	if (index < 0)
+	{
+		if (map_family_alias_count == MAXIMUM_ALIASES)
+			return;
+		index = map_family_alias_count++;
+	}
+	snprintf(map_family_aliases[index].file, MAP_FAMILY_FILE_LENGTH, "%s", file);
+	snprintf(map_family_aliases[index].path, sizeof(map_family_aliases[index].path), "%s", path);
+	map_family_aliases[index].lasting = map_family_aliases[index].lasting || lasting;
+}
+
+void map_family_aliases_forget(
+	void)
+{
+	long index = 0;
+
+	while (index < map_family_alias_count)
+	{
+		if (map_family_aliases[index].lasting)
+		{
+			index++;
+			continue;
+		}
+		map_family_aliases[index] = map_family_aliases[--map_family_alias_count];
+	}
+}
+
+unsigned long map_family_file_checksum(
+	char const *path)
+{
+	unsigned long checksum = 0;
+
+	return cache_file_header_is(path, CUSTOM_EDITION_CACHE_VERSION, CACHE_TYPE_ANY, &checksum) ? checksum : 0;
+}
+
+/* the first of the Custom Edition places' <name>.map and <name>_<hash>.map
+files whose checksum is `version` */
+static boolean version_find(
+	char const *name,
+	unsigned long version,
+	char *path,
+	long size)
+{
+	long count, index;
+	struct map_family_place const *places = family_places(_map_family_custom_edition, &count);
+	size_t name_length = strlen(name);
+
+	if (!name_length || strchr(name, '*') || strchr(name, '?'))
+		return FALSE;
+	for (index = 0; index < count; index++)
+	{
+		char folder[256], pattern[320];
+		WIN32_FIND_DATAA data;
+		HANDLE find;
+		unsigned long checksum = 0;
+
+		if (!place_folder(&places[index], folder, sizeof(folder)))
+			continue;
+		snprintf(path, (size_t)size, "%s%s%s.map", folder, name, places[index].suffix);
+		if (cache_file_header_is(path, CUSTOM_EDITION_CACHE_VERSION, CACHE_TYPE_ANY, &checksum) && checksum == version)
+			return TRUE;
+		/* (a place's own names alone: <name>_<hash>.map) */
+		if (places[index].suffix[0])
+			continue;
+		snprintf(pattern, sizeof(pattern), "%s%s_*.map", folder, name);
+		find = FindFirstFileA(pattern, &data);
+		if (find == INVALID_HANDLE_VALUE)
+			continue;
+		do
+		{
+			char file[MAP_FAMILY_FILE_LENGTH];
+			size_t length = strlen(data.cFileName);
+
+			if (length <= 4 || length - 4 >= MAP_FAMILY_FILE_LENGTH || _stricmp(data.cFileName + length - 4, ".map"))
+				continue;
+			snprintf(file, sizeof(file), "%.*s", (int)(length - 4), data.cFileName);
+			if (hashed_name_base_length(file) != name_length)
+				continue;
+			snprintf(path, (size_t)size, "%s%s", folder, data.cFileName);
+			if (cache_file_header_is(path, CUSTOM_EDITION_CACHE_VERSION, CACHE_TYPE_ANY, &checksum) &&
+				checksum == version)
+			{
+				CloseHandle(find);
+				return TRUE;
+			}
+		}
+		while (FindNextFileA(find, &data));
+		CloseHandle(find);
+	}
+	path[0] = 0;
+	return FALSE;
+}
+
+boolean map_family_find_version(
+	short family,
+	char const *file,
+	unsigned long version,
+	char *path,
+	long size)
+{
+	char base[MAP_FAMILY_FILE_LENGTH];
+	size_t base_length;
+
+	if (map_family_find(family, file, path, size) &&
+		(!version || family != _map_family_custom_edition || map_family_file_checksum(path) == version))
+	{
+		return TRUE;
+	}
+	if (!version || family != _map_family_custom_edition || !map_families_enabled() ||
+		strlen(file) >= MAP_FAMILY_FILE_LENGTH || strchr(file, '\\') || strchr(file, '/') || strchr(file, ':'))
+	{
+		return FALSE;
+	}
+	/* (the name's own files and its hash-named ones; for a name with a
+	hash, its base name's too: custom_maps\<name>_<hash> of a host is this
+	machine's <name>.map when that is the host's version) */
+	if (!version_find(file, version, path, size))
+	{
+		base_length = hashed_name_base_length(file);
+		if (!base_length)
+			return FALSE;
+		snprintf(base, sizeof(base), "%.*s", (int)base_length, file);
+		if (!version_find(base, version, path, size))
+			return FALSE;
+	}
+	map_family_alias(file, path, FALSE);
+	return TRUE;
 }
 
 /* ---------- public code */
@@ -428,6 +645,17 @@ boolean map_family_find(
 		strchr(file, '/') || strchr(file, ':'))
 	{
 		return FALSE;
+	}
+	/* (the version a game plays, or a hash-named level's file: above) */
+	if (family == _map_family_custom_edition)
+	{
+		long alias = alias_find(file);
+
+		if (alias >= 0 && cache_file_is(map_family_aliases[alias].path, family_cache_version(family), CACHE_TYPE_ANY))
+		{
+			snprintf(path, (size_t)size, "%s", map_family_aliases[alias].path);
+			return TRUE;
+		}
 	}
 	for (index = 0; index < count; index++)
 	{

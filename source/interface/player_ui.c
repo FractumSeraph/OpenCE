@@ -673,8 +673,10 @@ void player_ui_fast_setup_network_server(
 	still replace it through the ordinary variant-selection API. */
 	game_engine_get_variant_by_name(&default_variant, "slayer");
 	player_ui_set_game_variant(&default_variant);
+	/* port: the pregame screen the menus open (the port's lobby with its
+	menus loaded, as ui_widget.c opens it), not ui.map's by name */
 	if (ui_widget_load_by_name_or_tag(
-		"ui\\shell\\main_menu\\multiplayer_type_select\\connected\\pregame\\connected_pregame_screen",
+		pc_menus_screen("ui\\shell\\main_menu\\multiplayer_type_select\\connected\\pregame\\connected_pregame_screen"),
 		NONE,
 		NULL,
 		NONE,

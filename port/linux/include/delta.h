@@ -189,7 +189,8 @@ command repository's watch adds a row when it follows OpenCE's raise
 	X(24, "build-149", additive) /* the gametype's PC vehicle set: every vehicle the map places */ \
 	X(25, "build-169", additive) /* units' integrated lights in the object states; a banned machine told so */ \
 	X(26, "build-184", additive) /* internet play's signalling, version 4 (WebRTC, for browsers; p2p_signal.c reads 3 and 4); game messages as 25 */ \
-	X(27, "build-189", additive) /* followed from OpenCE: additive */
+	X(27, "build-189", additive) /* followed from OpenCE: additive */ \
+	X(28, "build-201", additive) /* map sharing holds a downloading machine's players; the messages are 27's (a few behaviours differ: lights past the Xbox limits, a second weapon readied, the first scripted BSP kept) */
 
 /* ---------- the legacy table (port/linux/src/delta.c)
 

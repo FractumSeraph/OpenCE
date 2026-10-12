@@ -152,15 +152,31 @@ holds (the game's most frequent call: a fortieth of the web build's frame),
 and that function where something does not, which notes and handles it
 (__inline__: msvc_comdat.c makes __inline weak, which a static function
 cannot be) */
+#ifdef HALO_CUSTOM_EDITION
+extern boolean cache_file_is_ce;
+#endif
 static __inline__ void *tag_block_get_element_fast(
 	struct tag_block const *block,
 	long index,
 	long element_size)
 {
-	/* (xbox_pointer: the 64-bit builds' blocks hold Xbox addresses) */
+	/* (xbox_pointer: the 64-bit builds' blocks hold Xbox addresses. A
+	Custom Edition map's block is the slow path's, which finds it only in the
+	map's tag cache (ce_tags_pointer); and a definition is read only where
+	that path reads one: the 64-bit builds' hold no address of this
+	program's, and a Custom Edition map's hold Halo PC's, which point at
+	nothing here: reading one stopped the 64-bit dedicated server at a Custom
+	Edition sound) */
 	if (block && index >= 0 && index < block->count && block->address &&
+#ifdef HALO_CUSTOM_EDITION
+		!cache_file_is_ce &&
+#endif
+#ifdef HALO_64BIT
+		TRUE)
+#else
 		(!block->definition ||
 			((struct tag_block_definition const *)xbox_pointer(block->definition))->element_size == element_size))
+#endif
 	{
 		return (char *)xbox_pointer(block->address) + index * element_size;
 	}

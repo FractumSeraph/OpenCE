@@ -26,6 +26,9 @@ void render_interpolation_first_person(short local_player_index, struct real_mat
 	short node_count, struct render_camera const *camera);
 float render_interpolation_game_time_sec(long ticks);
 
+/* the port's menus' screen for one of ui.map's, by name, else the name
+(port/linux/game/menu_tags.c) */
+char const *pc_menus_screen(char const *name);
 /* the width of the screen the game draws, 480 lines tall: the device's or
 the display's shape, or 640 (port/linux/src/d3d8_gl.c) */
 long halo_screen_width(void);

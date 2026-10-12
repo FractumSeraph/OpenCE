@@ -34,7 +34,9 @@ hugeass.map: 34 MB of 92 MB (1.2 MB/s, 5 peers)").
 Custom Edition's `bitmaps.map`, `sounds.map` and `loc.map`, which every
 Custom Edition map needs, are downloaded the same way when missing. The
 map goes into `maps_ce`, ChupathingyCE's folder of Custom Edition maps (a
-map of the same name already there is kept as `<name>.map.old`), and is
+map of the same name already there, another version, is never touched: the
+download goes beside it as `<name>_<hash>.map`, the name OpenCE's map sharing
+gives a version, and the game finds the one it plays by its checksum), and is
 marked downloaded (its scripts held to ChupathingyCE's tighter rules); a
 download interrupted goes on from where it was, next time, from
 `maps_ce\downloads`. What is missing is what ChupathingyCE's map families
