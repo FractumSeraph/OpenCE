@@ -1693,8 +1693,16 @@ static void gl_initialize(void)
 		glDrawElementsBaseVertex as an extension under another name; the renderer
 		calls the pointer it has, so it takes the extension's when the core one is
 		not there. One that cannot be loaded leaves the draws without a base vertex */
+#ifdef HALO_BROWSER
+		/* (this fork's browser build calls WebGL 2's functions by name, and
+		WebGL 2 has no base vertex: the draws go without one) */
+		xgpu_capabilities.base_vertex = FALSE;
+		base_vertex_source = "none (WebGL 2)";
+		if (0)
+#else
 		xgpu_capabilities.base_vertex = es32 && halo_glDrawElementsBaseVertex != NULL;
 		if (!xgpu_capabilities.base_vertex)
+#endif
 		{
 			if (host_gl_has_extension("GL_EXT_draw_elements_base_vertex") && halo_glDrawElementsBaseVertexEXT)
 			{
