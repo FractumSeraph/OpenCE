@@ -1698,11 +1698,10 @@ static void gl_initialize(void)
 		WebGL 2 has no base vertex: the draws go without one) */
 		xgpu_capabilities.base_vertex = FALSE;
 		base_vertex_source = "none (WebGL 2)";
-		if (0)
+		(void)es32;
 #else
 		xgpu_capabilities.base_vertex = es32 && halo_glDrawElementsBaseVertex != NULL;
 		if (!xgpu_capabilities.base_vertex)
-#endif
 		{
 			if (host_gl_has_extension("GL_EXT_draw_elements_base_vertex") && halo_glDrawElementsBaseVertexEXT)
 			{
@@ -1717,6 +1716,7 @@ static void gl_initialize(void)
 				base_vertex_source = "GL_OES_draw_elements_base_vertex";
 			}
 		}
+#endif
 		xgpu_capabilities.shading_language = major > 3 || (major == 3 && minor >= 1) ? "310 es" : "300 es";
 		if (major > 3 || (major == 3 && minor >= 1))
 		{
