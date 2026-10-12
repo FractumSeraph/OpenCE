@@ -20,6 +20,9 @@ Paths are UTF-8, as SDL gives them.
 
 #define UPDATE_USER_AGENT L"halo-ce-universal-updater"
 #define TIMEOUT_MILLISECONDS 20000
+/* (posix_update.c's: a release is tens of megabytes, a map's zip at most a
+few hundred: a body past this fills no disk) */
+#define MAXIMUM_DOWNLOAD_SIZE (512ull * 1024 * 1024)
 
 /* (WinHTTP's TLS 1.3 flag, missing from older SDKs) */
 #ifndef WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_3
@@ -42,7 +45,13 @@ static void set_error(char *error, int error_size, const char *what)
 int update_download(const char *url, const char *path, update_progress_proc progress, void *context, char *error,
 	int error_size)
 {
-	wchar_t wide_url[2048], wide_path[MAX_PATH * 2], host[256], url_path[2048];
+	return update_request(url, NULL, NULL, NULL, path, progress, context, error, error_size);
+}
+
+int update_request(const char *url, const char *form, const char *agent, const volatile int *stop,
+	const char *path, update_progress_proc progress, void *context, char *error, int error_size)
+{
+	wchar_t wide_url[2048], wide_path[MAX_PATH * 2], host[256], url_path[2048], wide_agent[256];
 	URL_COMPONENTS components;
 	HINTERNET session = NULL, connection = NULL, request = NULL;
 	HANDLE file = INVALID_HANDLE_VALUE;
@@ -68,7 +77,9 @@ int update_download(const char *url, const char *path, update_progress_proc prog
 		snprintf(error, (size_t)error_size, "not an https:// address: %s", url);
 		return 0;
 	}
-	session = WinHttpOpen(UPDATE_USER_AGENT, WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME,
+	if (!agent || !wide_from_utf8(agent, wide_agent, 256))
+		wcscpy(wide_agent, UPDATE_USER_AGENT);
+	session = WinHttpOpen(wide_agent, WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME,
 		WINHTTP_NO_PROXY_BYPASS, 0);
 	if (!session)
 	{
@@ -87,10 +98,16 @@ int update_download(const char *url, const char *path, update_progress_proc prog
 	connection = WinHttpConnect(session, host, components.nPort, 0);
 	if (connection)
 	{
-		request = WinHttpOpenRequest(connection, L"GET", url_path, NULL, WINHTTP_NO_REFERER,
+		request = WinHttpOpenRequest(connection, form ? L"POST" : L"GET", url_path, NULL, WINHTTP_NO_REFERER,
 			WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_SECURE);
 	}
-	if (!request || !WinHttpSendRequest(request, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0) ||
+	/* (a form's answer, redirected, is fetched with a GET: WinHTTP's own
+	redirect policy) */
+	if (!request ||
+		!WinHttpSendRequest(request,
+			form ? L"Content-Type: application/x-www-form-urlencoded\r\n" : WINHTTP_NO_ADDITIONAL_HEADERS,
+			form ? (DWORD)-1L : 0, form ? (LPVOID)form : WINHTTP_NO_REQUEST_DATA, form ? (DWORD)strlen(form) : 0,
+			form ? (DWORD)strlen(form) : 0, 0) ||
 		!WinHttpReceiveResponse(request, NULL))
 	{
 		set_error(error, error_size, "could not reach the server");
@@ -118,6 +135,11 @@ int update_download(const char *url, const char *path, update_progress_proc prog
 		char buffer[16384];
 		DWORD count = 0, written = 0;
 
+		if (stop && *stop)
+		{
+			snprintf(error, (size_t)error_size, "stopped");
+			goto done;
+		}
 		if (!WinHttpReadData(request, buffer, sizeof(buffer), &count))
 		{
 			set_error(error, error_size, "the download broke off");
@@ -131,6 +153,11 @@ int update_download(const char *url, const char *path, update_progress_proc prog
 			goto done;
 		}
 		received += count;
+		if (received > MAXIMUM_DOWNLOAD_SIZE)
+		{
+			snprintf(error, (size_t)error_size, "the download is too large");
+			goto done;
+		}
 		if (progress)
 			progress(context, received, length);
 	}

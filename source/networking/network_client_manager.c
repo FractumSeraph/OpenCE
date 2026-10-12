@@ -901,6 +901,12 @@ void network_game_client_dispose(
 {
 	if (client)
 	{
+		/* port: the joined game's map no longer seeded as a client's
+		(port/linux/src/map_torrents.c), and the map played again the one
+		of its name, not the host's version
+		(port/linux/game/custom_edition_cache.c) */
+		map_torrents_playing(NULL, 0, 0);
+		custom_edition_map_version_forget();
 		if (client->connection)
 			network_connection_delete(client->connection);
 
@@ -1313,6 +1319,10 @@ boolean network_game_client_game_settings_updated(
 			}
 			network_event("precaching map '%s'...", message_packet->map.name);
 			main_set_multiplayer_map_name(message_packet->map.name);
+			/* port: the map seeded for others joining, when maps.seed allows
+			a client to (port/linux/src/map_torrents.c) */
+			if (!network_game_is_splitscreen_local())
+				map_torrents_playing(message_packet->map.name, (unsigned long)message_packet->map.version, 0);
 		}
 
 		csmemcpy(&previous_game, &client->game, sizeof(client->game));

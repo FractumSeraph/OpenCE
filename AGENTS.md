@@ -26,7 +26,7 @@ end.
 | `port/third_party/` | Vendored libraries, each with a README naming its upstream, version and checksum |
 | `port/tools/` | Stand-alone tools (`cache_file_report.c`) |
 | `tools/` | Build scripts (`linux_build.py`, `windows_build.py`, `android_build.py`, `web_build.py`, `ci_build.py`, `web_serve.py`), generators (`ce_menus.py`, `port_settings.py`, `hud_assets.py`, `title_assets.py`, `embed_assets.py`, `xdk_headers.py`) and tests |
-| `docs/` | Longer design notes (`custom_edition_caches.md`) |
+| `docs/` | Longer design notes (`custom_edition_caches.md`, `map_torrents.md`) |
 | `pgo/` | Profile-guided optimisation profiles |
 | `assets/` | Game data for local runs (gitignored: `maps/`, `custom_maps/`) |
 | `.github/workflows/` | CI: builds every platform on each push, publishes releases from `main` |
@@ -87,6 +87,7 @@ python -m pytest -q tools/test_linux_port.py                # the build, the map
 python -m pytest -q tools/test_cache_file_formats.py tools/test_bmp_files.py tools/test_profile.py
 python tools/test_touch_layout.py                           # the Android touch layout (JDK 17+)
 python tools/test_light_storage.py
+python -m pytest -q tools/test_map_torrents.py tools/test_torrent_check.py  # the maps' index tool; the BitTorrent client and the archives' unzip (ninja linux's build/linux/torrent_check)
 python tools/test_death_timing.py
 python -m pytest -q tools/test_web_build.py                 # the web build's graph, sockets, menus
 node --test "port/web/tests/*.test.js"                      # the web page's importer and service worker
@@ -172,7 +173,10 @@ read `xbox/include`. To add a name, follow `port/include/xdk/README.md`.
 
 Custom Edition maps live in the data root's `custom_maps` folder with
 `bitmaps.map`, `sounds.map` and `loc.map`; their level names are
-`custom_maps\<name>`. OpenSauce features are not supported and must not be
+`custom_maps\<name>`. A map already in `custom_maps` is never replaced,
+renamed or changed by the game: another version of it (a download) goes in
+`custom_maps\versions\<checksum>` (`docs/map_torrents.md`). OpenSauce
+features are not supported and must not be
 added: a map that needs them is refused, and one that only carries
 OpenSauce's header runs as stock Custom Edition runs it. Map files are
 untrusted input: read them through bounds-checked readers. See
@@ -216,6 +220,7 @@ as documentation of file formats, never copied.
 | [port/web/README.md](port/web/README.md) | The web build, the page, the game data in the browser, limits, how it operates, hosting on GitHub Pages |
 | [port/include/xdk/README.md](port/include/xdk/README.md) | How the SDK declarations were written and are checked |
 | [docs/custom_edition_caches.md](docs/custom_edition_caches.md) | Loading and converting Custom Edition maps, and the evidence for each layout |
+| [docs/map_torrents.md](docs/map_torrents.md) | Custom Edition maps downloaded and seeded over BitTorrent, their index, and the archive's seeds |
 | [port/assets/menus/README.md](port/assets/menus/README.md) | The menu files' format and how to write them again |
 | [port/assets/menus/NON_HANDDRAWN.md](port/assets/menus/NON_HANDDRAWN.md) | Menu pictures that are not redraws |
 | [port/assets/menus/UNWIRED.md](port/assets/menus/UNWIRED.md) | Menu functions that do nothing yet |

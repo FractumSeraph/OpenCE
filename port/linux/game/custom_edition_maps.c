@@ -386,6 +386,43 @@ static int custom_edition_map_compare(
 		((struct custom_edition_map const *)second)->name);
 }
 
+/* The menu names of the maps builds 189 and 190 renamed for their hash
+(<name>_<hash>.map: custom_edition_map_name_unhashed), without it, as those
+builds showed them: unless another map listed has that name, with a hash
+or without (two versions of a map, which their names then tell apart). */
+static void custom_edition_maps_unhash_display_names(
+	struct custom_edition_map *maps,
+	short count)
+{
+	short index;
+
+	for (index = 0; index < count; index++)
+	{
+		char base[MAXIMUM_MAP_NAME_LENGTH + 1];
+		char other_base[MAXIMUM_MAP_NAME_LENGTH + 1];
+		short other;
+
+		if (!custom_edition_map_name_unhashed(maps[index].name, base))
+		{
+			continue;
+		}
+		for (other = 0; other < count; other++)
+		{
+			if (other != index && (!csstrcasecmp(maps[other].name, base) ||
+				(custom_edition_map_name_unhashed(maps[other].name, other_base) && !csstrcasecmp(other_base, base))))
+			{
+				break;
+			}
+		}
+		if (other == count)
+		{
+			display_name_make(base, maps[index].display_name);
+		}
+	}
+
+	return;
+}
+
 static void custom_edition_maps_look_for(
 	void)
 {
@@ -439,6 +476,8 @@ static void custom_edition_maps_look_for(
 		} while (FindNextFileA(find, &data));
 		CloseHandle(find);
 	}
+	custom_edition_maps_unhash_display_names(globals->maps, globals->map_count);
+	custom_edition_maps_unhash_display_names(globals->campaigns, globals->campaign_count);
 	qsort(globals->maps, globals->map_count, sizeof(globals->maps[0]), custom_edition_map_compare);
 	qsort(globals->campaigns, globals->campaign_count, sizeof(globals->campaigns[0]), custom_edition_map_compare);
 	error(_error_silent, "custom edition: %d multiplayer maps for the level list, %d campaign maps", globals->map_count,

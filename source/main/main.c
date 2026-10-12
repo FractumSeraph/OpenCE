@@ -3519,6 +3519,9 @@ static boolean main_loop_iteration(
 			network_test_update(main_globals.main_menu_scenario_loaded, main_globals.seconds_elapsed);
 			/* port: voice chat, in the lobby and in game (port/linux/game/network_voice.c) */
 			network_voice_update();
+			/* port: Custom Edition maps downloaded before a join and seeded while
+			played, in the menus too (port/linux/src/map_torrents.c) */
+			map_torrents_poll();
 			profile_scope_enter(main_network_start_frame_section)
 			connection = main_globals.connection;
 			if (connection==_game_connection_network_client)

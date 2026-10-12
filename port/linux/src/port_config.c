@@ -445,6 +445,55 @@ static const struct config_setting config_settings[] =
 		"The Discord application internet play invites go through while the\n"
 		"Discord desktop client runs; empty for none." },
 
+	{ "maps.torrents", _config_boolean, "true", "HALO_MAP_TORRENTS", _environment_value, _platform_all,
+		"Download a Custom Edition map this machine lacks when joining a game\n"
+		"on it, from the map archives (archives) or from other players and\n"
+		"seed boxes (BitTorrent), when the index of the maps' torrents\n"
+		"(torrent_index) has it; false never downloads (nor seeds)." },
+	{ "maps.download_screen", _config_boolean, "true", "HALO_MAP_DOWNLOAD_SCREEN", _environment_value,
+		_platform_all,
+		"While a map downloads before its game is joined, show Halo's loading\n"
+		"screen over the menus, its light sweeping across as the map comes (B\n"
+		"stops the download); false leaves the menus up, their status line\n"
+		"saying how the download goes." },
+	{ "maps.archives", _config_string, "\"halonet,halomaps\"", "HALO_MAP_ARCHIVES", _environment_value,
+		_platform_desktop,
+		"The community's map archives a missing map is first taken from, out\n"
+		"of the zip that holds it, in this order (comma-separated): halonet\n"
+		"(maps.halonet.net), halomaps (halomaps.org). The map is checked against\n"
+		"its torrent before it is used; BitTorrent gets what they do not give.\n"
+		"Empty: BitTorrent alone." },
+	{ "maps.seed", _config_string, "\"host\"", "HALO_MAP_SEED", _environment_value, _platform_all,
+		"Seed the Custom Edition map this machine's network game is on, for\n"
+		"the players joining it: \"host\" while hosting, \"all\" also while\n"
+		"joined, \"off\" never." },
+	{ "maps.upload_limit", _config_integer, "512", "HALO_MAP_UPLOAD_LIMIT", _environment_value, _platform_all,
+		"The most the seeding sends, in KB a second, however many players are\n"
+		"downloading, so that the game's own traffic comes first; 0 for no\n"
+		"limit." },
+	{ "maps.download_limit", _config_integer, "0", "HALO_MAP_DOWNLOAD_LIMIT", _environment_value, _platform_all,
+		"The most a map download takes, in KB a second; 0 for no limit." },
+	{ "maps.torrent_port", _config_integer, "0", "HALO_MAP_TORRENT_PORT", _environment_value, _platform_all,
+		"The TCP port other players' downloads connect to (and the UDP port\n"
+		"the UDP trackers answer on); 0 picks one. A fixed one can be\n"
+		"forwarded on the router, so that players behind other routers can\n"
+		"reach this machine." },
+	{ "maps.trackers", _config_string,
+		"\"udp://halovps.fractumseraph.net:6969/announce,http://halovps.fractumseraph.net:6969/announce\"",
+		"HALO_MAP_TRACKERS", _environment_value, _platform_all,
+		"Comma-separated trackers every map's torrent is announced to\n"
+		"(udp://host:port/announce or http://host/announce); empty for none.\n"
+		"The default is the map archive's own (docs/map_torrents.md)." },
+	{ "maps.web_seeds", _config_string, "\"http://halomaps.fractumseraph.net/maps/\"", "HALO_MAP_WEB_SEEDS",
+		_environment_value, _platform_all,
+		"Comma-separated http:// URLs of folders holding the maps' files under\n"
+		"their names, which a download also takes pieces from; empty for none.\n"
+		"The default is the map archive's own (docs/map_torrents.md)." },
+	{ "maps.torrent_index", _config_string, "\"map_torrents.txt\"", "HALO_MAP_TORRENT_INDEX", _environment_value,
+		_platform_all,
+		"The index of the maps' torrents (tools/map_torrents.py), beside this\n"
+		"file unless a full path: port/assets/network/map_torrents.txt, which\n"
+		"the builds put there." },
 	{ "update.auto", _config_boolean, "true", "HALO_UPDATE_AUTO", _environment_value, _platform_all,
 		"Look for a new version when the game starts, and offer to update to it;\n"
 		"false never looks (the game's \"Do not ask again\" writes false here)." },

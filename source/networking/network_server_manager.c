@@ -1317,6 +1317,8 @@ void network_game_server_dispose(
 
 	/* port: a won co-op round's next level belongs to this server alone */
 	network_game_server_cooperative_next_map[0] = 0;
+	/* port: its map no longer seeded as the host's */
+	map_torrents_playing(NULL, 0, 1);
 
 	switch (server->state)
 	{
@@ -1495,6 +1497,10 @@ static void network_game_server_list(
 	/* (the scenario's name, not its path: the listing has 32 characters) */
 	p2p_set_game_listing(name, tag_name_strip_path(game->map.name), gametype, game->variant.game_engine_index, open,
 		in_progress, game->variant.universal_variant.teams);
+	/* port: the map seeded for those joining (costs little when unchanged;
+	none for a local split-screen game, which nobody joins) */
+	if (!network_game_is_splitscreen_local())
+		map_torrents_playing(game->map.name, (unsigned long)game->map.version, 1);
 }
 
 boolean network_game_server_idle(

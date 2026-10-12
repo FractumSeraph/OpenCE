@@ -128,6 +128,17 @@ WEB_EXCLUDE = {
     "posix_trace_marker.c", # a Linux GPU driver's trace markers
     "posix_dtls.c",         # internet play's WebRTC: the browser's own
     "p2p_webrtc.c",         # (port/web/src/web_p2p.c)
+    # The Custom Edition maps' BitTorrent client (docs/map_torrents.md): a
+    # page has no TCP or UDP sockets for it, and plays no Custom Edition maps
+    # (port/web/src/web_map_torrents.c stands in for map_torrents.h)
+    "map_archives.c",
+    "map_archives_zip.c",
+    "map_torrents.c",
+    "torrent.c",
+    "torrent_bencode.c",
+    "torrent_peer.c",
+    "torrent_sha1.c",
+    "torrent_tracker.c",
 }
 
 # the web runtime's units that, like posix_*.c, are the C library's side of

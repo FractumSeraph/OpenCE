@@ -32,6 +32,13 @@ custom_maps folder, then a Halo Custom Edition install's maps folder (the
 platform's h:\ drive, when paths.custom_edition names one). */
 #define CUSTOM_EDITION_MAP_DIRECTORY "d:\\custom_maps\\"
 #define CUSTOM_EDITION_INSTALL_MAP_DIRECTORY "h:\\maps\\"
+/* Another version of a map than the one of its name in those folders is
+kept beside it, never in its place: custom_maps\versions\<checksum>\<name>.map
+(its header's checksum, 8 hexadecimal digits), which a network game's
+client plays when its host's map is that version (custom_edition_cache_present).
+The map torrents download one there (port/linux/src/map_torrents.c); the
+map lists do not show it. */
+#define CUSTOM_EDITION_VERSIONS_FOLDER "versions\\"
 
 /* A Custom Edition map's level name is this and its file's name
 (custom_maps\a30 for custom_maps\a30.map), which the game's own levels'
@@ -88,14 +95,42 @@ unsigned long custom_edition_map_checksum(
 /* Whether this machine can play the level `level_name` (custom_maps\<name>),
 as a network game's client must: its file present and a Custom Edition
 cache of the host's version (`checksum`, custom_edition_map_checksum's on
-the host; 0 for any), Custom Edition maps able to run, and the resource maps
-present. When not, `message` (`message_size` characters) says why, for the
+the host; 0 for any: the versions folder's first, CUSTOM_EDITION_VERSIONS_FOLDER,
+which the client then plays), Custom Edition maps able to run, and the
+resource maps present. When not, `message` (`message_size` characters) says why, for the
 player, and what to do. */
 boolean custom_edition_cache_present(
 	char const *level_name,
 	unsigned long checksum,
 	char *message,
 	long message_size);
+/* The files this machine lacks to play the level as a network game's
+client (custom_edition_cache_present's conditions): its map, when absent,
+not a Custom Edition cache or not the host's version (`checksum`; 0 for
+any), and each resource map absent, as file names, tab-separated ("<name>.map\tbitmaps.map")
+in `names` (`names_size` characters). Returns how many, 0 when nothing is
+missing, or -1 when Custom Edition maps cannot run at all. The map torrents
+(port/linux/src/map_torrents.c) download what is named. */
+short custom_edition_cache_files_missing(
+	char const *level_name,
+	unsigned long checksum,
+	char *names,
+	long names_size);
+/* The name without its hash, for a map that builds 189 and 190 (network
+version 27) named for its contents' hash: <name>_<8 hexadecimal digits>,
+as their hosts' level names are (custom_maps\<name>_<hash>) and as they
+renamed the maps of custom_maps. These builds rename no map, and find such
+a name's map by its name alone (custom_edition_cache.c), and such a file
+for its name (port/linux/NETCODE.md). <name> in `base` (as many characters
+as `name` has); FALSE for a name without such an end. */
+boolean custom_edition_map_name_unhashed(
+	char const *name,
+	char *base);
+/* The map a network game's client plays is again the one of its name in the
+maps folders, not the host's version that custom_edition_cache_present
+chose (the client gone: network_game_client_dispose). */
+void custom_edition_map_version_forget(
+	void);
 
 /* Whether the file `file_name` (custom_maps\<file_name>.map) is a Custom
 Edition cache of a campaign map (a solo scenario, played alone or as

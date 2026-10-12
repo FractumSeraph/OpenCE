@@ -65,4 +65,13 @@ void halo_screen_anti_alias(short x0, short y0, short x1, short y1);
 /* the mouse in the menus (source/interface/ui_widget.c) */
 #include "halo_ui_pointer.h"
 
+/* Custom Edition maps downloaded before a join and seeded while played
+(port/linux/src/map_torrents.c: cache_files.c, main.c's loop,
+network_client_manager.c, network_server_manager.c), and the host's version of a map forgotten as
+a client leaves (port/linux/game/custom_edition_cache.c) */
+int map_torrents_fetch(const char *level_name, unsigned long version, const char *files);
+void map_torrents_poll(void);
+void map_torrents_playing(const char *level_name, unsigned long version, int hosting);
+void custom_edition_map_version_forget(void);
+
 #endif

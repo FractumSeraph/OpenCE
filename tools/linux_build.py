@@ -48,6 +48,15 @@ def game_defines_and_includes(config: Dict[str, Any]) -> str:
     )
 
 
+# the platform layer's units the map torrents' client is built with alone
+# (tools/torrent_check.c): the client, the map archives' zips, and the
+# sockets and files they use
+TORRENT_CHECK_PLATFORM_SOURCES = (
+    "torrent.c", "torrent_bencode.c", "torrent_peer.c", "torrent_sha1.c", "torrent_tracker.c",
+    "map_archives_zip.c", "posix_files.c", "posix_net.c",
+)
+
+
 def compile_launcher(sln: Any) -> str:
     """what the native ports' compile commands start with: the
     --compiler-launcher (ccache, say) and a space, or nothing"""
@@ -511,9 +520,11 @@ def generate_linux_build(n: Writer, sln: Any) -> None:
     libs = " ".join(f"-l{lib}" for lib in config.get("libraries", []))
 
     def emit(obj_dir: Path, output: Path, extra_cflags: List[str], extra_ldflags: List[str],
-             implicit_inputs: List[Path], validator: Optional[Path] = None) -> None:
+             implicit_inputs: List[Path], validator: Optional[Path] = None,
+             torrent_check: Optional[Path] = None) -> None:
         """the objects and the executable, with the given extra flags (and
-        the tag validator alone, tools/map_validate.c, as validator)"""
+        the tag validator alone, tools/map_validate.c, as validator; the map
+        torrents' client alone, tools/torrent_check.c, as torrent_check)"""
         extra = " ".join(extra_cflags)
         # the posix_* units have glibc's 32-bit wchar_t, and LLVM will not
         # optimise them together with code that has a 16-bit one: they stay
@@ -673,6 +684,43 @@ def generate_linux_build(n: Writer, sln: Any) -> None:
                                                 *extra_ldflags])},
             )
 
+        # the map torrents' BitTorrent client (port/linux/src/torrent*.c)
+        # alone, seeding or downloading a file outside the game: the game's
+        # objects of it and of the platform layer's sockets and files, and a
+        # program that runs it (tools/torrent_check.c; tools/test_torrent_check.py)
+        if torrent_check is not None:
+            tool = Path("tools/torrent_check.c")
+            tool_object = obj_dir / tool.with_suffix(".o")
+            n.build(
+                outputs=tool_object,
+                rule="linux_cc",
+                inputs=tool,
+                implicit=[*xdk_headers(), prefix_header, platform_semantics_header, *sysroot_inputs],
+                variables={"cflags": f"{platform_cflags} {extra}"},
+            )
+            # (and stand-ins for the renderer, which the Xbox headers' inline
+            # functions in every platform unit refer to: tools/torrent_check_xbox.c)
+            stand_ins = Path("tools/torrent_check_xbox.c")
+            stand_ins_object = obj_dir / stand_ins.with_suffix(".o")
+            n.build(
+                outputs=stand_ins_object,
+                rule="linux_cc",
+                inputs=stand_ins,
+                implicit=sysroot_inputs,
+                variables={"cflags": f"{posix_cflags} {posix_extra}"},
+            )
+            tool_objects = [tool_object, stand_ins_object,
+                            *(obj_dir / (platform_dir / name).with_suffix(".o")
+                              for name in TORRENT_CHECK_PLATFORM_SOURCES),
+                            *(obj_dir / (ZLIB_DIR / name).with_suffix(".o") for name in ZLIB_SOURCES)]
+            n.build(
+                outputs=torrent_check,
+                rule="linux_tool_link",
+                inputs=tool_objects,
+                variables={"ldflags": " ".join(["--target=i686-linux-gnu", "-m32", "-no-pie", "-g", *sysroot_ldflags,
+                                                *extra_ldflags, "-lpthread"])},
+            )
+
     # Profile-guided optimisation: with the committed profile, or with
     # --pgo=train one that an instrumented build records while playing
     # (tools/pgo_train.py). A profile is trained once: code changed since
@@ -694,10 +742,14 @@ def generate_linux_build(n: Writer, sln: Any) -> None:
     cflags, ldflags = lto_flags(sln, build_dir / "thinlto-cache")
     cflags += profile_use_flags(profile)
     validator = build_dir / "map_validate"
-    emit(obj_dir, output, cflags, ldflags, [profile] if profile else [], validator)
+    torrent_check = build_dir / "torrent_check"
+    emit(obj_dir, output, cflags, ldflags, [profile] if profile else [], validator, torrent_check)
     # internet play's MQTT brokers, a file beside the game (network.brokers_file)
     brokers = build_dir / "brokers.txt"
     n.build(outputs=brokers, rule="linux_copy", inputs=Path("port/assets/network/brokers.txt"))
+    # the Custom Edition maps' torrents, a file beside the game (maps.torrent_index)
+    map_torrents = build_dir / "map_torrents.txt"
+    n.build(outputs=map_torrents, rule="linux_copy", inputs=Path("port/assets/network/map_torrents.txt"))
     n.build(outputs="linux", rule="phony",
-            inputs=[output, brokers, validator, *sdl_outputs])
+            inputs=[output, brokers, map_torrents, validator, torrent_check, *sdl_outputs])
     n.newline()
