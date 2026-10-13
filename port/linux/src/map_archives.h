@@ -47,6 +47,25 @@ void map_archives_stop(void);
 maps.archives this build can fetch from */
 int map_archives_available(const char *sources);
 
+/* Map sharing's web seeds (port/linux/game/map_share.c): the URL of the
+file named on the which-th web seed of maps.web_seeds (from 0); 0 if there
+is none, or this build fetches nothing (Android, the web) */
+int map_archives_web_seed_url(const char *file_name, int which, char *url, int url_size);
+
+/* Starts fetching length bytes of the file at url from offset (an HTTP
+range) into the file at path, on a thread of its own, beside the archives'
+fetch: 1 if started; 0 if one is under way or this build fetches nothing.
+Map sharing checks each piece of it against the piece's hash. */
+int map_archives_range_start(const char *url, unsigned long long offset, unsigned long length, const char *path);
+
+/* How the range fetch goes (done: the bytes are in its file; failed: why,
+in error) */
+enum map_archives_state map_archives_range_poll(char *error, int error_size);
+
+/* Stops a range fetch under way (its file deleted), or lets go of a
+finished one */
+void map_archives_range_stop(void);
+
 /* Takes the file named (<size> bytes, the first of the name and size in any
 folder) out of the zip at zip_path into path: stored or deflated, its CRC
 checked (map_archives_zip.c). 1 on success; else 0 and why in error.

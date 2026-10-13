@@ -402,7 +402,7 @@ the setting for one start of the game. It has priority over the file.
 | `maps.downloads` | `true` | `HALO_MAP_DOWNLOADS` | When the host does not send a Custom Edition map that you do not have: download it from the community's archives. `false`: never. Refer to "Map downloads". |
 | `maps.download_screen` | `true` | `HALO_MAP_DOWNLOAD_SCREEN` | `true`: Halo's loading screen covers the menus while a map downloads (B stops the download). `false`: the menus stay up, and the status line of the games list shows the download. |
 | `maps.archives` | `"halonet,halomaps"` | `HALO_MAP_ARCHIVES` | Linux and Windows. The archives that a missing map is taken from first, out of the zip that holds it, in this order: `halonet` (maps.halonet.net), `halomaps` (halomaps.org). Empty: none. |
-| `maps.web_seeds` | `"https://halomaps.fractumseraph.net/maps/"` | `HALO_MAP_WEB_SEEDS` | Linux and Windows. The `https://` folders (with commas between them) that hold the maps under their file names, tried after the archives. Empty: none. |
+| `maps.web_seeds` | `"https://halomaps.fractumseraph.net/maps/"` | `HALO_MAP_WEB_SEEDS` | Linux and Windows. The `https://` folders (with commas between them) that hold the maps under their file names: tried after the archives, and asked for pieces beside the players when map sharing downloads a map. Empty: none. |
 | `maps.index` | `"map_index.txt"` | `HALO_MAP_INDEX` | The index of the Custom Edition maps that downloads are checked against: next to `config.toml`, unless a full path. |
 | `network.coop_public` | `false` | `HALO_NET_COOP_PUBLIC` | `true`: an online co-op game (Create Game > Internet, a SINGLEPLAYER map) starts as PUBLIC. `false`: it starts as PRIVATE. LISTING in co-op's Server Setup writes its choice here. Refer to "Server browser". |
 | `network.brokers_file` | `"brokers.txt"` | `HALO_NET_BROKERS_FILE` | The file of the public MQTT brokers that let the machines of an invite find each other, and that carry the listings of the server browser: next to `config.toml`, unless a full path. One `host:port` on each line, up to 4; `#` starts a comment. |
@@ -808,7 +808,10 @@ beside any other version you have, which stays as it is. The menus show the
 map without the hash, and with it only when you have two versions of the
 map. A download that stops leaves a
 `.part` file in `custom_maps`; the next download of that map continues from
-it. Maps in the folder of a Halo Custom Edition install
+it. When the index of the maps has the host's map (see "Map downloads"), a
+web seed (`maps.web_seeds`) sends pieces of it too, beside the players: a
+host with a slow upload does not hold the download up. Each piece is checked
+against its hash, as a player's is. Maps in the folder of a Halo Custom Edition install
 (`paths.custom_edition`) keep their names, and the host does not share them.
 Copy a map to `custom_maps` to share it.
 

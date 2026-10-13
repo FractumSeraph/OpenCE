@@ -440,8 +440,9 @@ static const struct config_setting config_settings[] =
 	{ "maps.web_seeds", _config_string, "\"https://halomaps.fractumseraph.net/maps/\"", "HALO_MAP_WEB_SEEDS",
 		_environment_value, _platform_desktop,
 		"Comma-separated https:// folders holding every map of the index under\n"
-		"its file name (the maps' seed boxes), tried after the archives; empty\n"
-		"for none (docs/map_downloads.md)." },
+		"its file name (the maps' seed boxes), tried after the archives, and\n"
+		"asked for pieces beside the players when map sharing downloads a map;\n"
+		"empty for none (docs/map_downloads.md)." },
 	{ "maps.index", _config_string, "\"map_index.txt\"", "HALO_MAP_INDEX", _environment_value, _platform_all,
 		"The index of the maps (tools/map_index.py), beside this file unless\n"
 		"a full path: port/assets/network/map_index.txt, which the builds put\n"

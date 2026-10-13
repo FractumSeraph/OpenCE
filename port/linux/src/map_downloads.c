@@ -286,6 +286,82 @@ static const struct index_entry *index_find_file(const char *file_name, unsigned
 	return index_find(name, checksum);
 }
 
+/* ---------- map sharing's web seeds */
+
+static int downloads_folder(char *path, int size);
+
+int map_downloads_web_seed(const char *file_name, unsigned long checksum, unsigned long long size, int which,
+	char *url, int url_size)
+{
+	const struct index_entry *entry;
+
+	if (!config_boolean("maps.downloads") || !config_boolean("game.custom_edition") || !file_name)
+		return 0;
+	entry = index_find_file(file_name, checksum);
+	if (!entry || entry->size != size)
+		return 0;
+	return map_archives_web_seed_url(maps_index.names + entry->name, which, url, url_size);
+}
+
+/* the range fetch's file (custom_maps/downloads/web_seed_range.part), set
+when one starts */
+static char range_path[1100];
+
+int map_downloads_range_start(const char *url, unsigned long long offset, unsigned long length)
+{
+	char folder[1024];
+	unsigned long long received, total;
+	char archive[64];
+
+	/* (not while a map comes from the archives: one HTTPS request goes at a
+	time, posix_update.c, and that one may take minutes) */
+	if (map_archives_poll(&received, &total, archive, sizeof(archive)) == _map_archives_running ||
+		!downloads_folder(folder, sizeof(folder)))
+	{
+		return 0;
+	}
+	snprintf(range_path, sizeof(range_path), "%sweb_seed_range.part", folder);
+	return map_archives_range_start(url, offset, length, range_path);
+}
+
+int map_downloads_range_read(unsigned long offset, void *buffer, unsigned long size)
+{
+	FILE *file;
+	int ok;
+
+	if (!range_path[0] || map_archives_range_poll(NULL, 0) != _map_archives_done)
+		return 0;
+	file = fopen(range_path, "rb");
+	if (!file)
+		return 0;
+	ok = fseek(file, (long)offset, SEEK_SET) == 0 && fread(buffer, 1, size, file) == size;
+	fclose(file);
+	return ok;
+}
+
+int map_downloads_range_poll(char *error, int error_size)
+{
+	switch (map_archives_range_poll(error, error_size))
+	{
+	case _map_archives_running:
+		return 1;
+	case _map_archives_done:
+		return 2;
+	case _map_archives_failed:
+		return 3;
+	default:
+		return 0;
+	}
+}
+
+void map_downloads_range_stop(void)
+{
+	/* (one under way deletes its file as it ends) */
+	if (map_archives_range_poll(NULL, 0) != _map_archives_running && range_path[0])
+		unlink(range_path);
+	map_archives_range_stop();
+}
+
 /* ---------- paths */
 
 static int file_present(const char *path)

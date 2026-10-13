@@ -386,6 +386,14 @@ menus show a map without its hash, unless two versions are listed.
   its connections a 16 KiB block at a time, so that the game's own traffic
   keeps the rest of the upload; `network.map_seed = false` sends none. A
   player that has downloaded the map sends it on at once.
+- **Web seeds.** A file of the download that the index of the maps has (by
+  its name and version, at the offer's size: `port/linux/src/map_downloads.c`)
+  is also asked of a web seed (`maps.web_seeds`, a folder of the maps on a
+  web server) over HTTPS, 16 pieces at a time (an HTTP range, on a thread of
+  its own), pieces no player has been asked for. Each is checked against
+  its hash as a player's is; one that is not the file's ends the web seed
+  for that file, and three failed asks for the download. Nothing of it goes
+  over the game's connections. Linux and Windows (`maps.downloads`).
 - **Internet play.** The players of an internet game reach its host alone.
   A player that shares answers the holders of the invite it joined with as
   its host does (`p2p_set_answering_players`), and a downloading client asks

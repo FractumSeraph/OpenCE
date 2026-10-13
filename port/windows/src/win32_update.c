@@ -48,12 +48,59 @@ int update_download(const char *url, const char *path, update_progress_proc prog
 	return update_request(url, NULL, NULL, NULL, path, progress, context, error, error_size);
 }
 
+static int request(const char *url, const char *form, const char *range, const char *agent,
+	const volatile int *stop, const char *path, update_progress_proc progress, void *context, char *error,
+	int error_size);
+
 int update_request(const char *url, const char *form, const char *agent, const volatile int *stop,
 	const char *path, update_progress_proc progress, void *context, char *error, int error_size)
 {
+	return request(url, form, NULL, agent, stop, path, progress, context, error, error_size);
+}
+
+/* (what the body brought, for update_request_range's check) */
+static void range_progress(void *context, unsigned long long received, unsigned long long total)
+{
+	(void)total;
+	*(unsigned long long *)context = received;
+}
+
+int update_request_range(const char *url, const char *agent, const volatile int *stop, unsigned long long offset,
+	unsigned long long length, const char *path, char *error, int error_size)
+{
+	char range[64];
+	unsigned long long received = 0;
+
+	if (!length)
+	{
+		snprintf(error, (size_t)error_size, "an empty range");
+		return 0;
+	}
+	snprintf(range, sizeof(range), "bytes=%llu-%llu", offset, offset + length - 1);
+	if (!request(url, NULL, range, agent, stop, path, range_progress, &received, error, error_size))
+		return 0;
+	if (received != length)
+	{
+		wchar_t wide_path[MAX_PATH * 2];
+
+		snprintf(error, (size_t)error_size, "the server sent %llu bytes of the %llu asked for", received, length);
+		if (wide_from_utf8(path, wide_path, MAX_PATH * 2))
+			DeleteFileW(wide_path);
+		return 0;
+	}
+	return 1;
+}
+
+/* one GET (or a POST of form, or a GET of range, "bytes=<first>-<last>",
+whose answer must be 206 and the range's length) into the file at path */
+static int request(const char *url, const char *form, const char *range, const char *agent,
+	const volatile int *stop, const char *path, update_progress_proc progress, void *context, char *error,
+	int error_size)
+{
 	wchar_t wide_url[2048], wide_path[MAX_PATH * 2], host[256], url_path[2048], wide_agent[256];
+	wchar_t range_header[96] = { 0 };
 	URL_COMPONENTS components;
-	HINTERNET session = NULL, connection = NULL, request = NULL;
+	HINTERNET session = NULL, connection = NULL, http = NULL;
 	HANDLE file = INVALID_HANDLE_VALUE;
 	DWORD status = 0, status_size = sizeof(status);
 	DWORD length = 0, length_size = sizeof(length);
@@ -98,28 +145,52 @@ int update_request(const char *url, const char *form, const char *agent, const v
 	connection = WinHttpConnect(session, host, components.nPort, 0);
 	if (connection)
 	{
-		request = WinHttpOpenRequest(connection, form ? L"POST" : L"GET", url_path, NULL, WINHTTP_NO_REFERER,
+		http = WinHttpOpenRequest(connection, form ? L"POST" : L"GET", url_path, NULL, WINHTTP_NO_REFERER,
 			WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_SECURE);
 	}
+	if (range)
+		_snwprintf(range_header, sizeof(range_header) / sizeof(*range_header) - 1, L"Range: %hs\r\n", range);
 	/* (a form's answer, redirected, is fetched with a GET: WinHTTP's own
 	redirect policy) */
-	if (!request ||
-		!WinHttpSendRequest(request,
-			form ? L"Content-Type: application/x-www-form-urlencoded\r\n" : WINHTTP_NO_ADDITIONAL_HEADERS,
-			form ? (DWORD)-1L : 0, form ? (LPVOID)form : WINHTTP_NO_REQUEST_DATA, form ? (DWORD)strlen(form) : 0,
-			form ? (DWORD)strlen(form) : 0, 0) ||
-		!WinHttpReceiveResponse(request, NULL))
+	if (!http ||
+		!WinHttpSendRequest(http,
+			form ? L"Content-Type: application/x-www-form-urlencoded\r\n" : range ? range_header :
+				WINHTTP_NO_ADDITIONAL_HEADERS,
+			form || range ? (DWORD)-1L : 0, form ? (LPVOID)form : WINHTTP_NO_REQUEST_DATA,
+			form ? (DWORD)strlen(form) : 0, form ? (DWORD)strlen(form) : 0, 0) ||
+		!WinHttpReceiveResponse(http, NULL))
 	{
 		set_error(error, error_size, "could not reach the server");
 		goto done;
 	}
-	if (!WinHttpQueryHeaders(request, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
-		WINHTTP_HEADER_NAME_BY_INDEX, &status, &status_size, WINHTTP_NO_HEADER_INDEX) || status != 200)
+	if (!WinHttpQueryHeaders(http, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+		WINHTTP_HEADER_NAME_BY_INDEX, &status, &status_size, WINHTTP_NO_HEADER_INDEX) ||
+		status != (range ? 206u : 200u))
 	{
-		snprintf(error, (size_t)error_size, "the server answered %lu", (unsigned long)status);
+		if (range && status == 200)
+			snprintf(error, (size_t)error_size, "the server sends no part of a file, only the whole");
+		else
+			snprintf(error, (size_t)error_size, "the server answered %lu", (unsigned long)status);
 		goto done;
 	}
-	if (!WinHttpQueryHeaders(request, WINHTTP_QUERY_CONTENT_LENGTH | WINHTTP_QUERY_FLAG_NUMBER,
+	/* (a range's answer must be that range: "bytes <first>-<last>/<size>") */
+	if (range)
+	{
+		wchar_t content_range[128];
+		DWORD content_range_size = sizeof(content_range);
+		char expected[96], got[128];
+
+		snprintf(expected, sizeof(expected), "bytes %s/", range + strlen("bytes="));
+		if (!WinHttpQueryHeaders(http, WINHTTP_QUERY_CONTENT_RANGE, WINHTTP_HEADER_NAME_BY_INDEX, content_range,
+				&content_range_size, WINHTTP_NO_HEADER_INDEX) ||
+			WideCharToMultiByte(CP_UTF8, 0, content_range, -1, got, (int)sizeof(got), NULL, NULL) <= 0 ||
+			strncmp(got, expected, strlen(expected)) != 0)
+		{
+			snprintf(error, (size_t)error_size, "the server sent another part of the file");
+			goto done;
+		}
+	}
+	if (!WinHttpQueryHeaders(http, WINHTTP_QUERY_CONTENT_LENGTH | WINHTTP_QUERY_FLAG_NUMBER,
 		WINHTTP_HEADER_NAME_BY_INDEX, &length, &length_size, WINHTTP_NO_HEADER_INDEX))
 	{
 		length = 0;
@@ -140,7 +211,7 @@ int update_request(const char *url, const char *form, const char *agent, const v
 			snprintf(error, (size_t)error_size, "stopped");
 			goto done;
 		}
-		if (!WinHttpReadData(request, buffer, sizeof(buffer), &count))
+		if (!WinHttpReadData(http, buffer, sizeof(buffer), &count))
 		{
 			set_error(error, error_size, "the download broke off");
 			goto done;
@@ -175,8 +246,8 @@ done:
 		if (!succeeded)
 			DeleteFileW(wide_path);
 	}
-	if (request)
-		WinHttpCloseHandle(request);
+	if (http)
+		WinHttpCloseHandle(http);
 	if (connection)
 		WinHttpCloseHandle(connection);
 	if (session)

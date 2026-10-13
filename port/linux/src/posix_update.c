@@ -399,18 +399,21 @@ static int read_body(struct connection *connection, struct download *download, i
 	}
 }
 
-/* one GET (or a POST of form): the body into download on 200, the Location
-on a redirect; the status, or 0 on failure */
-static int https_get(const char *url, const char *form, const char *agent, struct download *download, char *location,
-	size_t location_size, char *error, int error_size)
+/* one GET (or a POST of form, or a GET of range, "bytes=<first>-<last>"):
+the body into download on 200 (206 for a range), the Location on a
+redirect; the status, or 0 on failure */
+static int https_get(const char *url, const char *form, const char *range, const char *agent,
+	struct download *download, char *location, size_t location_size, char *error, int error_size)
 {
 	static struct connection connection;
 	char host[256], port[16], path[2048];
 	char request[3072];
 	char line[MAXIMUM_HEADER_SIZE];
+	char content_range[128];
 	unsigned long long length = 0;
 	int have_length = 0, chunked = 0, status = 0;
 
+	content_range[0] = 0;
 	if (!parse_url(url, host, sizeof(host), port, sizeof(port), path, sizeof(path)))
 	{
 		snprintf(error, (size_t)error_size, "not an https:// address: %s", url);
@@ -431,8 +434,8 @@ static int https_get(const char *url, const char *form, const char *agent, struc
 	else
 	{
 		snprintf(request, sizeof(request),
-			"GET %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: %s\r\nAccept: */*\r\nConnection: close\r\n\r\n",
-			path, host, agent);
+			"GET %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: %s\r\nAccept: */*\r\n%s%s%sConnection: close\r\n\r\n",
+			path, host, agent, range ? "Range: " : "", range ? range : "", range ? "\r\n" : "");
 	}
 	if (strlen(request) >= sizeof(request) - 1)
 	{
@@ -486,8 +489,25 @@ static int https_get(const char *url, const char *form, const char *agent, struc
 		{
 			snprintf(location, location_size, "%s", value);
 		}
+		else if (!strcasecmp(line, "Content-Range"))
+		{
+			snprintf(content_range, sizeof(content_range), "%s", value);
+		}
 	}
-	if (status == 200)
+	/* (a range's answer must be that range: "bytes <first>-<last>/<size>") */
+	if (range && status == 206)
+	{
+		char expected[96];
+
+		snprintf(expected, sizeof(expected), "bytes %s/", range + strlen("bytes="));
+		if (strncmp(content_range, expected, strlen(expected)) != 0)
+		{
+			snprintf(error, (size_t)error_size, "the server sent another part of the file (%s)", content_range);
+			connection_free(&connection);
+			return 0;
+		}
+	}
+	if (status == (range ? 206 : 200))
 	{
 		download->total = have_length && !chunked ? length : 0;
 		if (!read_body(&connection, download, chunked, length, have_length && !chunked))
@@ -506,8 +526,9 @@ int update_download(const char *url, const char *path, update_progress_proc prog
 	return update_request(url, NULL, NULL, NULL, path, progress, context, error, error_size);
 }
 
-static int request_locked(const char *url, const char *form, const char *agent, const volatile int *stop,
-	const char *path, update_progress_proc progress, void *context, char *error, int error_size);
+static int request_locked(const char *url, const char *form, const char *range, const char *agent,
+	const volatile int *stop, const char *path, update_progress_proc progress, void *context, char *error,
+	int error_size);
 
 int update_request(const char *url, const char *form, const char *agent, const volatile int *stop,
 	const char *path, update_progress_proc progress, void *context, char *error, int error_size)
@@ -515,13 +536,53 @@ int update_request(const char *url, const char *form, const char *agent, const v
 	int result;
 
 	pthread_mutex_lock(&request_lock);
-	result = request_locked(url, form, agent, stop, path, progress, context, error, error_size);
+	result = request_locked(url, form, NULL, agent, stop, path, progress, context, error, error_size);
 	pthread_mutex_unlock(&request_lock);
 	return result;
 }
 
-static int request_locked(const char *url, const char *form, const char *agent, const volatile int *stop,
-	const char *path, update_progress_proc progress, void *context, char *error, int error_size)
+/* (what the body brought, for update_request_range's check) */
+static void range_progress(void *context, unsigned long long received, unsigned long long total)
+{
+	(void)total;
+	*(unsigned long long *)context = received;
+}
+
+int update_request_range(const char *url, const char *agent, const volatile int *stop, unsigned long long offset,
+	unsigned long long length, const char *path, char *error, int error_size)
+{
+	char range[64];
+	unsigned long long received = 0;
+	int result;
+
+	if (!length)
+	{
+		snprintf(error, (size_t)error_size, "an empty range");
+		return 0;
+	}
+	snprintf(range, sizeof(range), "bytes=%llu-%llu", offset, offset + length - 1);
+	pthread_mutex_lock(&request_lock);
+	/* (stopped while another request held the lock: not asked) */
+	if (stop && *stop)
+	{
+		pthread_mutex_unlock(&request_lock);
+		snprintf(error, (size_t)error_size, "stopped");
+		return 0;
+	}
+	result = request_locked(url, NULL, range, agent, stop, path, range_progress, &received, error, error_size);
+	pthread_mutex_unlock(&request_lock);
+	if (result && received != length)
+	{
+		snprintf(error, (size_t)error_size, "the server sent %llu bytes of the %llu asked for", received, length);
+		unlink(path);
+		return 0;
+	}
+	return result;
+}
+
+static int request_locked(const char *url, const char *form, const char *range, const char *agent,
+	const volatile int *stop, const char *path, update_progress_proc progress, void *context, char *error,
+	int error_size)
 {
 	char current[2048];
 	char location[2048];
@@ -553,10 +614,10 @@ static int request_locked(const char *url, const char *form, const char *agent, 
 	snprintf(current, sizeof(current), "%s", url);
 	for (redirect = 0; redirect <= MAXIMUM_REDIRECTS; redirect++)
 	{
-		int status = https_get(current, form, agent ? agent : UPDATE_USER_AGENT, &download, location,
+		int status = https_get(current, form, range, agent ? agent : UPDATE_USER_AGENT, &download, location,
 			sizeof(location), error, error_size);
 
-		if (status == 200)
+		if (status == (range ? 206 : 200))
 		{
 			if (fclose(download.file) != 0)
 			{
@@ -584,7 +645,9 @@ static int request_locked(const char *url, const char *form, const char *agent, 
 			form = NULL;
 			continue;
 		}
-		if (status)
+		if (status == 200 && range)
+			snprintf(error, (size_t)error_size, "the server sends no part of a file, only the whole");
+		else if (status)
 			snprintf(error, (size_t)error_size, "the server answered %d", status);
 		break;
 	}

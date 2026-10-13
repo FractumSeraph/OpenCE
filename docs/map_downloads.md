@@ -81,11 +81,31 @@ The settings, in `config.toml` (`port/linux/README.md` has every setting):
 | `maps.downloads` | `true` | Download a map that is missing, and that the host does not send, from the archives. `false`: never. |
 | `maps.download_screen` | `true` | Halo's loading screen over the menus while a map downloads (B stops it). `false`: the menus stay up, with the status line. |
 | `maps.archives` | `"halonet,halomaps"` | The archives a missing map is taken from first, out of the zip that holds it, in this order: `halonet` (maps.halonet.net), `halomaps` (halomaps.org). Empty: none. Linux and Windows. |
-| `maps.web_seeds` | `"https://halomaps.fractumseraph.net/maps/"` | Comma-separated `https://` folders that hold the maps under their file names, tried after the archives. Empty: none. Linux and Windows. |
+| `maps.web_seeds` | `"https://halomaps.fractumseraph.net/maps/"` | Comma-separated `https://` folders that hold the maps under their file names: tried after the archives, and asked for pieces beside the players when map sharing downloads a map. Empty: none. Linux and Windows. |
 | `maps.index` | `"map_index.txt"` | The index of the maps, next to `config.toml` unless a full path. |
 
 Nothing is downloaded while Custom Edition maps cannot be played
 (`game.custom_edition`).
+
+## Map sharing's web seeds
+
+When map sharing downloads a map from the game's players
+(`port/linux/game/map_share.c`), a web seed sends pieces of it too, if the
+index has the file at the size the host offered (the map by its name and
+header checksum, a resource map by its name). The seed is asked for runs of
+16 pieces (4 MiB) that no player has been asked for, with an HTTP range
+request (`update_request_range`, `update.h`), and each piece is checked
+against its hash, as a player's piece is (the pieces' hashes come from the
+host or the players, checked against the file's hash the host offered). So a
+web seed cannot send a wrong map: a piece that is not the file's ends the
+web seed for that file, and three failed requests end it for the download.
+Nothing of this goes over the game's connections, so it needs no network
+version, and players of builds without it are unaffected.
+
+With the default settings this uses the seed box's folder of every map, so a
+host whose upload is slow does not hold its players' downloads up. It needs
+`maps.downloads` on and an `https://` folder in `maps.web_seeds`; the
+Android and web builds have none.
 
 ## How a map is known: the index
 

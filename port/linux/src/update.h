@@ -31,6 +31,13 @@ failing, once *stop (when stop is not NULL) is not 0 */
 int update_request(const char *url, const char *form, const char *agent, const volatile int *stop,
 	const char *path, update_progress_proc progress, void *context, char *error, int error_size);
 
+/* update_request's GET of length bytes of the file at url from offset (a
+Range request) into the file at path: 1 when the server sent those bytes
+(206), else 0 and why in error (a server that sends the whole file instead
+is refused, unread) */
+int update_request_range(const char *url, const char *agent, const volatile int *stop, unsigned long long offset,
+	unsigned long long length, const char *path, char *error, int error_size);
+
 /* the full path of this executable; 1 on success */
 int update_executable_path(char *path, int size);
 

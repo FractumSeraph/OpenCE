@@ -559,6 +559,139 @@ void map_archives_stop(void)
 	fetch.state = _map_archives_idle;
 }
 
+/* ---------- map sharing's web seeds: a range of a file */
+
+int map_archives_web_seed_url(const char *file_name, int which, char *url, int url_size)
+{
+	const char *list = config_string("maps.web_seeds");
+	char encoded[1024];
+
+	url_encode(file_name, encoded, sizeof(encoded));
+	while (list && *list)
+	{
+		const char *comma = strchr(list, ',');
+		size_t length = comma ? (size_t)(comma - list) : strlen(list);
+
+		while (length && (*list == ' ' || *list == '\t'))
+		{
+			list++;
+			length--;
+		}
+		while (length && (list[length - 1] == ' ' || list[length - 1] == '\t'))
+			length--;
+		if (length > 8 && !strncmp(list, "https://", 8) && which-- == 0)
+		{
+			if (length + strlen(encoded) + 2 > (size_t)url_size)
+				return 0;
+			snprintf(url, (size_t)url_size, "%.*s%s%s", (int)length, list, list[length - 1] == '/' ? "" : "/",
+				encoded);
+			return 1;
+		}
+		list = comma ? comma + 1 : NULL;
+	}
+	return 0;
+}
+
+static struct
+{
+	pthread_mutex_t lock;
+	int lock_made;
+	volatile int stop;
+	enum map_archives_state state;
+	char url[2100];
+	unsigned long long offset;
+	unsigned long length;
+	char path[1024];
+	char error[192];
+} range_fetch;
+
+static void *range_thread(void *unused)
+{
+	char error[192];
+	int ok;
+
+	(void)unused;
+	error[0] = 0;
+	ok = update_request_range(range_fetch.url, USER_AGENT, &range_fetch.stop, range_fetch.offset, range_fetch.length,
+		range_fetch.path, error, sizeof(error));
+	if (!ok || range_fetch.stop)
+		unlink(range_fetch.path);
+	pthread_mutex_lock(&range_fetch.lock);
+	snprintf(range_fetch.error, sizeof(range_fetch.error), "%s", range_fetch.stop ? "stopped" : error);
+	range_fetch.state = ok && !range_fetch.stop ? _map_archives_done : _map_archives_failed;
+	pthread_mutex_unlock(&range_fetch.lock);
+	return NULL;
+}
+
+static enum map_archives_state range_state(void)
+{
+	enum map_archives_state state;
+
+	if (!range_fetch.lock_made)
+		return _map_archives_idle;
+	pthread_mutex_lock(&range_fetch.lock);
+	state = range_fetch.state;
+	pthread_mutex_unlock(&range_fetch.lock);
+	return state;
+}
+
+int map_archives_range_start(const char *url, unsigned long long offset, unsigned long length, const char *path)
+{
+	pthread_t thread;
+
+	if (!range_fetch.lock_made)
+	{
+		pthread_mutex_init(&range_fetch.lock, NULL);
+		range_fetch.lock_made = 1;
+	}
+	if (range_state() == _map_archives_running || !length || strlen(url) >= sizeof(range_fetch.url) ||
+		strlen(path) >= sizeof(range_fetch.path))
+	{
+		return 0;
+	}
+	snprintf(range_fetch.url, sizeof(range_fetch.url), "%s", url);
+	snprintf(range_fetch.path, sizeof(range_fetch.path), "%s", path);
+	range_fetch.offset = offset;
+	range_fetch.length = length;
+	range_fetch.stop = 0;
+	range_fetch.error[0] = 0;
+	range_fetch.state = _map_archives_running;
+	if (pthread_create(&thread, NULL, range_thread, NULL) != 0)
+	{
+		range_fetch.state = _map_archives_idle;
+		return 0;
+	}
+	pthread_detach(thread);
+	return 1;
+}
+
+enum map_archives_state map_archives_range_poll(char *error, int error_size)
+{
+	enum map_archives_state state;
+
+	if (!range_fetch.lock_made)
+		return _map_archives_idle;
+	pthread_mutex_lock(&range_fetch.lock);
+	state = range_fetch.state;
+	if (error && error_size > 0)
+		snprintf(error, (size_t)error_size, "%s", range_fetch.error);
+	pthread_mutex_unlock(&range_fetch.lock);
+	return state;
+}
+
+void map_archives_range_stop(void)
+{
+	if (range_state() == _map_archives_running)
+	{
+		/* (it ends by itself at its download's next block, deleting what it
+		wrote; map_archives_range_start waits for that) */
+		range_fetch.stop = 1;
+		return;
+	}
+	if (range_fetch.lock_made)
+		range_fetch.state = _map_archives_idle;
+}
+
 #else
 
 /* Android: no HTTPS download in its platform layer (update.h is the
@@ -594,6 +727,35 @@ enum map_archives_state map_archives_poll(unsigned long long *received, unsigned
 }
 
 void map_archives_stop(void)
+{
+}
+
+int map_archives_web_seed_url(const char *file_name, int which, char *url, int url_size)
+{
+	(void)file_name;
+	(void)which;
+	(void)url;
+	(void)url_size;
+	return 0;
+}
+
+int map_archives_range_start(const char *url, unsigned long long offset, unsigned long length, const char *path)
+{
+	(void)url;
+	(void)offset;
+	(void)length;
+	(void)path;
+	return 0;
+}
+
+enum map_archives_state map_archives_range_poll(char *error, int error_size)
+{
+	if (error && error_size > 0)
+		error[0] = 0;
+	return _map_archives_idle;
+}
+
+void map_archives_range_stop(void)
 {
 }
 
