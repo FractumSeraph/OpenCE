@@ -31,6 +31,12 @@ right as the map comes, with the map's name and how much has come ("34 MB of
 B stops the download. With `maps.download_screen = false` the menus stay up
 and the browser's status line shows the download instead ("Downloading
 hugeass.map: 34 MB of 92 MB (1.2 MB/s, 5 peers)").
+
+A game whose host does not send its map (map sharing off, or an OpenCE
+build's host that cannot) is downloaded the same way, if the index has the
+host's version: the player leaves the game, is told the map is being
+downloaded, and joins again once it is there (`download_offered`,
+`port/linux/game/map_share.c`).
 Custom Edition's `bitmaps.map`, `sounds.map` and `loc.map`, which every
 Custom Edition map needs, are downloaded the same way when missing. The
 map goes into `maps_ce`, ChupathingyCE's folder of Custom Edition maps (a

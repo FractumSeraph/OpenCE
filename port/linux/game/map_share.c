@@ -1409,14 +1409,26 @@ static void download_offered(
 
 	if (download->state != _download_asking || csstrcmp(offer->level_name, download->level_name))
 		return;
-	if (offer->result == _offer_off)
-	{
-		download_fail("The host does not share its maps.");
-		return;
-	}
 	if (offer->result != _offer_ok || !offer->file_count || offer->file_count > MAXIMUM_FILES)
 	{
-		download_fail("The host cannot share this map.");
+		int map_torrents_fetch(const char *level_name, unsigned long version, const char *files);
+		char base_level_name[LEVEL_NAME_BYTES];
+
+		/* port (this fork): downloaded over BitTorrent instead, when the
+		maps' torrent index has the host's version (port/linux/src/map_torrents.c,
+		by the name without its hash: the download goes beside any other
+		version as <name>_<hash>.map); the player joins again once it is
+		there */
+		csprintf(base_level_name, "%s%.*s", CUSTOM_EDITION_LEVEL_NAME_PREFIX, (int)map_share_name_base_length(name),
+			name);
+		if (map_torrents_fetch(base_level_name, download->version, NULL))
+		{
+			download_fail("The host does not send this map, so it is being downloaded (Join Game shows how it goes). "
+				"Join again when it is there.");
+			return;
+		}
+		download_fail(offer->result == _offer_off ? "The host does not share its maps." :
+			"The host cannot share this map.");
 		return;
 	}
 	download->in_progress = TEST_FLAG(offer->flags, _offer_in_progress_bit);
