@@ -64,6 +64,7 @@ done. The host does not drop a machine that says it is downloading.
 #include "custom_edition_maps.h"
 #include "map_share.h"
 #include "../src/p2p.h"
+#include "../src/map_downloads.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -1365,14 +1366,22 @@ static void download_offered(
 
 	if (download->state != _download_asking || csstrcmp(offer->level_name, download->level_name))
 		return;
-	if (offer->result == _offer_off)
-	{
-		download_fail("The host does not share its maps.");
-		return;
-	}
 	if (offer->result != _offer_ok || !offer->file_count || offer->file_count > MAXIMUM_FILES)
 	{
-		download_fail("The host cannot share this map.");
+		char files[256];
+
+		/* (from the community's archives instead, when the index of the maps
+		has it: port/linux/src/map_downloads.c; the player joins again once
+		it is there) */
+		if (custom_edition_cache_files_missing(download->level_name, download->version, files, sizeof(files)) > 0 &&
+			map_downloads_fetch(download->level_name, download->version, files))
+		{
+			download_fail("The host does not send this map, so it is being downloaded from the map archives "
+				"(Join Game shows how it goes). Join again when it is there.");
+			return;
+		}
+		download_fail(offer->result == _offer_off ? "The host does not share its maps." :
+			"The host cannot share this map.");
 		return;
 	}
 	download->in_progress = TEST_FLAG(offer->flags, _offer_in_progress_bit);

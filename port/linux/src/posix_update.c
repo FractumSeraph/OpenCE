@@ -52,6 +52,11 @@ static const char *const certificate_bundles[] =
 };
 
 static pthread_once_t certificates_once = PTHREAD_ONCE_INIT;
+/* one request at a time: the self-updater's thread and the map archives'
+(map_archives.c) both ask, and Mbed TLS is built without its threading
+support (its PSA crypto, and https_get's one connection, are for one thread
+at a time) */
+static pthread_mutex_t request_lock = PTHREAD_MUTEX_INITIALIZER;
 static mbedtls_x509_crt certificates;
 static int certificates_loaded;
 static int crypto_ready;
@@ -312,14 +317,17 @@ struct download
 	update_progress_proc progress;
 	void *context;
 	unsigned long long received, total;
+	/* (update_request's: the download stops once it is not 0) */
+	const volatile int *stop;
 };
 
-/* (a release is tens of megabytes: a body past this fills no disk) */
-#define MAXIMUM_DOWNLOAD_SIZE (512ull * 1024 * 1024)
+/* (a release is tens of megabytes, and the largest map of the index (a web
+seed's file, map_archives.c) about 760: a body past this fills no disk) */
+#define MAXIMUM_DOWNLOAD_SIZE (1024ull * 1024 * 1024)
 
 static int body_write(struct download *download, const unsigned char *data, size_t size)
 {
-	if (download->received + size > MAXIMUM_DOWNLOAD_SIZE)
+	if (download->received + size > MAXIMUM_DOWNLOAD_SIZE || (download->stop && *download->stop))
 		return 0;
 	if (fwrite(data, 1, size, download->file) != size)
 		return 0;
@@ -391,10 +399,10 @@ static int read_body(struct connection *connection, struct download *download, i
 	}
 }
 
-/* one GET: the body into download on 200, the Location on a redirect;
-the status, or 0 on failure */
-static int https_get(const char *url, struct download *download, char *location, size_t location_size, char *error,
-	int error_size)
+/* one GET (or a POST of form): the body into download on 200, the Location
+on a redirect; the status, or 0 on failure */
+static int https_get(const char *url, const char *form, const char *agent, struct download *download, char *location,
+	size_t location_size, char *error, int error_size)
 {
 	static struct connection connection;
 	char host[256], port[16], path[2048];
@@ -413,10 +421,25 @@ static int https_get(const char *url, struct download *download, char *location,
 		connection_free(&connection);
 		return 0;
 	}
-	snprintf(request, sizeof(request),
-		"GET %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: " UPDATE_USER_AGENT "\r\n"
-		"Accept: */*\r\nConnection: close\r\n\r\n",
-		path, host);
+	if (form)
+	{
+		snprintf(request, sizeof(request),
+			"POST %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: %s\r\nAccept: */*\r\nConnection: close\r\n"
+			"Content-Type: application/x-www-form-urlencoded\r\nContent-Length: %lu\r\n\r\n%s",
+			path, host, agent, (unsigned long)strlen(form), form);
+	}
+	else
+	{
+		snprintf(request, sizeof(request),
+			"GET %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: %s\r\nAccept: */*\r\nConnection: close\r\n\r\n",
+			path, host, agent);
+	}
+	if (strlen(request) >= sizeof(request) - 1)
+	{
+		snprintf(error, (size_t)error_size, "the request to %s is too long", host);
+		connection_free(&connection);
+		return 0;
+	}
 	if (!connection_write(&connection, request, strlen(request)) ||
 		!connection_read_line(&connection, line, sizeof(line)) ||
 		sscanf(line, "HTTP/%*d.%*d %d", &status) != 1)
@@ -480,6 +503,26 @@ static int https_get(const char *url, struct download *download, char *location,
 int update_download(const char *url, const char *path, update_progress_proc progress, void *context, char *error,
 	int error_size)
 {
+	return update_request(url, NULL, NULL, NULL, path, progress, context, error, error_size);
+}
+
+static int request_locked(const char *url, const char *form, const char *agent, const volatile int *stop,
+	const char *path, update_progress_proc progress, void *context, char *error, int error_size);
+
+int update_request(const char *url, const char *form, const char *agent, const volatile int *stop,
+	const char *path, update_progress_proc progress, void *context, char *error, int error_size)
+{
+	int result;
+
+	pthread_mutex_lock(&request_lock);
+	result = request_locked(url, form, agent, stop, path, progress, context, error, error_size);
+	pthread_mutex_unlock(&request_lock);
+	return result;
+}
+
+static int request_locked(const char *url, const char *form, const char *agent, const volatile int *stop,
+	const char *path, update_progress_proc progress, void *context, char *error, int error_size)
+{
 	char current[2048];
 	char location[2048];
 	struct download download;
@@ -500,6 +543,7 @@ int update_download(const char *url, const char *path, update_progress_proc prog
 	memset(&download, 0, sizeof(download));
 	download.progress = progress;
 	download.context = context;
+	download.stop = stop;
 	download.file = fopen(path, "wb");
 	if (!download.file)
 	{
@@ -509,7 +553,8 @@ int update_download(const char *url, const char *path, update_progress_proc prog
 	snprintf(current, sizeof(current), "%s", url);
 	for (redirect = 0; redirect <= MAXIMUM_REDIRECTS; redirect++)
 	{
-		int status = https_get(current, &download, location, sizeof(location), error, error_size);
+		int status = https_get(current, form, agent ? agent : UPDATE_USER_AGENT, &download, location,
+			sizeof(location), error, error_size);
 
 		if (status == 200)
 		{
@@ -535,6 +580,8 @@ int update_download(const char *url, const char *path, update_progress_proc prog
 			{
 				snprintf(current, sizeof(current), "%s", location);
 			}
+			/* (what a form's answer redirects to is fetched) */
+			form = NULL;
 			continue;
 		}
 		if (status)
