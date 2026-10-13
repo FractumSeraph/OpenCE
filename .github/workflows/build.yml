@@ -491,6 +491,22 @@ jobs:
           path: dist/chupathingyce-windows-release
           retention-days: 3
 
+      # the 32-bit dedicated server for Windows (ninja server-windows), as the
+      # 64-bit job's
+      - name: Dedicated server
+        run: |
+          python tools/ci_build.py server-windows release
+          server=dist/chupathingyce-server-windows-x86/chupathingyce-server.exe
+          "$server" --version
+          status=0; "$server" || status=$?
+          test "$status" = 2
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chupathingyce-server-windows-x86
+          path: dist/chupathingyce-server-windows-x86
+          retention-days: 3
+
       # (halo.exe's symbols and map, which ChupathingyCE's release keeps
       # privately for the crash reports; not published)
       - uses: actions/upload-artifact@v4
@@ -564,6 +580,24 @@ jobs:
         with:
           name: chupathingyce-windows64-release
           path: dist/chupathingyce-windows64-release
+          retention-days: 3
+
+      # the dedicated server for Windows (ninja server-windows64), the same
+      # units as the game with server/platform's: started once, as the Linux
+      # servers are, to print its version and refuse to start without a
+      # playlist (status 2)
+      - name: Dedicated server
+        run: |
+          python tools/ci_build.py server-windows64 release
+          server=dist/chupathingyce-server-windows-x64/chupathingyce-server.exe
+          "$server" --version
+          status=0; "$server" || status=$?
+          test "$status" = 2
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chupathingyce-server-windows-x64
+          path: dist/chupathingyce-server-windows-x64
           retention-days: 3
 
       # (halo.exe's symbols and map, which ChupathingyCE's release keeps

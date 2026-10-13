@@ -138,6 +138,16 @@ static int64_t now_seconds(void)
 	return (int64_t)time(NULL);
 }
 
+#ifdef _WIN32
+/* (Windows: the system's generator, as server_control.c's) */
+static int random_bytes(void *buffer, size_t size)
+{
+	/* (bcrypt.h's, which this unit's headers leave out; NTSTATUS a long) */
+	long __stdcall BCryptGenRandom(void *algorithm, unsigned char *buffer, unsigned long size, unsigned long flags);
+
+	return BCryptGenRandom(NULL, (unsigned char *)buffer, (unsigned long)size, 0x00000002 /* the system's */) >= 0;
+}
+#else
 static int random_bytes(void *buffer, size_t size)
 {
 	int fd = open("/dev/urandom", O_RDONLY | O_CLOEXEC);
@@ -161,6 +171,7 @@ static int random_bytes(void *buffer, size_t size)
 	close(fd);
 	return 1;
 }
+#endif
 
 static void link_path(char *path, size_t size)
 {

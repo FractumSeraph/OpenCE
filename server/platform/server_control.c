@@ -81,6 +81,21 @@ platform_log) are kept in a ring here, any public address in them hidden
 #include <time.h>
 #include <unistd.h>
 
+/* a socket closed, the wake pipe read and written, standard input read: on
+Windows, Winsock's sockets and the console's thread (server/platform/win32) */
+#ifdef _WIN32
+#define close_socket server_close_socket
+#define pipe server_wake_pair
+#define wake_read(fd, buffer, size) recv(fd, buffer, size, 0)
+#define wake_write(fd, buffer, size) send(fd, buffer, size, 0)
+#define console_read server_console_read
+#else
+#define close_socket close
+#define wake_read read
+#define wake_write write
+#define console_read(buffer, size) read(STDIN_FILENO, buffer, size)
+#endif
+
 /* (Linux's; the tests' harness builds this unit on macOS too, which has
 neither: server/tests/control_harness.c) */
 #ifndef SOCK_CLOEXEC
@@ -286,6 +301,16 @@ static int64_t monotonic_seconds(void)
 	return (int64_t)now.tv_sec;
 }
 
+#ifdef _WIN32
+/* (Windows: the system's generator, as win32_posix.c's posix_random_bytes) */
+static int random_bytes(void *buffer, size_t size)
+{
+	/* (bcrypt.h's, which this unit's headers leave out; NTSTATUS a long) */
+	long __stdcall BCryptGenRandom(void *algorithm, unsigned char *buffer, unsigned long size, unsigned long flags);
+
+	return BCryptGenRandom(NULL, (unsigned char *)buffer, (unsigned long)size, 0x00000002 /* the system's */) >= 0;
+}
+#else
 static int random_bytes(void *buffer, size_t size)
 {
 	int fd = open("/dev/urandom", O_RDONLY | O_CLOEXEC);
@@ -309,6 +334,7 @@ static int random_bytes(void *buffer, size_t size)
 	close(fd);
 	return 1;
 }
+#endif
 
 /* a free ticket (the queue's lock held): its index, or -1 */
 static int free_ticket(void)
@@ -427,8 +453,13 @@ static int load_credentials(void)
 	file = fopen(path, "r");
 	if (file)
 	{
+#ifdef _WIN32
+		/* (Windows' modes have no others' bits: its folders' permissions say) */
+		(void)information;
+#else
 		if (!fstat(fileno(file), &information) && (information.st_mode & 077))
 			notice("%s can be read by others than its owner (chmod 600 it)", CREDENTIALS_FILE);
+#endif
 		while (fgets(line, sizeof(line), file))
 		{
 			line_number++;
@@ -667,8 +698,12 @@ static void load_accounts(void)
 	file = fopen(path, "r");
 	if (!file)
 		return;
+#ifdef _WIN32
+	(void)information;
+#else
 	if (!fstat(fileno(file), &information) && (information.st_mode & 077))
 		notice("%s can be read by others than its owner (chmod 600 it)", ACCOUNTS_FILE);
+#endif
 	while (fgets(line, sizeof(line), file))
 	{
 		int value;
@@ -1252,7 +1287,7 @@ static int start_listener(const char *setting)
 		fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK))
 	{
 		notice("the control API cannot listen on %s (%s): it is off", setting, strerror(errno));
-		close(fd);
+		close_socket(fd);
 		return 0;
 	}
 	control.listener = fd;
@@ -1300,7 +1335,7 @@ static void close_connection(struct connection *connection)
 		connection->tls = NULL;
 	}
 	if (connection->fd >= 0)
-		close(connection->fd);
+		close_socket(connection->fd);
 	free(connection->response);
 	if (connection->state == CONNECTION_WAITING && connection->ticket >= 0)
 	{
@@ -3275,7 +3310,7 @@ static void accept_connection(void)
 	}
 	if (index >= MAXIMUM_CONNECTIONS || fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK))
 	{
-		close(fd);
+		close_socket(fd);
 		return;
 	}
 	{
@@ -3575,7 +3610,7 @@ static void console_line(const char *line)
 static void read_console(void)
 {
 	char buffer[512];
-	ssize_t count = read(STDIN_FILENO, buffer, sizeof(buffer));
+	ssize_t count = console_read(buffer, sizeof(buffer));
 	ssize_t index;
 
 	if (count < 0 && (errno == EAGAIN || errno == EINTR))
@@ -3636,12 +3671,14 @@ static void *control_thread(void *argument)
 			fds[count].events = POLLIN;
 			map[count++] = -2;
 		}
+#ifndef _WIN32
 		if (control.console_open)
 		{
 			fds[count].fd = STDIN_FILENO;
 			fds[count].events = POLLIN;
 			map[count++] = -3;
 		}
+#endif
 		for (index = 0; index < MAXIMUM_CONNECTIONS; index++)
 		{
 			struct connection *connection = &control.connections[index];
@@ -3685,7 +3722,7 @@ static void *control_thread(void *argument)
 			{
 				char drain[64];
 
-				while (read(wake_pipe[0], drain, sizeof(drain)) > 0)
+				while (wake_read(wake_pipe[0], drain, sizeof(drain)) > 0)
 					;
 			}
 			else if (map[index] == -2)
@@ -3704,6 +3741,12 @@ static void *control_thread(void *argument)
 					write_response(connection);
 			}
 		}
+#ifdef _WIN32
+		/* (the console's bytes, which its thread hands over: Winsock's poll
+		cannot wait on standard input, server_win32.c) */
+		if (control.console_open)
+			read_console();
+#endif
 		/* (bytes TLS has read and not handed out yet: poll does not wake for
 		them) */
 		for (index = 0; index < MAXIMUM_CONNECTIONS; index++)
@@ -3817,7 +3860,7 @@ void server_control_start(void)
 	{
 		notice("the console and control API cannot start (%s)", strerror(errno));
 		if (control.listener >= 0)
-			close(control.listener);
+			close_socket(control.listener);
 		control.listener = -1;
 		return;
 	}
@@ -3826,6 +3869,10 @@ void server_control_start(void)
 	fcntl(wake_pipe[0], F_SETFD, FD_CLOEXEC);
 	fcntl(wake_pipe[1], F_SETFD, FD_CLOEXEC);
 	control.console_open = control.console;
+#ifdef _WIN32
+	if (control.console && server_console_start(wake_pipe[1]))
+		control.console_open = 0;
+#endif
 	if (control.console)
 		notice("the console reads commands on standard input (help lists them)");
 	pthread_attr_init(&attributes);
@@ -3837,7 +3884,7 @@ void server_control_start(void)
 	{
 		notice("the console and control API cannot start");
 		if (control.listener >= 0)
-			close(control.listener);
+			close_socket(control.listener);
 		control.listener = -1;
 	}
 	pthread_attr_destroy(&attributes);
@@ -3925,7 +3972,7 @@ void server_control_finish(int ticket, int ok, const char *output)
 	pthread_mutex_unlock(&queue_mutex);
 	if (wake_pipe[1] >= 0)
 	{
-		ssize_t written = write(wake_pipe[1], "", 1);
+		ssize_t written = wake_write(wake_pipe[1], "", 1);
 
 		(void)written;
 	}

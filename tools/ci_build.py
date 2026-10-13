@@ -80,6 +80,10 @@ OUTPUTS = {
     "server-x64": ["build/server-x64/chupathingyce-server"],
     "server-arm64": ["build/server-arm64/chupathingyce-server"],
     "web": [],  # the site, below
+    # the dedicated server for Windows (ninja server-windows, server-windows64;
+    # tools/windows_build.py), with the SDL it links
+    "server-windows": ["build/server-windows/chupathingyce-server.exe", "build/server-windows/SDL3.dll"],
+    "server-windows64": ["build/server-windows64/chupathingyce-server.exe", "build/server-windows64/SDL3.dll"],
 }
 # the servers' Alpine Linux (--alpine), and Docker's name for each one's
 # architecture
@@ -204,7 +208,7 @@ def main() -> int:
         outputs = OUTPUTS[args.platform]
 
     if server:
-        return server_dist(args.platform, args.config, outputs[0])
+        return server_dist(args.platform, args.config, outputs)
 
     dist = ROOT / "dist" / f"chupathingyce-{args.platform}-{args.config}"
     if dist.exists():
@@ -300,16 +304,32 @@ def strip_debug(program: Path) -> None:
           "(debug information removed)", flush=True)
 
 
-def server_dist(platform: str, config: str, output: str) -> int:
-    """dist/chupathingyce-server-linux-<arch>[-debug]: the server, its
-    README, its playlists and the notices its parts' licenses ask for"""
-    arch = platform[len("server-"):]
-    dist = ROOT / "dist" / f"chupathingyce-server-linux-{arch}{'' if config == 'release' else '-debug'}"
+# the Windows servers' platforms, and their downloads' architectures
+WINDOWS_SERVERS = {"server-windows": "x86", "server-windows64": "x64"}
+
+
+def server_dist(platform: str, config: str, outputs: list) -> int:
+    """dist/chupathingyce-server-linux-<arch>[-debug] (or -windows-<arch>):
+    the server, its README, its playlists and the notices its parts'
+    licenses ask for; on Windows SDL3.dll beside it, the brokers' list, the
+    guide (server/docs/windows.md) and a script that starts it"""
+    windows = platform in WINDOWS_SERVERS
+    arch = WINDOWS_SERVERS[platform] if windows else platform[len("server-"):]
+    system = "windows" if windows else "linux"
+    dist = ROOT / "dist" / f"chupathingyce-server-{system}-{arch}{'' if config == 'release' else '-debug'}"
+    output = outputs[0]
     if dist.exists():
         shutil.rmtree(dist)
     (dist / "playlists").mkdir(parents=True)
-    shutil.copy2(ROOT / output, dist)
-    if config == "release":
+    for built in outputs:
+        shutil.copy2(ROOT / built, dist)
+    if windows:
+        # (its debug information is apart already: build/server-windows*/
+        # chupathingyce-server.pdb)
+        shutil.copy2(ROOT / "port/assets/network/brokers.txt", dist / "brokers.txt")
+        shutil.copy2(ROOT / "server/docs/windows.md", dist / "WINDOWS.md")
+        shutil.copy2(ROOT / "server/deploy/windows/start-server.cmd", dist / "start-server.cmd")
+    elif config == "release":
         # a release's download without its debug information (about 20 MB
         # of 33); build/server-<arch>/ keeps the full program, and a debug
         # build ships it

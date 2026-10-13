@@ -1,6 +1,6 @@
 # ChupathingyCE Dedicated Server
 
-A Halo: Combat Evolved server for Linux. It hosts games by itself, with no
+A Halo: Combat Evolved server for Linux and Windows. It hosts games by itself, with no
 player of its own, around the clock, from a playlist of maps and game types.
 Its games show on [halo.milenko.org](https://halo.milenko.org), the
 community's game list, and in the in-game Server Browser of ChupathingyCE
@@ -8,9 +8,10 @@ and OpenCE alike. Finished games get carnage reports there.
 
 It is the game itself (the same code, network protocol and version as the
 ChupathingyCE release it comes with), built as a program of its own with
-nothing a player sits in front of: no window, no sound, no controller. It is
-one file, with no libraries to install, and it runs on any Linux of its
-architecture.
+nothing a player sits in front of: no window, no sound, no controller. On
+Linux it is one file, with no libraries to install, and it runs on any Linux
+of its architecture; on Windows it is a console program
+([Windows](docs/windows.md)).
 
 On a home connection you don't need to open or forward any ports. Players
 reach your server the same way they reach anyone's invite link, even behind a
@@ -28,6 +29,10 @@ not sure.
 | `chupathingyce-server-linux-x64` | `x86_64` | Most VPSes and PCs: Intel and AMD 64-bit. |
 | `chupathingyce-server-linux-arm64` | `aarch64` | 64-bit ARM: Oracle Cloud's free tier (Ampere A1), other Ampere and Graviton servers, Raspberry Pi 4 and 5 with a 64-bit OS. |
 | `chupathingyce-server-linux-x86` | `i686`, `i386` | Older 32-bit PCs. It runs on a 64-bit x86 Linux too, and uses a little less memory there. |
+
+On Windows 10 or 11, use `chupathingyce-server-windows-x64` (or
+`chupathingyce-server-windows-x86` on 32-bit Windows): see
+[Windows](docs/windows.md) for its quick start.
 
 Halo PC (Custom Edition) and HaloMD maps: use the x64 or arm64 server. The
 x86 one is for the Xbox maps (it can load the others, with less room for
@@ -165,6 +170,7 @@ is on.
 | [docs/playlists.md](docs/playlists.md) | Playlists: the maps (Xbox, `@ce`, `@md`), the game types, and the ones included. |
 | [docs/docker.md](docs/docker.md) | The container image, the systemd services, more servers on one host, and the game list's probe. |
 | [docs/building.md](docs/building.md) | Building the server: the targets, musl and glibc, and how it differs from the game. |
+| [docs/windows.md](docs/windows.md) | The server on Windows: its downloads, quick start, the control panel, running without a window, and what differs from Linux. |
 | [CHANGELOG.md](CHANGELOG.md) | What changed in the server, release by release. |
 
 In this folder: `src/` is compiled into the game: the dedicated server's

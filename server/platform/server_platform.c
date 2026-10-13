@@ -145,12 +145,22 @@ before the game starts */
 __attribute__((constructor(102)))
 static void server_arguments(void)
 {
+#ifndef _WIN32
 	struct sigaction action;
+#endif
 	char argument[256];
 	int index;
 
 	for (index = 1; posix_command_line_argument(index, argument, sizeof(argument)); index++)
 	{
+#ifdef _WIN32
+		/* (Windows: the program started again as its own crash reporter,
+		or to send the reports an earlier crash left, which
+		port/windows/src/win32_crash.c's constructor does once this one
+		returns, and then ends) */
+		if (!strcmp(argument, "--crash-report") || !strcmp(argument, "--crash-upload"))
+			return;
+#endif
 		if (!strcmp(argument, "--version") || !strcmp(argument, "-v"))
 		{
 			print_version();
@@ -168,7 +178,12 @@ static void server_arguments(void)
 		exit(2);
 	}
 	/* (no sound to open: dsound_sdl.c's mixer runs on its own clock) */
+#ifdef _WIN32
+	if (!getenv("HALO_NO_AUDIO"))
+		_putenv_s("HALO_NO_AUDIO", "1");
+#else
 	setenv("HALO_NO_AUDIO", "1", 0);
+#endif
 	if (!browser_dedicated() && !browser_probe())
 	{
 		print_version();
@@ -184,12 +199,24 @@ static void server_arguments(void)
 	/* a write to a connection the other end closed fails instead of ending
 	the server (as sdl_platform.c); SIGTERM and SIGINT stop it at the next
 	frame */
+#ifdef _WIN32
+	/* (Windows: Ctrl+C, Ctrl+Break and the console closed stop it, at the
+	next frame as well; a socket written after its other end closed fails
+	there anyway: server/platform/win32) */
+	{
+		void server_win32_stop_events(volatile int *flag);
+
+		(void)stop_handler;
+		server_win32_stop_events((volatile int *)&stop_requested);
+	}
+#else
 	signal(SIGPIPE, SIG_IGN);
 	memset(&action, 0, sizeof(action));
 	action.sa_handler = stop_handler;
 	sigemptyset(&action.sa_mask);
 	sigaction(SIGTERM, &action, NULL);
 	sigaction(SIGINT, &action, NULL);
+#endif
 }
 
 /* ---------- the platform layer's start (all done above) */
@@ -354,6 +381,36 @@ void platform_input_read(struct platform_input_state *state, BOOL consume_motion
 {
 	(void)consume_motion;
 	memset(state, 0, sizeof(*state));
+}
+
+/* (sdl_platform.c's and xinput_sdl.c's, which the server leaves out: no
+audio devices, no push to talk, no scoreboard pointer; here, not in
+sdl_headless.c, as the Windows server links SDL itself) */
+int platform_audio_devices(int recording, char (*names)[PLATFORM_AUDIO_DEVICE_NAME_SIZE], int maximum)
+{
+	(void)recording;
+	(void)names;
+	(void)maximum;
+	return 0;
+}
+
+SDL_AudioDeviceID platform_audio_device(int recording, const char *name)
+{
+	(void)recording;
+	(void)name;
+	return 0;
+}
+
+int halo_push_to_talk_held(void)
+{
+	return 0;
+}
+
+BOOL platform_scoreboard_pointer(BOOL offered, struct platform_ui_pointer *pointer)
+{
+	(void)offered;
+	(void)pointer;
+	return FALSE;
 }
 
 /* ---------- events */

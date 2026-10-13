@@ -7,6 +7,14 @@ Linux (``port/linux/src``) and the Windows parts in ``port/windows``, and
 links ``build/windows/halo.exe`` with lld. It is generated only when
 configure.py runs on Windows. See port/windows/README.md for the design.
 
+``ninja server-windows`` and ``ninja server-windows64`` build the dedicated
+server (server/README.md) for Windows, ``build/server-windows*/
+chupathingyce-server.exe``: the same units with server/platform's in place of
+the window, the input and the self-updater (tools/server_build.py, the Linux
+server's), a console program that links SDL only for its utilities
+(SDL3.dll beside it), with server/platform/win32's POSIX headers for its
+control API's sockets (server/docs/windows.md).
+
 ``ninja windows64`` compiles the same units for x64 Windows
 (x86_64-pc-windows-msvc) into ``build/windows64/halo.exe``, with the 64-bit
 builds' code paths (HALO_64BIT: source/cseries/xbox_address.h), as
@@ -40,6 +48,8 @@ from .linux_build import (CUSTOM_EDITION_DEFINES, LINUX_PROFILE, MBEDTLS_DIR, MI
 from .lp64_build import lp64_excluded
 from .embed_assets import hud_assets_build, hud_configure_inputs, ui_fonts_build
 from .ninja_syntax import Writer
+from .server_build import (OUTPUT_NAME as SERVER_OUTPUT_NAME, SERVER_EXCLUDED, SERVER_NATIVE_SOURCES,
+                           SERVER_PLATFORM_DIR, SERVER_PLATFORM_SOURCES, webui_build)
 
 LINUX_DIR = Path("port/linux")
 PORT_DIR = Path("port/windows")
@@ -411,19 +421,39 @@ def generate_windows_build(n: Writer, sln: Any) -> None:
         # as OpenCE's: linux_build.configuration_defines)
         target_sln = sln if target.profile else SimpleNamespace(**{**vars(sln), "port_profile": False})
         generate_windows_target(n, target_sln, target)
+    # the dedicated servers (tools/server_build.py's, on Windows)
+    for target in (WINDOWS32, WINDOWS64):
+        target_sln = sln if target.profile else SimpleNamespace(**{**vars(sln), "port_profile": False})
+        generate_windows_target(n, target_sln, target, server=True)
 
 
-def generate_windows_target(n: Writer, sln: Any, target: WindowsTarget) -> None:
-    """one Windows build's rules: ``ninja windows`` or ``ninja windows64``"""
+# the Linux server's units it leaves out on Windows: SDL's stand-ins (the
+# server links SDL3.dll, of which it calls only the utilities) and glibc's
+# backtrace (win32_crash.c reports a crash)
+WINDOWS_SERVER_NATIVE_EXCLUDED = {"sdl_headless.c", "backtrace.c"}
+# the POSIX headers the server's control API includes, on Winsock
+# (server/platform/win32)
+WINDOWS_SERVER_POSIX = SERVER_PLATFORM_DIR / "win32"
+
+
+def generate_windows_target(n: Writer, sln: Any, target: WindowsTarget, server: bool = False) -> None:
+    """one Windows build's rules: ``ninja windows`` or ``ninja windows64``,
+    or with server the dedicated server's: ``ninja server-windows`` or
+    ``ninja server-windows64``"""
     linux_config: Dict[str, Any] = json.loads((LINUX_DIR / "port.json").read_text(encoding="utf-8"))
     config = _load_config()
 
-    prefix = target.name
+    prefix = f"server-{target.name}" if server else target.name
     label = prefix.upper()
-    build = target.build
+    build = Path("build") / prefix
     tags_header = build / "halo_msvc_tags.h"
     obj_dir = build / "obj"
-    output = build / "halo.exe"
+    output = build / (f"{SERVER_OUTPUT_NAME}.exe" if server else "halo.exe")
+    if server:
+        # (the server always has the game list and the dedicated server's
+        # director, as tools/server_build.py's)
+        sln = SimpleNamespace(**vars(sln))
+        sln.game_browser = True
     sdl_dll = build / "SDL3.dll"
     sdl_lib = SDL_DIR / "lib" / target.sdl_arch
     cc = getattr(sln, "windows_cc", None) or "clang"
@@ -486,7 +516,7 @@ def generate_windows_target(n: Writer, sln: Any, target: WindowsTarget) -> None:
     # overrun nobody has met cannot end a game)
     abi = " ".join(target.abi_flags + [march_flag(sln)] + configuration_defines(sln)
                    + ([] if getattr(sln, "port_release", False) else ["-fstack-protector-strong"])
-                   + game_browser_defines(sln))
+                   + game_browser_defines(sln) + (["-DHALO_SERVER"] if server else []))
     sdl_include = SDL_DIR / "include"
     libs = " ".join(
         [_quote(sdl_lib / "SDL3.lib")]
@@ -495,7 +525,10 @@ def generate_windows_target(n: Writer, sln: Any, target: WindowsTarget) -> None:
     # (the linker's map beside the program, halo.map: its functions'
     # addresses, kept with the symbols, tools/ci_build.py)
     base_ldflags = list(target.ldflags) + ["-Wl,/MAP"]
-    if getattr(sln, "port_release", False):
+    if server:
+        # (a console program: its log, console and Ctrl+C, server_platform.c)
+        base_ldflags += ["-Wl,/SUBSYSTEM:CONSOLE"]
+    elif getattr(sln, "port_release", False):
         # no console window (the port's log goes to halo.log instead,
         # win32_posix.c): under Wine (Proton, gamescope) the console window
         # can hide the game's window
@@ -582,7 +615,7 @@ def generate_windows_target(n: Writer, sln: Any, target: WindowsTarget) -> None:
         replaced = set(config.get("replaced_platform_sources", []))
         mbedtls_include = f"-I{MBEDTLS_DIR / 'include'}"
         for source in sorted(linux_platform.glob("*.c")):
-            if source.name in replaced:
+            if source.name in replaced or (server and source.as_posix() in SERVER_EXCLUDED):
                 continue
             if source.name == "posix_dtls.c":
                 # (internet play's DTLS with browsers: Mbed TLS sees the
@@ -612,6 +645,20 @@ def generate_windows_target(n: Writer, sln: Any, target: WindowsTarget) -> None:
                                          "-D_CRT_SECURE_NO_WARNINGS", "-D_WINSOCK_DEPRECATED_NO_WARNINGS", "-w"]))
         for source in embedded_assets:
             add_object(source, platform_cflags)
+        if server:
+            # the dedicated server's platform layer (server/platform), as
+            # the Linux server's: its window, input and version with the
+            # platform layer's flags, its console and control API with the
+            # Windows units', over server/platform/win32's POSIX headers
+            for source in SERVER_PLATFORM_SOURCES:
+                add_object(source, f"{platform_cflags} {updater_defines(getattr(sln, 'port_release', False))}")
+            server_cflags = " ".join([win32_cflags, f"-I{WINDOWS_SERVER_POSIX}", f"-I{MBEDTLS_DIR / 'include'}",
+                                      f"-I{MONOCYPHER_DIR}", f"-I{QRCODEGEN_DIR}", "-D_CRT_SECURE_NO_WARNINGS",
+                                      "-D_CRT_NONSTDC_NO_WARNINGS"])
+            for source in (SERVER_NATIVE_SOURCES + [WINDOWS_SERVER_POSIX / "server_win32.c"]
+                           + webui_build(n, prefix, build / "generated" / "webui_assets.c")):
+                if source.name not in WINDOWS_SERVER_NATIVE_EXCLUDED:
+                    add_object(source, server_cflags)
         # the settings file's parser (port/third_party/tomlc17), with the
         # platform layer's ABI and nothing else
         add_object(TOML_DIR / "tomlc17.c", " ".join([abi, "-std=gnu11", "-w"]))
@@ -656,7 +703,7 @@ def generate_windows_target(n: Writer, sln: Any, target: WindowsTarget) -> None:
     # one that an instrumented build records while playing
     # (tools/pgo_train.py). A profile is trained once: code changed since
     # simply goes without, and deleting it trains a new one.
-    profile = pgo_profile(sln, WINDOWS_PROFILE, [LINUX_PROFILE], cc) if target.pgo else None
+    profile = pgo_profile(sln, WINDOWS_PROFILE, [LINUX_PROFILE], cc) if target.pgo and not server else None
     if pgo_mode(sln) == "train" and profile == WINDOWS_PROFILE:
         release = clang_release(cc)
         if not release:
@@ -712,4 +759,12 @@ def generate_windows_target(n: Writer, sln: Any, target: WindowsTarget) -> None:
     map_torrents = build / "map_torrents.txt"
     n.build(outputs=map_torrents, rule=f"{prefix}_copy", inputs=Path("port/assets/network/map_torrents.txt"))
     n.build(outputs=prefix, rule="phony", inputs=[output, sdl_dll, brokers, map_torrents])
+    if server:
+        # the playlists the Linux server's download has (server/playlists)
+        playlists = []
+        for playlist in sorted(Path("server/playlists").glob("*.txt")):
+            copied = build / "playlists" / playlist.name
+            n.build(outputs=copied, rule=f"{prefix}_copy", inputs=playlist)
+            playlists.append(copied)
+        n.build(outputs=f"{prefix}-playlists", rule="phony", inputs=playlists)
     n.newline()

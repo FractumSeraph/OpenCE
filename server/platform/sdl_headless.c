@@ -275,34 +275,3 @@ Uint64 SDL_GetTicks(void)
 	clock_gettime(CLOCK_MONOTONIC, &now);
 	return (Uint64)now.tv_sec * 1000 + (Uint64)now.tv_nsec / 1000000;
 }
-
-/* (sdl_platform.c's and xinput_sdl.c's, which the server leaves out: no
-audio devices, no push to talk, no scoreboard pointer) */
-int platform_audio_devices(int recording, char (*names)[128], int maximum)
-{
-	(void)recording;
-	(void)names;
-	(void)maximum;
-	return 0;
-}
-
-SDL_AudioDeviceID platform_audio_device(int recording, const char *name)
-{
-	(void)recording;
-	(void)name;
-	return 0;
-}
-
-int halo_push_to_talk_held(void)
-{
-	return 0;
-}
-
-struct platform_ui_pointer;
-
-int platform_scoreboard_pointer(int offered, struct platform_ui_pointer *pointer)
-{
-	(void)offered;
-	(void)pointer;
-	return 0;
-}
