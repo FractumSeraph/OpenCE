@@ -15,49 +15,61 @@ You do not need the Xbox SDK. The declarations that the game uses are in
 
 To build:
 
-- Python and ninja.
-- clang. The option `--linux-cc` of `configure.py` selects a different
+- Python and ninja (`python3` and `ninja-build` on Debian and Ubuntu,
+  `python` and `ninja` on Arch Linux).
+- clang and lld. A release build is optimised with the profiles in `pgo/`
+  only with clang 22, the version that wrote them; with an older clang it
+  is built without them. Debian and Ubuntu get clang 22 from
+  [apt.llvm.org](https://apt.llvm.org) (`clang-22`, `lld-22`, `llvm-22`);
+  put `/usr/lib/llvm-22/bin` first on `PATH`, or give `configure.py` the
+  compiler with `--linux-cc clang-22`. Arch Linux has it as `clang` and
+  `lld`. The option `--linux-cc` of `configure.py` selects a different
   compiler.
-- The 32-bit glibc development files: `lib32-glibc` on Arch Linux,
-  `gcc-multilib` and `libc6-dev-i386` on Debian and Ubuntu.
-- The 32-bit SDL3: `lib32-sdl3` on Arch Linux, `libsdl3-dev:i386` on Debian
-  and Ubuntu. The portable build does not need it: refer to "Portable
+- The 32-bit glibc development files: `gcc-multilib` and `libc6-dev-i386`
+  on Debian and Ubuntu, `lib32-glibc` on Arch Linux.
+- The 32-bit SDL3: `libsdl3-dev:i386` on Debian and Ubuntu, `lib32-sdl3` on
+  Arch Linux. The portable build does not need it: refer to "Portable
   build".
 
 To start the game:
 
-- glibc 2.29 or later (32-bit), for the builds from GitHub Actions, which
-  are built against glibc 2.31. They start on SteamOS 3 (Steam Deck). They
-  should also start on Debian 11, Ubuntu 20.04, Fedora 32 and later
-  distributions, but this is not tested. A build that you make without
-  `--portable` needs the glibc of the computer that built it, or a later
-  one.
-- The 32-bit OpenGL libraries (`lib32-mesa`).
-- The 32-bit PipeWire or PulseAudio client libraries (`lib32-pipewire` or
-  `lib32-libpulse`).
-- The 32-bit X11 libraries (`lib32-libx11`, `lib32-libxext`). In a Wayland
-  session, the game uses them through XWayland. SDL uses Wayland itself
-  only if the 32-bit Wayland libraries are version 1.20 or later
-  (`lib32-wayland`, `lib32-libxkbcommon`; Debian 11, Ubuntu 20.04 and
-  Fedora 32 have older ones) and the compositor has the fifo-v1 protocol.
-  On GNOME, the window then has borders only with the 32-bit libdecor
-  (`lib32-libdecor`).
+- glibc 2.31 or later (32-bit), for the builds from GitHub Actions, which
+  are built against glibc 2.31. They should start on Debian 11, Ubuntu
+  20.04, Fedora 32 and later distributions. A build that you
+  make without `--portable` needs the glibc of the computer that built it,
+  or a later one.
+- The 32-bit OpenGL libraries: `libgl1:i386` and `libgl1-mesa-dri:i386`
+  on Debian and Ubuntu, `lib32-mesa` on Arch Linux.
+- The 32-bit PipeWire or PulseAudio client libraries:
+  `libpipewire-0.3-0:i386` or `libpulse0:i386` on Debian and Ubuntu,
+  `lib32-pipewire` or `lib32-libpulse` on Arch Linux.
+- The 32-bit X11 libraries: `libx11-6:i386` and `libxext6:i386` on Debian
+  and Ubuntu, `lib32-libx11` and `lib32-libxext` on Arch Linux. In a
+  Wayland session, the game uses them through XWayland. SDL uses Wayland
+  itself only if the 32-bit Wayland libraries are version 1.20 or later
+  (`libwayland-client0:i386`, `libwayland-cursor0:i386`,
+  `libwayland-egl1:i386` and `libxkbcommon0:i386` on Debian and Ubuntu,
+  `lib32-wayland` and `lib32-libxkbcommon` on Arch Linux; Debian 11,
+  Ubuntu 20.04 and Fedora 32 have older ones) and the compositor has the
+  fifo-v1 protocol. On GNOME, the window then has borders only with the
+  32-bit libdecor (`libdecor-0-0:i386` on Debian and Ubuntu,
+  `lib32-libdecor` on Arch Linux).
 
-SteamOS has all of these. Its system is read-only, and the builds from
-GitHub Actions need no package: they bring their own SDL3
+On Debian and Ubuntu, the 32-bit packages need the i386 architecture
+first: `sudo dpkg --add-architecture i386 && sudo apt update`. The builds
+from GitHub Actions need no SDL3 package: they bring their own
 (`libSDL3.so.0`, next to the executable).
 
 ### Portable build
 
 The builds from GitHub Actions are portable builds (`--portable`; refer to
-"Building it yourself" in the main
-[README](../../README.md#building-it-yourself)). The portable build starts
-on more systems than the build machine's:
+"Build options" in the main [README](../../README.md)). The portable build
+starts on more systems than the build machine's:
 
-- It is compiled and linked against the 32-bit glibc 2.31 of Debian 11, the
-  glibc of the Steam Runtime 3 ("sniper"), not against the glibc of the
-  build machine. An executable needs the glibc version that it was built
-  against, or a later one.
+- It is compiled and linked against the glibc 2.31 of Debian 11, the glibc
+  of the Steam Runtime 3 ("sniper"), not against the glibc of the build
+  machine. An executable needs the glibc version that it was built against,
+  or a later one.
 - It brings SDL 3 (`libSDL3.so.0`), built from source against the same
   glibc. The executable looks for it in its own folder first (a `DT_RPATH`
   of `$ORIGIN`, which comes before `LD_LIBRARY_PATH`), so that it uses this
@@ -66,27 +78,51 @@ on more systems than the build machine's:
   and ALSA when it starts, so it starts with whichever of them the system
   has. It is linked only to glibc. Its license is `SDL3-LICENSE.txt`.
 
+The 64-bit build (`ninja linux64`, below) is portable the same way, with
+Debian 11's 64-bit (amd64) packages.
+
 At the first build, `tools/linux_sysroot.py` downloads the Debian packages
 (about 25 MB) and the source of SDL. Each package comes from
 `archive.debian.org` or `deb.debian.org`, or else from
 `snapshot.debian.org`; the source of SDL comes from GitHub or from
-`libsdl.org`. It checks each download against its SHA-256 sum. The system root is in
-`build/linux/third_party/sysroot`. `tools/linux_sysroot.cmake` builds SDL
-against it.
+`libsdl.org`. It checks each download against its SHA-256 sum. The system
+root is in `build/linux/third_party/sysroot` (`build/linux64/third_party/sysroot`
+for the 64-bit build). `tools/linux_sysroot.cmake` (`tools/linux64_sysroot.cmake`)
+builds SDL against it.
 
 To make the portable build you need, in addition to the tools above,
-CMake, `pkg-config` (`pkgconf`) and `wayland-scanner` (`wayland` on Arch
-Linux, `libwayland-bin` on Debian and Ubuntu). You do not need the 32-bit
-SDL3. You need the 32-bit glibc only for the tests.
+CMake, `pkg-config` and `wayland-scanner`: `cmake`, `pkg-config` and
+`libwayland-bin` on Debian and Ubuntu, `cmake`, `pkgconf` and `wayland` on
+Arch Linux. You do not need the
+system's SDL3. You need the 32-bit glibc only for the tests.
 
 To see the glibc version that a build needs, enter
 `readelf -V build/linux/halo | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1`.
+`tools/linux_glibc_check.py`, which the GitHub Actions builds run on every
+Linux executable and library they make, fails on any version later than
+2.31.
 
 ## Build the game
 
-1. Go to the root folder of the repository.
-2. Enter `python configure.py`.
-3. Enter `ninja linux`.
+1. Install the tools. On Debian and Ubuntu, after adding apt.llvm.org's
+   `llvm-toolchain-<release>-22` repository (its instructions are at
+   [apt.llvm.org](https://apt.llvm.org); its script does it with
+   `sudo ./llvm.sh 22`), enter:
+
+   ```sh
+   sudo apt install clang-22 lld-22 llvm-22 gcc-multilib libc6-dev-i386 \
+     python3 ninja-build cmake pkg-config libwayland-bin
+   export PATH=/usr/lib/llvm-22/bin:$PATH
+   ```
+
+   On Arch Linux, enable the multilib repository and enter
+   `sudo pacman -S clang lld lib32-glibc python ninja cmake pkgconf wayland`.
+   GitHub Actions builds on Ubuntu 24.04 this way
+   (`.github/workflows/build.yml`).
+2. Go to the root folder of the repository.
+3. Enter `python3 configure.py` (with `--portable` for a build that
+   starts on other computers, as the releases are: "Portable build").
+4. Enter `ninja linux`.
 
 ### 64-bit
 
@@ -94,10 +130,13 @@ To see the glibc version that a build needs, enter
 `build/linux64/halo`, the way the macOS build does (the 64-bit build in
 [port/macos/README.md](../macos/README.md): `HALO_64BIT` and the `long`
 rewrite, `tools/lp64_build.py`). It needs the 64-bit glibc and SDL3
-development files (`sdl3` on Arch Linux, `libsdl3-dev` on Debian 13 and
-Ubuntu 25.04 or later) instead of the 32-bit ones, and the 64-bit OpenGL and
+development files (`libsdl3-dev` on Debian 13 and Ubuntu 25.04 or later,
+`sdl3` on Arch Linux) instead of the 32-bit ones, and the 64-bit OpenGL and
 sound libraries to start. An SDL3 built by hand is found through
-`LIBRARY_PATH` when linking and `LD_LIBRARY_PATH` when starting. It is not
+`LIBRARY_PATH` when linking and `LD_LIBRARY_PATH` when starting. With
+`--portable`, as the releases are built, it needs neither: it is built
+against Debian 11's 64-bit glibc 2.31 and brings its own SDL3, as the 32-bit
+portable build does (refer to "Portable build"). It is not
 optimised with a profile (the committed profiles are the 32-bit build's).
 Its releases are their own download, `chupathingyce-linux64-release.zip`,
 which its self-updater asks for. It plays Halo PC's maps (`maps_ce/`,
@@ -108,11 +147,10 @@ network, and it is a dedicated server too (`server/README.md`).
 
 Enter `build/linux/halo`.
 
-To play on a Steam Deck, unpack `chupathingyce-linux-release.zip` (refer to
-"Download" in the main [README](../../README.md#download)) into a folder (in
-Desktop Mode), and add `halo` to Steam as a non-Steam game ("Add a Game" in
-the Games menu of Steam). The game then starts in Game Mode as well. Refer
-to "Steam Deck".
+The Steam Deck is not a supported platform yet. The Linux build may run
+on it: unpack `chupathingyce-linux64-release.zip` into a folder (in Desktop
+Mode), and add `halo` to Steam as a non-Steam game ("Add a Game" in the
+Games menu of Steam). Reports are welcome in #bug-reports on the Discord.
 
 The game data is the folder that contains `maps/`, from an Xbox disc image
 of any version of the game. The game looks for this folder in this
@@ -1330,7 +1368,7 @@ Other changes:
 | `rasterizer/xbox/rasterizer_xbox_environment_fog.c` | A local pointer gets its value from the file-scope array with the same name. |
 | `game/player_control.c` | The mouse aims the player on controller 1 directly. |
 | `sound/game_sound.c` | The game calculates the obstruction of each sound one time for each tick, not for each frame. |
-| `cseries/errors.c` | `debug.txt` stays open between lines. |
+| `cseries/errors.c` | `debug.txt` stays open between lines. A line that is the same as the line before it is counted, not written again (`last line repeated N times`). At 64 MB, `debug.txt` becomes `debug.old.txt` and a new `debug.txt` starts. |
 | `networking/`, `game/`, `interface/`, `bungie_net/network/` and the pools of objects, effects and sounds | The system link limits and the memory for them. |
 | `game/`, `objects/`, `units/`, `networking/` | The distributed netcode. Refer to `NETCODE.md`. |
 | `cache/cache_files.c` | When a map's tags load and unload, the port finds the bitmaps that the high-res HUD replaces (`game/hud_hires_tags.c`), and adds the tags of the menus to the menus' map (`game/menu_tags.c`). |

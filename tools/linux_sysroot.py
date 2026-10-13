@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""The 32-bit x86 system root of the portable Linux build (configure.py
---portable), and the SDL3 source it builds libSDL3.so.0 from.
+"""The x86 system roots of the portable Linux builds (configure.py
+--portable), 32-bit (ninja linux) and 64-bit (ninja linux64), and the SDL3
+source each builds its libSDL3.so.0 from.
 
 An executable built against the build machine's glibc asks for the symbols
 of that version (GLIBC_2.43 on an up-to-date Arch Linux) and starts on no
 older system. The portable build is therefore compiled and linked against
-Debian 11's i386 glibc 2.31, the baseline of the Steam Runtime 3 ("sniper"),
+Debian 11's glibc 2.31 (i386, or amd64 for the 64-bit build), the baseline of the Steam Runtime 3 ("sniper"),
 which SteamOS 3, the Steam Deck and every distribution since 2020 have, and
 against the headers of the libraries SDL loads when it starts (X11, Wayland
 and libdecor, PipeWire, PulseAudio, ALSA, D-Bus, udev), which it opens itself
@@ -18,9 +19,9 @@ package was in it) do not change. SDL's source comes from its GitHub release,
 or libsdl.org's. Each download is tried a few times, and checked against the
 SHA-256 digests here.
 
-    python tools/linux_sysroot.py <folder>
+    python tools/linux_sysroot.py [--arch i386|amd64] <folder>
 
-makes <folder>/sysroot and <folder>/SDL3 once, and writes <folder>/stamp
+makes (for i386, the default, or amd64) <folder>/sysroot and <folder>/SDL3 once, and writes <folder>/stamp
 (the list of what it holds) last; a folder whose stamp matches is left as it
 is. Python alone: no dpkg, no root.
 
@@ -40,7 +41,7 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
 DEBIAN_MIRRORS = [
     "https://archive.debian.org/debian/",
@@ -165,6 +166,108 @@ PACKAGES: List[Tuple[str, str, str]] = [
      "634a5cc9d7bc226d75ced0414750e32b07e82531e8b2b091e41708d42978db3d", "20240616T023746Z"),
 ]
 
+# The 64-bit build's (tools/linux64_build.py): the same packages, amd64, in
+# the same order (the architecture-independent ones, _all, are the same files)
+PACKAGES_AMD64: List[Tuple[str, str, str]] = [
+    ("pool/main/g/glibc/libc6_2.31-13+deb11u11_amd64.deb",
+     "05f7264da867b37f4c5ce49266b558ea1e81e05a9464f623152fca70f3550282", "20240817T023924Z"),
+    ("pool/main/g/glibc/libc6-dev_2.31-13+deb11u11_amd64.deb",
+     "e7f7b45d9c5cfcf37609f0b6efd3c645272c812144703af89dfd32218fcb0fd3", "20240817T023924Z"),
+    ("pool/main/l/linux/linux-libc-dev_5.10.223-1_amd64.deb",
+     "e3be603bd12377bb90fcfb0f2048ca3a81c886e49d6f09945b82159d1c54f7b2", "20240815T030336Z"),
+    ("pool/main/g/gcc-10/libgcc-s1_10.2.1-6_amd64.deb",
+     "e478f2709d8474165bb664de42e16950c391f30eaa55bc9b3573281d83a29daf", "20210111T024320Z"),
+    ("pool/main/g/gcc-10/libgcc-10-dev_10.2.1-6_amd64.deb",
+     "3b711374092b84e732c4e73cf33e02cff02e34a5f105eb6467de8d9038e4cd9d", "20210111T024320Z"),
+    ("pool/main/libx/libx11/libx11-6_1.7.2-1+deb11u2_amd64.deb",
+     "2b3b959cb10c07be065eb638a8577fe20f282045aaef76425dbd7310d1244b8c", "20231012T085604Z"),
+    ("pool/main/libx/libx11/libx11-dev_1.7.2-1+deb11u2_amd64.deb",
+     "9fbcda6af06d8db9cd8a48b581570aa8fee862bfc43b6f569a66503ae7d83211", "20231012T085604Z"),
+    ("pool/main/x/xorgproto/x11proto-dev_2020.1-1_all.deb",
+     "d5568d587d9ad2664c34c14b0ac538ccb3c567e126ee5291085a8de704a565f5", "20200415T024424Z"),
+    ("pool/main/libx/libxcb/libxcb1-dev_1.14-3_amd64.deb",
+     "b75544f334c8963b8b7b0e8a88f8a7cde95a714dddbcda076d4beb669a961b58", "20210201T212616Z"),
+    ("pool/main/libx/libxext/libxext6_1.3.3-1.1_amd64.deb",
+     "dc1ff8a2b60c7dd3c8917ffb9aa65ee6cda52648d9150608683c47319d1c0c8c", "20201218T204051Z"),
+    ("pool/main/libx/libxext/libxext-dev_1.3.3-1.1_amd64.deb",
+     "0aa17565287ca8a37914e043789ee33c6e1f987acf346dac7175165009c5db7c", "20201218T204051Z"),
+    ("pool/main/libx/libxcursor/libxcursor1_1.2.0-2_amd64.deb",
+     "d9fee761e4c50572c3ce3c3965b70fcfecd277d0d7d598e102134d12757a3d11", "20190714T093329Z"),
+    ("pool/main/libx/libxcursor/libxcursor-dev_1.2.0-2_amd64.deb",
+     "c84c43ad4d596bd673288f6035ced4755468b873149181936a0c1fc99cff78aa", "20190714T093329Z"),
+    ("pool/main/libx/libxi/libxi6_1.7.10-1_amd64.deb",
+     "4d583f43b5396ca5434100a7274613e9983357d80875a47b29a4f3218fe0bec0", "20200602T210137Z"),
+    ("pool/main/libx/libxi/libxi-dev_1.7.10-1_amd64.deb",
+     "736309ff476f0e1594f855cf44e2fb20bf1e594518ce2259eb9b2dd93917f2db", "20200602T210137Z"),
+    ("pool/main/libx/libxrandr/libxrandr2_1.5.1-1_amd64.deb",
+     "8fdd8ba4a8ad819731d6bbd903b52851a2ec2f9ef4139d880e9be421ea61338c", "20161207T032837Z"),
+    ("pool/main/libx/libxrandr/libxrandr-dev_1.5.1-1_amd64.deb",
+     "67d40174015e8b4e3e2fe3b6fb2990943321a168e0fbb2d12082f637914a0a2e", "20161207T032837Z"),
+    ("pool/main/libx/libxfixes/libxfixes3_5.0.3-2_amd64.deb",
+     "58622d0d65c3535bd724c4da62ae7acb71e0e8f527bcbd65daf8c97e6f0ef843", "20200414T204951Z"),
+    ("pool/main/libx/libxfixes/libxfixes-dev_5.0.3-2_amd64.deb",
+     "bacfcd67ca931839a2e2ae87922ecb40e2870470afa86d0c7245288825da2340", "20200414T204951Z"),
+    ("pool/main/libx/libxrender/libxrender1_0.9.10-1_amd64.deb",
+     "3ea17d07b5aa89012130e2acd92f0fc0ea67314e2f5eab6e33930ef688f48294", "20161205T212728Z"),
+    ("pool/main/libx/libxrender/libxrender-dev_0.9.10-1_amd64.deb",
+     "135ed7c8a589e17d21718a91b5a7da48159f33c85e0b337aae9b9f484d3a4954", "20161205T212728Z"),
+    ("pool/main/libx/libxss/libxss1_1.2.3-1_amd64.deb",
+     "85cce16368f08a878fa892fbc54520fc654d00769cde6d300b8b802734a993c0", "20180906T152804Z"),
+    ("pool/main/libx/libxss/libxss-dev_1.2.3-1_amd64.deb",
+     "11968b1ac7a10de3731be164b343a3c960633a003ee5629770e06927222ef36b", "20180906T152804Z"),
+    ("pool/main/libg/libglvnd/libgl-dev_1.3.2-1_amd64.deb",
+     "a6487873f2706bbabf9346cdb190f47f23a1464f31cecf92c363bac37c342f2f", "20200729T210030Z"),
+    ("pool/main/libg/libglvnd/libglx-dev_1.3.2-1_amd64.deb",
+     "5a50549948bc4363eab32b1083dad2165402c3628f2ee85e9a32563228cc61c1", "20200729T210030Z"),
+    ("pool/main/w/wayland/libwayland-client0_1.21.0-1_amd64.deb",
+     "1f002d028b8b79eec9847c636d8886d10dfe8c884cc2bebe18086b1391c5a28d", "20220709T031205Z"),
+    ("pool/main/w/wayland/libwayland-cursor0_1.21.0-1_amd64.deb",
+     "0b684467ec795024fcaae99ea4384959cc4052b2da5adec38c9b76dfed9bcf41", "20220709T031205Z"),
+    ("pool/main/w/wayland/libwayland-egl1_1.21.0-1_amd64.deb",
+     "cb4225f0e15e00a3570d4cbc288c87ff477d73e741c3f1c5a6d47cf350d45378", "20220709T031205Z"),
+    ("pool/main/w/wayland/libwayland-dev_1.21.0-1_amd64.deb",
+     "063ac40e71069a1a92c2be32799f4a2d234f3d361ba98cea2e3137a7ab6804d1", "20220709T031205Z"),
+    ("pool/main/libd/libdecor-0/libdecor-0-0_0.1.1-2_amd64.deb",
+     "e58d66cbd2e27703c80f4e89c25fe7619db0ca0175d1077850b838023e115904", "20230211T151657Z"),
+    ("pool/main/libd/libdecor-0/libdecor-0-dev_0.1.1-2_amd64.deb",
+     "eba2a249cf553a50d00b293b18d2d618bf509e0675e24ab690129967b18a6481", "20230211T151657Z"),
+    ("pool/main/libf/libffi/libffi-dev_3.3-6_amd64.deb",
+     "ca2c71d9c68b1944b689606f12acf8023bad1b5083e8413894fd41ad0b977d20", "20210221T031914Z"),
+    ("pool/main/libx/libxkbcommon/libxkbcommon0_1.0.3-2_amd64.deb",
+     "d74d0b9f0a6641b44c279644c7ac627fa7a9b92350b7c6ff37da94352885bcfc", "20201126T153155Z"),
+    ("pool/main/libx/libxkbcommon/libxkbcommon-dev_1.0.3-2_amd64.deb",
+     "1202d8c64e670876b58f5b3d3f797b1848ec462f7caeef8b1e597ecea18570b6", "20201126T153155Z"),
+    ("pool/main/libg/libglvnd/libegl1_1.3.2-1_amd64.deb",
+     "3a5583ebd7a9d8ad102484db9637c409561428d21345037b310c4ef2ca8e8837", "20200729T210030Z"),
+    ("pool/main/libg/libglvnd/libegl-dev_1.3.2-1_amd64.deb",
+     "2847662b23487d5b1e467bca8cc8753baa880f794744a9b492c978bd5514b286", "20200729T210030Z"),
+    ("pool/main/a/alsa-lib/libasound2_1.2.4-1.1_amd64.deb",
+     "d8c9b5182768db2a7c5c73f1eed0b1be1431ae4f41084d502b325d06d5b0f648", "20210104T204018Z"),
+    ("pool/main/a/alsa-lib/libasound2-dev_1.2.4-1.1_amd64.deb",
+     "73d8b3fa8d161c7a9f3dcb38718925eaf8dbd9d94c1d687087b23aa0719f53e5", "20210104T204018Z"),
+    ("pool/main/p/pulseaudio/libpulse0_14.2-2_amd64.deb",
+     "f2d2ed93c03cff7cf081d401d855d67e1f73b65dec02687d309e0d72e7d1159d", "20210227T024018Z"),
+    ("pool/main/p/pulseaudio/libpulse-dev_14.2-2_amd64.deb",
+     "371d2218a1f30b77f22d3781c2956b876a75d11e5ef7c3e2e7485fe5f52b9862", "20210227T024018Z"),
+    ("pool/main/p/pipewire/libpipewire-0.3-0_0.3.65-2~bpo11+1_amd64.deb",
+     "b49a24743eb2b6d1198c7cf014ee791bccd5d3223ed8a1e4769d899e1f894a5b", "20230217T033139Z"),
+    ("pool/main/p/pipewire/libpipewire-0.3-dev_0.3.65-2~bpo11+1_amd64.deb",
+     "1ac874207f661c80cb9a98e6be67f5d19797384102251144128e71de764696b4", "20230217T033139Z"),
+    ("pool/main/p/pipewire/libspa-0.2-dev_0.3.65-2~bpo11+1_amd64.deb",
+     "0d7398d825821627e9fdb0df0a9d1ec9ae34c468266285b4b3b4b0166df049f9", "20230217T033139Z"),
+    ("pool/main/d/dbus/libdbus-1-3_1.12.28-0+deb11u1_amd64.deb",
+     "fc7c43086fd5330fef47eb9bd6b50972a0b351fa5d08a1e075ddbc4101e2c4a2", "20230625T033524Z"),
+    ("pool/main/d/dbus/libdbus-1-dev_1.12.28-0+deb11u1_amd64.deb",
+     "75b25b927b11767e650552db987676332a0f5cd23adc8b5f6cd8d57e78c3f298", "20230625T033524Z"),
+    ("pool/main/s/systemd/libudev1_247.3-7+deb11u5_amd64.deb",
+     "1db2b4498ae8fc80aaf06e3cf3adc479ae415d0ece1b475e86544de165931865", "20240616T023746Z"),
+    ("pool/main/s/systemd/libudev-dev_247.3-7+deb11u5_amd64.deb",
+     "bb3bc12a1c973805fdee8f19900646df9cca4dda13f320879f5e4d81ffcfcf1d", "20240616T023746Z"),
+]
+
+# each architecture's packages (--arch)
+ARCHES: Dict[str, List[Tuple[str, str, str]]] = {"i386": PACKAGES, "amd64": PACKAGES_AMD64}
+
 # SDL3's source release (the version of the other ports' SDL), from GitHub
 # or libsdl.org
 # (as tools/windows_build.py's SDL_VERSION and tools/android_build.py's SDL_TAG)
@@ -199,9 +302,9 @@ def check_sdl(build_config: Path) -> None:
                  "/CMakeFiles/CMakeConfigureLog.yaml")
 
 
-def stamp_text() -> str:
+def stamp_text(packages: List[Tuple[str, str, str]] = PACKAGES) -> str:
     """what a complete folder's stamp holds"""
-    return "".join(f"{path} {digest}\n" for path, digest, _ in PACKAGES) + f"{SDL_URLS[0]} {SDL_SHA256}\n"
+    return "".join(f"{path} {digest}\n" for path, digest, _ in packages) + f"{SDL_URLS[0]} {SDL_SHA256}\n"
 
 
 # (each URL's tries, a moment apart, before the next URL)
@@ -288,9 +391,10 @@ def extract(archive: tarfile.TarFile, destination: Path, strip: int = 0) -> None
             os.symlink(link, target)
 
 
-def make(folder: Path) -> None:
+def make(folder: Path, arch: str = "i386") -> None:
+    packages = ARCHES[arch]
     stamp = folder / "stamp"
-    if stamp.is_file() and stamp.read_text() == stamp_text():
+    if stamp.is_file() and stamp.read_text() == stamp_text(packages):
         return
     for name in ("stamp", "sysroot", "SDL3"):
         path = folder / name
@@ -300,7 +404,7 @@ def make(folder: Path) -> None:
             path.unlink()
     sysroot = folder / "sysroot"
     sysroot.mkdir(parents=True)
-    for path, digest, snapshot in PACKAGES:
+    for path, digest, snapshot in packages:
         print(f"Downloading {path.rsplit('/', 1)[-1]}", flush=True)
         mirrors = DEBIAN_MIRRORS + [SNAPSHOT.format(snapshot)]
         with deb_data(download([mirror + path for mirror in mirrors], digest)) as archive:
@@ -308,7 +412,7 @@ def make(folder: Path) -> None:
     print(f"Downloading SDL3-{SDL_VERSION}.tar.gz", flush=True)
     with tarfile.open(fileobj=io.BytesIO(download(SDL_URLS, SDL_SHA256)), mode="r:gz") as archive:
         extract(archive, folder / "SDL3", strip=1)
-    stamp.write_text(stamp_text())
+    stamp.write_text(stamp_text(packages))
 
 
 if __name__ == "__main__":
@@ -316,5 +420,7 @@ if __name__ == "__main__":
         check_sdl(Path(sys.argv[2]))
     elif len(sys.argv) == 2:
         make(Path(sys.argv[1]))
+    elif len(sys.argv) == 4 and sys.argv[1] == "--arch" and sys.argv[2] in ARCHES:
+        make(Path(sys.argv[3]), sys.argv[2])
     else:
         sys.exit(__doc__)

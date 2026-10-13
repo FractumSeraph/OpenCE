@@ -159,7 +159,7 @@ legacy table (port/linux/src/delta.c; docs/delta.md, "The legacy table as
 config") has a row of OpenCE numbers for each wire, which CI adds to only
 after a cross-play test of that wire; a build reads its own wire's row alone.
 Give each release that changes what the machines send a new one. */
-#define DELTA_WIRE "chupa-26a"
+#define DELTA_WIRE "chupa-28a"
 
 /* OpenCE's network versions (HALO_PORT_NETWORK_VERSION in its builds), the
 first of its releases with each, and whether the version's change is one the
@@ -189,8 +189,8 @@ command repository's watch adds a row when it follows OpenCE's raise
 	X(24, "build-149", additive) /* the gametype's PC vehicle set: every vehicle the map places */ \
 	X(25, "build-169", additive) /* units' integrated lights in the object states; a banned machine told so */ \
 	X(26, "build-184", additive) /* internet play's signalling, version 4 (WebRTC, for browsers; p2p_signal.c reads 3 and 4); game messages as 25 */ \
-	X(27, "build-189", additive) /* followed from OpenCE: additive */ \
-	X(28, "build-201", additive) /* map sharing holds a downloading machine's players; the messages are 27's (a few behaviours differ: lights past the Xbox limits, a second weapon readied, the first scripted BSP kept) */
+	X(27, "build-189", additive) /* Custom Edition map sharing's messages (a machine of 26 drops them); game messages as 25 */ \
+	X(28, "build-201", additive) /* no message changed: a script's switch_bsp keeps a multiplayer game's first, the flashlight past the Xbox limits, a second weapon readied while firing (wire chupa-28a) */
 
 /* ---------- the legacy table (port/linux/src/delta.c)
 

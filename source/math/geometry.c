@@ -318,6 +318,7 @@ struct geosphere *geosphere_new(
 					&vertex_index, &triangle_strip_vertex_indices_index, vertex_subdivision_indices);
 			}
 
+			/* port: a full strip buffer is allowed (January's < refused it) */
 			match_assert("c:\\halo\\SOURCE\\math\\geometry.c", 98,
 				triangle_strip_vertex_indices_index <= (NUMBER_OF_VERTICES_PER_TRIANGLE + 1) * result->triangle_count);
 			match_assert("c:\\halo\\SOURCE\\math\\geometry.c", 99, vertex_index == result->vertex_count);
@@ -332,6 +333,8 @@ struct geosphere *geosphere_new(
 			{
 				match_free("c:\\halo\\SOURCE\\math\\geometry.c", 104, result->triangle_strip_vertex_indices);
 			}
+			/* port: freed and none returned (January returned it with freed
+			members) */
 			match_free("c:\\halo\\SOURCE\\math\\geometry.c", 105, result);
 			result = NULL;
 		}

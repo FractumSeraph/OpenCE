@@ -463,6 +463,7 @@ boolean console_update(
 				console_close();
 				return FALSE;
 			case _key_backquote:
+			case _key_escape: /* port: as Halo PC's console */
 				console_close();
 				break;
 			case _key_return:

@@ -3385,6 +3385,8 @@ void actor_emotion_update(
 		actor->emotions.forced_to_charge = TRUE;
 	}
 
+	/* port: the scan starts at the last threat type, not one past the end of
+	specific_threats (January read cumulative_threats[0] there, always zero) */
 	for (priority = NUMBER_OF_ACTOR_THREAT_TYPES - 1;
 		priority > 0 &&
 			actor->situation.specific_threats[priority] <= 0;

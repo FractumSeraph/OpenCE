@@ -563,14 +563,15 @@ int load_symbol_table(
 					goto corrupt_map_file;
 				}
 
+				/* port: a map file that ends here is corrupt (January read
+				the buffer on without checking fgets) */
 				if (!fgets(line, sizeof(line), map_file) || !isspace(line[0]) ||
 					!fgets(line, sizeof(line), map_file) || !strstr(line, "Static symbols") ||
-					!fgets(line, sizeof(line), map_file) || !isspace(line[0]))
+					!fgets(line, sizeof(line), map_file) || !isspace(line[0]) ||
+					!fgets(line, sizeof(line), map_file))
 				{
 					goto corrupt_map_file;
 				}
-
-				fgets(line, sizeof(line), map_file);
 				segment = strtok(line, ":");
 				if (!segment || *segment!=' ')
 				{
@@ -584,6 +585,8 @@ int load_symbol_table(
 				}
 				symbol_address = strtoul(token, &end_str, 16);
 
+				/* port: an entry without its name is corrupt (January kept
+				the last one's) */
 				token = strtok(NULL, " \t\n\r");
 				if (!token)
 				{
@@ -605,7 +608,8 @@ int load_symbol_table(
 				stack_walk_globals.fixup = rva_base - (unsigned long)POINTER_BITS(load_symbol_table);
 			}
 
-			/* (the address's five columns, " f   ", before the object name) */
+			/* port: the address's five columns, " f   ", are there before the
+			object name is read past them (January only checked end_str) */
 			if (!end_str || strlen(end_str) < 5)
 			{
 				goto corrupt_map_file;
@@ -716,6 +720,7 @@ finished:
 			sizeof(*symbol_table->symbols),
 			symbol_sort_proc);
 
+		/* port: stops at none left (January assumed one nonzero RVA) */
 		while (symbol_table->number_of_symbols > 0 &&
 			symbol_table->symbols[symbol_table->number_of_symbols-1].rva_base==0)
 		{
@@ -751,6 +756,8 @@ static int symbol_sort_proc(
 	const struct debug_symbol *symbol1 = elem1;
 	const struct debug_symbol *symbol2 = elem2;
 
+	/* port: equal RVAs compare equal (January returned 1 for two zero ones,
+	which no sort may be given) */
 	if (symbol1->rva_base == symbol2->rva_base)
 	{
 		return 0;

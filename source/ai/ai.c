@@ -2717,6 +2717,8 @@ void ai_handle_editing(
 						"editing caused an overflow of MAXIMUM_SQUADS_PER_MAP (%d)",
 						MAXIMUM_SQUADS_PER_MAP));
 
+				/* port: the records move whole (January passed their count as
+				the size) */
 				csmemmove(
 					&squad_array[encounter->squad_base + encounter_definition->squads.count],
 					&squad_array[encounter->squad_base + encounter->squad_count],
@@ -2747,6 +2749,8 @@ void ai_handle_editing(
 						"editing caused an overflow of MAXIMUM_PLATOONS_PER_MAP (%d)",
 						MAXIMUM_PLATOONS_PER_MAP));
 
+				/* port: the records move whole (January passed their count as
+				the size) */
 				csmemmove(
 					&platoon_array[encounter->platoon_base + encounter_definition->platoons.count],
 					&platoon_array[encounter->platoon_base + encounter->platoon_count],

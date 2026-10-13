@@ -3542,10 +3542,10 @@ static boolean main_loop_iteration(
 			bink_playback_update();
 			profile_scope_exit(main_ui_update_section)
 
-			/* port: not the Xbox debug keyboard's End and Escape, which stop
-			the movie and restart the map: this keyboard reaches the game only
-			through the console and the menus' text boxes, whose End and Escape
-			they are (port/linux/src/xinput_sdl.c) */
+			/* port: not End or Escape, the Xbox devkit keyboard's way out of a
+			game: here the keys reach the game only through the console and text
+			fields, where they are keys of their own (Escape closes the console),
+			and a map reset from them took down the main menu or froze a game */
 			if (editor_should_exit())
 			{
 				main_movie_stop();

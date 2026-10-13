@@ -2406,6 +2406,8 @@ static long ai_communication_find_global_actor_to_talk(
 	}
 	if (cause_unit_index != NONE)
 	{
+		/* port: the cause's point (January read the subject's again and left
+		cause_point unset) */
 		unit_get_head_position(cause_unit_index, &cause_point);
 	}
 

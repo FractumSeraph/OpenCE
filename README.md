@@ -195,7 +195,7 @@ build compiles); nothing sent over the network is changed.
 
 <h1 align="center">ChupathingyCE</h1>
 
-<p align="center"><b>Halo: Combat Evolved on Windows, Mac, Linux and Android: a community build of OpenCE, with its own releases, dedicated servers and the Delta network family.</b></p>
+<p align="center"><b>Halo: Combat Evolved on Windows, Mac, Linux and Android: a port of the Halo CE decompilation, built for stability and community games.</b></p>
 
 <p align="center">
 <a href="https://github.com/ChupathingyCE/chupathingyce/releases/latest">Download</a> ·
@@ -203,16 +203,24 @@ build compiles); nothing sent over the network is changed.
 <a href="https://discord.gg/4BUm2FwuCB">Discord</a>
 </p>
 
-> **Compatible with [OpenCE](https://github.com/OpenCommunityEdition/OpenCE) build-189 (network version 27).** OpenCE build-184 players join our games, and our builds join games hosted on network versions 11 through 30 (OpenCE build-76 onward). Games hosted on older builds (network version 10) can't be joined; their hosts need to update. OpenCE's browser players can't join our games, nor we theirs.
-> Players on OpenCE and players on ChupathingyCE play together.
+> **Compatible with OpenCE build-201 (network version 28) for online play.** Players on that build join our games, and ours join games hosted on network versions 11 through 30. Browser builds can't join our games, nor we theirs.
 
-ChupathingyCE is a community build of **OpenCE**, the port of the Halo: Combat
-Evolved decompilation to modern computers and phones. Our goal is a unified
-online experience, plus our own tweaks, on a project that's still in its
-infancy. We stay compatible with OpenCE, offer our fixes back to it, and put
-out our own releases. Expect rough edges, and please report them.
+ChupathingyCE is a port of the Halo: Combat Evolved decompilation to modern
+computers and phones, built for stability and community games: releases you
+can count on, dedicated servers, stats, and its own network layer, Delta. It
+runs natively, with no emulator. Bring your own copy of the game: we never
+host or share Microsoft's files. Expect rough edges, and please report them.
 
 <p align="center"><img src="docs/screenshots/lobby.jpg" width="720" alt="A multiplayer lobby"></p>
+
+## What ChupathingyCE is and isn't
+
+- A port of the Halo: Combat Evolved decompilation for Windows, Mac, Linux
+  and Android, run by its community.
+- You bring your own legally owned copy of the game. We never host, share or
+  distribute Microsoft's files, and the game never downloads them.
+- No browser version, and no websites or domains that look official.
+- A fan project, not made or endorsed by Microsoft, Bungie or 343 Industries.
 
 ## Features
 
@@ -221,14 +229,14 @@ out our own releases. Expect rough edges, and please report them.
 - Games you host are listed for everyone, from any of our builds
 - Invite links (`halo://join/…`) to send to friends; opening one joins their game
 - Direct connections between players, with no port forwarding in most homes
-- Plays with OpenCE builds of the same network version, both ways
+- Cross-play with players on other builds of the same network version, both ways
 - Dedicated servers anyone can run: a playlist of games, around the clock, on Linux x86, x64 or arm64
 
 **Stats, on [halo.milenko.org](https://halo.milenko.org)**
 - A carnage report for every finished game, with medals
 - Service records and leaderboards, with confirmed players (your games count toward you, whatever name you use)
 - Accounts, made on the site or from the game, with an encrypted backup of your player identity
-- Listing a game hosted from an OpenCE build, by its invite link
+- Listing a game hosted from another build, by its invite link
 
 **The game**
 - The campaign, split screen and System Link, running natively (no emulator)
@@ -255,8 +263,8 @@ Get the latest release from the [Releases page](https://github.com/ChupathingyCE
 | Platform | Download | Notes |
 | --- | --- | --- |
 | Windows | `chupathingyce-windows-release.zip` | Windows 10 or later. |
-| Linux (64-bit) | `chupathingyce-linux64-release.zip` | Needs SDL3. See [port/linux/README.md](port/linux/README.md). |
-| Linux (32-bit, older systems) | `chupathingyce-linux-release.zip` | Needs SDL3 (32-bit). See [port/linux/README.md](port/linux/README.md). |
+| Linux (64-bit) | `chupathingyce-linux64-release.zip` | glibc 2.31 or later (Debian 11, Ubuntu 20.04). Brings its own SDL3. See [port/linux/README.md](port/linux/README.md). |
+| Linux (32-bit, older systems) | `chupathingyce-linux-release.zip` | glibc 2.31 or later (32-bit). Brings its own SDL3. See [port/linux/README.md](port/linux/README.md). |
 | Android | `chupathingyce-android-release.zip` | Android 9 or later, 64-bit. See [port/android/README.md](port/android/README.md). |
 | Mac | `chupathingyce-macos-release.zip` | macOS 13 or later, Apple silicon or Intel. |
 
@@ -335,20 +343,20 @@ Edition map is). A `<name>.bmp` picture (uncompressed 24-bit or 32-bit) and
 a `<name>.txt` description beside a map are shown for it in the map lists
 and the lobby, on Windows, Mac, Linux and Android.
 
-**Playing with OpenCE players.** OpenCE (build-147) plays Custom Edition
-maps from its `custom_maps` folder. A game on a Custom Edition map is named
-the same way for both, so OpenCE players with the map join our games and we
-join theirs. HaloMD and Halo PC retail games are ChupathingyCE's only: an
-OpenCE player is told the map is missing. Between ChupathingyCE players,
+**Playing with other builds.** Other builds play Custom Edition maps from
+a `custom_maps` folder. A game on a Custom Edition map is named the same way
+for both, so their players with the map join our games and we join theirs.
+HaloMD and Halo PC retail games are ChupathingyCE's only: a player on
+another build is told the map is missing. Between ChupathingyCE players,
 the map's identity (its name and a hash of its file) is checked, so a
 player with a different file of the same name is told so.
 
 **Older folders.** Earlier ChupathingyCE versions kept Custom Edition maps
-in `maps/ce/` and HaloMD maps in `md_maps/`, and OpenCE keeps its Custom
+in `maps/ce/` and HaloMD maps in `md_maps/`, and other builds keep their Custom
 Edition maps in `custom_maps/`. The game still plays the maps in all three.
 At its first start it offers to move `maps/ce/` to `maps_ce` and `md_maps/`
 to `maps_md` (each folder is moved whole: nothing is copied or deleted, and
-a folder that can't be moved stays where it is). `custom_maps/` is OpenCE's
+a folder that can't be moved stays where it is). `custom_maps/` is other builds'
 and stays where it is. `game.move_old_map_folders` in `config.toml` says
 `"ask"`, `"yes"` or `"no"`; Android moves them without asking. A map file
 named `<name>@ce.map` (`@md`, `@pc`), as some other builds name them, is
@@ -402,20 +410,20 @@ Halo.
 | You want to | Do this |
 | --- | --- |
 | Join a game | **Multiplayer → Online Games**, pick a game, press **A**. Or press **Join** on [halo.milenko.org](https://halo.milenko.org). |
-| Host a game | **Multiplayer → Online Games → Y (Create Game)**, or host from System Link as usual. Your game is listed online by itself, on halo.milenko.org and in OpenCE's in-game Server Browser (`public_lobby`/`host_public` under `[network]` in `config.toml` turn that off). |
+| Host a game | **Multiplayer → Online Games → Y (Create Game)**, or host from System Link as usual. Your game is listed online by itself, on halo.milenko.org and in other builds' in-game Server Browsers (`public_lobby`/`host_public` under `[network]` in `config.toml` turn that off). |
 | Invite a friend | When you host, the game copies an invite link (`halo://join/…`). Send it; opening it joins your game. |
 | See your stats | Your service record is on [halo.milenko.org](https://halo.milenko.org), found by your name. Games you join count even when the host doesn't run ChupathingyCE: when an online game you joined ends, the game sends halo.milenko.org the scoreboard as your game saw it (names, kills, deaths, scores, medals, weapons) with your player ID. Your copy also confirms your line in the host's report, which puts the game on your profile. To turn both off for games you join, set `report_joined_games = false` under `[network]` in `config.toml`. |
 | Stop sharing your hosted games' stats | Set `report_events = false` under `[network]` in `config.toml`. It's on by default: the games you host send their Delta Stats (kills with positions, accuracy, medals, objectives) to halo.milenko.org for its match pages and heatmaps. Never anyone's address. |
 | Make an account | On [halo.milenko.org/profile](https://halo.milenko.org/profile), or press **Start** in Online Games to make one for the player you already are. |
 | Link the game without a browser (Steam Deck, Game Mode) | In Online Games, press **RB** (or **C** on the keyboard) for Link Profile. On your phone or computer, go to [halo.milenko.org/connect](https://halo.milenko.org/connect), enter the code the game shows (or scan its QR code), then press **A** in the game to confirm. |
-| Use the PC menus | Set `menus = "pc"` under `[display]` in `config.toml`. **Multiplayer → Join Game → Server Browser** lists OpenCE's public games and the games of halo.milenko.org, each once. |
-| List a game from an OpenCE build | Sign in on the site, open **Host a Game**, and paste your invite link. |
+| Use the PC menus | Set `menus = "pc"` under `[display]` in `config.toml`. **Multiplayer → Join Game → Server Browser** lists the public games of every compatible build and the games of halo.milenko.org, each once. |
+| List a game from another build | Sign in on the site, open **Host a Game**, and paste your invite link. |
 
-Everything here plays with OpenCE builds of the same network version: they can
-join your games and you can join theirs. Games an OpenCE build hosts are
+Everything here plays with other builds of the same network version: they can
+join your games and you can join theirs. Games another build hosts are
 recorded from the reports of the ChupathingyCE players in them; a game only
-one player reported counts only on that player's own record. Games hosted from OpenCE builds can still be listed by
-their host on the site (Host a Game).
+one player reported counts only on that player's own record. Their hosts can
+still list them on the site (Host a Game).
 
 <p align="center">
 <img src="docs/screenshots/site-games.jpg" width="49%" alt="halo.milenko.org: games and recent games">
@@ -439,7 +447,7 @@ the wrong `[section]`, a value missing its quotes (`menus = "pc"`, not
 | --- | --- |
 | Windows | next to `halo.exe` |
 | Mac | `~/Library/Application Support/ChupathingyCE/config.toml` |
-| Linux and Steam Deck | next to the `halo` executable |
+| Linux | next to the `halo` executable |
 | Android | in the game's data folder, `/sdcard/Android/data/dev.horrible.chupathingyce/files` |
 
 A few people look for most:
@@ -472,29 +480,23 @@ Server Browser. It is its own download for Linux on x86, x64 and arm64
 (Oracle Cloud's free tier and Raspberry Pis included): one file, no libraries
 to install, and no port forwarding. See [server/README.md](server/README.md).
 
-## ChupathingyCE, OpenCE and Delta
+## Cross-play and Delta
 
-ChupathingyCE is a fork of OpenCE with some extra features, meant to stay
-compatible with it.
-
-- **OpenCE** ([OpenCommunityEdition/OpenCE](https://github.com/OpenCommunityEdition/OpenCE))
-  is the port ChupathingyCE started from. We merge its changes on our own
-  schedule, and ChupathingyCE has its own releases and version numbers, so it
-  doesn't change under you every few hours.
-- **Playing together.** OpenCE players and ChupathingyCE players join each
-  other's games. OpenCE raises its network version often, and its builds join
-  only hosts of their exact number. ChupathingyCE follows those raises
-  without a new download: a cross-play test runs against each new OpenCE
-  build, and once it passes, a signed table tells existing ChupathingyCE
-  builds which network versions to announce and join. A raise that changes
-  how multiplayer plays still needs a ChupathingyCE release. The line at the
-  top of this page says which OpenCE builds this release matches.
+- **Our own releases.** ChupathingyCE has its own code, releases and version
+  numbers, and doesn't change under you every few hours.
+- **Playing together.** Players on other builds of the decompilation's port
+  and ChupathingyCE players join each other's games when their network
+  versions match. ChupathingyCE follows those versions: a cross-play test
+  runs against each new one, and once it passes, a signed table tells
+  existing ChupathingyCE builds which network versions to announce and join,
+  without a new download. A change to how multiplayer plays still needs a
+  release. The line at the top of this page says which versions this
+  release plays with.
 - **Delta** is ChupathingyCE's network family ([docs/delta.md](docs/delta.md)):
-  the extras ChupathingyCE machines and services add on top of OpenCE's
-  game protocol, such as the game list, stats, profile links and dedicated
-  server admin tools on [halo.milenko.org](https://halo.milenko.org). Games
-  with OpenCE players use OpenCE's protocol, so everyone plays together.
-- Fixes to the shared game code are offered back to OpenCE as pull requests.
+  the game list, stats, profile links and dedicated server admin tools on
+  [halo.milenko.org](https://halo.milenko.org), and a channel between
+  ChupathingyCE machines for features of our own. Games with players on other
+  builds use the shared game protocol, so everyone plays together.
 
 ## Building it yourself
 
@@ -521,8 +523,8 @@ Useful `configure.py` options:
 | Option | What it does |
 | --- | --- |
 | `--release` | A release build, as players get. Without it, a failed check stops the game. |
-| `--portable` | A Linux or Windows build that runs on any x86-64 computer, or a universal Mac application, to give to others. The 32-bit Linux build also runs on older distributions and on SteamOS: see "Portable build" in [port/linux/README.md](port/linux/README.md#portable-build). |
-| `--no-game-browser` | Leaves out the server list, stats and dedicated servers, as OpenCE's builds are. |
+| `--portable` | A Linux or Windows build that runs on any x86-64 computer, or a universal Mac application, to give to others. The Linux builds also run on older distributions and on SteamOS: refer to "Portable build" in [port/linux/README.md](port/linux/README.md#portable-build). |
+| `--no-game-browser` | Leaves out the server list, stats and dedicated servers, as other builds are. |
 | `--pgo=off`, `--lto=off` | Faster builds, without profile-guided or link-time optimisation. |
 | `--profile` | A profiling build, which records where the game spends its time. See ["Profiling builds"](#profiling-builds-opence) below. |
 
@@ -535,12 +537,20 @@ the builds of other branches and pull requests on the Actions page are for
 checking changes. ChupathingyCE's own releases come from its release
 workflow.
 
+## Generative AI
+
+The decompilation this project is built on, and the port it started from, were made with heavy use of generative AI. Chupathingy has its own code and releases now, but a lot of that earlier work is still in it.
+
+We use AI tools the way developers use any other tool. A person decides what to build, reviews every change, tests it, and is responsible for it. Nothing is handed to an AI to build from start to finish without a person involved. We're also working through the code we inherited to clean up what reads as machine-written: comments that only repeat the code, unclear names, and changes nobody can explain.
+
+If you contribute, the same applies to you: see [CONTRIBUTING](CONTRIBUTING.md#using-ai-tools).
+
 ## Credits
 
 - The decompilation: [punpckhdq/halo](https://github.com/punpckhdq/halo) and
   [bnunu/halo-1](https://github.com/bnunu/halo-1), of the Xbox build 2342.
-- The port: [OpenCE](https://github.com/OpenCommunityEdition/OpenCE) and
-  its contributors.
+- The port ChupathingyCE started from: OpenCE and its contributors, up to
+  October 9, 2026.
 - ChupathingyCE: [Milenko](https://github.com/MrMilenko) and contributors. The
   icon is MrBruh's helmet, with tusks.
 - Fonts: [Noto Sans](https://fonts.google.com/noto) (SIL OFL) and
@@ -554,10 +564,8 @@ workflow.
 
 ### Contributors
 
-Fixes from other people's OpenCE pull requests and forks, taken into
-ChupathingyCE with their authors credited in each commit. What OpenCE has
-merged itself, such as MrBruh's work, comes with OpenCE and is credited
-there.
+Fixes from other people's pull requests and forks, taken into ChupathingyCE
+with their authors credited in each commit.
 
 - [Tyberious](https://github.com/Tyberious) (Jeff Clark): Xbox ADPCM decoding
   without the 344 Hz buzz, vertex constant serials that never wrap, pose
@@ -597,11 +605,11 @@ there.
   first.
 - Sabriel and ugoboom: the Halo PC map reports and regression lists behind
   most of the Custom Edition fixes.
-- MrBruh ([OpenCE](https://github.com/OpenCommunityEdition/OpenCE) build-145's Custom
+- MrBruh (build-145's Custom
   Edition loader, from DamnationCE's work by
   [xshxdex98](https://github.com/xshxdex98)): maps that need OpenSauce refused
   with a clear reason, the missing-map message when joining, and the
-  `custom_maps\<name>` naming our hosts and clients share with OpenCE.
+  `custom_maps\<name>` naming our hosts and clients share with other builds.
 
 Halo is a trademark of Microsoft. ChupathingyCE is a fan project, not made or
 endorsed by Microsoft, Bungie or 343 Industries, and includes none of the

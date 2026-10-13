@@ -1572,6 +1572,8 @@ long actor_aim_grenade(
 
 	actor_combat_reaim_grenade(actor_index, origin);
 
+	/* port: set in a vehicle too (January set it on foot only, and read it
+	unset in a vehicle) */
 	aim_vector = actor->control.grenade_current_aim_vector;
 	if (actor->input.vehicle_index == NONE)
 	{

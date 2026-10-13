@@ -1410,7 +1410,10 @@ static void profile_timesection_inherit(
 	return;
 }
 
-/* (never past maximum_length, and always terminated) */
+/* port: January appended each piece with maximum_length-strlen and no check
+for truncation, and a legal 150-tick frame could run past the 512-byte dump
+buffer. Appends go through here: never past maximum_length, always
+terminated. */
 static void profile_append(
 	char *string,
 	short maximum_length,
@@ -1787,6 +1790,7 @@ int compare_profile_sections(
 
 			default:
 				match_assert("c:\\halo\\SOURCE\\cseries\\profile.c", 844, !"unreachable");
+				/* port: January left result unassigned in this unreachable arm */
 				result = 0;
 				break;
 		}

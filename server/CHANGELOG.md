@@ -4,6 +4,17 @@ What changed in the ChupathingyCE Dedicated Server. The server is released
 with the game and has its version; the game's own changes are in its
 release notes.
 
+## 0.7.4e
+
+- OpenCE's network version 28 (build-201). No message changed; the game
+  plays three things as OpenCE's 28 does: a multiplayer script's
+  `switch_bsp` keeps the game's first BSP (maps with a copy of their place
+  for each sky stop reloading), the flashlight and dynamic lights stay on
+  past the Xbox's player and vehicle limits, and a second weapon picked up
+  while firing is readied.
+- Announces network version 28; joins as a client hosts of 11 through 30.
+  Redeploy: a legacy table can't follow this one (wire `chupa-28a`).
+
 ## 0.7.2e
 
 - OpenCE's network version 26 (build-184): its internet play's signalling

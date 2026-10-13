@@ -726,6 +726,8 @@ static long hs_parse_cond_recursive(
 			long condition_expression_index = hs_syntax_get(expression_index)->data;
 			struct hs_syntax_node *condition_expression = hs_syntax_get(condition_expression_index);
 
+			/* port: a clause without a result is refused (January tested
+			!next_node_index != NONE, always true) */
 			if (condition_expression->next_node_index != NONE)
 			{
 				long if_then_expression_index = datum_new(hs_syntax_data);
@@ -3249,6 +3251,8 @@ boolean hs_parse_begin(
 	{
 		if (argument_count < 1)
 		{
+			/* port: the message as it is (January sprintf'd it with an argument
+			it has no conversion for) */
 			hs_compile_globals.error = "a statement block must contain at least one argument.";
 			hs_compile_globals.error_offset = hs_syntax_get(expression_index)->source_offset;
 			result = FALSE;
