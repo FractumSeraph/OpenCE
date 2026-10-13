@@ -45,6 +45,16 @@ Every setting is an environment variable, as on Linux
 and `playlists` in it. The server writes its settings file (`config.toml`)
 beside the program, and its log (`debug.txt`) in the data folder.
 
+## Sending maps
+
+A player who joins without the game's Custom Edition map gets it from the
+server (OpenCE's map sharing, network version 27 and later), as from the
+Linux server: `HALO_NET_MAP_SHARE_NAMES` says how the map is named to the
+players, `hash` (the default, what OpenCE's players download by) or `plain`
+(which ChupathingyCE's players can play), and `HALO_NET_MAP_SHARE=false`
+turns it off ([the README](../README.md)). The server never renames or
+changes its map files.
+
 ## The control panel
 
 `HALO_DEDICATED_CONTROL=8080` turns on the control API and the web control
