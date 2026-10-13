@@ -594,7 +594,7 @@ char *nv2a_vertex_shader_to_glsl(const DWORD *instructions, unsigned long instru
 }
 
 /* The fixed-function pipeline's vertex shader, for the draws that select it
-(SetVertexShader with 0 or an FVF code): only the loading screen's
+(SetVertexShader with 0): only the loading screen's
 (progress_bar.c), which gives each vertex its position, diffuse color and
 up to four texture coordinates in immediate mode. d3d8_gl.c transforms the
 positions by the world, view and projection matrices before the draw, so the

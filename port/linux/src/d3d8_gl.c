@@ -546,8 +546,8 @@ struct gl_device
 	D3DSHADERCONSTANTMODE shader_constant_mode;
 
 	struct vertex_shader_object *vertex_shader;
-	/* SetVertexShader chose the fixed-function pipeline (0 or an FVF code):
-	the loading screen's draws (fixed_function_program) */
+	/* SetVertexShader chose the fixed-function pipeline (with 0): the
+	loading screen's draws (fixed_function_program) */
 	BOOL fixed_function;
 	struct vertex_shader_object *program_slots[VERTEX_PROGRAM_SLOTS];
 	unsigned long program_address;
@@ -2813,9 +2813,10 @@ void WINAPI D3DDevice_SetVertexShader(DWORD handle)
 		device.program_slots[0] = object;
 		device.fixed_function = FALSE;
 	}
-	/* 0 and the FVF codes (odd): the fixed-function pipeline, which only the
-	loading screen uses (progress_bar.c) */
-	else if (!handle || (handle & 1))
+	/* 0: the fixed-function pipeline, which only the loading screen uses
+	(progress_bar.c). Another handle that is no shader (NONE, of a shader
+	that could not be made) changes nothing, as before */
+	else if (!handle)
 		device.fixed_function = TRUE;
 }
 
@@ -2865,8 +2866,8 @@ static struct vertex_shader_object *current_program(void)
 	return program ? program : device.vertex_shader;
 }
 
-/* the fixed-function pipeline as a program (SetVertexShader with 0 or an
-FVF code): its immediate-mode draws only, whose positions D3DDevice_End
+/* the fixed-function pipeline as a program (SetVertexShader with 0): its
+immediate-mode draws only, whose positions D3DDevice_End
 transforms by the world, view and projection matrices (nv2a_fixed_function_glsl).
 Draws from vertex buffers have no declaration to read them by, and are not
 drawn (no game draw makes one). */
@@ -6535,12 +6536,21 @@ enum
 frame before did not take its picture (a loading screen's first frame) */
 static BOOL front_buffer_ready(void)
 {
+	/* (its memory could not be had: not asked for again each frame) */
+	static BOOL failed;
 	struct render_target_entry *front;
 
-	if (!device.gl_ready)
+	if (!device.gl_ready || failed)
 		return FALSE;
 	if (!device.front_buffer.Data)
+	{
 		d3d8_surface_initialize(&device.front_buffer, D3DFMT_LIN_A8R8G8B8, FRONT_BUFFER_WIDTH, FRONT_BUFFER_HEIGHT);
+		if (!device.front_buffer.Data)
+		{
+			failed = TRUE;
+			return FALSE;
+		}
+	}
 	front = render_target_get(&device.front_buffer);
 	if (!front)
 		return FALSE;
@@ -6557,6 +6567,9 @@ static BOOL front_buffer_ready(void)
 		glClear(GL_COLOR_BUFFER_BIT);
 		gl_check_errors("front buffer clear");
 		xgpu_gl_state_invalidate();
+		/* (drawn into, as a draw marks a target: the latest of its memory's) */
+		front->last_rendered = device.frame + 1;
+		front->target.written = ++render_target_write_serial;
 	}
 	device.front_buffer_asked = device.frame + 1;
 	return TRUE;
@@ -6594,6 +6607,8 @@ static void front_buffer_take(void)
 		(GLint)front->target.gl_width, (GLint)front->target.gl_height, GL_COLOR_BUFFER_BIT, GL_LINEAR);
 	gl_check_errors("front buffer copy");
 	xgpu_gl_state_invalidate();
+	front->last_rendered = device.frame + 1;
+	front->target.written = ++render_target_write_serial;
 	device.front_buffer_taken = device.frame + 1;
 }
 

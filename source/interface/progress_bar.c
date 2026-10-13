@@ -2354,6 +2354,7 @@ static void progress_bar_load_loading_texture(
 	struct tga_image image;
 	D3DLOCKED_RECT locked_rect;
 	unsigned long *pixels;
+	/* port: whether a picture was read (else the clouds, below) */
 	boolean loaded= FALSE;
 	FILE *file;
 
