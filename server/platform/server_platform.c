@@ -145,12 +145,22 @@ before the game starts */
 __attribute__((constructor(102)))
 static void server_arguments(void)
 {
+#ifndef _WIN32
 	struct sigaction action;
+#endif
 	char argument[256];
 	int index;
 
 	for (index = 1; posix_command_line_argument(index, argument, sizeof(argument)); index++)
 	{
+#ifdef _WIN32
+		/* (Windows: the program started again as its own crash reporter,
+		or to send the reports an earlier crash left, which
+		port/windows/src/win32_crash.c's constructor does once this one
+		returns, and then ends) */
+		if (!strcmp(argument, "--crash-report") || !strcmp(argument, "--crash-upload"))
+			return;
+#endif
 		if (!strcmp(argument, "--version") || !strcmp(argument, "-v"))
 		{
 			print_version();
@@ -168,7 +178,12 @@ static void server_arguments(void)
 		exit(2);
 	}
 	/* (no sound to open: dsound_sdl.c's mixer runs on its own clock) */
+#ifdef _WIN32
+	if (!getenv("HALO_NO_AUDIO"))
+		_putenv_s("HALO_NO_AUDIO", "1");
+#else
 	setenv("HALO_NO_AUDIO", "1", 0);
+#endif
 	if (!browser_dedicated() && !browser_probe())
 	{
 		print_version();
@@ -184,12 +199,24 @@ static void server_arguments(void)
 	/* a write to a connection the other end closed fails instead of ending
 	the server (as sdl_platform.c); SIGTERM and SIGINT stop it at the next
 	frame */
+#ifdef _WIN32
+	/* (Windows: Ctrl+C, Ctrl+Break and the console closed stop it, at the
+	next frame as well; a socket written after its other end closed fails
+	there anyway: server/platform/win32) */
+	{
+		void server_win32_stop_events(volatile int *flag);
+
+		(void)stop_handler;
+		server_win32_stop_events((volatile int *)&stop_requested);
+	}
+#else
 	signal(SIGPIPE, SIG_IGN);
 	memset(&action, 0, sizeof(action));
 	action.sa_handler = stop_handler;
 	sigemptyset(&action.sa_mask);
 	sigaction(SIGTERM, &action, NULL);
 	sigaction(SIGINT, &action, NULL);
+#endif
 }
 
 /* ---------- the platform layer's start (all done above) */
