@@ -18,7 +18,11 @@ replaced, map_families.c finds the version a game plays) and marked
 downloaded (map_downloaded_mark: its scripts held to
 the tighter rules), and once every file is there the menus try the join
 again (map_torrents_take_ready). The menus show how it goes
-(map_torrents_fetching).
+(map_torrents_fetching). A file that BitTorrent does not give (its download
+failed, or brought nothing for ARCHIVE_FALLBACK_MILLISECONDS: no peer has
+it, and no web seed answers) is taken instead out of the community
+archives' zip that the index names for it, HaloNet's or HaloMaps's
+(map_archives.c, maps.archives), checked against the same info hash.
 
 The map a machine's network game is on is seeded meanwhile, from where the
 families find it, when maps.seed
@@ -34,6 +38,7 @@ web seeds and DHT of the [maps] settings, and stopped with the game.
 #include "posix.h"
 #include "port_config.h"
 #include "map_torrents.h"
+#include "map_archives.h"
 #include "torrent.h"
 
 /* halo_map_families.h's (the game's boolean is a byte) */
@@ -47,6 +52,9 @@ void map_downloaded_mark(char const *map_name);
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#ifndef _WIN32
+#include <fcntl.h>
+#endif
 
 #ifdef _WIN32
 #define PATH_SEPARATOR "\\"
@@ -64,6 +72,8 @@ void map_downloaded_mark(char const *map_name);
 #define STATUS_INTERVAL 500
 #define SEED_CHECK_INTERVAL 5000
 #define NAME_SIZE 128
+/* how long a torrent may bring nothing before the archives are asked */
+#define ARCHIVE_FALLBACK_MILLISECONDS 30000
 
 /* ---------- the index */
 
@@ -75,6 +85,10 @@ struct index_entry
 	unsigned long long size;
 	unsigned long piece_length;
 	char info_hash[41];
+	/* into torrent_maps_index.names: the archives' zips that hold it, as the
+	index's columns after the info hash (tab-separated "halonet:<zip>",
+	"halomaps:<file id>"; map_archives.h), "" for none */
+	unsigned long sources;
 };
 
 static struct
@@ -153,7 +167,7 @@ static void index_load(void)
 	}
 	for (line = file; line && *line; line = next)
 	{
-		char *fields[5];
+		char *fields[6];
 		int field;
 		char *end;
 		struct index_entry *entry;
@@ -169,6 +183,7 @@ static void index_load(void)
 		if (!line[0] || line[0] == '#')
 			continue;
 		fields[0] = line;
+		fields[5] = NULL;
 		for (field = 1; field < 5; field++)
 		{
 			char *tab = strchr(fields[field - 1], '\t');
@@ -178,7 +193,13 @@ static void index_load(void)
 			*tab = 0;
 			fields[field] = tab + 1;
 		}
-		if (field < 5 || strchr(fields[4], '\t') || strlen(fields[4]) != 40)
+		/* (the archives' zips after the info hash, kept as they are) */
+		if (field == 5 && strchr(fields[4], '\t'))
+		{
+			*strchr(fields[4], '\t') = 0;
+			fields[5] = fields[4] + 41;
+		}
+		if (field < 5 || strlen(fields[4]) != 40)
 		{
 			platform_log("map torrents: %s line %d is not an entry (left out)", torrent_maps_index.path, number);
 			continue;
@@ -202,6 +223,18 @@ static void index_load(void)
 		entry->size = strtoull(fields[2], NULL, 10);
 		entry->piece_length = strtoul(fields[3], NULL, 10);
 		memcpy(entry->info_hash, fields[4], 41);
+		entry->sources = torrent_maps_index.names_size;
+		if (fields[5])
+		{
+			size_t sources_length = strlen(fields[5]);
+
+			memcpy(torrent_maps_index.names + torrent_maps_index.names_size, fields[5], sources_length + 1);
+			torrent_maps_index.names_size += (unsigned long)sources_length + 1;
+		}
+		else
+		{
+			torrent_maps_index.names[torrent_maps_index.names_size++] = 0;
+		}
 		if (!name_length || !entry->size || !entry->piece_length)
 		{
 			platform_log("map torrents: %s line %d has a bad size or piece length (left out)",
@@ -383,6 +416,15 @@ static struct
 		char name[NAME_SIZE];
 		int handle;
 		int done;
+		const struct index_entry *entry;
+		/* where it is downloaded to (maps_ce\downloads), the bytes the
+		torrent had when they last grew, and when; and whether it is the
+		archives' to fetch now (the torrent removed: 1 waiting for the
+		archives' fetch, 2 under way) */
+		char path[1200];
+		unsigned long long progress_bytes;
+		unsigned long progress_time;
+		int archive;
 	} files[FETCH_MAXIMUM_FILES];
 	int count;
 	unsigned long started;
@@ -399,8 +441,17 @@ static void fetch_stop(void)
 
 	for (which = 0; which < fetch.count; which++)
 	{
-		if (!fetch.files[which].done)
+		if (fetch.files[which].done)
+			continue;
+		if (fetch.files[which].archive)
+		{
+			if (fetch.files[which].archive == 2)
+				map_archives_stop();
+		}
+		else
+		{
 			torrent_remove(fetch.files[which].handle);
+		}
 	}
 	fetch.active = 0;
 	fetch.count = 0;
@@ -530,7 +581,10 @@ int map_torrents_fetch(const char *level_name, unsigned long version, const char
 			return 0;
 		}
 		snprintf(fetch.files[which].name, sizeof(fetch.files[which].name), "%s", torrent_maps_index.names + entry->name);
+		snprintf(fetch.files[which].path, sizeof(fetch.files[which].path), "%s", path);
 		fetch.files[which].handle = handle;
+		fetch.files[which].entry = entry;
+		fetch.files[which].progress_time = GetTickCount();
 		fetch.count++;
 	}
 	snprintf(fetch.level_name, sizeof(fetch.level_name), "%s", level_name);
@@ -538,6 +592,71 @@ int map_torrents_fetch(const char *level_name, unsigned long version, const char
 	fetch.active = 1;
 	fetch.started = GetTickCount();
 	platform_log("map torrents: downloading %d file(s) for %s: %s", count, level_name, files);
+	return 1;
+}
+
+/* a file moved to a name no file has: never in place of one (POSIX's
+rename would replace it, so the name is taken first; Windows's fails) */
+static int move_to_new_name(const char *from, const char *to)
+{
+#ifndef _WIN32
+	int taken = open(to, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0644);
+
+	if (taken < 0)
+		return 0;
+	close(taken);
+	if (rename(from, to) != 0)
+	{
+		unlink(to);
+		return 0;
+	}
+	return 1;
+#else
+	return rename(from, to) == 0;
+#endif
+}
+
+static int fetch_file_done(int which);
+
+/* a file the archives are to give: their fetch started when no other is
+under way, and the file put in place once it came (map_archives.c checks it
+against the index's info hash); 0 when the download failed */
+static int archive_poll(int which)
+{
+	const struct index_entry *entry = fetch.files[which].entry;
+	unsigned long long received, total;
+	char archive[64];
+	enum map_archives_state state;
+
+	if (fetch.files[which].archive == 1)
+	{
+		/* (one fetch at a time: another file's, or one stopped still ending) */
+		if (map_archives_poll(&received, &total, archive, sizeof(archive)) == _map_archives_running)
+			return 1;
+		map_archives_stop();
+		if (!map_archives_start(fetch.files[which].name, entry->size, entry->piece_length, entry->info_hash,
+			torrent_maps_index.names + entry->sources, fetch.files[which].path))
+		{
+			fetch_fail(fetch.files[which].name, "nothing came over BitTorrent, and the archives could not be asked");
+			return 0;
+		}
+		fetch.files[which].archive = 2;
+		return 1;
+	}
+	state = map_archives_poll(&received, &total, archive, sizeof(archive));
+	if (state == _map_archives_running)
+		return 1;
+	map_archives_stop();
+	if (state != _map_archives_done)
+	{
+		fetch_fail(fetch.files[which].name, "neither BitTorrent nor the map archives gave it (the log says why)");
+		return 0;
+	}
+	if (!fetch_file_done(which))
+	{
+		fetch_fail(fetch.files[which].name, "it could not be put in place");
+		return 0;
+	}
 	return 1;
 }
 
@@ -573,18 +692,23 @@ static int fetch_file_done(int which)
 		/* (that version there already: the download is it) */
 		if (file_present(destination))
 		{
-			torrent_remove(fetch.files[which].handle);
+			if (fetch.files[which].archive)
+				unlink(fetch.files[which].path);
+			else
+				torrent_remove(fetch.files[which].handle);
 			fetch.files[which].done = 1;
 			platform_log("map torrents: %s is there already", destination);
 			return 1;
 		}
 	}
-	if (!torrent_move(fetch.files[which].handle, destination))
+	if (fetch.files[which].archive ? !move_to_new_name(fetch.files[which].path, destination) :
+		!torrent_move(fetch.files[which].handle, destination))
 	{
 		platform_log("map torrents: %s could not be moved into %s", fetch.files[which].name, folder);
 		return 0;
 	}
-	torrent_remove(fetch.files[which].handle);
+	if (!fetch.files[which].archive)
+		torrent_remove(fetch.files[which].handle);
 	fetch.files[which].done = 1;
 	platform_log("map torrents: %s is in %s", fetch.files[which].name, folder);
 	/* (a map, not a resource map: a downloaded one, whose scripts are held to
@@ -621,10 +745,35 @@ static void fetch_poll(void)
 			done++;
 			continue;
 		}
+		if (fetch.files[which].archive)
+		{
+			if (!archive_poll(which))
+				return;
+			if (fetch.files[which].done)
+				done++;
+			continue;
+		}
 		if (!torrent_status_get(fetch.files[which].handle, &status))
 		{
 			fetch_fail(fetch.files[which].name, "the client lost it");
 			return;
+		}
+		if (status.have_bytes != fetch.files[which].progress_bytes)
+		{
+			fetch.files[which].progress_bytes = status.have_bytes;
+			fetch.files[which].progress_time = GetTickCount();
+		}
+		/* (BitTorrent does not give it: the archives instead, if they have it) */
+		if ((status.state == _torrent_state_failed ||
+			(status.state != _torrent_state_seeding && status.state != _torrent_state_checking &&
+			GetTickCount() - fetch.files[which].progress_time >= ARCHIVE_FALLBACK_MILLISECONDS)) &&
+			map_archives_available(torrent_maps_index.names + fetch.files[which].entry->sources))
+		{
+			platform_log("map torrents: %s: %s; from the archives instead", fetch.files[which].name,
+				status.state == _torrent_state_failed ? status.detail : "nothing came over BitTorrent");
+			torrent_remove(fetch.files[which].handle);
+			fetch.files[which].archive = 1;
+			continue;
 		}
 		if (status.state == _torrent_state_failed)
 		{
@@ -678,10 +827,30 @@ static void fetch_status_update(void)
 
 		if (fetch.files[which].done)
 			continue;
-		if (!torrent_status_get(fetch.files[which].handle, &status))
-			continue;
 		if (fetch.count > 1)
 			snprintf(which_text, sizeof(which_text), " (%d of %d)", which + 1, fetch.count);
+		if (fetch.files[which].archive)
+		{
+			unsigned long long received, bytes;
+			char archive[64];
+
+			if (fetch.files[which].archive == 2 &&
+				map_archives_poll(&received, &bytes, archive, sizeof(archive)) == _map_archives_running && bytes)
+			{
+				size_text(received, have, sizeof(have));
+				size_text(bytes, total, sizeof(total));
+				snprintf(fetch.status, sizeof(fetch.status), "Downloading %s%s from %s: %s of %s",
+					fetch.files[which].name, which_text, archive, have, total);
+			}
+			else
+			{
+				snprintf(fetch.status, sizeof(fetch.status), "Downloading %s%s from the map archives",
+					fetch.files[which].name, which_text);
+			}
+			return;
+		}
+		if (!torrent_status_get(fetch.files[which].handle, &status))
+			continue;
 		switch (status.state)
 		{
 		case _torrent_state_metadata:
@@ -735,9 +904,24 @@ int map_torrents_download_progress(float *fraction, char *name, int size)
 		struct torrent_status status;
 
 		if (fetch.files[which].done)
+		{
 			done += 1.0f;
+		}
+		else if (fetch.files[which].archive)
+		{
+			unsigned long long received, bytes;
+			char archive[64];
+
+			if (fetch.files[which].archive == 2 &&
+				map_archives_poll(&received, &bytes, archive, sizeof(archive)) == _map_archives_running && bytes)
+			{
+				done += (float)((double)received / (double)bytes);
+			}
+		}
 		else if (torrent_status_get(fetch.files[which].handle, &status) && status.total_bytes)
+		{
 			done += (float)((double)status.have_bytes / (double)status.total_bytes);
+		}
 	}
 	*fraction = fetch.count ? done / (float)fetch.count : 0.0f;
 	snprintf(name, (size_t)size, "%s", fetch.level_name);

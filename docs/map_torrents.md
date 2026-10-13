@@ -37,6 +37,20 @@ build's host that cannot) is downloaded the same way, if the index has the
 host's version: the player leaves the game, is told the map is being
 downloaded, and joins again once it is there (`download_offered`,
 `port/linux/game/map_share.c`).
+
+A map that BitTorrent does not give, because its download fails or brings
+nothing for 30 seconds (no peer has it, and no web seed answers), is taken
+instead out of the zip that the index names for it in the community's
+archives: HaloNet's map repository (maps.halonet.net), then HaloMaps
+(halomaps.org), in `maps.archives`'s order ("Downloading hugeass.map from
+HaloMaps: 12 MB of 40 MB"). The file taken out of the zip is checked
+against the index's info hash, as a torrent's pieces are, and one that is
+not the index's is thrown away and the next archive tried
+(`port/linux/src/map_archives.c`, `map_archives_zip.c`). The archives are
+fetched over HTTPS, with the self-updater's download (`update_request`,
+`update.h`): the Linux, Windows and macOS builds; Android and the browser
+have none.
+
 Custom Edition's `bitmaps.map`, `sounds.map` and `loc.map`, which every
 Custom Edition map needs, are downloaded the same way when missing. The
 map goes into `maps_ce`, ChupathingyCE's folder of Custom Edition maps (a
@@ -66,6 +80,7 @@ The settings, in `config.toml`:
 | `maps.dht` | `true` | Find peers through the mainline DHT. |
 | `maps.trackers` | the archive's tracker | Comma-separated `udp://` and `http://` trackers to announce to. |
 | `maps.web_seeds` | the archive's web seed | Comma-separated `http://` folders holding the maps by file name, downloaded from too. |
+| `maps.archives` | `"halonet,halomaps"` | The community's map archives a map is taken from when BitTorrent does not give it (the download fails, or brings nothing for 30 seconds), out of the zip the index names for it, in this order: `halonet` (maps.halonet.net), `halomaps` (halomaps.org). Empty: none. Linux, Windows and macOS. |
 | `maps.torrent_index` | `"map_torrents.txt"` | The index of the maps' torrents, beside `config.toml`. |
 
 A machine behind a router that forwards nothing can still download (it
@@ -77,7 +92,12 @@ play's UPnP does not forward the torrent port yet.
 
 `port/assets/network/map_torrents.txt` lists every map's torrent, one a
 line: the file name, the header checksum, the size, the piece length and
-the info hash. The builds put it beside the game as `map_torrents.txt`
+the info hash, then, a column each, the archives' zips that hold it:
+`halonet:<zip file name>` (https://maps.halonet.net/maps/<zip file name>)
+and `halomaps:<file id>` (https://halomaps.org/hce/detail.cfm?fid=<file id>);
+5,827 of the 5,829 lines have at least one, which `python tools/map_torrents.py
+sources --halonet <folder> --halomaps <folder>` notes from copies of the
+archives' zips. The builds put it beside the game as `map_torrents.txt`
 (`maps.torrent_index`). It was made from the halomaps.org and HaloNet
 archives (5,829 maps, with the three resource maps) by
 `tools/map_torrents.py`.

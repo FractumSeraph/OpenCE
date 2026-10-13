@@ -23,6 +23,13 @@ of it; 1 on success, else 0 and why in error */
 int update_download(const char *url, const char *path, unsigned long long maximum, update_progress_proc progress,
 	void *context, char *error, int error_size);
 
+/* update_download's request with more of it given: form, when not NULL, is
+POSTed (application/x-www-form-urlencoded, a redirect after it followed with
+a GET); agent, when not NULL, is the User-Agent; and the download stops,
+failing, once *stop (when stop is not NULL) is not 0. Up to 1 GiB. */
+int update_request(const char *url, const char *form, const char *agent, const volatile int *stop,
+	const char *path, update_progress_proc progress, void *context, char *error, int error_size);
+
 /* the full path of this executable; 1 on success */
 int update_executable_path(char *path, int size);
 

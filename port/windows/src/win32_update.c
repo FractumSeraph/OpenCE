@@ -39,8 +39,31 @@ static void set_error(char *error, int error_size, const char *what)
 		snprintf(error, (size_t)error_size, "%s (error %lu)", what, (unsigned long)code);
 }
 
+static int request_download(const char *url, const char *form, const char *agent, const volatile int *stop,
+	const char *path, unsigned long long maximum, update_progress_proc progress, void *context, char *error,
+	int error_size);
+
 int update_download(const char *url, const char *path, unsigned long long maximum, update_progress_proc progress,
 	void *context, char *error, int error_size)
+{
+	return request_download(url, NULL, NULL, NULL, path, maximum, progress, context, error, error_size);
+}
+
+/* (posix_update.c's: up to 1 GiB, the largest Custom Edition map of the maps'
+index about 760 MB: map_archives.c) */
+int update_request(const char *url, const char *form, const char *agent, const volatile int *stop,
+	const char *path, update_progress_proc progress, void *context, char *error, int error_size)
+{
+	return request_download(url, form, agent, stop, path, 1024ull * 1024 * 1024, progress, context, error,
+		error_size);
+}
+
+/* one GET (or a POST of form, application/x-www-form-urlencoded, whose
+answer WinHTTP's redirect policy fetches with a GET) into the file at path,
+with this build's User-Agent or agent; stopped once *stop is not 0 */
+static int request_download(const char *url, const char *form, const char *agent, const volatile int *stop,
+	const char *path, unsigned long long maximum, update_progress_proc progress, void *context, char *error,
+	int error_size)
 {
 	wchar_t wide_url[2048], wide_path[MAX_PATH * 2], host[256], url_path[2048], user_agent[128];
 	URL_COMPONENTS components;
@@ -53,7 +76,7 @@ int update_download(const char *url, const char *path, unsigned long long maximu
 	int succeeded = 0;
 
 	if (!wide_from_utf8(url, wide_url, 2048) || !wide_from_utf8(path, wide_path, MAX_PATH * 2) ||
-		!wide_from_utf8(build_identity_user_agent(), user_agent, 128))
+		!wide_from_utf8(agent ? agent : build_identity_user_agent(), user_agent, 128))
 	{
 		snprintf(error, (size_t)error_size, "a bad address or path");
 		return 0;
@@ -88,10 +111,14 @@ int update_download(const char *url, const char *path, unsigned long long maximu
 	connection = WinHttpConnect(session, host, components.nPort, 0);
 	if (connection)
 	{
-		request = WinHttpOpenRequest(connection, L"GET", url_path, NULL, WINHTTP_NO_REFERER,
+		request = WinHttpOpenRequest(connection, form ? L"POST" : L"GET", url_path, NULL, WINHTTP_NO_REFERER,
 			WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_SECURE);
 	}
-	if (!request || !WinHttpSendRequest(request, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0) ||
+	if (!request ||
+		!WinHttpSendRequest(request,
+			form ? L"Content-Type: application/x-www-form-urlencoded\r\n" : WINHTTP_NO_ADDITIONAL_HEADERS,
+			form ? (DWORD)-1L : 0, form ? (LPVOID)form : WINHTTP_NO_REQUEST_DATA, form ? (DWORD)strlen(form) : 0,
+			form ? (DWORD)strlen(form) : 0, 0) ||
 		!WinHttpReceiveResponse(request, NULL))
 	{
 		set_error(error, error_size, "could not reach the server");
@@ -124,6 +151,11 @@ int update_download(const char *url, const char *path, unsigned long long maximu
 		char buffer[16384];
 		DWORD count = 0, written = 0;
 
+		if (stop && *stop)
+		{
+			snprintf(error, (size_t)error_size, "stopped");
+			goto done;
+		}
 		if (!WinHttpReadData(request, buffer, sizeof(buffer), &count))
 		{
 			set_error(error, error_size, "the download broke off");

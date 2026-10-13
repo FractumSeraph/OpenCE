@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """The torrents of the Custom Edition maps, and their index
 (port/assets/network/map_torrents.txt), which the game reads to download a
-map it lacks when joining a game on it (port/linux/src/map_torrents.c).
+map it lacks when joining a game on it (port/linux/src/map_torrents.c): over
+BitTorrent, from peers and web seeds, else out of the community archives'
+zips (port/linux/src/map_archives.c), a download checked against the info
+hash either way.
 
     python tools/map_torrents.py make --maps <folder> [--maps <folder>...]
         [--resource-maps <folder>] --torrents <folder> [--index <file>]
@@ -21,11 +24,27 @@ given can have them added by any client.
 
 Each torrent's info dictionary is exactly {length, name, piece length,
 pieces}, so a machine that has the file can make the torrent again from the
-index line alone (the game's host seeds the map it plays that way).
+index line alone: the game's host seeds the map it plays that way, and the
+game checks an archive's download that way (map_archives_verify,
+port/linux/src/map_archives_zip.c).
 
     python tools/map_torrents.py check --index <file> [--torrents <folder>]
 
 checks an index (and that each torrent file matches its line).
+
+    python tools/map_torrents.py sources [--halonet <folder>] [--halomaps <folder>]
+        [--index <file>]
+
+notes, on each map's line, the community archives' zips that hold it, which
+the game downloads a map from when BitTorrent does not give it
+(port/linux/src/map_archives.c):
+a column "halonet:<zip file name>" for each zip of HaloNet's repository
+(https://maps.halonet.net/maps/<zip file name>; the folder holds copies of
+them under those names) and "halomaps:<file id>" for each of HaloMaps's
+(https://halomaps.org/hce/detail.cfm?fid=<file id>; the folder's copies are
+named "<file id>-<anything>.zip"). A zip holds a map when one of its files
+has the map's name (in any folder), size and header checksum. The archives
+given have their columns made again; the others' are kept.
 
 The work of a run is remembered in <torrents>/.map_torrents_cache.json by
 path, size and modification time, so a rerun hashes only new files.
@@ -35,9 +54,11 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import struct
 import sys
 import time
+import zipfile
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
@@ -227,22 +248,29 @@ def torrent_bytes(info, comment):
 
 # ---------- the index
 
-class Entry:
-    __slots__ = ("file_name", "checksum", "size", "piece_length", "info_hash")
+# a map archive's zip that holds a map: "<archive>:<its id there>"
+ARCHIVES = ("halonet", "halomaps")
+SOURCE_PATTERN = re.compile(r"^(halonet|halomaps):[^\t\r\n]+$")
 
-    def __init__(self, file_name, checksum, size, piece_length, info_hash):
+
+class Entry:
+    __slots__ = ("file_name", "checksum", "size", "piece_length", "info_hash", "sources")
+
+    def __init__(self, file_name, checksum, size, piece_length, info_hash, sources=()):
         self.file_name = file_name
         self.checksum = checksum
         self.size = size
         self.piece_length = piece_length
         self.info_hash = info_hash
+        self.sources = list(sources)
 
     @property
     def key(self):
         return (self.file_name.lower(), self.checksum)
 
     def line(self):
-        return f"{self.file_name}\t{self.checksum:08X}\t{self.size}\t{self.piece_length}\t{self.info_hash}"
+        return "\t".join([self.file_name, f"{self.checksum:08X}", str(self.size), str(self.piece_length),
+                          self.info_hash, *self.sources])
 
 
 def read_index(path):
@@ -258,12 +286,15 @@ def read_index(path):
             if not line or line.startswith("#"):
                 continue
             fields = line.split("\t")
-            if len(fields) != 5:
-                raise SystemExit(f"{path}:{number}: {len(fields)} fields, not 5")
+            if len(fields) < 5:
+                raise SystemExit(f"{path}:{number}: {len(fields)} fields, not 5 or more")
             try:
-                entry = Entry(fields[0], int(fields[1], 16), int(fields[2]), int(fields[3]), fields[4].lower())
+                entry = Entry(fields[0], int(fields[1], 16), int(fields[2]), int(fields[3]), fields[4].lower(),
+                              fields[5:])
             except ValueError as error:
                 raise SystemExit(f"{path}:{number}: {error}")
+            if any(not SOURCE_PATTERN.match(source) for source in entry.sources):
+                raise SystemExit(f"{path}:{number}: a bad archive source")
             if len(entry.info_hash) != 40 or any(c not in "0123456789abcdef" for c in entry.info_hash):
                 raise SystemExit(f"{path}:{number}: a bad info hash")
             entries[entry.key] = entry
@@ -274,10 +305,12 @@ def write_index(path, entries):
     path.parent.mkdir(parents=True, exist_ok=True)
     lines = [
         f"# {INDEX_FORMAT}",
-        "# The torrents of the Custom Edition maps (tools/map_torrents.py): each line a map,",
+        "# The Custom Edition maps (tools/map_torrents.py): each line a map,",
         "# tab-separated: file name, header checksum (the map version a host sends; 0 for",
-        "# the resource maps, matched by name alone), size in bytes, piece length, info hash.",
-        "# A map's single-file torrent has info = {length, name, piece length, pieces}.",
+        "# the resource maps, matched by name alone), size in bytes, piece length, info hash,",
+        "# then the map archives' zips that hold it (halonet:<zip>, halomaps:<file id>).",
+        "# A map's single-file torrent has info = {length, name, piece length, pieces}: a",
+        "# download is checked against its info hash (port/linux/src/map_archives.c).",
     ]
     for entry in sorted(entries.values(), key=lambda e: (e.file_name.lower(), e.checksum)):
         lines.append(entry.line())
@@ -412,6 +445,84 @@ def make(args):
         print(f"  {path.name}: {reason}")
 
 
+# ---------- the archives' zips
+
+def zip_maps(path):
+    """(name, size, checksum) of each map in the zip at path (checksum 0 for
+    one too short to have a header); nothing for a zip that cannot be read"""
+    found = []
+    try:
+        with zipfile.ZipFile(path) as archive:
+            for member in archive.infolist():
+                name = member.filename.replace("\\", "/").rsplit("/", 1)[-1]
+                if not name.lower().endswith(".map") or member.is_dir():
+                    continue
+                checksum = 0
+                if member.file_size >= HEADER_BYTES:
+                    try:
+                        with archive.open(member) as f:
+                            checksum = read_u32(f.read(HEADER_BYTES), CHECKSUM_OFFSET)
+                    except Exception:
+                        continue
+                found.append((name, member.file_size, checksum))
+    except (zipfile.BadZipFile, OSError, NotImplementedError, ValueError):
+        pass
+    return found
+
+
+def archive_zips(archive, folder):
+    """(id, path) of the archive's zips in folder: HaloNet's by file name,
+    HaloMaps's by the file id their name starts with"""
+    for path in sorted(Path(folder).iterdir()):
+        if not path.is_file() or path.suffix.lower() != ".zip" or "\t" in path.name:
+            continue
+        if archive == "halonet":
+            yield path.name, path
+        else:
+            match = re.match(r"^(\d+)-", path.name)
+            if match:
+                yield match.group(1), path
+
+
+def sources(args):
+    index_path = Path(args.index)
+    entries = read_index(index_path)
+    by_name = {}
+    for entry in entries.values():
+        by_name.setdefault(entry.file_name.lower(), []).append(entry)
+    given = [(archive, folder) for archive, folder in (("halonet", args.halonet), ("halomaps", args.halomaps))
+             if folder]
+    if not given:
+        raise SystemExit("give --halonet or --halomaps (or both)")
+    found = {entry.key: {archive: [] for archive, _ in given} for entry in entries.values()}
+    for archive, folder in given:
+        zips = list(archive_zips(archive, folder))
+        print(f"{archive}: {len(zips)} zips in {folder}", flush=True)
+        for number, (zip_id, path) in enumerate(zips, 1):
+            for name, size, checksum in zip_maps(path):
+                for entry in by_name.get(name.lower(), []):
+                    # (a resource map's checksum is 0 in the index: its size says)
+                    if entry.size == size and entry.checksum in (checksum, 0):
+                        ids = found[entry.key][archive]
+                        if zip_id not in ids:
+                            ids.append(zip_id)
+            if number % 500 == 0:
+                print(f"  {number} of {len(zips)}", flush=True)
+    counts = {archive: 0 for archive, _ in given}
+    for entry in entries.values():
+        kept = [source for source in entry.sources if source.split(":", 1)[0] not in found[entry.key]]
+        made = [f"{archive}:{zip_id}" for archive in ARCHIVES if archive in found[entry.key]
+                for zip_id in found[entry.key][archive]]
+        for archive in found[entry.key]:
+            counts[archive] += bool(found[entry.key][archive])
+        # (in the archives' order: the game tries them in maps.archives's)
+        entry.sources = sorted(kept + made, key=lambda source: ARCHIVES.index(source.split(":", 1)[0]))
+    write_index(index_path, entries)
+    for archive, count in counts.items():
+        print(f"{count} of {len(entries)} maps in a zip of {archive}")
+    return 0
+
+
 # ---------- checking
 
 def check(args):
@@ -463,6 +574,12 @@ def main():
     check_parser.add_argument("--index", metavar="FILE", default=str(DEFAULT_INDEX))
     check_parser.add_argument("--torrents", metavar="FOLDER")
     check_parser.set_defaults(run=check)
+    sources_parser = commands.add_parser("sources", help="note the map archives' zips that hold each map")
+    sources_parser.add_argument("--halonet", metavar="FOLDER", help="copies of HaloNet's zips, under their names")
+    sources_parser.add_argument("--halomaps", metavar="FOLDER",
+                                help="copies of HaloMaps's zips, named <file id>-<anything>.zip")
+    sources_parser.add_argument("--index", metavar="FILE", default=str(DEFAULT_INDEX))
+    sources_parser.set_defaults(run=sources)
     args = parser.parse_args()
     sys.exit(args.run(args) or 0)
 

@@ -146,6 +146,10 @@ WEB_EXCLUDED_PLATFORM_SOURCES = {
     "torrent_dht.c",
     "torrent_bencode.c",
     "torrent_sha1.c",
+    # and the map archives' fetch (map_archives.c), over the self-updater's
+    # HTTPS, which the page has none of
+    "map_archives.c",
+    "map_archives_zip.c",
     # OpenCE's bridge to the Android host's touch overlay (the host's events):
     # the page has its own touch controls (port/web/assets/touch);
     # port/web/src/web_touch_input.c stands in for touch_input.h

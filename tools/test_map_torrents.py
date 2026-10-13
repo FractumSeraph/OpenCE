@@ -9,6 +9,7 @@ import hashlib
 import random
 import struct
 import subprocess
+import zipfile
 import sys
 from pathlib import Path
 
@@ -129,3 +130,54 @@ def test_the_committed_index_is_well_formed():
         assert entry.piece_length >= 262144 and entry.piece_length & (entry.piece_length - 1) == 0
         assert entry.size > 0x800
     assert ("bitmaps.map", 0) in entries and ("sounds.map", 0) in entries and ("loc.map", 0) in entries
+
+
+def test_sources_notes_the_archives_zips_that_hold_each_map(tmp_path):
+    """The archives' zips (halonet: by name, halomaps: <file id>-...) are
+    matched to the index by a file's name, size and header checksum; a zip
+    with another version of the map is not one of its sources."""
+    maps = tmp_path / "maps"
+    maps.mkdir()
+    alpha = cache_bytes("alpha", size=400_000, checksum=0x11111111, seed=1)
+    (maps / "alpha.map").write_bytes(alpha)
+    (maps / "beta.map").write_bytes(cache_bytes("beta", size=300_000, checksum=0x22222222, seed=2))
+    index = tmp_path / "index.txt"
+    result = run("make", "--maps", str(maps), "--torrents", str(tmp_path / "torrents"), "--index", str(index),
+                 "--jobs", "2")
+    assert result.returncode == 0, result.stdout + result.stderr
+    halonet = tmp_path / "halonet"
+    halomaps = tmp_path / "halomaps"
+    halonet.mkdir()
+    halomaps.mkdir()
+    with zipfile.ZipFile(halonet / "alpha pack.zip", "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("maps/Alpha.map", alpha)
+        archive.writestr("readme.txt", "alpha")
+    with zipfile.ZipFile(halomaps / "1234-alpha.zip", "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("alpha.map", alpha)
+    # (another version of beta: not beta's source)
+    with zipfile.ZipFile(halomaps / "77-beta.zip", "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("beta.map", cache_bytes("beta", size=300_000, checksum=0x99999999, seed=2))
+    (halomaps / "not-a-zip.zip").write_bytes(b"junk")
+    result = run("sources", "--halonet", str(halonet), "--halomaps", str(halomaps), "--index", str(index))
+    assert result.returncode == 0, result.stdout + result.stderr
+    entries = map_torrents.read_index(index)
+    assert entries[("alpha.map", 0x11111111)].sources == ["halonet:alpha pack.zip", "halomaps:1234"]
+    assert entries[("beta.map", 0x22222222)].sources == []
+    # the line the game reads: the sources after the info hash
+    line = next(line for line in index.read_text(encoding="utf-8").splitlines() if line.startswith("alpha.map"))
+    assert line.split("\t")[5:] == ["halonet:alpha pack.zip", "halomaps:1234"]
+    # an archive not given keeps its columns; a rerun gives the same
+    result = run("sources", "--halomaps", str(halomaps), "--index", str(index))
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert map_torrents.read_index(index)[("alpha.map", 0x11111111)].sources == ["halonet:alpha pack.zip",
+                                                                               "halomaps:1234"]
+    # and the check takes the columns
+    assert run("check", "--index", str(index)).returncode == 0
+
+
+def test_the_committed_index_names_the_archives_zips():
+    entries = map_torrents.read_index(map_torrents.DEFAULT_INDEX)
+    with_sources = [entry for entry in entries.values() if entry.sources]
+    assert len(with_sources) > 5000
+    for entry in with_sources:
+        assert all(map_torrents.SOURCE_PATTERN.match(source) for source in entry.sources)

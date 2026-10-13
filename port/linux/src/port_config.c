@@ -674,6 +674,12 @@ static const struct config_setting config_settings[] =
 		"Comma-separated http:// URLs of folders holding the maps' files under\n"
 		"their names, which a download also takes pieces from; empty for none.\n"
 		"The default is the map archive's own (docs/map_torrents.md)." },
+	{ "maps.archives", _config_string, "\"halonet,halomaps\"", "HALO_MAP_ARCHIVES", _environment_value,
+		_platform_desktop,
+		"The community's map archives a map is taken from when BitTorrent does\n"
+		"not give it, out of the zip the index names for it, in this order:\n"
+		"halonet (maps.halonet.net), halomaps (halomaps.org); empty for none\n"
+		"(docs/map_torrents.md)." },
 	{ "maps.torrent_index", _config_string, "\"map_torrents.txt\"", "HALO_MAP_TORRENT_INDEX", _environment_value,
 		_platform_all,
 		"The index of the maps' torrents (tools/map_torrents.py), beside this\n"
