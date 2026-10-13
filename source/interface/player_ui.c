@@ -639,7 +639,13 @@ void player_ui_set_single_player_local_player_controller(
 long player_ui_get_player1_last_used_profile_index(
 	void)
 {
-	if (!player1_profile_path[0] &&
+	/* port: z:\lastprof.txt read once (its absence logged once); the port's
+	lobby asks every frame, and player_ui_remember_player1_profile sets the
+	path itself afterwards */
+	static boolean read;
+
+	if (!player1_profile_path[0] && !read &&
+		(read = TRUE) &&
 		saved_game_file_retrieve_player1_last_used_profile_directory(
 			player1_profile_path))
 	{
