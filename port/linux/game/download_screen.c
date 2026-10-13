@@ -122,7 +122,9 @@ void download_screen_render(
 	rectangle2d bounds;
 	short index;
 
-	if (!download_screen_active() || !map_torrents_download_progress(&fraction, name, sizeof(name)))
+	/* (nothing drawn without a renderer: debug.null_renderer, a server's) */
+	if (!download_screen_active() || config_boolean("debug.null_renderer") ||
+		!map_torrents_download_progress(&fraction, name, sizeof(name)))
 	{
 		if (download_screen.shown)
 		{
