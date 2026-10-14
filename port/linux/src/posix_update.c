@@ -18,6 +18,9 @@ Built with the host's ABI, as the other posix_*.c.
 
 #include "update.h"
 #include "build_identity.h"
+#ifdef HALO_GAME_BROWSER
+#include "browser_http.h"
+#endif
 
 #include "mbedtls/error.h"
 #include "mbedtls/net_sockets.h"
@@ -55,6 +58,26 @@ static pthread_once_t certificates_once = PTHREAD_ONCE_INIT;
 static mbedtls_x509_crt certificates;
 static int certificates_loaded;
 static int crypto_ready;
+
+/* Mbed TLS, as it is built here, has no locks of its own, and its PSA
+random generator, key slots and setup are shared with the game list's
+requests (posix_browser.c), Delta Stats' uploads and the rest: every use of
+it here is taken in turn with theirs (posix_browser_lock). Only the use: the
+waits for the server's bytes are outside it, so a map archive's download
+(map_archives.c), which can take minutes, does not hold up the game list */
+static void tls_lock(void)
+{
+#ifdef HALO_GAME_BROWSER
+	posix_browser_lock();
+#endif
+}
+
+static void tls_unlock(void)
+{
+#ifdef HALO_GAME_BROWSER
+	posix_browser_unlock();
+#endif
+}
 
 static void load_certificates(void)
 {
@@ -141,11 +164,15 @@ struct connection
 
 static void connection_free(struct connection *connection)
 {
+	tls_lock();
 	mbedtls_ssl_close_notify(&connection->ssl);
 	mbedtls_ssl_free(&connection->ssl);
 	mbedtls_ssl_config_free(&connection->config);
+	tls_unlock();
 	mbedtls_net_free(&connection->net);
 }
+
+static int connection_handshake(struct connection *connection, const char *host, char *error, int error_size);
 
 static int connection_open(struct connection *connection, const char *host, const char *port, char *error,
 	int error_size)
@@ -153,8 +180,10 @@ static int connection_open(struct connection *connection, const char *host, cons
 	int result;
 
 	mbedtls_net_init(&connection->net);
+	tls_lock();
 	mbedtls_ssl_init(&connection->ssl);
 	mbedtls_ssl_config_init(&connection->config);
+	tls_unlock();
 	connection->start = connection->end = 0;
 	connection->closed = 0;
 	if ((result = mbedtls_net_connect(&connection->net, host, port, MBEDTLS_NET_PROTO_TCP)) != 0)
@@ -162,6 +191,17 @@ static int connection_open(struct connection *connection, const char *host, cons
 		set_error(error, error_size, "could not connect", result);
 		return 0;
 	}
+	tls_lock();
+	result = connection_handshake(connection, host, error, error_size);
+	tls_unlock();
+	return result;
+}
+
+/* (tls_lock held) */
+static int connection_handshake(struct connection *connection, const char *host, char *error, int error_size)
+{
+	int result;
+
 	if ((result = mbedtls_ssl_config_defaults(&connection->config, MBEDTLS_SSL_IS_CLIENT,
 		MBEDTLS_SSL_TRANSPORT_STREAM, MBEDTLS_SSL_PRESET_DEFAULT)) != 0)
 	{
@@ -208,7 +248,11 @@ static int connection_write(struct connection *connection, const char *data, siz
 {
 	while (size)
 	{
-		int result = mbedtls_ssl_write(&connection->ssl, (const unsigned char *)data, size);
+		int result;
+
+		tls_lock();
+		result = mbedtls_ssl_write(&connection->ssl, (const unsigned char *)data, size);
+		tls_unlock();
 
 		if (result == MBEDTLS_ERR_SSL_WANT_READ || result == MBEDTLS_ERR_SSL_WANT_WRITE)
 			continue;
@@ -239,8 +283,18 @@ static int connection_fill(struct connection *connection)
 	}
 	for (;;)
 	{
+		/* (nothing decrypted or received yet: the server waited for
+		without the lock) */
+		if (!mbedtls_ssl_get_bytes_avail(&connection->ssl) && !mbedtls_ssl_check_pending(&connection->ssl))
+		{
+			result = mbedtls_net_poll(&connection->net, MBEDTLS_NET_POLL_READ, TIMEOUT_MILLISECONDS);
+			if (result <= 0)
+				return -1;
+		}
+		tls_lock();
 		result = mbedtls_ssl_read(&connection->ssl, connection->buffer + connection->end,
 			sizeof(connection->buffer) - connection->end);
+		tls_unlock();
 		if (result > 0)
 		{
 			connection->end += (size_t)result;
@@ -321,7 +375,8 @@ maps' index about 760 (map_archives.c): a body past this fills no disk) */
 #define MAXIMUM_DOWNLOAD_SIZE (1024ull * 1024 * 1024)
 
 /* one request at a time: the self-updater's thread and the map archives'
-(map_archives.c) both ask, through one connection (https_get's) */
+(map_archives.c) both ask, through one connection (https_get's); Mbed TLS
+itself is taken in turn with the program's other users by tls_lock */
 static pthread_mutex_t request_lock = PTHREAD_MUTEX_INITIALIZER;
 
 static int body_write(struct download *download, const unsigned char *data, size_t size)
@@ -544,7 +599,9 @@ static int request_locked(const char *url, const char *form, const char *agent, 
 	struct download download;
 	int redirect;
 
+	tls_lock();
 	pthread_once(&certificates_once, load_certificates);
+	tls_unlock();
 	if (!crypto_ready)
 	{
 		snprintf(error, (size_t)error_size, "could not start the cryptography");

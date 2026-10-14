@@ -27,6 +27,12 @@ headers is not NULL */
 int posix_browser_send(const char *url, const char *body, size_t body_length, const char *content_type,
 	const char *headers, char *response, int response_size, char *error, int error_size);
 
+/* taken around every use of Mbed TLS, which as built here has no locks of
+its own: the requests above take it themselves; the self-updater's
+downloads (posix_update.c) take it too */
+void posix_browser_lock(void);
+void posix_browser_unlock(void);
+
 int posix_browser_private_key(const char *path, unsigned char *key, int size);
 int posix_browser_replace_key(const char *path, const unsigned char *key, int size);
 

@@ -613,6 +613,11 @@ the distribution (`src/posix_update.c`, with Mbed TLS); on Windows, the
 certificate store of Windows (WinHTTP). The folder of the executable must
 let the game write to it.
 
+On Linux, the downloads of the updater and of the map archives use Mbed TLS
+in turn with the game list's requests, because Mbed TLS is built without
+locks of its own. They hold the lock only while they use Mbed TLS: while a
+download waits for the server, the game list can make its requests.
+
 Builds that you make yourself have no build number. They do not look for
 updates.
 

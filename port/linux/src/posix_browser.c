@@ -380,34 +380,45 @@ int posix_browser_request(const char *url, const char *form, const char *content
 static int request_as(const char *url, const char *body_data, size_t body_length, const char *content_type,
 	const char *user_agent, const char *headers, char *response, int response_size, char *error, int error_size);
 
-/* (one request at a time across the program's threads: Mbed TLS, as it is
-built here, has no locks of its own, and its PSA random generator and key
-slots are shared; the game list's thread, the crash reporter's, Delta
-Stats' uploads and a dedicated server's Delta Control link each make
-requests) */
+/* (one user of Mbed TLS at a time across the program's threads: as it is
+built here it has no locks of its own, and its PSA random generator, key
+slots and setup are shared; the game list's thread, the crash reporter's,
+Delta Stats' uploads, a dedicated server's Delta Control link, the player
+key's first making and the self-updater's downloads (posix_update.c) all
+use it) */
 #ifdef _WIN32
-static SRWLOCK request_lock = SRWLOCK_INIT;
+static SRWLOCK tls_lock = SRWLOCK_INIT;
 #else
-static pthread_mutex_t request_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t tls_lock = PTHREAD_MUTEX_INITIALIZER;
 #endif
+
+void posix_browser_lock(void)
+{
+#ifdef _WIN32
+	AcquireSRWLockExclusive(&tls_lock);
+#else
+	pthread_mutex_lock(&tls_lock);
+#endif
+}
+
+void posix_browser_unlock(void)
+{
+#ifdef _WIN32
+	ReleaseSRWLockExclusive(&tls_lock);
+#else
+	pthread_mutex_unlock(&tls_lock);
+#endif
+}
 
 static int locked_request(const char *url, const char *body_data, size_t body_length, const char *content_type,
 	const char *user_agent, const char *headers, char *response, int response_size, char *error, int error_size)
 {
 	int status;
 
-#ifdef _WIN32
-	AcquireSRWLockExclusive(&request_lock);
-#else
-	pthread_mutex_lock(&request_lock);
-#endif
+	posix_browser_lock();
 	status = request_as(url, body_data, body_length, content_type, user_agent, headers, response, response_size, error,
 		error_size);
-#ifdef _WIN32
-	ReleaseSRWLockExclusive(&request_lock);
-#else
-	pthread_mutex_unlock(&request_lock);
-#endif
+	posix_browser_unlock();
 	return status;
 }
 
@@ -648,9 +659,13 @@ int posix_browser_private_key(const char *path, unsigned char *key, int size)
 		/* (another copy of the game made it first: read that one) */
 		if (descriptor < 0)
 			continue;
-		/* (the PSA crypto set up first: load_certificates does) */
+		/* (the PSA crypto set up first: load_certificates does; and the
+		random generator taken in turn with the requests) */
+		posix_browser_lock();
 		set_up();
-		if (!crypto_ready || psa_generate_random(key, (size_t)size) != PSA_SUCCESS)
+		ok = crypto_ready && psa_generate_random(key, (size_t)size) == PSA_SUCCESS;
+		posix_browser_unlock();
+		if (!ok)
 		{
 			close(descriptor);
 			unlink(path);
