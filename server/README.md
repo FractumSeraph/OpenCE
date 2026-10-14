@@ -79,7 +79,10 @@ one machine, use [Docker or systemd](docs/docker.md).
 ## What it does
 
 - Hosts a system link game with no player of its own, listed on the game
-  list. Any build that opens invite links can join it.
+  list. Any build that opens invite links can join it. Its invite link
+  changes each time the server starts, unless `HALO_NET_LASTING_INVITE` is
+  `true`: then it stays the same (its key and token kept in
+  `lasting_invite.key` in the save folder), to post on a website.
 - Is a public game (unless `HALO_DEDICATED_PUBLIC` is `false`): it shows in
   the in-game Server Browser (Join Game > Server Browser) of OpenCE and
   ChupathingyCE.

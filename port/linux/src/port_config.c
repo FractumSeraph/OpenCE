@@ -440,6 +440,14 @@ static const struct config_setting config_settings[] =
 		"clipboard) that lets whoever has it join over the internet; opening a\n"
 		"link (or copying one before switching to the game) joins. Only people\n"
 		"with the invite can join. Off keeps system link to the local network." },
+	{ "network.lasting_invite", _config_boolean, "false", "HALO_NET_LASTING_INVITE", _environment_value,
+		_platform_all,
+		"Hosting on the internet: keep the same invite link from one run of the\n"
+		"game to the next (a dedicated server's, to post somewhere), its key and\n"
+		"token kept in lasting_invite.key in the save folder, which only you can\n"
+		"read. Anyone with the link can always use it; a new password or going\n"
+		"private still makes a new one, which is then kept. Copy that file to\n"
+		"one machine alone." },
 	{ "network.join_from_clipboard", _config_boolean, "true", "HALO_NET_JOIN_FROM_CLIPBOARD", _environment_value,
 		_platform_all,
 		"Join the game of an invite link found on the clipboard when the game\n"

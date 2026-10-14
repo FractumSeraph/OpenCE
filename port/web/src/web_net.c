@@ -1595,6 +1595,15 @@ int posix_user_secret(unsigned char *secret, int size)
 	return 0;
 }
 
+int posix_secret_file(const char *path, unsigned char *secret, int size, int write_it)
+{
+	(void)path;
+	(void)secret;
+	(void)size;
+	(void)write_it;
+	return 0;
+}
+
 int posix_discord_connect(void)
 {
 	return -1;

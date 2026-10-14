@@ -33,7 +33,8 @@ use the network. Allow it on private networks, and on public networks too if
 this computer is on one, or players cannot reach the server.
 
 On a home connection you don't need to forward any ports: players reach the
-server as they reach anyone's invite link. On a cloud server, open one UDP
+server as they reach anyone's invite link. `set HALO_NET_LASTING_INVITE=true`
+in `start-server.cmd` keeps that link the same each time the server starts. On a cloud server, open one UDP
 port, as on Linux (the README's "It shows, but nobody can join").
 
 ## Settings

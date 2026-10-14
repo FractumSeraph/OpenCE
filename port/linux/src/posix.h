@@ -195,6 +195,11 @@ int posix_register_url_scheme(const char *scheme, const char *description);
 file that only they can read (made the first time); 1 on success, 0 where
 there is none (always, on Android) */
 int posix_user_secret(unsigned char *secret, int size);
+/* port (this fork): a file of secret bytes that only this user can read, at
+path: read into secret, or made with new random ones the first time (write_it
+0); or written with secret's (write_it 1, replacing the file whole). 1 on
+success, 0 where there is none (the browser's) */
+int posix_secret_file(const char *path, unsigned char *secret, int size, int write_it);
 
 /* a connection to the Discord desktop client's local socket or pipe, or -1
 if none is running (always, on Android) */

@@ -81,6 +81,42 @@ int posix_register_url_scheme(const char *scheme, const char *description)
 	return ok ? 1 : 0;
 }
 
+int posix_secret_file(const char *path, unsigned char *secret, int size, int write_it)
+{
+	char temporary[MAX_PATH + 64];
+	DWORD done = 0;
+	BOOL ok;
+	HANDLE file;
+
+	if (!write_it)
+	{
+		file = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+		if (file != INVALID_HANDLE_VALUE)
+		{
+			ok = ReadFile(file, secret, (DWORD)size, &done, NULL) && done == (DWORD)size;
+			CloseHandle(file);
+			return ok ? 1 : 0;
+		}
+		if (GetLastError() != ERROR_FILE_NOT_FOUND)
+			return 0;
+		posix_random_bytes(secret, (posix_ulong)size);
+	}
+	/* (written beside it, then put in its place: never half a file; the
+	save folder is the user's, as their local application data is) */
+	snprintf(temporary, sizeof(temporary), "%s.new", path);
+	file = CreateFileA(temporary, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+	if (file == INVALID_HANDLE_VALUE)
+		return 0;
+	ok = WriteFile(file, secret, (DWORD)size, &done, NULL) && done == (DWORD)size;
+	CloseHandle(file);
+	if (!ok || !MoveFileExA(temporary, path, MOVEFILE_REPLACE_EXISTING))
+	{
+		DeleteFileA(temporary);
+		return 0;
+	}
+	return 1;
+}
+
 int posix_user_secret(unsigned char *secret, int size)
 {
 	/* in the user's local application data, which only they (and the

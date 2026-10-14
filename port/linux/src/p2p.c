@@ -427,6 +427,13 @@ static unsigned char signing_key[P2P_KEY_SIZE];
 static unsigned char secret_key[P2P_KEY_SIZE];
 static unsigned char public_key[P2P_KEY_SIZE];
 static int has_identifier;
+/* port (this fork): network.lasting_invite: the seed and the invite's
+token kept in the save root's LASTING_INVITE_FILE (only this user's), so
+that a host's invite link (a dedicated server's) is the same from run to
+run; the token read there, for the run's first invite */
+#define LASTING_INVITE_FILE "lasting_invite.key"
+static unsigned char lasting_token[P2P_TOKEN_SIZE];
+static int has_lasting_token;
 
 /* ---------- helpers */
 
@@ -573,7 +580,22 @@ const unsigned char *p2p_identifier(void)
 	pthread_mutex_lock(&identifier_lock);
 	if (!has_identifier)
 	{
-		posix_random_bytes(seed, sizeof(seed));
+		unsigned char kept[P2P_SEED_SIZE + P2P_TOKEN_SIZE];
+		char path[1024];
+
+		snprintf(path, sizeof(path), "%s/" LASTING_INVITE_FILE, platform_save_root());
+		if (config_boolean("network.lasting_invite") && posix_secret_file(path, kept, (int)sizeof(kept), 0))
+		{
+			memcpy(seed, kept, P2P_SEED_SIZE);
+			memcpy(lasting_token, kept + P2P_SEED_SIZE, P2P_TOKEN_SIZE);
+			has_lasting_token = 1;
+		}
+		else
+		{
+			if (config_boolean("network.lasting_invite"))
+				platform_log("Internet play: %s could not be read or made: this run's invite is its own", path);
+			posix_random_bytes(seed, sizeof(seed));
+		}
 		p2p_ed25519_public(seed, signing_key, secret_key);
 		p2p_x25519(public_key, secret_key, NULL);
 		p2p_identifier_for(public_key, identifier);
@@ -2821,7 +2843,29 @@ static void make_invite(void)
 	unsigned char bytes[P2P_KEY_HASH_SIZE + P2P_TOKEN_SIZE];
 	char text[2 * (P2P_KEY_HASH_SIZE + P2P_TOKEN_SIZE) + 1];
 
-	posix_random_bytes(p2p.token, sizeof(p2p.token));
+	/* (port: network.lasting_invite's token, for the run's first invite;
+	a new one after it is kept for the next runs) */
+	p2p_identifier();
+	if (has_lasting_token)
+	{
+		memcpy(p2p.token, lasting_token, sizeof(p2p.token));
+		has_lasting_token = 0;
+	}
+	else
+	{
+		posix_random_bytes(p2p.token, sizeof(p2p.token));
+		if (config_boolean("network.lasting_invite"))
+		{
+			unsigned char kept[P2P_SEED_SIZE + P2P_TOKEN_SIZE];
+			char path[1024];
+
+			memcpy(kept, seed, P2P_SEED_SIZE);
+			memcpy(kept + P2P_SEED_SIZE, p2p.token, P2P_TOKEN_SIZE);
+			snprintf(path, sizeof(path), "%s/" LASTING_INVITE_FILE, platform_save_root());
+			if (!posix_secret_file(path, kept, (int)sizeof(kept), 1))
+				platform_log("Internet play: %s could not be written: the next run's invite is another", path);
+		}
+	}
 	p2p.has_token = 1;
 	p2p.token_listed = 0;
 	p2p_key_hash(p2p_public_key(), bytes);

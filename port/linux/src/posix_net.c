@@ -869,6 +869,53 @@ posix_ulong posix_process_id(void)
 	return (posix_ulong)getpid();
 }
 
+int posix_secret_file(const char *path, unsigned char *secret, int size, int write_it)
+{
+#if defined(HALO_BROWSER)
+	(void)path;
+	(void)secret;
+	(void)size;
+	(void)write_it;
+	return 0;
+#else
+	char temporary[1100];
+	int descriptor;
+	int ok;
+
+	if (!write_it)
+	{
+		struct stat status;
+
+		descriptor = open(path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
+		if (descriptor >= 0)
+		{
+			/* (one of this user's that no one else can read, whole) */
+			ok = fstat(descriptor, &status) == 0 && S_ISREG(status.st_mode) && status.st_uid == getuid() &&
+				!(status.st_mode & 077) && read(descriptor, secret, (size_t)size) == size;
+			close(descriptor);
+			return ok;
+		}
+		if (errno != ENOENT)
+			return 0;
+		posix_random_bytes(secret, (posix_ulong)size);
+	}
+	/* (written beside it, then put in its place: never half a file) */
+	snprintf(temporary, sizeof(temporary), "%s.new", path);
+	unlink(temporary);
+	descriptor = open(temporary, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
+	if (descriptor < 0)
+		return 0;
+	ok = write(descriptor, secret, (size_t)size) == size;
+	close(descriptor);
+	if (!ok || rename(temporary, path) != 0)
+	{
+		unlink(temporary);
+		return 0;
+	}
+	return 1;
+#endif
+}
+
 int posix_user_secret(unsigned char *secret, int size)
 {
 #if defined(__ANDROID__) || defined(HALO_BROWSER)
