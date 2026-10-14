@@ -46,6 +46,7 @@ def generated(fault=None, faulty_function=None):
     checks_header = read("port/linux/game/ce_map_checks.h")
     config = enum_with(checks_header, "CE_IMAGE_TAG_CACHE_BASE") + "\n"
     config += structure(checks_header, "ce_tag_instance") + "\n"
+    config += structure(checks_header, "ce_image") + "\n"
     config += enum_with(source, "PLACEMENT_SCALE_X_OFFSET") + "\n"
     config += enum_with(source, "_ce_behaviour_gearbox_meters") + "\n"
     config += re.search(r"^#define BEHAVIOUR_FLAG\(.*$", source, re.M).group(0) + "\n"
@@ -57,6 +58,11 @@ def generated(fault=None, faulty_function=None):
     assert globals_, "ce_hud.c's globals not found"
     config += globals_.group(0) + "\n"
     text = "boolean ce_hud_bitmap_is_meter(void const *bitmap);\n"
+    # (ChupathingyCE's Xbox button icons for HUD messages, which ce_hud_tags_loaded adds first, read from
+    # ui.map: none here, as these maps' HUD scale is what is tested)
+    text += "static long ce_hud_button_icon_group_count;\n"
+    text += ("static void ce_hud_button_icons(byte *hud, struct ce_image const *image)\n"
+             "{\n\t(void)hud;\n\t(void)image;\n}\n")
     for name in FUNCTIONS:
         code = function(read("port/linux/game/ce_map_checks.c") if name == "ce_range_within" else source, name)
         if fault and name == faulty_function:

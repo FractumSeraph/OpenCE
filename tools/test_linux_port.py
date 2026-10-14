@@ -423,7 +423,11 @@ def test_config_has_each_section_once(tmp_path):
     root = Path(__file__).resolve().parent.parent
     stubs = tmp_path / "stubs"
     (stubs / "SDL3").mkdir(parents=True)
-    (stubs / "SDL3" / "SDL.h").write_text("")
+    # (the few of SDL's functions the settings use)
+    (stubs / "SDL3" / "SDL.h").write_text(
+        "#include <stddef.h>\n#include <strings.h>\n"
+        "static inline int SDL_strcasecmp(const char *a, const char *b) { return strcasecmp(a, b); }\n"
+        "static inline int SDL_strncasecmp(const char *a, const char *b, size_t n) { return strncasecmp(a, b, n); }\n")
     (stubs / "platform.h").write_text("void platform_log(const char *format, ...);\n")
     # (beside the stubs, which it then includes instead of the platform layer's)
     for name in ("port_config.c", "port_config.h"):
