@@ -844,6 +844,9 @@ boolean network_game_client_dont_use_directly_in_use = FALSE;
 network family): the joined game's advertisement's flags, whose
 DELTA_ADVERTISED_FLAG says its host speaks it (0 for the host's own game) */
 static byte network_game_client_joined_flags;
+/* (and its host's identifier, as the native builds keep it:
+network_game_client_joined_host_identifier) */
+static byte network_game_client_joined_host[6];
 static void network_game_client_delta_frame(struct network_game_client *client);
 void web_delta_peer_stop(void);
 #endif
