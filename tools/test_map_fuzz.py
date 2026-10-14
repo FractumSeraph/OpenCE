@@ -74,6 +74,9 @@ CUSTOM_EDITION = [
     "port/linux/game/ce_functions.c",
     "source/bitmaps/bitmaps.c",
     "source/rasterizer/rasterizer_geometry.c",
+    # (the port's zlib: ce_hud.c inflates the Xbox ui.map with it)
+    *(f"port/third_party/zlib/{name}" for name in ("adler32.c", "crc32.c", "inffast.c", "inflate.c", "inftrees.c",
+                                                   "zutil.c")),
 ]
 TARGETS = {
     "xbox": ("MAP_FUZZ_XBOX", VALIDATOR),
@@ -161,17 +164,36 @@ def xbox_map(name=b"fuzz"):
     return bytes(data)
 
 
+# the globals' blocks the checks require an element of (ce_map_checks.c,
+# ce_globals_check): their offsets in the globals and their elements' sizes
+CE_GLOBALS_BLOCKS = ((0x104, 0x10), (0x110, 0x80), (0x134, 0x1AC), (0x140, 0x130), (0x170, 0xF4), (0x17C, 0xC0))
+
+
 def ce_map(name=b"fuzz"):
     """a Custom Edition map of a scenario and one empty structure BSP, its
-    scripts' syntax an empty data array"""
+    scripts' syntax an empty data array, and its globals (globals\\globals),
+    each block of them the checks require one zeroed element"""
     base = TAG_CACHE["ce"]
     tags = bytearray(0x28)
     instances = len(tags)
-    tags += bytes(0x40)
+    tags += bytes(0x60)
     names = len(tags)
     tags += name + b"\0"
     bsp_name = len(tags)
-    tags += b"fuzz_bsp\0" + bytes((-(len(tags) + 9)) % 4)
+    tags += b"fuzz_bsp\0"
+    globals_name = len(tags)
+    tags += b"globals\\globals\0"
+    tags += bytes((-len(tags)) % 4)
+    globals_root = len(tags)
+    tags += bytes(0x1AC)
+    for offset, size in CE_GLOBALS_BLOCKS:
+        element = len(tags)
+        struct.pack_into("<iII", tags, globals_root + offset, 1, base + element, 0)
+        tags += bytes(size)
+        if offset == 0x110:
+            # (the player control's look function, of one real)
+            struct.pack_into("<iII", tags, element + 0x74, 1, base + len(tags), 0)
+            tags += bytes(4)
     scenario = len(tags)
     tags += bytes(0x5B0)
     bsps = len(tags)
@@ -187,11 +209,13 @@ def ce_map(name=b"fuzz"):
     model_offset = bsp_offset + len(bsp)
     # the tag header: instances, the scenario, checksum, count, model parts,
     # model data offset, model parts, vertex data size, model data size
-    struct.pack_into("<IIIIIIIII4s", tags, 0, base + instances, 0xE1740000, 0, 2, 0, model_offset, 0, 0, 0, b"sgat")
+    struct.pack_into("<IIIIIIIII4s", tags, 0, base + instances, 0xE1740000, 0, 3, 0, model_offset, 0, 0, 0, b"sgat")
     struct.pack_into("<4s4s4sIIIII", tags, instances, b"rncs", b"\xff\xff\xff\xff", b"\xff\xff\xff\xff", 0xE1740000,
                      base + names, base + scenario, 0, 0)
     struct.pack_into("<4s4s4sIIIII", tags, instances + 0x20, b"psbs", b"\xff\xff\xff\xff", b"\xff\xff\xff\xff",
                      0xE1750001, base + bsp_name, 0, 0, 0)
+    struct.pack_into("<4s4s4sIIIII", tags, instances + 0x40, b"gtam", b"\xff\xff\xff\xff", b"\xff\xff\xff\xff",
+                     0xE1760002, base + globals_name, base + globals_root, 0, 0)
     # the scenario's scripts' syntax (a data array of no nodes of 0x14
     # bytes) and its structure BSP
     struct.pack_into("<iIII", tags, scenario + 0x474, 0x38, 0, 0, base + syntax)

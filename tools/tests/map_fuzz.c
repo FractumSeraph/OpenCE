@@ -169,6 +169,7 @@ boolean ce_models_tags_loaded(void *tag_instances, long tag_count, byte const *m
 void ce_functions_tags_loaded(void *tag_instances, long tag_count);
 void ce_shaders_tags_loaded(void *tag_instances, long tag_count);
 void ce_hud_tags_loaded(void *tag_instances, long tag_count);
+void ce_resources_tag_names_copy(void *tag_instances, long tag_count);
 void ce_bsp_loaded(void *structure);
 void ce_repairs_bsp_loaded(void *structure);
 void ce_bsp_unloaded(void);
@@ -444,6 +445,17 @@ boolean cache_file_tags_are_ce(void)
 HANDLE cache_files_ce_map_file(void)
 {
 	return &fuzz_map_file;
+}
+
+/* (cache_files.c's: whether the map's tags are a Custom Edition map's,
+which tag_groups.h's block reads go by, set with fuzz_tags_are_ce) */
+boolean cache_file_is_ce;
+
+/* (the maps' folder, where ce_hud.c looks for the Xbox ui.map for its
+controller buttons: none here) */
+char const *cache_files_map_directory(void)
+{
+	return "";
 }
 
 boolean map_family_resource(char const *name, char *path, long size)
@@ -873,6 +885,7 @@ static void fuzz_ce_load(unsigned char const *data, struct map_header const *hea
 	memcpy(&model_data_size, tag_cache + 0x20, 4);
 	instances = xbox_pointer(tag_instances);
 	fuzz_tags_are_ce = TRUE;
+	cache_file_is_ce = TRUE;
 
 	scenario = xbox_pointer(instances[scenario_tag_index & 0xFFFF].base_address);
 	memcpy(&bsp_count, scenario + SCENARIO_BSPS_OFFSET, 4);
@@ -897,6 +910,9 @@ static void fuzz_ce_load(unsigned char const *data, struct map_header const *hea
 		system_free(model_data);
 	}
 	ce_hud_tags_loaded(instances, (long)tag_count);
+	/* (and last, the tags' names copied out of the tags, as cache_files.c
+	does) */
+	ce_resources_tag_names_copy(instances, (long)tag_count);
 
 	/* each BSP, read where it loads (checked: ce_bsps_check) */
 	for (bsp_index = 0; bsp_index < bsp_count; bsp_index++)
@@ -926,11 +942,13 @@ static void fuzz_ce(unsigned char const *data, size_t size)
 	fuzz_map_file.data = data;
 	fuzz_map_file.size = (unsigned long)size;
 	fuzz_tags_are_ce = FALSE;
+	cache_file_is_ce = FALSE;
 	ce_map_cache_version = header->version;
 	if (setjmp(fuzz_exit))
 	{
 		fuzz_exit_armed = FALSE;
 		fuzz_tags_are_ce = FALSE;
+		cache_file_is_ce = FALSE;
 		ce_resources_tags_unloaded();
 		ce_models_tags_unloaded();
 		ce_hud_tags_unloaded();
@@ -941,6 +959,7 @@ static void fuzz_ce(unsigned char const *data, size_t size)
 		fuzz_ce_load(data, header);
 	fuzz_exit_armed = FALSE;
 	fuzz_tags_are_ce = FALSE;
+	cache_file_is_ce = FALSE;
 	ce_resources_tags_unloaded();
 	ce_models_tags_unloaded();
 	ce_hud_tags_unloaded();

@@ -1548,6 +1548,13 @@ long scenario_tags_load(
 
 				loose_sounds_tags_loaded();
 			}
+			/* (and last, its tags' names copied out of its tags, where what is
+			written could take away their ends: port/linux/game/ce_resources.c) */
+			{
+				extern void ce_resources_tag_names_copy(void *tag_instances, long tag_count);
+
+				ce_resources_tag_names_copy(global_tag_instances, ce_header->tag_count);
+			}
 			return ce_header->scenario_tag_index;
 		}
 #endif

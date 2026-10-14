@@ -102,8 +102,14 @@ if not */
 boolean ce_image_data(struct ce_image const *image, void const *field, char const *what, unsigned long *size,
 	byte **data);
 
-/* a tag instance's name, for messages */
+/* a tag instance's name, for messages (in the image, or once the map is
+loaded its copy: ce_resources_tag_name) */
 char const *ce_image_tag_name(struct ce_image const *image, void const *instance);
+
+/* a loaded map's tag name, copied out of its tag cache
+(ce_resources_tag_names_copy, ce_resources.c), at its Xbox address; else
+NULL */
+char const *ce_resources_tag_name(unsigned long address);
 
 /* the map being checked refused: the first reason given is kept (and
 logged by ce_map_check); returns FALSE */

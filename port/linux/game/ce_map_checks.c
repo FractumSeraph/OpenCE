@@ -32,7 +32,16 @@ what it points into, with arithmetic that cannot overflow:
   - every animation graph's nodes and animations against the arrays the game
     poses them in, and each object's graph against its model (ce_models.c);
   - the scenario's scripts' syntax, which the game indexes where it is;
-  - the HUD interfaces' blocks the port rescales (ce_hud.c).
+  - the HUD interfaces' blocks the port rescales (ce_hud.c);
+  - the globals (globals\globals) there, with the blocks the game reads the
+    first element of unchecked (its camera, player control and look
+    function, rasterizer data, interface tags, player information and first
+    person interface).
+
+Once a map is loaded, its tags' names are copies of their own, outside the
+tag cache (ce_resources.c, ce_resources_tag_names_copy): a name that lies
+in a tag's data (checked here only to be terminated) could otherwise lose
+its end to what the game writes there.
 
 What Halo PC's engine read without checking and this one would not (bad
 predicted resources, an object typed as another group's, a model shader that
@@ -98,6 +107,29 @@ enum
 	CE_MAXIMUM_WEAPON_MAGAZINES = 2,
 	CE_MAXIMUM_WEAPON_TRIGGERS = 2,
 	CE_BSP_HEADER_SIZE = 0x18,
+	/* the globals (game_globals.h), the tag the game loads by its name
+	(scenario.c), and the blocks of it whose first element the game reads
+	unchecked, each of its elements' size: the camera (a tag reference),
+	the player control and its look function (a real each), the rasterizer
+	data, the interface tags, the player information and the first person
+	interface */
+	CE_GLOBALS_GROUP = 'matg',
+	CE_GLOBALS_SIZE = 0x1ac,
+	CE_GLOBALS_CAMERA_OFFSET = 0x104,
+	CE_GLOBALS_CAMERA_SIZE = 0x10,
+	CE_GLOBALS_PLAYER_CONTROL_OFFSET = 0x110,
+	CE_GLOBALS_PLAYER_CONTROL_SIZE = 0x80,
+	CE_GLOBALS_LOOK_FUNCTION_OFFSET = 0x74,
+	CE_GLOBALS_LOOK_FUNCTION_SIZE = 4,
+	CE_GLOBALS_RASTERIZER_DATA_OFFSET = 0x134,
+	CE_GLOBALS_RASTERIZER_DATA_SIZE = 0x1ac,
+	CE_GLOBALS_INTERFACE_TAGS_OFFSET = 0x140,
+	CE_GLOBALS_INTERFACE_TAGS_SIZE = 0x130,
+	CE_GLOBALS_PLAYER_INFORMATION_OFFSET = 0x170,
+	CE_GLOBALS_PLAYER_INFORMATION_SIZE = 0xf4,
+	CE_GLOBALS_FIRST_PERSON_INTERFACE_OFFSET = 0x17c,
+	CE_GLOBALS_FIRST_PERSON_INTERFACE_SIZE = 0xc0,
+	CE_MAXIMUM_GLOBALS_ELEMENTS = 0x10000,
 
 	/* the scenario's scripts (scenario_definitions.h): their syntax, a data
 	array (data.h) the game uses in place, and their strings */
@@ -348,6 +380,69 @@ static boolean ce_weapons_check(
 	return TRUE;
 }
 
+/* a block of the globals that the game reads the first element of
+unchecked (an empty one reads as zeroes, its tag references naming tag 0:
+asserts, or a crash), and so must have one, all its elements in the tags */
+static boolean ce_globals_block_check(
+	struct ce_image const *image,
+	byte const *field,
+	unsigned long element_size,
+	char const *what,
+	byte **elements)
+{
+	long count;
+
+	if (!ce_image_block(image, field, element_size, CE_MAXIMUM_GLOBALS_ELEMENTS, what, &count, elements))
+		return FALSE;
+	if (!count)
+		return ce_refuse("its globals have no %s", what);
+	return TRUE;
+}
+
+/* the globals the game loads (scenario.c, by the name globals\globals, as
+tag_loaded finds it): there, and with the camera, player control (and its
+look function), rasterizer data, interface tags, player information and
+first person interface the game reads unchecked (OpenCE's
+tag_schema_effects.c, game_globals_check, the same for Xbox maps). Every
+stock and known custom map has each */
+static boolean ce_globals_check(
+	struct ce_image const *image,
+	struct ce_tag_instance const *instances,
+	long tag_count)
+{
+	struct ce_tag_instance const *instance = NULL;
+	byte *globals, *player_control, *elements;
+	long index;
+
+	for (index = 0; index < tag_count && !instance; index++)
+	{
+		if (instances[index].group_tag == CE_GLOBALS_GROUP &&
+			!_stricmp(ce_image_tag_name(image, &instances[index]), "globals\\globals"))
+		{
+			instance = &instances[index];
+		}
+	}
+	if (!instance)
+		return ce_refuse("it has no globals (globals\\globals)");
+	globals = ce_image_pointer(image, instance->base_address, CE_GLOBALS_SIZE);
+	if (!globals)
+		return ce_refuse("its globals are not in the tags");
+	return ce_globals_block_check(image, globals + CE_GLOBALS_CAMERA_OFFSET, CE_GLOBALS_CAMERA_SIZE, "camera",
+			&elements) &&
+		ce_globals_block_check(image, globals + CE_GLOBALS_PLAYER_CONTROL_OFFSET, CE_GLOBALS_PLAYER_CONTROL_SIZE,
+			"player control", &player_control) &&
+		ce_globals_block_check(image, player_control + CE_GLOBALS_LOOK_FUNCTION_OFFSET,
+			CE_GLOBALS_LOOK_FUNCTION_SIZE, "look function", &elements) &&
+		ce_globals_block_check(image, globals + CE_GLOBALS_RASTERIZER_DATA_OFFSET, CE_GLOBALS_RASTERIZER_DATA_SIZE,
+			"rasterizer data", &elements) &&
+		ce_globals_block_check(image, globals + CE_GLOBALS_INTERFACE_TAGS_OFFSET, CE_GLOBALS_INTERFACE_TAGS_SIZE,
+			"interface tags", &elements) &&
+		ce_globals_block_check(image, globals + CE_GLOBALS_PLAYER_INFORMATION_OFFSET,
+			CE_GLOBALS_PLAYER_INFORMATION_SIZE, "player information", &elements) &&
+		ce_globals_block_check(image, globals + CE_GLOBALS_FIRST_PERSON_INTERFACE_OFFSET,
+			CE_GLOBALS_FIRST_PERSON_INTERFACE_SIZE, "first person interface", &elements);
+}
+
 /* the scenario's structure BSPs: each one read and checked (ce_bsp.c); the
 lowest's address (the tag cache's room ends there) and the room the most
 needy's conversion takes */
@@ -532,7 +627,8 @@ static boolean ce_map_check_tags(
 		goto done;
 	}
 	valid = ce_shaders_check(&tags, instances, tag_count) && ce_hud_check(&tags, instances, tag_count) &&
-		ce_animations_check(&tags, instances, tag_count) && ce_weapons_check(&tags, instances, tag_count);
+		ce_animations_check(&tags, instances, tag_count) && ce_weapons_check(&tags, instances, tag_count) &&
+		ce_globals_check(&tags, instances, tag_count);
 
 done:
 	if (model_data)
@@ -622,7 +718,10 @@ char const *ce_image_tag_name(
 	struct ce_tag_instance const *tag = instance;
 	char const *name = ce_image_pointer(image, tag->name, 1);
 
-	/* (checked to be terminated: ce_tag_index_check) */
+	/* (checked to be terminated: ce_tag_index_check; once the map is
+	loaded, copied out of the tags, terminated: ce_resources.c) */
+	if (!name && !ce_checking)
+		name = ce_resources_tag_name(tag->name);
 	return name ? name : "<unnamed>";
 }
 

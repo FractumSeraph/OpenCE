@@ -41,6 +41,7 @@ by their tags' paths (below).
 #include "ce_map_checks.h"
 #include "halo_map_families.h"
 
+#include <xtl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -157,6 +158,10 @@ static HANDLE ce_decoded_sounds_file;
 static char ce_decoded_sounds_path[256];
 /* the space left in the map's tag cache (ce_resources_allocate) */
 static unsigned long ce_free_next, ce_free_end;
+/* the map's tags' names, copied out of the tag cache
+(ce_resources_tag_names_copy), and their size */
+static char *ce_tag_names;
+static unsigned long ce_tag_names_size;
 
 /* ---------- private code */
 
@@ -1505,12 +1510,99 @@ void ce_resources_free_to(
 		ce_free_next = mark;
 }
 
+/* a Custom Edition map's tags loaded (cache_files.c), last of all: each
+tag's name (in its tag data, terminated within 256 bytes: ce_map_checks.c)
+copied, no more than 255 characters of it, into memory of its own, and its
+instance pointed at the copy. A map's tools may put a name where a tag's
+data is, and what is written there (the port's repairs, the game's runtime
+values) could take away its end; nothing a map's data says writes to the
+copies. (Done after everything that finds a tag's name in the tag cache's
+image, ce_resources_place's ce_image_tag_name: ce_image_tag_name finds the
+copies after it) */
+void ce_resources_tag_names_copy(
+	void *tag_instances,
+	long tag_count)
+{
+	unsigned long size = 0, next = 0;
+	long index;
+	int pass;
+
+	if (ce_tag_names)
+		XPhysicalFree(ce_tag_names);
+	ce_tag_names = NULL;
+	ce_tag_names_size = 0;
+	/* (the size of them all, then the copies) */
+	for (pass = 0; pass < 2; pass++)
+	{
+		for (index = 0; index < tag_count; index++)
+		{
+			struct ce_tag_instance *instance = (struct ce_tag_instance *)((byte *)tag_instances +
+				index * CE_TAG_INSTANCE_SIZE);
+			unsigned long address = instance->name;
+			char const *name = "";
+			char const *end;
+			unsigned long length;
+
+			if (address >= CE_IMAGE_TAG_CACHE_BASE && address - CE_IMAGE_TAG_CACHE_BASE < CE_IMAGE_TAG_CACHE_SIZE)
+			{
+				name = xbox_pointer(address);
+				end = memchr(name, 0, MIN(CE_IMAGE_TAG_CACHE_SIZE - (address - CE_IMAGE_TAG_CACHE_BASE), 255UL));
+				length = end ? (unsigned long)(end - name) : MIN(CE_IMAGE_TAG_CACHE_SIZE -
+					(address - CE_IMAGE_TAG_CACHE_BASE), 255UL);
+			}
+			else
+			{
+				length = 0;
+			}
+			if (!pass)
+			{
+				size += length + 1;
+				continue;
+			}
+			memcpy(ce_tag_names + next, name, length);
+			ce_tag_names[next + length] = 0;
+			instance->name = (unsigned long)xbox_address(ce_tag_names + next);
+			next += length + 1;
+		}
+		if (!pass)
+		{
+			ce_tag_names = size ? XPhysicalAlloc(size, -1, 0, PAGE_READWRITE) : NULL;
+			if (!ce_tag_names)
+			{
+				error(_error_silent, "%s map: no memory for its tags' names (%lu bytes): they are left in its "
+					"tags", ce_map_family_name(), size);
+				return;
+			}
+			ce_tag_names_size = size;
+		}
+	}
+}
+
+/* a name copied so (ce_resources_tag_names_copy), at its Xbox address; else
+NULL */
+char const *ce_resources_tag_name(
+	unsigned long address)
+{
+	unsigned long first;
+
+	if (!ce_tag_names)
+		return NULL;
+	first = (unsigned long)xbox_address(ce_tag_names);
+	if (address < first || address - first >= ce_tag_names_size)
+		return NULL;
+	return xbox_pointer(address);
+}
+
 /* the map unloaded (cache_files.c) */
 void ce_resources_tags_unloaded(
 	void)
 {
 	ce_indexed_tag_count = 0;
 	ce_free_next = ce_free_end = 0;
+	if (ce_tag_names)
+		XPhysicalFree(ce_tag_names);
+	ce_tag_names = NULL;
+	ce_tag_names_size = 0;
 }
 
 #endif
