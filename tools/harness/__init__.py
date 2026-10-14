@@ -114,7 +114,11 @@ def build(test, generated):
     for name, text in generated:
         (work / name).write_text(text)
     executable = work / test
-    command = [os.environ.get("CC", "clang"), "-m32", "-std=gnu99", "-O2", "-Wall", "-Werror", "-Wno-unused-function",
+    # (SSE2 floating point, as the Windows build's: x87's wider registers can
+    # keep one of two equal computations at more precision than the other,
+    # which an exact comparison sees, as clang 22 on Ubuntu did in
+    # test_elevator_prediction)
+    command = [os.environ.get("CC", "clang"), "-m32", "-msse2", "-mfpmath=sse", "-std=gnu99", "-O2", "-Wall", "-Werror", "-Wno-unused-function",
                "-Wno-unused-variable", "-I", str(HARNESS / "include"), "-I", str(ROOT / "source" / "cseries"),
                "-I", str(work), str(HARNESS / "tests" / f"{test}.c"), "-o", str(executable), "-lm"]
     result = subprocess.run(command, capture_output=True, text=True)
