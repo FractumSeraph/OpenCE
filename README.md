@@ -437,11 +437,14 @@ port adds is in one file, `config.toml`. The game writes it the first time it
 starts, with every setting listed, commented out at its default, and a line
 or two saying what each one does. To change one, remove the `#` in front of it
 and edit the value; the game reads the file when it starts, so restart it
-after a change. If a change seems to do nothing, look in `debug.txt` for lines
-starting `config.toml` or `settings:`: they name a misspelled setting, one in
-the wrong `[section]`, a value missing its quotes (`menus = "pc"`, not
-`menus = pc`, which leaves every setting at its default), or, on a Mac, a
-`config.toml` that is not the one the game reads.
+after a change. A line that starts with `#` does nothing. If a change seems
+to do nothing, look in `debug.txt` for lines starting `config.toml` or
+`settings:`: they name a misspelled setting, one in the wrong `[section]`, a
+line still commented out, a line the game skipped because of a mistake (a
+value missing its quotes, `menus = pc` for `menus = "pc"`, or `False` for
+`false`; the other lines still count), a word a setting does not know, or a
+`config.toml` that is not the one the game reads (such as `config.toml.txt`
+on Windows).
 
 | Platform | config.toml is |
 | --- | --- |
@@ -454,10 +457,11 @@ A few people look for most:
 
 | Setting | What it does |
 | --- | --- |
-| `display.mode` | `"fullscreen"`, `"borderless"` or `"windowed"`. F11 switches between a window and the whole screen. |
+| `display.mode` | `"fullscreen"`, `"borderless"` or `"windowed"`. F11 switches between a window and the whole screen. When it is set, `display.fullscreen` is ignored; when it is empty, `display.fullscreen = true` is borderless and `false` a window. |
 | `display.window_scale` | The window's size, as a multiple of 640x480. |
 | `display.vsync`, `display.max_fps` | Vertical sync, and a frame rate cap (0 for none). |
 | `display.menus` | `"xbox"` (the default; `"pc"` in the browser) or `"pc"`, the Halo PC style menus with their Server Browser. |
+| `display.high_res_text` | `true` draws the game's text (menus and HUD) with sharp fonts at your resolution; `false` uses the maps' original bitmap fonts. The Server Browser and the moderation overlays use the system's fonts either way. For a blocky look overall, also set `display.resolution_scaling = "original"`. |
 | `display.player_names` | Names over players' heads: `"all"`, `"allies"`, `"enemies"` or `"none"`. |
 | `audio.volume`, `audio.music_volume`, `audio.effects_volume` | Volumes, from 0.0 to 1.0. |
 | `input.mouse_sensitivity`, `input.invert_mouse` | Mouse aim. |

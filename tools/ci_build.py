@@ -309,7 +309,7 @@ WINDOWS_SERVERS = {"server-windows": "x86", "server-windows64": "x64"}
 
 def server_dist(platform: str, config: str, outputs: list) -> int:
     """dist/chupathingyce-server-linux-<arch>[-debug] (or -windows-<arch>):
-    the server, its README, its playlists and the notices its parts'
+    the server, its README, its playlists, its blocked names list and the notices its parts'
     licenses ask for; on Windows SDL3.dll beside it, the brokers' list, the
     guide (server/docs/windows.md) and a script that starts it"""
     windows = platform in WINDOWS_SERVERS
@@ -336,6 +336,8 @@ def server_dist(platform: str, config: str, outputs: list) -> int:
     shutil.copy2(ROOT / "server/README.md", dist / "README.md")
     for playlist in sorted((ROOT / "server/playlists").glob("*.txt")):
         shutil.copy2(playlist, dist / "playlists")
+    # (sv_name_filter's list, read from the data folder)
+    shutil.copy2(ROOT / "server/blocked_names.txt", dist / "blocked_names.txt")
     for source, name in (("port/third_party/mbedtls/LICENSE", "mbedtls-LICENSE.txt"),
                          ("port/third_party/miniupnpc/LICENSE", "miniupnpc-LICENSE.txt"),
                          ("port/third_party/expat/COPYING", "expat-COPYING.txt"),

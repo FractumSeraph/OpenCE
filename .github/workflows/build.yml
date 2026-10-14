@@ -21,17 +21,33 @@ name: Build
 # - compiles go through ccache, whose cache carries over from run to run, so
 #   a commit only recompiles what it changed; downloads (SDL, musl, Gradle,
 #   the Linux builds' system roots) are cached too;
-# - a newer push to the same branch cancels a run still going;
-# - pushes that only change documentation do not build;
+# - pushes build only main, release branches and tags; every other branch
+#   builds through its pull request, so a commit is not built twice;
+# - a newer commit to a pull request or a release branch cancels its run
+#   still going; main's runs are never canceled, so every commit of main
+#   has its Build (ChupathingyCE/command's nightly takes main's newest);
+# - changes that only touch documentation do not build (no check is
+#   required to merge, so a pull request without a Build is not blocked);
+# - the compile caches are saved only on main (each run restores main's
+#   newest), so branches and pull requests do not crowd main's out of the
+#   repository's 10 GB of caches;
 # - Windows, whose minutes cost twice Linux's, builds only Windows;
 # - artifacts are kept for three days.
 on:
   push:
+    branches:
+      - main
+      - "release-*"
+      - "release/**"
+    tags:
+      - "**"
     paths-ignore:
       - "**.md"
+      - "docs/**"
   pull_request:
     paths-ignore:
       - "**.md"
+      - "docs/**"
   workflow_dispatch:
     inputs:
       commit:
@@ -59,10 +75,12 @@ on:
 # workflows find their run; the others keep GitHub's name)
 run-name: ${{ inputs.version && format('Build {0} at {1} {2}', inputs.version, inputs.commit, inputs.request) || '' }}
 
-# (a run started by hand is never canceled by a push, and cancels none)
+# (a run started by hand is never canceled by a push, and cancels none; a
+# push to main or a tag has a group of its own, so none is canceled or left
+# waiting; a pull request's or a release branch's newer run cancels the last)
 concurrency:
-  group: ${{ github.event_name == 'workflow_dispatch' && format('build-dispatch-{0}', github.run_id) || format('build-{0}', github.ref) }}
-  cancel-in-progress: true
+  group: ${{ github.event_name == 'workflow_dispatch' && format('build-dispatch-{0}', github.run_id) || ((github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) && format('build-{0}-{1}', github.ref, github.sha) || format('build-{0}', github.ref)) }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' && github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/') }}
 
 permissions:
   contents: read
@@ -157,7 +175,9 @@ jobs:
         with:
           ref: ${{ inputs.commit }}
 
-      - uses: actions/cache@v4
+      # (restored on every run, saved only on main: other branches' and pull
+      # requests' runs start from main's and keep nothing of their own)
+      - uses: actions/cache/restore@v4
         with:
           path: .ccache
           key: ccache-linux-ubuntu-clang22-${{ github.sha }}
@@ -221,6 +241,12 @@ jobs:
           path: dist/chupathingyce-linux-profile
           retention-days: 3
 
+      - uses: actions/cache/save@v4
+        if: ${{ success() && github.ref == 'refs/heads/main' }}
+        with:
+          path: .ccache
+          key: ccache-linux-ubuntu-clang22-${{ github.sha }}
+
   linux64:
     # The native 64-bit Linux build (ninja linux64), on Ubuntu with clang 22
     # as the 32-bit one, and portable as it is: against Debian 11's amd64
@@ -254,7 +280,9 @@ jobs:
         with:
           ref: ${{ inputs.commit }}
 
-      - uses: actions/cache@v4
+      # (restored on every run, saved only on main: other branches' and pull
+      # requests' runs start from main's and keep nothing of their own)
+      - uses: actions/cache/restore@v4
         with:
           path: .ccache
           key: ccache-linux64-ubuntu-clang22-${{ github.sha }}
@@ -290,6 +318,12 @@ jobs:
           path: dist/chupathingyce-linux64-release
           retention-days: 3
 
+      - uses: actions/cache/save@v4
+        if: ${{ success() && github.ref == 'refs/heads/main' }}
+        with:
+          path: .ccache
+          key: ccache-linux64-ubuntu-clang22-${{ github.sha }}
+
   server:
     # The dedicated server (tools/server_build.py): one static program for
     # each architecture, built against musl in Alpine Linux's container of
@@ -314,7 +348,9 @@ jobs:
         with:
           ref: ${{ inputs.commit }}
 
-      - uses: actions/cache@v4
+      # (restored on every run, saved only on main: other branches' and pull
+      # requests' runs start from main's and keep nothing of their own)
+      - uses: actions/cache/restore@v4
         with:
           path: .ccache
           key: ccache-server-${{ matrix.arch }}-${{ github.sha }}
@@ -361,6 +397,12 @@ jobs:
           name: chupathingyce-server-linux-${{ matrix.arch }}
           path: dist/chupathingyce-server-linux-${{ matrix.arch }}
           retention-days: 3
+
+      - uses: actions/cache/save@v4
+        if: ${{ success() && github.ref == 'refs/heads/main' }}
+        with:
+          path: .ccache
+          key: ccache-server-${{ matrix.arch }}-${{ github.sha }}
 
   server-container:
     # The server's container (server/deploy/Dockerfile) for the three
@@ -435,7 +477,9 @@ jobs:
         with:
           ref: ${{ inputs.commit }}
 
-      - uses: actions/cache@v4
+      # (restored on every run, saved only on main: other branches' and pull
+      # requests' runs start from main's and keep nothing of their own)
+      - uses: actions/cache/restore@v4
         with:
           path: .ccache
           key: ccache-android-${{ github.sha }}
@@ -487,6 +531,12 @@ jobs:
           path: dist/chupathingyce-android-release
           retention-days: 3
 
+      - uses: actions/cache/save@v4
+        if: ${{ success() && github.ref == 'refs/heads/main' }}
+        with:
+          path: .ccache
+          key: ccache-android-${{ github.sha }}
+
   windows:
     # The runner image has LLVM, Python and Visual Studio's x86 libraries and
     # Windows SDK.
@@ -514,7 +564,9 @@ jobs:
         with:
           ref: ${{ inputs.commit }}
 
-      - uses: actions/cache@v4
+      # (restored on every run, saved only on main: other branches' and pull
+      # requests' runs start from main's and keep nothing of their own)
+      - uses: actions/cache/restore@v4
         with:
           path: .ccache
           key: ccache-windows-${{ github.sha }}
@@ -580,6 +632,12 @@ jobs:
           path: dist/chupathingyce-windows-release-symbols
           retention-days: 3
 
+      - uses: actions/cache/save@v4
+        if: ${{ success() && github.ref == 'refs/heads/main' }}
+        with:
+          path: .ccache
+          key: ccache-windows-${{ github.sha }}
+
   windows64:
     # The native 64-bit Windows build (ninja windows64), on the same runner
     # image as the 32-bit one, with Visual Studio's x64 libraries.
@@ -607,7 +665,9 @@ jobs:
         with:
           ref: ${{ inputs.commit }}
 
-      - uses: actions/cache@v4
+      # (restored on every run, saved only on main: other branches' and pull
+      # requests' runs start from main's and keep nothing of their own)
+      - uses: actions/cache/restore@v4
         with:
           path: .ccache
           key: ccache-windows64-${{ github.sha }}
@@ -673,6 +733,12 @@ jobs:
           path: dist/chupathingyce-windows64-release-symbols
           retention-days: 3
 
+      - uses: actions/cache/save@v4
+        if: ${{ success() && github.ref == 'refs/heads/main' }}
+        with:
+          path: .ccache
+          key: ccache-windows64-${{ github.sha }}
+
   macos:
     # Apple silicon, with Xcode's clang: the universal application (Apple
     # silicon and Intel, self-contained: tools/macos_build.py, --portable),
@@ -689,7 +755,9 @@ jobs:
         with:
           ref: ${{ inputs.commit }}
 
-      - uses: actions/cache@v4
+      # (restored on every run, saved only on main: other branches' and pull
+      # requests' runs start from main's and keep nothing of their own)
+      - uses: actions/cache/restore@v4
         with:
           path: .ccache
           key: ccache-macos-${{ github.sha }}
@@ -722,6 +790,12 @@ jobs:
           name: chupathingyce-macos-release
           path: chupathingyce-macos-release.tar
           retention-days: 3
+
+      - uses: actions/cache/save@v4
+        if: ${{ success() && github.ref == 'refs/heads/main' }}
+        with:
+          path: .ccache
+          key: ccache-macos-${{ github.sha }}
 
   web:
     # OpenCE's web build (ninja web, port/web/README.md), as OpenCE builds and
