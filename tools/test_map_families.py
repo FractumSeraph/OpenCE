@@ -70,12 +70,13 @@ def families(tmp_path_factory):
     work = tmp_path_factory.mktemp("families")
     (work / "cseries").mkdir()
     (work / "cseries.h").write_text(STUB_CSERIES)
-    (work / "cseries" / "cseries_windows.h").write_text(STUB_WINDOWS)
-    (work / "harness.c").write_text(HARNESS)
+    (work / "cseries" / "cseries_windows.h").write_text(STUB_WINDOWS_FILES)
+    (work / "harness.c").write_text(HARNESS + LINK_STUBS)
     # (the header alone: port/linux/include's stdio.h is the game's)
     shutil.copy(ROOT / "port/linux/include/halo_map_families.h", work / "halo_map_families.h")
     binary = work / "families"
-    subprocess.run([cc, "-std=gnu99", "-Wall", "-Werror", "-I", str(work),
+    # (the file stubs this build leaves unused: its Custom Edition folders' lists)
+    subprocess.run([cc, "-std=gnu99", "-Wall", "-Werror", "-Wno-unused-function", "-I", str(work),
                     str(work / "harness.c"), str(ROOT / "port/linux/game/map_families.c"), "-o", str(binary)],
                    check=True)
 
@@ -132,6 +133,35 @@ static int FindNextFileA(HANDLE find, WIN32_FIND_DATAA *data)
 {
 	return 0;
 }
+#define GENERIC_WRITE 0
+#define OPEN_ALWAYS 0
+#define FILE_END 2
+/* (ChupathingyCE's maps_ce/downloaded_maps.txt, written by
+map_downloaded_remember: not here) */
+static unsigned long SetFilePointer(HANDLE file, long distance, long *high, int method)
+{
+	return 0;
+}
+static int WriteFile(HANDLE file, void const *buffer, unsigned long size, unsigned long *written, void *overlapped)
+{
+	return 0;
+}
+"""
+LINK_STUBS = r"""
+/* (ChupathingyCE's hashed names, port/linux/src/map_archive.c and
+map_file_hash.c, which map_families.c calls: none here, the fork's own
+hash-named versions are what is tested) */
+int map_archive_hashed_name(const char *name, char *base, int base_size, unsigned int *prefix)
+{
+	return 0;
+}
+int map_file_hash_prefix(const char *path, unsigned int *prefix)
+{
+	return 0;
+}
+void platform_log(char const *format, ...)
+{
+}
 """
 FILES_HARNESS = r"""
 #include <stdio.h>
@@ -186,7 +216,7 @@ def family_files(tmp_path_factory):
     (work / "cseries").mkdir()
     (work / "cseries.h").write_text(STUB_CSERIES)
     (work / "cseries" / "cseries_windows.h").write_text(STUB_WINDOWS_FILES)
-    (work / "harness.c").write_text(FILES_HARNESS)
+    (work / "harness.c").write_text(FILES_HARNESS + LINK_STUBS)
     shutil.copy(ROOT / "port/linux/include/halo_map_families.h", work / "halo_map_families.h")
     binary = work / "family_files"
     subprocess.run([cc, "-std=gnu99", "-Wall", "-Werror", "-Wno-unused-function", "-Wno-multichar",
@@ -321,6 +351,19 @@ static HANDLE FindFirstFileA(char const *pattern, WIN32_FIND_DATAA *data)
 	}
 	return handle;
 }
+#define GENERIC_WRITE 0
+#define OPEN_ALWAYS 0
+#define FILE_END 2
+/* (ChupathingyCE's maps_ce/downloaded_maps.txt, written by
+map_downloaded_remember: not here) */
+static unsigned long SetFilePointer(HANDLE file, long distance, long *high, int method)
+{
+	return 0;
+}
+static int WriteFile(HANDLE file, void const *buffer, unsigned long size, unsigned long *written, void *overlapped)
+{
+	return 0;
+}
 """
 REAL_HARNESS = FILES_HARNESS.replace("""	else if (!strcmp(argv[1], "resource"))""", """	else if (!strcmp(argv[1], "campaigns"))
 		map_family_list_campaigns(map_family_parse(argv[2], NULL, 0), found, NULL);
@@ -340,7 +383,7 @@ def family_folders(tmp_path_factory):
     (work / "cseries").mkdir()
     (work / "cseries.h").write_text(STUB_CSERIES)
     (work / "cseries" / "cseries_windows.h").write_text(STUB_WINDOWS_REAL)
-    (work / "harness.c").write_text(REAL_HARNESS)
+    (work / "harness.c").write_text(REAL_HARNESS + LINK_STUBS)
     shutil.copy(ROOT / "port/linux/include/halo_map_families.h", work / "halo_map_families.h")
     binary = work / "family_folders"
     # (32-bit, as the game is: a cache file's header is read as longs of 4 bytes, as the 64-bit builds have them

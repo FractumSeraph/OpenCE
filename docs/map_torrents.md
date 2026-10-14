@@ -32,6 +32,18 @@ B stops the download. With `maps.download_screen = false` the menus stay up
 and the browser's status line shows the download instead ("Downloading
 hugeass.map: 34 MB of 92 MB (1.2 MB/s, 5 peers)").
 
+Joined from Online Games, or left for want of the map (a host whose map
+is missing here, after map sharing; a dedicated server moving on to a map
+this machine lacks), the map is ChupathingyCE's offer over the main menu
+("Download <name>.map from other players and the map archives?", as
+`network.map_downloads` says: `"ask"`, `"always"` or `"never"`), and its
+panel shows how this download goes ("34 MB of 92 MB (1.2 MB/s, 5 peers)");
+once it is there the game is joined again. ChupathingyCE's downloader
+(`port/linux/src/map_download.c`) asks the map torrents first and its own
+community map repositories (maps.halonet.net and its mirrors) only when
+they do not bring the map (the index lacks it, or every source failed).
+With `"never"`, nothing is downloaded but what the host sends.
+
 A game whose host does not send its map (map sharing off, or an OpenCE
 build's host that cannot) is downloaded the same way, if the index has the
 host's version: the player leaves the game, is told the map is being
@@ -46,7 +58,9 @@ archives: HaloNet's map repository (maps.halonet.net), then HaloMaps
 HaloMaps: 12 MB of 40 MB"). The file taken out of the zip is checked
 against the index's info hash, as a torrent's pieces are, and one that is
 not the index's is thrown away and the next archive tried
-(`port/linux/src/map_archives.c`, `map_archives_zip.c`). The archives are
+(`port/linux/src/map_archives.c`, `map_archives_zip.c`). When no archive
+has it either (or `maps.archives` is empty), the download fails after
+those 30 seconds, and ChupathingyCE's downloader asks its repositories. The archives are
 fetched over HTTPS, with the self-updater's download (`update_request`,
 `update.h`): the Linux, Windows and macOS builds; Android and the browser
 have none.

@@ -347,7 +347,11 @@ plays, with `ce_maps` agreed by both:
   `<file>.map` is not the host's and which folder to replace it in, and
   leaves the game. No such file: nothing more is said here, as the legacy
   join already tells the player the map is missing and where it goes
-  (`cache_files_map_present`).
+  (`cache_files_map_present`), or offers to download a Custom Edition map
+  from the community map repositories (`port/linux/src/map_download.c`),
+  checked against the version the host advertises in the legacy protocol
+  (its header's checksum). Once it is joined, MAP checks the whole file
+  as for any other.
 - **Hostile input**: a MAP is read only from the client's host, of its
   session, with `ce_maps` agreed and not turned off by the kill switch; a
   name that is not a plain file name, a Halo PC map without its hash, or

@@ -171,7 +171,9 @@ not match its definition traps in a browser.
   seed (http://halomaps.fractumseraph.net/maps/) and tracker
   (halovps.fractumseraph.net:6969), or from the web seed alone when no peer
   has it (the whole file, checked against the index), and a hosted map is
-  seeded.
+  seeded. ChupathingyCE's map download offer (Online Games,
+  `network.map_downloads`) downloads through them first, and asks its
+  community map repositories only when they fail.
 - **The maps downloaded at the first start** (`sdl_platform.c`,
   `LauncherActivity.java`; `data.download_url`).
 - **Voice chat** (OpenCE's, with the Opus codec built into every port).
@@ -350,6 +352,57 @@ HaloMD and Halo PC retail games are ChupathingyCE's only: a player on
 another build is told the map is missing. Between ChupathingyCE players,
 the map's identity (its name and a hash of its file) is checked, so a
 player with a different file of the same name is told so.
+
+**Downloading a missing map.** When a game you join is on a Custom Edition
+map you don't have, the game offers to download it from the community map
+repositories (the public map repositories Halo PC players have used for
+years, as Chimera downloads from them: maps.halonet.net, then its mirrors
+maps2 and maps1, over HTTPS): "Download <name>.map from the community map
+repository?", with Yes, No and Don't ask again. The download shows its
+progress and can be cancelled. Before the map goes in `maps_ce`, the game
+checks it: no more than 200 MB, downloaded and unpacked; only `<name>.map`
+taken from the archive, never a path from it; its size and CRC-32 as the
+archive states them; a Custom Edition multiplayer map whose header names the
+map asked for; and the host's version of it (the checksum in its header,
+which the host advertises with its game). It never replaces a file that is
+there. Then the game joins, and the map's own checks run as for any map. A
+downloaded map is listed in `maps_ce/downloaded_maps.txt`: its scripts are
+held to a downloaded map's tighter rules. `network.map_downloads` in
+`config.toml` (or Network Settings in the PC menus) says `"ask"` (the
+default), `"always"` or `"never"`. Desktop and Android builds download maps;
+the dedicated server doesn't. HaloMD and Halo PC retail maps aren't
+downloaded, and neither are Halo PC's own maps and files (Blood Gulch, Putput,
+the campaign's levels, `ui`, `bitmaps` and the rest, also under a hashed
+name), though the repositories have copies: they're Microsoft's and
+Gearbox's, so the game asks you to copy them from your own Halo PC or Custom
+Edition install instead ("Install this map yourself").
+
+In this fork the offer reads "Download <name>.map from other players and the
+map archives?": the map comes from the host if the host shares it (map
+sharing), else over BitTorrent (other players, this fork's seed box and web
+seed), else out of the HaloNet and HaloMaps archives' zips, all checked
+against the maps' index, and only then from the repositories above
+([docs/map_torrents.md](docs/map_torrents.md)). Maps from any of them are
+listed in `maps_ce/downloaded_maps.txt`, and `"never"` stops all of them
+but map sharing (which has its own setting, Network Settings > Map Sharing).
+
+**When the host changes map.** If a game you're in moves on to a Custom
+Edition map you don't have (a dedicated server's playlist going to its next
+map, say), the game leaves it, offers the map the same way over the main
+menu (or downloads it at once, with `"always"`), and then joins the same host
+again, in its next lobby or the game in progress. The game's protocol gives a
+machine about a minute to load a map before the host drops it, too short for
+most downloads, so the player leaves and comes back rather than holding the
+game up. If the map isn't downloaded (you say no, cancel it, or it fails),
+the main menu says the map is missing, as it does with `"never"`.
+
+**Maps named with a hash.** Hosts on some other builds name a shared Custom
+Edition map `<name>_<8 hex digits>` (a game on `Sneak_af352483`, say), the
+digits the start of a hash of the whole map file. ChupathingyCE plays such a
+game from your `<name>.map` (`sneak.map`) when its hash matches, and the
+downloader fetches `<name>.map` for it, checking the hash too. If your
+`<name>.map` is another version, the download is kept beside it as
+`<name>_<digits>.map`.
 
 **Older folders.** Earlier ChupathingyCE versions kept Custom Edition maps
 in `maps/ce/` and HaloMD maps in `md_maps/`, and other builds keep their Custom
@@ -561,6 +614,10 @@ If you contribute, the same applies to you: see [CONTRIBUTING](CONTRIBUTING.md#u
   [Kenney's Input Prompts](https://kenney.nl/assets/input-prompts) (CC0).
 - HaloMD map names: from [MacGamingMods](https://macgamingmods.com)' public
   HaloMD mod list, so the menus can show each map's own name.
+- Missing Custom Edition maps: downloaded from the community map
+  repositories, as Chimera uses them (maps.halonet.net, the HAC2 map
+  repository, and its mirrors). ChupathingyCE's downloader is its own code;
+  Chimera showed where the repositories are and how they answer.
 - Libraries: SDL3, stb, Mbed TLS, miniupnpc, KCP, tomlc17, musl's maths,
   extract-xiso, Expat, Monocypher, zlib, Opus, SMAA, and Project Nayuki's QR Code
   generator. Their licenses are

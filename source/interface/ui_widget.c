@@ -693,6 +693,7 @@ void download_screen_render(void);
 code over the widgets, as the virtual keyboard is */
 boolean browser_screen_active(void);
 void browser_screen_open(void);
+boolean browser_screen_open_map_offer(void);
 void browser_screen_process(void);
 void browser_screen_render(void);
 /* port: moderation on a dedicated server (port/linux/game/moderation_screen.c) */
@@ -5176,6 +5177,16 @@ void main_screen_shell_load(
 			if (!ui_widget_load_by_name_or_tag(pc_menus_root_name(), NONE, NULL, NONE, NONE, NONE, NONE))
 				error(_error_silent, "failed to load main screen shell window");
 		}
+#ifdef HALO_GAME_BROWSER
+		/* port: a join left for a Custom Edition map the player may
+		download: Online Games offers it, and joins the game again
+		(port/linux/game/browser_screen.c), in place of the map's error */
+		if (browser_screen_open_map_offer())
+		{
+			widget_globals.main_menu_deferred_error_code = NONE;
+			ui_widget_port_error_pending_text = NULL;
+		}
+#endif
 		if (widget_globals.main_menu_deferred_error_code != NONE)
 		{
 			display_error(widget_globals.main_menu_deferred_error_code, NONE, TRUE, FALSE);

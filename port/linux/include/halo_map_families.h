@@ -79,6 +79,9 @@ came from a download, whose scripts are held to tighter rules (hs.c):
 marked by the downloader, or named by game.downloaded_maps */
 boolean map_is_downloaded(char const *map_name);
 void map_downloaded_mark(char const *map_name);
+/* ... and kept so in maps_ce/downloaded_maps.txt, for the next runs (the
+map downloader's maps: port/linux/src/map_download.c) */
+void map_downloaded_remember(char const *map_name);
 
 #ifdef HALO_CUSTOM_EDITION
 /* a family's cache version: 609 for Custom Edition's, 7 for HaloMD's and

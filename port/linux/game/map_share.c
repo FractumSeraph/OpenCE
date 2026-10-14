@@ -1412,16 +1412,36 @@ static void download_offered(
 	if (offer->result != _offer_ok || !offer->file_count || offer->file_count > MAXIMUM_FILES)
 	{
 		int map_torrents_fetch(const char *level_name, unsigned long version, const char *files);
+		char const *config_string(char const *name);
 		char base_level_name[LEVEL_NAME_BYTES];
 
-		/* port (this fork): downloaded over BitTorrent instead, when the
-		maps' torrent index has the host's version (port/linux/src/map_torrents.c,
+#ifdef HALO_GAME_BROWSER
+		{
+			/* (port/linux/src/map_download.h, port/linux/game/browser_screen.c) */
+			int map_download_possible(char const *name);
+			void browser_screen_map_missing(char const *file, unsigned long version);
+
+			/* port (this fork): ChupathingyCE's offer over the main menu, in
+			place of the error below, as network.map_downloads says: it
+			downloads the map (over BitTorrent first: map_download.c) and joins
+			this host again */
+			if (map_download_possible(name))
+			{
+				browser_screen_map_missing(name, download->version);
+				download_fail("The host does not send this map.");
+				return;
+			}
+		}
+#endif
+		/* port (this fork): else downloaded over BitTorrent, when the maps'
+		torrent index has the host's version (port/linux/src/map_torrents.c,
 		by the name without its hash: the download goes beside any other
-		version as <name>_<hash>.map); the player joins again once it is
-		there */
+		version as <name>_<hash>.map), unless network.map_downloads is
+		"never"; the player joins again once it is there */
 		csprintf(base_level_name, "%s%.*s", CUSTOM_EDITION_LEVEL_NAME_PREFIX, (int)map_share_name_base_length(name),
 			name);
-		if (map_torrents_fetch(base_level_name, download->version, NULL))
+		if (strcmp(config_string("network.map_downloads"), "never") &&
+			map_torrents_fetch(base_level_name, download->version, NULL))
 		{
 			download_fail("The host does not send this map, so it is being downloaded (Join Game shows how it goes). "
 				"Join again when it is there.");
@@ -1696,12 +1716,14 @@ static void download_finish(
 		}
 	}
 	custom_edition_maps_look_again();
-	/* (port: held to a downloaded map's rules, hs.c) */
+	/* (port: held to a downloaded map's rules, hs.c, in this run and the next
+	ones: maps_ce/downloaded_maps.txt, as ChupathingyCE's map downloader keeps
+	its maps) */
 	{
 		char map_name[LEVEL_NAME_BYTES + 8];
 
 		map_family_from_wire_name(download->level_name, map_name, sizeof(map_name));
-		map_downloaded_mark(map_name);
+		map_downloaded_remember(map_name);
 	}
 	if (!custom_edition_cache_present(download->level_name, download->version, message, sizeof(message)))
 	{

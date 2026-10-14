@@ -4571,7 +4571,8 @@ static boolean lobby_browser_select(struct widget_instance *widget, short contro
 	{
 		wchar_t blocked[ROW_TEXT_LENGTH * 2];
 
-		if (server_browser_map_blocked(game->map, blocked, NUMBEROF(blocked)))
+		if (server_browser_map_blocked(game->map, blocked, NUMBEROF(blocked)) &&
+			!server_browser_map_downloadable(game->map))
 		{
 			lobby_browser_message(blocked);
 			return campaign_fail();
@@ -4728,6 +4729,10 @@ boolean ui_widget_port_join_map_fetch(void *advertised_game)
 	joins: lobby_browser_join; one the site lacks is said to be missing) */
 	return FALSE;
 #endif
+	/* (network.map_downloads "never": the join goes ahead, and the map is
+	said to be missing) */
+	if (!strcmp(config_string("network.map_downloads"), "never"))
+		return FALSE;
 	/* (the map torrents find what is missing: the map, and Custom Edition's
 	resource maps) */
 	if (!map_torrents_fetch(file, (unsigned long)game->map_version, NULL))

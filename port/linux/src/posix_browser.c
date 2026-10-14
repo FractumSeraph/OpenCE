@@ -552,6 +552,217 @@ static int request_as(const char *url, const char *body_data, size_t body_length
 }
 
 
+/* ---------- downloads (map_download.c): a response's body read as it comes */
+
+enum
+{
+	MAXIMUM_REDIRECTS = 5,
+	/* a response's status line and headers, at most */
+	MAXIMUM_HEAD = 16384,
+};
+
+static struct
+{
+	int open;
+	struct connection connection;
+	/* the body's first bytes, read with the head */
+	unsigned char head[MAXIMUM_HEAD];
+	size_t pending, pending_used;
+} download;
+
+/* a header's value (name ends in ':'), trimmed, into value; 0 if the head
+has none */
+static int header_value(const char *head, const char *name, char *value, size_t size)
+{
+	size_t length = strlen(name);
+	const char *line = strstr(head, "\r\n");
+
+	while (line && line[2] && !(line[2] == '\r' && line[3] == '\n'))
+	{
+		line += 2;
+		if (!strncasecmp(line, name, length))
+		{
+			const char *start = line + length;
+			size_t count;
+
+			while (*start == ' ' || *start == '\t')
+				start++;
+			count = strcspn(start, "\r\n");
+			while (count && (start[count - 1] == ' ' || start[count - 1] == '\t'))
+				count--;
+			if (count >= size)
+				return 0;
+			memcpy(value, start, count);
+			value[count] = 0;
+			return 1;
+		}
+		line = strstr(line, "\r\n");
+	}
+	return 0;
+}
+
+static void download_unlock(void)
+{
+	posix_browser_unlock();
+}
+
+/* one GET of url on download.connection, its head read: the status, else
+0 with why in error */
+static int download_request(const char *url, const char *user_agent, char *location, size_t location_size,
+	long long *length, char *error, int error_size)
+{
+	char host[256], port[16], path[1024], request[2048];
+	char value[64];
+	size_t used = 0;
+	char *end = NULL;
+	int secure, status = 0;
+	int count;
+
+	location[0] = 0;
+	*length = -1;
+	memset(&download.connection, 0, sizeof(download.connection));
+	mbedtls_net_init(&download.connection.net);
+	mbedtls_ssl_init(&download.connection.ssl);
+	mbedtls_ssl_config_init(&download.connection.config);
+	if (!parse_url(url, &secure, host, sizeof(host), port, sizeof(port), path, sizeof(path)))
+	{
+		set_error(error, error_size, "not an http:// or https:// address", 0);
+		return 0;
+	}
+	if (secure)
+	{
+		set_up();
+		if (!crypto_ready || !certificates_loaded)
+		{
+			set_error(error, error_size, "no certificate authorities (set SSL_CERT_FILE)", 0);
+			return 0;
+		}
+	}
+	count = snprintf(request, sizeof(request), "GET %s HTTP/1.0\r\nHost: %s\r\nUser-Agent: %s\r\nAccept: */*\r\n\r\n",
+		path, host, user_agent);
+	if (count <= 0 || (size_t)count >= sizeof(request))
+	{
+		set_error(error, error_size, "the request is too long", 0);
+		return 0;
+	}
+	download.connection.secure = secure;
+	if (!connection_open(&download.connection, host, port, error, error_size))
+		return 0;
+	if (!connection_write(&download.connection, request, (size_t)count))
+	{
+		set_error(error, error_size, "could not send the request", 0);
+		return 0;
+	}
+	/* the head, and whatever of the body came with it */
+	while (!end && used < sizeof(download.head) - 1)
+	{
+		count = connection_read(&download.connection, download.head + used, sizeof(download.head) - 1 - used);
+		if (count <= 0)
+			break;
+		used += (size_t)count;
+		download.head[used] = 0;
+		end = strstr((char *)download.head, "\r\n\r\n");
+	}
+	if (!end || sscanf((char *)download.head, "HTTP/%*d.%*d %d", &status) != 1)
+	{
+		set_error(error, error_size, "not an HTTP response", 0);
+		return 0;
+	}
+	end[2] = 0;
+	if (header_value((char *)download.head, "Content-Length:", value, sizeof(value)))
+		*length = strtoll(value, NULL, 10);
+	if (status >= 300 && status < 400 && !header_value((char *)download.head, "Location:", location, location_size))
+		location[0] = 0;
+	/* (the body's first bytes, moved to the buffer's start) */
+	download.pending = used - (size_t)(end + 4 - (char *)download.head);
+	memmove(download.head, end + 4, download.pending);
+	download.pending_used = 0;
+	return status;
+}
+
+int posix_browser_download_open(const char *url, const char *user_agent, int *status, int *length, char *error,
+	int error_size)
+{
+	char current[2048], location[2048];
+	int redirect;
+
+	*status = 0;
+	*length = -1;
+	error[0] = 0;
+	if (download.open)
+	{
+		set_error(error, error_size, "a download is open already", 0);
+		return 0;
+	}
+	/* (held until it is closed: one Mbed TLS user at a time, as the
+	requests are) */
+	posix_browser_lock();
+	snprintf(current, sizeof(current), "%s", url);
+	for (redirect = 0; redirect <= MAXIMUM_REDIRECTS; redirect++)
+	{
+		long long size = -1;
+
+		*status = download_request(current, user_agent, location, sizeof(location), &size, error, error_size);
+		if (*status == 200)
+		{
+			*length = size >= 0 && size <= 0x7fffffff ? (int)size : -1;
+			download.open = 1;
+			return 1;
+		}
+		connection_free(&download.connection);
+		if (*status >= 300 && *status < 400 && location[0])
+		{
+			/* (an address on the same host, or another's) */
+			if (location[0] == '/')
+			{
+				char host[256], port[16], path[1024];
+				int secure;
+
+				if (!parse_url(current, &secure, host, sizeof(host), port, sizeof(port), path, sizeof(path)))
+					break;
+				snprintf(current, sizeof(current), "%s://%s:%s%s", secure ? "https" : "http", host, port, location);
+			}
+			else
+				snprintf(current, sizeof(current), "%s", location);
+			continue;
+		}
+		if (*status)
+			snprintf(error, (size_t)error_size, "the server answered %d", *status);
+		break;
+	}
+	if (redirect > MAXIMUM_REDIRECTS)
+		set_error(error, error_size, "too many redirects", 0);
+	download_unlock();
+	return 0;
+}
+
+int posix_browser_download_read(int handle, void *buffer, int size)
+{
+	if (handle != 1 || !download.open || size <= 0)
+		return -1;
+	if (download.pending_used < download.pending)
+	{
+		size_t count = download.pending - download.pending_used;
+
+		if (count > (size_t)size)
+			count = (size_t)size;
+		memcpy(buffer, download.head + download.pending_used, count);
+		download.pending_used += count;
+		return (int)count;
+	}
+	return connection_read(&download.connection, (unsigned char *)buffer, (size_t)size);
+}
+
+void posix_browser_download_close(int handle)
+{
+	if (handle != 1 || !download.open)
+		return;
+	connection_free(&download.connection);
+	download.open = 0;
+	download_unlock();
+}
+
+
 #ifdef _WIN32
 
 /* a UTF-8 path as Windows' */

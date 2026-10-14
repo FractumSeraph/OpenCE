@@ -15,7 +15,7 @@ record's map version), and downloaded into maps_ce\downloads; a file that
 arrives whole is moved into maps_ce (beside one of its name there, as
 <name>_<hash>.map, OpenCE's map sharing's name: a map is never renamed or
 replaced, map_families.c finds the version a game plays) and marked
-downloaded (map_downloaded_mark: its scripts held to
+downloaded (map_downloaded_remember: its scripts held to
 the tighter rules), and once every file is there the menus try the join
 again (map_torrents_take_ready). The menus show how it goes
 (map_torrents_fetching). A file that BitTorrent does not give (its download
@@ -46,7 +46,7 @@ enum { MAP_FAMILY_XBOX, MAP_FAMILY_CUSTOM_EDITION };
 short map_family_parse(char const *map, char *file, long size);
 unsigned char map_family_find(short family, char const *file, char *path, long size);
 unsigned char map_family_resource(char const *name, char *path, long size);
-void map_downloaded_mark(char const *map_name);
+void map_downloaded_remember(char const *map_name);
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -712,7 +712,8 @@ static int fetch_file_done(int which)
 	fetch.files[which].done = 1;
 	platform_log("map torrents: %s is in %s", fetch.files[which].name, folder);
 	/* (a map, not a resource map: a downloaded one, whose scripts are held to
-	the tighter rules: map_downloaded_mark, ChupathingyCE's hs.c) */
+	the tighter rules: map_downloaded_remember, ChupathingyCE's hs.c, kept in
+	maps_ce/downloaded_maps.txt for the next runs too) */
 	if (!same_name(fetch.files[which].name, "bitmaps.map") && !same_name(fetch.files[which].name, "sounds.map") &&
 		!same_name(fetch.files[which].name, "loc.map"))
 	{
@@ -723,7 +724,7 @@ static int fetch_file_done(int which)
 		{
 			snprintf(marked, sizeof(marked), "%.*s@ce", (int)(length - strlen(MAP_FILE_EXTENSION)),
 				fetch.files[which].name);
-			map_downloaded_mark(marked);
+			map_downloaded_remember(marked);
 		}
 	}
 	return 1;
@@ -778,6 +779,16 @@ static void fetch_poll(void)
 		if (status.state == _torrent_state_failed)
 		{
 			fetch_fail(fetch.files[which].name, status.detail);
+			return;
+		}
+		/* (nor do the archives, for want of one that has it, or any:
+		the download fails, so that the next source is asked, as
+		ChupathingyCE's map downloader asks its repositories then,
+		map_download.c) */
+		if (status.state != _torrent_state_seeding && status.state != _torrent_state_checking &&
+			GetTickCount() - fetch.files[which].progress_time >= ARCHIVE_FALLBACK_MILLISECONDS)
+		{
+			fetch_fail(fetch.files[which].name, "nothing came over BitTorrent, and no map archive has it");
 			return;
 		}
 		if (status.state == _torrent_state_seeding)

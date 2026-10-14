@@ -1178,6 +1178,11 @@ boolean cache_files_map_present(
 {
 	void platform_log(char const *format, ...);
 	char const *cache_files_map_directory(void);
+#ifdef HALO_CUSTOM_EDITION
+	/* (port/linux/src/map_archive.h: Halo PC's own maps) */
+	int map_archive_stock_name(char const *name);
+	int map_archive_stock_message(char const *name, char *text, int size);
+#endif
 	wchar_t error_text[512];
 	char file[64];
 	char message[512];
@@ -1234,16 +1239,56 @@ boolean cache_files_map_present(
 		{
 			return TRUE;
 		}
-		/* port: a Custom Edition map missing here, or another version than the
-		host's, downloaded if the maps' torrent index has it
-		(port/linux/src/map_torrents.c; the host changed map after this machine
-		joined, say: a join from the browser downloads first): the player told
-		to join again once it is there */
-		if (family == _map_family_custom_edition && map_families_enabled() && map_torrents_fetch(file, version, NULL))
+		/* port (ChupathingyCE): one of Halo PC's own maps, by its name or a
+		hashed name's base: the player's to copy from their install, never
+		downloaded (port/linux/src/map_archive.h) */
+		if (family == _map_family_custom_edition && map_families_enabled() && map_archive_stock_name(file))
 		{
-			snprintf(message, sizeof(message),
-				"The host's map %.63s is being downloaded (Join Game shows how it goes). Join again when it is there.",
-				file);
+			char stock[384];
+
+			map_archive_stock_message(file, stock, sizeof(stock));
+			snprintf(message, sizeof(message), "Install this map yourself\r\n%s", stock);
+#ifdef HALO_GAME_BROWSER
+			/* (Online Games says so over the main menu, in place of this
+			error: port/linux/game/browser_screen.c) */
+			{
+				void browser_screen_map_missing(char const *file, unsigned long version);
+
+				browser_screen_map_missing(file, version);
+			}
+#endif
+		}
+		else if (family == _map_family_custom_edition && map_families_enabled())
+		{
+			/* (port/linux/src/map_download.h) */
+			int map_download_possible(char const *name);
+			char const *config_string(char const *name);
+
+#ifdef HALO_GAME_BROWSER
+			/* port (ChupathingyCE): a Custom Edition map the player may
+			download: Online Games offers it in place of this error once the
+			main menu is back (as network.map_downloads says), downloads it
+			(map_download.c: over BitTorrent first, then the map archives and
+			repositories) and joins the game again
+			(port/linux/game/browser_screen.c) */
+			if (map_download_possible(file))
+			{
+				void browser_screen_map_missing(char const *file, unsigned long version);
+
+				browser_screen_map_missing(file, version);
+			}
+			else
+#endif
+			/* port: else (a build without Online Games), downloaded if the
+			maps' torrent index has it (port/linux/src/map_torrents.c), unless
+			network.map_downloads is "never": the player told to join again
+			once it is there */
+			if (strcmp(config_string("network.map_downloads"), "never") && map_torrents_fetch(file, version, NULL))
+			{
+				snprintf(message, sizeof(message),
+					"The host's map %.63s is being downloaded (Join Game shows how it goes). Join again when it is there.",
+					file);
+			}
 		}
 	}
 	else

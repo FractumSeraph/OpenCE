@@ -829,6 +829,8 @@ static struct
 /* port: the joined game's advertisement's flags (HALO_PORT_ADVERTISED_FLAGS_OFFSET),
 for Delta Peer (network_game_client_delta_frame); 0 for the host's own game */
 static byte network_game_client_joined_flags;
+/* port: the joined game's host's identifier (its XNADDR's abEnet) */
+static byte network_game_client_joined_host[6];
 static void network_game_client_delta_frame(struct network_game_client *client);
 void delta_peer_game_stop(int host);
 #endif
@@ -2158,6 +2160,9 @@ boolean network_game_client_initiate_join_game(
 		network_game_client_joined_flags = game_index >= 0 && game_index < MAXIMUM_NETWORK_ADVERTISED_GAMES ?
 			network_game_client_advertised_versions[game_index].flags : 0;
 	}
+	/* (its host's identifier, its XNADDR's abEnet: the game joined again
+	once a map it needs is downloaded, browser_screen.c) */
+	csmemcpy(network_game_client_joined_host, game->xnaddr.data + 2, sizeof(network_game_client_joined_host));
 #endif
 
 	csmemcpy(
@@ -3538,6 +3543,18 @@ long network_game_client_join_invite_host(
 	return 0;
 }
 
+void network_game_client_joined_host_identifier(
+	char *text,
+	long size)
+{
+	long index;
+
+	if (size < 13)
+		return;
+	for (index = 0; index < 6; index++)
+		snprintf(text + index * 2, 3, "%02x", network_game_client_joined_host[index]);
+}
+
 long network_game_client_invite_host_advertisement(
 	char const *invite,
 	struct network_invite_advertisement *advertisement)
@@ -3573,6 +3590,7 @@ long network_game_client_invite_host_advertisement(
 		/* (the advertisement's variant setting: the score to win) */
 		advertisement->score_limit = game->unknown100;
 		advertisement->in_progress = network_game_client_advertised_game_in_progress(client, game);
+		advertisement->map_version = (unsigned long)game->map.version;
 		return 1;
 	}
 	return 0;

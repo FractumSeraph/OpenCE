@@ -45,6 +45,10 @@ int config_boolean(char const *name);
 void ui_widget_port_map_fetch_cancel(void);
 /* ui_widget.c */
 boolean main_menu_is_active(void);
+#ifdef HALO_GAME_BROWSER
+/* browser_screen.c */
+boolean browser_screen_active(void);
+#endif
 
 /* ---------- globals */
 
@@ -84,6 +88,12 @@ boolean download_screen_active(
 	float fraction;
 	char name[64];
 
+	/* (not over Online Games, whose panel shows its downloads:
+	browser_screen.c, map_download.c) */
+#ifdef HALO_GAME_BROWSER
+	if (browser_screen_active())
+		return FALSE;
+#endif
 	return main_menu_is_active() && config_boolean("maps.download_screen") &&
 		map_torrents_download_progress(&fraction, name, sizeof(name));
 }
