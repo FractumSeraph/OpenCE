@@ -53,6 +53,11 @@ enum
 	CE_MAXIMUM_BSP_LIGHTMAPS = 0x10000,
 	CE_MAXIMUM_LIGHTMAP_MATERIALS = 0x10000,
 	CE_MAXIMUM_MATERIAL_VERTICES = 0x100000,
+	/* the most bytes of compressed vertices a BSP's materials are given
+	(ce_bsp_loaded): several times what the largest maps take. Materials
+	may name the same uncompressed vertices, so the BSP's size does not
+	bound what they add up to (OpenCE's build-206 caps its loader's so) */
+	CE_MAXIMUM_GEOMETRY_BYTES = 0x8000000,
 	/* (the room ce_vertex_buffer takes of the tag cache) */
 	CE_BUFFER_HEADER_ROOM = 16,
 	/* clusters and their portals (structures.c, structures.h's maximums) */
@@ -146,6 +151,7 @@ boolean ce_bsp_check(
 	unsigned long words[6];
 	byte *structure, *lightmaps;
 	long lightmap_count, lightmap_index;
+	unsigned long vertex_bytes = 0;
 
 	*bytes = 0;
 	if (!header)
@@ -238,6 +244,16 @@ than sphere_intersects_cluster_portal projects into an array on the stack */
 				return ce_refuse("a structure BSP's material's vertices (%lu bytes) are fewer than its counts (%lu)",
 					data_size, needed);
 			}
+			/* (as ce_bsp_loaded compresses them: within
+			CE_MAXIMUM_MATERIAL_VERTICES, no product wraps) */
+			needed = (unsigned long)vertex_count * ENVIRONMENT_VERTEX_COMPRESSED_SIZE +
+				(unsigned long)lightmap_vertex_count * LIGHTMAP_VERTEX_COMPRESSED_SIZE;
+			if (needed > CE_MAXIMUM_GEOMETRY_BYTES - vertex_bytes)
+			{
+				return ce_refuse("a structure BSP's materials take more than %lu bytes of vertices",
+					(unsigned long)CE_MAXIMUM_GEOMETRY_BYTES);
+			}
+			vertex_bytes += needed;
 			*bytes += (lightmap_vertex_count ? 2 : 1) * CE_BUFFER_HEADER_ROOM;
 		}
 	}

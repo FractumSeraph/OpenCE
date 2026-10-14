@@ -610,6 +610,12 @@ enum
 	/* (the room ce_models_tags_loaded takes of the tag cache: 16-byte
 	aligned) */
 	CE_BUFFER_HEADER_ROOM = 16,
+	/* the most bytes of vertices a map's models are given (ce_part_vertices):
+	several times what the largest maps take. Parts may name the same
+	vertices and strips, so the model data's size does not bound what they
+	add up to, and a sum past 4 GB would wrap (OpenCE's build-206 caps its
+	loader's so: MAXIMUM_GEOMETRY_BYTES) */
+	CE_MAXIMUM_GEOMETRY_BYTES = 0x8000000,
 	/* shaders' groups and types, Halo PC's (shader_definitions.h, with
 	transparent chicago extended at 7) */
 	CE_SHADER_GROUP = 'shdr',
@@ -696,7 +702,8 @@ static boolean ce_model_nodes_check(
 vertices, each vertex's nodes the model's and among those the renderer skins
 (a model of more nodes, a first-person weapon's with the arms' and its own,
 is drawn with its first CE_MAXIMUM_SKINNED_NODES: models.c); the room its
-conversion takes */
+conversion takes of the tag cache, and its vertices' (each sum no more than
+there is room for) */
 static boolean ce_part_check(
 	byte const *part,
 	char const *name,
@@ -704,7 +711,8 @@ static boolean ce_part_check(
 	byte const *model_data,
 	unsigned long model_data_size,
 	unsigned long vertex_data_size,
-	unsigned long *bytes)
+	unsigned long *bytes,
+	unsigned long *vertex_bytes)
 {
 	short triangle_type = ce_read_short(part + PART_TRIANGLE_BUFFER_OFFSET);
 	long triangle_count = ce_read_long32(part + PART_TRIANGLE_BUFFER_OFFSET + 4);
@@ -775,7 +783,15 @@ static boolean ce_part_check(
 			}
 		}
 	}
+	/* (more than the tag cache holds would not fit in any case) */
+	if (CE_ALIGNED(index_count * sizeof(word)) + 2 * CE_BUFFER_HEADER_ROOM > CE_IMAGE_TAG_CACHE_SIZE - *bytes ||
+		(unsigned long)vertex_count * XBOX_VERTEX_SIZE > CE_MAXIMUM_GEOMETRY_BYTES - *vertex_bytes)
+	{
+		return ce_refuse("model %s: the models' parts take more than %lu bytes of strips or %lu of vertices", name,
+			(unsigned long)CE_IMAGE_TAG_CACHE_SIZE, (unsigned long)CE_MAXIMUM_GEOMETRY_BYTES);
+	}
 	*bytes += CE_ALIGNED(index_count * sizeof(word)) + 2 * CE_BUFFER_HEADER_ROOM;
+	*vertex_bytes += (unsigned long)vertex_count * XBOX_VERTEX_SIZE;
 	return TRUE;
 }
 
@@ -792,6 +808,7 @@ boolean ce_models_check(
 	unsigned long vertex_data_size,
 	unsigned long *bytes)
 {
+	unsigned long vertex_bytes = 0;
 	long index;
 
 	*bytes = 0;
@@ -891,6 +908,8 @@ boolean ce_models_check(
 			{
 				return FALSE;
 			}
+			if (CE_ALIGNED((unsigned long)part_count * XBOX_PART_SIZE) > CE_IMAGE_TAG_CACHE_SIZE - *bytes)
+				return ce_refuse("model %s: the models' parts take more than the tag cache", name);
 			*bytes += CE_ALIGNED((unsigned long)part_count * XBOX_PART_SIZE);
 			for (part = 0; part < part_count; part++)
 			{
@@ -911,8 +930,11 @@ boolean ce_models_check(
 				}
 				if (primary < 0 || primary >= node_count || secondary < 0 || secondary >= node_count)
 					return ce_refuse("model %s: a part's centroid is on nodes %d and %d", name, primary, secondary);
-				if (!ce_part_check(at, name, node_count, model_data, model_data_size, vertex_data_size, bytes))
+				if (!ce_part_check(at, name, node_count, model_data, model_data_size, vertex_data_size, bytes,
+					&vertex_bytes))
+				{
 					return FALSE;
+				}
 			}
 		}
 	}

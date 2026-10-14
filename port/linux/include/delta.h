@@ -190,7 +190,8 @@ command repository's watch adds a row when it follows OpenCE's raise
 	X(25, "build-169", additive) /* units' integrated lights in the object states; a banned machine told so */ \
 	X(26, "build-184", additive) /* internet play's signalling, version 4 (WebRTC, for browsers; p2p_signal.c reads 3 and 4); game messages as 25 */ \
 	X(27, "build-189", additive) /* Custom Edition map sharing's messages (a machine of 26 drops them); game messages as 25 */ \
-	X(28, "build-201", additive) /* no message changed: a script's switch_bsp keeps a multiplayer game's first, the flashlight past the Xbox limits, a second weapon readied while firing (wire chupa-28a) */
+	X(28, "build-201", additive) /* no message changed: a script's switch_bsp keeps a multiplayer game's first, the flashlight past the Xbox limits, a second weapon readied while firing (wire chupa-28a) */ \
+	X(29, "build-206", additive) /* no message changed: a Custom Edition map by its own name in the settings, its version the first 32 bits of its hash (the header checksum before); followed by this fork ahead of ChupathingyCE, whose clients find a version by either */
 
 /* ---------- the legacy table (port/linux/src/delta.c)
 

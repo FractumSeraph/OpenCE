@@ -530,15 +530,6 @@ static const struct config_setting config_settings[] =
 		"the map (from maps_ce, custom_maps...), and the resource maps it needs\n"
 		"that the player lacks (bitmaps.map, sounds.map, loc.map). The game's\n"
 		"other players help (network.map_seed)." },
-	{ "network.map_share_names", _config_string, "\"hash\"", "HALO_NET_MAP_SHARE_NAMES", _environment_value,
-		_platform_all,
-		"Hosting: how a Custom Edition map is named to the players. \"hash\": with\n"
-		"the start of its hash (custom_maps\\hugeass_1a2b3c4d), as OpenCE's builds\n"
-		"since build-189 name it, which they download a map by; ChupathingyCE's\n"
-		"players cannot play a map named so. \"plain\": by its name alone\n"
-		"(custom_maps\\hugeass), which every build plays that has the map; this\n"
-		"fork's players still download it, OpenCE's do not. No map file is\n"
-		"renamed either way." },
 	{ "network.map_share_upload", _config_integer, "1024", "HALO_NET_MAP_SHARE_UPLOAD", _environment_value,
 		_platform_all,
 		"Hosting: the most kilobytes a second the host sends of maps (16 to\n"

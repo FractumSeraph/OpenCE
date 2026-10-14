@@ -499,6 +499,27 @@ unsigned long map_family_file_checksum(
 	return cache_file_header_is(path, CUSTOM_EDITION_CACHE_VERSION, CACHE_TYPE_ANY, &checksum) ? checksum : 0;
 }
 
+unsigned long map_family_file_hash_version(
+	char const *path)
+{
+	unsigned int prefix = 0;
+
+	/* (map_share.h's map_share_hash_version: 0 is a version a client checks
+	nothing for, so a hash beginning so is 1) */
+	if (!map_file_hash_prefix(path, &prefix))
+		return 0;
+	return prefix ? prefix : 1;
+}
+
+boolean map_family_version_matches(
+	char const *path,
+	unsigned long version)
+{
+	/* (the checksum first: it is in the header, the hash reads the file,
+	once a run: map_file_hash.c) */
+	return !version || map_family_file_checksum(path) == version || map_family_file_hash_version(path) == version;
+}
+
 /* the first of the Custom Edition places' <name>.map and <name>_<hash>.map
 files whose checksum is `version` */
 static boolean version_find(
@@ -523,8 +544,11 @@ static boolean version_find(
 		if (!place_folder(&places[index], folder, sizeof(folder)))
 			continue;
 		snprintf(path, (size_t)size, "%s%s%s.map", folder, name, places[index].suffix);
-		if (cache_file_header_is(path, CUSTOM_EDITION_CACHE_VERSION, CACHE_TYPE_ANY, &checksum) && checksum == version)
+		if (cache_file_header_is(path, CUSTOM_EDITION_CACHE_VERSION, CACHE_TYPE_ANY, &checksum) &&
+			(checksum == version || map_family_file_hash_version(path) == version))
+		{
 			return TRUE;
+		}
 		/* (a place's own names alone: <name>_<hash>.map) */
 		if (places[index].suffix[0])
 			continue;
@@ -544,7 +568,7 @@ static boolean version_find(
 				continue;
 			snprintf(path, (size_t)size, "%s%s", folder, data.cFileName);
 			if (cache_file_header_is(path, CUSTOM_EDITION_CACHE_VERSION, CACHE_TYPE_ANY, &checksum) &&
-				checksum == version)
+				(checksum == version || map_family_file_hash_version(path) == version))
 			{
 				CloseHandle(find);
 				return TRUE;
@@ -568,7 +592,7 @@ boolean map_family_find_version(
 	size_t base_length;
 
 	if (map_family_find(family, file, path, size) &&
-		(!version || family != _map_family_custom_edition || map_family_file_checksum(path) == version))
+		(!version || family != _map_family_custom_edition || map_family_version_matches(path, version)))
 	{
 		return TRUE;
 	}

@@ -1131,10 +1131,14 @@ void cache_files_show_multiplayer_unavailable(
 }
 
 /* port: the version of the map a network game is on, which the host sends
-in its game record's map version (which the Xbox game left 0): a Halo PC
-map's header checksum, which differs between versions of a map, as OpenCE's
-build-147 sends a Custom Edition map's. 0, which a client checks nothing
-for, for the Xbox's maps, whose builds of other regions play together. */
+in its game record's map version (which the Xbox game left 0): a Custom
+Edition map's hash's first 32 bits (port/linux/game/map_share.h, network
+version 29, as OpenCE's build-206 sends it; its header checksum before),
+which differ between versions of it, a client playing its file of that
+version whatever its name; another Halo PC map's header checksum. 0, which
+a client checks nothing for, for the Xbox's maps, whose builds of other
+regions play together. (A client takes a file whose checksum or hash is
+the version: map_family_version_matches, so hosts of both are joined.) */
 unsigned long cache_files_map_version(
 	char const *map_name)
 {
@@ -1148,6 +1152,8 @@ unsigned long cache_files_map_version(
 
 	if (family == _map_family_xbox || !map_family_find(family, file, path, sizeof(path)))
 		return 0;
+	if (family == _map_family_custom_edition)
+		return map_family_file_hash_version(path);
 	handle = CreateFileA(path, GENERIC_READ, 0, NULL, OPEN_EXISTING, 0, NULL);
 	if (handle == INVALID_HANDLE_VALUE)
 		return 0;

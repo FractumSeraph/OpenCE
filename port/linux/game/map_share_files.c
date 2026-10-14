@@ -1,10 +1,12 @@
 /*
 MAP_SHARE_FILES.C
 
-The files map sharing hashes (map_share.h): a map's name made from its
-hash, and the hashes of the files this machine shares, worked out on a
+The files map sharing hashes (map_share.h): a map's version (its hash's
+first digits), the hashes of the files this machine shares, worked out on a
 thread of their own a file at a time, so that a map of hundreds of
-megabytes costs the game no frames.
+megabytes costs the game no frames. (Port, this fork: OpenCE's build-206
+gives back the names its builds of before gave maps, <name>_<hash>.map; this
+fork never renames a player's file, so it has none of that.)
 
 A file's hash is BLAKE2b's (32 bytes) of a label, its size and its pieces'
 hashes (each piece MAP_SHARE_PIECE_BYTES of it, the last shorter, hashed with
@@ -35,8 +37,6 @@ hashing thread allocates what the game's thread frees) */
 
 /* (p2p_crypto.c's) */
 void p2p_blake2b_256(const void *data, unsigned long size, unsigned char *digest);
-/* (port_config.c's) */
-const char *config_string(const char *name);
 
 /* ---------- constants */
 
@@ -45,9 +45,8 @@ enum
 	/* the files hashed for sharing at once: a game's map and its three
 	resource maps, a download's, and the last few games' */
 	MAXIMUM_SHARE_FILES = 16,
-	/* port (this fork): the hosts' maps whose hashes are known, for their
-	level names (map_share_level_name_hash) */
-	MAXIMUM_LEVEL_HASHES = 16,
+	/* the maps' hashes kept this run (map_share_map_hash) */
+	MAXIMUM_KNOWN_HASHES = 64,
 	/* the longest map file name the map lists take (custom_edition_maps.c:
 	the level name, custom_maps\ and it, kept whole by the game engine) */
 	MAXIMUM_MAP_NAME_LENGTH = CUSTOM_EDITION_MAXIMUM_LEVEL_NAME_LENGTH - (sizeof(CUSTOM_EDITION_LEVEL_NAME_PREFIX) - 1),
@@ -84,9 +83,11 @@ struct hash_job
 	volatile long failed;
 };
 
-/* port (this fork): a map file's hash, while its size and time stay */
-struct level_hash
+/* a map's hash, found this run: its file by its path, size and time
+written, so that it is read once */
+struct known_hash
 {
+	boolean used;
 	char path[MAP_SHARE_PATH_SIZE];
 	unsigned long size;
 	unsigned long modified;
@@ -106,9 +107,13 @@ struct map_share_files_globals
 	struct hash_job job;
 	long job_owner;
 
-	/* port (this fork): the hashes of maps hosted, the next to replace */
-	struct level_hash level_hashes[MAXIMUM_LEVEL_HASHES];
-	short next_level_hash;
+	/* the maps' hashes found, and the next of them to replace */
+	struct known_hash known[MAXIMUM_KNOWN_HASHES];
+	short next_known;
+	/* the level name a host's game was last given, and its map's version
+	(map_share_level_name_choose) */
+	char chosen_level[MAP_SHARE_PATH_SIZE];
+	unsigned long chosen_version;
 
 	/* the pieces asked for, and what was found for their owner */
 	boolean pieces_wanted;
@@ -149,14 +154,42 @@ boolean map_share_name_hashed(
 	return TRUE;
 }
 
+/* whether Windows takes a file of this name for a device: its name before
+the first dot, spaces after it aside, is CON, PRN, AUX, NUL, CONIN$, CONOUT$,
+or COM or LPT and a digit, in any case (CON.x_1a2b3c4d.map.part is the
+console) */
+static boolean name_device(
+	char const *name)
+{
+	static char const *const devices[] = { "con", "prn", "aux", "nul", "conin$", "conout$" };
+	long length = 0;
+	short index;
+
+	while (name[length] && name[length] != '.')
+		length++;
+	while (length && name[length - 1] == ' ')
+		length--;
+	if (length == 4 && (!_strnicmp(name, "com", 3) || !_strnicmp(name, "lpt", 3)) && name[3] >= '0' && name[3] <= '9')
+		return TRUE;
+	for (index = 0; index < (short)(sizeof(devices) / sizeof(devices[0])); index++)
+	{
+		if ((long)csstrlen(devices[index]) == length && !_strnicmp(name, devices[index], length))
+			return TRUE;
+	}
+	return FALSE;
+}
+
 boolean map_share_name_safe(
 	char const *name)
 {
 	long length = (long)csstrlen(name);
 	long index;
 
-	if (!length || name[0] == '.' || name[0] == ' ' || name[length - 1] == '.' || name[length - 1] == ' ')
+	if (!length || name[0] == '.' || name[0] == ' ' || name[length - 1] == '.' || name[length - 1] == ' ' ||
+		name_device(name))
+	{
 		return FALSE;
+	}
 	for (index = 0; index < length; index++)
 	{
 		unsigned char character = (unsigned char)name[index];
@@ -438,108 +471,209 @@ boolean map_share_pieces_hashed(
 	return TRUE;
 }
 
-/* ---------- a host's level name
+/* ---------- maps' hashes */
 
-port (this fork): OpenCE renames every map of custom_maps <name>_<hash>.map
-(its map lists name them), so that a host's level name says its version.
-This fork never renames a file: a host whose network.map_share_names is
-"hash" names its level <name>_<hash> (custom_maps\<name>_<hash> in the
-protocol), hashing the map where it is, and the name finds the file from
-then on (map_family_alias). "plain" leaves the name as it is: clients that
-play maps by their names alone (ChupathingyCE's, OpenCE's before build-189)
-play it, and OpenCE's since then that have it, but these do not download a
-map named so (map_share.c). */
+static struct known_hash *known_hash_find(
+	char const *path,
+	unsigned long size,
+	unsigned long modified)
+{
+	struct map_share_files_globals *globals = &map_share_files_globals;
+	short index;
 
-/* the hash of a map file, from what is known of it or hashed now (a map's
-hash takes a fraction of a second) */
-static boolean level_hash_find(
+	for (index = 0; index < MAXIMUM_KNOWN_HASHES; index++)
+	{
+		struct known_hash *known = &globals->known[index];
+
+		if (known->used && known->size == size && known->modified == modified && !csstrcasecmp(known->path, path))
+			return known;
+	}
+	return NULL;
+}
+
+void map_share_map_hash_remember(
+	char const *path,
+	byte const *hash)
+{
+	struct map_share_files_globals *globals = &map_share_files_globals;
+	struct known_hash *known;
+	unsigned long size;
+	unsigned long modified;
+	short index;
+
+	if (!file_stamp(path, &size, &modified))
+		return;
+	known = known_hash_find(path, size, modified);
+	if (!known)
+	{
+		/* (the same path's of before, else the next in turn) */
+		for (index = 0; index < MAXIMUM_KNOWN_HASHES; index++)
+		{
+			if (globals->known[index].used && !csstrcasecmp(globals->known[index].path, path))
+				break;
+		}
+		if (index == MAXIMUM_KNOWN_HASHES)
+		{
+			index = globals->next_known;
+			globals->next_known = (short)((index + 1) % MAXIMUM_KNOWN_HASHES);
+		}
+		known = &globals->known[index];
+		csmemset(known, 0, sizeof(*known));
+		known->used = TRUE;
+		csstrncpy(known->path, path, sizeof(known->path) - 1);
+		known->size = size;
+		known->modified = modified;
+	}
+	csmemcpy(known->hash, hash, MAP_SHARE_HASH_BYTES);
+}
+
+boolean map_share_map_hash(
 	char const *path,
 	byte *hash)
 {
 	struct map_share_files_globals *globals = &map_share_files_globals;
-	struct level_hash *entry;
+	struct known_hash const *known;
 	struct hash_job job;
-	unsigned long size, modified;
+	unsigned long size;
+	unsigned long modified;
 	short index;
 
-	if (!file_stamp(path, &size, &modified))
+	if (!file_stamp(path, &size, &modified) || size > MAXIMUM_FILE_BYTES)
 		return FALSE;
-	for (index = 0; index < MAXIMUM_LEVEL_HASHES; index++)
+	known = known_hash_find(path, size, modified);
+	if (known)
 	{
-		entry = &globals->level_hashes[index];
-		if (entry->path[0] && !csstrcasecmp(entry->path, path) && entry->size == size && entry->modified == modified)
+		csmemcpy(hash, known->hash, MAP_SHARE_HASH_BYTES);
+		return TRUE;
+	}
+	/* (one the catalog hashed for sharing) */
+	for (index = 0; index < MAXIMUM_SHARE_FILES; index++)
+	{
+		struct map_share_file const *file = &globals->files[index];
+
+		if (file->used && file->ready && file->size == size && file->modified == modified &&
+			!csstrcasecmp(file->path, path))
 		{
-			csmemcpy(hash, entry->hash, MAP_SHARE_HASH_BYTES);
+			csmemcpy(hash, file->hash, MAP_SHARE_HASH_BYTES);
+			map_share_map_hash_remember(path, hash);
 			return TRUE;
 		}
 	}
+	/* (read here: a map takes a fraction of a second) */
 	csmemset(&job, 0, sizeof(job));
 	csstrncpy(job.path, path, sizeof(job.path) - 1);
 	hash_job_run(&job);
 	free(job.piece_hashes);
 	if (job.failed || job.size != size)
 		return FALSE;
-	entry = &globals->level_hashes[globals->next_level_hash];
-	globals->next_level_hash = (short)((globals->next_level_hash + 1) % MAXIMUM_LEVEL_HASHES);
-	csstrncpy(entry->path, path, sizeof(entry->path) - 1);
-	entry->path[sizeof(entry->path) - 1] = 0;
-	entry->size = size;
-	entry->modified = modified;
-	csmemcpy(entry->hash, job.hash, MAP_SHARE_HASH_BYTES);
 	csmemcpy(hash, job.hash, MAP_SHARE_HASH_BYTES);
+	map_share_map_hash_remember(path, hash);
 	return TRUE;
 }
 
+unsigned long map_share_hash_version(
+	byte const *hash)
+{
+	unsigned long version = (unsigned long)hash[0] << 24 | (unsigned long)hash[1] << 16 |
+		(unsigned long)hash[2] << 8 | (unsigned long)hash[3];
+
+	/* (0 is a version a client checks nothing for) */
+	return version ? version : 1;
+}
+
+boolean map_share_map_version(
+	char const *path,
+	unsigned long *version)
+{
+	byte hash[MAP_SHARE_HASH_BYTES];
+
+	if (!map_share_map_hash(path, hash))
+		return FALSE;
+	*version = map_share_hash_version(hash);
+	return TRUE;
+}
+
+/* ---------- a host's level name
+
+port (this fork): the game names a Custom Edition map <name>@ce
+(halo_map_families.h), custom_maps\<name> in the protocol. A host's level
+name is the map's own (network version 29, OpenCE's build-206): its file's
+name, without a hash it ends in when that is its hash's (another version's
+file, <name>_<hash>.map, which the game then plays by the name alone:
+map_family_alias), and its version, the hash's first 32 bits, goes in the
+game record (cache_files_map_version). No file is renamed. */
+
+void map_share_level_name_choose(
+	char *level_name,
+	long size)
+{
+	struct map_share_files_globals *globals = &map_share_files_globals;
+	char file[MAP_SHARE_PATH_SIZE];
+	char path[MAP_SHARE_PATH_SIZE];
+	char name[MAP_SHARE_PATH_SIZE];
+	char digits[MAP_SHARE_NAME_DIGITS + 1];
+	byte hash[MAP_SHARE_HASH_BYTES];
+	char const *suffix = map_family_suffix(_map_family_custom_edition);
+	long length;
+
+	globals->chosen_level[0] = 0;
+	if (!level_name || map_family_parse(level_name, file, sizeof(file)) != _map_family_custom_edition ||
+		!map_family_find(_map_family_custom_edition, file, path, sizeof(path)) || !map_share_map_hash(path, hash))
+	{
+		return;
+	}
+	/* the map's own name: its file's, without a hash it ends in if that is
+	its hash's */
+	csstrncpy(name, tag_name_strip_path(path), sizeof(name) - 1);
+	name[sizeof(name) - 1] = 0;
+	length = (long)csstrlen(name) - 4;
+	if (length <= 0)
+		return;
+	name[length] = 0;
+	map_share_hash_digits(hash, digits);
+	if (map_share_name_hashed(name) && !csstrcmp(name + length - MAP_SHARE_NAME_DIGITS, digits))
+		length -= MAP_SHARE_NAME_DIGITS + 1;
+	if (length <= 0 || length + csstrlen(suffix) >= (unsigned long)size ||
+		length + csstrlen(suffix) >= sizeof(globals->chosen_level) ||
+		csstrlen(CUSTOM_EDITION_LEVEL_NAME_PREFIX) + length > CUSTOM_EDITION_MAXIMUM_LEVEL_NAME_LENGTH)
+	{
+		return;
+	}
+	name[length] = 0;
+	/* (the file of another version, played by the name alone from now on) */
+	if (csstrcasecmp(name, file))
+		map_family_alias(name, path, TRUE);
+	csprintf(level_name, "%s%s", name, suffix);
+	csstrncpy(globals->chosen_level, level_name, sizeof(globals->chosen_level) - 1);
+	globals->chosen_version = map_share_hash_version(hash);
+	error(_error_silent, "map sharing: the game's map is %s (%s, not renamed, version %08lx)", level_name, path,
+		globals->chosen_version);
+}
+
+boolean map_share_level_name_version(
+	char const *level_name,
+	unsigned long *version)
+{
+	struct map_share_files_globals *globals = &map_share_files_globals;
+
+	if (!level_name || !globals->chosen_level[0] || csstrcasecmp(globals->chosen_level, level_name))
+		return FALSE;
+	*version = globals->chosen_version;
+	return TRUE;
+}
+
+/* port (this fork): the map torrents' download of a version beside
+another (map_torrents.c) */
 boolean map_share_file_digits(
 	char const *path,
 	char *digits)
 {
 	byte hash[MAP_SHARE_HASH_BYTES];
 
-	if (!level_hash_find(path, hash))
+	if (!map_share_map_hash(path, hash))
 		return FALSE;
 	map_share_hash_digits(hash, digits);
 	return TRUE;
-}
-
-void map_share_level_name_hash(
-	char *level_name,
-	long size)
-{
-	char file[MAP_SHARE_PATH_SIZE];
-	char path[MAP_SHARE_PATH_SIZE];
-	char hashed[MAP_SHARE_PATH_SIZE];
-	char digits[MAP_SHARE_NAME_DIGITS + 1];
-	byte hash[MAP_SHARE_HASH_BYTES];
-	char const *names = config_string("network.map_share_names");
-
-	/* (the game's name, <name>@ce: a Custom Edition map's, not named for
-	its hash yet) */
-	if (!level_name || map_family_parse(level_name, file, sizeof(file)) != _map_family_custom_edition ||
-		map_share_name_hashed(file) || !names || _stricmp(names, "hash"))
-	{
-		return;
-	}
-	if (!map_family_find(_map_family_custom_edition, file, path, sizeof(path)))
-		return;
-	/* (the name and its hash kept whole by the game engine) */
-	if (csstrlen(file) + 1 + MAP_SHARE_NAME_DIGITS > MAXIMUM_MAP_NAME_LENGTH)
-	{
-		error(_error_silent, "map sharing: %s is named as it is: too long a name for its hash too", file);
-		return;
-	}
-	if (!level_hash_find(path, hash))
-	{
-		error(_error_silent, "map sharing: '%s' could not be read to name it for its hash", path);
-		return;
-	}
-	map_share_hash_digits(hash, digits);
-	csprintf(hashed, "%s_%s", file, digits);
-	if (csstrlen(hashed) + csstrlen(map_family_suffix(_map_family_custom_edition)) >= (unsigned long)size)
-		return;
-	map_family_alias(hashed, path, TRUE);
-	csprintf(level_name, "%s%s", hashed, map_family_suffix(_map_family_custom_edition));
-	error(_error_silent, "map sharing: the game's map is %s (%s, not renamed)", level_name, path);
 }
 
 /* ---------- the hashing thread's work */
@@ -577,6 +711,7 @@ void map_share_files_update(
 					file->piece_hashes = globals->job.piece_hashes;
 					csmemcpy(file->hash, globals->job.hash, MAP_SHARE_HASH_BYTES);
 					file->ready = TRUE;
+					map_share_map_hash_remember(file->path, file->hash);
 				}
 			}
 			else

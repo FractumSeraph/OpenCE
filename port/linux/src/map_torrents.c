@@ -379,6 +379,24 @@ static void level_file_name(const char *level_name, char *file_name, int size)
 /* where the file named (<file>.map, or a resource map) is, where the map
 families find it (maps_ce, OpenCE's custom_maps, maps\ce...): the host's
 path; 0 if it is nowhere */
+/* a Custom Edition map file's header checksum (at 0x64, as the index holds
+it); 0 if it cannot be read */
+static unsigned long file_header_checksum(const char *path)
+{
+	unsigned char header[0x68];
+	FILE *file = fopen(path, "rb");
+	size_t read;
+
+	if (!file)
+		return 0;
+	read = fread(header, 1, sizeof(header), file);
+	fclose(file);
+	if (read != sizeof(header))
+		return 0;
+	return (unsigned long)header[0x64] | (unsigned long)header[0x65] << 8 | (unsigned long)header[0x66] << 16 |
+		(unsigned long)header[0x67] << 24;
+}
+
 static int map_file_path(const char *file_name, char *path, int size)
 {
 	char xbox_path[256];
@@ -1068,15 +1086,20 @@ static void seed_poll(void)
 		if (strncmp(wanted, "custom_maps\\", 12) && strncmp(wanted, "custom_maps/", 12))
 			return;
 		level_file_name(wanted, file_name, sizeof(file_name));
-		entry = index_find(file_name, version);
-		if (!entry)
+		if (!map_file_path(file_name, path, sizeof(path)))
 		{
-			platform_log("map torrents: %s (checksum %08lX) is not in the index: not seeded", file_name, version);
 			snprintf(seed.failed_level_name, sizeof(seed.failed_level_name), "%s", wanted);
 			return;
 		}
-		if (!map_file_path(file_name, path, sizeof(path)))
+		/* (the game's version is the header checksum for a game of network
+		version 28 and before, the start of the map's hash for one of 29,
+		which the index does not hold: the file's own checksum then) */
+		entry = index_find(file_name, version);
+		if (!entry)
+			entry = index_find(file_name, file_header_checksum(path));
+		if (!entry)
 		{
+			platform_log("map torrents: %s (version %08lX) is not in the index: not seeded", file_name, version);
 			snprintf(seed.failed_level_name, sizeof(seed.failed_level_name), "%s", wanted);
 			return;
 		}

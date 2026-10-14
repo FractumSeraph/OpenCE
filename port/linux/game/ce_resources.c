@@ -95,6 +95,12 @@ enum
 	MB: a map's Ogg Vorbis streams may decode to any length (silence takes
 	almost nothing compressed); the shipped maps' take a few megabytes */
 	CE_MAXIMUM_DECODED_SOUNDS_SIZE = 0x20000000,
+	/* the most bytes of a permutation's Ogg Vorbis stream read to be
+	decoded: as many as the most frames kept (ce_vorbis.c's 0x1000000) take
+	decoded, stereo. A stream is smaller than the samples it holds, so a
+	longer one would be refused once decoded, after as much memory as the
+	map asked for (OpenCE's build-206 caps its loader's so) */
+	CE_MAXIMUM_OGG_SIZE = 0x1000000 * 2 * 2,
 	/* (the played permutations are a 32-bit mask: sound_definitions.c) */
 	CE_MAXIMUM_PLAYED_PERMUTATIONS = 32,
 
@@ -1362,6 +1368,13 @@ static void ce_sounds_decode(
 
 				if (size <= 0)
 					continue;
+				if (size > CE_MAXIMUM_OGG_SIZE)
+				{
+					error(_error_silent, "Custom Edition maps: %s: an Ogg Vorbis permutation of %ld bytes; left as it "
+						"was", (char const *)xbox_pointer(instance->name), size);
+					all = FALSE;
+					break;
+				}
 				/* (another compression's samples stay in the sound's own file,
 				which a decoded sound is no longer read from) */
 				if (*(short *)(at + CE_PERMUTATION_COMPRESSION_OFFSET) != CE_SOUND_COMPRESSION_OGG)

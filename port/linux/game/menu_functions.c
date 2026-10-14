@@ -4719,8 +4719,7 @@ boolean ui_widget_port_join_map_fetch(void *advertised_game)
 		return FALSE;
 	map_family_parse(map, file, sizeof(file));
 	/* (here already, and the host's version: the join goes ahead) */
-	if (map_family_find(family, file, path, sizeof(path)) &&
-		(!game->map_version || cache_files_map_version(map) == (unsigned long)game->map_version))
+	if (map_family_find_version(family, file, (unsigned long)game->map_version, path, sizeof(path)))
 	{
 		return FALSE;
 	}

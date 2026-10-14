@@ -15,11 +15,6 @@ rem listed in the in-game Server Browser (false: only who has its invite)
 set HALO_DEDICATED_PUBLIC=true
 rem the control panel and API: a port on this computer, off when empty
 set HALO_DEDICATED_CONTROL=8080
-rem a Custom Edition map's name to the players: hash (custom_maps\<name>_<hash>,
-rem which OpenCE's players download it from this server by; ChupathingyCE's
-rem cannot play it), or plain (every build that has the map plays it)
-set HALO_NET_MAP_SHARE_NAMES=hash
-
 rem the data folder: the one with maps\ (ui.map and the multiplayer maps)
 rem and playlists\; this script's own folder unless set
 if not defined HALO_DATA_ROOT set HALO_DATA_ROOT=%~dp0.

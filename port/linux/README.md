@@ -532,7 +532,6 @@ the setting for one start of the game. It has priority over the file.
 | `network.votekick_minutes` | `5` | `HALO_NET_VOTEKICK_MINUTES` | When you host: the minutes that a player must play on the server before the player can start a vote to kick (`0` to `60`). To vote, a player must play for 2 minutes, or for this time if it is less. |
 | `network.votekick_ban_minutes` | `30` | `HALO_NET_VOTEKICK_BAN_MINUTES` | When you host: the minutes that a player who is kicked by a vote cannot join again (`1` to `1440`). |
 | `network.map_share` | `true` | `HALO_NET_MAP_SHARE` | When you host: send a player who joins without the game's Custom Edition map the map, and the resource maps that it needs and that the player does not have. SHARE MAPS in Server Setup > Map Sharing writes its choice here. Refer to "Map sharing". |
-| `network.map_share_names` | `"hash"` | `HALO_NET_MAP_SHARE_NAMES` | When you host: how the game names its Custom Edition map to the players. `"hash"`: with the start of the map's hash (`custom_maps\hugeass_0e2b3ee4`), as OpenCE's builds since build-189 expect, which they download a map by; ChupathingyCE's players cannot play a map named so. `"plain"`: by its name alone (`custom_maps\hugeass`), which every build plays if it has the map; this fork's players still download it, OpenCE's do not. No map file is renamed either way. Refer to "Map sharing". |
 | `network.map_share_upload` | `1024` | `HALO_NET_MAP_SHARE_UPLOAD` | When you host: the most kilobytes per second that the game sends of maps (`16` to `65536`). UPLOAD LIMIT in Server Setup > Map Sharing writes its choice here. |
 | `network.map_seed` | `true` | `HALO_NET_MAP_SEED` | When you play in the game of another machine: help send its map to players who join without it. HELP SEND MAPS in Settings > Network Setup > Map Sharing. |
 | `network.map_seed_upload` | `256` | `HALO_NET_MAP_SEED_UPLOAD` | When you play in the game of another machine: the most kilobytes per second that the game sends of maps to other players (`16` to `65536`). UPLOAD LIMIT in Settings > Network Setup > Map Sharing. |
@@ -985,7 +984,9 @@ on the internet. It also downloads the resource maps that the map needs
 the top of the screen shows the progress. In the lobby, the game starts when
 every player has the map. If the game already operates, you join it when
 the download is complete. If no player sends any of the map for a minute,
-you leave the game, and the main menu tells you why.
+you leave the game, and the main menu tells you why. If the downloaded map
+cannot be played, the game deletes the files that it downloaded, and you
+leave the game.
 
 All the players help (HELP SEND MAPS in Settings > Network Setup > Map
 Sharing, `network.map_seed`), as the peers of a torrent do:
@@ -999,31 +1000,28 @@ UPLOAD LIMIT in Settings > Network Setup > Map Sharing). Set these lower on
 a slow connection. DOWNLOAD MAPS there (`network.map_download`) turns
 downloading off: you then leave a game whose map you do not have.
 
-**This fork never renames, moves or replaces a map file.** OpenCE renames
-each map in `custom_maps` so that its name ends with the start of its hash
-(`hugeass.map` becomes `hugeass_0e2b3ee4.map`), and a host's game names the
-map that way (`custom_maps\hugeass_0e2b3ee4`), which is how OpenCE's players
-(build-189 and later) know which version to download. This fork does it
-differently:
+**This fork never renames, moves or replaces a map file.** Maps keep their
+names. Since network version 29 (OpenCE's build-206), a game is on a map by
+its name (`hugeass`), and says which version of it by the start of the map's
+hash, so a game always loads the version of the host, whatever your copy is
+called. (OpenCE's builds 189 to 201 renamed each map in `custom_maps`
+`hugeass_0e2b3ee4.map` and named the game's map so, and build-206 gives
+those names back; this fork did neither.)
 
-- **Hosting.** `network.map_share_names` says how the game names its map to
-  the players. `"hash"` (the default): `hugeass_0e2b3ee4`, as OpenCE expects.
-  The game works the hash out from your `hugeass.map` where it is, and leaves
-  the file as it is. OpenCE's players without the map download it;
-  ChupathingyCE's players cannot play a map named so (they look for a file of
-  that name). `"plain"`: `hugeass`, which every build plays if it has the map;
-  this fork's players still download it, OpenCE's do not. The host shares the
-  map from any of its Custom Edition folders (`maps_ce`, `custom_maps`, ...).
-- **Joining.** The game looks for the host's version by the checksum in the
-  map's header (the version the host's settings name): your own
+- **Hosting.** The game names its map by its name (`hugeass`) and sends the
+  start of its hash as its version; OpenCE's players (build-206 and later)
+  and this fork's without the map download it. The host shares the map from
+  any of its Custom Edition folders (`maps_ce`, `custom_maps`, ...).
+- **Joining.** The game looks for the host's version: by the start of its
+  hash (hosts of version 29), or by the checksum in its header (hosts of 28
+  and before, which may name the map `hugeass_0e2b3ee4`): your own
   `hugeass.map`, or a version beside it named `hugeass_<hash>.map` (OpenCE's
-  name, or one this game downloaded). A host's `hugeass_0e2b3ee4` is your
-  `hugeass.map` when that is the host's version.
-- **Downloading.** A map you do not have goes into `maps_ce` under the host's
-  name for it. When you have another version of it, the host's goes beside
-  yours as `hugeass_<hash>.map`: yours is never touched, and stays the one you
-  host with. A download that stops leaves a `.part` file there; the next
-  download of that map continues from it.
+  name, or one this game downloaded).
+- **Downloading.** A map you do not have goes into `maps_ce` under its own
+  name. When you have another version of it, the host's goes beside yours as
+  `hugeass_<hash>.map`: yours is never touched, and stays the one you host
+  with. A download that stops leaves a `.part` file there; the next download
+  of that map continues from it.
 
 Over the internet, the players of a game connect only to the host. To send
 each other a map, a player answers the other players of the game (who have
@@ -1413,7 +1411,7 @@ Other changes:
 | `rasterizer/xbox/rasterizer_xbox_widgets.c`, `objects/widgets/light_volumes.c` | A light volume's sprites (a plasma bolt's glow, a couple of hundred) are one draw. |
 | `rasterizer/rasterizer.h` | A frame holds 2048 transparent geometry groups, not 384 (`include/halo_port_capacity.h`): a co-op game with many added enemies asked for more, and the Xbox's pool drew the frame without the rest. |
 | `structures/structure_render.c` | The structure's visible surfaces are put in order by a radix sort, not `qsort_4byte`: the same order. |
-| `cache/cache_files.c`, `networking/network_client_manager.c`, `networking/network_server_manager.c`, `networking/network_server_message_handler.c`, `main/main.c`, `interface/interface.c` | Map sharing (`game/map_share.c`): a client that does not have the game's Custom Edition map asks the host for it instead of leaving, is not given time to precache it until it has it, and adds its players to a game in progress only then; the host names the game's map for its hash, takes the requests from any machine in the game, lobby too, and does not drop a machine that downloads; the transfers run each frame, and their progress is drawn over the screen. |
+| `cache/cache_files.c`, `networking/network_client_manager.c`, `networking/network_server_manager.c`, `networking/network_server_message_handler.c`, `main/main.c`, `interface/interface.c` | Map sharing (`game/map_share.c`): a client that does not have the game's Custom Edition map asks the host for it instead of leaving, is not given time to precache it until it has it, and adds its players to a game in progress only then; the host gives the game's map its own name and its version (its hash's start), takes the requests from any machine in the game, lobby too, and does not drop a machine that downloads; the transfers run each frame, and their progress is drawn over the screen. |
 | `cutscene/cinematics.c` | A scenario's titles (some Custom Edition maps show their name for the whole game) are not drawn over a menu, as the letterbox is not: the screen's overlays are drawn after the players' menus. |
 | `tag_files/tag_groups.h` | `TAG_BLOCK_GET_ELEMENT` returns an element in the block without a call, and calls `tag_block_get_element_with_size` for anything else. |
 | `interface/progress_bar.c`, `interface/ui_widget.c`, `rasterizer/xbox/rasterizer_xbox.c` | The loading screen's light sweeps over clouds the game makes when the maps folder has no `loading.tga`, and the rasterizer's caches of the device's states learn what the loading screen set (`rasterizer_forget_hardware_state`). The same screen covers the menus while a map downloads before its game is joined (`game/download_screen.c`, `maps.download_screen`): the menus go on behind it but take no presses, and B stops the download. |

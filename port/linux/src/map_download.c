@@ -294,15 +294,33 @@ static int unpack_and_check(const char *file, int hashed, unsigned int prefix, c
 		if (!ok)
 			snprintf(error, (size_t)error_size, "the map could not be read back");
 		else
-			ok = map_archive_check_header(header, map_size, file, map_download.version, error, error_size);
+			ok = map_archive_check_header(header, map_size, file, 0, error, error_size);
 		if (ok)
 		{
-			platform_log("map download: %s.map is a Custom Edition multiplayer map named %s, checksum %08x%s", file,
-				file, map_archive_header_checksum(header), map_download.version ? " (the host's)" :
-				" (the host's not known)");
+			platform_log("map download: %s.map is a Custom Edition multiplayer map named %s, checksum %08x", file,
+				file, map_archive_header_checksum(header));
 		}
 	}
 	CloseHandle(files.map);
+	/* (port, this fork: the host's version, its header checksum for a host
+	of network version 28 and before, the first 32 bits of its hash for one
+	of 29, OpenCE's build-206: either) */
+	if (ok && map_download.version && map_archive_header_checksum(header) != map_download.version)
+	{
+		unsigned int found = 0;
+
+		set_phase(MAP_DOWNLOAD_CHECKING, 0, 0);
+		if (!map_file_hash_prefix(partial_path, &found) || (found ? found : 1) != map_download.version)
+		{
+			snprintf(error, (size_t)error_size, "its checksum is %08x and its hash begins %08x, the host's version "
+				"%08x: another version of the map", map_archive_header_checksum(header), found, map_download.version);
+			ok = 0;
+		}
+		else
+			platform_log("map download: %s.map's hash begins %08x, the host's version", file, found);
+	}
+	else if (ok && map_download.version)
+		platform_log("map download: %s.map's checksum is the host's version", file);
 	/* (a hashed name's map is the host's file to the byte) */
 	if (ok && hashed)
 	{

@@ -104,14 +104,12 @@ one machine, use [Docker or systemd](docs/docker.md).
   sharing, network version 27 and later), with the resource maps the map
   needs that the player lacks; the players help each other, as a torrent's
   peers do. `HALO_NET_MAP_SHARE=false` turns it off,
-  `HALO_NET_MAP_SHARE_UPLOAD` caps it (KB/s, 1024 by default). The map's
-  name in the game (`HALO_NET_MAP_SHARE_NAMES`): `hash` (the default) names
-  it with the start of its hash (`custom_maps\hugeass_0e2b3ee4`), which is
-  what OpenCE's players download a map by, though ChupathingyCE's players
-  cannot play a map named so; `plain` names it `custom_maps\hugeass`, which
-  every build plays if it has the map, and which this fork's players (not
-  OpenCE's) download. The server never renames or changes its map files
-  ([port/linux/README.md](../port/linux/README.md), "Map sharing").
+  `HALO_NET_MAP_SHARE_UPLOAD` caps it (KB/s, 1024 by default). The map is
+  named by its name (`custom_maps\hugeass`) with the start of its hash as
+  its version (network version 29, as OpenCE's build-206), which OpenCE's
+  players and this fork's download it by. The server never renames or
+  changes its map files ([port/linux/README.md](../port/linux/README.md),
+  "Map sharing").
 
 ## Run your own server: moderators and the control panel
 
