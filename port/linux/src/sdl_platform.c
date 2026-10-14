@@ -24,6 +24,7 @@ and the debug keyboard that the game's console reads.
 #endif
 #include "touch_input.h"
 #include "delta.h"
+#include "shared_bans.h"
 #include "crash_report.h"
 
 #include <SDL3/SDL.h>
@@ -395,6 +396,8 @@ BOOL platform_sdl_initialize(void)
 	/* (the legacy table: a newer one fetched meanwhile; the browser's is the
 	page's, port/web/src/web_delta.c) */
 	delta_legacy_start();
+	/* (port, this fork: the ban lists of network.shared_bans, shared_bans.c) */
+	shared_bans_start();
 #endif
 	/* (Custom Edition maps downloaded and seeded: map_torrents.c) */
 	map_torrents_initialize();

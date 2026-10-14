@@ -2,3 +2,5 @@
 # Windows checkout (core.autocrlf): a CRLF shebang line does not start.
 *.sh text eol=lf
 port/android/gradlew text eol=lf
+# (run directly on Linux: a CRLF shebang line does not start)
+server/deploy/halo-bans-publish text eol=lf

@@ -479,6 +479,13 @@ static const struct config_setting config_settings[] =
 		"read. Anyone with the link can always use it; a new password or going\n"
 		"private still makes a new one, which is then kept. Copy that file to\n"
 		"one machine alone." },
+	{ "network.shared_bans", _config_string, "\"\"", "HALO_NET_SHARED_BANS", _environment_value, _platform_all,
+		"Hosting: ban lists other hosts publish, taken as this host's own bans:\n"
+		"their https:// addresses, with commas between them (FractumSeraph's\n"
+		"servers' is https://halovps.fractumseraph.net/bans/shared.txt). Fetched\n"
+		"at start and every 10 minutes into shared_bans.txt beside bans.txt; a\n"
+		"machine whose hardware id (or address) is in one is refused. Name only\n"
+		"lists whose publishers you trust. Empty: none." },
 	{ "network.join_from_clipboard", _config_boolean, "true", "HALO_NET_JOIN_FROM_CLIPBOARD", _environment_value,
 		_platform_all,
 		"Join the game of an invite link found on the clipboard when the game\n"

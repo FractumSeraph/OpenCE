@@ -1,0 +1,56 @@
+#!/usr/bin/env python3
+# Publishes FractumSeraph's servers' shared ban list (server/deploy/halo-bans-publish; installed as
+# /usr/local/sbin/halo-bans-publish, run every 2 minutes by
+# halo-bans-publish.timer): the bans of /opt/halo-bans/bans.txt (FractumSnap's
+# and FractumSlayer's, which both servers' data/bans.txt link to) that are
+# still on and have a hardware id, WITHOUT their IP addresses or Discord users
+# (personal data), to /srv/halo-bans/shared.txt, which Caddy serves at
+# https://halovps.fractumseraph.net/bans/shared.txt. Hosts running the fork
+# take it with network.shared_bans (port/linux/src/shared_bans.c).
+import os
+import time
+
+SOURCE = "/opt/halo-bans/bans.txt"
+TARGET = "/srv/halo-bans/shared.txt"
+# (the fields kept: when, the hardware id, the names, why, how long)
+KEPT = ("hwid=", "players=", "reason=", "until=")
+
+now = int(time.time())
+lines = []
+try:
+    with open(SOURCE, encoding="utf-8", errors="replace") as source:
+        for line in source:
+            line = line.rstrip("\r\n")
+            if not line or line.startswith("#"):
+                continue
+            fields = line.split("\t")
+            kept = [fields[0]] if "=" not in fields[0] else []
+            hwid = until = None
+            for field in fields:
+                if field.startswith("hwid="):
+                    hwid = field[5:]
+                if field.startswith("until="):
+                    until = field[6:]
+                if field.startswith(KEPT):
+                    kept.append(field)
+            # (no hardware id: an address alone, which is not published)
+            if not hwid or hwid == "none" or len(hwid) < 16:
+                continue
+            # (a ban for a while that is over)
+            if until and until.isdigit() and int(until) <= now:
+                continue
+            lines.append("\t".join(kept))
+except FileNotFoundError:
+    pass
+
+os.makedirs(os.path.dirname(TARGET), exist_ok=True)
+temporary = TARGET + ".new"
+with open(temporary, "w", encoding="utf-8") as target:
+    target.write("# FractumSeraph's Halo servers' shared ban list (FractumSnap, FractumSlayer).\n"
+                 "# A line a ban, as bans.txt has them: hardware ids, no IP addresses.\n"
+                 "# Hosts of github.com/FractumSeraph/OpenCE take it with\n"
+                 "# network.shared_bans = \"https://halovps.fractumseraph.net/bans/shared.txt\".\n")
+    for line in lines:
+        target.write(line + "\n")
+os.chmod(temporary, 0o644)
+os.replace(temporary, TARGET)

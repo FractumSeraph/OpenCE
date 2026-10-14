@@ -143,6 +143,10 @@ P2P_DISCORD_ID_SIZE and P2P_DISCORD_NAME_SIZE) */
 #define CHEATERS_FILE "d:\\cheaters.txt"
 /* ... and those it bans (by hand, and cheaters): their addresses refused */
 #define BANS_FILE "d:\\bans.txt"
+/* port (this fork): the bans of the lists other hosts publish, which a host
+takes as its own (network.shared_bans: port/linux/src/shared_bans.c) */
+#include "../src/shared_bans.h"
+#define SHARED_BANS_LOG_LIST 96
 
 /* a client's Discord user, as told (_distributed_message_client_identity) */
 struct distributed_client_identity
@@ -3865,26 +3869,21 @@ static boolean distributed_ban_line(
 	return line[0] != '#' && (strstr(line, "ip=") || strstr(line, "hwid="));
 }
 
-/* (the host: network_server_manager.c) whether a machine of this address
-(host byte order; an internet play peer's by its real one) is banned: its
-address one of BANS_FILE's (each line's "ip=", which a host may add or
-take out by hand), and the ban not over (its "until=") */
-boolean network_distributed_banned(
-	unsigned long address,
-	char const *hardware_id)
+/* whether a file of bans (BANS_FILE's form) has a ban, not over, of this
+address (its text) or hardware id (kept: sanitized), the line into banned_line
+if it has */
+static boolean distributed_banned_in(
+	char const *file_name,
+	char const *text,
+	char const *kept_hardware_id,
+	char *banned_line,
+	long banned_line_size)
 {
-	char text[32];
 	char line[512];
-	char kept_hardware_id[40];
 	FILE *file;
 	boolean banned = FALSE;
 
-	p2p_hardware_id_sanitize(kept_hardware_id, 33, hardware_id);
-	if (address)
-		distributed_address_text(address, text, sizeof(text));
-	else
-		text[0] = 0;
-	file = fopen(BANS_FILE, "r");
+	file = fopen(file_name, "r");
 	if (!file)
 		return FALSE;
 	while (!banned && fgets(line, sizeof(line), file))
@@ -3914,9 +3913,42 @@ boolean network_distributed_banned(
 		{
 			banned = TRUE;
 		}
+		if (banned)
+			csstrncpy(banned_line, line, banned_line_size - 1);
 	}
 	fclose(file);
 	return banned;
+}
+
+/* (the host: network_server_manager.c) whether a machine of this address
+(host byte order; an internet play peer's by its real one) is banned: its
+address one of BANS_FILE's (each line's "ip=", which a host may add or
+take out by hand), and the ban not over (its "until="); port (this fork):
+or of the shared lists' (SHARED_BANS_FILE, network.shared_bans) */
+boolean network_distributed_banned(
+	unsigned long address,
+	char const *hardware_id)
+{
+	char text[32];
+	char kept_hardware_id[40];
+	char line[512] = "";
+
+	p2p_hardware_id_sanitize(kept_hardware_id, 33, hardware_id);
+	if (address)
+		distributed_address_text(address, text, sizeof(text));
+	else
+		text[0] = 0;
+	if (distributed_banned_in(BANS_FILE, text, kept_hardware_id, line, sizeof(line)))
+		return TRUE;
+	if (distributed_banned_in(SHARED_BANS_FILE, text, kept_hardware_id, line, sizeof(line)))
+	{
+		char list[SHARED_BANS_LOG_LIST] = "";
+
+		distributed_ban_field(line, "list=", list, sizeof(list));
+		error(_error_silent, "a machine banned by a shared ban list (%s) refused", list[0] ? list : "?");
+		return TRUE;
+	}
+	return FALSE;
 }
 
 /* (the host: network_server_manager.c, its ban command; the dedicated

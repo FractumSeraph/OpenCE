@@ -28,6 +28,7 @@ never hosts.
 #include "browser.h"
 #include "halo_port_limits.h"
 #include "delta.h"
+#include "shared_bans.h"
 
 #include <signal.h>
 #include <stdio.h>
@@ -196,6 +197,8 @@ static void server_arguments(void)
 	server_check_data();
 	/* (the legacy table: a newer one fetched meanwhile) */
 	delta_legacy_start();
+	/* (port, this fork: the ban lists of network.shared_bans, shared_bans.c) */
+	shared_bans_start();
 	/* a write to a connection the other end closed fails instead of ending
 	the server (as sdl_platform.c); SIGTERM and SIGINT stop it at the next
 	frame */

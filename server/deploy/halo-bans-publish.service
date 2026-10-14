@@ -1,0 +1,6 @@
+[Unit]
+Description=Publish the Halo servers shared ban list (no IP addresses)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/halo-bans-publish

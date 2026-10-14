@@ -81,6 +81,34 @@ command ever shows.
 A machine that tells no hardware id (macOS builds have none today) is
 banned by its address alone; `sv_ban` says so.
 
+### Shared ban lists
+
+A server can take the bans other hosts publish as its own (this fork:
+`port/linux/src/shared_bans.c`). Name their lists in
+`HALO_NET_SHARED_BANS` (`network.shared_bans`): https:// addresses, with
+commas between them, for example FractumSeraph's servers' list:
+
+```
+HALO_NET_SHARED_BANS=https://halovps.fractumseraph.net/bans/shared.txt
+```
+
+The server fetches them at start and every 10 minutes into
+`shared_bans.txt` beside `bans.txt` (a list that cannot be fetched keeps its
+bans of the time before), and refuses a machine whose hardware id (or
+address, if a list has one) is in them, as it does its own bans. A list is
+`bans.txt`'s form, a line a ban; nothing else of it is kept. `sv_banlist` and
+`sv_unban` are about `bans.txt` alone: a shared ban is lifted by its
+publisher. Name only lists whose publishers you trust: their bans are
+yours.
+
+To publish your own, serve your bans over HTTPS without their addresses, as
+FractumSeraph's servers do with `server/deploy/halo-bans-publish` (run every
+2 minutes by `halo-bans-publish.service` and `.timer` beside it, its file
+served by the web server): each ban's time, hardware id, players, reason and
+end, never its IP address or Discord user, and no ban without a hardware id.
+Two servers on one machine share one list by linking their `bans.txt` to
+one file (each service allowed to write where it is: `ReadWritePaths`).
+
 ### Why there is no `sv_password`
 
 A join password needs the player's game to send one. A join request in the
