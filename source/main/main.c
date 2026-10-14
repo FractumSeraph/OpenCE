@@ -735,6 +735,7 @@ static struct _main_globals main_globals = { 0 };
 /* Keep the original globals layout; these clocks belong to pending requests. */
 static long main_loss_last_tick;
 static long main_respawn_last_tick;
+static long main_save_last_tick;
 boolean debug_force_frame_rate_update = FALSE;
 boolean debug_no_drawing = FALSE;
 boolean debug_game_save = FALSE;
@@ -1158,6 +1159,10 @@ static void screenshot_record(
 		error(_error_silent, error_message);
 	return;
 }
+
+/* port_config.c's */
+double config_real(const char *name);
+unsigned long config_changes(void);
 
 void set_window_camera_values(
 	struct render_window *window,
@@ -1636,6 +1641,8 @@ void main_save_map_safe(
 		main_globals.ticks_until_next_save_check = 0;
 		main_globals.ticks_unable_to_save = 0;
 		main_globals.safe_intervals = 0;
+		/* (the tick before: the first check is at once) */
+		main_save_last_tick = game_time_get()-1;
 	}
 	return;
 }
@@ -1650,6 +1657,8 @@ void main_save_map_no_timeout(
 		main_globals.ticks_until_next_save_check = 0;
 		main_globals.ticks_unable_to_save = 0;
 		main_globals.safe_intervals = 0;
+		/* (the tick before: the first check is at once) */
+		main_save_last_tick = game_time_get()-1;
 	}
 	main_globals.save_map_timeout = FALSE;
 	return;
@@ -2094,26 +2103,40 @@ static void main_save_map_private(
 
 		if (save_map_safely)
 		{
-			if (main_globals.ticks_unable_to_save++ >= 240 &&
-				main_globals.save_map_timeout)
+			/* port: the counts below are of game ticks, as on the Xbox, whose
+			loop ran once a tick (30 a second). This loop runs once a frame, and
+			at 60 frames a second or more a checkpoint gave up in a few seconds,
+			before the fight it waited on was over: few checkpoints came */
+			long current_tick = game_time_get();
+			long ticks = current_tick-main_save_last_tick;
+
+			if (current_tick < main_save_last_tick)
+				ticks = 0;
+			main_save_last_tick = current_tick;
+
+			while (ticks-- > 0 && !save_map)
 			{
-				if (debug_game_save)
-					console_printf(FALSE, "gave up trying to save");
-				main_globals.saving_map = FALSE;
-				return;
-			}
-			else if (main_globals.ticks_until_next_save_check-- <= 0)
-			{
-				if (game_safe_to_save())
+				if (main_globals.ticks_unable_to_save++ >= 240 &&
+					main_globals.save_map_timeout)
 				{
-					if (main_globals.safe_intervals++ >= 3)
-						save_map = TRUE;
+					if (debug_game_save)
+						console_printf(FALSE, "gave up trying to save");
+					main_globals.saving_map = FALSE;
+					return;
 				}
-				else
+				else if (main_globals.ticks_until_next_save_check-- <= 0)
 				{
-					main_globals.safe_intervals = 0;
+					if (game_safe_to_save())
+					{
+						if (main_globals.safe_intervals++ >= 3)
+							save_map = TRUE;
+					}
+					else
+					{
+						main_globals.safe_intervals = 0;
+					}
+					main_globals.ticks_until_next_save_check = 10;
 				}
-				main_globals.ticks_until_next_save_check = 10;
 			}
 		}
 		else
@@ -2961,9 +2984,53 @@ static void screenshot_render(
 	return;
 }
 
+/* port: when the main menu's build number box (set_textbox_to_build_number,
+empty) was last drawn: the main menu's screen is up while it is */
+unsigned long main_version_box_shown;
+
+/* port: this build's version (build_identity_watermark), small and faint
+in the bottom right corner, where the Xbox's build number was, clear of the
+HUD: on the main menu's own screen (none of the screens it leads to, whose
+button prompts are there), and in a game with display.version_watermark
+while no menu is up */
+static void main_version_watermark_render(
+	void)
+{
+	extern char const *build_identity_watermark(void);
+	extern int config_boolean(char const *name);
+	extern boolean main_menu_is_active(void);
+	/* (light grey, faint) */
+	real_argb_color color = { 0.4f, 0.8f, 0.8f, 0.8f };
+	long font_tag_index;
+	rectangle2d bounds;
+	boolean shown;
+
+	if (main_menu_is_active())
+		shown = system_milliseconds() - main_version_box_shown < 250;
+	else
+		shown = config_boolean("display.version_watermark") && !ui_widgets_active();
+	if (!shown)
+		return;
+	font_tag_index = tag_loaded(FONT_GROUP_TAG, "ui\\small_ui");
+	if (font_tag_index == NONE)
+		font_tag_index = hud_globals->messaging.single_player_font.index;
+	if (font_tag_index == NONE)
+		return;
+	bounds = render.camera.window_bounds;
+	bounds.x1 = (short)(bounds.x1 - 8);
+	bounds.y0 = (short)(bounds.y1 - 22);
+	bounds.y1 = (short)(bounds.y1 - 4);
+	draw_string_set_format(NONE, _text_justification_right, 0);
+	draw_string_set_color(&color);
+	draw_string_set_font(font_tag_index);
+	rasterizer_draw_string(&bounds, NULL, NULL, 0, build_identity_watermark());
+}
+
 void main_framerate_render(
 	void)
 {
+	main_version_watermark_render();
+
 	if (display_framerate)
 	{
 		long font_tag_index;

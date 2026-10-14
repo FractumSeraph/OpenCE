@@ -97,8 +97,17 @@ public class HaloActivity extends SDLActivity {
         state.putString("pending-layout-export", pendingLayoutExport);
     }
 
+    /** Halo PC maps from the system's file picker (MapImporter); no storage permission */
+    public void chooseMapFiles() {
+        MapImporter.choose(this);
+    }
+
     @Override
     protected void onActivityResult(int request, int result, Intent data) {
+        if (request == MapImporter.REQUEST_CODE) {
+            MapImporter.handleResult(this, result, data, null);
+            return;
+        }
         if (request != EXPORT_LAYOUT && request != IMPORT_LAYOUT) {
             super.onActivityResult(request, result, data);
             return;

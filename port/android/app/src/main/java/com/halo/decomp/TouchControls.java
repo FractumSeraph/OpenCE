@@ -810,7 +810,7 @@ public final class TouchControls extends View implements SensorEventListener, In
     }
 
     private void showOptions() {
-        String[] items = {"General", "Edit buttons layout", "Look sensitivity"};
+        String[] items = {"General", "Edit buttons layout", "Look sensitivity", "Import maps"};
         AlertDialog dialog = new AlertDialog.Builder(getContext())
             .setTitle("Options")
             .setItems(items, (d, which) -> {
@@ -819,8 +819,11 @@ public final class TouchControls extends View implements SensorEventListener, In
                 } else if (which == 1) {
                     editing = true;
                     setHidden(false);
-                } else {
+                } else if (which == 2) {
                     post(this::showSensitivity);
+                } else {
+                    // (ChupathingyCE's: Halo PC maps from the system's file picker)
+                    ((HaloActivity) getContext()).chooseMapFiles();
                 }
             })
             .setNegativeButton("Close", null)

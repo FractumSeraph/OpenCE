@@ -325,7 +325,10 @@ Where the game's `maps` folder is:
 | Windows | next to `halo.exe` |
 | Android | `/sdcard/Android/data/net.fractumseraph.halo/files` |
 
-Copy the `.map` files from your own Halo PC install. Include `bitmaps.map`,
+Copy the `.map` files from your own Halo PC install. On Android, Import
+maps (hold the app's icon, or the touch controls' Options in the game)
+picks `.map` files or `.zip` archives with Android's own file picker and
+puts each in its folder. Include `bitmaps.map`,
 `sounds.map` and `loc.map` from Custom Edition in `maps_ce`: every Halo PC
 map reads them. Halo PC's own `ui.map` there adds its map names and
 pictures. The maps appear in the multiplayer map list after the Xbox maps,
@@ -519,7 +522,10 @@ A few people look for most:
 | `display.vsync`, `display.max_fps` | Vertical sync, and a frame rate cap (0 for none). |
 | `display.menus` | `"xbox"` (the default; `"pc"` in the browser) or `"pc"`, the Halo PC style menus with their Server Browser. |
 | `display.high_res_text` | `true` draws the game's text (menus and HUD) with sharp fonts at your resolution; `false` uses the maps' original bitmap fonts. The Server Browser and the moderation overlays use the system's fonts either way. For a blocky look overall, also set `display.resolution_scaling = "original"`. |
+| `display.field_of_view` | How wide the first-person view is, in degrees: 70 (the Xbox's) by default, 50 to 120. |
+| `display.match_timer` | `true` shows a timed multiplayer game's time left at the top of the screen (off by default). |
 | `display.player_names` | Names over players' heads: `"all"`, `"allies"`, `"enemies"` or `"none"`. |
+| `game.unlock_all_levels` | `true` gives new profiles every campaign level. By default a new profile starts at The Pillar of Autumn, as on the Xbox. Profiles made by earlier versions had every level open; `profile_reset_campaign` in the console starts one over. |
 | `audio.volume`, `audio.music_volume`, `audio.effects_volume` | Volumes, from 0.0 to 1.0. |
 | `input.mouse_sensitivity`, `input.invert_mouse` | Mouse aim. |
 | `controls.*` | Every key: `controls.jump = "Space"`, or two at once, such as `"F, Mouse 4"`. |

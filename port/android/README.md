@@ -158,8 +158,24 @@ To make a copy of the saved games, enter
 
 The app plays Halo PC (Custom Edition, HaloMD and retail) maps as the other
 builds do: refer to "Halo PC maps" in the main
-[README](../../README.md#halo-pc-maps). Copy the files from a computer, for
-example
+[README](../../README.md#halo-pc-maps).
+
+To add maps on the device, use **Import maps**: hold the app's icon and
+choose Import Halo PC maps, or, in the game, open the touch controls'
+Options and choose Import maps. Android's own file picker opens (no
+storage permission is asked for). Pick one or more `.map` files, or `.zip`
+archives of them, and the app copies each into its folder by its header
+(`port/android/app/src/main/java/com/halo/decomp/MapImporter.java`): a
+Custom Edition map (cache version 609), and `bitmaps.map`, `sounds.map` and
+`loc.map`, into `maps_ce`; a Halo PC 1.0 map (version 7) into `maps_md`
+when it is named as HaloMD's are (`<name>_<number>.map`), else into
+`maps_pc`. Xbox maps are left out: they come from the disc image. A map
+replaces a file of the same name in its folder. From a zip, only the
+`.map` files are taken, by their names alone (never a folder from the
+archive). This is the way in on recent Android versions, where file
+managers cannot open the app's folder.
+
+Or copy the files from a computer, for example
 `adb push <folder>/. /sdcard/Android/data/dev.horrible.chupathingyce/files/maps_ce/`.
 The older `maps/ce` and `md_maps` of earlier versions are moved into
 `maps_ce` and `maps_md` when the game starts (unless

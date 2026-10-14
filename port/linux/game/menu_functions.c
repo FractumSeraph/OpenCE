@@ -106,6 +106,8 @@ MULTIPLAYER) */
 /* (cache_files.c: a map file's header checksum, its version) */
 unsigned long cache_files_map_version(char const *map_name);
 #include "halo_server_browser.h"
+/* (the multiplayer maps past the Xbox's: ui_map_list.c) */
+#include "halo_ui_map_list.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -1093,6 +1095,19 @@ static short map_kind_rows_update(struct widget_instance *list, short *first, sh
 
 static void multiplayer_map_text(short map, wchar_t *text)
 {
+#ifdef HALO_CUSTOM_EDITION
+	wchar_t const *own = ui_map_list_text(ui_map_list_string_index(map, _ui_map_list_string_lobby_name));
+
+	if (own)
+	{
+		long length;
+
+		for (length = 0; own[length] && length < ROW_TEXT_LENGTH - 1; length++)
+			text[length] = own[length];
+		text[length] = 0;
+		return;
+	}
+#endif
 	string_get("pc\\main_menu\\mp_map_list", map, text);
 }
 
@@ -3519,7 +3534,7 @@ static void map_display_name(char const *map_name, wchar_t *text)
 	{
 		if (!_stricmp(scenario_name(names[index]), scenario_name(map_name)))
 		{
-			string_get("pc\\main_menu\\mp_map_list", index, text);
+			multiplayer_map_text(index, text);
 			return;
 		}
 	}

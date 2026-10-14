@@ -111,6 +111,30 @@ the Xbox's. */
 #define HALO_PORT_SOUND_CACHE_SIZE 0x1000000 /* (0x400000) */
 #endif
 
+/* ---------- transparent geometry, particles and lights a frame draws
+
+What one view draws in a frame, past which the rest is not drawn: its
+transparent geometry groups (each a projectile's or an effect's transparent
+model, glow, light volume or run of particles: a busy multiplayer fight
+spends the Xbox's 384, and plasma bolts, the plasma pistol's charge glow
+and the rest stop drawing), the runs of particles that share a definition,
+and the dynamic lights (an assault rifle's flashlight, each plasma bolt's
+light) found in the clusters it sees. The desktop builds draw several
+times as many. Only what is drawn changes: these are rebuilt every frame,
+outside the game state, and nothing of them reaches the network, so
+machines with other limits still play the same game. Android's guest build,
+OpenCE's web build (HALO_WEB) and the Xbox builds keep the Xbox's. */
+
+#if !(defined(HALO_ANDROID) && !defined(HALO_64BIT)) && !defined(HALO_WEB) && !defined(HALO_XBOX_CONSOLE)
+#define HALO_PORT_MAXIMUM_TRANSPARENT_GEOMETRY_GROUPS 2048 /* (384) */
+#define HALO_PORT_MAXIMUM_RENDERED_PARTICLE_GROUPS 2048 /* (512) */
+#define HALO_PORT_MAXIMUM_RENDERED_LIGHTS 512 /* (128) */
+#else
+#define HALO_PORT_MAXIMUM_TRANSPARENT_GEOMETRY_GROUPS 384 /* (384) */
+#define HALO_PORT_MAXIMUM_RENDERED_PARTICLE_GROUPS 512 /* (512) */
+#define HALO_PORT_MAXIMUM_RENDERED_LIGHTS 128 /* (128) */
+#endif
+
 /* ---------- AI
 
 Network co-op adds enemies for its players (port/linux/game/coop_enemies.c):
@@ -157,16 +181,5 @@ without its widget */
 #define HALO_PORT_MAXIMUM_CONTRAIL_POINTS 8192 /* (1024) */
 #define HALO_PORT_MAXIMUM_LIGHTS_PER_MAP 4096 /* (896) */
 #define HALO_PORT_MAXIMUM_GAME_LOOPING_SOUNDS 4096 /* (1024) */
-
-/* ---------- rasterizer
-
-A frame's transparent geometry groups: each transparent part of a model drawn,
-each widget drawn (light volumes, antennas, flags, glows), each batch of
-dynamic geometry (particles, contrails), each transparent surface of the
-structure. A full pool draws the frame without the
-rest ("too many transparent geometry groups" in debug.txt): a b30 co-op game
-with eight times the enemies asked for 464 in a frame. Each group is 160
-bytes */
-#define HALO_PORT_MAXIMUM_TRANSPARENT_GEOMETRY_GROUPS 2048 /* (384) */
 
 #endif /* __HALO_PORT_CAPACITY_H */

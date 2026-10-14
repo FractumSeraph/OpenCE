@@ -72,6 +72,16 @@
             </intent-filter>
         </activity>
 
+        <!-- the launcher icon's "Import maps" shortcut (LauncherActivity):
+             the system's file picker for Halo PC maps, over what was on
+             screen -->
+        <activity
+            android:name=".MapImportActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.Transparent"
+            android:configChanges="orientation|screenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode" />
+
         <!-- in a process of its own, with a fresh Java heap (HaloApplication) -->
         <activity
             android:name=".HaloActivity"

@@ -36,6 +36,10 @@ when the player acts.
 #include "../src/delta_moderation.h"
 #include "../src/ui_overlay.h"
 
+int config_boolean(char const *name);
+char const *config_string(char const *name);
+void platform_log(char const *format, ...);
+
 /* ---------- constants */
 
 enum
@@ -316,6 +320,10 @@ void moderation_screen_update(
 	{
 		moderation_screen.notice_seen = moderation_screen.moderation.notice_count;
 		moderation_screen.notice_time = system_milliseconds();
+		if (moderation_screen.moderation.notice[0])
+			platform_log("server %s: %s",
+				moderation_screen.moderation.notice_kind == _delta_moderation_notice_warning ? "warning" : "notice",
+				moderation_screen.moderation.notice);
 	}
 	if (moderation_screen.moderation.result_count != moderation_screen.result_seen)
 	{
@@ -395,6 +403,49 @@ static char const *role_name(
 	}
 }
 
+/* a setting's "#RRGGBB" or "#RRGGBBAA" as the overlay's 0xRRGGBBAA; empty or
+bad gives the fallback (a bad value is logged once per setting) */
+static unsigned int banner_color(
+	char const *name,
+	unsigned int fallback)
+{
+	static char bad[3][64];
+	static char const *const names[3] = {
+		"display.server_message_text_color", "display.server_message_border_color",
+		"display.server_message_background_color" };
+	char const *text = config_string(name);
+	unsigned long value = 0;
+	size_t length, index;
+	int which = 0;
+
+	while (which < 2 && strcmp(name, names[which]))
+		which++;
+	if (!text || !text[0])
+		return fallback;
+	length = strlen(text);
+	if (text[0] == '#' && (length == 7 || length == 9))
+	{
+		for (index = 1; index < length; index++)
+		{
+			char c = text[index];
+			int digit = c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 :
+				c >= 'A' && c <= 'F' ? c - 'A' + 10 : -1;
+
+			if (digit < 0)
+				break;
+			value = value << 4 | (unsigned long)digit;
+		}
+		if (index == length)
+			return length == 7 ? (unsigned int)(value << 8 | 0xFF) : (unsigned int)value;
+	}
+	if (strncmp(bad[which], text, sizeof(bad[which]) - 1))
+	{
+		snprintf(bad[which], sizeof(bad[which]), "%s", text);
+		platform_log("settings: %s = \"%s\" is not \"#RRGGBB\" or \"#RRGGBBAA\"; the default is used", name, text);
+	}
+	return fallback;
+}
+
 /* over the game: a warning the server sent, and a link waiting */
 static void render_banner(
 	void)
@@ -403,14 +454,18 @@ static void render_banner(
 	unsigned long now = system_milliseconds();
 	char text[192];
 
-	if (moderation->notice_count && now - moderation_screen.notice_time < NOTICE_DURATION && moderation->notice[0])
+	if (moderation->notice_count && now - moderation_screen.notice_time < NOTICE_DURATION && moderation->notice[0] &&
+		config_boolean("display.server_messages"))
 	{
 		boolean warning = moderation->notice_kind == _delta_moderation_notice_warning;
 
-		ui_overlay_rect(110, 24, 420, 30, 6, COLOR_PANEL);
-		ui_overlay_outline(110, 24, 420, 30, 6, 1.0f, warning ? COLOR_WARNING : COLOR_PANEL_EDGE);
+		ui_overlay_rect(110, 24, 420, 30, 6,
+			banner_color("display.server_message_background_color", COLOR_PANEL));
+		ui_overlay_outline(110, 24, 420, 30, 6, 1.0f,
+			banner_color("display.server_message_border_color", warning ? COLOR_WARNING : COLOR_PANEL_EDGE));
 		snprintf(text, sizeof(text), "%s%s", warning ? "Server warning: " : "", moderation->notice);
-		ui_overlay_text(UI_FONT_BOLD, 13.0f, 320, 32, UI_ALIGN_CENTER, warning ? COLOR_WARNING : COLOR_TEXT, text);
+		ui_overlay_text(UI_FONT_BOLD, 13.0f, 320, 32, UI_ALIGN_CENTER,
+			banner_color("display.server_message_text_color", warning ? COLOR_WARNING : COLOR_TEXT), text);
 	}
 	else if (moderation->bind_waiting && !moderation_screen.active)
 	{

@@ -4,6 +4,10 @@ What changed in the ChupathingyCE Dedicated Server. The server is released
 with the game and has its version; the game's own changes are in its
 release notes.
 
+## 0.7.5b
+
+- No server changes of its own; built from the same code as the game's 0.7.5b.
+
 ## 0.7.5a
 
 - OpenCE's network version 29 (build-206). No message changed, but a game
