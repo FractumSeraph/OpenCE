@@ -1182,6 +1182,8 @@ boolean cache_files_map_present(
 	/* (port/linux/src/map_archive.h: Halo PC's own maps) */
 	int map_archive_stock_name(char const *name);
 	int map_archive_stock_message(char const *name, char *text, int size);
+	/* (port/linux/src/map_download.h) */
+	int map_download_possible(char const *name);
 #endif
 	wchar_t error_text[512];
 	char file[64];
@@ -1240,9 +1242,12 @@ boolean cache_files_map_present(
 			return TRUE;
 		}
 		/* port (ChupathingyCE): one of Halo PC's own maps, by its name or a
-		hashed name's base: the player's to copy from their install, never
-		downloaded (port/linux/src/map_archive.h) */
-		if (family == _map_family_custom_edition && map_families_enabled() && map_archive_stock_name(file))
+		hashed name's base: the player's to copy from their install
+		(port/linux/src/map_archive.h); in this fork only when it is not
+		downloaded (map_download_possible: "never", or a build without Online
+		Games), else offered as any map */
+		if (family == _map_family_custom_edition && map_families_enabled() && map_archive_stock_name(file) &&
+			!map_download_possible(file))
 		{
 			char stock[384];
 
@@ -1260,8 +1265,6 @@ boolean cache_files_map_present(
 		}
 		else if (family == _map_family_custom_edition && map_families_enabled())
 		{
-			/* (port/linux/src/map_download.h) */
-			int map_download_possible(char const *name);
 			char const *config_string(char const *name);
 
 #ifdef HALO_GAME_BROWSER

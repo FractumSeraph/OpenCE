@@ -123,8 +123,10 @@ boolean server_browser_map_blocked(char const *map, wchar_t *message, short leng
 	case _ce_map_missing:
 		/* (a hashed name by the file the player knows: map_archive.h) */
 		map_archive_display_name(file, display, (int)sizeof(display));
-		/* (one of Halo PC's own maps: never downloaded, map_archive.h) */
-		if (family == _map_family_custom_edition && map_archive_stock_name(file))
+		/* (one of Halo PC's own maps: never downloaded, map_archive.h;
+		port (this fork): when it is not downloaded) */
+		if (family == _map_family_custom_edition && map_archive_stock_name(file) &&
+			!server_browser_map_downloadable(map))
 			snprintf(text, sizeof(text), "%s.map is one of Halo PC's own maps: install it yourself", display);
 		else
 			snprintf(text, sizeof(text), server_browser_map_downloadable(map) ?

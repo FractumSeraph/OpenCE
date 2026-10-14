@@ -324,14 +324,16 @@ static boolean ce_map_downloadable(
 }
 
 /* whether a game's missing map is one of Halo PC's own (map_archive.h):
-never downloaded, the player told to copy it from their install */
+never downloaded, the player told to copy it from their install (port
+(this fork): only when it is not downloaded, map_download_possible) */
 static boolean ce_map_stock(
 	struct browser_game const *game)
 {
 	char file[BROWSER_MAP_LENGTH];
 
 	return map_file(game->map, file, sizeof(file)) == _map_family_custom_edition &&
-		ce_map_state(game, FALSE) == _ce_map_missing && map_archive_stock_name(file);
+		ce_map_state(game, FALSE) == _ce_map_missing && map_archive_stock_name(file) &&
+		!map_download_possible(file);
 }
 
 /* (network_client_manager.c: the game whose host's identifier the invite
@@ -704,7 +706,7 @@ static void wait_for_host(
 			short family = map_family_parse(advertisement.map_name, file, sizeof(file));
 
 			if (family == _map_family_custom_edition && !ui_map_list_family_present(family, file) &&
-				map_archive_stock_name(file))
+				map_archive_stock_name(file) && !map_download_possible(file))
 			{
 				offer_stock(file);
 				return;
@@ -955,8 +957,9 @@ void browser_screen_map_missing(
 	if (browser_screen.offer != _offer_none)
 		return;
 	/* (one of Halo PC's own maps: its panel says where to copy it from, in
-	place of the main menu's error, whose dialog is too small for it) */
-	if (map_archive_stock_name(file))
+	place of the main menu's error, whose dialog is too small for it; port
+	(this fork): when it is not downloaded, map_download_possible) */
+	if (map_archive_stock_name(file) && !map_download_possible(file))
 	{
 		csstrncpy(browser_screen.offer_file, file, sizeof(browser_screen.offer_file) - 1);
 		browser_screen.offer_file[sizeof(browser_screen.offer_file) - 1] = 0;

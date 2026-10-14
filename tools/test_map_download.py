@@ -457,17 +457,21 @@ def test_community_maps_are_not_stock(harness, name):
     assert run(harness, "stock", name) == "0"
 
 
-def test_downloader_never_asks_for_stock_maps():
-    """map_download_possible and map_download_start both refuse them, before
-    any repository is asked"""
+def test_downloader_offers_stock_maps_in_this_fork():
+    """this fork (FractumSeraph/OpenCE) downloads Halo PC's own maps too, which
+    ChupathingyCE leaves to the player's install: map_download_possible does
+    not refuse them, map_download_start says so and goes on to the map
+    torrents, and the "install it yourself" panels and words are left for a
+    map that is not downloaded"""
     download = (SOURCE / "map_download.c").read_text(encoding="utf-8")
     possible = download[download.index("int map_download_possible("):download.index("int map_download_start(")]
-    assert "!map_archive_stock_name(name)" in possible
+    assert "!map_archive_stock_name(name)" not in possible
     start = download[download.index("int map_download_start("):]
-    refused = start.index("map_archive_stock_name(name)")
-    # (this fork: the map torrents first, then the repositories' thread)
-    assert refused < start.index("map_torrents_fetch(") < start.index("start_thread()")
-    assert "is one of the game's own maps; not downloaded" in start[:start.index("map_torrents_fetch(")]
+    assert start.index("downloaded in this fork") < start.index("map_torrents_fetch(") < start.index("start_thread()")
+    cache = (ROOT / "source" / "cache" / "cache_files.c").read_text(encoding="utf-8")
+    assert "map_archive_stock_name(file) &&\n\t\t\t!map_download_possible(file)" in cache.replace("\r\n", "\n")
+    browser = (ROOT / "port" / "linux" / "game" / "browser_screen.c").read_text(encoding="utf-8")
+    assert browser.count("map_archive_stock_name(file) && !map_download_possible(file)") == 2
 
 
 def test_stock_message_in_the_missing_map_paths():

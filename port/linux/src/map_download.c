@@ -8,7 +8,8 @@ have downloaded missing maps from for years, as Chimera uses them
 name for its zip archive (locator.php?format=zip&map=<name>&type=halom),
 over HTTPS. Never for one of Halo PC's own maps or files (bloodgulch, ui,
 ...: map_archive_stock_name), which the repositories also have: those are
-the player's to copy from their own install.
+the player's to copy from their own install. (This fork downloads those
+too, from its seed box and web seed first: map_download_possible.)
 
 On a thread of its own: the archive is received into maps_ce (no more than
 MAP_ARCHIVE_MAXIMUM_SIZE), the next repository asked when one fails; the
@@ -520,9 +521,10 @@ void map_download_set_setting(int setting)
 int map_download_possible(const char *name)
 {
 #if defined(HALO_GAME_BROWSER) && !defined(HALO_SERVER)
-	/* (never one of Halo PC's own maps: the player's own copy is played) */
-	return map_download_setting() != MAP_DOWNLOADS_NEVER && map_archive_name_valid(name) &&
-		!map_archive_stock_name(name);
+	/* (port (this fork): Halo PC's own maps too, which ChupathingyCE leaves
+	to the player's install: this fork's seed box and web seed have them,
+	as its first start's download has the Xbox's) */
+	return map_download_setting() != MAP_DOWNLOADS_NEVER && map_archive_name_valid(name);
 #else
 	(void)name;
 	return 0;
@@ -537,13 +539,10 @@ int map_download_start(const char *name, unsigned int version)
 
 	if (!map_archive_name_valid(name))
 		return 0;
-	/* Halo PC's own maps are the player's to copy from their install, never
-	asked of a repository (map_archive.h) */
+	/* (port (this fork): Halo PC's own maps are downloaded too, which
+	ChupathingyCE leaves to the player's install: map_download_possible) */
 	if (map_archive_stock_name(name))
-	{
-		platform_log("map download: %s is one of the game's own maps; not downloaded", name);
-		return 0;
-	}
+		platform_log("map download: %s is one of Halo PC's own maps; downloaded in this fork", name);
 	pthread_mutex_lock(&map_download.lock);
 	if (map_download.running)
 	{

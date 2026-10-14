@@ -42,7 +42,9 @@ once it is there the game is joined again. ChupathingyCE's downloader
 (`port/linux/src/map_download.c`) asks the map torrents first and its own
 community map repositories (maps.halonet.net and its mirrors) only when
 they do not bring the map (the index lacks it, or every source failed).
-With `"never"`, nothing is downloaded but what the host sends.
+With `"never"`, nothing is downloaded but what the host sends. Halo PC's
+own maps are offered like any other in this fork (ChupathingyCE leaves them
+to the player's install, and says so only with `"never"` here).
 
 A game whose host does not send its map (map sharing off, or an OpenCE
 build's host that cannot) is downloaded the same way, if the index has the

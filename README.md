@@ -385,6 +385,10 @@ against the maps' index, and only then from the repositories above
 ([docs/map_torrents.md](docs/map_torrents.md)). Maps from any of them are
 listed in `maps_ce/downloaded_maps.txt`, and `"never"` stops all of them
 but map sharing (which has its own setting, Network Settings > Map Sharing).
+Unlike ChupathingyCE, this fork offers Halo PC's own maps too (Blood Gulch,
+Putput and the rest, also under a hashed name), from its seed box and web
+seed first, as its first start downloads the Xbox's maps; "Install this map
+yourself" is left for `"never"`.
 
 **When the host changes map.** If a game you're in moves on to a Custom
 Edition map you don't have (a dedicated server's playlist going to its next
