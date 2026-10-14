@@ -104,6 +104,7 @@ python tools/test_touch_layout.py                           # the Android touch 
 python tools/test_light_storage.py
 python tools/test_death_timing.py
 python tools/test_hud_thresholds.py                         # the HUD meter shader (NumPy, Pillow, SciPy; OpenGL 4.5)
+python -m pytest -q tools/test_mbedtls_threads.py         # Mbed TLS on several threads (ThreadSanitizer)
 python -m pytest -q tools/test_web_build.py                 # the web build's graph, sockets, menus
 node --test "port/web/tests/*.test.js"                      # the web page's importer and service worker
 node port/web/tests/webrtc_native.mjs chromium firefox      # the native builds' WebRTC with browsers (Playwright)

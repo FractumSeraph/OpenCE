@@ -19,6 +19,7 @@ import socket
 import ssl
 import stat
 import subprocess
+import sys
 import threading
 import time
 import warnings
@@ -27,6 +28,10 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+
+from tools.linux_build import MBEDTLS_DEFINES  # noqa: E402
+
 MBEDTLS = ROOT / "port" / "third_party" / "mbedtls"
 SOURCES = [ROOT / "server" / "tests" / "tls_test.c", ROOT / "server" / "platform" / "control_tls.c"]
 # (the build machine's Python may have no TLS 1.3, as macOS's own LibreSSL
@@ -52,7 +57,7 @@ def build_mbedtls(cc, folder):
 
     def compile_one(source):
         obj = folder / (source.stem + ".o")
-        result = subprocess.run([cc, "-std=gnu11", "-O1", "-w", f"-I{MBEDTLS / 'include'}",
+        result = subprocess.run([cc, "-std=gnu11", "-O1", "-w", f"-I{MBEDTLS / 'include'}", *MBEDTLS_DEFINES,
                                  f"-I{MBEDTLS / 'library'}", "-c", str(source), "-o", str(obj)],
                                 capture_output=True, text=True)
         assert result.returncode == 0, result.stderr
@@ -79,7 +84,8 @@ def binary(tmp_path_factory):
     archive = build_mbedtls(cc, folder / "mbedtls")
     output = folder / "tls_test"
     base = [cc, "-std=gnu11", "-Wall", "-Wextra", "-Werror", "-O1", "-g", f"-I{MBEDTLS / 'include'}",
-            f"-I{ROOT / 'server' / 'platform'}", *map(str, SOURCES), str(archive), "-o", str(output)]
+            *MBEDTLS_DEFINES, f"-I{ROOT / 'server' / 'platform'}", *map(str, SOURCES), str(archive), "-o",
+            str(output), "-lpthread"]
     result = subprocess.run(base[:1] + SANITIZERS + base[1:], capture_output=True, text=True)
     if result.returncode != 0:
         # (a compiler without the sanitizers' runtime: unsanitized)

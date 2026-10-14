@@ -40,6 +40,7 @@ from .embed_assets import hud_assets_build, hud_configure_inputs, ui_fonts_build
 from .embed_webui import webui_inputs
 from .linux64_build import LINUX64_GAME_FLAGS, LINUX64_POSIX_FLAGS
 from .linux_build import (
+    MBEDTLS_DEFINES,
     MBEDTLS_DIR,
     MONOCYPHER_DIR,
     PORT_CONFIG,
@@ -248,8 +249,9 @@ def generate_server_build(n: Writer, sln: Any) -> None:
     libs = "-lm -lpthread"
     # (SDL's headers; Monocypher's, for the control API's credentials; Mbed
     # TLS's, for its HTTPS beyond the machine: control_tls.c, whose library
-    # the game list's requests already link)
-    include_flags = [f"-I{SDL_INCLUDE}", f"-I{MONOCYPHER_DIR}", f"-I{MBEDTLS_DIR / 'include'}", f"-I{QRCODEGEN_DIR}"]
+    # the game list's requests already link, built with its locks)
+    include_flags = [f"-I{SDL_INCLUDE}", f"-I{MONOCYPHER_DIR}", f"-I{MBEDTLS_DIR / 'include'}", *MBEDTLS_DEFINES,
+                     f"-I{QRCODEGEN_DIR}"]
 
     n.comment(f"The dedicated server (ninja server; tools/server_build.py): {', '.join(arches)}, "
               f"{'static, musl' if static else 'glibc'}")

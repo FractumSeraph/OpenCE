@@ -902,9 +902,12 @@ Optional and outbound: the server dials the site; no port is opened.
    answer says so and the server deletes it. `HALO_DEDICATED_LINK=false`
    turns the link off for good.
 
-HTTPS requests in the server go one at a time across its threads (Mbed TLS
-is built without locks), so polls are short; long polling waits for a build
-of Mbed TLS with its threading on.
+HTTPS requests in the server go one at a time across its threads (the
+request lock, `posix_browser_lock`, is held for a whole request), so polls
+are short: a long poll would hold up the game list's requests and Delta
+Stats' uploads. Mbed TLS itself is built with its threading on
+(`MBEDTLS_THREADING_C`), for the game thread's DTLS with browsers, which
+takes no request lock.
 
 ### The event log's hook
 

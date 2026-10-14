@@ -131,6 +131,7 @@ These files use only the Windows SDK:
 | `src/win32_posix.c` | The POSIX functions on Windows threads, critical sections, condition variables, `VirtualAlloc` and the performance counter. |
 | `src/win32_memory_watch.c` | The write tracking of textures, with a vectored exception handler. |
 | `src/win32_crash.c` | The crash reports. Refer to "Crash reports". |
+| `src/win32_mbedtls.c`, `mbedtls/threading_alt.h` | The locks of Mbed TLS (`MBEDTLS_THREADING_ALT`), slim reader/writer locks that it gets before `main`. The DTLS of the game thread and the HTTPS of the other threads use Mbed TLS at the same time. |
 
 `port.json` gives the Linux files that these files replace, and the Windows
 libraries of the link.

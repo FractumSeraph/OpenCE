@@ -135,6 +135,14 @@ ZLIB_SOURCES = ("adler32.c", "crc32.c", "inffast.c", "inflate.c", "inftrees.c", 
 ZLIB_DEFINES = ("-DZ_PREFIX", "-Dz_errmsg=z_port_errmsg")
 # the self-updater's TLS (port/linux/src/posix_update.c)
 MBEDTLS_DIR = Path("port/third_party/mbedtls")
+# Mbed TLS with its own locks (pthread mutexes): its PSA crypto (setup,
+# random generator, key slots) is shared by the game thread's DTLS with
+# browsers (posix_dtls.c) and the other threads' HTTPS (posix_browser.c,
+# posix_update.c, the server's control_tls.c), which Mbed TLS 3.6 allows only
+# with MBEDTLS_THREADING_C. Every unit that includes its headers needs these
+# too: its random generators' and entropy's structs hold a mutex with them
+# (the Windows builds' own: tools/windows_build.py WINDOWS_MBEDTLS_DEFINES)
+MBEDTLS_DEFINES = ["-DMBEDTLS_THREADING_C", "-DMBEDTLS_THREADING_PTHREAD"]
 STB_DIR = Path("port/third_party/stb")
 # internet play's UPnP (port/linux/src/posix_upnp.c)
 MINIUPNPC_DIR = Path("port/third_party/miniupnpc")
@@ -593,7 +601,7 @@ def linux32_objects(n: Writer, units: Linux32Units, obj_dir: Path, extra_cflags:
     ])
     posix_cflags = " ".join(posix_flags + target + [f"-I{platform_dir}"] + browser_defines
                             + units.extra_flags + units.include_flags)
-    mbedtls_include = f"-I{MBEDTLS_DIR / 'include'}"
+    mbedtls_include = " ".join([f"-I{MBEDTLS_DIR / 'include'}", *MBEDTLS_DEFINES])
     for source in sorted(platform_dir.glob("*.c")):
         if source.as_posix() in units.excluded:
             continue

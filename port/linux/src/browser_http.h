@@ -39,9 +39,10 @@ int posix_browser_download_open(const char *url, const char *user_agent, int *st
 end, negative on an error (each read waits about ten seconds at most) */
 int posix_browser_download_read(int download, void *buffer, int size);
 void posix_browser_download_close(int download);
-/* taken around every use of Mbed TLS, which as built here has no locks of
-its own: the requests above take it themselves; the self-updater's
-downloads (posix_update.c) take it too */
+/* one request at a time: the requests above take it themselves; the
+self-updater's downloads (posix_update.c) take it around their uses of
+Mbed TLS too. (Mbed TLS has locks of its own, MBEDTLS_THREADING_C: the game
+thread's DTLS, posix_dtls.c, does not take this one) */
 void posix_browser_lock(void);
 void posix_browser_unlock(void);
 

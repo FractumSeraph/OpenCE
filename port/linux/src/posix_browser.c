@@ -380,12 +380,13 @@ int posix_browser_request(const char *url, const char *form, const char *content
 static int request_as(const char *url, const char *body_data, size_t body_length, const char *content_type,
 	const char *user_agent, const char *headers, char *response, int response_size, char *error, int error_size);
 
-/* (one user of Mbed TLS at a time across the program's threads: as it is
-built here it has no locks of its own, and its PSA random generator, key
-slots and setup are shared; the game list's thread, the crash reporter's,
-Delta Stats' uploads, a dedicated server's Delta Control link, the player
-key's first making and the self-updater's downloads (posix_update.c) all
-use it) */
+/* (one request at a time across the program's threads, and around the
+uses of Mbed TLS of the self-updater's downloads (posix_update.c): the game
+list's thread, the crash reporter's, Delta Stats' uploads, a dedicated
+server's Delta Control link and the player key's first making. Mbed TLS
+itself is built with its own locks (MBEDTLS_THREADING_C: its PSA random
+generator, key slots and setup are shared with them and with the game
+thread's DTLS, posix_dtls.c, which does not take this lock) */
 #ifdef _WIN32
 static SRWLOCK tls_lock = SRWLOCK_INIT;
 #else

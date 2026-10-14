@@ -30,6 +30,7 @@ from .linux_build import (
     EXPAT_SOURCES,
     GAME_FLAGS as LINUX_GAME_FLAGS,
     KCP_DIR,
+    MBEDTLS_DEFINES,
     MBEDTLS_DIR,
     MINIUPNPC_DEFINES,
     MINIUPNPC_DIR,
@@ -305,7 +306,7 @@ class Lp64Build:
         ])
         posix_cflags = " ".join([*host.target_flags, *host.posix_flags, f"-I{platform_dir}", host.host_include,
                                  *game_browser_defines(sln)])
-        mbedtls_include = f"-I{MBEDTLS_DIR / 'include'}"
+        mbedtls_include = " ".join([f"-I{MBEDTLS_DIR / 'include'}", *MBEDTLS_DEFINES])
         for source in sorted(platform_dir.glob("*.c")):
             if str(source) in excluded:
                 continue

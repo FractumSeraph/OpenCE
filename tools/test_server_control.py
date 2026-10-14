@@ -28,6 +28,7 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 from tools.embed_webui import generate as generate_webui  # noqa: E402
+from tools.linux_build import MBEDTLS_DEFINES  # noqa: E402
 
 MONOCYPHER = ROOT / "port" / "third_party" / "monocypher" / "monocypher.c"
 QRCODEGEN = ROOT / "port" / "third_party" / "qrcodegen"
@@ -94,9 +95,9 @@ def build(cc, binary, extra, sources=None, standard="c11"):
     archive = mbedtls_archive(cc, binary.parent / "mbedtls")
     return subprocess.run(
         [cc, f"-std={standard}", "-Wall", "-Wextra", "-Werror", "-O1", "-g", *extra,
-         f"-I{ROOT / 'port' / 'third_party' / 'monocypher'}", f"-I{MBEDTLS / 'include'}", f"-I{QRCODEGEN}",
-         *(str(source) for source in (sources or SOURCES)), str(webui), str(archive), "-o", str(binary),
-         *(["-lpthread"] if sources else [])],
+         f"-I{ROOT / 'port' / 'third_party' / 'monocypher'}", f"-I{MBEDTLS / 'include'}", *MBEDTLS_DEFINES,
+         f"-I{QRCODEGEN}", *(str(source) for source in (sources or SOURCES)), str(webui), str(archive), "-o",
+         str(binary), "-lpthread"],
         capture_output=True, text=True,
     )
 

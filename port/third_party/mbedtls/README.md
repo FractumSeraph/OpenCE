@@ -10,7 +10,16 @@ Upstream: https://github.com/Mbed-TLS/mbedtls, release `mbedtls-3.6.7` (the
 
 Only `library/`, `include/` and `LICENSE` of the release are kept, without
 their build files, and nothing in them is changed. The default configuration
-(`include/mbedtls/mbedtls_config.h`) is used, with TLS 1.2 and 1.3.
+(`include/mbedtls/mbedtls_config.h`) is used, with TLS 1.2 and 1.3, and with
+its locks: the builds define `MBEDTLS_THREADING_C` for every unit that
+includes its headers, with `MBEDTLS_THREADING_PTHREAD` on Linux, macOS and
+Android (`tools/linux_build.py` `MBEDTLS_DEFINES`) and, on Windows,
+`MBEDTLS_THREADING_ALT` with slim reader/writer locks
+(`port/windows/mbedtls/threading_alt.h`, `port/windows/src/win32_mbedtls.c`).
+Several threads use it at once: the game thread's DTLS, and the HTTPS of the
+game list, Delta Stats, the dedicated server's control link and the
+downloads, which share its PSA crypto (its setup, random generator and key
+slots).
 
 Every native build's internet play uses it for DTLS with browsers
 (`port/linux/src/posix_dtls.c`: WebRTC's DTLS 1.2 server, with a

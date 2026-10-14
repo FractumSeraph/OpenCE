@@ -49,8 +49,10 @@ async function build() {
     [path.join(monocypher, 'monocypher-ed25519.c'), ['-w']],
     [path.join(root, 'port/web/tests/webrtc_native.c'), []],
   ];
-  const flags = ['-std=gnu11', '-O1', '-g', '-D_GNU_SOURCE', `-I${path.join(mbedtls, 'include')}`,
-    `-I${path.join(mbedtls, 'library')}`, `-I${monocypher}`, `-I${path.join(root, 'port/linux/src')}`];
+  // (Mbed TLS with its locks, as the builds have it: tools/linux_build.py MBEDTLS_DEFINES)
+  const flags = ['-std=gnu11', '-O1', '-g', '-D_GNU_SOURCE', '-DMBEDTLS_THREADING_C', '-DMBEDTLS_THREADING_PTHREAD',
+    `-I${path.join(mbedtls, 'include')}`, `-I${path.join(mbedtls, 'library')}`, `-I${monocypher}`,
+    `-I${path.join(root, 'port/linux/src')}`];
   const objects = [];
   const queue = sources.map(([source, extra], index) => () => new Promise((resolve, reject) => {
     const object = path.join(work, `${index}.o`);

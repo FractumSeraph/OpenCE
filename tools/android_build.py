@@ -26,7 +26,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .linux_build import (CUSTOM_EDITION_DEFINES, LINUX_PROFILE, MBEDTLS_DIR, MINIUPNPC_DEFINES, MINIUPNPC_DIR, MUSL_MATH_DIR, STB_DIR,
+from .linux_build import (CUSTOM_EDITION_DEFINES, LINUX_PROFILE, MBEDTLS_DEFINES, MBEDTLS_DIR, MINIUPNPC_DEFINES, MINIUPNPC_DIR, MUSL_MATH_DIR, STB_DIR,
                           XDK_INCLUDE, compile_launcher, configuration_defines, game_browser_defines, game_defines_and_includes,
                           game_sources, miniupnpc_sources, musl_math_sources, opus_flags, opus_sources, pgo_mode,
                           pgo_profile, profile_use_flags, updater_defines, xdk_headers)
@@ -636,7 +636,7 @@ def generate_android_build(n: Writer, sln: Any) -> None:
     # port/third_party/mbedtls, as the other posix_*.c in the host
     game_browser = getattr(sln, "game_browser", False)
     mbedtls_cflags = " ".join([host_cflags, *(game_browser_defines(sln) if game_browser else []),
-                               f"-I{MBEDTLS_DIR / 'include'}", f"-I{MBEDTLS_DIR / 'library'}"])
+                               f"-I{MBEDTLS_DIR / 'include'}", f"-I{MBEDTLS_DIR / 'library'}", *MBEDTLS_DEFINES])
     tls_sources = [LINUX_DIR / "src" / "posix_dtls.c"]
     if game_browser:
         tls_sources.append(LINUX_DIR / "src" / "posix_browser.c")

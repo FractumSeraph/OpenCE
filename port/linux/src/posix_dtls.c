@@ -15,6 +15,15 @@ p2p_webrtc.c compares its hash with the one signalled.
 There are no cookies (HelloVerifyRequest): datagrams reach an endpoint only
 from an address whose ICE check passed, with the session's password.
 
+It runs on the game thread while other threads use Mbed TLS too (the game
+list's requests, Delta Stats' uploads, a dedicated server's control link,
+the self-updater's and the map archives' downloads), and takes no lock of
+theirs (posix_browser_lock, held through a request's waits for the server):
+Mbed TLS is built with its own locks (MBEDTLS_THREADING_C:
+tools/linux_build.py, tools/windows_build.py), held only while it touches
+what the threads share (PSA crypto's setup, random generator and key slots),
+so a frame never waits for a download.
+
 Built with the host's ABI, as the other posix_*.c.
 */
 

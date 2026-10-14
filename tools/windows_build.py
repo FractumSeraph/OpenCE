@@ -88,6 +88,11 @@ QRCODEGEN_DIR = Path("port/third_party/qrcodegen")
 MONOCYPHER_DIR = Path("port/third_party/monocypher")
 # internet play's DTLS with browsers (port/linux/src/posix_dtls.c)
 MBEDTLS_DIR = Path("port/third_party/mbedtls")
+# Mbed TLS with its own locks, as on Linux (tools/linux_build.py
+# MBEDTLS_DEFINES), but Windows' slim reader/writer locks
+# (port/windows/mbedtls/threading_alt.h; win32_mbedtls.c sets them up before
+# main): every unit that includes its headers needs these too
+WINDOWS_MBEDTLS_DEFINES = ["-DMBEDTLS_THREADING_C", "-DMBEDTLS_THREADING_ALT", f"-I{PORT_DIR / 'mbedtls'}"]
 # the port's zlib (port/third_party/zlib/zlib_prefixed.h), which inflates
 # the maps, the menus' and the HUD's PNGs and the updates
 ZLIB_DIR = Path("port/third_party/zlib")
@@ -613,7 +618,7 @@ def generate_windows_target(n: Writer, sln: Any, target: WindowsTarget, server: 
             f"-I{_quote(sdl_include)}",
         ])
         replaced = set(config.get("replaced_platform_sources", []))
-        mbedtls_include = f"-I{MBEDTLS_DIR / 'include'}"
+        mbedtls_include = " ".join([f"-I{MBEDTLS_DIR / 'include'}", *WINDOWS_MBEDTLS_DEFINES])
         for source in sorted(linux_platform.glob("*.c")):
             if source.name in replaced or (server and source.as_posix() in SERVER_EXCLUDED):
                 continue
@@ -626,7 +631,7 @@ def generate_windows_target(n: Writer, sln: Any, target: WindowsTarget, server: 
             elif source.name == "posix_browser.c":
                 # (the game list's requests: on Winsock, with Mbed TLS, as
                 # on Linux)
-                add_object(source, f"{win32_cflags} -I{MBEDTLS_DIR / 'include'}")
+                add_object(source, f"{win32_cflags} {mbedtls_include}")
             elif source.name == "posix_ui_font.c":
                 # (the overlay's fonts: stb_truetype; their data, tools/embed_assets.py --fonts)
                 add_object(source, f"{platform_cflags} -I{STB_DIR}")
@@ -636,6 +641,8 @@ def generate_windows_target(n: Writer, sln: Any, target: WindowsTarget, server: 
         for source in sorted((PORT_DIR / "src").glob("*.c")):
             if source.name == "win32_upnp.c":
                 add_object(source, f"{win32_cflags} {miniupnpc_include}")
+            elif source.name == "win32_mbedtls.c":
+                add_object(source, f"{win32_cflags} {mbedtls_include}")
             else:
                 add_object(source, win32_cflags if source.name.startswith("win32_") else platform_cflags)
         # internet play's UPnP (port/third_party/miniupnpc), on Winsock, as
@@ -652,7 +659,7 @@ def generate_windows_target(n: Writer, sln: Any, target: WindowsTarget, server: 
             # Windows units', over server/platform/win32's POSIX headers
             for source in SERVER_PLATFORM_SOURCES:
                 add_object(source, f"{platform_cflags} {updater_defines(getattr(sln, 'port_release', False))}")
-            server_cflags = " ".join([win32_cflags, f"-I{WINDOWS_SERVER_POSIX}", f"-I{MBEDTLS_DIR / 'include'}",
+            server_cflags = " ".join([win32_cflags, f"-I{WINDOWS_SERVER_POSIX}", mbedtls_include,
                                       f"-I{MONOCYPHER_DIR}", f"-I{QRCODEGEN_DIR}", "-D_CRT_SECURE_NO_WARNINGS",
                                       "-D_CRT_NONSTDC_NO_WARNINGS"])
             for source in (SERVER_NATIVE_SOURCES + [WINDOWS_SERVER_POSIX / "server_win32.c"]

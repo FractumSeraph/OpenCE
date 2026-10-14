@@ -59,12 +59,13 @@ static mbedtls_x509_crt certificates;
 static int certificates_loaded;
 static int crypto_ready;
 
-/* Mbed TLS, as it is built here, has no locks of its own, and its PSA
-random generator, key slots and setup are shared with the game list's
-requests (posix_browser.c), Delta Stats' uploads and the rest: every use of
-it here is taken in turn with theirs (posix_browser_lock). Only the use: the
+/* every use of Mbed TLS here is taken in turn with the game list's
+requests (posix_browser.c), Delta Stats' uploads and the rest
+(posix_browser_lock), as ChupathingyCE's build has it. Only the use: the
 waits for the server's bytes are outside it, so a map archive's download
-(map_archives.c), which can take minutes, does not hold up the game list */
+(map_archives.c), which can take minutes, does not hold up the game list.
+(Mbed TLS itself is built with its own locks, MBEDTLS_THREADING_C, for what
+the threads share: its PSA random generator, key slots and setup) */
 static void tls_lock(void)
 {
 #ifdef HALO_GAME_BROWSER

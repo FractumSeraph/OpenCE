@@ -615,9 +615,12 @@ certificate store of Windows (WinHTTP). The folder of the executable must
 let the game write to it.
 
 On Linux, the downloads of the updater and of the map archives use Mbed TLS
-in turn with the game list's requests, because Mbed TLS is built without
-locks of its own. They hold the lock only while they use Mbed TLS: while a
-download waits for the server, the game list can make its requests.
+in turn with the game list's requests. They hold the lock of the requests
+only while they use Mbed TLS: while a download waits for the server, the
+game list can make its requests. Mbed TLS itself is built with its own locks
+(`MBEDTLS_THREADING_C`, `tools/linux_build.py`), because the DTLS of
+internet play with browsers (`src/posix_dtls.c`) uses it on the thread of
+the game at the same time, and does not wait for the requests.
 
 Builds that you make yourself have no build number. They do not look for
 updates.
