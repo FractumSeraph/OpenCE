@@ -96,6 +96,44 @@ static void test_command_line(void)
 	long_line[COMMAND_LINE_WORD_SIZE - 1] = 'x';
 	long_line[COMMAND_LINE_WORD_SIZE] = 0;
 	CHECK(!command_line_parse(long_line, &line, error, sizeof(error)));
+	/* a reason: one word in quotes, or the rest of the line */
+	CHECK(command_line_parse("sv_warn 1 \"Please keep it friendly. This is a test warning from the server.\"", &line,
+		error, sizeof(error)));
+	CHECK(line.count == 3 && !strcmp(line.words[2], "Please keep it friendly. This is a test warning from the server."));
+	CHECK(command_line_parse("sv_warn 1 Please keep it friendly. This is a test warning from the server.  ", &line,
+		error, sizeof(error)));
+	CHECK(line.count == 3 && !strcmp(line.words[2], "Please keep it friendly. This is a test warning from the server."));
+	CHECK(command_line_parse("sv_kick \"Master Chief\" stop saying \"gg ez\"", &line, error, sizeof(error)));
+	CHECK(line.count == 3 && !strcmp(line.words[1], "Master Chief") && !strcmp(line.words[2], "stop saying \"gg ez\""));
+	CHECK(command_line_parse("sv_ban 2 1d12h camping the base, again and again", &line, error, sizeof(error)));
+	CHECK(line.count == 4 && !strcmp(line.words[2], "1d12h") && !strcmp(line.words[3], "camping the base, again and again"));
+	CHECK(command_line_parse("sv_ban 2 2h", &line, error, sizeof(error)) && line.count == 3);
+	CHECK(command_line_parse("sv_kick 2", &line, error, sizeof(error)) && line.count == 2);
+	CHECK(!command_line_parse("sv_warn 1 \"in quotes\" and not", &line, error, sizeof(error)) && error[0]);
+	CHECK(!command_line_parse("sv_warn 1 \"open", &line, error, sizeof(error)));
+	/* (127 characters, quoted or not; 128 too many) */
+	memcpy(long_line, "sv_warn 1 ", 10);
+	memset(long_line + 10, 'r', COMMAND_LINE_REASON_SIZE - 1);
+	long_line[10 + COMMAND_LINE_REASON_SIZE - 1] = 0;
+	CHECK(command_line_parse(long_line, &line, error, sizeof(error)) && line.count == 3 &&
+		(int)strlen(line.words[2]) == COMMAND_LINE_REASON_SIZE - 1);
+	long_line[10 + COMMAND_LINE_REASON_SIZE - 1] = 'r';
+	long_line[10 + COMMAND_LINE_REASON_SIZE] = 0;
+	CHECK(!command_line_parse(long_line, &line, error, sizeof(error)));
+	long_line[10] = '"';
+	long_line[10 + COMMAND_LINE_REASON_SIZE] = '"';
+	long_line[10 + COMMAND_LINE_REASON_SIZE + 1] = 0;
+	CHECK(command_line_parse(long_line, &line, error, sizeof(error)) && line.count == 3 &&
+		(int)strlen(line.words[2]) == COMMAND_LINE_REASON_SIZE - 1);
+	long_line[10 + COMMAND_LINE_REASON_SIZE] = 'r';
+	long_line[10 + COMMAND_LINE_REASON_SIZE + 1] = '"';
+	long_line[10 + COMMAND_LINE_REASON_SIZE + 2] = 0;
+	CHECK(!command_line_parse(long_line, &line, error, sizeof(error)));
+	/* (other commands' words are no longer than before) */
+	memcpy(long_line, "sv_map ", 7);
+	memset(long_line + 7, 'm', COMMAND_LINE_WORD_SIZE);
+	long_line[7 + COMMAND_LINE_WORD_SIZE] = 0;
+	CHECK(!command_line_parse(long_line, &line, error, sizeof(error)));
 	/* (a tiny error buffer is not overrun) */
 	CHECK(!command_line_parse("\"", &line, error, 1) && error[0] == 0);
 

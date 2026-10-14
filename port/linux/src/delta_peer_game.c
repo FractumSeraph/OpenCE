@@ -601,6 +601,50 @@ unsigned char delta_peer_advertised_flags(void)
 		DELTA_ADVERTISED_FLAG : 0;
 }
 
+/* (the wire's name fits its place, unended) */
+typedef char delta_advertised_wire_fits[sizeof(DELTA_WIRE) - 1 <= DELTA_ADVERTISED_WIRE_SIZE ? 1 : -1];
+
+void delta_peer_advertised_wire(unsigned char *reserved, int size)
+{
+	if (size < DELTA_ADVERTISED_WIRE_OFFSET + 1 + DELTA_ADVERTISED_WIRE_SIZE)
+		return;
+	memset(reserved + DELTA_ADVERTISED_WIRE_OFFSET, 0, 1 + DELTA_ADVERTISED_WIRE_SIZE);
+	if (!delta_peer_advertised_flags())
+		return;
+	reserved[DELTA_ADVERTISED_WIRE_OFFSET] = DELTA_MAJOR;
+	memcpy(reserved + DELTA_ADVERTISED_WIRE_OFFSET + 1, DELTA_WIRE, sizeof(DELTA_WIRE) - 1);
+}
+
+int delta_peer_advertised_wire_matches(const unsigned char *reserved, int size, char *theirs, int theirs_size)
+{
+	const unsigned char *wire = reserved + DELTA_ADVERTISED_WIRE_OFFSET + 1;
+	int length = 0;
+	int index;
+
+	if (theirs_size > 0)
+		theirs[0] = 0;
+	if (size < DELTA_ADVERTISED_WIRE_OFFSET + 1 + DELTA_ADVERTISED_WIRE_SIZE ||
+		delta_peer_protocol() == _delta_peer_protocol_opence ||
+		!(reserved[HALO_PORT_ADVERTISED_FLAGS_OFFSET] & DELTA_ADVERTISED_FLAG) ||
+		reserved[DELTA_ADVERTISED_WIRE_OFFSET] != DELTA_MAJOR)
+	{
+		return -1;
+	}
+	while (length < DELTA_ADVERTISED_WIRE_SIZE && wire[length])
+		length++;
+	/* (none: a host of this major from before the wire was advertised) */
+	if (!length)
+		return -1;
+	if (length == (int)sizeof(DELTA_WIRE) - 1 && !memcmp(wire, DELTA_WIRE, (size_t)length))
+		return 1;
+	/* (printable ASCII alone, for the player's message and the log) */
+	for (index = 0; index < length && index < theirs_size - 1; index++)
+		theirs[index] = wire[index] >= 0x20 && wire[index] < 0x7F ? (char)wire[index] : '?';
+	if (theirs_size > 0)
+		theirs[index] = 0;
+	return 0;
+}
+
 int delta_peer_host_player_limit(void)
 {
 	if (!delta_game.ready || delta_game.role != _role_host)

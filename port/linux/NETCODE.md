@@ -198,11 +198,18 @@ other to send it; version 28 holds the players of a machine still
 downloading the map out of the game until it has the map, keeps a
 multiplayer map's first scripted BSP, leaves dynamic lights and the
 flashlight on past the Xbox game's player and vehicle limits, and readies a
-second weapon picked up while firing; version 29 names a Custom Edition map
-by its own name (`custom_maps\hugeass`, which every screen shows) and says
-which version it is by the map version of the game record, its hash's first
-32 bits (the header checksum before), which a client finds its file by
-(below, "Map sharing"). This fork's machines read and write the signalling
+second weapon picked up while firing; version 29 (OpenCE's build-206)
+names a Custom Edition map by its own name (`custom_maps\hugeass`) and puts
+which version of it the host plays in the game record's map version: the
+first 32 bits of the map's whole-file hash (BLAKE2b of a label, the file's
+size and its 256 KiB pieces' hashes, `port/linux/src/map_archive.h`), read
+big-endian, 1 for 0, where versions 23 to 28 put the map's header checksum.
+A client plays its file of that name and version, or one named for its hash
+(`hugeass_0e2b3ee4.map`, a download beside another version of the name),
+and still takes an older host's header checksum and the hashed level names
+(`custom_maps\hugeass_0e2b3ee4`) its map sharing gave
+(`port/linux/game/map_families.c`, `map_family_find_version`). A host hashes
+a map once a run, when its game is put on it. This fork's machines read and write the signalling
 of 26 and of the versions before it (p2p_signal.c, MESSAGE_VERSION_OLD), so
 they join both, and take a map file whose checksum or hash is the host's
 version (map_family_version_matches), so they play the Custom Edition maps

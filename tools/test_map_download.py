@@ -411,6 +411,37 @@ def test_whole_file_hash(harness, tmp_path, size):
     assert run(harness, "hash", path) == f"{expected} {expected[:8]}"
 
 
+# ---------- map versions (network version 29)
+
+
+def test_version_is_the_hash_or_the_checksum(harness, tmp_path):
+    """a host of network version 29 sends the hash's first 32 bits, read
+    big-endian; older hosts the header checksum; 0 is any"""
+    data = make_map(checksum=0x1234ABCD, size=0x50000)
+    path = write(tmp_path, data, "versioned.map")
+    hash_version = reference_hash(data)[:8]
+    assert run(harness, "version", path, hash_version) == f"{hash_version} 1234abcd host's"
+    assert run(harness, "version", path, "1234abcd") == f"{hash_version} 1234abcd host's"
+    assert run(harness, "version", path, "0") == f"{hash_version} 1234abcd host's"
+    assert run(harness, "version", path, "deadbeef") == f"{hash_version} 1234abcd other"
+    # (the bytes of the hash's version in the order they are written, not a
+    # little-endian read of them)
+    swapped = bytes.fromhex(hash_version)[::-1].hex()
+    if swapped != hash_version:
+        assert run(harness, "version", path, swapped).endswith(" other")
+
+
+@pytest.mark.parametrize("hash_hex,version", [
+    ("af352483" + "00" * 28, "af352483"),
+    ("0000000100" + "ff" * 27, "00000001"),
+    # (a hash beginning with 32 zero bits is version 1: 0 means any)
+    ("00000000" + "ab" * 28, "00000001"),
+    ("ffffffff" + "00" * 28, "ffffffff"),
+])
+def test_hash_version(harness, hash_hex, version):
+    assert run(harness, "hashversion", hash_hex) == version
+
+
 def test_whole_file_hash_sees_every_byte(harness, tmp_path):
     data = bytearray(make_map(size=0x90000))
     first = run(harness, "hash", write(tmp_path, data, "a.map"))
@@ -523,6 +554,10 @@ def test_real_hashed_map(harness, tmp_path):
     assert run(harness, "header", out, HASHED_MAP, HASHED_CHECKSUM) == "ok"
     digest, prefix = run(harness, "hash", out).split()
     assert prefix == HASHED_PREFIX
+    # (what a host of network version 29 sends as its version, and what an
+    # older one sends: both are this map)
+    assert run(harness, "version", out, HASHED_PREFIX) == f"{HASHED_PREFIX} {HASHED_CHECKSUM} host's"
+    assert run(harness, "version", out, HASHED_CHECKSUM) == f"{HASHED_PREFIX} {HASHED_CHECKSUM} host's"
     assert digest == reference_hash(out.read_bytes())
     assert run(harness, "hashed", "Sneak_" + HASHED_PREFIX) == f"hashed Sneak {HASHED_PREFIX}"
 

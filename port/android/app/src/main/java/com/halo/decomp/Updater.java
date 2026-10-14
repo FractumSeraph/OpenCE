@@ -259,7 +259,8 @@ final class Updater {
     /* ---------- updating */
 
     private static void update(Activity activity, String latest) {
-        String asset = "chupathingyce-android-" + (BuildConfig.DEBUG ? "debug" : "release") + ".zip";
+        // (the native 64-bit build's is chupathingyce-android64-*: build.gradle)
+        String asset = BuildConfig.HALO_UPDATE_ASSET + "-" + (BuildConfig.DEBUG ? "debug" : "release") + ".zip";
         File directory = new File(activity.getCacheDir(), UpdateProvider.DIRECTORY);
         LinearLayout layout = new LinearLayout(activity);
         TextView status = new TextView(activity);

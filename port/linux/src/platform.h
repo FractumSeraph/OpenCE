@@ -173,15 +173,16 @@ the game and Direct3D rely on keeps working. PLATFORM_CONTIGUOUS_BASE is an
 Xbox address. */
 
 #define PLATFORM_CONTIGUOUS_BASE 0x80000000U
-#if defined(HALO_ARM64_GUEST) || defined(HALO_WEB)
+#if (defined(HALO_ARM64_GUEST) || defined(HALO_WEB)) && !defined(HALO_64BIT)
 /* a 128 MB development kit's: Android's guest image (HALO_ARM64_GUEST, which
-every HALO_ANDROID build, this fork's browser build too, defines) is linked
-just above it
-(port/android/include/halo_android_abi.h), and OpenCE's web build's
-WebAssembly memory ends with it (tools/web_build.py) */
+every HALO_ANDROID guest build, this fork's browser build too, defines) is
+linked just above it (port/android/include/halo_android_abi.h), and OpenCE's
+web build's WebAssembly memory ends with it (tools/web_build.py); not the
+native 64-bit Android build (HALO_64BIT) */
 #define PLATFORM_CONTIGUOUS_SIZE 0x08000000U
 #else
-/* the desktop builds' (Linux, macOS, Windows): four times a 128 MB
+/* the desktop builds' (Linux, macOS, Windows) and the native 64-bit
+Android build's: four times a 128 MB
 development kit's, for their larger texture cache (halo_port_capacity.h);
 port/windows/src/win32_memory_watch.c has the same */
 #define PLATFORM_CONTIGUOUS_SIZE 0x20000000U

@@ -55,16 +55,17 @@ pages are taken only as the game writes them (xbox_memory.c), so a map
 that fills a fraction of the cache takes no more. Nothing of the cache's
 size reaches the network or the game state.
 
-Android's window stays the development kit's 128 MB (its guest image is
-linked just above it), 82 MB of it above the game state. Besides the
+Android's guest build keeps the development kit's 128 MB window (its
+guest image is linked just above it), 82 MB of it above the game state. Besides the
 texture cache, Portent and Foundation take about 23 MB of that in a game
 (the sound cache and Direct3D's resources), so Android's cache is twice
 the Xbox's, 44 MB, and leaves about 15 MB free: Portent's busiest frames
 fit, Foundation's (66 MB) do not, and some of its surfaces can show the
-wrong pixels there. The Xbox builds (HALO_XBOX_CONSOLE) keep the Xbox's
-cache. */
+wrong pixels there. The native 64-bit Android build has no guest image
+and the desktop's window and cache. The Xbox builds (HALO_XBOX_CONSOLE)
+keep the Xbox's cache. */
 
-#if defined(HALO_ANDROID) || defined(HALO_WEB)
+#if (defined(HALO_ANDROID) && !defined(HALO_64BIT)) || defined(HALO_WEB)
 #define HALO_PORT_TEXTURE_CACHE_SIZE 0x2C00000 /* (0x1600000) */
 #elif !defined(HALO_XBOX_CONSOLE)
 #define HALO_PORT_TEXTURE_CACHE_SIZE 0x10000000 /* (0x1600000) */
@@ -83,10 +84,10 @@ for those maps raise it to 32767 surfaces with a 65536-triangle buffer).
 The desktop builds draw up to 32767 (the count is a short), with twice the
 dynamic triangles, so the BSP's do not leave the rest of a frame's draws
 none. Only what is drawn changes: nothing reaches the network or the game
-state. Android, OpenCE's web build (HALO_WEB: Android's 128 MB window) and
-the Xbox builds keep the Xbox's. */
+state. Android's guest build, OpenCE's web build (HALO_WEB: Android's 128
+MB window) and the Xbox builds keep the Xbox's. */
 
-#if !defined(HALO_ANDROID) && !defined(HALO_WEB) && !defined(HALO_XBOX_CONSOLE)
+#if !(defined(HALO_ANDROID) && !defined(HALO_64BIT)) && !defined(HALO_WEB) && !defined(HALO_XBOX_CONSOLE)
 #define HALO_PORT_MAXIMUM_RENDERED_ENVIRONMENT_SURFACES 32767 /* (16384) */
 #define HALO_PORT_MAXIMUM_DYNAMIC_TRIANGLES 65536 /* (32768) */
 #else

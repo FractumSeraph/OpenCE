@@ -312,7 +312,7 @@ static struct
 	char const *payload;
 	/* what it was done to, and why, for the audit (the commands set them) */
 	char target[96];
-	char reason[96];
+	char reason[COMMAND_LINE_REASON_SIZE];
 } server_command_running;
 
 /* the blocked names (sv_name_filter): each player slot's name as it was
@@ -1320,7 +1320,7 @@ static boolean command_warn(
 		return FALSE;
 	machine_names(player.machine_index, names, sizeof(names));
 	note_target(names, line->words[2]);
-	shown = server_moderation_notice(player.machine_index, TRUE, "Warning", line->words[2]);
+	shown = server_moderation_notice(player.machine_index, TRUE, NULL, line->words[2]);
 	error(_error_silent, "dedicated: warned %s", names);
 	command_output_printf(output, "warned %s%s\n", names, shown ? "" :
 		" (their game cannot show it: not a ChupathingyCE game; the warning is in the audit file)");
@@ -1872,7 +1872,7 @@ static void names_update(
 			if (server_names_blocked(name, (int)length))
 			{
 				/* (a game that cannot show the warning is kicked at once) */
-				boolean shown = server_moderation_notice(network_player->machine_index, TRUE, "Warning", NAMES_MESSAGE);
+				boolean shown = server_moderation_notice(network_player->machine_index, TRUE, NULL, NAMES_MESSAGE);
 
 				error(_error_silent, "dedicated: player %ld has a blocked name: warned, kicked in %d seconds", index + 1,
 					shown ? (int)(NAMES_KICK_DELAY_MILLISECONDS / 1000) : 0);

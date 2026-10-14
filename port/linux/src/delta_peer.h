@@ -496,6 +496,16 @@ int delta_peer_protocol(void);
 
 /* the host's advertisement flags to add (DELTA_ADVERTISED_FLAG, or 0) */
 unsigned char delta_peer_advertised_flags(void);
+/* the game wire after them (DELTA_ADVERTISED_WIRE_OFFSET), in the
+advertisement's reserved bytes (size of them): zeros unless the flag is set */
+void delta_peer_advertised_wire(unsigned char *reserved, int size);
+/* whether a host's advertisement (its reserved bytes) is of this machine's
+game wire: 1 when both speak Delta, of one major and one wire (the OpenCE
+numbers then don't matter), 0 when the host's wire is another (its wire
+into theirs, of theirs_size), -1 when either side doesn't say (this machine
+on the legacy protocol, a host without Delta, of another major, or built
+before the wire was advertised): the OpenCE numbers decide */
+int delta_peer_advertised_wire_matches(const unsigned char *reserved, int size, char *theirs, int theirs_size);
 /* the hosted game's player limit: DELTA_PEER_NO_LIMIT unless a Delta
 machine (or this host's own key) takes fewer */
 int delta_peer_host_player_limit(void);

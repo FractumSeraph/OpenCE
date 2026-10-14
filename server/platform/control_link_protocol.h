@@ -32,7 +32,8 @@ enum
 	CONTROL_LINK_TOKEN_SIZE = 72,
 	/* a command's text and reason as the site sends them, at most */
 	CONTROL_LINK_COMMAND_SIZE = 201,
-	CONTROL_LINK_REASON_SIZE = 64,
+	/* (a reason as long as a command line's: COMMAND_LINE_REASON_SIZE) */
+	CONTROL_LINK_REASON_SIZE = 128,
 	/* what one answer carries, at most */
 	CONTROL_LINK_COMMANDS = 16,
 	CONTROL_LINK_ROLE_ENTRIES = 128,

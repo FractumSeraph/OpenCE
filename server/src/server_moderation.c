@@ -155,7 +155,7 @@ static int hook_action(
 	int result_size)
 {
 	char line[COMMAND_LINE_MAXIMUM_LENGTH + 1];
-	char reason_word[80] = "";
+	char reason_word[COMMAND_LINE_MAXIMUM_LENGTH + 1] = "";
 	char name[48];
 	char actor[96];
 	char who[64];
@@ -312,7 +312,7 @@ boolean server_moderation_notice(
 	{
 		return FALSE;
 	}
-	snprintf(notice, sizeof(notice), "%s: %s", title, text && text[0] ? text : "-");
+	snprintf(notice, sizeof(notice), "%s%s%s", title ? title : "", title ? ": " : "", text && text[0] ? text : "-");
 	return delta_peer_game_moderation_notice((int)machine_index, warning ? _delta_moderation_notice_warning :
 		_delta_moderation_notice_info, notice) ? TRUE : FALSE;
 }

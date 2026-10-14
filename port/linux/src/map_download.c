@@ -15,13 +15,18 @@ On a thread of its own: the archive is received into maps_ce (no more than
 MAP_ARCHIVE_MAXIMUM_SIZE), the next repository asked when one fails; the
 map alone is unpacked from it (map_archive.c), into a file of its own; its
 header is checked (a Custom Edition multiplayer map named for the map asked
-for, and the host's version of it, when the host says which); and only then
-is it renamed <name>.map, never over a file that is there. A hashed name
-(<base>_<8 hex digits>, the naming other builds use for the maps their
-hosts share: map_archive.h) is asked for by its base, and its map must also
-have the whole-file hash the name ends in; it is put in <base>.map, or in a
-file of the hashed name when another version of <base>.map is there (the
-game finds either: map_families.c). The archive and
+for), and it must be the host's version of it, when the host says which
+(its whole-file hash's first 32 bits from a host of network version 29, its
+header checksum from an older one: map_archive_version_matches); and only
+then is it renamed <name>.map, never over a file that is there: beside
+another version of that name, it is put in <name>_<8 hex digits>.map, its
+hash's first digits, as OpenCE's version 29 names a map it downloads beside
+another. A hashed name (<base>_<8 hex digits>, the level names older hosts
+gave the maps they shared: map_archive.h) is asked for by its base, and its
+map must also have the whole-file hash the name ends in; it is put in
+<base>.map, or in a file of the hashed name when another version of
+<base>.map is there. The game finds every one of them by the host's version
+(map_families.c); no file already there is renamed. The archive and
 any partial file are deleted, whatever happens. The map is then marked as
 downloaded (map_families.c, for good: maps_ce/downloaded_maps.txt), so its
 scripts are held to a downloaded map's rules, and the game's own checks read all of it before it is played
@@ -82,9 +87,10 @@ static struct
 	volatile int cancel;
 	int running;
 	/* the map installed is marked as downloaded (map_download_get), and
-	the file it was put in (a hashed name's: its base's, or its own) */
+	the file it was put in (its name's, or beside another version the name
+	and its hash's digits; a hashed name's: its base's, or its own) */
 	int remembered;
-	char installed[32];
+	char installed[48];
 	/* port (this fork): the map torrents' download is followed (on the
 	game's thread) before the repositories are asked; the name they were
 	asked for (a hashed name's base) */
@@ -246,9 +252,10 @@ static int receive(const char *url, const char *path, int *status, char *error, 
 }
 
 /* the map file (its name in the archive, and inside it) unpacked from the
-archive at archive_path into partial_path, and its header checked; for a
-hashed name (hashed), its whole-file hash too, which must begin with
-prefix: 1, or 0 with why in error */
+archive at archive_path into partial_path, and its header checked, and its
+version, the host's when it said which (map_download.version); for a hashed
+name (hashed), its whole-file hash too, which must begin with prefix: 1, or
+0 with why in error */
 static int unpack_and_check(const char *file, int hashed, unsigned int prefix, const char *archive_path,
 	const char *partial_path, char *error, int error_size)
 {
@@ -302,25 +309,30 @@ static int unpack_and_check(const char *file, int hashed, unsigned int prefix, c
 		}
 	}
 	CloseHandle(files.map);
-	/* (port, this fork: the host's version, its header checksum for a host
-	of network version 28 and before, the first 32 bits of its hash for one
-	of 29, OpenCE's build-206: either) */
-	if (ok && map_download.version && map_archive_header_checksum(header) != map_download.version)
+	/* (the host's version: its hash's from a host of network version 29,
+	its checksum from an older one) */
+	if (ok && map_download.version)
 	{
-		unsigned int found = 0;
+		unsigned int checksum = map_archive_header_checksum(header);
+		unsigned int hash_version = 0;
 
 		set_phase(MAP_DOWNLOAD_CHECKING, 0, 0);
-		if (!map_file_hash_prefix(partial_path, &found) || (found ? found : 1) != map_download.version)
+		if (!map_archive_version_matches(map_download.version, checksum, 0) &&
+			!map_file_hash_version(partial_path, &hash_version))
 		{
-			snprintf(error, (size_t)error_size, "its checksum is %08x and its hash begins %08x, the host's version "
-				"%08x: another version of the map", map_archive_header_checksum(header), found, map_download.version);
+			snprintf(error, (size_t)error_size, "the map could not be read back");
+			ok = 0;
+		}
+		else if (!map_archive_version_matches(map_download.version, checksum, hash_version))
+		{
+			snprintf(error, (size_t)error_size,
+				"its version is %08x (checksum %08x), the host's %08x: another version of the map", hash_version,
+				checksum, map_download.version);
 			ok = 0;
 		}
 		else
-			platform_log("map download: %s.map's hash begins %08x, the host's version", file, found);
+			platform_log("map download: %s.map is the host's version, %08x", file, map_download.version);
 	}
-	else if (ok && map_download.version)
-		platform_log("map download: %s.map's checksum is the host's version", file);
 	/* (a hashed name's map is the host's file to the byte) */
 	if (ok && hashed)
 	{
@@ -351,6 +363,7 @@ static void *download_thread(void *argument)
 	char archive_path[MAP_DOWNLOAD_PATH_SIZE], partial_path[MAP_DOWNLOAD_PATH_SIZE], path[MAP_DOWNLOAD_PATH_SIZE];
 	char error[160] = "";
 	const char *installed = NULL;
+	char beside[sizeof(map_download.installed)];
 	unsigned int prefix = 0;
 	size_t index;
 	int received = 0;
@@ -403,21 +416,30 @@ static void *download_thread(void *argument)
 	}
 	DeleteFileA(archive_path);
 	/* (in place, never over a file that is there: MoveFileA refuses one. A
-	hashed name's map is put in its base's file, as the repositories name
-	it; if another version of it is there, in a file of the hashed name, so
-	both are kept: the game looks for the hashed name's own file first) */
+	map is put in its own name's file, as the repositories name it; if
+	another version of it is there, in a file of its name and its hash's
+	first digits (a hashed name's: that name), so both are kept: the game
+	finds the host's version by its hash, map_families.c) */
 	if (received)
 	{
 		installed = hashed ? asked : name;
 		final_path(installed, path);
 		if (!MoveFileA(partial_path, path))
 		{
+			unsigned int found = 0;
+
 			installed = NULL;
 			if (hashed)
+				snprintf(beside, sizeof(beside), "%s", name);
+			else if (map_download.version && map_file_hash_prefix(partial_path, &found))
+				snprintf(beside, sizeof(beside), "%s_%08x", name, found);
+			else
+				beside[0] = 0;
+			if (beside[0])
 			{
 				platform_log("map download: maps_ce/%s.map is there already, another version: putting this one in "
-					"%s.map", asked, name);
-				installed = name;
+					"%s.map", hashed ? asked : name, beside);
+				installed = beside;
 				final_path(installed, path);
 				if (!MoveFileA(partial_path, path))
 					installed = NULL;
@@ -448,7 +470,7 @@ static void *download_thread(void *argument)
 	pthread_mutex_lock(&map_download.lock);
 	snprintf(map_download.installed, sizeof(map_download.installed), "%s", installed);
 	pthread_mutex_unlock(&map_download.lock);
-	if (hashed)
+	if (installed != name)
 		platform_log("map download: %s installed in maps_ce as %s.map", name, installed);
 	else
 		platform_log("map download: %s.map installed in maps_ce", name);
@@ -585,10 +607,10 @@ int map_download_start(const char *name, unsigned int version)
 	{
 		snprintf(map_download.torrent_name, sizeof(map_download.torrent_name), "%s", base);
 		map_download.torrents = 1;
-		platform_log("map download: %s.map through the map torrents first (host's checksum %08x)", name, version);
+		platform_log("map download: %s.map through the map torrents first (host's version %08x)", name, version);
 		return 1;
 	}
-	platform_log("map download: %s.map from the community map repositories (host's checksum %08x)", name, version);
+	platform_log("map download: %s.map from the community map repositories (host's version %08x)", name, version);
 	return start_thread();
 #else
 	(void)name;

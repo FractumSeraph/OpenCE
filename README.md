@@ -205,7 +205,7 @@ build compiles); nothing sent over the network is changed.
 <a href="https://discord.gg/4BUm2FwuCB">Discord</a>
 </p>
 
-> **Compatible with OpenCE build-201 (network version 28) for online play.** Players on that build join our games, and ours join games hosted on network versions 11 through 30. Browser builds can't join our games, nor we theirs.
+> **Compatible with OpenCE build-206 (network version 29) for online play.** Players on that build join our games, and ours join games hosted on network versions 11 through 30. Browser builds can't join our games, nor we theirs.
 
 ChupathingyCE is a port of the Halo: Combat Evolved decompilation to modern
 computers and phones, built for stability and community games: releases you

@@ -80,6 +80,9 @@ void cache_files_show_multiplayer_unavailable(
 	char const *build);
 unsigned long cache_files_map_version(
 	char const *map_name);
+unsigned long cache_files_map_choose(
+	char *map_name,
+	long size);
 boolean cache_files_map_present(
 	char const *map_name,
 	unsigned long version);

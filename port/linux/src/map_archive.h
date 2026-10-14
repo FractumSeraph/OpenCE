@@ -147,4 +147,21 @@ int map_archive_map_hash(map_archive_read_proc read, map_archive_stop_proc stop,
 (what a hashed name ends in) */
 unsigned int map_archive_hash_prefix(const unsigned char *hash);
 
+/* ---------- map versions
+
+Since network version 29 a host names a Custom Edition map by its own name
+(custom_maps\hugeass) and puts which version of it it plays in the game
+record's map version: its whole-file hash's first 32 bits (the prefix
+above), or 1 for a prefix of 0, which a client takes for "any". Hosts of
+version 23 to 28 put the map's header checksum there; a client accepts
+either. */
+
+/* a map of this whole-file hash's version, as a host of network version 29
+sends it: never 0 */
+unsigned int map_archive_hash_version(const unsigned char *hash);
+
+/* whether a map of this header checksum and hash version (map_archive_hash_version's)
+is the host's version: 1 if version is 0 (any), either of them, else 0 */
+int map_archive_version_matches(unsigned int version, unsigned int checksum, unsigned int hash_version);
+
 #endif

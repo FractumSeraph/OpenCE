@@ -76,6 +76,47 @@ of the whole `save` folder stops there.
 The app is `dev.horrible.chupathingyce`, and its name on the device is
 ChupathingyCE. Refer to "App ID, signing and versions".
 
+## The native 64-bit build (experimental)
+
+`ninja android64` builds the game as native 64-bit code (LP64), as the
+Linux x86-64, Windows x64 and macOS builds do (`HALO_64BIT`,
+`tools/lp64_build.py`). It has no guest image and no host loader: the game
+and the platform layer are in `libmain.so`, which calls SDL3 and OpenGL ES
+3 directly. `port/android/native64/android64_main.c` is its entry point
+(`SDL_main`) and does the work of `host_main.c`. The touch controls
+(`host/host_touch.c`) and the OpenGL ES helpers (`host/host_gl.c`) are
+shared with the usual build.
+
+`ninja android64_apk` makes the app:
+`port/android/app/build-native64/outputs/apk/debug/app-debug.apk`. It is
+the same Gradle module built with `-Pnative64`, so the two builds' APKs
+sit side by side. It is the same app: the same ID
+(`dev.horrible.chupathingyce`), name, key and version code. Either build
+installs over the other and keeps the data folder and the saves. Its
+updates come from the release asset `chupathingyce-android64-<config>.zip`,
+the usual build's from `chupathingyce-android-<config>.zip` (refer to
+"Updates").
+
+The game does not use fixed addresses. Its Xbox address space (4 GB,
+`source/cseries/xbox_address.h`) is reserved wherever the process has room,
+aligned to 4 GB (`port/linux/src/xbox_memory.c`). ART's spaces cannot be
+in the way, as they can be at `0x80000000` for the usual build (refer to
+"The fixed addresses"). The log shows the address, for example `Xbox
+address space at 0x7200000000`. If the reservation fails, the game shows a
+message and writes the process's mappings to the log.
+
+The native build has the memory window and texture cache of the desktop
+builds, and it plays Halo PC maps as they do. Kernels with 16 KB pages
+(Android 15 and later) are supported.
+
+To build and install it:
+
+1. Enter `ninja android64_apk`.
+2. Enter `adb install -r port/android/app/build-native64/outputs/apk/debug/app-debug.apk`.
+
+A crash report gives addresses in `libmain.so`. To get the names, enter
+`llvm-symbolizer --obj=build/android64/jniLibs/arm64-v8a/libmain.so 0x<offset>`.
+
 ## Game data
 
 The game needs the `maps/` folder of the game. The app downloads it from

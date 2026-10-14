@@ -31,6 +31,16 @@ alone. */
 machines ignore it. Set only while the host's Delta socket is open and
 network.protocol is not "opence" (delta_peer_advertised_flags). */
 #define DELTA_ADVERTISED_FLAG 0x04
+/* ... and with it, after the port's flags in the advertisement's reserved
+bytes, the game wire the host plays: its Delta major (a byte), then
+DELTA_WIRE, zero padded (delta_peer_advertised_wire). OpenCE's machines, and
+hosts built before then, leave the bytes zero. A Delta client joins a host
+of its own major and wire whatever OpenCE number either announces, and
+refuses one of another wire; a host without the bytes, or of another major,
+is joined by its OpenCE number, as before
+(delta_peer_advertised_wire_matches). */
+#define DELTA_ADVERTISED_WIRE_OFFSET 3
+#define DELTA_ADVERTISED_WIRE_SIZE 16
 
 /* Delta Peer's UDP port: the game's server port (NETWORK_GAME_SERVER_PORT,
 5150) plus this, so 5160. A host listens there; a client sends from any
@@ -159,7 +169,19 @@ legacy table (port/linux/src/delta.c; docs/delta.md, "The legacy table as
 config") has a row of OpenCE numbers for each wire, which CI adds to only
 after a cross-play test of that wire; a build reads its own wire's row alone.
 Give each release that changes what the machines send a new one. */
-#define DELTA_WIRE "chupa-28a"
+#define DELTA_WIRE "chupa-29a"
+
+/* how many OpenCE numbers past the one announced (the newest this build, or
+the signed table, has proven) are presumed additive: a client joins their
+hosts from the day OpenCE raises, before a table follows. The built-in
+maximum (HALO_PORT_NETWORK_VERSION_MAXIMUM) is at least the built-in number
+plus this (tools/test_delta.py), and a signed table's row at least its
+announce plus this (delta.c). Such a host's game is played as an additive
+raise is: what the client does not know it drops, and content it can't
+match (a map of another version) ends its join rather than playing on. A
+raise that changes an existing message is breaking: a release follows it
+(docs/delta.md, "The legacy number"). */
+#define DELTA_LEGACY_PRESUMED 1
 
 /* OpenCE's network versions (HALO_PORT_NETWORK_VERSION in its builds), the
 first of its releases with each, and whether the version's change is one the
@@ -191,7 +213,7 @@ command repository's watch adds a row when it follows OpenCE's raise
 	X(26, "build-184", additive) /* internet play's signalling, version 4 (WebRTC, for browsers; p2p_signal.c reads 3 and 4); game messages as 25 */ \
 	X(27, "build-189", additive) /* Custom Edition map sharing's messages (a machine of 26 drops them); game messages as 25 */ \
 	X(28, "build-201", additive) /* no message changed: a script's switch_bsp keeps a multiplayer game's first, the flashlight past the Xbox limits, a second weapon readied while firing (wire chupa-28a) */ \
-	X(29, "build-206", additive) /* no message changed: a Custom Edition map by its own name in the settings, its version the first 32 bits of its hash (the header checksum before); followed by this fork ahead of ChupathingyCE, whose clients find a version by either */
+	X(29, "build-206", additive) /* a Custom Edition map by its own name, its hash's first 32 bits its version in the game record (a client of 29 also takes 28's hashed names and header checksums; wire chupa-29a) */
 
 /* ---------- the legacy table (port/linux/src/delta.c)
 

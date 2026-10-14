@@ -101,7 +101,8 @@ boolean map_family_resource(char const *name, char *path, long size);
 /* the file of a map of a family past the Xbox's (its file's name without
 the suffix), as cache_files_windows.c opens it: the path (for CreateFileA)
 of the first of the family's places that is a cache file of the family's
-version; FALSE if there is none */
+version (the network game's version of its map first:
+map_family_set_game_version); FALSE if there is none */
 boolean map_family_find(short family, char const *file, char *path, long size);
 /* the same of a version (as a network game's settings name it: the
 checksum in its header for a host of network version 28 or before, the first
@@ -128,6 +129,11 @@ unsigned long map_family_file_hash_version(char const *path);
 /* whether the file is of the version a network game's settings name (0:
 any), its checksum or its hash's */
 boolean map_family_version_matches(char const *path, unsigned long version);
+
+/* the map a network game is on and the version of it the host plays (0 for
+any, which forgets it): map_family_find gives the file of that version, if
+there is one, so that the map loaded is the host's */
+void map_family_set_game_version(char const *map, unsigned long version);
 
 /* every multiplayer map of a family past the Xbox's, in its folders: each
 one's file's name (without the suffix, each once), passed to found */

@@ -633,3 +633,16 @@ unsigned int map_archive_hash_prefix(const unsigned char *hash)
 	return (unsigned int)hash[0] << 24 | (unsigned int)hash[1] << 16 | (unsigned int)hash[2] << 8 |
 		(unsigned int)hash[3];
 }
+
+unsigned int map_archive_hash_version(const unsigned char *hash)
+{
+	unsigned int version = map_archive_hash_prefix(hash);
+
+	/* (0 is the version a client checks nothing for) */
+	return version ? version : 1;
+}
+
+int map_archive_version_matches(unsigned int version, unsigned int checksum, unsigned int hash_version)
+{
+	return !version || version == hash_version || version == checksum;
+}

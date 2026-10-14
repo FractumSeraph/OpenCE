@@ -3734,6 +3734,13 @@ void network_game_server_change_map_name(
 	it is (port/linux/game/map_share.c) */
 	map_share_level_name_choose(server->game.map.name, NETWORK_GAME_MAP_NAME_LENGTH);
 	server->game.map.version = (long)cache_files_map_version(server->game.map.name);
+	/* (renamed so, a map of another version's file by its own name: this
+	machine plays it by that name too, as its clients do: ChupathingyCE's) */
+	if (csstrcmp(server->game.map.name, map_name))
+	{
+		main_set_multiplayer_map_name(server->game.map.name);
+		game_engine_override_map_name(server->game.map.name);
+	}
 
 	if (!network_game_server_send_game_data_pregame(server))
 	{

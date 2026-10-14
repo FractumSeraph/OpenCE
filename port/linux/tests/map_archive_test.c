@@ -12,6 +12,8 @@ repository's, where it can reach it):
   map_archive_test hashed <text>                  hashed <base> <digits> | plain
   map_archive_test display <text>                 the name a player knows the map by
   map_archive_test hash <map>                     its whole-file hash, in hex
+  map_archive_test version <map> <host version>   <hash version> <checksum> host's | other
+  map_archive_test hashversion <64 hex digits>    that hash's version (network version 29)
   map_archive_test selftest                       ok, or what failed
 
 No file is written but <out>; nothing in an archive names a path.
@@ -264,6 +266,50 @@ int main(int argc, char **argv)
 
 		map_archive_display_name(argv[2], display, (int)sizeof(display));
 		printf("%s\n", display);
+		return 0;
+	}
+	if (argc == 4 && !strcmp(argv[1], "version"))
+	{
+		struct memory memory;
+		unsigned char hash[MAP_ARCHIVE_HASH_SIZE];
+		unsigned int checksum, hash_version;
+
+		memset(&memory, 0, sizeof(memory));
+		memory.archive = read_file(argv[2], &memory.archive_size);
+		if (!memory.archive || memory.archive_size < MAP_ARCHIVE_HEADER_SIZE)
+		{
+			printf("cannot read %s\n", argv[2]);
+			free(memory.archive);
+			return 2;
+		}
+		if (!map_archive_map_hash(memory_read, NULL, &memory, memory.archive_size, hash))
+		{
+			printf("refused: not read whole\n");
+			free(memory.archive);
+			return 1;
+		}
+		checksum = map_archive_header_checksum(memory.archive);
+		hash_version = map_archive_hash_version(hash);
+		printf("%08x %08x %s\n", hash_version, checksum,
+			map_archive_version_matches((unsigned int)strtoul(argv[3], NULL, 16), checksum, hash_version) ?
+			"host's" : "other");
+		free(memory.archive);
+		return 0;
+	}
+	if (argc == 3 && !strcmp(argv[1], "hashversion"))
+	{
+		unsigned char hash[MAP_ARCHIVE_HASH_SIZE];
+		int index;
+
+		if (strlen(argv[2]) != MAP_ARCHIVE_HASH_SIZE * 2)
+			return 2;
+		for (index = 0; index < MAP_ARCHIVE_HASH_SIZE; index++)
+		{
+			char pair[3] = { argv[2][index * 2], argv[2][index * 2 + 1], 0 };
+
+			hash[index] = (unsigned char)strtoul(pair, NULL, 16);
+		}
+		printf("%08x\n", map_archive_hash_version(hash));
 		return 0;
 	}
 	if (argc == 3 && !strcmp(argv[1], "hash"))

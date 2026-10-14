@@ -1143,17 +1143,20 @@ unsigned long cache_files_map_version(
 	char const *map_name)
 {
 #ifdef HALO_CUSTOM_EDITION
+	/* (port/linux/src/map_file_hash.h) */
+	int map_file_hash_version(char const *path, unsigned int *version);
 	char file[64];
 	char path[256];
 	short family = map_family_parse(map_name, file, sizeof(file));
 	struct cache_file_header header;
 	unsigned long bytes_read = 0;
+	unsigned int hash_version = 0;
 	HANDLE handle;
 
 	if (family == _map_family_xbox || !map_family_find(family, file, path, sizeof(path)))
 		return 0;
 	if (family == _map_family_custom_edition)
-		return map_family_file_hash_version(path);
+		return map_file_hash_version(path, &hash_version) ? hash_version : 0;
 	handle = CreateFileA(path, GENERIC_READ, 0, NULL, OPEN_EXISTING, 0, NULL);
 	if (handle == INVALID_HANDLE_VALUE)
 		return 0;
@@ -1165,6 +1168,45 @@ unsigned long cache_files_map_version(
 	(void)map_name;
 	return 0;
 #endif
+}
+
+/* port: a host's game's map (map_name, a buffer of size), as its settings
+name it and the players' clients look for it: a Custom Edition map whose
+file is named for its hash (<file>_<8 hex digits>, a download beside
+another version of its name, or an older host's level name) is named by its
+own name, as OpenCE's hosts of network version 29 name it, the game
+record's version saying which of the files of that name it is; the host
+plays that file (map_family_set_game_version). Its version
+(cache_files_map_version). */
+unsigned long cache_files_map_choose(
+	char *map_name,
+	long size)
+{
+#ifdef HALO_CUSTOM_EDITION
+	/* (port/linux/src/map_archive.h) */
+	int map_archive_hashed_name(char const *name, char *base, int base_size, unsigned int *prefix);
+	char file[64];
+	char base[64];
+	char path[256];
+	short family = map_family_parse(map_name, file, sizeof(file));
+	unsigned long version;
+
+	map_family_set_game_version(NULL, 0);
+	if (family == _map_family_custom_edition && map_archive_hashed_name(file, base, (int)sizeof(base), NULL) &&
+		map_family_find(family, file, path, sizeof(path)))
+	{
+		version = cache_files_map_version(map_name);
+		if (version)
+		{
+			snprintf(map_name, (size_t)size, "%s%s", base, map_family_suffix(family));
+			map_family_set_game_version(map_name, version);
+			return version;
+		}
+	}
+#else
+	(void)size;
+#endif
+	return cache_files_map_version(map_name);
 }
 
 /* port: whether this machine has the map a network game is on (a client
@@ -1206,6 +1248,10 @@ boolean cache_files_map_present(
 		int map_torrents_fetch(const char *level_name, unsigned long version, const char *files);
 		char path[256];
 
+		/* (ChupathingyCE: the host's version, which map_family_find then
+		gives, its file of the map's name or one of another name of that
+		version: map_family_set_game_version) */
+		map_family_set_game_version(map_name, version);
 		/* port: (none played with game.custom_edition off, nor downloaded) */
 		if (!map_families_enabled())
 		{
@@ -1232,6 +1278,16 @@ boolean cache_files_map_present(
 			snprintf(message, sizeof(message),
 				"Your %s map %.63s is another version than the host's. Copy the host's %.63s.map into %s.",
 				map_family_badge(family), file, file, map_family_folder(family));
+#ifdef HALO_GAME_BROWSER
+			/* (the host's version may be downloaded beside it, named for its
+			hash: port/linux/src/map_download.c) */
+			if (family == _map_family_custom_edition && !map_archive_stock_name(file))
+			{
+				void browser_screen_map_missing(char const *file, unsigned long version);
+
+				browser_screen_map_missing(file, version);
+			}
+#endif
 		}
 		else if (family != _map_family_custom_edition)
 		{

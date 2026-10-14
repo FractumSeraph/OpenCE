@@ -118,3 +118,14 @@ int map_file_hash_prefix(const char *path, unsigned int *prefix)
 	pthread_mutex_unlock(&map_file_hashes.lock);
 	return 1;
 }
+
+int map_file_hash_version(const char *path, unsigned int *version)
+{
+	unsigned int prefix;
+
+	if (!map_file_hash_prefix(path, &prefix))
+		return 0;
+	/* (0 is the version a client checks nothing for: map_archive_hash_version) */
+	*version = prefix ? prefix : 1;
+	return 1;
+}

@@ -1229,8 +1229,12 @@ static void update_list(void)
 				*next++ = 0;
 			if (!line[0])
 				continue;
-			if (parse_game(line, &games[count]) && games[count].version >= delta_legacy_minimum() &&
-				games[count].version <= delta_legacy_maximum() &&
+			/* (a game of another OpenCE number too when its host speaks
+			Delta: joining it goes by the game wire its advertisement says,
+			network_game_client_advertised_game_compatible) */
+			if (parse_game(line, &games[count]) &&
+				((games[count].version >= delta_legacy_minimum() && games[count].version <= delta_legacy_maximum()) ||
+				(games[count].protocol == BROWSER_PROTOCOL_DELTA && delta_peer_protocol() != _delta_peer_protocol_opence)) &&
 				strcmp(games[count].invite, own))
 			{
 				count++;

@@ -25,6 +25,12 @@ line the API hands out shows a player's address.
 whole name in either case, else the beginning of one name (`sv_kick mil`).
 A name with spaces goes in double quotes: `sv_kick "Master Chief"`.
 
+A reason (`sv_warn`, `sv_kick`, `sv_ban`) is the rest of the line, up to
+127 characters: `sv_warn 2 Please keep it friendly`. In double quotes it is
+the quoted text alone, and nothing may follow it:
+`sv_ban "Master Chief" 2h "camping, again"`. On `sv_ban` it comes after
+the duration.
+
 | Command | What it does |
 | --- | --- |
 | `help [command]` | Lists the commands, or tells what one does. |

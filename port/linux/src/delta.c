@@ -731,6 +731,10 @@ static enum delta_result delta_take(const char *document, size_t size, const cha
 		delta.announce = table.announce;
 		delta.minimum = table.minimum;
 		delta.maximum = table.maximum;
+		/* (and the numbers past the one announced that are presumed
+		additive, DELTA_LEGACY_PRESUMED, whatever the row says) */
+		if (delta.maximum < delta.announce + DELTA_LEGACY_PRESUMED)
+			delta.maximum = delta.announce + DELTA_LEGACY_PRESUMED > 65535 ? 65535 : delta.announce + DELTA_LEGACY_PRESUMED;
 		memcpy(delta.follows, table.follows, sizeof(delta.follows));
 	}
 	delta.disabled = table.disabled;

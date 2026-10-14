@@ -148,9 +148,9 @@ static int WriteFile(HANDLE file, void const *buffer, unsigned long size, unsign
 }
 """
 LINK_STUBS = r"""
-/* (ChupathingyCE's hashed names, port/linux/src/map_archive.c and
-map_file_hash.c, which map_families.c calls: none here, the fork's own
-hash-named versions are what is tested) */
+/* (ChupathingyCE's hashed names and versions, port/linux/src/map_archive.c
+and map_file_hash.c, which map_families.c calls: no hashes here, the
+fork's own hash-named versions are what is tested) */
 int map_archive_hashed_name(const char *name, char *base, int base_size, unsigned int *prefix)
 {
 	return 0;
@@ -158,6 +158,20 @@ int map_archive_hashed_name(const char *name, char *base, int base_size, unsigne
 int map_file_hash_prefix(const char *path, unsigned int *prefix)
 {
 	return 0;
+}
+int map_file_hash_version(const char *path, unsigned int *version)
+{
+	return 0;
+}
+unsigned int map_archive_header_checksum(const unsigned char *header)
+{
+	return (unsigned int)header[0x64] | (unsigned int)header[0x65] << 8 | (unsigned int)header[0x66] << 16 |
+		(unsigned int)header[0x67] << 24;
+}
+/* (map_archive.c's: a version is the checksum or the hash's, 0 any) */
+int map_archive_version_matches(unsigned int version, unsigned int checksum, unsigned int hash_version)
+{
+	return !version || version == checksum || (hash_version && version == hash_version);
 }
 void platform_log(char const *format, ...)
 {
