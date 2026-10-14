@@ -33,7 +33,7 @@ import java.nio.channels.FileChannel;
  *
  * The game reads the Xbox game data (the folder holding maps/) from the
  * app's external files directory,
- * /sdcard/Android/data/dev.horrible.chupathingyce/files.
+ * /sdcard/Android/data/net.fractumseraph.halo/files (this fork's app ID).
  * If it is missing, this screen lets the player pick an Xbox disc image of
  * the game (.xiso or .iso, any version) with the system file picker, and
  * copies its maps folder there (XisoExtractor), as the desktop games do; or

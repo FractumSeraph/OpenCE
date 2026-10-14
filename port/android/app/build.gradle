@@ -62,15 +62,17 @@ android {
     // com.halo.decomp: the native code's JNI functions are named for it
     // (Java_com_halo_decomp_*), and upstream's changes merge as they are.
     // Only the application ID, what Android and the stores know the app by,
-    // is ChupathingyCE's; it decides the data folder too,
-    // /sdcard/Android/data/dev.horrible.chupathingyce/files. A variant that
+    // is this fork's (FractumSeraph/OpenCE), net.fractumseraph.halo, so that
+    // it installs beside ChupathingyCE's app (dev.horrible.chupathingyce),
+    // whose signature it does not have; it decides the data folder too,
+    // /sdcard/Android/data/net.fractumseraph.halo/files. A variant that
     // installs beside it (a native 64-bit build) adds a suffix:
-    // dev.horrible.chupathingyce.native64.
+    // net.fractumseraph.halo.native64.
     namespace "com.halo.decomp"
     compileSdk 35
 
     defaultConfig {
-        applicationId "dev.horrible.chupathingyce"
+        applicationId "net.fractumseraph.halo"
         minSdk 28
         targetSdk 35
         versionCode haloVersionCode

@@ -289,7 +289,7 @@ disc image (`.iso` or `.xiso`) of Halo: Combat Evolved. Any region works.
 3. It copies the game's `maps` folder out of the image (about 2 GB), then starts.
 
 On Android, copy the disc image to your phone first; the maps, settings and
-saves go in `/sdcard/Android/data/dev.horrible.chupathingyce/files`. On a
+saves go in `/sdcard/Android/data/net.fractumseraph.halo/files`. On a
 Mac, the maps, settings and saves go in
 `~/Library/Application Support/ChupathingyCE`.
 On Linux, the maps and settings (`config.toml`) go next to the `halo`
@@ -323,7 +323,7 @@ Where the game's `maps` folder is:
 | Mac | `~/Library/Application Support/ChupathingyCE/` |
 | Linux | next to the `halo` executable |
 | Windows | next to `halo.exe` |
-| Android | `/sdcard/Android/data/dev.horrible.chupathingyce/files` |
+| Android | `/sdcard/Android/data/net.fractumseraph.halo/files` |
 
 Copy the `.map` files from your own Halo PC install. Include `bitmaps.map`,
 `sounds.map` and `loc.map` from Custom Edition in `maps_ce`: every Halo PC
@@ -508,7 +508,7 @@ on Windows).
 | Windows | next to `halo.exe` |
 | Mac | `~/Library/Application Support/ChupathingyCE/config.toml` |
 | Linux | next to the `halo` executable |
-| Android | in the game's data folder, `/sdcard/Android/data/dev.horrible.chupathingyce/files` |
+| Android | in the game's data folder, `/sdcard/Android/data/net.fractumseraph.halo/files` |
 
 A few people look for most:
 
@@ -757,7 +757,7 @@ to `halo.log` next to `halo.exe`. `python tools/net_report.py
 to 1024). A recording has no length limit: the game writes a part each time
 the memory is full. See the settings in
 [port/linux/README.md](port/linux/README.md). On Android, the files are in
-`/sdcard/Android/data/dev.horrible.chupathingyce/files/profiles/` (copy them with
+`/sdcard/Android/data/net.fractumseraph.halo/files/profiles/` (copy them with
 `adb pull`). A profiling build plays with normal builds.
 
 `python tools/ci_build.py linux profile` builds it as the GitHub workflow

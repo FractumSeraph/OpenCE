@@ -327,6 +327,21 @@ beside the app adds a suffix, for example
 
 ### Signing
 
+**This fork (FractumSeraph/OpenCE)** has an app ID of its own,
+`net.fractumseraph.halo` ("Halo FS"), so that its app installs beside
+ChupathingyCE's (`dev.horrible.chupathingyce`), whose key it does not have;
+its data folder is `/sdcard/Android/data/net.fractumseraph.halo/files`. Its
+releases are signed with its own key: its pushes to `main` write
+`keystore.properties` from the repository's secrets
+(`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`,
+`ANDROID_KEY_PASSWORD`; `.github/workflows/build.yml`, "Signing key"), so
+both apps of a release are signed and each release installs over the one
+before. The owner makes the key and the secrets once with
+`build\tools\android-signing-setup.ps1` (outside this repository), which
+keeps the key in a folder of their own; a lost key means apps that no longer
+update. Without the secrets the release app is unsigned, as below.
+
+
 The build signs the app with the key in `port/android/keystore.properties`,
 as Butter and Jelly does. Git ignores this file. Never commit it, or the
 key:

@@ -14,7 +14,7 @@ import java.io.FileNotFoundException;
 /**
  * Hands Android's package installer the downloaded new version of the app
  * (Updater), read-only, the one file content://<application ID>.update/halo.apk
- * (content://dev.horrible.chupathingyce.update/halo.apk; the manifest's
+ * (content://net.fractumseraph.halo.update/halo.apk, the app ID's; the manifest's
  * ${applicationId}.update).
  * (The app has no AndroidX, whose FileProvider does the same.)
  */
