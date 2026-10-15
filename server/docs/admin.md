@@ -235,6 +235,54 @@ handle {
 }
 ```
 
+### Public replays and watching live
+
+With `HALO_NET_RECORD_PUBLIC=true` (`network.record_public`) as well, the
+server writes each game's public copy to `recordings/public/` under the same
+name, for anyone to watch, live or again, in the replay viewer. It is the
+recording without anything private:
+
+- each player's name, team and every move are there; their addresses and
+  hardware ids are not (empty);
+- the hits are there, without the fair play checks' verdicts, how far off
+  aim they were or how far they went (zeros), and the moves the host refused
+  are left out: a suspicion is for moderators, not for everyone;
+- while the game is played, each part is written only
+  `HALO_NET_RECORD_PUBLIC_DELAY` seconds (`network.record_public_delay`, 30
+  by default) after it happened, so that no one watching can tell its
+  players where the others are; the rest is written when the game ends.
+
+`recordings/public/live.json` says which copy is being written (`"live":
+true`, its file, server, map, game type, start and delay); once the game's
+carnage report is on the game list, `<name>.json` beside its copy gives the
+report's address, which the viewer links. The oldest go once the folder
+holds more than `HALO_NET_RECORD_PUBLIC_MEGABYTES`
+(`network.record_public_megabytes`, 2048 by default; 0 keeps everything).
+
+Serve `recordings/public/` alone, never `recordings/`, with its listing in
+JSON and range requests (the viewer reads a game being played a part at a
+time), to any origin. FractumSeraph's servers do it with Caddy:
+
+```
+handle_path /replays/fractumffa/* {
+	root * /opt/halo-dedicated/data/recordings/public
+	header Access-Control-Allow-Origin *
+	header Access-Control-Expose-Headers "Content-Range, Content-Length, Accept-Ranges"
+	header Cache-Control "no-cache"
+	file_server browse {
+		hide *.new
+	}
+}
+```
+
+The viewer then watches a server's game as it is played at
+`index.html?live=<that folder's address>`, and opens a finished one at
+`index.html?file=<its address>`. Opened with neither, it lists the games of
+the servers named in `servers.json` beside it (`[{"name", "public": the
+folder's address}]`): FractumSeraph's at
+https://halo.fractumseraph.net/assets/replay/. A public copy shows no fair
+play panels.
+
 ### Why there is no `sv_password`
 
 A join password needs the player's game to send one. A join request in the

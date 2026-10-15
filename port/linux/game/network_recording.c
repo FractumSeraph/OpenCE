@@ -46,6 +46,21 @@ that many bytes; one of a type a reader does not know it skips:
 
 A block goes to the file every 10 seconds, or sooner when 192 kilobytes of
 records have come: a host that stops loses no more than that.
+
+With network.record_public on too, each block also goes to the game's
+public copy, recordings\public\<the same name>, for anyone to watch, live
+or again (public_records): a player record without its hardware id and
+address (both empty), a hit without its verdict, degrees off aim and
+distance (zeros), and no move records; the format is the same, so any
+reader opens both. A block that shows the game being played (a frame, hit,
+kill, move or end) is held back network.record_public_delay seconds before
+it is written, so that no one watching can tell its players where the
+others are; the rest of the game is written when it ends.
+recordings\public\live.json says which copy is being written: {"live":
+true or false, "file", "server", "map", "game_type", "started" (unix
+time), "delay" (seconds), "ticks_per_second"}. When the game list takes the
+game's carnage report, <name>.json beside the copy gives its address:
+{"report": "<network.browser_url>/games/<id>"}.
 */
 
 #include "cseries.h"
@@ -109,6 +124,10 @@ enum
 	RECORDING_MAXIMUM_WALL_BYTES = 8 * 1024 * 1024,
 	/* the files a folder is pruned of, at most at once */
 	RECORDING_MAXIMUM_FILES = 1024,
+	/* the public copy's blocks held back (network.record_public_delay), at
+	most, and their bytes: past these the oldest is written early */
+	PUBLIC_MAXIMUM_BLOCKS = 512,
+	PUBLIC_MAXIMUM_BYTES = 16 * 1024 * 1024,
 };
 
 #define RECORDING_NO_TAG 0xFFFF
@@ -129,6 +148,24 @@ static struct
 	short tag_count;
 	/* the player each slot had when last told (DATUM_INDEX_NEW), NONE */
 	long players[MAXIMUM_TRACKED_PLAYERS];
+	/* the public copy (network.record_public): its file, its name in the
+	public folder (kept after it ends, for its carnage report), what its
+	game is, and its blocks held back until they are old enough */
+	FILE *public_file;
+	char public_name[MAX_PATH];
+	char public_server[64];
+	char public_map[64];
+	char public_game_type[64];
+	unsigned long public_started;
+	struct
+	{
+		long time;
+		unsigned long length;
+		byte *data;
+	} pending[PUBLIC_MAXIMUM_BLOCKS];
+	short pending_first;
+	short pending_count;
+	unsigned long pending_bytes;
 } recording;
 
 /* ---------- private code */
@@ -164,12 +201,208 @@ static void recording_write_block(
 		fflush(recording.file);
 }
 
+/* ---------- the public copy (network.record_public) */
+
+/* the records as anyone may see them, written to out (as large as the
+records: nothing grows): a player's hardware id and address left out, a
+hit's fair play verdict, how far off aim and how far it went zeroed, and
+the moves the host refused left out; *live is set when a record shows
+the game as it is played (a frame, hit, kill, move or a game's end) */
+static unsigned long public_records(
+	byte const *records,
+	unsigned long length,
+	byte *out,
+	boolean *live)
+{
+	unsigned long read = 0;
+	unsigned long written = 0;
+
+	*live = FALSE;
+	while (read + 5 <= length)
+	{
+		byte type = records[read];
+		unsigned long size = (unsigned long)records[read + 1] | ((unsigned long)records[read + 2] << 8) |
+			((unsigned long)records[read + 3] << 16) | ((unsigned long)records[read + 4] << 24);
+		byte const *payload = records + read + 5;
+
+		if (size > length - read - 5)
+			break;
+		read += 5 + size;
+		if (type == _record_frame || type == _record_hit || type == _record_kill || type == _record_end ||
+			type == _record_move)
+		{
+			*live = TRUE;
+		}
+		if (type == _record_move)
+			continue;
+		if (type == _record_player && size >= 7 && 6 + 1 + (unsigned long)payload[6] <= size)
+		{
+			/* (tick, player, team and name kept; an empty hardware id and
+			address after them) */
+			unsigned long kept = 6 + 1 + payload[6];
+
+			out[written] = type;
+			out[written + 1] = (byte)(kept + 2);
+			out[written + 2] = (byte)((kept + 2) >> 8);
+			out[written + 3] = 0;
+			out[written + 4] = 0;
+			csmemcpy(out + written + 5, payload, kept);
+			out[written + 5 + kept] = 0;
+			out[written + 5 + kept + 1] = 0;
+			written += 5 + kept + 2;
+			continue;
+		}
+		csmemcpy(out + written, records + read - 5 - size, 5 + size);
+		/* (a hit: tick 4, shooter 1, target 1, where 12, then the verdict 1,
+		degrees off aim 4 and distance 4, zeroed) */
+		if (type == _record_hit && size >= 27)
+			csmemset(out + written + 5 + 18, 0, 9);
+		written += 5 + size;
+	}
+	return written;
+}
+
+/* a block of the public copy written; the copy ends if it cannot be */
+static void public_write(
+	byte const *records,
+	unsigned long length)
+{
+	byte header[9];
+
+	if (!recording.public_file || !length)
+		return;
+	header[0] = 'R';
+	header[1] = header[5] = (byte)length;
+	header[2] = header[6] = (byte)(length >> 8);
+	header[3] = header[7] = (byte)(length >> 16);
+	header[4] = header[8] = (byte)(length >> 24);
+	if (fwrite(header, sizeof(header), 1, recording.public_file) != 1 ||
+		fwrite(records, length, 1, recording.public_file) != 1)
+	{
+		error(_error_log, "recording: could not write to the public copy (a full disk?); it ends");
+		fclose(recording.public_file);
+		recording.public_file = NULL;
+	}
+	else
+		fflush(recording.public_file);
+}
+
+/* the held back blocks written: those old enough, or all of them */
+static void public_write_due(
+	boolean all)
+{
+	long delay = config_integer("network.record_public_delay") * TICKS_PER_SECOND;
+	long now = game_time_get();
+
+	while (recording.pending_count)
+	{
+		short first = recording.pending_first;
+
+		if (!all && now - recording.pending[first].time < delay &&
+			recording.pending_count < PUBLIC_MAXIMUM_BLOCKS && recording.pending_bytes <= PUBLIC_MAXIMUM_BYTES)
+		{
+			break;
+		}
+		public_write(recording.pending[first].data, recording.pending[first].length);
+		recording.pending_bytes -= recording.pending[first].length;
+		free(recording.pending[first].data);
+		recording.pending[first].data = NULL;
+		recording.pending_first = (short)((first + 1) % PUBLIC_MAXIMUM_BLOCKS);
+		recording.pending_count--;
+	}
+}
+
+/* a block's records added to the public copy: at once if they show nothing
+of the game being played (the map's walls, a game's start) and nothing is
+held back before them, else held back network.record_public_delay seconds,
+so that no one can watch a game being played to tell its players where the
+others are */
+static void public_add(
+	byte const *records,
+	unsigned long length)
+{
+	byte *copy;
+	boolean live;
+	unsigned long kept;
+	short last;
+
+	if (!recording.public_file || !length)
+		return;
+	copy = malloc(length);
+	if (!copy)
+		return;
+	kept = public_records(records, length, copy, &live);
+	if (!kept)
+	{
+		free(copy);
+		return;
+	}
+	if (!live && !recording.pending_count)
+	{
+		public_write(copy, kept);
+		free(copy);
+		return;
+	}
+	if (recording.pending_count >= PUBLIC_MAXIMUM_BLOCKS)
+		public_write_due(FALSE);
+	last = (short)((recording.pending_first + recording.pending_count) % PUBLIC_MAXIMUM_BLOCKS);
+	recording.pending[last].time = game_time_get();
+	recording.pending[last].length = kept;
+	recording.pending[last].data = copy;
+	recording.pending_count++;
+	recording.pending_bytes += kept;
+}
+
+/* text for a JSON string: quotes, backslashes and controls left out */
+static void public_json_text(
+	char *out,
+	size_t size,
+	char const *text)
+{
+	size_t used = 0;
+
+	for (; *text && used + 1 < size; text++)
+	{
+		if (*text != '"' && *text != '\\' && (unsigned char)*text >= 0x20)
+			out[used++] = *text;
+	}
+	out[used] = 0;
+}
+
+/* the public folder's live.json, which a page showing the game live reads:
+whether a game is being recorded now, its file, and what it is */
+static void public_status_write(
+	boolean live)
+{
+	char server[64], map[64], game_type[64], name[MAX_PATH];
+	FILE *file;
+
+	if (!recording.public_name[0])
+		return;
+	public_json_text(server, sizeof(server), recording.public_server);
+	public_json_text(map, sizeof(map), recording.public_map);
+	public_json_text(game_type, sizeof(game_type), recording.public_game_type);
+	public_json_text(name, sizeof(name), recording.public_name);
+	file = fopen(RECORDING_FOLDER "\\public\\live.json.new", "wb");
+	if (!file)
+		return;
+	fprintf(file, "{\"live\": %s, \"file\": \"%s\", \"server\": \"%s\", \"map\": \"%s\", \"game_type\": \"%s\", "
+		"\"started\": %lu, \"delay\": %ld, \"ticks_per_second\": %d}\n",
+		live ? "true" : "false", name, server, map, game_type, recording.public_started,
+		config_integer("network.record_public_delay"), TICKS_PER_SECOND);
+	fclose(file);
+	/* (MoveFileA replaces nothing) */
+	DeleteFileA(RECORDING_FOLDER "\\public\\live.json");
+	MoveFileA(RECORDING_FOLDER "\\public\\live.json.new", RECORDING_FOLDER "\\public\\live.json");
+}
+
 /* the records so far written as a block */
 static void recording_flush(
 	void)
 {
 	recording.flushed_time = game_time_get();
 	recording_write_block(recording.buffer, recording.length);
+	public_add(recording.buffer, recording.length);
 	recording.length = 0;
 }
 
@@ -280,7 +513,8 @@ static unsigned long recording_tag(
 /* the oldest recordings deleted while the folder holds more than its
 megabytes (the names begin with their time: the oldest sorts first) */
 static void recording_prune(
-	void)
+	char const *folder,
+	char const *setting)
 {
 	static char names[RECORDING_MAXIMUM_FILES][MAX_PATH];
 	static unsigned long sizes[RECORDING_MAXIMUM_FILES];
@@ -289,11 +523,13 @@ static void recording_prune(
 	long count = 0;
 	long index;
 	double total = 0.0;
-	double limit = (double)config_integer("network.recordings_megabytes") * 1024.0 * 1024.0;
+	double limit = (double)config_integer(setting) * 1024.0 * 1024.0;
+	char pattern[MAX_PATH];
 
 	if (!(limit > 0.0))
 		return;
-	find = FindFirstFileA(RECORDING_FOLDER "\\*.hrec", &data);
+	snprintf(pattern, sizeof(pattern), "%s\\*.hrec", folder);
+	find = FindFirstFileA(pattern, &data);
 	if (find == INVALID_HANDLE_VALUE)
 		return;
 	do
@@ -318,9 +554,15 @@ static void recording_prune(
 			if (strcmp(names[index], names[oldest]) < 0)
 				oldest = index;
 		}
-		snprintf(path, sizeof(path), RECORDING_FOLDER "\\%s", names[oldest]);
+		snprintf(path, sizeof(path), "%s\\%s", folder, names[oldest]);
 		if (DeleteFileA(path))
-			error(_error_silent, "recording: %s deleted (the folder is over network.recordings_megabytes)", names[oldest]);
+			error(_error_silent, "recording: %s deleted (the folder is over %s)", names[oldest], setting);
+		/* (and its carnage report's link beside it, a public copy's) */
+		if (strlen(path) > 5)
+		{
+			strcpy(path + strlen(path) - 5, ".json");
+			DeleteFileA(path);
+		}
 		total -= (double)sizes[oldest];
 		names[oldest][0] = '\x7f';
 		names[oldest][1] = 0;
@@ -430,6 +672,8 @@ static void recording_walls(
 			at = put_u32(at, (unsigned long)corner_vertices[corner]);
 	}
 	recording_write_block(walls, size + 5);
+	/* (the public copy's too: the walls show no one where anyone is) */
+	public_add(walls, size + 5);
 	free(walls);
 }
 
@@ -489,7 +733,7 @@ static void recording_start(
 		}
 	}
 	CreateDirectoryA(RECORDING_FOLDER, NULL);
-	recording_prune();
+	recording_prune(RECORDING_FOLDER, "network.recordings_megabytes");
 	if (local)
 		strftime(when, sizeof(when), "%Y-%m-%d_%H-%M-%S", local);
 	/* (the map's own name, its folders gone, kept to letters, digits, -, _) */
@@ -519,6 +763,34 @@ static void recording_start(
 		fwrite(header, sizeof(header), 1, recording.file);
 	}
 	error(_error_silent, "recording: %s", file_name);
+	/* (the public copy, network.record_public: the same name in the public
+	folder, its game told in live.json) */
+	recording.public_file = NULL;
+	recording.public_name[0] = 0;
+	if (config_boolean("network.record_public"))
+	{
+		char public_path[MAX_PATH + 16];
+		char const *name = strrchr(file_name, '\\') + 1;
+
+		CreateDirectoryA(RECORDING_FOLDER "\\public", NULL);
+		recording_prune(RECORDING_FOLDER "\\public", "network.record_public_megabytes");
+		snprintf(public_path, sizeof(public_path), RECORDING_FOLDER "\\public\\%s", name);
+		recording.public_file = fopen(public_path, "wb");
+		if (recording.public_file)
+		{
+			byte header[8] = { 'H', 'R', 'E', 'C', RECORDING_VERSION, 0, 0, 0 };
+
+			fwrite(header, sizeof(header), 1, recording.public_file);
+			snprintf(recording.public_name, sizeof(recording.public_name), "%s", name);
+			snprintf(recording.public_server, sizeof(recording.public_server), "%s", server_name);
+			snprintf(recording.public_map, sizeof(recording.public_map), "%s", base);
+			snprintf(recording.public_game_type, sizeof(recording.public_game_type), "%s", game_type);
+			recording.public_started = (unsigned long)now;
+			public_status_write(TRUE);
+		}
+		else
+			error(_error_log, "recording: could not make the public copy %s", public_path);
+	}
 	size = 4 + 2 + text_size(server_name) + text_size(map) + text_size(game_type);
 	at = recording_begin(_record_game, size);
 	if (at)
@@ -547,6 +819,23 @@ static void recording_end(
 		if (recording.file)
 			fclose(recording.file);
 	}
+	/* (the public copy whole: the game is over, nothing held back is a
+	help to its players any more) */
+	if (recording.public_file)
+	{
+		public_write_due(TRUE);
+		fclose(recording.public_file);
+		recording.public_file = NULL;
+		public_status_write(FALSE);
+	}
+	while (recording.pending_count)
+	{
+		free(recording.pending[recording.pending_first].data);
+		recording.pending[recording.pending_first].data = NULL;
+		recording.pending_first = (short)((recording.pending_first + 1) % PUBLIC_MAXIMUM_BLOCKS);
+		recording.pending_count--;
+	}
+	recording.pending_bytes = 0;
 	recording.file = NULL;
 	recording.started = FALSE;
 	recording.failed = FALSE;
@@ -701,6 +990,39 @@ void network_recording_host_tick(
 	}
 	if (recording.length >= RECORDING_BLOCK_BYTES || game_time_get() - recording.flushed_time >= RECORDING_BLOCK_TICKS)
 		recording_flush();
+	/* (the public copy's held back blocks, once old enough) */
+	public_write_due(FALSE);
+}
+
+int network_recording_public_name(
+	char *name,
+	int size)
+{
+	if (!recording.public_name[0] || size <= 0)
+		return 0;
+	snprintf(name, (size_t)size, "%s", recording.public_name);
+	return 1;
+}
+
+void network_recording_public_report(
+	char const *name,
+	char const *report_url)
+{
+	char path[MAX_PATH + 32];
+	char url[256];
+	size_t length = strlen(name);
+	FILE *file;
+
+	/* (only a name the public folder could have: no folders) */
+	if (length < 6 || length >= MAX_PATH || strpbrk(name, "\\/:") || strcmp(name + length - 5, ".hrec"))
+		return;
+	public_json_text(url, sizeof(url), report_url);
+	snprintf(path, sizeof(path), RECORDING_FOLDER "\\public\\%.*s.json", (int)(length - 5), name);
+	file = fopen(path, "wb");
+	if (!file)
+		return;
+	fprintf(file, "{\"report\": \"%s\"}\n", url);
+	fclose(file);
 }
 
 void network_recording_hit(

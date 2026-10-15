@@ -505,6 +505,21 @@ static const struct config_setting config_settings[] =
 		_platform_all,
 		"How many megabytes of recordings (network.record_games) to keep: the\n"
 		"oldest go first. 0 keeps them all." },
+	{ "network.record_public", _config_boolean, "false", "HALO_NET_RECORD_PUBLIC", _environment_value, _platform_all,
+		"Hosting, with network.record_games: also write each game's public copy\n"
+		"to recordings\\public, for anyone to watch, live or again: no player's\n"
+		"address or hardware id and no fair play verdicts, and the game as it is\n"
+		"played held back network.record_public_delay seconds, so that no one\n"
+		"watching can tell its players where the others are. recordings\\public\\\n"
+		"live.json says which game is being written. Serve that folder alone." },
+	{ "network.record_public_delay", _config_integer, "30", "HALO_NET_RECORD_PUBLIC_DELAY", _environment_value,
+		_platform_all,
+		"How many seconds the public copy (network.record_public) is held back\n"
+		"while its game is played." },
+	{ "network.record_public_megabytes", _config_integer, "2048", "HALO_NET_RECORD_PUBLIC_MEGABYTES",
+		_environment_value, _platform_all,
+		"How many megabytes of public copies (network.record_public) to keep:\n"
+		"the oldest go first. 0 keeps them all." },
 	{ "network.join_from_clipboard", _config_boolean, "true", "HALO_NET_JOIN_FROM_CLIPBOARD", _environment_value,
 		_platform_all,
 		"Join the game of an invite link found on the clipboard when the game\n"

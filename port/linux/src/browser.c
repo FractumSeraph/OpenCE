@@ -43,6 +43,10 @@ with it under the lock.
 
 #include <SDL3/SDL_stdinc.h>
 
+/* the game's (this fork: port/linux/game/network_recording.h) */
+int network_recording_public_name(char *name, int size);
+void network_recording_public_report(char const *name, char const *report_url);
+
 enum
 {
 	ANNOUNCE_INTERVAL = 20000,
@@ -127,8 +131,10 @@ static struct
 	struct hosted_game announced;
 
 	/* a finished game's carnage report, waiting to be sent (JSON, without
-	the invite, which is the listing's) */
+	the invite, which is the listing's), and its game's public recording
+	(network.record_public), which is linked to the report once it is in */
 	char *report;
+	char report_recording[260];
 	/* a joined game's report, waiting to be sent (JSON, without the player
 	key, which the browser thread adds), how often it was tried, and when */
 	char *client_report;
@@ -938,6 +944,7 @@ static void update_hosting(void)
 static void send_report(void)
 {
 	char url[512], response[256], error[256];
+	char recording[sizeof(browser.report_recording)];
 	char *report, *body;
 	size_t size;
 	int status;
@@ -945,6 +952,8 @@ static void send_report(void)
 	pthread_mutex_lock(&browser_lock);
 	report = browser.report;
 	browser.report = NULL;
+	snprintf(recording, sizeof(recording), "%s", browser.report_recording);
+	browser.report_recording[0] = 0;
 	pthread_mutex_unlock(&browser_lock);
 	if (!report)
 		return;
@@ -962,8 +971,16 @@ static void send_report(void)
 				sizeof(error));
 			response[strcspn(response, "\r\n")] = 0;
 			if (status == 200 && !strncmp(response, "ok ", 3))
-				platform_log("Game list: the game's carnage report is at %s/games/%s",
-					config_string("network.browser_url"), response + 3);
+			{
+				char report_url[384];
+
+				snprintf(report_url, sizeof(report_url), "%s/games/%s", config_string("network.browser_url"),
+					response + 3);
+				platform_log("Game list: the game's carnage report is at %s", report_url);
+				/* (this fork: the report linked to the game's public recording) */
+				if (recording[0])
+					network_recording_public_report(recording, report_url);
+			}
 			else if (status == 200)
 				platform_log("Game list: the game's carnage report was sent");
 			else
@@ -1493,6 +1510,9 @@ void browser_report_game(int teams, int red_score, int blue_score, int duration_
 	pthread_mutex_lock(&browser_lock);
 	free(browser.report);
 	browser.report = report;
+	/* (this fork: the game's public recording, network_recording.c) */
+	if (!network_recording_public_name(browser.report_recording, (int)sizeof(browser.report_recording)))
+		browser.report_recording[0] = 0;
 	pthread_mutex_unlock(&browser_lock);
 }
 

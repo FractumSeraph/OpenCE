@@ -67,6 +67,14 @@ button.on{background:rgba(127,211,164,.35);border-color:var(--accent)}
 #marks i{position:absolute;top:0;width:2px;height:8px}
 .spacer{flex:1}
 #recording{color:var(--bad);font-weight:700;display:none}
+#live{display:none;font-size:12px;font-weight:700;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:2px 7px}
+#live.on{color:#fff;background:var(--bad);border-color:var(--bad)}
+#games{display:flex;flex-wrap:wrap;gap:18px;justify-content:center;max-width:56rem;text-align:left}
+#games section{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px 16px;min-width:15rem}
+#games h2{margin:0 0 6px;font-size:16px}
+#games ol{margin:8px 0 0;padding-left:1.2rem;font-size:13px;line-height:1.6}
+#games a{color:var(--accent)}
+#games .button{color:var(--bg)}
 @media (max-width:820px){body{grid-template-columns:1fr;grid-template-rows:1fr auto 40vh}
   #side{grid-column:1;grid-row:3;border-left:0;border-top:1px solid var(--line)}}
 </style>
@@ -79,9 +87,10 @@ button.on{background:rgba(127,211,164,.35);border-color:var(--accent)}
 <div id="view">
   <div id="drop">
     <h1>Halo Replay Viewer</h1>
-    <p>Open a game a server recorded (<code>recordings\*.hrec</code> in its data folder, with
-      <code>network.record_games</code> on). Watch it through any player's eyes, see who was behind walls,
-      and jump to the hits the fair play checks refused or doubted. The file stays on this computer.</p>
+    <p>Watch a game a server recorded, live or again: through any player's eyes, behind them, or from
+      anywhere. Pick a game below, or open a recording (<code>recordings\*.hrec</code>: an admin's
+      shows the hits the fair play checks refused or doubted). A file you open stays on this computer.</p>
+    <div id="games" style="display:none"></div>
     <label class="button">Open a recording<input id="file" type="file" accept=".hrec" hidden></label>
     <p style="font-size:12px">or drop it here</p>
   </div>
@@ -103,6 +112,7 @@ button.on{background:rgba(127,211,164,.35);border-color:var(--accent)}
     <button id="lines" class="on" title="Everyone's aim (A)">Aim lines</button>
     <button id="record" title="Save the view as a video">Record video</button>
     <span id="recording">REC</span>
+    <span id="live"></span>
   </div>
 </div>
 <aside id="side">
@@ -110,7 +120,7 @@ button.on{background:rgba(127,211,164,.35);border-color:var(--accent)}
   <div id="game">No recording open.</div>
   <h2>Players</h2>
   <div id="players"></div>
-  <h2>Hits and kills</h2>
+  <h2 id="events-title">Hits and kills</h2>
   <div id="filters">
     <label><input type="checkbox" id="f-refused" checked>refused</label>
     <label><input type="checkbox" id="f-suspicious" checked>doubted</label>
@@ -134,28 +144,50 @@ async function inflate(bytes) {
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
-async function parse(buffer) {
-  const file = new DataView(buffer);
-  const magic = String.fromCharCode(...new Uint8Array(buffer, 0, 4));
-  if (magic !== "HREC") throw new Error("This is not a Halo recording (.hrec).");
-  const version = file.getUint32(4, true);
+// (the file's start: "HREC" and its version)
+function checkHeader(bytes) {
+  if (bytes.length < 8 || String.fromCharCode(...bytes.subarray(0, 4)) !== "HREC")
+    throw new Error("This is not a Halo recording (.hrec).");
+  const version = new DataView(bytes.buffer, bytes.byteOffset, 8).getUint32(4, true);
   if (version !== 1) throw new Error(`Recording version ${version}: this viewer reads version 1.`);
+}
+
+// (the whole blocks from at on, and where the next begins: a block cut short
+// waits for the rest, as a game being written or watched live has)
+async function readBlocks(bytes, at) {
+  const file = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const chunks = [];
-  let at = 8;
-  while (at + 9 <= buffer.byteLength) {
+  while (at + 9 <= bytes.length) {
     // ('R': the records as they are; 'B': compressed with zlib, as the first recordings were)
     const kind = file.getUint8(at);
     if (kind !== 0x52 && kind !== 0x42) break;
     const size = file.getUint32(at + 5, true);
-    if (at + 9 + size > buffer.byteLength) break; // (a block cut short: the host stopped while writing it)
-    const block = new Uint8Array(buffer, at + 9, size);
+    if (at + 9 + size > bytes.length) break;
+    const block = bytes.subarray(at + 9, at + 9 + size);
     chunks.push(kind === 0x42 ? await inflate(block) : block);
     at += 9 + size;
   }
-  const r = {
+  return { chunks, at };
+}
+
+function newRecording() {
+  return {
     game: { time: 0, rate: 30, server: "", map: "", type: "" }, vertices: null, polygons: [],
-    players: new Map(), tags: new Map(), frames: [], hits: [], kills: [], moves: [], end: null,
+    players: new Map(), tags: new Map(), frames: [], hits: [], kills: [], moves: [], end: null, first: 0, last: 0,
   };
+}
+
+async function parse(buffer) {
+  const bytes = new Uint8Array(buffer);
+  checkHeader(bytes);
+  const r = newRecording();
+  addChunks(r, (await readBlocks(bytes, 8)).chunks);
+  if (!r.frames.length) throw new Error("The recording has no frames: it may have ended at once.");
+  return r;
+}
+
+// (records added to a recording, in the order they were written)
+function addChunks(r, chunks) {
   const decoder = new TextDecoder();
   for (const chunk of chunks) {
     const view = new DataView(chunk.buffer, chunk.byteOffset, chunk.byteLength);
@@ -211,10 +243,10 @@ async function parse(buffer) {
       p = end;
     }
   }
-  if (!r.frames.length) throw new Error("The recording has no frames: it may have ended at once.");
-  r.first = r.frames[0].tick;
-  r.last = r.frames[r.frames.length - 1].tick;
-  return r;
+  if (r.frames.length) {
+    r.first = r.frames[0].tick;
+    r.last = r.frames[r.frames.length - 1].tick;
+  }
 }
 
 /* ---------- the scene (Halo's world units, z up) */
@@ -631,33 +663,55 @@ document.getElementById("record").onclick = () => {
 
 /* ---------- opening a recording */
 
-async function open(file) {
-  const drop = document.getElementById("drop");
-  drop.querySelector("p").textContent = `Reading ${file.name}...`;
-  try {
-    rec = await parse(await file.arrayBuffer());
-  } catch (error) {
-    drop.querySelector("p").textContent = error.message;
-    return;
-  }
-  drop.style.display = "none";
-  for (const figure of figures.values()) scene.remove(figure.group);
-  figures = new Map();
-  teams = [...rec.players.values()].some(list => list.some(p => p.team === 1)) &&
-    [...rec.players.values()].every(list => list.every(p => p.team <= 1));
-  buildWalls();
+// (a server's public copy, network.record_public: no addresses, hardware ids,
+// fair play verdicts or refused moves, so their panels are left out)
+let publicCopy = false;
+function looksPublic(r) {
+  const players = [...r.players.values()].flat();
+  return players.length > 0 && players.every(p => !p.hwid && !p.ip) && !r.moves.length && r.hits.every(h => !h.verdict);
+}
+
+function gameLine(text, href) {
+  const d = document.createElement("div");
+  if (href) {
+    const a = document.createElement("a");
+    a.href = href; a.textContent = text; a.target = "_blank"; a.rel = "noopener";
+    d.append(a);
+  } else d.textContent = text;
+  document.getElementById("game").append(d);
+}
+
+function describeGame() {
   const date = rec.game.time ? new Date(rec.game.time * 1000).toLocaleString() : "";
   const map = rec.game.map.split("\\").pop();
   document.getElementById("game").innerHTML = "";
-  for (const line of [`${map}${rec.game.type ? " · " + rec.game.type : ""}`, rec.game.server, date,
-    `${fmt(rec.last)} long · ${rec.hits.length} hits checked · ${rec.kills.length} kills`]) {
-    const d = document.createElement("div"); d.textContent = line; document.getElementById("game").append(d);
-  }
+  for (const text of [`${map}${rec.game.type ? " · " + rec.game.type : ""}`, rec.game.server, date,
+    `${fmt(rec.last)} long · ${rec.hits.length} hits${publicCopy ? "" : " checked"} · ${rec.kills.length} kills`])
+    gameLine(text);
+  if (rec.report) gameLine("Carnage report and stats", rec.report);
+  return map;
+}
+
+// (shown: a recording read whole, or the first of one watched live)
+function show(r) {
+  rec = r;
+  document.getElementById("drop").style.display = "none";
+  for (const figure of figures.values()) scene.remove(figure.group);
+  figures = new Map();
+  publicCopy = looksPublic(rec);
+  document.getElementById("filters").style.display = publicCopy ? "none" : "";
+  document.getElementById("events-title").textContent = publicCopy ? "Kills" : "Hits and kills";
+  if (publicCopy) for (const [id, on] of [["f-refused", false], ["f-suspicious", false], ["f-ok", false],
+    ["f-kills", true], ["f-moves", false], ["f-selected", false]]) document.getElementById(id).checked = on;
+  teams = [...rec.players.values()].some(list => list.some(p => p.team === 1)) &&
+    [...rec.players.values()].every(list => list.every(p => p.team <= 1));
+  buildWalls();
+  const map = describeGame();
   scrub.min = String(rec.first);
   scrub.max = String(rec.last);
-  const worst = [...rec.players.keys()].map(slot => [slot, suspicion(slot)]).sort((a, b) =>
+  const worst = publicCopy ? null : [...rec.players.keys()].map(slot => [slot, suspicion(slot)]).sort((a, b) =>
     b[1].refused - a[1].refused || b[1].doubted - a[1].doubted)[0];
-  selected = worst ? worst[0] : null;
+  selected = worst ? worst[0] : rec.players.size ? [...rec.players.keys()].sort((a, b) => a - b)[0] : null;
   setCamera(selected != null ? "first" : "free");
   renderPlayers();
   renderEvents();
@@ -665,16 +719,189 @@ async function open(file) {
   document.title = `${map} replay`;
 }
 
+// (a public copy's game's carnage report on the game list: <name>.json beside it)
+async function linkReport(address) {
+  if (!/\.hrec$/.test(address) || !rec) return;
+  try {
+    const answer = await fetch(address.replace(/\.hrec$/, ".json"), { cache: "no-store" });
+    if (!answer.ok) return;
+    const report = (await answer.json()).report;
+    if (typeof report === "string" && /^https:\/\//.test(report)) {
+      rec.report = report;
+      describeGame();
+    }
+  } catch (error) { /* (no report yet) */ }
+}
+
+async function open(file) {
+  const drop = document.getElementById("drop");
+  stopLive();
+  drop.querySelector("p").textContent = `Reading ${file.name}...`;
+  try {
+    show(await parse(await file.arrayBuffer()));
+  } catch (error) {
+    drop.querySelector("p").textContent = error.message;
+  }
+}
+
+/* ---------- watching live (?live=<a server's public folder>) */
+
+// The server writes its public copy as the game is played, each part held
+// back network.record_public_delay seconds; this reads what is new every few
+// seconds (an HTTP range request for the rest of the file) and plays a little
+// behind its end, so that parts arriving every ten seconds play smoothly.
+const live = { base: null, file: null, bytes: new Uint8Array(0), at: 8, timer: 0, status: null };
+const LIVE_POLL_MS = 3000, LIVE_LAG_SECONDS = 12;
+
+function stopLive() {
+  clearTimeout(live.timer);
+  live.base = null;
+  document.getElementById("live").style.display = "none";
+}
+
+function liveBadge(text, on) {
+  const badge = document.getElementById("live");
+  badge.style.display = "inline";
+  badge.textContent = text;
+  badge.classList.toggle("on", !!on);
+}
+
+async function liveStatus() {
+  const answer = await fetch(new URL("live.json", live.base), { cache: "no-store" });
+  if (!answer.ok) throw new Error(`No game to watch at ${live.base} (${answer.status}).`);
+  return answer.json();
+}
+
+// (the file's bytes from where this has them on; a host that sends the whole
+// file again is cut to the new part)
+async function liveFetch(url) {
+  const answer = await fetch(url, { cache: "no-store", headers: { Range: `bytes=${live.bytes.length}-` } });
+  if (answer.status === 416) return;
+  if (!answer.ok) throw new Error(`${url}: ${answer.status}`);
+  let part = new Uint8Array(await answer.arrayBuffer());
+  if (answer.status === 200) part = part.subarray(live.bytes.length);
+  if (!part.length) return;
+  const joined = new Uint8Array(live.bytes.length + part.length);
+  joined.set(live.bytes);
+  joined.set(part, live.bytes.length);
+  live.bytes = joined;
+}
+
+async function livePoll() {
+  if (!live.base) return;
+  try {
+    const status = await liveStatus();
+    const url = new URL(status.file, live.base).href;
+    // (a new game: begun again from its start)
+    if (url !== live.file) {
+      live.file = url;
+      live.bytes = new Uint8Array(0);
+      live.at = 8;
+      rec = null;
+    }
+    live.status = status;
+    await liveFetch(url);
+    if (live.bytes.length >= 8 && live.at === 8) checkHeader(live.bytes);
+    const read = await readBlocks(live.bytes, live.at);
+    live.at = read.at;
+    if (!rec) {
+      const r = newRecording();
+      addChunks(r, read.chunks);
+      if (r.frames.length) {
+        show(r);
+        linkReport(url);
+        seek(Math.max(rec.first, rec.last - LIVE_LAG_SECONDS * rec.game.rate));
+        setPlaying(true);
+      } else {
+        document.getElementById("drop").style.display = "";
+        document.querySelector("#drop p").textContent = status.live ?
+          `${status.server}: ${status.map.split("\\").pop()} has just begun. It shows here ${status.delay} seconds behind the game.` :
+          `${status.server} is not playing a game right now. This page shows the next one when it begins.`;
+      }
+    } else if (read.chunks.length) {
+      const players = rec.players.size;
+      addChunks(rec, read.chunks);
+      scrub.max = String(rec.last);
+      describeGame();
+      if (rec.players.size !== players) renderPlayers();
+      renderEvents();
+    }
+    if (rec) liveBadge(status.live ? `LIVE · ${status.delay} s behind` : "Game over: watch it again", status.live);
+  } catch (error) {
+    if (!rec) document.querySelector("#drop p").textContent = error.message;
+  }
+  live.timer = setTimeout(livePoll, LIVE_POLL_MS);
+}
+
+function watchLive(base) {
+  stopLive();
+  live.base = new URL(base.replace(/\/?$/, "/"), location.href).href;
+  live.file = null;
+  document.getElementById("drop").style.display = "";
+  document.querySelector("#drop p").textContent = "Looking for the game...";
+  livePoll();
+}
+
+/* ---------- the games (servers.json: the servers whose public folders this page knows) */
+
+async function listGames() {
+  const box = document.getElementById("games");
+  let servers;
+  try {
+    servers = await (await fetch("servers.json", { cache: "no-store" })).json();
+  } catch (error) { return; }
+  if (!Array.isArray(servers) || !servers.length) return;
+  box.style.display = "";
+  for (const server of servers) {
+    const base = new URL(String(server.public).replace(/\/?$/, "/"), location.href).href;
+    const section = document.createElement("section");
+    section.innerHTML = `<h2></h2><p class="live-line"></p><ol></ol>`;
+    section.querySelector("h2").textContent = server.name;
+    box.append(section);
+    fetch(new URL("live.json", base), { cache: "no-store" }).then(r => r.ok ? r.json() : null).then(status => {
+      const p = section.querySelector(".live-line");
+      if (status && status.live) {
+        const a = document.createElement("a");
+        a.href = `?live=${encodeURIComponent(base)}`;
+        a.className = "button";
+        a.textContent = `Watch live: ${status.map.split("\\").pop()}${status.game_type ? " · " + status.game_type : ""}`;
+        p.append(a);
+      } else p.textContent = "No game right now.";
+    }).catch(() => {});
+    // (the folder's listing, as the web server gives it: Caddy's file_server browse, in JSON)
+    fetch(base, { headers: { Accept: "application/json" }, cache: "no-store" }).then(r => r.ok ? r.json() : []).then(files => {
+      const list = section.querySelector("ol");
+      const games = (Array.isArray(files) ? files : []).filter(f => /\.hrec$/.test(f.name))
+        .sort((a, b) => b.name.localeCompare(a.name)).slice(0, 15);
+      for (const f of games) {
+        const m = /^(\d{4}-\d\d-\d\d)_(\d\d)-(\d\d)-\d\d_(.+)\.hrec$/.exec(f.name);
+        const li = document.createElement("li");
+        const a = document.createElement("a");
+        a.href = `?file=${encodeURIComponent(new URL(f.name, base).href)}`;
+        a.textContent = m ? `${m[4]} · ${m[1]} ${m[2]}:${m[3]}` : f.name;
+        li.append(a);
+        list.append(li);
+      }
+      if (!games.length) list.outerHTML = "<p>No games recorded yet.</p>";
+    }).catch(() => {});
+  }
+}
+
 document.getElementById("file").onchange = e => { if (e.target.files[0]) open(e.target.files[0]); };
-// (?file=<address>: a recording at a link, as one an admin keeps somewhere private)
+// (?file=<address>: a recording at a link, a public copy or one an admin keeps
+// somewhere private; ?live=<a server's public folder>: its game as it is played;
+// neither: the games of the servers in servers.json)
 {
-  const link = new URLSearchParams(location.search).get("file");
-  if (link) fetch(link).then(r => {
+  const query = new URLSearchParams(location.search);
+  const link = query.get("file"), liveBase = query.get("live");
+  if (liveBase) watchLive(liveBase);
+  else if (link) fetch(link).then(r => {
     if (!r.ok) throw new Error(`${link}: ${r.status}`);
     return r.blob();
-  }).then(blob => open(new File([blob], link.split("/").pop()))).catch(error => {
+  }).then(async blob => { await open(new File([blob], link.split("/").pop())); linkReport(link); }).catch(error => {
     document.querySelector("#drop p").textContent = error.message;
   });
+  else listGames();
 }
 view.addEventListener("dragover", e => { e.preventDefault(); document.getElementById("drop").classList.add("hover"); });
 view.addEventListener("dragleave", () => document.getElementById("drop").classList.remove("hover"));
@@ -690,7 +917,8 @@ function frame(now) {
   last = now;
   if (rec && playing) {
     seek(tick + dt * rec.game.rate * speed);
-    if (tick >= rec.last) setPlaying(false);
+    // (watched live: at the end of what has come, it waits for more)
+    if (tick >= rec.last && !(live.base && live.status && live.status.live)) setPlaying(false);
   }
   draw();
   requestAnimationFrame(frame);

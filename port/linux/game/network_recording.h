@@ -39,4 +39,14 @@ void network_recording_kill(short killer_index, short victim_index, boolean head
 (network_fairplay.h's NETWORK_FAIRPLAY_MOVE_*), and by how much */
 void network_recording_move(short player_index, byte kind, real amount);
 
+/* the public copy (network.record_public) being written, or the last one:
+its file's name in recordings\public (0 if none), for the carnage
+report of its game to be linked to it */
+int network_recording_public_name(char *name, int size);
+
+/* a public copy's game's carnage report, once the game list took it: its
+address, kept beside the copy as <name>.json for the replay viewer and the
+game list to link the two (any thread) */
+void network_recording_public_report(char const *name, char const *report_url);
+
 #endif
