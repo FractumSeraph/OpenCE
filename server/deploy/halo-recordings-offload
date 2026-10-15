@@ -1,0 +1,132 @@
+#!/usr/bin/env python3
+# Moves FractumSeraph's game servers' finished recordings (network.record_games:
+# port/linux/game/network_recording.c) off the VPS to the seedbox, which has
+# room (server/deploy/halo-recordings-offload; installed as
+# /usr/local/sbin/halo-recordings-offload, run every 10 minutes by
+# halo-recordings-offload.timer):
+#
+#   - a recording not written to for 5 minutes (its game over) goes to the
+#     seedbox over SSH with /root/.ssh/halo_recordings, whose authorized_keys
+#     line there lets it run halo-recordings-receive and nothing else;
+#   - once the seedbox has it whole (its SHA-256 the same as here), it goes in
+#     the folder's archived.txt (name, bytes, time), which the control panel
+#     lists (server/platform/server_control.c), and is deleted here;
+#   - those the seedbox pruned to stay under its size come out of archived.txt.
+#
+# The panel saves one from /archive/<name>: Caddy, in front of the panel, asks
+# the panel whether the request's login may (forward_auth to /v1/recordings),
+# then fetches it from the seedbox with the archive token, which nginx there
+# asks for (server/docs/admin.md, "Recordings"). Its log: journalctl -u
+# halo-recordings-offload.
+import hashlib
+import os
+import subprocess
+import sys
+import time
+
+SERVERS = {"halo-dedicated": "/opt/halo-dedicated/data", "halo-fractumslayer": "/opt/halo-fractumslayer/data"}
+KEY = "/root/.ssh/halo_recordings"
+TARGET = "fractum@chronos.feralhosting.com"
+QUIET_SECONDS = 5 * 60
+ARCHIVED = "archived.txt"
+
+
+def log(text):
+    print(text, flush=True)
+
+
+def sha256(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as file:
+        for block in iter(lambda: file.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def read_archived(folder):
+    try:
+        with open(os.path.join(folder, ARCHIVED), encoding="utf-8") as file:
+            return [line.rstrip("\n").split("\t") for line in file if line.strip()]
+    except OSError:
+        return []
+
+
+def write_archived(folder, entries):
+    path = os.path.join(folder, ARCHIVED)
+    temporary = path + ".new"
+    with open(temporary, "w", encoding="utf-8") as file:
+        for entry in entries:
+            file.write("\t".join(entry) + "\n")
+    os.chmod(temporary, 0o644)
+    os.replace(temporary, path)
+
+
+def send(unit, path, name, size):
+    """the recording to the seedbox: its SHA-256 there, and what it pruned (server, name)"""
+    with open(path, "rb") as file:
+        result = subprocess.run(["ssh", "-T", "-i", KEY, "-o", "BatchMode=yes", "-o", "ConnectTimeout=60", TARGET,
+                                 f"receive {unit} {name} {size}"], stdin=file, capture_output=True, text=True,
+                                timeout=3600)
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or f"ssh exited {result.returncode}")
+    digest = None
+    pruned = []
+    for line in result.stdout.splitlines():
+        words = line.split()
+        if len(words) == 2 and words[0] == "ok":
+            digest = words[1]
+        elif len(words) == 3 and words[0] == "pruned":
+            pruned.append((words[1], words[2]))
+    return digest, pruned
+
+
+def main():
+    now = time.time()
+    failed = False
+    for unit, data in SERVERS.items():
+        folder = os.path.join(data, "recordings")
+        if not os.path.isdir(folder):
+            continue
+        archived = read_archived(folder)
+        changed = False
+        for name in sorted(os.listdir(folder)):
+            path = os.path.join(folder, name)
+            if not name.endswith(".hrec") or not os.path.isfile(path):
+                continue
+            status = os.stat(path)
+            # (still being written: its game goes on)
+            if now - status.st_mtime < QUIET_SECONDS:
+                continue
+            try:
+                here = sha256(path)
+                digest, pruned = send(unit, path, name, status.st_size)
+            except Exception as error:
+                log(f"{unit}: {name} not moved: {error}")
+                failed = True
+                continue
+            if digest != here:
+                log(f"{unit}: {name}: the seedbox's copy is not this one ({digest} not {here}); kept here")
+                failed = True
+                continue
+            archived = [entry for entry in archived if entry[0] != name]
+            archived.append([name, str(status.st_size), str(int(status.st_mtime))])
+            for pruned_unit, pruned_name in pruned:
+                if pruned_unit == unit:
+                    archived = [entry for entry in archived if entry[0] != pruned_name]
+                else:
+                    other = os.path.join(SERVERS.get(pruned_unit, "/nonexistent"), "recordings")
+                    rest = [entry for entry in read_archived(other) if entry[0] != pruned_name]
+                    if os.path.isdir(other):
+                        write_archived(other, rest)
+                log(f"the seedbox pruned {pruned_unit} {pruned_name}")
+            write_archived(folder, archived)
+            changed = True
+            os.remove(path)
+            log(f"{unit}: {name} ({status.st_size / 1048576:.1f} MB) moved to the seedbox")
+        if changed:
+            write_archived(folder, archived)
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

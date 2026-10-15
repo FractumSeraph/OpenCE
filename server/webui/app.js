@@ -588,11 +588,13 @@
       const row = element('tr');
       const save = element('td', null, 'actions');
       const link = element('a', 'Save');
-      link.href = '/v1/recordings/' + encodeURIComponent(entry.name);
+      // (one moved to the seedbox: /archive/, which the web server in front of
+      // this panel fetches from there once this panel says who may: server/docs/admin.md)
+      link.href = (entry.archived ? '/archive/' : '/v1/recordings/') + encodeURIComponent(entry.name);
       link.setAttribute('download', entry.name);
       save.append(link);
       row.append(
-        element('td', entry.name.replace(/\.hrec$/, '')),
+        element('td', entry.name.replace(/\.hrec$/, '') + (entry.archived ? '  (archived)' : '')),
         element('td', (entry.bytes / 1048576).toFixed(1) + ' MB', 'num'),
         element('td', new Date(entry.time * 1000).toLocaleString()),
         save,

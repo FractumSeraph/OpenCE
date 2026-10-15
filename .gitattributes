@@ -8,3 +8,5 @@ server/deploy/halo-gameservers-update text eol=lf
 server/deploy/halo-backup text eol=lf
 server/deploy/halo-backup-receive text eol=lf
 server/deploy/halo-alerts text eol=lf
+server/deploy/halo-recordings-offload text eol=lf
+server/deploy/halo-recordings-receive text eol=lf

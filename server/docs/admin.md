@@ -189,6 +189,38 @@ two seconds before it, through the shooter's eyes. **Record video** saves
 the view as a video for a ban's evidence. A recording a server keeps
 somewhere private opens with `index.html?file=<address>`.
 
+Recordings may live somewhere else once their game is over: list them in
+`recordings/archived.txt`, a line each (name, bytes, time in seconds since
+1970, with tabs between), and delete them from the folder. The panel lists
+them too, as archived, and saves one from `/archive/<name>` on its own
+address, which the web server in front of it must answer. FractumSeraph's
+servers move theirs to a seedbox every 10 minutes
+(`server/deploy/halo-recordings-offload`, its timer, and
+`halo-recordings-receive` on the seedbox, its SSH key allowed nothing
+else); Caddy answers `/archive/` by asking the panel whether the request's
+login may (`forward_auth` to `/v1/recordings`), then fetching the file from
+the seedbox with a token its nginx asks for:
+
+```
+@archive path_regexp ^/archive/[A-Za-z0-9_.-]+\.hrec$
+handle @archive {
+	forward_auth 127.0.0.1:8080 {
+		uri /v1/recordings
+	}
+	uri strip_prefix /archive
+	rewrite * /halo-archive/halo-dedicated{uri}
+	reverse_proxy https://halo.fractumseraph.net {
+		header_up Host halo.fractumseraph.net
+		header_up X-Halo-Archive {env.HALO_ARCHIVE_TOKEN}
+		header_up -Cookie
+		header_up -Authorization
+	}
+}
+handle {
+	reverse_proxy 127.0.0.1:8080
+}
+```
+
 ### Why there is no `sv_password`
 
 A join password needs the player's game to send one. A join request in the

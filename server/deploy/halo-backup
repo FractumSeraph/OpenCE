@@ -30,7 +30,7 @@ for item in /opt/halo-bans /opt/halo/config.json /etc/caddy /etc/mosquitto /etc/
             /etc/cron.daily/umami-backup /opt/umami/docker-compose.yml /opt/umami/.env; do
     [ -e "$item" ] && echo "$item"
 done >> "$list"
-ls -d /etc/systemd/system/halo* /etc/systemd/system/crowdsec-ssh-only* /etc/systemd/system/crowdsec-firewall-bouncer.service.d /usr/local/sbin/halo-* \
+ls -d /etc/systemd/system/halo* /etc/systemd/system/crowdsec-ssh-only* /etc/systemd/system/crowdsec-firewall-bouncer.service.d /etc/systemd/system/caddy.service.d /usr/local/sbin/halo-* \
    /usr/local/sbin/crowdsec-ssh-only.sh 2>/dev/null >> "$list" || true
 dump=$(ls -1t /opt/umami/backups/* 2>/dev/null | head -1 || true)
 [ -n "$dump" ] && echo "$dump" >> "$list"

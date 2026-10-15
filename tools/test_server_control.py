@@ -384,6 +384,16 @@ def test_recordings(harness, tmp_path):
     assert "2026-10-15_06-08-31_bloodgulch.hrec" in audit.read_text()
     for name in ("../secret.hrec", "..%2Fsecret.hrec", "notes.txt", "missing.hrec", ".hrec", "a/b.hrec"):
         assert http(harness, "GET", "/v1/recordings/" + name, jar).status != 200, name
+    # (those moved elsewhere, archived.txt: listed, marked, a bad line left out,
+    # one still in the folder listed once, as the folder's)
+    (folder / "archived.txt").write_text("2026-10-14_20-00-00_sneak.hrec\t5000000\t1792000000\n"
+                                          "../escape.hrec\t1\t1\n"
+                                          "2026-10-15_07-00-00_sneak.hrec\t4\t1\n")
+    entries = http(harness, "GET", "/v1/recordings", jar).json()["recordings"]
+    assert [(entry["name"], entry["archived"]) for entry in entries] == [
+        ("2026-10-15_07-00-00_sneak.hrec", False), ("2026-10-15_06-08-31_bloodgulch.hrec", False),
+        ("2026-10-14_20-00-00_sneak.hrec", True)]
+    assert entries[2]["bytes"] == 5000000
 
 
 def test_web_login_limits(harness):

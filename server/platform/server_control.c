@@ -2295,9 +2295,14 @@ static void respond_audit(struct connection *connection)
 /* ---------- recordings (this fork: network.record_games, network_recording.c) */
 
 /* the folder in the data folder, and how many are listed, and how large one
-sent may be */
+sent may be; and the list of those moved elsewhere (archived.txt in it: a
+line each, name, bytes and time with tabs between, kept by whoever moves
+them, as server/deploy/halo-recordings-offload does to a seedbox: the panel
+saves those from /archive/<name>, which the web server in front of it
+answers) */
 #define RECORDINGS_FOLDER "recordings"
-#define MAXIMUM_LISTED_RECORDINGS 500
+#define RECORDINGS_ARCHIVED_FILE "archived.txt"
+#define MAXIMUM_LISTED_RECORDINGS 2000
 #define MAXIMUM_RECORDING_BYTES (256L * 1024L * 1024L)
 
 struct recording_entry
@@ -2305,6 +2310,8 @@ struct recording_entry
 	char name[96];
 	long long size;
 	long long time;
+	/* moved elsewhere (archived.txt), not in the folder */
+	int archived;
 };
 
 /* whether a name is a recording's own: letters, digits, '-', '_', '.' (no
@@ -2371,6 +2378,7 @@ static int list_recordings(struct recording_entry *entries, int maximum)
 					snprintf(entries[count].name, sizeof(entries[count].name), "%s", found.name);
 					entries[count].size = (long long)found.size;
 					entries[count].time = (long long)found.time_write;
+					entries[count].archived = 0;
 					count++;
 				}
 			}
@@ -2396,17 +2404,49 @@ static int list_recordings(struct recording_entry *entries, int maximum)
 			snprintf(entries[count].name, sizeof(entries[count].name), "%s", item->d_name);
 			entries[count].size = (long long)status.st_size;
 			entries[count].time = (long long)status.st_mtime;
+			entries[count].archived = 0;
 			count++;
 		}
 		if (directory)
 			closedir(directory);
 	}
 #endif
+	/* (and those moved elsewhere, but one in the folder too) */
+	{
+		char path[1200];
+		char line[256];
+		FILE *file;
+
+		snprintf(path, sizeof(path), "%s/%s", folder, RECORDINGS_ARCHIVED_FILE);
+		file = fopen(path, "r");
+		while (file && fgets(line, sizeof(line), file) && count < maximum)
+		{
+			char name[96];
+			long long size = 0, time = 0;
+			int index;
+			int known = 0;
+
+			if (sscanf(line, "%95[^\t\n]\t%lld\t%lld", name, &size, &time) < 1 || !recording_name_valid(name))
+				continue;
+			for (index = 0; index < count && !known; index++)
+				known = !strcmp(entries[index].name, name);
+			if (known)
+				continue;
+			snprintf(entries[count].name, sizeof(entries[count].name), "%s", name);
+			entries[count].size = size;
+			entries[count].time = time;
+			entries[count].archived = 1;
+			count++;
+		}
+		if (file)
+			fclose(file);
+	}
 	qsort(entries, (size_t)count, sizeof(*entries), recording_entry_newer);
 	return count;
 }
 
-/* the recordings, as JSON: name, bytes, when last written */
+/* the recordings, as JSON: name, bytes, when last written, and whether moved
+elsewhere (archived.txt: saved from /archive/<name>) */
 static void respond_recordings(struct connection *connection)
 {
 	static struct recording_entry entries[MAXIMUM_LISTED_RECORDINGS];
@@ -2420,7 +2460,8 @@ static void respond_recordings(struct connection *connection)
 	{
 		json_printf(&body, "%s{\"name\": ", index ? ", " : "");
 		json_string(&body, entries[index].name);
-		json_printf(&body, ", \"bytes\": %lld, \"time\": %lld}", entries[index].size, entries[index].time);
+		json_printf(&body, ", \"bytes\": %lld, \"time\": %lld, \"archived\": %s}", entries[index].size,
+			entries[index].time, entries[index].archived ? "true" : "false");
 	}
 	json_printf(&body, "], \"count\": %d}", count);
 	respond_json(connection, 200, &body, NULL);

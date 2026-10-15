@@ -172,6 +172,17 @@ at the top of each):
   list run failed; and again when it is back. The webhook's URL goes in
   `/etc/halo-alerts/webhook`, readable by root alone (anyone with it can
   post to the channel); `halo-alerts --test` posts a line to try it.
+- `halo-recordings-offload`, run every 10 minutes by
+  `halo-recordings-offload.service` and `.timer`: each recording whose game
+  is over (not written to for 5 minutes) goes to the seedbox over SSH
+  (`/root/.ssh/halo_recordings`, whose `authorized_keys` line there runs
+  `halo-recordings-receive` and nothing else: it keeps them in
+  `~/halo-recordings/<server>/`, the oldest going past 200 GB), is checked
+  there by its SHA-256, listed in the folder's `archived.txt` and deleted
+  here. The control panel still lists and saves them
+  ([admin.md](admin.md#recordings)): nginx on the seedbox serves
+  `/halo-archive/` only with the token in `/etc/caddy/halo-archive.env`
+  (given to Caddy by `caddy.service.d/halo-archive.conf`).
 
 ## The game list's probe
 
