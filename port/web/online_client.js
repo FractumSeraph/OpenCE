@@ -2317,6 +2317,53 @@
       "Connected through a relay" : "Connected peer-to-peer";
   }
 
+  /* The host's first room link. A room is closed when its host gives up on
+     it, which ends the invite already handed out: so a link that does not
+     open (a slow or briefly unreachable lobby, as just after it restarts)
+     is tried again, on scheduleReconnect's backoff, before the room is
+     given up. The lobby keeps a session whose link never opened for the
+     session's life (room.ts: its pending_sessions row goes only when a
+     link opens), and gives the host no other session meanwhile
+     (HOST_ALREADY_CONNECTED): so the same session is tried again, and a
+     new one is taken only once the lobby gives one. */
+  async function openHostSocket(websocketUrl, operation) {
+    var lastError;
+    for (var attempt = 0; attempt < 8; attempt++) {
+      if (attempt > 0) {
+        await new Promise(function(resolve) {
+          global.setTimeout(resolve, Math.min(8000, 500 * Math.pow(2, attempt - 1)));
+        });
+        requireCurrentOperation(operation);
+        setStatus("Reaching the lobby service again (try " + (attempt + 1) + " of 8)…");
+      }
+      try {
+        await openSocket(websocketUrl, operation);
+        return;
+      } catch (error) {
+        if (error && error.haloCanceled) throw error;
+        lastError = error;
+      }
+      /* (a new session, when the lobby no longer keeps this one: one whose
+         link opened and then closed, or that ran out) */
+      try {
+        var result = await createSession(session.roomTicket);
+        requireCurrentOperation(operation);
+        session.selfPeerId = result.session.peerId;
+        updateLocalRoster();
+        if (Array.isArray(result.iceServers)) session.iceServers = result.iceServers;
+        configureTransport(session.iceServers);
+        websocketUrl = result.session.websocketUrl;
+      } catch (error) {
+        if (error && error.haloCanceled) throw error;
+        /* (a refusal that waiting does not change: the room is gone, or
+           its ticket or build is not this page's; 409 is the lobby still
+           keeping this session, which is tried again) */
+        if (error && error.haloStatus && error.haloStatus !== 409 && error.haloStatus < 500) throw error;
+      }
+    }
+    throw lastError;
+  }
+
   function validateRoomResponse(result) {
     if (!result || result.v !== PROTOCOL_VERSION || !result.room ||
         !result.session || !result.session.websocketUrl ||
@@ -2390,11 +2437,13 @@
          same signaling service support a staged origin without leaking its
          canonical production URL into preview invites. */
       session.inviteUrl = makeInviteUrl(session.inviteCode);
-      showInvite();
       session.iceServers = Array.isArray(result.iceServers) ? result.iceServers : [];
       configureTransport(session.iceServers);
-      await openSocket(result.host.session.websocketUrl, operation);
+      await openHostSocket(result.host.session.websocketUrl, operation);
       requireCurrentOperation(operation);
+      /* (shown once the room is linked: an invite to a room its host could
+         not reach would be closed under the guest) */
+      showInvite();
       applyPlayerCustomization(profile);
       requestConfiguredHost(settings);
       session.gameCommandIssued = true;
@@ -2468,7 +2517,7 @@
       session.inviteUrl = makeInviteUrl(session.inviteCode);
       session.iceServers = Array.isArray(result.iceServers) ? result.iceServers : [];
       configureTransport(session.iceServers);
-      await openSocket(result.host.session.websocketUrl, operation);
+      await openHostSocket(result.host.session.websocketUrl, operation);
       requireCurrentOperation(operation);
       sendInviteToGame();
       showInvite();
