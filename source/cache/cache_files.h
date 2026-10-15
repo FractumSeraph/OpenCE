@@ -83,6 +83,13 @@ unsigned long cache_files_map_version(
 unsigned long cache_files_map_choose(
 	char *map_name,
 	long size);
+/* port: a Halo PC map here but refused by the port's checks: why, and
+whether its file is the one it should be (cache_files_windows.c) */
+boolean cache_files_ce_map_refused(
+	char const *map_name,
+	char *text,
+	long size);
+
 boolean cache_files_map_present(
 	char const *map_name,
 	unsigned long version);

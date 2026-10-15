@@ -118,6 +118,17 @@ boolean ce_refuse(char const *format, ...);
 /* whether a map is being checked (ce_map_check) rather than loaded */
 boolean ce_map_checking(void);
 
+/* why the map checked last was refused (ce_map_check), or empty */
+char const *ce_map_refusal(void);
+
+/* a refused map's file checked against the hash it should have: a hashed
+name's digits (map_archive.h), or the version the host plays
+(map_family_game_version); header_checksum is its header's. The verdict (is
+the file damaged, or the map itself refused) in verdict (size bytes), logged
+and shown as the refusal is */
+void ce_map_refused_verify(char const *map_name, char const *path, unsigned long header_checksum, char *verdict,
+	long size);
+
 /* the cache version of the map being checked or loaded (ce_map_checks.c):
 Custom Edition's (609), or Halo PC retail's (7: HaloMD's maps, played as
 <name>@md, whose bitmaps' pixels and sounds' samples are at offsets in Halo

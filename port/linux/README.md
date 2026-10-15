@@ -1281,6 +1281,16 @@ in `assets/maps`. `map_validate --fuzz <runs> map.map` changes a few words
 of the tags at random in each run. The checks must not crash or hang, and a
 map that they let through must need no more corrections.
 
+When a Halo PC map is refused (its file cut short, its tags damaged, or
+not a cache file of its family's version), the port also hashes the file
+and says whether the file is the one it should be: a hashed name
+(`<name>_<hash>.map`) says which, and in a game the host's version of the
+map does. So the console and `debug.txt` say either that the file is
+damaged or another version (delete it, and the next join downloads it
+again) or that it is intact and the map itself is refused. A client joining
+a game on such a map leaves it with that message in the main menu's error,
+instead of the damaged disc error and a restart.
+
 A map's scripts can call only the script functions that a map needs (the
 allowlist in `hs/hs.c`). They cannot call the functions for files, the
 saved state of the game, the console, debugging or cheats. A script that

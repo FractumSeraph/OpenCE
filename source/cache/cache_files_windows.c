@@ -462,12 +462,18 @@ static HANDLE ce_request_files[MAXIMUM_SIMULTANEOUS_CACHE_REQUESTS];
 HANDLE ce_resources_file_for_tag(long tag_index);
 boolean ce_map_check(HANDLE file, char const *map_name, long file_length, long tag_data_offset,
 	long tag_data_size);
+char const *ce_map_refusal(void);
+void ce_map_refused_verify(char const *map_name, char const *path, unsigned long header_checksum, char *verdict,
+	long size);
 /* the version of the map checked or loaded (port/linux/game/ce_resources.c) */
 extern long ce_map_cache_version;
-/* the last map refused (ce_map_check), its size and checksum */
+/* the last map refused (ce_map_check), its size and checksum, and why,
+with whether its file is the one it should be (ce_map_refused_verify:
+cache_files_ce_map_refused) */
 static char ce_refused_map_name[64];
 static unsigned long ce_refused_map_size;
 static unsigned long ce_refused_map_checksum;
+static char ce_refused_text[512];
 
 static boolean ce_map_name_is(
 	const char *map_name)
@@ -487,6 +493,8 @@ static boolean ce_map_open(
 	unsigned long file_size;
 	HANDLE file;
 	short family;
+	char const *reason = NULL;
+	char verdict[384];
 
 	if (ce_map_file.file && !_stricmp(ce_map_name, map_name))
 		return TRUE;
@@ -504,10 +512,16 @@ static boolean ce_map_open(
 	}
 	family = map_family_parse(map_name, file_name, sizeof(file_name));
 	if (!map_family_find(family, file_name, path, sizeof(path)))
+	{
+		ce_refused_text[0] = 0;
 		return FALSE;
+	}
 	file = CreateFileA(path, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, NULL);
 	if (file == INVALID_HANDLE_VALUE)
+	{
+		ce_refused_text[0] = 0;
 		return FALSE;
+	}
 	memset(&header, 0, sizeof(header));
 	file_size = GetFileSize(file, NULL);
 	if (!ReadFile(file, &header, sizeof(header), &bytes_read, NULL))
@@ -531,6 +545,7 @@ static boolean ce_map_open(
 		error(_error_silent, "%s map %s refused: %s is not a cache file of this version",
 			map_family_kind(family), map_name, path);
 		console_warning("%s map %s refused: not a cache file of this version", map_family_kind(family), map_name);
+		reason = "it is not a cache file of this version";
 	}
 	/* every offset, count and size in it that the port reads checked, before
 	it has a slot (port/linux/game/ce_map_checks.c) */
@@ -556,7 +571,27 @@ static boolean ce_map_open(
 	ce_refused_map_size = file_size;
 	ce_refused_map_checksum = header.checksum;
 	CloseHandle(file);
+	/* (its file checked against the hash it should have: a download
+	damaged since, or the map itself: port/linux/game/ce_map_checks.c) */
+	if (!reason)
+		reason = ce_map_refusal();
+	ce_map_refused_verify(map_name, path, header.checksum, verdict, sizeof(verdict));
+	snprintf(ce_refused_text, sizeof(ce_refused_text), "%s; %s", reason, verdict);
 	return FALSE;
+}
+
+/* port: whether the map named, a Halo PC map that is here, is refused
+(ce_map_open): why, and whether its file is the one it should be, in text
+(size bytes). A map of the Xbox's, or one that opens, is not refused */
+boolean cache_files_ce_map_refused(
+	char const *map_name,
+	char *text,
+	long size)
+{
+	if (!map_name || !ce_map_name_is(map_name) || ce_map_open(map_name))
+		return FALSE;
+	snprintf(text, (size_t)size, "%s", ce_refused_text[0] ? ce_refused_text : "its file could not be opened");
+	return TRUE;
 }
 
 /* the map open in that slot, or NULL: its own sounds' samples are read

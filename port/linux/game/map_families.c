@@ -896,6 +896,17 @@ void map_family_set_game_version(
 	map_family_game.version = version;
 }
 
+unsigned long map_family_game_version(
+	char const *map)
+{
+	char file[MAP_FAMILY_FILE_LENGTH];
+	short family = map_family_parse(map ? map : "", file, sizeof(file));
+
+	if (!map || family == _map_family_xbox || family != map_family_game.family || _stricmp(file, map_family_game.file))
+		return 0;
+	return map_family_game.version;
+}
+
 /* every map of a family past the Xbox's of a scenario type, in its folders
 (map_family_list, map_family_list_campaigns) */
 static void family_list(

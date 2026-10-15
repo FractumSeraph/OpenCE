@@ -1277,7 +1277,14 @@ boolean cache_files_map_present(
 			custom_edition_map_present(map_name, version, message, sizeof(message)) :
 			map_family_find_version(family, file, version, path, sizeof(path)))
 		{
-			return TRUE;
+			/* port: the map here, but refused by the port's checks
+			(cache_files_windows.c): said why, and whether its file is the one
+			it should be (damaged since it was downloaded, or the map itself),
+			in the main menu's error, rather than the damaged disc error that
+			precaching it gives */
+			if (!cache_files_ce_map_refused(map_name, why, sizeof(why)))
+				return TRUE;
+			snprintf(message, sizeof(message), "The host's map %.63s cannot be played: %s.", file, why);
 		}
 		else if (family != _map_family_custom_edition && map_family_find(family, file, path, sizeof(path)))
 		{
