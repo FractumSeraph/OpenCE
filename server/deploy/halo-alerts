@@ -5,6 +5,9 @@
 #   - a suspect: the fair play checks' "fair play: suspect" log line
 #     (port/linux/game/network_fairplay.c) on FractumSnap or FractumSlayer,
 #     with the player's name, why, and the game's recording (network.record_games);
+#   - a game server that crashed (systemd: its process dumped core or was
+#     killed by a signal), which systemd starts again within seconds, too
+#     soon for the minute's checks to see;
 #   - something down: a game server, the web services, Caddy, the tracker or
 #     MQTT not running; the site, the lobby or a server's place on the game
 #     list not answering; little disk left; a server update, backup or ban
@@ -119,7 +122,18 @@ def follow_suspects():
             message = entry.get("MESSAGE")
             if isinstance(message, list):
                 message = bytes(message).decode("utf-8", "replace")
-            if not isinstance(message, str) or "fair play: suspect" not in message:
+            if not isinstance(message, str):
+                continue
+            # (systemd's own lines about the unit: a crash)
+            if "Main process exited" in message and ("code=dumped" in message or "code=killed" in message):
+                unit = (entry.get("UNIT") or entry.get("_SYSTEMD_UNIT") or "").removesuffix(".service")
+                server = SERVERS.get(unit, (unit or "a game server", None))[0]
+                why = message.split("Main process exited, ", 1)[-1].rstrip(".")
+                send(f"\N{COLLISION SYMBOL} **{server} crashed** ({why}); systemd is starting it again. "
+                     f"Players in its game were dropped. `journalctl -u {unit}`")
+                log(f"crash: {server}: {why}")
+                continue
+            if "fair play: suspect" not in message:
                 continue
             unit = (entry.get("_SYSTEMD_UNIT") or "").removesuffix(".service")
             server, folder = SERVERS.get(unit, (unit or "a server", None))

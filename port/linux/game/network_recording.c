@@ -13,12 +13,13 @@ as they join, and every tick each living player's position, eye height,
 aim, crouch, triggers, zoom, health, weapon and vehicle; each bullet's hit
 on a player with the fair play checks' verdict (network_fairplay.c), and
 each kill. The oldest recordings go once the folder holds more than
-network.recordings_megabytes. A recording is about 10 megabytes an hour of
+network.recordings_megabytes. A recording is about 40 megabytes an hour of
 a full game. Keep the folder private: it holds players' addresses.
 
 The file (little-endian): "HREC", a version (1, 4 bytes), then blocks:
-'B', the records' size, the block's size (4 bytes each), and the records
-compressed with zlib (compress2, which a browser's DecompressionStream
+'R', the records' size, the block's size (4 bytes each, the same), and the
+records as they are (a reader takes 'B' too: the records compressed with
+zlib, as the first recordings were, which a browser's DecompressionStream
 "deflate" opens). A record is its type (1 byte), its size (4 bytes) and
 that many bytes; one of a type a reader does not know it skips:
 
@@ -52,7 +53,6 @@ records have come: a host that stops loses no more than that.
 #include "game/game_engine.h"
 #include "game/players.h"
 #include "memory/data.h"
-#include "memory/zlib/zlib.h"
 #include "networking/network_game_globals.h"
 #include "networking/network_game_manager.h"
 #include "networking/network_server_manager.h"
@@ -130,42 +130,27 @@ static struct
 
 /* ---------- private code */
 
-/* records compressed and written as a block; the recording ended if it
-cannot be */
+/* records written as a block; the recording ended if they cannot be */
 static void recording_write_block(
 	byte const *records,
 	unsigned long length)
 {
-	/* (zlib 1.1.3's bound: a thousandth more, and 12 bytes) */
-	unsigned long capacity = length + length / 1000 + 64;
-	byte *compressed = (byte *)malloc(capacity);
-	unsigned long size = capacity;
 	byte header[9];
 
 	if (!recording.file || !length)
-	{
-		free(compressed);
 		return;
-	}
-	if (!compressed || compress2(compressed, &size, records, length, 6) != Z_OK)
-	{
-		free(compressed);
-		error(_error_log, "recording: could not compress %lu bytes; the recording ends", length);
-		fclose(recording.file);
-		recording.file = NULL;
-		recording.failed = TRUE;
-		return;
-	}
-	header[0] = 'B';
+	/* (as they are: the game's own zlib, 1.1.3, compresses nothing right in
+	the 64-bit builds' sources, the dedicated servers', and crashed them) */
+	header[0] = 'R';
 	header[1] = (byte)length;
 	header[2] = (byte)(length >> 8);
 	header[3] = (byte)(length >> 16);
 	header[4] = (byte)(length >> 24);
-	header[5] = (byte)size;
-	header[6] = (byte)(size >> 8);
-	header[7] = (byte)(size >> 16);
-	header[8] = (byte)(size >> 24);
-	if (fwrite(header, sizeof(header), 1, recording.file) != 1 || fwrite(compressed, size, 1, recording.file) != 1)
+	header[5] = header[1];
+	header[6] = header[2];
+	header[7] = header[3];
+	header[8] = header[4];
+	if (fwrite(header, sizeof(header), 1, recording.file) != 1 || fwrite(records, length, 1, recording.file) != 1)
 	{
 		error(_error_log, "recording: could not write to the recording (a full disk?); it ends");
 		fclose(recording.file);
@@ -174,7 +159,6 @@ static void recording_write_block(
 	}
 	else
 		fflush(recording.file);
-	free(compressed);
 }
 
 /* the records so far written as a block */

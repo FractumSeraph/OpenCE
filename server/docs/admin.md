@@ -169,7 +169,7 @@ records every game (`port/linux/game/network_recording.c`) to
 each player's name, team, address and hardware id, every tick each living
 player's position, eye height, aim, crouch, triggers, zoom, health, weapon
 and vehicle, each bullet's hit on a player with the fair play checks'
-verdict, and each kill. That is about 10 MB an hour of a full game; once
+verdict, and each kill. That is about 40 MB an hour of a full game; once
 the folder holds more than `HALO_NET_RECORDINGS_MEGABYTES`
 (`network.recordings_megabytes`, 2048 by default; 0 keeps everything) the
 oldest go. A game in progress is on disk to within 10 seconds. Keep the

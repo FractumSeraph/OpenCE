@@ -498,7 +498,7 @@ static const struct config_setting config_settings[] =
 		"Hosting: record every game to recordings\\ in the data folder (each\n"
 		"player's position, aim, health and weapon every tick, their names,\n"
 		"addresses and hardware ids, the fair play checks' verdicts, the kills and\n"
-		"the map's walls), about 10 MB an hour, to watch again through any\n"
+		"the map's walls), about 40 MB an hour, to watch again through any\n"
 		"player's eyes at halo.fractumseraph.net/assets/replay/. Keep the folder\n"
 		"private." },
 	{ "network.recordings_megabytes", _config_integer, "2048", "HALO_NET_RECORDINGS_MEGABYTES", _environment_value,

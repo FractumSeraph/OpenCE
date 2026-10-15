@@ -164,7 +164,8 @@ at the top of each):
   encrypted. Restore one with `tar -xzf halovps-<date>.tar.gz -C /`.
 - `halo-alerts`, run by `halo-alerts.service`: posts to a Discord channel
   when the fair play checks make a player a suspect (their name, why, the
-  game's recording: no address or hardware id), and when a game server,
+  game's recording: no address or hardware id), when a game server
+  crashes (systemd starts it again within seconds), and when a game server,
   the web services, Caddy, the tracker or MQTT is not running, the site or
   the lobby does not answer, a server is off the game list for ten
   minutes, the disk has under 2 GB left, or a server update, backup or ban

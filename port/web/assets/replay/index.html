@@ -142,10 +142,13 @@ async function parse(buffer) {
   const chunks = [];
   let at = 8;
   while (at + 9 <= buffer.byteLength) {
-    if (file.getUint8(at) !== 0x42) break;
+    // ('R': the records as they are; 'B': compressed with zlib, as the first recordings were)
+    const kind = file.getUint8(at);
+    if (kind !== 0x52 && kind !== 0x42) break;
     const size = file.getUint32(at + 5, true);
     if (at + 9 + size > buffer.byteLength) break; // (a block cut short: the host stopped while writing it)
-    chunks.push(await inflate(new Uint8Array(buffer, at + 9, size)));
+    const block = new Uint8Array(buffer, at + 9, size);
+    chunks.push(kind === 0x42 ? await inflate(block) : block);
     at += 9 + size;
   }
   const r = {
