@@ -78,7 +78,8 @@ enum
 /* (this fork) the Watch choice's action, which is not the server's */
 #define MODERATION_ACTION_WATCH (-1)
 
-/* the actions, as the screen offers them */
+/* the actions, as the screen offers them: the server's control panel offers
+the same, by the same names and to the same roles (server/webui/app.js) */
 struct moderation_choice
 {
 	char const *name;
@@ -96,8 +97,9 @@ static struct moderation_choice const moderation_choices[] =
 	{ "Ban 1 hour", _delta_moderation_action_ban, 60, DELTA_MODERATION_BAN_TIMED, TRUE },
 	{ "Ban 1 day", _delta_moderation_action_ban, 24 * 60, DELTA_MODERATION_BAN_TIMED, TRUE },
 	{ "Ban 7 days", _delta_moderation_action_ban, 7 * 24 * 60, DELTA_MODERATION_BAN_TIMED, TRUE },
-	{ "Ban for ever", _delta_moderation_action_ban, 0, DELTA_MODERATION_BAN, TRUE },
-	{ "End the game", _delta_moderation_action_end_game, 0, DELTA_MODERATION_MAP, FALSE },
+	{ "Ban 30 days", _delta_moderation_action_ban, 30 * 24 * 60, DELTA_MODERATION_BAN_TIMED, TRUE },
+	{ "Ban forever", _delta_moderation_action_ban, 0, DELTA_MODERATION_BAN, TRUE },
+	{ "End game", _delta_moderation_action_end_game, 0, DELTA_MODERATION_MAP, FALSE },
 	{ "Next map", _delta_moderation_action_next_map, 0, DELTA_MODERATION_MAP, FALSE },
 	/* (this fork: watching through the player's eyes, here alone: nothing is
 	sent, sightjack.c) */
@@ -134,6 +136,11 @@ static struct
 	unsigned long result_seen;
 	unsigned long result_time;
 	char status[128];
+	boolean signing_in;
+	/* the server's last word to this player alone (an info notice): its
+	role here and where the role comes from, which it tells each player
+	when they sign in and when it changes */
+	char note[DELTA_WIRE_MODERATION_TEXT_SIZE + 1];
 } moderation_screen;
 
 /* ---------- private code */
@@ -268,7 +275,8 @@ static void press(
 	{
 		if (button == _gamepad_analog_button_a && settled)
 		{
-			set_status(delta_peer_game_moderation_sign_in() ? "Signing in..." :
+			moderation_screen.signing_in = delta_peer_game_moderation_sign_in();
+			set_status(moderation_screen.signing_in ? "Signing in..." :
 				"Could not sign in (no player key, or this is not the server you joined).");
 		}
 		return;
@@ -338,10 +346,21 @@ void moderation_screen_update(
 	{
 		moderation_screen.notice_seen = moderation_screen.moderation.notice_count;
 		moderation_screen.notice_time = system_milliseconds();
+		if (moderation_screen.moderation.notice_kind == _delta_moderation_notice_info)
+		{
+			csstrncpy(moderation_screen.note, moderation_screen.moderation.notice, sizeof(moderation_screen.note) - 1);
+			moderation_screen.note[sizeof(moderation_screen.note) - 1] = 0;
+		}
 		if (moderation_screen.moderation.notice[0])
 			platform_log("server %s: %s",
 				moderation_screen.moderation.notice_kind == _delta_moderation_notice_warning ? "warning" : "notice",
 				moderation_screen.moderation.notice);
+	}
+	/* (signed in: the host said the key's role, so "Signing in..." is done) */
+	if (moderation_screen.moderation.has_state && moderation_screen.signing_in)
+	{
+		moderation_screen.signing_in = FALSE;
+		moderation_screen.status[0] = 0;
 	}
 	if (moderation_screen.moderation.result_count != moderation_screen.result_seen)
 	{
@@ -356,7 +375,10 @@ void moderation_screen_update(
 			held = TRUE;
 	}
 	if (!moderation_screen.moderation.available)
+	{
 		moderation_screen.active = FALSE;
+		moderation_screen.note[0] = 0;
+	}
 	else if (!moderation_screen.active && menu_open && held && !moderation_screen.open_held)
 	{
 		moderation_screen.active = TRUE;
@@ -562,6 +584,12 @@ void moderation_screen_render(
 		ui_overlay_text(UI_FONT_REGULAR, 13.0f, 120, y, UI_ALIGN_LEFT, COLOR_TEXT, "Signing in...");
 		prompt(UI_BUTTON_B, "Back", 120, 392);
 		return;
+	}
+	/* (the role's source, as the server told this player) */
+	if (moderation_screen.note[0])
+	{
+		ui_overlay_text(UI_FONT_REGULAR, 11.0f, 120, 96, UI_ALIGN_LEFT, COLOR_DIM, moderation_screen.note);
+		y += 8;
 	}
 	if (!moderation->role || !moderation_screen.allowed_count)
 	{

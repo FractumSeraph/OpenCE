@@ -193,6 +193,11 @@ void p2p_discord_sanitize(char *destination, int size, const char *source, int n
 /* the Discord user signed in to the client on this machine, as its
 READY told (empty if none, or internet play is off) */
 void p2p_discord_identity(char *id, int id_size, char *name, int name_size);
+/* what the game is doing, for its activity on Discord, and the player's
+settings of it (discord_activity.h; port/linux/game/discord_game.c) */
+struct discord_activity_game;
+struct discord_activity_options;
+void p2p_discord_set_game(const struct discord_activity_game *game, const struct discord_activity_options *options);
 /* this machine's hardware id, as hex (empty if none), a host told it when
 joining (a keyed hash of what the machine is known by: p2p.c); and the hex
 kept of one told: lowercase hex digits only, P2P_HARDWARE_ID_BYTES' worth */

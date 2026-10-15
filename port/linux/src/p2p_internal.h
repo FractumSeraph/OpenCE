@@ -336,6 +336,8 @@ unsigned short p2p_tunnel_local_port(void);
 void p2p_lobby_update(const unsigned char *token, int player_count, int maximum_player_count);
 /* whether the game hosted is listed now, and whether the browser is open */
 int p2p_lobby_listed(void);
+/* ... listed with no password: anyone can join it by its invite */
+int p2p_lobby_open(void);
 int p2p_lobby_browsing(void);
 /* a message on a slot (its key hash in hex) through a broker; retained: the
 slot's retained copy, sent on subscribing */
@@ -355,8 +357,8 @@ desktop client */
 void p2p_discord_update(void);
 /* the Discord user signed in, as told (empty if none): under p2p_lock */
 void p2p_discord_user(char *id, int id_size, char *name, int name_size);
-/* what to show: hosting with an invite link's secret and player counts, or
-not (secret NULL) */
-void p2p_discord_set_hosting(const char *secret, int player_count, int maximum_player_count);
+/* the public game hosted, by its invite's code (the hex after halo://join/),
+for the activity's Join game button; NULL for none: under p2p_lock */
+void p2p_discord_set_join(const char *code);
 
 #endif

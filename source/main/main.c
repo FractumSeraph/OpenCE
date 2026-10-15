@@ -3597,16 +3597,19 @@ static boolean main_loop_iteration(
 				/* the dedicated server's director (server/src/dedicated.c); the
 				game list's probe (server/src/probe.c); the game list's confirmed
 				players (port/linux/game/game_list_claims.c) and statistics
-				recorder (port/linux/game/game_stats.c) */
+				recorder (port/linux/game/game_stats.c); the game on Discord
+				(port/linux/game/discord_game.c) */
 				void dedicated_server_update(void);
 				void probe_update(void);
 				void game_list_claims_update(void);
 				void game_stats_update(void);
+				void discord_game_update(void);
 
 				dedicated_server_update();
 				probe_update();
 				game_list_claims_update();
 				game_stats_update();
+				discord_game_update();
 			}
 #endif
 			bink_playback_update();

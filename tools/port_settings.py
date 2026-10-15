@@ -139,7 +139,11 @@ SCREENS = {
     "network_setup": {
         "screen": "network_settings_screen",
         "header": ("header_profile_network_settings", f"{PE}/network_setup/header_profile_network_settings"),
-        "spacing": 30,
+        # (closer than Video Setup's: ChupathingyCE's twelve rows, 24 apart,
+        # and this fork's map sharing on the desktop, 13 rows, clear of the
+        # help text at 364)
+        "spacing": 22,
+        "help_top": 364,
         # (the router, the clipboard and the updates, which the web build
         # has not: the other rows from the top there)
         "platform_places": True,
@@ -168,6 +172,12 @@ SCREENS = {
             ("MAP DOWNLOADS:", "network.map_downloads", [("ASK", "ask"), ("ALWAYS", "always"), ("NEVER", "never")],
              "A Custom Edition map a game needs, from other\nplayers and the map archives: ask first, or not.",
              "desktop android"),
+            ("DISCORD STATUS:", "discord.presence", [("FULL", "full"), ("MINIMAL", "minimal"), ("OFF", "off")],
+             "What Discord shows: the game, map and score, only\nPlaying Chupathingy, or nothing.", "desktop"),
+            ("DISCORD SERVER NAME:", "discord.show_server_name", [("SHOW", "true"), ("HIDE", "false")],
+             "Show the name of the network game on Discord.", "desktop"),
+            ("DISCORD JOIN BUTTON:", "discord.show_join", ON_OFF,
+             "While hosting a public game, Discord shows a Join\ngame button that opens its invite.", "desktop"),
         ],
     },
     "gamepad_setup": {

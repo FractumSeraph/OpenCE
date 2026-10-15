@@ -446,7 +446,7 @@ static const struct config_setting config_settings[] =
 		"single quotes: 'C:\\Games\\Halo'." },
 	{ "paths.saves", _config_string, "\"\"", "HALO_SAVE_ROOT", _environment_value, _platform_desktop,
 		"Where saved games and profiles go; empty for the usual place\n"
-		"(~/.local/share/halo-linux, or %APPDATA%\\halo on Windows)." },
+		"(~/.local/share/halo-fs, or %APPDATA%\\HaloFS on Windows)." },
 	{ "paths.custom_edition", _config_string, "\"\"", "HALO_CUSTOM_EDITION_ROOT", _environment_value, _platform_desktop,
 		"A folder of Custom Edition maps, or a Halo Custom Edition install\n"
 		"(its maps folder), looked in after maps_ce and custom_maps for\n"
@@ -684,8 +684,9 @@ static const struct config_setting config_settings[] =
 		"listed there, and System Link shows its games; empty for none." },
 	{ "network.list_hosted_games", _config_boolean, "true", "HALO_NET_LIST_GAMES", _environment_value, _platform_all,
 		"List the system link games this machine hosts on network.browser_url,\n"
-		"where anyone can find and join them. False keeps them to invites and\n"
-		"the local network." },
+		"where anyone can find and join them, and send each one's carnage report\n"
+		"there when it ends. False keeps them to invites and the local network,\n"
+		"and sends no report." },
 	{ "network.report_joined_games", _config_boolean, "true", "HALO_NET_REPORT_GAMES", _environment_value,
 		_platform_all,
 		"When an internet game this machine joined ends, send network.browser_url\n"
@@ -697,8 +698,10 @@ static const struct config_setting config_settings[] =
 		"Delta Stats: record the games this machine hosts (kills with weapons and\n"
 		"positions, accuracy, medals, objectives, vehicles, pickups, positions a\n"
 		"few seconds apart) and send them to network.browser_url when each ends,\n"
-		"for the site's match pages, heatmaps and leaderboards. Players' names\n"
-		"and a hash of their hardware ID; never an address. False turns it off." },
+		"for the site's match pages, heatmaps and leaderboards. Players are their\n"
+		"names, never a hardware ID or an address; an OpenCE player is only their\n"
+		"name, team, score, place, kills and deaths. False records and sends no\n"
+		"events; a listed game's carnage report still goes (list_hosted_games)." },
 	{ "network.events_token", _config_string, "\"\"", "HALO_EVENTS_TOKEN", _environment_value, _platform_all,
 		"A dedicated server's Delta Stats token, from the game list's operator:\n"
 		"its games count as a trusted server's. Empty: the game must be listed\n"
@@ -718,10 +721,25 @@ static const struct config_setting config_settings[] =
 		"(a full path is best: a relative one is from the working folder); empty\n"
 		"for none." },
 #endif
-	{ "discord.application_id", _config_string, "\"1553978809840050229\"", "HALO_DISCORD_APPLICATION",
+	/* (the project's Discord application, "Chupathingy") */
+	{ "discord.application_id", _config_string, "\"1560397272166957136\"", "HALO_DISCORD_APPLICATION",
 		_environment_value, _platform_desktop,
-		"The Discord application internet play invites go through while the\n"
-		"Discord desktop client runs; empty for none." },
+		"The Discord application the game shows as while the Discord desktop\n"
+		"client runs (its name is what Discord says is being played); empty\n"
+		"for none." },
+	{ "discord.presence", _config_string, "\"full\"", "HALO_DISCORD_PRESENCE", _environment_value,
+		_platform_desktop,
+		"What Discord shows of the game: \"full\" (the game type, map, score,\n"
+		"players and time, the map's picture, and a public game's Join game\n"
+		"button), \"minimal\" (only \"Playing Chupathingy\") or \"off\"." },
+	{ "discord.show_server_name", _config_boolean, "true", "HALO_DISCORD_SHOW_SERVER_NAME", _environment_value,
+		_platform_desktop,
+		"Discord shows the name of the network game being played." },
+	{ "discord.show_join", _config_boolean, "true", "HALO_DISCORD_SHOW_JOIN", _environment_value,
+		_platform_desktop,
+		"While this machine hosts a public game (in the server browser, with no\n"
+		"password), Discord shows a Join game button: its page on the project's\n"
+		"site, which opens its invite. False: no button." },
 
 	{ "maps.torrents", _config_boolean, "true", "HALO_MAP_TORRENTS", _environment_value, _platform_all,
 		"Download a Custom Edition map this machine lacks when joining a game\n"
@@ -913,6 +931,9 @@ static const struct config_setting config_settings[] =
 		"Save every this many frames to screenshot_directory; 0 none." },
 	{ "debug.texture_dump_directory", _config_string, "\"\"", "HALO_TEXTURE_DUMP", _environment_value, _platform_all,
 		"A folder to write every texture to as it is uploaded; empty none." },
+	{ "debug.discord_log", _config_boolean, "false", "HALO_DISCORD_LOG", _environment_set_is_true,
+		_platform_desktop,
+		"Log each activity sent to Discord (an invite in it left out)." },
 	{ "debug.texture_log", _config_boolean, "false", "HALO_TEXTURE_LOG", _environment_set_is_true, _platform_all,
 		"Log texture uploads." },
 	{ "debug.texture_no_cache", _config_boolean, "false", "HALO_TEXTURE_NO_CACHE", _environment_set_is_true, _platform_all,
@@ -1645,6 +1666,9 @@ static const struct
 {
 	/* upstream's, which ChupathingyCE kept until v0.5.2b */
 	{ "display.menus", "\"pc\"" },
+	/* OpenCE's Discord application, which ChupathingyCE kept until v0.7.5c
+	(Discord showed "OpenCE" as being played) */
+	{ "discord.application_id", "\"1553978809840050229\"" },
 };
 
 #define NUMBER_OF_CONFIG_OLD_DEFAULTS (sizeof(config_old_defaults) / sizeof(config_old_defaults[0]))
@@ -1866,6 +1890,7 @@ static const struct
 	{ "network.protocol", { "auto", "opence", "delta", NULL }, NULL },
 	{ "network.map_downloads", { "ask", "always", "never", NULL }, "\"ask\"" },
 	{ "network.fair_play", { "refuse", "log", "off", NULL }, "\"refuse\"" },
+	{ "discord.presence", { "full", "minimal", "off", NULL }, "\"full\"" },
 	{ "network.platform_limits", { "on", "off", NULL }, "\"on\"" },
 	{ "network.coop_friendly_fire", { "off", "on", "shields_only", "explosives_only", NULL }, NULL },
 	{ "network.coop_enemies_mode", { "none", "per_player", "multiplier", NULL }, "\"none\"" },

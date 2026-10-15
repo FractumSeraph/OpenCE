@@ -9,9 +9,10 @@ link games as if they were on one LAN, without a server of this project's.
   other key can be found to have; the first 6 are the machine's identifier,
   which its XNADDR also carries) and a random 16-byte token. A machine
   makes one when its game starts hosting (the game listens for
-  connections), logs it, puts it on the clipboard, and offers it through
-  Discord (p2p_discord.c). Nothing about a game is published anywhere else:
-  without an invite there is no way to find or join it.
+  connections), logs it and puts it on the clipboard. Only a public game's
+  is published (the server browser: p2p_lobby.c; and its Join game button
+  on Discord: p2p_discord.c): without an invite there is no way to find or
+  join a private game.
 - Signalling (p2p_signal.c) goes through public MQTT brokers, on topics
   that are hashes of the token, with messages sealed with a key derived
   from it (p2p_crypto.c). A joiner offers its public key and the addresses
@@ -369,12 +370,9 @@ static struct
 	char invite[P2P_LINK_SIZE];
 	int invite_copied;
 	/* the game's players and its most (p2p_set_game_player_counts; 0: not
-	said, and the machines the tunnel reaches are shown), and what Discord
-	was told */
+	said, and the machines the tunnel reaches are shown) */
 	int game_player_count;
 	int game_player_maximum;
-	int reported_player_count;
-	int reported_player_maximum;
 
 	/* answering the other players of the game joined (map sharing:
 	p2p_set_answering_players): wanted, and doing (p2p_signal_host with the
@@ -2890,8 +2888,6 @@ void p2p_new_invite_if_listed(void)
 		p2p_signal_host(p2p.token);
 		memcpy(p2p.clipboard, p2p.invite, sizeof(p2p.clipboard));
 		p2p.has_clipboard = 1;
-		/* (Discord is told the new one) */
-		p2p.reported_player_count = -1;
 	}
 }
 
@@ -2931,25 +2927,11 @@ static void update_hosting(void)
 			p2p.has_clipboard = 1;
 			p2p.invite_copied = 1;
 		}
-		p2p.reported_player_count = -1;
 	}
 	else if (!want && p2p.hosting)
 	{
 		p2p.hosting = 0;
 		p2p_signal_stop_hosting();
-		p2p_discord_set_hosting(NULL, 0, 0);
-	}
-	if (p2p.hosting)
-	{
-		int count, maximum;
-
-		hosted_player_counts(&count, &maximum);
-		if (count != p2p.reported_player_count || maximum != p2p.reported_player_maximum)
-		{
-			p2p.reported_player_count = count;
-			p2p.reported_player_maximum = maximum;
-			p2p_discord_set_hosting(p2p.invite + strlen("halo://join/"), count, maximum);
-		}
 	}
 }
 
@@ -3632,6 +3614,10 @@ static void *p2p_thread(void *unused)
 		update_answering();
 		update_reaching();
 		update_upnp();
+		/* (a public game's invite is in everyone's server browser already:
+		its Join game button on Discord) */
+		p2p_discord_set_join(p2p.hosting && p2p.has_token && p2p_lobby_open() ?
+			p2p.invite + strlen("halo://join/") : NULL);
 		p2p_discord_update();
 #ifdef HALO_ANDROID
 		poll_invite_file();

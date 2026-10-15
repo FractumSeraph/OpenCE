@@ -61,6 +61,7 @@ types only) */
 #include "server_admin.h"
 /* port (this fork): the host's fair play checks (sv_suspects) */
 #include "../../port/linux/game/network_fairplay.h"
+#include "server_config.h"
 #include "server_moderation.h"
 #include "server_names.h"
 
@@ -211,8 +212,10 @@ static struct server_command const server_commands[] =
 	{ "sv_end_game", "sv_end_game", "Ends the game in progress (its carnage report shows, then the next entry).",
 		1, 1, TRUE, command_end_game },
 	{ "sv_maxplayers", "sv_maxplayers [count]", "Shows or sets the most players a game takes (from the next "
-		"lobby, or the lobby now).", 1, 2, FALSE, command_maxplayers },
-	{ "sv_name", "sv_name [name]", "Shows or sets the server's name on the lists (15 characters at most).", 1, 2, FALSE,
+		"lobby, or the lobby now), saved in admin/settings.toml unless the environment sets it.", 1, 2, FALSE,
+		command_maxplayers },
+	{ "sv_name", "sv_name [name]", "Shows or sets the server's name on the lists (15 characters at most), saved in "
+		"admin/settings.toml unless the environment sets it.", 1, 2, FALSE,
 		command_name },
 	{ "sv_name_filter", "sv_name_filter [0|1]", "Shows or sets whether players with a blocked name (blocked_names.txt "
 		"in the data folder) are warned and kicked; saved in admin/settings.toml.", 1, 2, FALSE, command_name_filter },
@@ -256,18 +259,19 @@ static struct server_command const server_commands[] =
 		server_admin_set },
 #ifdef HALO_SERVER
 	/* (Delta Control's roles: server/docs/moderation.md) */
-	{ "sv_mod_list", "sv_mod_list", "The moderators: the moderators file's, the control panel's accounts bound to "
-		"a game, and the site's.", 1, 1, FALSE, command_mod_list },
+	{ "sv_mod_list", "sv_mod_list", "Everyone with a role here and where it comes from: the moderators file, "
+		"the control panel's accounts (bound to a game or not) and the site's profiles (capped by "
+		"HALO_DEDICATED_LINK_ROLE; cached while the site cannot be reached).", 1, 1, FALSE, command_mod_list },
 	{ "sv_mod_add", "sv_mod_add <player|key> <role> [name]", "Gives a player (once their game has proved its "
 		"moderator key: sv_players) or a moderator key a role: moderator, admin or owner (moderators.txt).", 3, 4,
 		FALSE, command_mod_add },
 	{ "sv_mod_remove", "sv_mod_remove <key|name>", "Takes a moderator out of moderators.txt.", 2, 2, FALSE,
 		command_mod_remove },
-	{ "sv_link", "sv_link", "Links the server to an account on halo.milenko.org (Delta Control): prints a code "
-		"to enter there.", 1, 1, FALSE, command_link },
-	{ "sv_unlink", "sv_unlink", "Unlinks the server from halo.milenko.org: its credential stops working.", 1, 1,
+	{ "sv_link", "sv_link", "Links the server to an account on the Chupathingy site (Delta Control): prints a "
+		"link to open there, signed in.", 1, 1, FALSE, command_link },
+	{ "sv_unlink", "sv_unlink", "Unlinks the server from the Chupathingy site: its credential stops working.", 1, 1,
 		FALSE, command_unlink },
-	{ "sv_link_status", "sv_link_status", "Whether the server is linked to halo.milenko.org, and to whom.", 1, 1,
+	{ "sv_link_status", "sv_link_status", "Whether the server is linked to the Chupathingy site, and to whom.", 1, 1,
 		FALSE, command_link_status },
 #endif
 	/* (the console's own: server_control.c runs them before they get here) */
@@ -1210,6 +1214,7 @@ static boolean command_maxplayers(
 {
 	struct dedicated_status status;
 	long maximum;
+	boolean done;
 
 	(void)json;
 	dedicated_server_get_status(&status);
@@ -1230,9 +1235,14 @@ static boolean command_maxplayers(
 			status.minimum_players);
 		return FALSE;
 	}
+	/* (saved, as sv_set maximum_players does, unless the environment sets
+	it: then until a restart) */
+	if (server_admin_set_saved(SERVER_SETTING_MAXIMUM_PLAYERS, line->words[1], output, &done))
+		return done;
 	dedicated_server_set_maximum_players(maximum);
 	error(_error_silent, "dedicated: a command sets the most players to %ld", maximum);
-	command_output_printf(output, "a game takes %ld players %s\n", maximum,
+	command_output_printf(output, "a game takes %ld players %s, until a restart (HALO_DEDICATED_MAXIMUM_PLAYERS in the "
+		"server's environment sets it at start)\n", maximum,
 		status.state == _dedicated_state_lobby ? "(now)" : "(from the next lobby)");
 	return TRUE;
 }
@@ -1243,6 +1253,7 @@ static boolean command_name(
 	struct command_output *output)
 {
 	struct dedicated_status status;
+	boolean done;
 
 	(void)json;
 	dedicated_server_get_status(&status);
@@ -1256,9 +1267,14 @@ static boolean command_name(
 		command_output_printf(output, "a name is 1 to 15 printable ASCII characters (in quotes if it has spaces)\n");
 		return FALSE;
 	}
+	/* (saved, as sv_set name does, unless the environment sets it: then
+	until a restart) */
+	if (server_admin_set_saved(SERVER_SETTING_NAME, line->words[1], output, &done))
+		return done;
 	dedicated_server_set_name(line->words[1]);
 	error(_error_silent, "dedicated: a command names the server %s", line->words[1]);
-	command_output_printf(output, "the server is %s %s\n", line->words[1],
+	command_output_printf(output, "the server is %s %s, until a restart (HALO_DEDICATED_NAME in the server's "
+		"environment names it at start)\n", line->words[1],
 		status.state == _dedicated_state_lobby ? "(now)" : "(from the next lobby)");
 	return TRUE;
 }
@@ -1411,41 +1427,18 @@ static boolean command_warn(
 }
 
 #ifdef HALO_SERVER
+/* everyone with a role here: the moderators file's, the control panel's
+accounts and the site's (server_roles_list_text) */
 static boolean command_mod_list(
 	struct command_line const *line,
 	boolean json,
 	struct command_output *output)
 {
-	long count = server_roles_moderator_count();
-	long index;
+	static char text[OUTPUT_SIZE];
 
 	(void)line;
-	if (json)
-		command_output_printf(output, "{\"moderators\": [");
-	else if (!count)
-		command_output_printf(output, "no moderators in moderators.txt\n");
-	for (index = 0; index < count; index++)
-	{
-		char key[72], name[40];
-		int role;
-
-		if (!server_roles_moderator_get((int)index, &role, key, sizeof(key), name, sizeof(name)))
-			break;
-		if (json)
-		{
-			command_output_printf(output, "%s{\"role\": \"%s\", \"key\": \"%s\", \"name\": ", index ? ", " : "",
-				server_role_name(role), key);
-			command_output_json_string(output, name);
-			command_output_printf(output, "}");
-		}
-		else
-			command_output_printf(output, "%-9s  %s  %s\n", server_role_name(role), key, name);
-	}
-	if (json)
-		command_output_printf(output, "], \"count\": %ld}", count);
-	else
-		command_output_printf(output, "(and the control panel's accounts bound to a game, and the site's, if the "
-			"server is linked)\n");
+	server_roles_list_text(json ? 1 : 0, text, sizeof(text));
+	command_output_printf(output, "%s", text);
 	return TRUE;
 }
 
