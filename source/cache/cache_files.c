@@ -1236,6 +1236,7 @@ boolean cache_files_map_present(
 	wchar_t error_text[512];
 	char file[64];
 	char message[512];
+	char why[384];
 	short family;
 	short index;
 
@@ -1258,6 +1259,13 @@ boolean cache_files_map_present(
 			snprintf(message, sizeof(message),
 				"The map %.63s is a %s map, and Halo PC maps are turned off (game.custom_edition in config.toml).",
 				file, map_family_badge(family));
+		}
+		/* port: none played without their tag cache, which the platform
+		layer could not map at start-up (platform.h): said why, before the
+		map is looked for or asked of the host (it would not load) */
+		else if (!map_families_playable(why, sizeof(why)))
+		{
+			snprintf(message, sizeof(message), "The map %.63s is a %s map. %s", file, map_family_badge(family), why);
 		}
 		/* port: the host's version of it, when the host says which: this
 		machine's own file, or another version's beside it, or for a name with

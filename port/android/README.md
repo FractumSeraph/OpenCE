@@ -562,8 +562,12 @@ same way, but the game can start without it. ART's main space starts at
 `0x12c00000` and is as large as the Java heap of the device
 (`dalvik.vm.heapsize`). If that heap is larger than about 700 MB, the main
 space covers the range, and the host does not take it. Then the game does
-not list or load Halo PC maps, and the log shows `cannot reserve Custom
-Edition maps' tag cache`.
+not list or load Halo PC maps: it tells the player so once, when it first
+lists its maps and there are Halo PC maps in their folders, and when a game
+on a Halo PC map is joined (which it leaves, without downloading the map);
+the log shows `cannot reserve Custom Edition maps' tag cache`, and the
+header of `debug.txt` says `Custom Edition maps' tag cache not mapped` and
+why.
 
 To test the reclaim on any device, set a system property before you start
 the game. The app then puts a stand-in for ART's large object space over

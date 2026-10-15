@@ -793,6 +793,33 @@ boolean map_families_enabled(
 	return config_boolean("game.custom_edition") != 0;
 }
 
+boolean map_families_playable(
+	char *why,
+	long size)
+{
+#ifdef HALO_CUSTOM_EDITION
+	/* (port/linux/src/xbox_memory.c) */
+	extern int platform_ce_tag_cache_ready;
+	extern char platform_ce_tag_cache_error[160];
+
+	if (!platform_ce_tag_cache_ready)
+	{
+		if (why && size > 0)
+		{
+			snprintf(why, (size_t)size, "Halo PC maps cannot be played on this device: %s."
+#ifdef HALO_ANDROID
+				" Android's Java runtime keeps that memory on devices whose Java heap is larger than about 700 MB."
+#endif
+				, platform_ce_tag_cache_error[0] ? platform_ce_tag_cache_error : "their tag cache is not mapped");
+		}
+		return FALSE;
+	}
+#endif
+	if (why && size > 0)
+		why[0] = 0;
+	return TRUE;
+}
+
 boolean map_family_resource(
 	char const *name,
 	char *path,

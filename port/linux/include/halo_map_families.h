@@ -93,6 +93,11 @@ OpenCE's setting; on unless turned off): when not, none of their maps is
 found or listed */
 boolean map_families_enabled(void);
 
+/* whether Halo PC maps can be played at all: their tag cache (platform.h)
+was mapped at start-up. When not, why, in words for the player (why may be
+NULL) */
+boolean map_families_playable(char *why, long size);
+
 /* the path of a Custom Edition resource map (bitmaps, sounds, loc; or
 Halo PC's ui), in maps_ce or its older places: FALSE if there is none (path
 then the place it goes) */
