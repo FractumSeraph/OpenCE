@@ -199,8 +199,8 @@ static struct server_command const server_commands[] =
 		command_banlist },
 	{ "sv_suspects", "sv_suspects [last]", "What the fair play checks found of this game's players (or the last "
 		"game's): their bullets' hits checked, through walls and far off aim (refused), snaps of the aim, headshot "
-		"kills, aim on enemies behind walls, and who to look into (network.fair_play; each finding is in "
-		"fairplay.txt).", 1, 2, FALSE, command_suspects },
+		"kills, aim on enemies behind walls, moves refused as teleports and seconds flying, and who to look into "
+		"(network.fair_play; each finding is in fairplay.txt).", 1, 2, FALSE, command_suspects },
 	{ "sv_map", "sv_map <map> <game type>", "Plays a map (bloodgulch, a Custom Edition map as name@ce, a HaloMD map as "
 		"name@md, a Halo PC map as name@pc) and game type (slayer, ctf, ...) now; then the playlist goes on.", 3, 3, FALSE, command_map },
 	{ "sv_maps", "sv_maps", "The maps this server can play (its multiplayer maps: Xbox, name@ce, name@md, name@pc) and "
@@ -1012,8 +1012,8 @@ static boolean command_suspects(
 		command_output_printf(output, "{\"game\": \"%s\", \"players\": [", last ? "last" : "this");
 	else
 	{
-		command_output_printf(output, "%-11s  %4s  %-9s  %-9s  %5s  %-8s  %-13s  %-7s  %-15s  %s\n", "name",
-			"hits", "wall/ref", "aim/ref", "snaps", "hs/kills", "hidden aim", "suspect", "address", "id");
+		command_output_printf(output, "%-11s  %4s  %-9s  %-9s  %5s  %-8s  %-13s  %3s  %5s  %-7s  %-15s  %s\n", "name",
+			"hits", "wall/ref", "aim/ref", "snaps", "hs/kills", "hidden aim", "tp", "fly", "suspect", "address", "id");
 	}
 	for (index = 0; network_fairplay_entry(last, index, &stats); index++)
 	{
@@ -1036,9 +1036,10 @@ static boolean command_suspects(
 			command_output_printf(output, ", \"checked_hits\": %ld, \"wall_hits\": %ld, \"refused_wall_hits\": %ld, "
 				"\"off_aim_hits\": %ld, \"refused_aim_hits\": %ld, \"snap_hits\": %ld, \"kills\": %ld, "
 				"\"headshot_kills\": %ld, \"hidden_enemy_seconds\": %.1f, \"hidden_aim_seconds\": %.1f, "
-				"\"suspect\": %s}", stats.checked_hits, stats.wall_hits, stats.refused_wall_hits, stats.off_aim_hits,
-				stats.refused_aim_hits, stats.snap_hits, stats.kills, stats.headshot_kills,
-				(double)stats.hidden_enemy_seconds, (double)stats.hidden_aim_seconds, stats.suspect ? "true" : "false");
+				"\"teleport_attempts\": %ld, \"flying_seconds\": %.1f, \"suspect\": %s}", stats.checked_hits,
+				stats.wall_hits, stats.refused_wall_hits, stats.off_aim_hits, stats.refused_aim_hits, stats.snap_hits,
+				stats.kills, stats.headshot_kills, (double)stats.hidden_enemy_seconds, (double)stats.hidden_aim_seconds,
+				stats.teleport_attempts, (double)stats.flying_seconds, stats.suspect ? "true" : "false");
 			continue;
 		}
 		snprintf(wall, sizeof(wall), "%ld/%ld", stats.wall_hits, stats.refused_wall_hits);
@@ -1051,8 +1052,9 @@ static boolean command_suspects(
 		}
 		else
 			snprintf(hidden, sizeof(hidden), "-");
-		command_output_printf(output, "%-11s  %4ld  %-9s  %-9s  %5ld  %-8s  %-13s  %-7s  %-15s  %s\n", stats.name,
-			stats.checked_hits, wall, aim, stats.snap_hits, heads, hidden, stats.suspect ? "SUSPECT" : "-",
+		command_output_printf(output, "%-11s  %4ld  %-9s  %-9s  %5ld  %-8s  %-13s  %3ld  %4.0fs  %-7s  %-15s  %s\n",
+			stats.name, stats.checked_hits, wall, aim, stats.snap_hits, heads, hidden, stats.teleport_attempts,
+			(double)stats.flying_seconds, stats.suspect ? "SUSPECT" : "-",
 			stats.address[0] ? stats.address : "-", stats.hardware_id[0] ? stats.hardware_id : "-");
 	}
 	if (json)

@@ -134,7 +134,21 @@ where they aimed every tick, and the map's walls, so for each such hit:
   landed on the target. Only noted: people flick too.
 
 Every few ticks it also notes, for each player, whether an enemy near them
-is behind a wall, and whether they aim at one that is. A player who sees
+is behind a wall, and whether they aim at one that is.
+
+**Teleports and flying.** A player's game tells the server where they are,
+and the server already refuses a position that is too far from where it
+has them, too fast since the last it took, or higher above the ground than
+a jump takes them; it keeps its own copy, which falls and walks as their
+input has it, so the cheat snaps back. The checks count those refusals: a
+burst of them too far or too fast is a teleport attempt, a refusal too
+high a tick of flying, and so is a player hovering (in the air for over 2.5
+seconds, rising and falling less than half a world unit). They are never
+counted for 2 seconds after the server moves a player itself (a
+teleporter, a new life, getting into or out of a vehicle), and each line
+says the player's ping (a bad link has the odd refusal; a cheat, many).
+Three teleport attempts or three seconds of flying in a game make a
+suspect. A player who sees
 through walls (ESP) follows hidden enemies far more than one who guesses
 where someone will come round a corner.
 

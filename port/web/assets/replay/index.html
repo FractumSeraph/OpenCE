@@ -116,6 +116,7 @@ button.on{background:rgba(127,211,164,.35);border-color:var(--accent)}
     <label><input type="checkbox" id="f-suspicious" checked>doubted</label>
     <label><input type="checkbox" id="f-ok">others</label>
     <label><input type="checkbox" id="f-kills" checked>kills</label>
+    <label><input type="checkbox" id="f-moves" checked>teleports, flying</label>
     <label><input type="checkbox" id="f-selected">selected player only</label>
   </div>
   <div id="events"></div>
@@ -153,7 +154,7 @@ async function parse(buffer) {
   }
   const r = {
     game: { time: 0, rate: 30, server: "", map: "", type: "" }, vertices: null, polygons: [],
-    players: new Map(), tags: new Map(), frames: [], hits: [], kills: [], end: null,
+    players: new Map(), tags: new Map(), frames: [], hits: [], kills: [], moves: [], end: null,
   };
   const decoder = new TextDecoder();
   for (const chunk of chunks) {
@@ -205,6 +206,7 @@ async function parse(buffer) {
           angle: f32(), distance: f32() }); break;
         case 7: r.kills.push({ tick: u32(), killer: u8(), victim: u8(), headshot: u8() === 1 }); break;
         case 8: r.end = u32(); break;
+        case 9: r.moves.push({ tick: u32(), player: u8(), kind: u8(), amount: f32() }); break;
       }
       p = end;
     }
@@ -464,7 +466,7 @@ function setCamera(mode) {
 
 function suspicion(slot) {
   const hits = rec.hits.filter(h => h.shooter === slot);
-  return { refused: hits.filter(h => h.verdict & HIT.REFUSED).length,
+  return { refused: hits.filter(h => h.verdict & HIT.REFUSED).length + rec.moves.filter(m => m.player === slot).length,
     doubted: hits.filter(h => !(h.verdict & HIT.REFUSED) && h.verdict & (HIT.WALL | HIT.OFF_AIM)).length, all: hits.length };
 }
 
@@ -496,6 +498,10 @@ function eventList() {
     if (only && h.shooter !== selected && h.victim !== selected) continue;
     list.push({ tick: h.tick, kind: refused ? "refused" : doubted ? "suspicious" : "ok", hit: h });
   }
+  if (want("f-moves")) for (const m of rec.moves) {
+    if (only && m.player !== selected) continue;
+    list.push({ tick: m.tick, kind: "refused", move: m });
+  }
   if (want("f-kills")) for (const k of rec.kills) {
     if (only && k.killer !== selected && k.victim !== selected) continue;
     list.push({ tick: k.tick, kind: "kill", kill: k });
@@ -505,6 +511,12 @@ function eventList() {
 
 function describe(e) {
   const name = slot => playerAt(slot, e.tick).name;
+  if (e.move) {
+    const why = { 1: `moved too far from where the server had them (${e.move.amount.toFixed(1)}): a teleport`,
+      2: `moved too fast (${e.move.amount.toFixed(1)}): a teleport`, 3: `too high above the ground (${e.move.amount.toFixed(1)}): flying`,
+      4: "hovering in the air: flying" }[e.move.kind] || "a move refused";
+    return `${name(e.move.player)} ${why} (refused)`;
+  }
   if (e.kill) return e.kill.killer === e.kill.victim ? `${name(e.kill.victim)} died` :
     `${name(e.kill.killer)} killed ${name(e.kill.victim)}${e.kill.headshot ? " (headshot)" : ""}`;
   const h = e.hit, why = [];
@@ -526,7 +538,7 @@ function renderEvents() {
     row.querySelector(".d").textContent = describe(e);
     row.onclick = () => {
       // (two seconds before, through the shooter's eyes)
-      const slot = e.hit ? e.hit.shooter : e.kill.killer;
+      const slot = e.hit ? e.hit.shooter : e.move ? e.move.player : e.kill.killer;
       select(slot);
       seek(e.tick - 2 * rec.game.rate);
       setPlaying(true);
@@ -568,7 +580,7 @@ document.getElementById("cam-third").onclick = () => setCamera("third");
 document.getElementById("cam-free").onclick = () => setCamera("free");
 document.getElementById("xray").onclick = e => { xray = !xray; e.target.classList.toggle("on", xray); };
 document.getElementById("lines").onclick = e => { aimLines = !aimLines; e.target.classList.toggle("on", aimLines); };
-for (const id of ["f-refused", "f-suspicious", "f-ok", "f-kills", "f-selected"]) document.getElementById(id).onchange = renderEvents;
+for (const id of ["f-refused", "f-suspicious", "f-ok", "f-kills", "f-moves", "f-selected"]) document.getElementById(id).onchange = renderEvents;
 addEventListener("keydown", e => {
   if (!rec || e.target.tagName === "INPUT" && e.target.type !== "range" && e.target.type !== "checkbox") return;
   if (e.key === " ") { e.preventDefault(); document.getElementById("play").click(); }

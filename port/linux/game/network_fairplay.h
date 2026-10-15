@@ -38,9 +38,27 @@ struct network_fairplay_stats
 	they aimed at one (an ESP's tell) */
 	real hidden_enemy_seconds;
 	real hidden_aim_seconds;
+	/* the host refusing where their game said they were (network_distributed.c):
+	bursts of moves too far or too fast (teleports), and seconds too high
+	or hovering (flying); never after the host moved them (a teleporter, a
+	new life, a vehicle) */
+	long teleport_attempts;
+	real flying_seconds;
 	/* the host's judgement: enough refused hits, or aim on hidden enemies,
 	to look into */
 	boolean suspect;
+};
+
+/* ---------- constants */
+
+/* why the host refused a player's position (network_fairplay_refused_move) */
+enum
+{
+	NETWORK_FAIRPLAY_MOVE_FAR = 1,
+	NETWORK_FAIRPLAY_MOVE_FAST,
+	NETWORK_FAIRPLAY_MOVE_HIGH,
+	/* (the host's own: in the air, neither rising nor falling) */
+	NETWORK_FAIRPLAY_MOVE_HOVER,
 };
 
 /* ---------- prototypes */
@@ -58,6 +76,14 @@ boolean network_fairplay_hit(short player_index, long target_object_index, real_
 /* (damage.c, through game_events_damage) a player's damage to another's
 unit, its headshot and whether it killed */
 void network_fairplay_damage(long owner_player_index, long victim_player_index, boolean headshot, boolean killing);
+/* (the host, network_distributed.c's distributed_take_prediction) where a
+player's game said they were, refused: too far from where the host has
+them, too fast since the last taken, or too high above the ground; the
+amount (world units) */
+void network_fairplay_refused_move(short player_index, short kind, real amount);
+/* (the host) the host moved the player's unit itself (a teleporter): their
+game's word on it is late for a while */
+void network_fairplay_moved_by_host(short player_index);
 /* the players' findings: of this game (last FALSE) or the one before; the
 entry at the index, FALSE past the last */
 boolean network_fairplay_entry(boolean last, long index, struct network_fairplay_stats *stats);

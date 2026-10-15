@@ -41,6 +41,8 @@ that many bytes; one of a type a reader does not know it skips:
               (1: network_recording.h), degrees off aim, distance (floats)
   7 kill:     tick (4), killer (1), killed (1), headshot (1)
   8 end:      tick (4)
+  9 move:     tick (4), player (1), why (1: too far from where the host had
+              them 1, too fast 2, too high 3, hovering 4), how much (a float)
 
 A block goes to the file every 10 seconds, or sooner when 192 kilobytes of
 records have come: a host that stops loses no more than that.
@@ -92,6 +94,7 @@ enum
 	_record_hit,
 	_record_kill,
 	_record_end,
+	_record_move,
 };
 
 enum
@@ -721,6 +724,21 @@ void network_recording_hit(
 	at = put_u8(at, verdict);
 	at = put_real(at, angle);
 	put_real(at, distance);
+}
+
+void network_recording_move(
+	short player_index,
+	byte kind,
+	real amount)
+{
+	byte *at = recording_begin(_record_move, 4 + 1 + 1 + 4);
+
+	if (!at)
+		return;
+	at = put_u32(at, (unsigned long)game_time_get());
+	at = put_u8(at, (unsigned long)player_index);
+	at = put_u8(at, kind);
+	put_real(at, amount);
 }
 
 void network_recording_kill(

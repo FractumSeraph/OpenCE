@@ -35,5 +35,8 @@ void network_recording_hit(short shooter_index, short victim_index, real_point3d
 	real angle, real distance);
 /* a player killed another (or themself) */
 void network_recording_kill(short killer_index, short victim_index, boolean headshot);
+/* the host refused where a player's game said they were, or saw them hover
+(network_fairplay.h's NETWORK_FAIRPLAY_MOVE_*), and by how much */
+void network_recording_move(short player_index, byte kind, real amount);
 
 #endif

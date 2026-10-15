@@ -619,7 +619,9 @@ its name alone beside it, has its name given back as the map lists find it.
      more than 45 degrees from everywhere they aimed then (the host keeps
      four seconds of each player's eyes and aim, every tick); near misses
      of those, snaps of the aim and aim held on enemies behind walls are
-     logged (`server/docs/admin.md`, "Fair play checks"). A report made more than three seconds ago (a burst of them held
+     logged, as are the host's refusals of a client's positions (too far,
+     too fast, too high: teleports and flying; not just after a teleporter,
+     a new life or a ride) (`server/docs/admin.md`, "Fair play checks"). A report made more than three seconds ago (a burst of them held
      back while the network was out) is refused. A report is paid for
      before the host looks through its history, so a flood of them costs
      the sender its hits. The damage is dealt as a client's own hit can

@@ -784,6 +784,11 @@ static const struct config_setting config_settings[] =
 		"Each automated test player aims at the next player (where\n"
 		"debug.network_test_shoot's hits land) and holds the trigger: aimed hits,\n"
 		"which the host's fair play checks (network.fair_play) must deal." },
+	{ "debug.network_test_cheat", _config_string, "\"\"", "HALO_NETWORK_TEST_CHEAT", _environment_value, _platform_all,
+		"The automated test player moves as a cheat's game would: \"teleport\" (6\n"
+		"world units ahead every 5 seconds) or \"fly\" (3 up, hovering, 4 seconds\n"
+		"of every 10), for the host's fair play checks to refuse and count; empty\n"
+		"for none." },
 	{ "debug.network_test_watch", _config_boolean, "false", "HALO_NETWORK_TEST_WATCH", _environment_set_is_true,
 		_platform_all,
 		"The automated test player signs in to a dedicated server's moderation\n"

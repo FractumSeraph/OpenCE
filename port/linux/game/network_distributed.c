@@ -146,6 +146,8 @@ P2P_DISCORD_ID_SIZE and P2P_DISCORD_NAME_SIZE) */
 /* port (this fork): the bans of the lists other hosts publish, which a host
 takes as its own (network.shared_bans: port/linux/src/shared_bans.c) */
 #include "../src/shared_bans.h"
+/* port (this fork): the host's fair play checks of its clients' moves */
+#include "network_fairplay.h"
 #define SHARED_BANS_LOG_LIST 96
 
 /* a client's Discord user, as told (_distributed_message_client_identity) */
@@ -2090,7 +2092,11 @@ static void distributed_take_prediction(
 	dy = position.y - object->object.position.y;
 	dz = position.z - object->object.position.z;
 	if (!(dx * dx + dy * dy + dz * dz <= HOST_ACCEPT_TOLERANCE * HOST_ACCEPT_TOLERANCE))
+	{
+		/* (port, this fork: the fair play checks count it, network_fairplay.c) */
+		network_fairplay_refused_move(player_index, NETWORK_FAIRPLAY_MOVE_FAR, (real)sqrt(dx * dx + dy * dy + dz * dz));
 		return;
+	}
 	if (distributed_accepted[player_index].valid)
 	{
 		long ticks = MIN(distributed_predictions[player_index].time - distributed_accepted[player_index].time,
@@ -2106,10 +2112,21 @@ static void distributed_take_prediction(
 			distributed_host_speeds[player_index].ground_height = object->object.position.z;
 			distributed_host_speeds[player_index].top_height = object->object.position.z;
 			distributed_host_speeds[player_index].ground_time = now;
+			/* (port, this fork: the client's word comes late for a while) */
+			network_fairplay_moved_by_host(player_index);
 		}
-		else if (ticks <= 0 || !distributed_on_foot_move_valid(bound, &distributed_accepted[player_index].position,
-			&position, ticks))
+		else if (ticks <= 0)
 		{
+			return;
+		}
+		else if (!distributed_on_foot_move_valid(bound, &distributed_accepted[player_index].position, &position, ticks))
+		{
+			real ax = position.x - distributed_accepted[player_index].position.x;
+			real ay = position.y - distributed_accepted[player_index].position.y;
+			real az = position.z - distributed_accepted[player_index].position.z;
+
+			/* (port, this fork) */
+			network_fairplay_refused_move(player_index, NETWORK_FAIRPLAY_MOVE_FAST, (real)sqrt(ax * ax + ay * ay + az * az));
 			return;
 		}
 	}
@@ -2119,6 +2136,9 @@ static void distributed_take_prediction(
 	if (!(position.z - distributed_host_speeds[player_index].ground_height <=
 		distributed_on_foot_ceiling(player_index, bound)))
 	{
+		/* (port, this fork) */
+		network_fairplay_refused_move(player_index, NETWORK_FAIRPLAY_MOVE_HIGH,
+			position.z - distributed_host_speeds[player_index].ground_height);
 		return;
 	}
 	/* (the client told which of its ticks the host has it at) */

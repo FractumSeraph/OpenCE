@@ -150,6 +150,10 @@ static struct
 	/* (this fork) debug.network_test_aim, and debug.network_test_watch: signed
 	in, and watching */
 	boolean aim;
+	/* (this fork) debug.network_test_cheat: "teleport" or "fly" */
+	char cheat[16];
+	real cheat_height;
+	long cheat_time;
 	boolean watch;
 	boolean watch_signed_in;
 	boolean watch_started;
@@ -259,6 +263,7 @@ static void network_test_read_settings(
 	network_test.shoot_interval = (real)config_real("debug.network_test_shoot");
 	network_test.aim = config_boolean("debug.network_test_aim") != 0;
 	network_test.watch = config_boolean("debug.network_test_watch") != 0;
+	snprintf(network_test.cheat, sizeof(network_test.cheat), "%s", config_string("debug.network_test_cheat"));
 	network_test.vehicle_time = (real)config_real("debug.network_test_vehicle");
 	network_test.pickup_time = (real)config_real("debug.network_test_pickup");
 	snprintf(network_test.pickup_weapon, sizeof(network_test.pickup_weapon), "%s",
@@ -668,6 +673,63 @@ static void network_test_watch(
 #endif
 }
 
+/* (this fork) debug.network_test_cheat: this machine's player moves as a
+cheat's game would have it, for the host's fair play checks to see
+(network_fairplay.c): "teleport", 6 world units ahead every 5 seconds;
+"fly", 3 above where it was for 4 seconds of every 10, neither rising nor
+falling. The host refuses their game's word on both (network_distributed.c) */
+static void network_test_cheat(
+	void)
+{
+	struct data_iterator iterator;
+	struct player_datum *player;
+	long now = game_time_get();
+
+	/* (once a tick: a frame is drawn more often) */
+	if (now == network_test.cheat_time)
+		return;
+	network_test.cheat_time = now;
+	data_iterator_new(&iterator, player_data);
+	while ((player = (struct player_datum *)data_iterator_next(&iterator)) != NULL)
+	{
+		struct object_datum *unit;
+		real_point3d position;
+
+		if (player->local_player_index == NONE || player->unit_index == NONE)
+			continue;
+		unit = object_get(player->unit_index);
+		if (unit->object.parent_object_index != NONE)
+			continue;
+		position = unit->object.position;
+		if (!strcmp(network_test.cheat, "teleport") && now % (5 * TICKS_PER_SECOND) == 0)
+		{
+			position.x += 6.0f * unit->object.forward.i;
+			position.y += 6.0f * unit->object.forward.j;
+			object_set_position(player->unit_index, &position, NULL, NULL);
+			platform_log("network test: cheat: teleport");
+		}
+		else if (!strcmp(network_test.cheat, "fly"))
+		{
+			long phase = now % (10 * TICKS_PER_SECOND);
+
+			/* (from where it stands, up: the next 4 seconds held there) */
+			if (phase == 0)
+			{
+				network_test.cheat_height = position.z + 3.0f;
+				platform_log("network test: cheat: fly");
+			}
+			if (phase < 4 * TICKS_PER_SECOND && network_test.cheat_height != 0.0f)
+			{
+				position.z = network_test.cheat_height;
+				unit->object.translational_velocity.i = 0.0f;
+				unit->object.translational_velocity.j = 0.0f;
+				unit->object.translational_velocity.k = 0.0f;
+				object_set_position(player->unit_index, &position, NULL, NULL);
+			}
+		}
+	}
+}
+
 /* the host seats the last player as the nearest vehicle's driver, or out */
 /* the host brings the players far from the first (on foot) near it, so
 that they are within their weapons' reach (network_test_shoot shoots only
@@ -1007,6 +1069,8 @@ void network_test_update(
 		network_test_aim();
 	if (network_test.watch && game_in_progress() && !main_menu_loaded)
 		network_test_watch();
+	if (network_test.cheat[0] && game_in_progress() && !main_menu_loaded)
+		network_test_cheat();
 	if (game_in_progress() && !main_menu_loaded && game_time_get() - network_test.logged_time >= TICKS_PER_SECOND)
 	{
 		network_test.logged_time = game_time_get();

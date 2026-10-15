@@ -48,6 +48,7 @@ Nothing is banned or kicked by itself: a judgement is the admin's.
 #include "networking/network_server_manager.h"
 #include "objects/objects.h"
 #include "physics/collisions.h"
+#include "units/bipeds.h"
 #include "units/units.h"
 #include "network_distributed.h"
 #include "network_fairplay.h"
@@ -109,6 +110,30 @@ enemies (of the seconds one was near, after at least a minute of them) */
 #define FAIRPLAY_SUSPECT_REFUSED_HITS 3
 #define FAIRPLAY_SUSPECT_HIDDEN_AIM_SHARE 0.25f
 #define FAIRPLAY_SUSPECT_HIDDEN_ENEMY_SECONDS 60.0f
+/* ... or so many bursts of moves refused (teleports), or seconds flying */
+#define FAIRPLAY_SUSPECT_TELEPORTS 3
+#define FAIRPLAY_SUSPECT_FLYING_SECONDS 3.0f
+/* world units: how little a unit in the air rises and falls for so long, a
+hover (gravity takes anything else down) */
+#define FAIRPLAY_HOVER_RANGE 0.5f
+/* ... and how far the host's own copy of a player moving at once in a tick
+is the host moving them (a teleporter), not their game's word: further than
+anyone runs, or is thrown, in one */
+#define FAIRPLAY_HOST_JUMP 1.0f
+
+enum
+{
+	/* the ticks after the host moves a player itself (a teleporter, a new
+	life, a vehicle got into or out of) its refusals of their game's word
+	are not counted: it comes late */
+	FAIRPLAY_MOVE_GRACE_TICKS = 2 * TICKS_PER_SECOND,
+	/* refusals this close together are one burst */
+	FAIRPLAY_MOVE_BURST_TICKS = TICKS_PER_SECOND,
+	/* in the air this long, rising and falling less than FAIRPLAY_HOVER_RANGE */
+	FAIRPLAY_HOVER_TICKS = 75,
+	/* the lines in fairplay.txt for a player's moves in a game, at most */
+	FAIRPLAY_MAXIMUM_MOVE_LINES = 6,
+};
 
 /* the map's structure as a bullet meets it: its visible faces (not
 two-sided ones, fences and grates, nor glass that breaks) */
@@ -144,6 +169,21 @@ struct fairplay_player
 	long lines;
 	boolean flagged;
 	struct network_fairplay_stats stats;
+	/* their moves: refusals not counted before (a new life, a ride, a
+	teleporter), the unit and whether on foot last tick, the burst of
+	refusals going on (until), the time in the air (NONE on the ground) and
+	how high and low in it, and the lines written of it */
+	long grace_until;
+	long last_unit;
+	boolean last_on_foot;
+	long burst_until;
+	long airborne_since;
+	real air_low;
+	real air_high;
+	long hover_noted_until;
+	long move_lines;
+	/* where the host had their unit last tick (unit last_unit) */
+	real_point3d last_position;
 };
 
 /* ---------- globals */
@@ -260,6 +300,8 @@ static struct fairplay_player *fairplay_player_get(
 
 		csmemset(fairplay, 0, sizeof(*fairplay));
 		fairplay->player_id = player_id;
+		fairplay->last_unit = NONE;
+		fairplay->airborne_since = NONE;
 		for (character = 0; character < (short)NUMBEROF(player->name) && player->name[character] &&
 			character < (short)sizeof(fairplay->stats.name) - 1; character++)
 		{
@@ -291,15 +333,17 @@ static void fairplay_judge(
 
 	(void)player_index;
 	stats->suspect = stats->refused_wall_hits + stats->refused_aim_hits >= FAIRPLAY_SUSPECT_REFUSED_HITS ||
-		hidden_aim;
+		hidden_aim || stats->teleport_attempts >= FAIRPLAY_SUSPECT_TELEPORTS ||
+		stats->flying_seconds >= FAIRPLAY_SUSPECT_FLYING_SECONDS;
 	if (stats->suspect && !fairplay->flagged)
 	{
-		char reason[96];
+		char reason[128];
 
 		fairplay->flagged = TRUE;
-		snprintf(reason, sizeof(reason), "fair play: suspect (%ld refused hits, aim on hidden enemies %.0f%%)",
-			stats->refused_wall_hits + stats->refused_aim_hits,
-			stats->hidden_enemy_seconds > 0.0f ? 100.0f * stats->hidden_aim_seconds / stats->hidden_enemy_seconds : 0.0f);
+		snprintf(reason, sizeof(reason), "fair play: suspect (%ld refused hits, hidden aim %.0f%%, "
+			"%ld teleports, %.0fs flying)", stats->refused_wall_hits + stats->refused_aim_hits,
+			stats->hidden_enemy_seconds > 0.0f ? 100.0f * stats->hidden_aim_seconds / stats->hidden_enemy_seconds : 0.0f,
+			stats->teleport_attempts, stats->flying_seconds);
 		error(_error_log, "%s: %s", reason, stats->name);
 		if (stats->machine_index != NONE)
 			distributed_log_player(FAIRPLAY_FILE, stats->machine_index, reason);
@@ -409,6 +453,72 @@ static void fairplay_note_hidden_aim(
 	}
 }
 
+/* the player's ping, for a line about their moves (a laggy link has some
+refused, a cheat many) */
+static long fairplay_ping(
+	short player_index)
+{
+	long ping = distributed_player_ping(player_index);
+
+	return ping > 0 ? ping : 0;
+}
+
+/* a new life, a ride got into or out of: the next refusals not counted; and
+in the air neither rising nor falling for long (flying), on foot */
+static void fairplay_note_moves(
+	short player_index,
+	struct fairplay_player *fairplay,
+	long unit_index,
+	boolean on_foot)
+{
+	struct biped_datum *biped = (struct biped_datum *)object_try_and_get_and_verify_type(unit_index, _object_mask_biped);
+	long now = game_time_get();
+	real z = object_get(unit_index)->object.position.z;
+	boolean airborne;
+
+	if (unit_index != fairplay->last_unit || on_foot != fairplay->last_on_foot)
+	{
+		fairplay->grace_until = now + FAIRPLAY_MOVE_GRACE_TICKS;
+		fairplay->airborne_since = NONE;
+	}
+	fairplay->last_unit = unit_index;
+	fairplay->last_on_foot = on_foot;
+	fairplay->last_position = object_get(unit_index)->object.position;
+	airborne = on_foot && biped && TEST_FLAG(biped->biped.flags, _biped_airborne_bit);
+	if (!airborne || now < fairplay->grace_until)
+	{
+		fairplay->airborne_since = NONE;
+		return;
+	}
+	if (fairplay->airborne_since == NONE)
+	{
+		fairplay->airborne_since = now;
+		fairplay->air_low = fairplay->air_high = z;
+		return;
+	}
+	fairplay->air_low = MIN(fairplay->air_low, z);
+	fairplay->air_high = MAX(fairplay->air_high, z);
+	if (now - fairplay->airborne_since < FAIRPLAY_HOVER_TICKS || fairplay->air_high - fairplay->air_low >= FAIRPLAY_HOVER_RANGE)
+		return;
+	fairplay->stats.flying_seconds += 1.0f / TICKS_PER_SECOND;
+	if (now >= fairplay->hover_noted_until)
+	{
+		char reason[96];
+
+		fairplay->hover_noted_until = now + 5 * TICKS_PER_SECOND;
+		network_recording_move(player_index, NETWORK_FAIRPLAY_MOVE_HOVER, fairplay->air_high - fairplay->air_low);
+		if (fairplay->move_lines < FAIRPLAY_MAXIMUM_MOVE_LINES)
+		{
+			fairplay->move_lines++;
+			snprintf(reason, sizeof(reason), "fair play: hovering, %.1fs in the air within %.1f (ping %ld ms)",
+				(real)(now - fairplay->airborne_since) / TICKS_PER_SECOND, fairplay->air_high - fairplay->air_low,
+				fairplay_ping(player_index));
+			fairplay_note(fairplay, reason);
+		}
+	}
+	fairplay_judge(player_index, fairplay);
+}
+
 /* the game's findings kept as the last game's, and a line in fairplay.txt
 for each player with a hit through a wall, off aim or after a snap, or aim
 on a hidden enemy */
@@ -428,12 +538,15 @@ static void fairplay_end_game(
 			continue;
 		fairplay_last_game[fairplay_last_game_count++] = *stats;
 		/* (the line only for a player with anything to look at) */
-		if (!stats->wall_hits && !stats->off_aim_hits && !stats->snap_hits && !(stats->hidden_aim_seconds > 0.0f))
+		if (!stats->wall_hits && !stats->off_aim_hits && !stats->snap_hits && !(stats->hidden_aim_seconds > 0.0f) &&
+			!stats->teleport_attempts && !(stats->flying_seconds > 0.0f))
+		{
 			continue;
-		snprintf(reason, sizeof(reason), "fair play game:%s hits %ld wall %ld/%ld aim %ld/%ld snap %ld hs %ld/%ld hidden %.0f/%.0fs",
+		}
+		snprintf(reason, sizeof(reason), "fair play game:%s hits %ld wall %ld/%ld aim %ld/%ld snap %ld hs %ld/%ld hidden %.0f/%.0fs tp %ld fly %.0fs",
 			stats->suspect ? " SUSPECT" : "", stats->checked_hits, stats->refused_wall_hits, stats->wall_hits,
 			stats->refused_aim_hits, stats->off_aim_hits, stats->snap_hits, stats->headshot_kills, stats->kills,
-			stats->hidden_aim_seconds, stats->hidden_enemy_seconds);
+			stats->hidden_aim_seconds, stats->hidden_enemy_seconds, stats->teleport_attempts, stats->flying_seconds);
 		if (stats->machine_index != NONE)
 			distributed_log_player(FAIRPLAY_FILE, stats->machine_index, reason);
 	}
@@ -471,18 +584,21 @@ void network_fairplay_host_tick(
 		struct player_datum *player = distributed_player(player_index);
 		long unit_index = player ? distributed_living_unit(player) : NONE;
 		struct unit_datum *unit;
+		struct fairplay_player *fairplay;
 
 		view->time = NONE;
 		if (unit_index == NONE)
 			continue;
 		unit = unit_get(unit_index);
-		fairplay_player_get(player_index);
+		fairplay = fairplay_player_get(player_index);
 		unit_get_camera_position(unit_index, &view->eye);
 		view->aim = unit->unit.aiming_vector;
 		if (normalize3d(&view->aim) == 0.0f)
 			continue;
 		view->on_foot = unit->object.parent_object_index == NONE;
 		view->time = now;
+		if (fairplay)
+			fairplay_note_moves(player_index, fairplay, unit_index, view->on_foot);
 	}
 	fairplay_note_hidden_aim();
 }
@@ -657,6 +773,78 @@ void network_fairplay_damage(
 	fairplay->stats.kills++;
 	if (headshot)
 		fairplay->stats.headshot_kills++;
+}
+
+void network_fairplay_refused_move(
+	short player_index,
+	short kind,
+	real amount)
+{
+	struct fairplay_player *fairplay;
+	long now = game_time_get();
+	boolean new_burst;
+
+	if (fairplay_mode() == _fairplay_off || player_index < 0 || player_index >= MAXIMUM_TRACKED_PLAYERS ||
+		distributed_player_is_local(player_index) || !(fairplay = fairplay_player_get(player_index)) ||
+		now < fairplay->grace_until)
+	{
+		return;
+	}
+	/* (the host moved them itself since its last tick, a teleporter: their
+	game's word is late, and the next few with it) */
+	{
+		long unit_index = distributed_living_unit(distributed_player(player_index));
+
+		if (unit_index != NONE && unit_index == fairplay->last_unit)
+		{
+			real_point3d const *at = &object_get(unit_index)->object.position;
+			real dx = at->x - fairplay->last_position.x;
+			real dy = at->y - fairplay->last_position.y;
+			real dz = at->z - fairplay->last_position.z;
+
+			if (dx * dx + dy * dy + dz * dz > FAIRPLAY_HOST_JUMP * FAIRPLAY_HOST_JUMP)
+			{
+				fairplay->grace_until = now + FAIRPLAY_MOVE_GRACE_TICKS;
+				fairplay->last_position = *at;
+				return;
+			}
+		}
+	}
+	new_burst = now > fairplay->burst_until;
+	fairplay->burst_until = now + FAIRPLAY_MOVE_BURST_TICKS;
+	/* (too high: each refusal a tick of flying; too far or too fast: a
+	burst of them one teleport) */
+	if (kind == NETWORK_FAIRPLAY_MOVE_HIGH)
+		fairplay->stats.flying_seconds += 1.0f / TICKS_PER_SECOND;
+	else if (new_burst)
+		fairplay->stats.teleport_attempts++;
+	if (new_burst)
+	{
+		char reason[96];
+
+		network_recording_move(player_index, (byte)kind, amount);
+		if (fairplay->move_lines < FAIRPLAY_MAXIMUM_MOVE_LINES)
+		{
+			fairplay->move_lines++;
+			snprintf(reason, sizeof(reason), "fair play: move refused, %s %.1f (ping %ld ms)",
+				kind == NETWORK_FAIRPLAY_MOVE_FAR ? "too far from the host's," :
+				kind == NETWORK_FAIRPLAY_MOVE_FAST ? "too fast, moved" : "too high (flying),", amount,
+				fairplay_ping(player_index));
+			fairplay_note(fairplay, reason);
+		}
+	}
+	fairplay_judge(player_index, fairplay);
+}
+
+void network_fairplay_moved_by_host(
+	short player_index)
+{
+	struct fairplay_player *fairplay;
+
+	if (player_index < 0 || player_index >= MAXIMUM_TRACKED_PLAYERS || !(fairplay = fairplay_player_get(player_index)))
+		return;
+	fairplay->grace_until = game_time_get() + FAIRPLAY_MOVE_GRACE_TICKS;
+	fairplay->airborne_since = NONE;
 }
 
 boolean network_fairplay_entry(

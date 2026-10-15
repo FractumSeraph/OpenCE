@@ -532,7 +532,7 @@
     if (!players.length) {
       const row = element('tr');
       const cell = element('td', 'No players', 'empty');
-      cell.colSpan = 10;
+      cell.colSpan = 12;
       row.append(cell);
       body.append(row);
       return;
@@ -552,6 +552,8 @@
         element('td', entry.snap_hits, 'num'),
         element('td', entry.headshot_kills + ' / ' + entry.kills),
         element('td', hidden),
+        element('td', entry.teleport_attempts || 0, 'num'),
+        element('td', Math.round(entry.flying_seconds || 0) + 's', 'num'),
         element('td', entry.suspect ? 'SUSPECT' : '-', entry.suspect ? 'bad' : null),
         element('td', entry.address || '-'),
         element('td', entry.id || '-'),
