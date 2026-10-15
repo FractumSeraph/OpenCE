@@ -2759,6 +2759,10 @@ static void distributed_host_plan_players(
 			viewer_aims[viewer_count] = viewer->aim;
 			viewer_scoped[viewer_count++] = scoped;
 		}
+		/* port (this fork): a moderator's machine, as one with no player alive:
+		every player every tick (network_distributed_full_view_proc) */
+		if (network_distributed_full_view_proc && network_distributed_full_view_proc(machine_index))
+			viewer_count = 0;
 		for (player_index = 0; player_index < MAXIMUM_TRACKED_PLAYERS; player_index++)
 		{
 			boolean own = distributed_player_machines[player_index] == machine_index;
@@ -3719,8 +3723,9 @@ static void distributed_address_text(
 	}
 }
 
-/* (the host) a client machine's address as text (distributed_address_text) */
-static void distributed_machine_address_text(
+/* (the host) a client machine's address as text (distributed_address_text;
+port, this fork: network_fairplay.c's too) */
+void distributed_machine_address_text(
 	long machine_index,
 	char *text,
 	long size)
@@ -3812,6 +3817,28 @@ static void distributed_log_cheater(
 	distributed_machine_address_text(machine_index, address, sizeof(address));
 	distributed_write_player_record(CHEATERS_FILE, address, machine_index, names, reason, 0);
 	distributed_write_player_record(BANS_FILE, address, machine_index, names, reason, 0);
+}
+
+/* port (this fork): whether a machine is sent every player every tick (a
+dedicated server's moderators, who may watch any player:
+port/linux/game/sightjack.c), as a machine whose players are dead is; set
+by the server (server_moderation.c), NULL in a player's game */
+boolean (*network_distributed_full_view_proc)(long machine_index) = NULL;
+
+/* port (this fork): a line about the machine's players in a list as
+CHEATERS_FILE's (network_fairplay.c's fairplay.txt): when, its address,
+hardware id, Discord user and names, and the reason */
+void distributed_log_player(
+	char const *file_name,
+	long machine_index,
+	char const *reason)
+{
+	char address[32];
+	char names[96];
+
+	distributed_machine_address_text(machine_index, address, sizeof(address));
+	distributed_machine_player_names(machine_index, names, sizeof(names));
+	distributed_write_player_record(file_name, address, machine_index, names, reason, 0);
 }
 
 /* a line of BANS_FILE's field (its "name=" given), up to the next tab or

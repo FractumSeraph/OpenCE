@@ -50,7 +50,7 @@ $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
 
 # the game's files in public\ (the maps and lobby artwork are not among them)
 $gameItems = @("index.html", "halo.html", "halo.js", "halo.wasm", "coi-serviceworker.js",
-    "manifest.webmanifest", "assets\pwa", "assets\touch", "assets\android")
+    "manifest.webmanifest", "assets\pwa", "assets\touch", "assets\android", "assets\replay")
 $topItems = @("README.md", "HOSTING-VPS.md", "Start Halo (Windows).bat", "start-halo.sh")
 
 function Stop-Halo {

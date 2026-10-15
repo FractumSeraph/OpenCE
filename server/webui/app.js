@@ -253,6 +253,7 @@
     players: loadPlayers,
     maps: loadMaps,
     bans: loadBans,
+    suspects: loadSuspects,
     log: loadLog,
     playlists: loadPlaylists,
     settings: loadSettings,
@@ -522,6 +523,50 @@
     } catch (error) {
       failed(error);
     }
+  }
+
+  // ---------- suspects (this fork: the fair play checks, sv_suspects)
+
+  function suspectRows(body, players) {
+    body.replaceChildren();
+    if (!players.length) {
+      const row = element('tr');
+      const cell = element('td', 'No players', 'empty');
+      cell.colSpan = 10;
+      row.append(cell);
+      body.append(row);
+      return;
+    }
+    // (the most refused first, then the most doubted)
+    players.slice().sort((a, b) => (b.refused_wall_hits + b.refused_aim_hits) - (a.refused_wall_hits + a.refused_aim_hits) ||
+      (b.wall_hits + b.off_aim_hits) - (a.wall_hits + a.off_aim_hits)).forEach((entry) => {
+      const row = element('tr');
+      const hidden = entry.hidden_enemy_seconds > 0
+        ? Math.round(100 * entry.hidden_aim_seconds / entry.hidden_enemy_seconds) + '% of ' + Math.round(entry.hidden_enemy_seconds) + 's'
+        : '-';
+      row.append(
+        element('td', entry.name || '-'),
+        element('td', entry.checked_hits, 'num'),
+        element('td', entry.wall_hits + ' / ' + entry.refused_wall_hits),
+        element('td', entry.off_aim_hits + ' / ' + entry.refused_aim_hits),
+        element('td', entry.snap_hits, 'num'),
+        element('td', entry.headshot_kills + ' / ' + entry.kills),
+        element('td', hidden),
+        element('td', entry.suspect ? 'SUSPECT' : '-', entry.suspect ? 'bad' : null),
+        element('td', entry.address || '-'),
+        element('td', entry.id || '-'),
+      );
+      body.append(row);
+    });
+  }
+
+  async function loadSuspects() {
+    const now = await api('/v1/suspects');
+    const last = await api('/v1/suspects/last');
+    $('suspects-count').textContent = String(now.count);
+    $('suspects-last-count').textContent = String(last.count);
+    suspectRows($('suspects-body'), now.players);
+    suspectRows($('suspects-last-body'), last.players);
   }
 
   // ---------- log

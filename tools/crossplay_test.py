@@ -586,7 +586,10 @@ def plan(args):
     START_DELAY = getattr(args, "start_delay", None) or START_DELAY
     base = getattr(args, "address_base", None) or 10
     variants = ["slayer", "ctf"]
-    test = {"HALO_NETWORK_TEST_START": str(START_DELAY), "HALO_NETWORK_TEST_SHOOT": str(SHOOT_INTERVAL)}
+    # (the scripted shots hit without aiming, which a host of ours refuses
+    # as silent aim: network.fair_play "log" deals them and logs them)
+    test = {"HALO_NETWORK_TEST_START": str(START_DELAY), "HALO_NETWORK_TEST_SHOOT": str(SHOOT_INTERVAL),
+        "HALO_NET_FAIR_PLAY": "log"}
     host_test = dict(test, HALO_NETWORK_TEST=f"host:{args.map}:{','.join(variants)}",
         HALO_NETWORK_TEST_KILL=str(KILL_INTERVAL), HALO_NETWORK_TEST_SCORE=str(SCORE_TO_WIN))
     join_test = dict(test, HALO_NETWORK_TEST="join")

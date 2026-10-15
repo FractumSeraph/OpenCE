@@ -90,6 +90,31 @@ allows are shown, and the server checks each again. OpenCE games cannot
 sign in (they cannot prove a key); they can be warned (in the audit file
 only), kicked and banned like anyone.
 
+### Watching a player (this fork)
+
+This fork's game adds **Watch** to the Moderation screen's actions, for any
+role that may warn: pick a player and Watch, and your view becomes theirs,
+from their eyes along their aim, as Halo PC's admins did with SightJack. It
+shows whether someone follows players through walls or snaps onto them
+(`port/linux/game/sightjack.c`; record it with any screen recorder for a
+ban's evidence). Nothing is sent: it only changes what your own game draws.
+
+- Left and right (the d-pad, the shoulder buttons, or the arrow keys) watch
+  the previous and next player; B (or Backspace) stops.
+- Your own player stands where it is and takes no input while you watch:
+  watch from somewhere safe, or while dead.
+- The watched player's body and weapon are not drawn (the view is from
+  inside their head), nor your own first-person weapon or HUD: the screen
+  is their view, with a line at the top saying whom you watch.
+- It stops by itself when the game ends, the last other player leaves, or
+  you are no longer signed in with a role.
+
+This fork's servers send a signed-in moderator's game every player every
+tick, so the view is as smooth as the watched player's own; a server
+without that sends players out of your own sight a few times a second.
+The fair play checks' findings are with `sv_suspects`
+([admin.md](admin.md#fair-play-checks)): watch the players they name.
+
 ## The control panel
 
 The web page on the control API's port: status, players (warn, kick, ban,

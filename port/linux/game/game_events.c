@@ -54,6 +54,7 @@ Called each frame from game_stats_update (main.c).
 #include "tag_files/tag_files.h"
 #include "../src/browser.h"
 #include "../src/event_log.h"
+#include "network_fairplay.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -940,6 +941,11 @@ void game_events_damage(
 	long victim_player_index;
 	int dealer, taker;
 
+	/* port (this fork): the kills and their headshots, for the host's fair
+	play checks (network_fairplay.c), whether or not the game is recorded */
+	victim_unit = unit_try_and_get(object_index);
+	network_fairplay_damage(owner_player_index, victim_unit ? victim_unit->unit.player_index : NONE, headshot,
+		killing);
 	if (!game_events.recording)
 		return;
 	if (killing)

@@ -69,6 +69,7 @@
       <button type="button" role="tab" data-tab="players">Players</button>
       <button type="button" role="tab" data-tab="maps">Maps</button>
       <button type="button" role="tab" data-tab="bans">Bans</button>
+      <button type="button" role="tab" data-tab="suspects" data-needs="2">Suspects</button>
       <button type="button" role="tab" data-tab="log">Log</button>
       <button type="button" role="tab" data-tab="playlists" data-needs="64">Playlists</button>
       <button type="button" role="tab" data-tab="settings">Settings</button>
@@ -124,6 +125,24 @@
           <tbody id="bans-body"></tbody>
         </table>
       </div>
+    </section>
+
+    <section class="panel" data-panel="suspects" hidden>
+      <h2>Suspects: this game <span class="count" id="suspects-count"></span></h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Name</th><th class="num">Hits</th><th>Wall / refused</th><th>Off aim / refused</th><th class="num">Snaps</th><th>Headshots / kills</th><th>Hidden aim</th><th>Suspect</th><th>Address</th><th>Hardware id</th></tr></thead>
+          <tbody id="suspects-body"></tbody>
+        </table>
+      </div>
+      <h2>The last game <span class="count" id="suspects-last-count"></span></h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Name</th><th class="num">Hits</th><th>Wall / refused</th><th>Off aim / refused</th><th class="num">Snaps</th><th>Headshots / kills</th><th>Hidden aim</th><th>Suspect</th><th>Address</th><th>Hardware id</th></tr></thead>
+          <tbody id="suspects-last-body"></tbody>
+        </table>
+      </div>
+      <p class="hint">The fair play checks (sv_suspects): each player's bullets' hits on players checked; of them, through a wall and far off where they aimed (with how many were refused: through a solid wall, or over 45 degrees off), hits right after a very fast turn of the aim, and how much of the time an enemy near them was behind a wall they aimed at one (wallhacks). A suspect is someone to look into, not proof: watch them (the game's Moderation screen, Watch) or their game's recording before you ban. Every finding is in fairplay.txt.</p>
     </section>
 
     <section class="panel" data-panel="log" hidden>

@@ -17,7 +17,8 @@ Every command runs on the game's main thread, between frames, whichever
 place it came from. Kicks, bans and map changes use what the game's network
 protocol already does: players need nothing new to play on a server that
 uses them, and nothing about joining changes. No command, response or log
-line the API hands out shows a player's address.
+line the API hands out shows a player's address, but `sv_suspects` (this
+fork's, a moderator's: who the fair play checks found, kept for a ban).
 
 ## The commands
 
@@ -41,6 +42,7 @@ the duration.
 | `sv_ban <player> [duration] [reason]` | Drops the player and keeps their machine out: for ever, or for a while (`30m`, `2h`, `7d`, `1w`, `1d12h`; a bare number is minutes). Every player in the game is told. bans.txt's reason says by whom, how long and why. |
 | `sv_unban <ban>` | Takes a ban out, by its number in `sv_banlist`. |
 | `sv_banlist` | The bans: number, when, hardware id, how long is left, the players' names and why. Never their addresses. |
+| `sv_suspects [last]` | What the fair play checks found of this game's players (`last`: the last game's): their bullets' hits on players checked, of them through a wall and far off aim (each with how many were refused), snaps of the aim, headshot kills of kills, how much of the time an enemy near them was behind a wall they aimed at one, whether they are a suspect, their address and hardware id ([below](#fair-play-checks)). A moderator's (warn). |
 | `sv_map <map> <game type>` | Plays that map and game type now: the game in progress ends at once (no carnage report), and after the new one the playlist goes on where it was. In the lobby it is set at once. Maps: `bloodgulch`, a Custom Edition map as `<name>@ce`, a HaloMD map as `<name>@md`, a Halo PC map as `<name>@pc` ([Playlists](playlists.md)). Game types: `slayer`, `team_slayer`, `ctf`, `king`, `oddball`, `race`, ... |
 | `sv_maps` | The maps this server can play (its multiplayer maps: Xbox, `<name>@ce`, `<name>@md`, `<name>@pc`) and the game types `sv_map` takes. |
 | `sv_mapcycle` | The playlist, and which entry is playing or next. |
@@ -108,6 +110,81 @@ served by the web server): each ban's time, hardware id, players, reason and
 end, never its IP address or Discord user, and no ban without a hardware id.
 Two servers on one machine share one list by linking their `bans.txt` to
 one file (each service allowed to write where it is: `ReadWritePaths`).
+
+### Fair play checks
+
+This fork's servers check every bullet a player reports hitting another
+player (`port/linux/game/network_fairplay.c`). In this netcode the shooter's
+own game decides what its shots hit and tells the server, which already
+checks the weapon, its rate and range and where the target was; a modified
+game can still claim hits its player never aimed at (silent aim) or that
+went through walls. The server knows where each player's eyes were and
+where they aimed every tick, and the map's walls, so for each such hit:
+
+- **Through a wall**: no point the shooter was at in the time the shot
+  flew had a line of sight to where it hit (the map's solid surfaces; not
+  glass, fences or grates). It is refused when the wall is solid: blocked
+  both ways, and from around the shooter's eyes too, so a corner they
+  peeked past never counts.
+- **Off aim**: the shooter never aimed within 15 degrees of where it hit.
+  It is refused beyond 45 degrees, which no spread reaches. Guided and
+  falling projectiles (needles, plasma, grenades) are not checked, nor
+  shots from vehicles.
+- **Snap**: the aim turned faster than 25 degrees a tick just before it
+  landed on the target. Only noted: people flick too.
+
+Every few ticks it also notes, for each player, whether an enemy near them
+is behind a wall, and whether they aim at one that is. A player who sees
+through walls (ESP) follows hidden enemies far more than one who guesses
+where someone will come round a corner.
+
+`HALO_NET_FAIR_PLAY` (`network.fair_play`): `refuse` (the default) refuses
+the hits above and logs; `log` only logs; `off` checks nothing. A player is
+a **suspect** after 3 refused hits in a game, or when, after a minute in
+all of enemies near them being hidden, they aimed at one a quarter of that
+time. The server never kicks or bans by itself: the judgement is yours.
+
+What it finds:
+
+- `fairplay.txt` in the data folder, a line each in `bans.txt`'s form (when,
+  `ip=`, `hwid=`, Discord user, the players' names), its reason what was
+  seen: `fair play: through solid wall on Bob, 14.2 away, 38 deg off aim
+  (refused)`. At most 8 such lines for a player a game, a line when they
+  become a suspect, and at the end of each game a line with their counts
+  for each player with anything to look at. Keep it private, as `bans.txt`.
+- `fair play:` lines in the log.
+- `sv_suspects` (and `GET /v1/suspects`, `/v1/suspects/last`, and the
+  control panel's **Suspects** tab): the game's players and the last game's.
+
+A suspect is someone to watch, not proof: look at their counts beside the
+others', and at what they did, before you ban: watch them live
+([moderation.md](moderation.md#watching-a-player-this-fork)), or in a
+recording.
+
+### Recordings
+
+With `HALO_NET_RECORD_GAMES=true` (`network.record_games`) the server
+records every game (`port/linux/game/network_recording.c`) to
+`recordings/<date>_<time>_<map>.hrec` in the data folder: the map's walls,
+each player's name, team, address and hardware id, every tick each living
+player's position, eye height, aim, crouch, triggers, zoom, health, weapon
+and vehicle, each bullet's hit on a player with the fair play checks'
+verdict, and each kill. That is about 10 MB an hour of a full game; once
+the folder holds more than `HALO_NET_RECORDINGS_MEGABYTES`
+(`network.recordings_megabytes`, 2048 by default; 0 keeps everything) the
+oldest go. A game in progress is on disk to within 10 seconds. Keep the
+folder private: it holds players' addresses.
+
+To watch one, copy it off the server (`scp`, or your backups) and open it
+at https://halo.fractumseraph.net/assets/replay/ (`port/web/assets/replay`).
+The file is read in your browser and sent nowhere. The page draws the map's
+walls and every player with their aim. It follows a player through their
+eyes (1), from behind them (2) or freely (3), with players behind walls
+shown through them (X). Its list and timeline mark the hits the checks
+refused (red) or doubted (orange), and the kills; a click on one jumps to
+two seconds before it, through the shooter's eyes. **Record video** saves
+the view as a video for a ban's evidence. A recording a server keeps
+somewhere private opens with `index.html?file=<address>`.
 
 ### Why there is no `sv_password`
 

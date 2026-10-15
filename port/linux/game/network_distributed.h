@@ -275,6 +275,15 @@ void distributed_send_notice(char const *text);
 void distributed_send_notice_to_machine(long machine_index, char const *text);
 /* (the host) the names of a client machine's players, in ASCII */
 void distributed_machine_player_names(long machine_index, char *names, long size);
+/* port (this fork): a line about the machine's players in a list of players
+(when, address, hardware id, Discord user, names, the reason), as
+cheaters.txt's (network_fairplay.c's fairplay.txt) */
+void distributed_log_player(char const *file_name, long machine_index, char const *reason);
+/* (the host) a client machine's address as text */
+void distributed_machine_address_text(long machine_index, char *text, long size);
+/* (the host) whether a machine is sent every player every tick: a dedicated
+server's moderators' (sightjack.c), set by the server; NULL for none */
+extern boolean (*network_distributed_full_view_proc)(long machine_index);
 /* (the host) a client machine's real IPv4 address (host byte order): an
 internet play peer's endpoint, not its stand-in; 0 if not known */
 unsigned long distributed_machine_real_address(long machine_index);

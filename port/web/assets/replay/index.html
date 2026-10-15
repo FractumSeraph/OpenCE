@@ -1,0 +1,686 @@
+<!doctype html>
+<!--
+  The replay viewer (this fork; halo.fractumseraph.net/assets/replay/): a
+  recording a host made of a game (network.record_games,
+  port/linux/game/network_recording.c, whose comment has the file's format)
+  watched again in the browser, through any player's eyes, behind them, or
+  from anywhere: the map's walls as the fair play checks meet them, each
+  player as a figure with their aim, the hits the checks looked at (refused
+  ones red, through a wall or far off aim orange) and the kills on a
+  timeline, players behind walls shown through them on request, and the
+  view saved as a video. The file is opened here, in the browser: nothing
+  is sent anywhere. three.js from jsDelivr draws it.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="../pwa/icon-192.png" sizes="192x192" type="image/png">
+<title>Halo Replay Viewer</title>
+<style>
+:root{color-scheme:dark;font-family:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --bg:#050807;--panel:rgba(10,18,15,.94);--line:rgba(151,189,169,.2);--text:#e9f3ee;--muted:#9fb7ab;
+  --accent:#7fd3a4;--bad:#ff6b5a;--warn:#f2b84e;--ok:#7fd67f}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-size:14px}
+body{display:grid;grid-template-columns:1fr 320px;grid-template-rows:1fr auto;height:100vh;overflow:hidden}
+#view{position:relative;grid-column:1;grid-row:1;min-width:0;min-height:0}
+#view canvas{display:block;width:100%;height:100%}
+#hud{position:absolute;left:12px;top:10px;pointer-events:none;text-shadow:0 1px 3px #000}
+#hud .who{font-size:18px;font-weight:700}
+#hud .sub{color:var(--muted);font-size:12px}
+#drop{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;
+  text-align:center;padding:24px;background:radial-gradient(circle at 50% 30%,rgba(78,126,104,.25),transparent 55%)}
+#drop h1{margin:0;font-size:24px}
+#drop p{margin:0;color:var(--muted);max-width:34rem;line-height:1.5}
+#drop.hover{outline:2px dashed var(--accent);outline-offset:-12px}
+button,select,label.button{font:inherit;color:var(--text);background:rgba(127,211,164,.12);border:1px solid var(--line);
+  border-radius:6px;padding:5px 10px;cursor:pointer}
+button:hover,label.button:hover{border-color:var(--accent)}
+button.on{background:rgba(127,211,164,.35);border-color:var(--accent)}
+#side{grid-column:2;grid-row:1/3;background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+#side h2{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:12px 12px 6px}
+#game{padding:0 12px;color:var(--muted);font-size:12px;line-height:1.5}
+#players{padding:0 8px;max-height:34vh;overflow:auto}
+.player{display:grid;grid-template-columns:10px 1fr auto;gap:8px;align-items:center;padding:5px 6px;border-radius:6px;cursor:pointer}
+.player:hover{background:rgba(255,255,255,.05)}
+.player.sel{background:rgba(127,211,164,.18)}
+.dot{width:10px;height:10px;border-radius:50%}
+.player .meta{grid-column:2/4;color:var(--muted);font-size:11px;word-break:break-all}
+.player .flag{font-size:11px;color:var(--bad);font-weight:700}
+#events{flex:1;overflow:auto;padding:0 8px 8px;min-height:0}
+.event{padding:5px 6px;border-radius:6px;cursor:pointer;font-size:12px;line-height:1.4;border-left:3px solid transparent}
+.event:hover{background:rgba(255,255,255,.05)}
+.event .t{color:var(--muted);font-variant-numeric:tabular-nums}
+.event.refused{border-left-color:var(--bad)}
+.event.suspicious{border-left-color:var(--warn)}
+.event.kill{border-left-color:#8aa}
+#filters{display:flex;gap:6px;flex-wrap:wrap;padding:0 12px 6px}
+#filters label{font-size:12px;color:var(--muted);display:flex;gap:4px;align-items:center}
+#bar{grid-column:1;grid-row:2;background:var(--panel);border-top:1px solid var(--line);padding:8px 12px;display:flex;flex-direction:column;gap:6px}
+#controls{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+#time{font-variant-numeric:tabular-nums;color:var(--muted);min-width:9ch}
+#track{position:relative;height:26px}
+#scrub{position:absolute;inset:0;width:100%;margin:0}
+#marks{position:absolute;left:0;right:0;top:0;height:8px;pointer-events:none}
+#marks i{position:absolute;top:0;width:2px;height:8px}
+.spacer{flex:1}
+#recording{color:var(--bad);font-weight:700;display:none}
+@media (max-width:820px){body{grid-template-columns:1fr;grid-template-rows:1fr auto 40vh}
+  #side{grid-column:1;grid-row:3;border-left:0;border-top:1px solid var(--line)}}
+</style>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+"three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+</script>
+</head>
+<body>
+<div id="view">
+  <div id="drop">
+    <h1>Halo Replay Viewer</h1>
+    <p>Open a game a server recorded (<code>recordings\*.hrec</code> in its data folder, with
+      <code>network.record_games</code> on). Watch it through any player's eyes, see who was behind walls,
+      and jump to the hits the fair play checks refused or doubted. The file stays on this computer.</p>
+    <label class="button">Open a recording<input id="file" type="file" accept=".hrec" hidden></label>
+    <p style="font-size:12px">or drop it here</p>
+  </div>
+  <div id="hud"><div class="who"></div><div class="sub"></div></div>
+</div>
+<div id="bar">
+  <div id="track"><div id="marks"></div><input id="scrub" type="range" min="0" max="0" value="0" step="1"></div>
+  <div id="controls">
+    <button id="play" title="Play or pause (Space)">Play</button>
+    <button id="back" title="Back 5 seconds (Left)">-5s</button>
+    <button id="fwd" title="Forward 5 seconds (Right)">+5s</button>
+    <select id="speed" title="Speed"><option>0.25</option><option>0.5</option><option selected>1</option><option>2</option><option>4</option></select>
+    <span id="time">0:00.0</span>
+    <span class="spacer"></span>
+    <button id="cam-first" class="on" title="Through the player's eyes (1)">Eyes</button>
+    <button id="cam-third" title="Behind the player (2)">Behind</button>
+    <button id="cam-free" title="Free camera: drag to turn, scroll to zoom (3)">Free</button>
+    <button id="xray" title="Players through walls (X)">X-ray</button>
+    <button id="lines" class="on" title="Everyone's aim (A)">Aim lines</button>
+    <button id="record" title="Save the view as a video">Record video</button>
+    <span id="recording">REC</span>
+  </div>
+</div>
+<aside id="side">
+  <h2>Game</h2>
+  <div id="game">No recording open.</div>
+  <h2>Players</h2>
+  <div id="players"></div>
+  <h2>Hits and kills</h2>
+  <div id="filters">
+    <label><input type="checkbox" id="f-refused" checked>refused</label>
+    <label><input type="checkbox" id="f-suspicious" checked>doubted</label>
+    <label><input type="checkbox" id="f-ok">others</label>
+    <label><input type="checkbox" id="f-kills" checked>kills</label>
+    <label><input type="checkbox" id="f-selected">selected player only</label>
+  </div>
+  <div id="events"></div>
+</aside>
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+/* ---------- the recording (network_recording.c's format) */
+
+const HIT = { WALL: 1, SOLID: 2, OFF_AIM: 4, SNAP: 8, REFUSED: 16 };
+
+async function inflate(bytes) {
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate"));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+async function parse(buffer) {
+  const file = new DataView(buffer);
+  const magic = String.fromCharCode(...new Uint8Array(buffer, 0, 4));
+  if (magic !== "HREC") throw new Error("This is not a Halo recording (.hrec).");
+  const version = file.getUint32(4, true);
+  if (version !== 1) throw new Error(`Recording version ${version}: this viewer reads version 1.`);
+  const chunks = [];
+  let at = 8;
+  while (at + 9 <= buffer.byteLength) {
+    if (file.getUint8(at) !== 0x42) break;
+    const size = file.getUint32(at + 5, true);
+    if (at + 9 + size > buffer.byteLength) break; // (a block cut short: the host stopped while writing it)
+    chunks.push(await inflate(new Uint8Array(buffer, at + 9, size)));
+    at += 9 + size;
+  }
+  const r = {
+    game: { time: 0, rate: 30, server: "", map: "", type: "" }, vertices: null, polygons: [],
+    players: new Map(), tags: new Map(), frames: [], hits: [], kills: [], end: null,
+  };
+  const decoder = new TextDecoder();
+  for (const chunk of chunks) {
+    const view = new DataView(chunk.buffer, chunk.byteOffset, chunk.byteLength);
+    let p = 0;
+    while (p + 5 <= chunk.length) {
+      const type = view.getUint8(p), size = view.getUint32(p + 1, true);
+      let q = p + 5;
+      const end = q + size;
+      if (end > chunk.length) break;
+      const u8 = () => view.getUint8(q++);
+      const u16 = () => { const v = view.getUint16(q, true); q += 2; return v; };
+      const i16 = () => { const v = view.getInt16(q, true); q += 2; return v; };
+      const u32 = () => { const v = view.getUint32(q, true); q += 4; return v; };
+      const f32 = () => { const v = view.getFloat32(q, true); q += 4; return v; };
+      const text = () => { const n = u8(); const s = decoder.decode(chunk.subarray(q, q + n)); q += n; return s; };
+      switch (type) {
+        case 1: r.game = { time: u32(), rate: u16(), server: text(), map: text(), type: text() }; break;
+        case 2: {
+          const count = u32();
+          r.vertices = new Float32Array(count * 3);
+          for (let i = 0; i < count * 3; i++) r.vertices[i] = f32();
+          const polygons = u32();
+          for (let i = 0; i < polygons && q < end; i++) {
+            const flags = u8(), n = u8(), corners = [];
+            for (let k = 0; k < n; k++) corners.push(u32());
+            r.polygons.push({ flags, corners });
+          }
+          break;
+        }
+        case 3: {
+          const tick = u32(), slot = u8(), team = u8(), name = text(), hwid = text(), ip = text();
+          if (!r.players.has(slot)) r.players.set(slot, []);
+          r.players.get(slot).push({ tick, slot, team, name, hwid, ip });
+          break;
+        }
+        case 4: {
+          const tick = u32(), count = u8(), entries = [];
+          for (let i = 0; i < count; i++) {
+            entries.push({ slot: u8(), flags: u8(), x: f32(), y: f32(), z: f32(), eye: i16() / 1000,
+              yaw: i16() / 10000, pitch: i16() / 10000, body: u8() / 255, shield: u8() / 127.5,
+              weapon: u16(), vehicle: u16() });
+          }
+          r.frames.push({ tick, entries });
+          break;
+        }
+        case 5: { const id = u16(); r.tags.set(id, text()); break; }
+        case 6: r.hits.push({ tick: u32(), shooter: u8(), victim: u8(), x: f32(), y: f32(), z: f32(), verdict: u8(),
+          angle: f32(), distance: f32() }); break;
+        case 7: r.kills.push({ tick: u32(), killer: u8(), victim: u8(), headshot: u8() === 1 }); break;
+        case 8: r.end = u32(); break;
+      }
+      p = end;
+    }
+  }
+  if (!r.frames.length) throw new Error("The recording has no frames: it may have ended at once.");
+  r.first = r.frames[0].tick;
+  r.last = r.frames[r.frames.length - 1].tick;
+  return r;
+}
+
+/* ---------- the scene (Halo's world units, z up) */
+
+const view = document.getElementById("view");
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+view.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b1410);
+scene.fog = new THREE.Fog(0x0b1410, 60, 220);
+const camera = new THREE.PerspectiveCamera(70, 1, 0.02, 2000);
+camera.up.set(0, 0, 1);
+scene.add(new THREE.HemisphereLight(0xdfeee6, 0x24302a, 1.1));
+const sun = new THREE.DirectionalLight(0xffffff, 0.8);
+sun.position.set(0.4, 0.3, 1);
+scene.add(sun);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enabled = false;
+
+function resize() {
+  const w = view.clientWidth, h = view.clientHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / Math.max(1, h);
+  camera.updateProjectionMatrix();
+}
+addEventListener("resize", resize);
+resize();
+
+const COLORS = [0xff5a4a, 0x4aa3ff, 0x7fd67f, 0xf2c14e, 0xc77dff, 0x4ae0d0, 0xff8ad8, 0xb0b0b0,
+  0xff9f43, 0x6c8cff, 0x9be15d, 0xffe066, 0xe056fd, 0x22a6b3, 0xf8a5c2, 0xdfe6e9];
+const TEAM_COLORS = [0xff5a4a, 0x4aa3ff];
+
+let rec = null, walls = null, figures = new Map(), hitLines = [];
+let tick = 0, playing = false, speed = 1, selected = null, cameraMode = "first", xray = false, aimLines = true;
+let teams = false;
+
+function playerAt(slot, t) {
+  const list = rec.players.get(slot);
+  if (!list) return { slot, name: `Player ${slot + 1}`, team: 0, hwid: "", ip: "" };
+  let best = list[0];
+  for (const p of list) if (p.tick <= t) best = p;
+  return best;
+}
+
+function colorOf(slot) {
+  const p = playerAt(slot, tick);
+  return teams ? TEAM_COLORS[p.team & 1] : COLORS[slot % COLORS.length];
+}
+
+function buildWalls() {
+  if (walls) { scene.remove(walls); walls.geometry.dispose(); }
+  if (!rec.vertices) return;
+  const positions = [], colors = [];
+  const v = rec.vertices;
+  for (const polygon of rec.polygons) {
+    if (polygon.flags & 2) continue; // (invisible walls: the players' own map does not show them)
+    const shade = polygon.flags & 1 ? [0.45, 0.55, 0.5] : [0.62, 0.66, 0.6];
+    const c = polygon.corners;
+    for (let k = 1; k + 1 < c.length; k++) {
+      for (const index of [c[0], c[k], c[k + 1]]) {
+        positions.push(v[index * 3], v[index * 3 + 1], v[index * 3 + 2]);
+        colors.push(...shade);
+      }
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+  geometry.computeVertexNormals();
+  walls = new THREE.Mesh(geometry, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, flatShading: true }));
+  scene.add(walls);
+  geometry.computeBoundingSphere();
+  const s = geometry.boundingSphere;
+  controls.target.copy(s.center);
+  camera.position.set(s.center.x + s.radius * 0.6, s.center.y - s.radius * 0.6, s.center.z + s.radius * 0.5);
+  scene.fog.far = s.radius * 3;
+}
+
+function makeFigure(slot) {
+  const group = new THREE.Group();
+  const material = new THREE.MeshLambertMaterial({ color: colorOf(slot) });
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 1, 12), material);
+  body.rotation.x = Math.PI / 2; // (the cylinder along z)
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 8), material);
+  const aimGeometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(1, 0, 0)]);
+  const aim = new THREE.Line(aimGeometry, new THREE.LineBasicMaterial({ color: colorOf(slot), transparent: true, opacity: 0.85 }));
+  const label = makeLabel(playerAt(slot, tick).name, colorOf(slot));
+  group.add(body, head, aim, label);
+  scene.add(group);
+  return { group, body, head, aim, label, material, slot };
+}
+
+function makeLabel(text, color) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 256; canvas.height = 64;
+  const g = canvas.getContext("2d");
+  g.font = "bold 30px system-ui, sans-serif";
+  g.textAlign = "center";
+  g.fillStyle = "rgba(0,0,0,.55)";
+  g.fillRect(0, 10, 256, 44);
+  g.fillStyle = "#" + color.toString(16).padStart(6, "0");
+  g.fillText(text, 128, 44);
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas), depthTest: false }));
+  sprite.scale.set(0.9, 0.225, 1);
+  sprite.renderOrder = 3;
+  return sprite;
+}
+
+/* the frame at or before the tick, and the one after (an index) */
+function frameIndex(t) {
+  let lo = 0, hi = rec.frames.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (rec.frames[mid].tick <= t) lo = mid; else hi = mid - 1;
+  }
+  return lo;
+}
+
+function lerpAngle(a, b, f) {
+  let d = b - a;
+  while (d > Math.PI) d -= 2 * Math.PI;
+  while (d < -Math.PI) d += 2 * Math.PI;
+  return a + d * f;
+}
+
+/* each player where they were at the tick (between two frames, between them) */
+function statesAt(t) {
+  const i = frameIndex(t);
+  const a = rec.frames[i], b = rec.frames[Math.min(i + 1, rec.frames.length - 1)];
+  const f = b.tick > a.tick ? Math.min(1, Math.max(0, (t - a.tick) / (b.tick - a.tick))) : 0;
+  const after = new Map(b.entries.map(e => [e.slot, e]));
+  const states = new Map();
+  for (const e of a.entries) {
+    const n = after.get(e.slot);
+    const close = n && Math.hypot(n.x - e.x, n.y - e.y, n.z - e.z) < 2; // (not across a respawn)
+    states.set(e.slot, close && f > 0 ? {
+      ...e, x: e.x + (n.x - e.x) * f, y: e.y + (n.y - e.y) * f, z: e.z + (n.z - e.z) * f,
+      eye: e.eye + (n.eye - e.eye) * f, yaw: lerpAngle(e.yaw, n.yaw, f), pitch: e.pitch + (n.pitch - e.pitch) * f,
+    } : e);
+  }
+  return states;
+}
+
+function aimVector(s) {
+  return new THREE.Vector3(Math.cos(s.pitch) * Math.cos(s.yaw), Math.cos(s.pitch) * Math.sin(s.yaw), Math.sin(s.pitch));
+}
+
+function draw() {
+  if (!rec) return;
+  const states = statesAt(tick);
+  for (const [slot, figure] of figures) {
+    if (!states.has(slot)) figure.group.visible = false;
+  }
+  for (const [slot, s] of states) {
+    let figure = figures.get(slot);
+    if (!figure) { figure = makeFigure(slot); figures.set(slot, figure); }
+    const height = Math.max(0.3, s.eye + 0.08);
+    figure.group.visible = true;
+    figure.group.position.set(s.x, s.y, s.z);
+    figure.body.scale.set(1, height, 1);
+    figure.body.position.set(0, 0, height / 2);
+    figure.head.position.set(0, 0, s.eye);
+    figure.label.position.set(0, 0, height + 0.25);
+    const dir = aimVector(s);
+    const positions = figure.aim.geometry.attributes.position;
+    positions.setXYZ(0, 0, 0, s.eye);
+    positions.setXYZ(1, dir.x * 25, dir.y * 25, s.eye + dir.z * 25);
+    positions.needsUpdate = true;
+    figure.aim.visible = aimLines && !(cameraMode === "first" && slot === selected);
+    const own = cameraMode === "first" && slot === selected;
+    figure.body.visible = figure.head.visible = figure.label.visible = !own;
+    for (const m of [figure.body, figure.head]) {
+      m.material.depthTest = !xray;
+      m.material.transparent = xray;
+      m.material.opacity = xray ? 0.85 : 1;
+      m.renderOrder = xray ? 2 : 0;
+    }
+  }
+  // (the hits of the last second: where they went from the shooter's eyes)
+  for (const line of hitLines) { scene.remove(line); line.geometry.dispose(); }
+  hitLines = [];
+  for (const hit of rec.hits) {
+    if (hit.tick > tick || hit.tick < tick - rec.game.rate) continue;
+    const s = states.get(hit.shooter);
+    if (!s) continue;
+    const color = hit.verdict & HIT.REFUSED ? 0xff3b2f : hit.verdict & (HIT.WALL | HIT.OFF_AIM) ? 0xf2b84e : 0xffffff;
+    const geometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(s.x, s.y, s.z + s.eye),
+      new THREE.Vector3(hit.x, hit.y, hit.z)]);
+    const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color, depthTest: false, transparent: true,
+      opacity: 1 - (tick - hit.tick) / rec.game.rate }));
+    line.renderOrder = 4;
+    scene.add(line);
+    hitLines.push(line);
+  }
+  // (the camera)
+  const s = selected != null ? states.get(selected) : null;
+  controls.enabled = cameraMode === "free";
+  if (cameraMode !== "free" && s) {
+    const eye = new THREE.Vector3(s.x, s.y, s.z + s.eye);
+    const dir = aimVector(s);
+    camera.fov = s.flags & 8 ? 30 : 70;
+    if (cameraMode === "first") {
+      camera.position.copy(eye);
+      camera.lookAt(eye.clone().add(dir));
+    } else {
+      const flat = new THREE.Vector3(dir.x, dir.y, 0).normalize();
+      camera.position.copy(eye).addScaledVector(flat, -2.2).add(new THREE.Vector3(0, 0, 0.6));
+      camera.lookAt(eye.clone().addScaledVector(dir, 6));
+    }
+    camera.updateProjectionMatrix();
+  } else if (cameraMode === "free") {
+    camera.fov = 70;
+    camera.updateProjectionMatrix();
+    controls.update();
+  }
+  // (the HUD)
+  const who = document.querySelector("#hud .who"), sub = document.querySelector("#hud .sub");
+  if (selected != null) {
+    const p = playerAt(selected, tick);
+    who.textContent = p.name;
+    who.style.color = "#" + colorOf(selected).toString(16).padStart(6, "0");
+    sub.textContent = s ? `health ${Math.round(s.body * 100)}%  shields ${Math.round(Math.min(s.shield, 1) * 100)}%  ${weaponName(s.weapon)}${s.flags & 16 ? "  (riding)" : ""}${s.flags & 1 ? "  crouching" : ""}${s.flags & 2 ? "  firing" : ""}` : "dead";
+  } else { who.textContent = ""; sub.textContent = ""; }
+  renderer.render(scene, camera);
+}
+
+function weaponName(id) {
+  const name = rec.tags.get(id);
+  return name ? name.split("\\").pop() : "";
+}
+
+/* ---------- the panels and the timeline */
+
+const fmt = t => { const s = Math.max(0, (t - rec.first) / rec.game.rate); return `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, "0")}`; };
+
+function select(slot) {
+  selected = slot;
+  if (cameraMode === "free") setCamera("first");
+  renderPlayers();
+  renderEvents();
+}
+
+function setCamera(mode) {
+  cameraMode = mode;
+  for (const m of ["first", "third", "free"]) document.getElementById("cam-" + m).classList.toggle("on", m === mode);
+  if (mode === "free") controls.target.copy(camera.position.clone().add(camera.getWorldDirection(new THREE.Vector3()).multiplyScalar(8)));
+}
+
+function suspicion(slot) {
+  const hits = rec.hits.filter(h => h.shooter === slot);
+  return { refused: hits.filter(h => h.verdict & HIT.REFUSED).length,
+    doubted: hits.filter(h => !(h.verdict & HIT.REFUSED) && h.verdict & (HIT.WALL | HIT.OFF_AIM)).length, all: hits.length };
+}
+
+function renderPlayers() {
+  const box = document.getElementById("players");
+  box.innerHTML = "";
+  for (const slot of [...rec.players.keys()].sort((a, b) => a - b)) {
+    const p = playerAt(slot, rec.last), s = suspicion(slot);
+    const row = document.createElement("div");
+    row.className = "player" + (slot === selected ? " sel" : "");
+    row.innerHTML = `<span class="dot"></span><span class="name"></span><span class="flag"></span><span class="meta"></span>`;
+    row.querySelector(".dot").style.background = "#" + colorOf(slot).toString(16).padStart(6, "0");
+    row.querySelector(".name").textContent = p.name;
+    row.querySelector(".flag").textContent = s.refused ? `${s.refused} refused` : s.doubted ? `${s.doubted} doubted` : "";
+    if (!s.refused && s.doubted) row.querySelector(".flag").style.color = "var(--warn)";
+    row.querySelector(".meta").textContent = `${s.all} hits checked` + (p.ip ? ` · ${p.ip}` : "") + (p.hwid ? ` · id ${p.hwid}` : "");
+    row.onclick = () => select(slot);
+    box.append(row);
+  }
+}
+
+function eventList() {
+  const want = id => document.getElementById(id).checked;
+  const only = want("f-selected") && selected != null;
+  const list = [];
+  for (const h of rec.hits) {
+    const refused = h.verdict & HIT.REFUSED, doubted = !refused && h.verdict & (HIT.WALL | HIT.OFF_AIM | HIT.SNAP);
+    if (refused ? !want("f-refused") : doubted ? !want("f-suspicious") : !want("f-ok")) continue;
+    if (only && h.shooter !== selected && h.victim !== selected) continue;
+    list.push({ tick: h.tick, kind: refused ? "refused" : doubted ? "suspicious" : "ok", hit: h });
+  }
+  if (want("f-kills")) for (const k of rec.kills) {
+    if (only && k.killer !== selected && k.victim !== selected) continue;
+    list.push({ tick: k.tick, kind: "kill", kill: k });
+  }
+  return list.sort((a, b) => a.tick - b.tick);
+}
+
+function describe(e) {
+  const name = slot => playerAt(slot, e.tick).name;
+  if (e.kill) return e.kill.killer === e.kill.victim ? `${name(e.kill.victim)} died` :
+    `${name(e.kill.killer)} killed ${name(e.kill.victim)}${e.kill.headshot ? " (headshot)" : ""}`;
+  const h = e.hit, why = [];
+  if (h.verdict & HIT.SOLID) why.push("through solid wall"); else if (h.verdict & HIT.WALL) why.push("through wall");
+  if (h.verdict & HIT.OFF_AIM) why.push(`${h.angle.toFixed(0)}° off aim`);
+  if (h.verdict & HIT.SNAP) why.push("after a snap");
+  return `${name(h.shooter)} hit ${name(h.victim)}, ${h.distance.toFixed(1)} away${why.length ? ": " + why.join(", ") : ""}${h.verdict & HIT.REFUSED ? " (refused)" : ""}`;
+}
+
+function renderEvents() {
+  const box = document.getElementById("events");
+  box.innerHTML = "";
+  const list = eventList();
+  for (const e of list.slice(0, 2000)) {
+    const row = document.createElement("div");
+    row.className = "event " + e.kind;
+    row.innerHTML = `<span class="t"></span> <span class="d"></span>`;
+    row.querySelector(".t").textContent = fmt(e.tick);
+    row.querySelector(".d").textContent = describe(e);
+    row.onclick = () => {
+      // (two seconds before, through the shooter's eyes)
+      const slot = e.hit ? e.hit.shooter : e.kill.killer;
+      select(slot);
+      seek(e.tick - 2 * rec.game.rate);
+      setPlaying(true);
+    };
+    box.append(row);
+  }
+  if (!list.length) box.innerHTML = `<div class="event" style="cursor:default;color:var(--muted)">Nothing to show with these filters.</div>`;
+  // (the timeline's marks)
+  const marks = document.getElementById("marks");
+  marks.innerHTML = "";
+  const span = Math.max(1, rec.last - rec.first);
+  for (const e of list) {
+    if (e.kind === "ok") continue;
+    const m = document.createElement("i");
+    m.style.left = `${((e.tick - rec.first) / span) * 100}%`;
+    m.style.background = e.kind === "refused" ? "var(--bad)" : e.kind === "suspicious" ? "var(--warn)" : "#8aa";
+    marks.append(m);
+  }
+}
+
+const scrub = document.getElementById("scrub");
+function seek(t) {
+  tick = Math.max(rec.first, Math.min(rec.last, t));
+  scrub.value = String(Math.round(tick));
+  document.getElementById("time").textContent = `${fmt(tick)} / ${fmt(rec.last)}`;
+}
+function setPlaying(on) {
+  playing = on;
+  document.getElementById("play").textContent = on ? "Pause" : "Play";
+}
+
+scrub.oninput = () => seek(Number(scrub.value));
+document.getElementById("play").onclick = () => { if (tick >= rec.last) seek(rec.first); setPlaying(!playing); };
+document.getElementById("back").onclick = () => seek(tick - 5 * rec.game.rate);
+document.getElementById("fwd").onclick = () => seek(tick + 5 * rec.game.rate);
+document.getElementById("speed").onchange = e => { speed = Number(e.target.value); };
+document.getElementById("cam-first").onclick = () => setCamera("first");
+document.getElementById("cam-third").onclick = () => setCamera("third");
+document.getElementById("cam-free").onclick = () => setCamera("free");
+document.getElementById("xray").onclick = e => { xray = !xray; e.target.classList.toggle("on", xray); };
+document.getElementById("lines").onclick = e => { aimLines = !aimLines; e.target.classList.toggle("on", aimLines); };
+for (const id of ["f-refused", "f-suspicious", "f-ok", "f-kills", "f-selected"]) document.getElementById(id).onchange = renderEvents;
+addEventListener("keydown", e => {
+  if (!rec || e.target.tagName === "INPUT" && e.target.type !== "range" && e.target.type !== "checkbox") return;
+  if (e.key === " ") { e.preventDefault(); document.getElementById("play").click(); }
+  else if (e.key === "ArrowLeft") seek(tick - 5 * rec.game.rate);
+  else if (e.key === "ArrowRight") seek(tick + 5 * rec.game.rate);
+  else if (e.key === "1") setCamera("first");
+  else if (e.key === "2") setCamera("third");
+  else if (e.key === "3") setCamera("free");
+  else if (e.key === "x" || e.key === "X") document.getElementById("xray").click();
+  else if (e.key === "a" || e.key === "A") document.getElementById("lines").click();
+  else if (e.key === "[" || e.key === "]") {
+    const slots = [...rec.players.keys()].sort((a, b) => a - b);
+    if (!slots.length) return;
+    const at = Math.max(0, slots.indexOf(selected));
+    select(slots[(at + (e.key === "]" ? 1 : slots.length - 1)) % slots.length]);
+  }
+});
+
+/* ---------- saving the view as a video */
+
+let recorder = null, recorded = [];
+document.getElementById("record").onclick = () => {
+  const button = document.getElementById("record");
+  if (recorder) { recorder.stop(); return; }
+  const type = ["video/webm;codecs=vp9", "video/webm", "video/mp4"].find(t => MediaRecorder.isTypeSupported(t));
+  if (!type) { alert("This browser cannot record video."); return; }
+  recorded = [];
+  recorder = new MediaRecorder(renderer.domElement.captureStream(60), { mimeType: type, videoBitsPerSecond: 8000000 });
+  recorder.ondataavailable = e => { if (e.data.size) recorded.push(e.data); };
+  recorder.onstop = () => {
+    const blob = new Blob(recorded, { type });
+    const a = document.createElement("a");
+    const who = selected != null ? playerAt(selected, tick).name.replace(/[^A-Za-z0-9_-]+/g, "_") : "replay";
+    a.href = URL.createObjectURL(blob);
+    a.download = `${who}_${fmt(tick).replace(/[:.]/g, "-")}.${type.includes("mp4") ? "mp4" : "webm"}`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+    recorder = null;
+    button.textContent = "Record video";
+    button.classList.remove("on");
+    document.getElementById("recording").style.display = "none";
+  };
+  recorder.start(1000);
+  button.textContent = "Stop and save";
+  button.classList.add("on");
+  document.getElementById("recording").style.display = "inline";
+};
+
+/* ---------- opening a recording */
+
+async function open(file) {
+  const drop = document.getElementById("drop");
+  drop.querySelector("p").textContent = `Reading ${file.name}...`;
+  try {
+    rec = await parse(await file.arrayBuffer());
+  } catch (error) {
+    drop.querySelector("p").textContent = error.message;
+    return;
+  }
+  drop.style.display = "none";
+  for (const figure of figures.values()) scene.remove(figure.group);
+  figures = new Map();
+  teams = [...rec.players.values()].some(list => list.some(p => p.team === 1)) &&
+    [...rec.players.values()].every(list => list.every(p => p.team <= 1));
+  buildWalls();
+  const date = rec.game.time ? new Date(rec.game.time * 1000).toLocaleString() : "";
+  const map = rec.game.map.split("\\").pop();
+  document.getElementById("game").innerHTML = "";
+  for (const line of [`${map}${rec.game.type ? " · " + rec.game.type : ""}`, rec.game.server, date,
+    `${fmt(rec.last)} long · ${rec.hits.length} hits checked · ${rec.kills.length} kills`]) {
+    const d = document.createElement("div"); d.textContent = line; document.getElementById("game").append(d);
+  }
+  scrub.min = String(rec.first);
+  scrub.max = String(rec.last);
+  const worst = [...rec.players.keys()].map(slot => [slot, suspicion(slot)]).sort((a, b) =>
+    b[1].refused - a[1].refused || b[1].doubted - a[1].doubted)[0];
+  selected = worst ? worst[0] : null;
+  setCamera(selected != null ? "first" : "free");
+  renderPlayers();
+  renderEvents();
+  seek(rec.first);
+  document.title = `${map} replay`;
+}
+
+document.getElementById("file").onchange = e => { if (e.target.files[0]) open(e.target.files[0]); };
+// (?file=<address>: a recording at a link, as one an admin keeps somewhere private)
+{
+  const link = new URLSearchParams(location.search).get("file");
+  if (link) fetch(link).then(r => {
+    if (!r.ok) throw new Error(`${link}: ${r.status}`);
+    return r.blob();
+  }).then(blob => open(new File([blob], link.split("/").pop()))).catch(error => {
+    document.querySelector("#drop p").textContent = error.message;
+  });
+}
+view.addEventListener("dragover", e => { e.preventDefault(); document.getElementById("drop").classList.add("hover"); });
+view.addEventListener("dragleave", () => document.getElementById("drop").classList.remove("hover"));
+view.addEventListener("drop", e => {
+  e.preventDefault();
+  document.getElementById("drop").classList.remove("hover");
+  if (e.dataTransfer.files[0]) open(e.dataTransfer.files[0]);
+});
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.1, (now - last) / 1000);
+  last = now;
+  if (rec && playing) {
+    seek(tick + dt * rec.game.rate * speed);
+    if (tick >= rec.last) setPlaying(false);
+  }
+  draw();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

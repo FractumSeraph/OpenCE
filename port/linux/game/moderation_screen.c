@@ -35,6 +35,8 @@ when the player acts.
 #include "../src/browser.h"
 #include "../src/delta_moderation.h"
 #include "../src/ui_overlay.h"
+/* this fork: watching a player (Watch) */
+#include "sightjack.h"
 
 int config_boolean(char const *name);
 char const *config_string(char const *name);
@@ -73,6 +75,9 @@ enum
 	COLOR_WARNING = 0xF2C14EFF,
 };
 
+/* (this fork) the Watch choice's action, which is not the server's */
+#define MODERATION_ACTION_WATCH (-1)
+
 /* the actions, as the screen offers them */
 struct moderation_choice
 {
@@ -94,6 +99,9 @@ static struct moderation_choice const moderation_choices[] =
 	{ "Ban for ever", _delta_moderation_action_ban, 0, DELTA_MODERATION_BAN, TRUE },
 	{ "End the game", _delta_moderation_action_end_game, 0, DELTA_MODERATION_MAP, FALSE },
 	{ "Next map", _delta_moderation_action_next_map, 0, DELTA_MODERATION_MAP, FALSE },
+	/* (this fork: watching through the player's eyes, here alone: nothing is
+	sent, sightjack.c) */
+	{ "Watch", MODERATION_ACTION_WATCH, 0, DELTA_MODERATION_WARN, TRUE },
 };
 
 /* a player of the game, as the screen lists them */
@@ -211,6 +219,14 @@ static void act(
 			return;
 		target = moderation_screen.players[moderation_screen.selected].machine_index;
 	}
+	/* (this fork) */
+	if (choice->action == MODERATION_ACTION_WATCH)
+	{
+		sightjack_watch(target);
+		moderation_screen.confirming = FALSE;
+		moderation_screen.active = FALSE;
+		return;
+	}
 	if (!delta_peer_game_moderation_action(choice->action, target, choice->minutes, ""))
 	{
 		set_status("Could not send that to the server.");
@@ -316,6 +332,8 @@ void moderation_screen_update(
 	short index;
 
 	delta_peer_game_client_moderation(&moderation_screen.moderation);
+	/* (this fork: a player watched, sightjack.c) */
+	sightjack_update(menu_open);
 	if (moderation_screen.moderation.notice_count != moderation_screen.notice_seen)
 	{
 		moderation_screen.notice_seen = moderation_screen.moderation.notice_count;
@@ -488,6 +506,8 @@ void moderation_screen_render(
 	if (!ui_overlay_available() || !moderation->available)
 		return;
 	render_banner();
+	/* (this fork) */
+	sightjack_render();
 	if (!moderation_screen.active)
 		return;
 

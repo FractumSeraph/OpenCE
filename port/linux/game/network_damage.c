@@ -56,6 +56,9 @@ being hit looks and feels like on the clients).
 #include "scenario/scenario.h"
 #include "units/units.h"
 #include "network_distributed.h"
+/* port (this fork): the host's fair play checks, and its recordings */
+#include "network_fairplay.h"
+#include "network_recording.h"
 
 #include <math.h>
 
@@ -239,6 +242,10 @@ largest damage scale a client's hit has: a melee blow's, airborne
 (unit_update_melee), anything else's all of it */
 #define REPORT_WORLD_BOUND 32768.0f
 #define REPORT_MAXIMUM_MELEE_SCALE 1.5f
+/* port (this fork): how far a projectile falls off the line it was fired
+along over its range, at most, for network_fairplay.c to check its aim (a
+slope: 5 degrees) */
+#define FLIGHT_BENT_SLOPE 0.0875f
 
 /* the damage flags a client's hit has: what its own object_cause_damage is
 given (neither the host's instant kills nor its passengers' passthrough) */
@@ -330,12 +337,15 @@ struct distributed_hit_report_message
 /* how far from its firer what a source deals goes off (world units), in
 how many ticks from when it is fired, and for how many of them what it
 fires is carried at its firer's own speed (a grenade thrown on the run); a
-distance below 0 where the tags do not bound it */
+distance below 0 where the tags do not bound it; and (port, this fork:
+network_fairplay.c) whether what it fires may bend off the line it was
+aimed along: guided, or falling */
 struct damage_reach
 {
 	real distance;
 	real ticks;
 	real carried_ticks;
+	boolean bent;
 };
 
 /* the vehicle damage in the globals' falling damage block, as vehicles.c
@@ -853,6 +863,7 @@ static void distributed_reach_combine(
 	struct damage_reach *reach,
 	struct damage_reach const *other)
 {
+	reach->bent = reach->bent || other->bent;
 	if (!(reach->distance >= 0.0f) || !(other->distance >= 0.0f))
 	{
 		reach->distance = -1.0f;
@@ -883,6 +894,18 @@ static void distributed_projectile_flight(
 	flight->distance = -1.0f;
 	flight->ticks = (real)PLAYER_TRAIL_TICKS;
 	flight->carried_ticks = 0.0f;
+	/* (port, this fork: network_fairplay.c's: guided, or falling more than
+	FLIGHT_BENT_SLOPE over its range, or a second's flight, from the line
+	it was fired along at its slowest) */
+	{
+		real speed = slowest > 0.0f ? slowest : fastest;
+		real range = projectile->projectile.maximum_range > 0.0f ? projectile->projectile.maximum_range :
+			speed * TICKS_PER_SECOND;
+		real fall = global_gravity * MAX(0.0f, projectile->projectile.air_gravity_scale);
+
+		flight->bent = projectile->projectile.guided_angular_velocity > 0.0f ||
+			!(speed > 0.0f) || !(fall * range <= 2.0f * FLIGHT_BENT_SLOPE * speed * speed);
+	}
 	for (response_index = 0; response_index < projectile->projectile.material_responses.count; response_index++)
 	{
 		struct projectile_material_response_definition *response = TAG_BLOCK_GET_ELEMENT(
@@ -1017,6 +1040,7 @@ static byte distributed_projectile_deals(
 			from_here.ticks += flight.ticks;
 			from_here.carried_ticks += flight.carried_ticks;
 		}
+		from_here.bent = from_here.bent || flight.bent;
 		distributed_reach_combine(reach, &from_here);
 	}
 	return kinds;
@@ -1095,6 +1119,7 @@ static real distributed_source_deals_uncached(
 	reach->distance = 0.0f;
 	reach->ticks = 0.0f;
 	reach->carried_ticks = 0.0f;
+	reach->bent = FALSE;
 	if (grenade)
 	{
 		*kinds = distributed_projectile_deals(source_index, damage_index, 0, reach);
@@ -1219,6 +1244,7 @@ static real distributed_player_deals(
 	reach->distance = 0.0f;
 	reach->ticks = 0.0f;
 	reach->carried_ticks = 0.0f;
+	reach->bent = FALSE;
 	for (index = 0; index < MAXIMUM_RECENT_WEAPONS; index++)
 	{
 		if (damage_players[player_index].definition_indices[index] != NONE &&
@@ -1904,6 +1930,15 @@ static boolean distributed_report_valid(
 		if (!(distributed_distance_squared(&report->target_position, &origin) <= tolerance * tolerance))
 			return FALSE;
 	}
+	/* port (this fork): a bullet's hit on a player through a solid wall, or
+	far from where its shooter aimed, refused; less sure ones noted
+	(network_fairplay.c, network.fair_play) */
+	if (!melee && !collision && !area &&
+		!network_fairplay_hit(player_index, report->object_index, &report->damage.origin, report->host_time,
+			fired_reach.distance >= 0.0f ? fired_reach.ticks : -1.0f, fired_reach.bent))
+	{
+		return FALSE;
+	}
 	/* the damage as the host deals it: what a client's hit can be, from the
 	player's own */
 	if (!distributed_damage_to_data(&report->damage, damage))
@@ -2147,6 +2182,9 @@ void network_damage_host_tick(
 	distributed_log_reports();
 	distributed_note_weapons();
 	distributed_note_targets();
+	/* (port, this fork: network_fairplay.c, network_recording.c) */
+	network_fairplay_host_tick();
+	network_recording_host_tick();
 	distributed_note_event_destinations();
 	for (machine_number = 0; machine_number < machine_count; machine_number++)
 	{
@@ -2351,6 +2389,9 @@ void network_damage_new_game(
 	damage_event_count = 0;
 	damage_report_count = 0;
 	damage_dealing_report = FALSE;
+	/* (port, this fork) */
+	network_fairplay_new_game();
+	network_recording_new_game();
 	damage_replaying_kill = FALSE;
 	csmemset(damage_players, 0, sizeof(damage_players));
 	for (player_index = 0; player_index < TARGET_HISTORY_TICKS; player_index++)

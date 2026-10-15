@@ -27,7 +27,8 @@ cheater; a ban is a line in bans.txt, which every join is checked against
 (network_distributed.c), by the machine's hardware id and its address; a
 map is changed by ending the game and setting the next, as the playlist
 does. No message of the protocol is new or changed. Nothing here shows a
-player's address.
+player's address, but sv_suspects (this fork's, a moderator's: the fair play
+checks' findings, network_fairplay.c), which keeps it for a ban.
 
 sv_password is not here: a join request (message_client_join_game_request)
 has no password a player could type in, its join token is the game's own,
@@ -58,6 +59,8 @@ types only) */
 #include "../platform/server_control.h"
 #endif
 #include "server_admin.h"
+/* port (this fork): the host's fair play checks (sv_suspects) */
+#include "../../port/linux/game/network_fairplay.h"
 #include "server_moderation.h"
 #include "server_names.h"
 
@@ -151,6 +154,7 @@ static boolean command_kick(struct command_line const *line, boolean json, struc
 static boolean command_ban(struct command_line const *line, boolean json, struct command_output *output);
 static boolean command_unban(struct command_line const *line, boolean json, struct command_output *output);
 static boolean command_banlist(struct command_line const *line, boolean json, struct command_output *output);
+static boolean command_suspects(struct command_line const *line, boolean json, struct command_output *output);
 static boolean command_map(struct command_line const *line, boolean json, struct command_output *output);
 static boolean command_mapcycle(struct command_line const *line, boolean json, struct command_output *output);
 static boolean command_mapcycle_next(struct command_line const *line, boolean json, struct command_output *output);
@@ -193,6 +197,10 @@ static struct server_command const server_commands[] =
 		command_unban },
 	{ "sv_banlist", "sv_banlist", "The bans in bans.txt: number, when, hardware id, players, how long.", 1, 1, FALSE,
 		command_banlist },
+	{ "sv_suspects", "sv_suspects [last]", "What the fair play checks found of this game's players (or the last "
+		"game's): their bullets' hits checked, through walls and far off aim (refused), snaps of the aim, headshot "
+		"kills, aim on enemies behind walls, and who to look into (network.fair_play; each finding is in "
+		"fairplay.txt).", 1, 2, FALSE, command_suspects },
 	{ "sv_map", "sv_map <map> <game type>", "Plays a map (bloodgulch, a Custom Edition map as name@ce, a HaloMD map as "
 		"name@md, a Halo PC map as name@pc) and game type (slayer, ctf, ...) now; then the playlist goes on.", 3, 3, FALSE, command_map },
 	{ "sv_maps", "sv_maps", "The maps this server can play (its multiplayer maps: Xbox, name@ce, name@md, name@pc) and "
@@ -978,6 +986,79 @@ static boolean command_banlist(
 		command_output_printf(output, "], \"count\": %ld}", index);
 	else if (!index)
 		command_output_printf(output, "no bans\n");
+	return TRUE;
+}
+
+/* port (this fork): the fair play checks' findings (network_fairplay.c) */
+static boolean command_suspects(
+	struct command_line const *line,
+	boolean json,
+	struct command_output *output)
+{
+	boolean last = FALSE;
+	struct network_fairplay_stats stats;
+	long index;
+
+	if (line->count > 1)
+	{
+		if (_stricmp(line->words[1], "last"))
+		{
+			command_output_printf(output, "sv_suspects [last]: \"last\" for the last game's players\n");
+			return FALSE;
+		}
+		last = TRUE;
+	}
+	if (json)
+		command_output_printf(output, "{\"game\": \"%s\", \"players\": [", last ? "last" : "this");
+	else
+	{
+		command_output_printf(output, "%-11s  %4s  %-9s  %-9s  %5s  %-8s  %-13s  %-7s  %-15s  %s\n", "name",
+			"hits", "wall/ref", "aim/ref", "snaps", "hs/kills", "hidden aim", "suspect", "address", "id");
+	}
+	for (index = 0; network_fairplay_entry(last, index, &stats); index++)
+	{
+		char wall[16], aim[16], heads[16], hidden[24];
+
+		if (json)
+		{
+			command_output_printf(output, "%s{\"name\": ", index ? ", " : "");
+			command_output_json_string(output, stats.name);
+			command_output_printf(output, ", \"id\": ");
+			if (stats.hardware_id[0])
+				command_output_json_string(output, stats.hardware_id);
+			else
+				command_output_printf(output, "null");
+			command_output_printf(output, ", \"address\": ");
+			if (stats.address[0])
+				command_output_json_string(output, stats.address);
+			else
+				command_output_printf(output, "null");
+			command_output_printf(output, ", \"checked_hits\": %ld, \"wall_hits\": %ld, \"refused_wall_hits\": %ld, "
+				"\"off_aim_hits\": %ld, \"refused_aim_hits\": %ld, \"snap_hits\": %ld, \"kills\": %ld, "
+				"\"headshot_kills\": %ld, \"hidden_enemy_seconds\": %.1f, \"hidden_aim_seconds\": %.1f, "
+				"\"suspect\": %s}", stats.checked_hits, stats.wall_hits, stats.refused_wall_hits, stats.off_aim_hits,
+				stats.refused_aim_hits, stats.snap_hits, stats.kills, stats.headshot_kills,
+				(double)stats.hidden_enemy_seconds, (double)stats.hidden_aim_seconds, stats.suspect ? "true" : "false");
+			continue;
+		}
+		snprintf(wall, sizeof(wall), "%ld/%ld", stats.wall_hits, stats.refused_wall_hits);
+		snprintf(aim, sizeof(aim), "%ld/%ld", stats.off_aim_hits, stats.refused_aim_hits);
+		snprintf(heads, sizeof(heads), "%ld/%ld", stats.headshot_kills, stats.kills);
+		if (stats.hidden_enemy_seconds > 0.0f)
+		{
+			snprintf(hidden, sizeof(hidden), "%.0f%% of %.0fs", 100.0 * stats.hidden_aim_seconds /
+				stats.hidden_enemy_seconds, (double)stats.hidden_enemy_seconds);
+		}
+		else
+			snprintf(hidden, sizeof(hidden), "-");
+		command_output_printf(output, "%-11s  %4ld  %-9s  %-9s  %5ld  %-8s  %-13s  %-7s  %-15s  %s\n", stats.name,
+			stats.checked_hits, wall, aim, stats.snap_hits, heads, hidden, stats.suspect ? "SUSPECT" : "-",
+			stats.address[0] ? stats.address : "-", stats.hardware_id[0] ? stats.hardware_id : "-");
+	}
+	if (json)
+		command_output_printf(output, "], \"count\": %ld}", index);
+	else if (!index)
+		command_output_printf(output, "no players %s\n", last ? "in the last game" : "in this game");
 	return TRUE;
 }
 

@@ -100,6 +100,21 @@ static void hook_machine_key(
 		moderation.has_key[machine_index] = FALSE;
 }
 
+/* (this fork: network_distributed.c's, which these units do not include) */
+extern boolean (*network_distributed_full_view_proc)(long machine_index);
+
+/* (this fork) whether a machine is sent every player every tick: one whose
+game proved a key with a role here (1, a moderator, or more), who may watch
+any player (port/linux/game/sightjack.c; network_distributed.c) */
+static boolean full_view(
+	long machine_index)
+{
+	unsigned char key[32];
+
+	return server_moderation_machine_key(machine_index, key) &&
+		server_roles_key_role(key, NULL, NULL, 0) >= 1;
+}
+
 static int hook_key_role(
 	void *context,
 	unsigned char const *key,
@@ -256,6 +271,8 @@ void server_moderation_update(
 
 		moderation.registered = TRUE;
 		delta_peer_game_set_moderation_host(&host);
+		/* (this fork) */
+		network_distributed_full_view_proc = full_view;
 	}
 	/* the roles changed elsewhere (the panel's accounts, the site's list):
 	the moderators' games told again */

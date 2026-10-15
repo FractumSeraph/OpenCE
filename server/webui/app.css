@@ -186,6 +186,8 @@ td.actions { white-space: nowrap; }
 td.actions button + button { margin-left: 6px; }
 tr.current td { background: color-mix(in srgb, var(--accent) 14%, transparent); }
 td.empty { color: var(--muted); text-align: center; padding: 16px; }
+/* (this fork: the Suspects tab) */
+td.bad { color: var(--danger); font-weight: 700; }
 .team-red { color: #c0392b; font-weight: 600; }
 .team-blue { color: #2f6db5; font-weight: 600; }
 

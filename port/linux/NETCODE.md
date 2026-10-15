@@ -603,7 +603,7 @@ its name alone beside it, has its name given back as the map lists find it.
      the client's round trip and a second before the report came; not checked for what the tags do
      not bound: a projectile that sticks, which what it sticks to carries,
      one whose timer starts once it bounces or rests, a weapon's own
-     detonation; no line of sight); the target within a few world units of
+     detonation; no line of sight here, but below); the target within a few world units of
      where the host had it at the tick the report was made at (a player's
      unit or vehicle: the host keeps a second of where they were) or of
      where it is (more for a fast one; also for one that is no longer a
@@ -612,7 +612,14 @@ its name alone beside it, has its name given back as the map lists find it.
      fire and projectiles a shot, with a margin; an explosion's hits count
      as one, when its damage has a reach, and no object is hit twice by
      one, the explosions of each player's reports told apart on their
-     own). A report made more than three seconds ago (a burst of them held
+     own); and (this fork, `network_fairplay.c`, `network.fair_play`) a
+     bullet's hit on a player (a projectile that flies straight: not guided
+     or falling; from on foot) not through a solid wall from every point
+     the host had the shooter's eyes at since it could have been fired, nor
+     more than 45 degrees from everywhere they aimed then (the host keeps
+     four seconds of each player's eyes and aim, every tick); near misses
+     of those, snaps of the aim and aim held on enemies behind walls are
+     logged (`server/docs/admin.md`, "Fair play checks"). A report made more than three seconds ago (a burst of them held
      back while the network was out) is refused. A report is paid for
      before the host looks through its history, so a flood of them costs
      the sender its hits. The damage is dealt as a client's own hit can
@@ -773,7 +780,10 @@ made and removed and the hits reported, dealt, rejected and replayed, so
 two machines' views of one game can be compared. `debug.network_test_kill`,
 `debug.network_test_shoot`, `debug.network_test_vehicle` and
 `debug.network_test_pickup` script kills, hits, a vehicle ride and a weapon
-swap the bots' wandering does not reach (`debug.network_test_pickup_weapon`
+swap the bots' wandering does not reach (the scripted hits are not aimed: a
+host of this fork refuses them as silent aim unless its `network.fair_play`
+is `log`; `debug.network_test_aim` instead has each player aim at the next
+and fire their weapon, real shots the host must deal) (`debug.network_test_pickup_weapon`
 picks the weapon: the first whose tag name has it in it, as "sniper"), and `debug.network_test_score`
 shortens the game, to test the next (`host:<map>:<variant>,<variant>...`
 plays the variants in turn, the next once a game is over, as the host's

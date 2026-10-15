@@ -486,6 +486,25 @@ static const struct config_setting config_settings[] =
 		"at start and every 10 minutes into shared_bans.txt beside bans.txt; a\n"
 		"machine whose hardware id (or address) is in one is refused. Name only\n"
 		"lists whose publishers you trust. Empty: none." },
+	{ "network.fair_play", _config_string, "\"refuse\"", "HALO_NET_FAIR_PLAY", _environment_value, _platform_all,
+		"Hosting: check players' shots for cheats. \"refuse\" refuses a bullet's\n"
+		"hit through a solid wall or far from where its shooter aimed (silent\n"
+		"aim), and logs those, near misses of the checks, fast snaps of the aim\n"
+		"and aim held on enemies behind walls (wallhacks) in fairplay.txt beside\n"
+		"bans.txt; \"log\" only logs; \"off\" checks nothing. A dedicated\n"
+		"server lists what it found with sv_suspects. Nothing is banned by\n"
+		"itself." },
+	{ "network.record_games", _config_boolean, "false", "HALO_NET_RECORD_GAMES", _environment_value, _platform_all,
+		"Hosting: record every game to recordings\\ in the data folder (each\n"
+		"player's position, aim, health and weapon every tick, their names,\n"
+		"addresses and hardware ids, the fair play checks' verdicts, the kills and\n"
+		"the map's walls), about 10 MB an hour, to watch again through any\n"
+		"player's eyes at halo.fractumseraph.net/assets/replay/. Keep the folder\n"
+		"private." },
+	{ "network.recordings_megabytes", _config_integer, "2048", "HALO_NET_RECORDINGS_MEGABYTES", _environment_value,
+		_platform_all,
+		"How many megabytes of recordings (network.record_games) to keep: the\n"
+		"oldest go first. 0 keeps them all." },
 	{ "network.join_from_clipboard", _config_boolean, "true", "HALO_NET_JOIN_FROM_CLIPBOARD", _environment_value,
 		_platform_all,
 		"Join the game of an invite link found on the clipboard when the game\n"
@@ -760,6 +779,16 @@ static const struct config_setting config_settings[] =
 	{ "debug.network_test_score", _config_integer, "0", "HALO_NETWORK_TEST_SCORE", _environment_value, _platform_all,
 		"The score an automated test host's game type plays to (a short game, to\n"
 		"test the next); 0 the game type's own." },
+	{ "debug.network_test_aim", _config_boolean, "false", "HALO_NETWORK_TEST_AIM", _environment_set_is_true,
+		_platform_all,
+		"Each automated test player aims at the next player (where\n"
+		"debug.network_test_shoot's hits land) and holds the trigger: aimed hits,\n"
+		"which the host's fair play checks (network.fair_play) must deal." },
+	{ "debug.network_test_watch", _config_boolean, "false", "HALO_NETWORK_TEST_WATCH", _environment_set_is_true,
+		_platform_all,
+		"The automated test player signs in to a dedicated server's moderation\n"
+		"and, once the server gives its key a role, watches the first other\n"
+		"player (the Moderation screen's Watch)." },
 	{ "debug.network_test_shoot", _config_real, "0.0", "HALO_NETWORK_TEST_SHOOT", _environment_value, _platform_all,
 		"Every this many seconds each automated test player hits the next with\n"
 		"their weapon, within its reach (the host brings far players near the\n"
@@ -1816,6 +1845,7 @@ static const struct
 	{ "game.move_old_map_folders", { "ask", "yes", "no", NULL }, "\"ask\"" },
 	{ "network.protocol", { "auto", "opence", "delta", NULL }, NULL },
 	{ "network.map_downloads", { "ask", "always", "never", NULL }, "\"ask\"" },
+	{ "network.fair_play", { "refuse", "log", "off", NULL }, "\"refuse\"" },
 	{ "network.platform_limits", { "on", "off", NULL }, "\"on\"" },
 	{ "network.coop_friendly_fire", { "off", "on", "shields_only", "explosives_only", NULL }, NULL },
 	{ "network.coop_enemies_mode", { "none", "per_player", "multiplier", NULL }, "\"none\"" },

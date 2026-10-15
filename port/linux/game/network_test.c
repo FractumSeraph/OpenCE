@@ -43,7 +43,8 @@ Scripted play for the netcode's parts the bots' wandering does not reach:
 debug.network_test_kill (the host kills the last player every so often),
 debug.network_test_shoot (every so often each machine's player hits the
 next with their weapon's projectile: a client's through its report to the
-host) and debug.network_test_vehicle (the host seats the last player as a
+host, which, not aimed, a host refuses as silent aim unless its
+network.fair_play is "log": network_fairplay.c) and debug.network_test_vehicle (the host seats the last player as a
 vehicle's driver that many seconds in, takes them out 15 seconds on, and 5
 seconds later stands them at a vehicle's driver's entrance, where a joining
 machine's player holds the action button, as getting in does)
@@ -81,6 +82,11 @@ Called from the main loop every frame (main.c).
 #include "../src/map_download.h"
 
 #include "../src/p2p.h" /* port: port/linux/src/p2p.c, p2p_lobby.c */
+#ifdef HALO_GAME_BROWSER
+/* (this fork: debug.network_test_watch) */
+#include "../src/delta_moderation.h"
+#include "sightjack.h"
+#endif
 
 #include <math.h>
 #include <stdarg.h>
@@ -105,6 +111,7 @@ void network_distributed_item_statistics(long *creates, long *deletes, long *fai
 void network_damage_statistics(long *sent_reports, long *dealt_reports, long *rejected_reports, long *replayed_events);
 /* xinput_sdl.c's */
 void test_input_hold_action(int hold);
+void test_input_hold_fire(int hold);
 
 enum
 {
@@ -140,6 +147,12 @@ static struct
 	boolean team_set;
 	real kill_interval;
 	real shoot_interval;
+	/* (this fork) debug.network_test_aim, and debug.network_test_watch: signed
+	in, and watching */
+	boolean aim;
+	boolean watch;
+	boolean watch_signed_in;
+	boolean watch_started;
 	real vehicle_time;
 	real pickup_time;
 	char pickup_weapon[64];
@@ -244,6 +257,8 @@ static void network_test_read_settings(
 	network_test.start_delay = (real)config_real("debug.network_test_start");
 	network_test.kill_interval = (real)config_real("debug.network_test_kill");
 	network_test.shoot_interval = (real)config_real("debug.network_test_shoot");
+	network_test.aim = config_boolean("debug.network_test_aim") != 0;
+	network_test.watch = config_boolean("debug.network_test_watch") != 0;
 	network_test.vehicle_time = (real)config_real("debug.network_test_vehicle");
 	network_test.pickup_time = (real)config_real("debug.network_test_pickup");
 	snprintf(network_test.pickup_weapon, sizeof(network_test.pickup_weapon), "%s",
@@ -543,8 +558,10 @@ static void network_test_shoot(
 		damage.owner_player_index = iterator.datum_index;
 		damage.owner_object_index = player->unit_index;
 		damage.owner_team_index = unit->object.owner_team_index;
-		damage.origin = melee ? unit->object.bounding_sphere_center : target_object->object.position;
-		damage.epicenter = melee ? unit->object.bounding_sphere_center : target_object->object.position;
+		/* (this fork: aimed, at the body's centre, where the aim is) */
+		damage.origin = melee ? unit->object.bounding_sphere_center : network_test.aim ?
+			target_object->object.bounding_sphere_center : target_object->object.position;
+		damage.epicenter = damage.origin;
 		direction.i = target_object->object.position.x - unit->object.position.x;
 		direction.j = target_object->object.position.y - unit->object.position.y;
 		direction.k = target_object->object.position.z - unit->object.position.z;
@@ -556,6 +573,99 @@ static void network_test_shoot(
 		platform_log("network test: player %ld shoots player %ld",
 			(long)DATUM_INDEX_TO_ABSOLUTE_INDEX(iterator.datum_index), (long)(target - (struct player_datum *)xbox_pointer(player_data->data)));
 	}
+}
+
+/* (this fork) debug.network_test_aim: each of this machine's players aims
+at the next living player (from their eyes at their body's centre, where
+network_test_shoot's hit then lands) and holds the trigger, as a player
+shooting them does: their hits, scripted or fired, aimed, which a host's
+fair play checks (network_fairplay.c) must deal */
+static void network_test_aim(
+	void)
+{
+	struct data_iterator iterator;
+	struct player_datum *player;
+	boolean firing = FALSE;
+
+	data_iterator_new(&iterator, player_data);
+	while ((player = (struct player_datum *)data_iterator_next(&iterator)) != NULL)
+	{
+		struct data_iterator targets;
+		struct player_datum *candidate;
+		struct player_datum *target = NULL;
+		real_point3d eye;
+		real_vector3d direction;
+
+		if (player->local_player_index == NONE || player->unit_index == NONE)
+			continue;
+		data_iterator_new(&targets, player_data);
+		while ((candidate = (struct player_datum *)data_iterator_next(&targets)) != NULL)
+		{
+			if (candidate != player && candidate->unit_index != NONE)
+			{
+				target = candidate;
+				break;
+			}
+		}
+		if (!target)
+			continue;
+		unit_get_camera_position(player->unit_index, &eye);
+		vector_from_points3d(&eye, &object_get(target->unit_index)->object.bounding_sphere_center, &direction);
+		if (normalize3d(&direction) == 0.0f)
+			continue;
+		player_control_set_facing(player->local_player_index, &direction);
+		/* (and the weapon kept loaded: the test's players may have none left) */
+		{
+			struct unit_datum *unit = unit_get(player->unit_index);
+			long weapon_index = unit->unit.current_weapon_index != NONE ?
+				unit->unit.weapon_object_indices[unit->unit.current_weapon_index] : NONE;
+
+			if (weapon_index != NONE && weapon_get(weapon_index)->weapon.magazines[0].rounds_loaded < 4)
+				weapon_get(weapon_index)->weapon.magazines[0].rounds_loaded = 32;
+		}
+		firing = TRUE;
+	}
+	test_input_hold_fire(firing);
+}
+
+/* (this fork) debug.network_test_watch: this machine's player signs in to
+the host's moderation (once it offers it), and once the host gives their key
+a role, watches the first other player (sightjack.c), as the Moderation
+screen's Watch does: nothing the host does not allow */
+static void network_test_watch(
+	void)
+{
+#ifdef HALO_GAME_BROWSER
+	struct delta_peer_game_moderation moderation;
+	struct data_iterator iterator;
+	struct player_datum *player;
+
+	if (network_test.watch_started)
+		return;
+	delta_peer_game_client_moderation(&moderation);
+	if (!moderation.available)
+		return;
+	if (!moderation.signed_in && !network_test.watch_signed_in)
+	{
+		network_test.watch_signed_in = delta_peer_game_moderation_sign_in() != 0;
+		if (network_test.watch_signed_in)
+			platform_log("network test: signed in to the host's moderation");
+		return;
+	}
+	if (!sightjack_allowed())
+		return;
+	data_iterator_new(&iterator, player_data);
+	while ((player = (struct player_datum *)data_iterator_next(&iterator)) != NULL)
+	{
+		if (player->local_player_index == NONE)
+		{
+			sightjack_watch(player->network_player_data.machine_index);
+			network_test.watch_started = TRUE;
+			platform_log("network test: watching player %ld", (long)DATUM_INDEX_TO_ABSOLUTE_INDEX(iterator.datum_index));
+			return;
+		}
+	}
+#endif
 }
 
 /* the host seats the last player as the nearest vehicle's driver, or out */
@@ -892,6 +1002,11 @@ void network_test_update(
 	game's time starts over) */
 	if (game_in_progress() && game_time_get() < network_test.logged_time)
 		network_test.logged_time = 0;
+	/* (this fork) */
+	if (network_test.aim && game_in_progress() && !main_menu_loaded)
+		network_test_aim();
+	if (network_test.watch && game_in_progress() && !main_menu_loaded)
+		network_test_watch();
 	if (game_in_progress() && !main_menu_loaded && game_time_get() - network_test.logged_time >= TICKS_PER_SECOND)
 	{
 		network_test.logged_time = game_time_get();

@@ -106,6 +106,7 @@ symbols in this file:
 #include "shaders/shaders.h"
 #include "game/players.h"
 #include "interface/first_person_weapons.h"
+#include "sightjack.h" /* port (this fork): port/linux/game/sightjack.c */
 #include "camera/director.h"
 #include "cutscene/cinematics.h"
 #include "tag_files/tag_files.h"
@@ -414,7 +415,10 @@ static boolean object_is_first_person_camera(
 	return (unit_index == object_index &&
 		director_get_perspective(render.local_player_index) ==
 			_director_perspective_first_person) ||
-		scripted_camera_object_is_first_person_camera(object_index);
+		scripted_camera_object_is_first_person_camera(object_index) ||
+		/* port (this fork): the player a moderator watches, from inside
+		their head (port/linux/game/sightjack.c) */
+		sightjack_object_hidden(object_index);
 }
 
 static void find_rendered_objects(

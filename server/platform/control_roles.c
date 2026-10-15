@@ -119,6 +119,8 @@ static const struct command_permission command_permissions[] =
 	{ "sv_gametypes", CONTROL_PERMISSION_VIEW, 0, 0 },
 	{ "sv_gametype", CONTROL_PERMISSION_VIEW, 0, 0 },
 	{ "sv_settings", CONTROL_PERMISSION_VIEW, 0, 0 },
+	/* (port, this fork: who to look into is a moderator's to see) */
+	{ "sv_suspects", CONTROL_PERMISSION_WARN, 0, 0 },
 	{ "sv_warn", CONTROL_PERMISSION_WARN, 1, 0 },
 	{ "sv_kick", CONTROL_PERMISSION_KICK, 1, 0 },
 	/* (sv_ban: BAN_TIMED or BAN by its duration, below) */
