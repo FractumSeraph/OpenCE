@@ -16,6 +16,8 @@ they call besides is stubbed: the speed and height limits pass every move
 unit there.
 */
 
+#include <math.h>
+
 #include "harness.h"
 
 /* ---------- the fake world */
@@ -105,6 +107,16 @@ static struct
 #define distributed_on_foot_move_valid(bound, from, to, ticks) TRUE
 #define distributed_on_foot_ceiling(player_index, bound) ((bound)->rise)
 #define distributed_on_foot_fall_speed(bound, height) 0.0f
+
+/* (the fair play checks' counting of refused moves: none here) */
+enum
+{
+	NETWORK_FAIRPLAY_MOVE_FAR = 1,
+	NETWORK_FAIRPLAY_MOVE_FAST,
+	NETWORK_FAIRPLAY_MOVE_HIGH
+};
+#define network_fairplay_refused_move(player_index, kind, amount) ((void)(amount))
+#define network_fairplay_moved_by_host(player_index) ((void)0)
 
 /* the unit put where the host takes it to be */
 static boolean apply(long unit_index, real_point3d const *position)
