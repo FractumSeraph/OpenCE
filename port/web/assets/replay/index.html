@@ -514,7 +514,7 @@ function renderPlayers() {
     row.querySelector(".name").textContent = p.name;
     row.querySelector(".flag").textContent = s.refused ? `${s.refused} refused` : s.doubted ? `${s.doubted} doubted` : "";
     if (!s.refused && s.doubted) row.querySelector(".flag").style.color = "var(--warn)";
-    row.querySelector(".meta").textContent = `${s.all} hits checked` + (p.ip ? ` · ${p.ip}` : "") + (p.hwid ? ` · id ${p.hwid}` : "");
+    row.querySelector(".meta").textContent = `${s.all} hits${publicCopy ? "" : " checked"}` + (p.ip ? ` · ${p.ip}` : "") + (p.hwid ? ` · id ${p.hwid}` : "");
     row.onclick = () => select(slot);
     box.append(row);
   }
@@ -681,9 +681,14 @@ function gameLine(text, href) {
   document.getElementById("game").append(d);
 }
 
+// (a map as players name it: no folders, no @ce/@md/@pc)
+function mapName(map) {
+  return String(map).split("\\").pop().replace(/@(ce|md|pc)$/, "");
+}
+
 function describeGame() {
   const date = rec.game.time ? new Date(rec.game.time * 1000).toLocaleString() : "";
-  const map = rec.game.map.split("\\").pop();
+  const map = mapName(rec.game.map);
   document.getElementById("game").innerHTML = "";
   for (const text of [`${map}${rec.game.type ? " · " + rec.game.type : ""}`, rec.game.server, date,
     `${fmt(rec.last)} long · ${rec.hits.length} hits${publicCopy ? "" : " checked"} · ${rec.kills.length} kills`])
@@ -815,7 +820,7 @@ async function livePoll() {
       } else {
         document.getElementById("drop").style.display = "";
         document.querySelector("#drop p").textContent = status.live ?
-          `${status.server}: ${status.map.split("\\").pop()} has just begun. It shows here ${status.delay} seconds behind the game.` :
+          `${status.server}: ${mapName(status.map)} has just begun. It shows here ${status.delay} seconds behind the game.` :
           `${status.server} is not playing a game right now. This page shows the next one when it begins.`;
       }
     } else if (read.chunks.length) {
@@ -868,7 +873,7 @@ async function listGames() {
         const a = document.createElement("a");
         a.href = `?live=${encodeURIComponent(base)}`;
         a.className = "button";
-        a.textContent = `Watch live: ${status.map.split("\\").pop()}${status.game_type ? " · " + status.game_type : ""}`;
+        a.textContent = `Watch live: ${mapName(status.map)}${status.game_type ? " · " + status.game_type : ""}`;
         p.append(a);
       } else p.textContent = "No game right now.";
     }).catch(() => {});
@@ -888,7 +893,7 @@ async function listGames() {
         const li = document.createElement("li");
         const a = document.createElement("a");
         a.href = `?file=${encodeURIComponent(f.url)}`;
-        a.textContent = m ? `${m[4]} · ${m[1]} ${m[2]}:${m[3]}` : f.name;
+        a.textContent = m ? `${m[4].replace(/-(ce|md|pc)$/, "")} · ${m[1]} ${m[2]}:${m[3]}` : f.name;
         li.append(a);
         list.append(li);
       }
