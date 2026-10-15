@@ -11,7 +11,7 @@
 #   - something down: a game server, the web services, Caddy, the tracker or
 #     MQTT not running; the site, the lobby or a server's place on the game
 #     list not answering; little disk left; a server update, backup or ban
-#     list run that failed. Said once when it has lasted a few minutes (the
+#     list run, or a move of recordings to the seedbox, that failed. Said once when it has lasted a few minutes (the
 #     game list: ten, it is slow to notice), and again when it is back.
 #
 # The webhook is /etc/halo-alerts/webhook (its URL, one line, readable by
@@ -37,7 +37,7 @@ SERVERS = {
 }
 # what must be running, and what must not have failed (oneshots run by timers)
 RUNNING = ["halo-dedicated", "halo-fractumslayer", "halo", "caddy", "opentracker", "mosquitto"]
-NOT_FAILED = ["halo-gameservers-update", "halo-backup", "halo-bans-publish"]
+NOT_FAILED = ["halo-gameservers-update", "halo-backup", "halo-bans-publish", "halo-recordings-offload"]
 SITE = "https://halo.fractumseraph.net/"
 LOBBY = "http://127.0.0.1:8765/v1/public-games"
 GAME_LIST = "https://halo.milenko.org/v1/games"
