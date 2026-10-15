@@ -2062,6 +2062,13 @@ HRESULT WINAPI Direct3D_CreateDevice(UINT adapter, D3DDEVTYPE device_type, void 
 	return S_OK;
 }
 
+/* (this fork) whether OpenGL is up: not on a dedicated server, a probe, or
+with debug.null_renderer (hud_hires.c makes no texture without it) */
+int d3d8_gl_ready(void)
+{
+	return device.gl_ready ? 1 : 0;
+}
+
 /* ---------- the menus' pointer */
 
 /* a point in the window, as SDL reports it, in the menus' coordinates: the

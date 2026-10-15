@@ -24,8 +24,9 @@ enum
 {
 	COMMAND_LINE_MAXIMUM_LENGTH = 255,
 	COMMAND_LINE_MAXIMUM_WORDS = 8,
-	/* a word, with its terminator */
-	COMMAND_LINE_WORD_SIZE = 64,
+	/* a word, with its terminator (port, this fork: a moderator key, 64 hex
+	digits, is one word: sv_mod_add <key> <role>; 64 left no room for it) */
+	COMMAND_LINE_WORD_SIZE = 80,
 	/* a reason, with its terminator: as long as a notice in a player's game
 	(Delta Peer's, DELTA_WIRE_MODERATION_TEXT_SIZE) */
 	COMMAND_LINE_REASON_SIZE = 128,

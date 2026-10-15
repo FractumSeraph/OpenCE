@@ -394,7 +394,12 @@ failed:
 	return NULL;
 }
 
-/* a GL texture of a decoded PNG's texels (which it frees), as below */
+/* (this fork: d3d8_gl.c's) whether OpenGL is up */
+int d3d8_gl_ready(void);
+
+/* a GL texture of a decoded PNG's texels (which it frees), as below; none
+without OpenGL (a dedicated server, or debug.null_renderer, draws its
+post-game screen's icons too, and has no GL functions to call) */
 static unsigned int png_pixels_texture(unsigned char *pixels, unsigned long width, unsigned long height,
 	unsigned long *levels)
 {
@@ -403,6 +408,11 @@ static unsigned int png_pixels_texture(unsigned char *pixels, unsigned long widt
 
 	if (!pixels)
 		return 0;
+	if (!d3d8_gl_ready())
+	{
+		free(pixels);
+		return 0;
+	}
 	*levels = 1;
 	for (largest = width > height ? width : height; largest > 1; largest >>= 1)
 		(*levels)++;
@@ -431,7 +441,8 @@ unsigned int hud_hires_override_texture(long asset, unsigned long *levels)
 {
 	const struct hud_hires_embedded *embedded;
 
-	if (asset < 0 || asset >= hud_hires_asset_count() || textures[asset].failed)
+	/* (nothing to make a texture with: this fork, png_pixels_texture) */
+	if (asset < 0 || asset >= hud_hires_asset_count() || textures[asset].failed || !d3d8_gl_ready())
 		return 0;
 	if (textures[asset].texture)
 	{
