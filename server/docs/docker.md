@@ -136,6 +136,33 @@ MemoryMax=1G
 WantedBy=multi-user.target
 ```
 
+### Updates on their own, and backups
+
+FractumSeraph's two servers (FractumSnap and FractumSlayer, one program in
+`/opt/halo-dedicated/bin`) keep themselves up to date and backed up with
+these, in `server/deploy`, which another host can adapt (names and paths are
+at the top of each):
+
+- `halo-gameservers-update`, run every 30 minutes by
+  `halo-gameservers-update.service` and `.timer`: when the fork's latest
+  release is newer than the program, and the public game list says both
+  servers have had no players for a minute, it checks the zip against
+  GitHub's SHA-256 digest, runs the new program once (`--version`), keeps
+  the old one as `chupathingyce-server.previous` and restarts both servers;
+  if either is not running a minute later, it puts the previous program
+  back. Never in the middle of a game. Its log is
+  `journalctl -u halo-gameservers-update`.
+- `halo-backup`, run nightly by `halo-backup.service` and `.timer`: a
+  `.tar.gz` of the servers' settings (env files, admin settings, playlists,
+  control panel accounts and audit log, Delta Control links, lasting invite
+  keys, game state), the shared ban list, the web server's, MQTT broker's
+  and tracker's settings, the units and scripts, and the newest Umami
+  database dump (no maps, programs or logs), sent over SSH to a seedbox
+  whose `authorized_keys` lets that key run `halo-backup-receive` and
+  nothing else (`restrict,command="$HOME/bin/halo-backup-receive"`). That
+  keeps the newest 14, readable by its account alone; they are not
+  encrypted. Restore one with `tar -xzf halovps-<date>.tar.gz -C /`.
+
 ## The game list's probe
 
 The server program is also the game list's probe when `HALO_PROBE` holds an

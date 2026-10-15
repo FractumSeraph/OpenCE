@@ -1,0 +1,15 @@
+#!/bin/sh
+# (server/deploy/halo-backup-receive: on the seedbox as ~/bin/halo-backup-receive.)
+# halovps (the Halo VPS) sends its nightly backup on standard input, through
+# the one thing its key may do here (authorized_keys: restrict,command=):
+# kept in ~/backups/halovps as halovps-<date>.tar.gz, readable by this
+# account alone, the newest 14 kept.
+umask 077
+dir="$HOME/backups/halovps"
+mkdir -p "$dir"
+file="$dir/halovps-$(date +%F).tar.gz"
+cat > "$file.part" || exit 1
+gzip -t "$file.part" 2>/dev/null || { rm -f "$file.part"; echo "not a whole gzip file: refused" >&2; exit 1; }
+mv "$file.part" "$file"
+ls -1t "$dir"/halovps-*.tar.gz | tail -n +15 | while read old; do rm -f "$old"; done
+echo "kept $file ($(wc -c < "$file") bytes)"

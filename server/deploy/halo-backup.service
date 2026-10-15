@@ -1,0 +1,8 @@
+[Unit]
+Description=Send the Halo VPS's settings and server data to the seedbox (halo-backup)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/halo-backup

@@ -1,0 +1,8 @@
+[Unit]
+Description=Update the Halo dedicated servers to the fork's latest release when they are empty
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/halo-gameservers-update

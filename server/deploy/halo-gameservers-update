@@ -1,0 +1,153 @@
+#!/usr/bin/env python3
+# Keeps FractumSeraph's dedicated servers (FractumSnap: halo-dedicated, and
+# FractumSlayer: halo-fractumslayer, one program in /opt/halo-dedicated/bin)
+# on the fork's latest release (server/deploy/halo-gameservers-update;
+# installed as /usr/local/sbin/halo-gameservers-update, run every 30 minutes
+# by halo-gameservers-update.timer):
+#
+#   1. the latest release of github.com/FractumSeraph/OpenCE (published only
+#      once every platform built), and its server's zip and digest;
+#   2. nothing to do if the servers run it already;
+#   3. only while both servers have no players (the public game list, asked
+#      twice a minute apart): never in the middle of a game;
+#   4. the zip checked against GitHub's SHA-256 digest, the program run once
+#      (--version), the one running until now kept as chupathingyce-server.previous;
+#   5. both servers restarted, and if either is not running a minute later,
+#      the previous program put back and both restarted again.
+#
+# Everything is logged to the journal (journalctl -u halo-gameservers-update).
+import hashlib
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+import urllib.request
+import zipfile
+
+REPOSITORY = "FractumSeraph/OpenCE"
+ASSET = "chupathingyce-server-linux-x64.zip"
+BIN = "/opt/halo-dedicated/bin"
+PROGRAM = os.path.join(BIN, "chupathingyce-server")
+UNITS = ["halo-dedicated", "halo-fractumslayer"]
+SERVERS = ["FractumSnap", "FractumSlayer"]
+GAME_LIST = "https://halo.milenko.org/v1/games"
+
+
+def log(text):
+    print(text, flush=True)
+
+
+def fetch(url, accept=None):
+    request = urllib.request.Request(url, headers={"User-Agent": "halo-gameservers-update",
+                                                   **({"Accept": accept} if accept else {})})
+    with urllib.request.urlopen(request, timeout=60) as response:
+        return response.read()
+
+
+def running_version():
+    try:
+        out = subprocess.run([PROGRAM, "--version"], capture_output=True, text=True, timeout=60).stdout
+    except Exception:
+        return ""
+    # "ChupathingyCE Dedicated Server 0.7.5b-fs.00106 (release, ...)"
+    for line in out.splitlines():
+        if "Dedicated Server" in line:
+            return line.split("Dedicated Server", 1)[1].split()[0]
+    return ""
+
+
+def players():
+    """the players on the servers, or None when the list does not say"""
+    try:
+        data = json.loads(fetch(GAME_LIST))
+    except Exception as error:
+        log(f"the game list could not be read: {error}")
+        return None
+    games = data.get("games", data) if isinstance(data, dict) else data
+    found = {game.get("name"): int(game.get("players") or 0) for game in games if game.get("name") in SERVERS}
+    if len(found) != len(SERVERS):
+        log(f"not every server is on the game list ({sorted(found)})")
+        return None
+    return sum(found.values())
+
+
+def active(unit):
+    return subprocess.run(["systemctl", "is-active", "--quiet", unit]).returncode == 0
+
+
+def restart_all():
+    subprocess.run(["systemctl", "restart", *UNITS], check=False)
+    time.sleep(60)
+    return all(active(unit) for unit in UNITS)
+
+
+def main():
+    release = json.loads(fetch(f"https://api.github.com/repos/{REPOSITORY}/releases/latest",
+                               "application/vnd.github+json"))
+    tag = release.get("tag_name", "")
+    version = tag[1:] if tag.startswith("v") else tag
+    asset = next((item for item in release.get("assets", []) if item.get("name") == ASSET), None)
+    if not asset or not str(asset.get("digest", "")).startswith("sha256:"):
+        log(f"{tag}: no {ASSET} with a digest; nothing done")
+        return 0
+    current = running_version()
+    if current == version:
+        return 0
+    log(f"{tag} is out; the servers run {current or 'an unknown version'}")
+    count = players()
+    if count != 0:
+        log(f"the servers have players ({count}); trying again later")
+        return 0
+    time.sleep(60)
+    count = players()
+    if count != 0:
+        log(f"the servers have players ({count}); trying again later")
+        return 0
+
+    work = tempfile.mkdtemp(prefix="halo-update-")
+    try:
+        zip_path = os.path.join(work, ASSET)
+        data = fetch(asset["browser_download_url"])
+        digest = hashlib.sha256(data).hexdigest()
+        if digest != asset["digest"].split(":", 1)[1]:
+            log(f"{ASSET}'s SHA-256 is {digest}, not GitHub's {asset['digest']}: not installed")
+            return 1
+        with open(zip_path, "wb") as file:
+            file.write(data)
+        with zipfile.ZipFile(zip_path) as archive:
+            names = [name for name in archive.namelist() if name.endswith("/chupathingyce-server") or
+                     name == "chupathingyce-server"]
+            if not names:
+                log(f"{ASSET} has no chupathingyce-server: not installed")
+                return 1
+            archive.extract(names[0], work)
+        new = os.path.join(work, names[0])
+        os.chmod(new, 0o755)
+        check = subprocess.run([new, "--version"], capture_output=True, text=True, timeout=60, cwd=work)
+        if version not in check.stdout:
+            log(f"the new program says {check.stdout.strip()[:200]!r}, not {version}: not installed")
+            return 1
+        stat = os.stat(PROGRAM)
+        shutil.copy2(PROGRAM, PROGRAM + ".previous")
+        shutil.copy2(new, PROGRAM + ".new")
+        os.chown(PROGRAM + ".new", stat.st_uid, stat.st_gid)
+        os.replace(PROGRAM + ".new", PROGRAM)
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+    if restart_all():
+        log(f"both servers run {running_version()} ({tag})")
+        return 0
+    log(f"a server did not come back on {tag}: the previous program put back")
+    shutil.copy2(PROGRAM + ".previous", PROGRAM + ".new")
+    os.chown(PROGRAM + ".new", stat.st_uid, stat.st_gid)
+    os.replace(PROGRAM + ".new", PROGRAM)
+    log("both servers back on the previous program" if restart_all() else "a server is still down: look at it")
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

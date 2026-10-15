@@ -1,0 +1,39 @@
+#!/bin/sh
+# Sends FractumSeraph's Halo VPS's settings and server data to the seedbox
+# every night (server/deploy/halo-backup; installed as
+# /usr/local/sbin/halo-backup, run by halo-backup.timer): one .tar.gz on
+# standard input to chronos, whose authorized_keys lets this key run
+# halo-backup-receive and nothing else (it keeps the newest 14, readable by
+# that account alone). Not encrypted: the seedbox account is trusted.
+#
+# Kept: both servers' env files, admin settings, playlists, control panel
+# accounts and audit log, Delta Control links, lasting invite keys and game
+# state; the shared ban list; the web kit's config; Caddy, Mosquitto,
+# opentracker and the systemd units and scripts; the newest Umami database
+# dump. Not kept: maps, programs, logs, saves other than the invite keys
+# (all of them downloaded or made again).
+set -eu
+umask 077
+KEY=/root/.ssh/halo_backup
+TARGET=fractum@chronos.feralhosting.com
+
+list=$(mktemp)
+trap 'rm -f "$list"' EXIT
+for server in /opt/halo-dedicated /opt/halo-fractumslayer; do
+    for item in dedicated.env data/admin data/playlists data/control_accounts.txt \
+                data/control_credentials.txt data/control_audit.log data/delta_link.key \
+                data/gamestate.txt data/saves/lasting_invite.key; do
+        [ -e "$server/$item" ] && echo "$server/$item"
+    done
+done >> "$list"
+for item in /opt/halo-bans /opt/halo/config.json /etc/caddy /etc/mosquitto /etc/opentracker \
+            /etc/cron.daily/umami-backup /opt/umami/docker-compose.yml /opt/umami/.env; do
+    [ -e "$item" ] && echo "$item"
+done >> "$list"
+ls -d /etc/systemd/system/halo* /etc/systemd/system/crowdsec-ssh-only* /etc/systemd/system/crowdsec-firewall-bouncer.service.d /usr/local/sbin/halo-* \
+   /usr/local/sbin/crowdsec-ssh-only.sh 2>/dev/null >> "$list" || true
+dump=$(ls -1t /opt/umami/backups/* 2>/dev/null | head -1 || true)
+[ -n "$dump" ] && echo "$dump" >> "$list"
+
+tar -czf - --ignore-failed-read -T "$list" 2>/dev/null |
+    ssh -T -i "$KEY" -o BatchMode=yes -o ConnectTimeout=60 "$TARGET"

@@ -4,3 +4,6 @@
 port/android/gradlew text eol=lf
 # (run directly on Linux: a CRLF shebang line does not start)
 server/deploy/halo-bans-publish text eol=lf
+server/deploy/halo-gameservers-update text eol=lf
+server/deploy/halo-backup text eol=lf
+server/deploy/halo-backup-receive text eol=lf
