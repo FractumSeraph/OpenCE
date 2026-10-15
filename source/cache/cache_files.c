@@ -1236,6 +1236,7 @@ boolean cache_files_map_present(
 	wchar_t error_text[512];
 	char file[64];
 	char message[512];
+	char why[384];
 	short family;
 	short index;
 
@@ -1259,6 +1260,13 @@ boolean cache_files_map_present(
 				"The map %.63s is a %s map, and Halo PC maps are turned off (game.custom_edition in config.toml).",
 				file, map_family_badge(family));
 		}
+		/* port: none played without their tag cache, which the platform
+		layer could not map at start-up (platform.h): said why, before the
+		map is looked for or asked of the host (it would not load) */
+		else if (!map_families_playable(why, sizeof(why)))
+		{
+			snprintf(message, sizeof(message), "The map %.63s is a %s map. %s", file, map_family_badge(family), why);
+		}
 		/* port: the host's version of it, when the host says which: this
 		machine's own file, or another version's beside it, or for a name with
 		its hash (OpenCE's map sharing's, custom_maps\<name>_<hash>) the base
@@ -1269,7 +1277,14 @@ boolean cache_files_map_present(
 			custom_edition_map_present(map_name, version, message, sizeof(message)) :
 			map_family_find_version(family, file, version, path, sizeof(path)))
 		{
-			return TRUE;
+			/* port: the map here, but refused by the port's checks
+			(cache_files_windows.c): said why, and whether its file is the one
+			it should be (damaged since it was downloaded, or the map itself),
+			in the main menu's error, rather than the damaged disc error that
+			precaching it gives */
+			if (!cache_files_ce_map_refused(map_name, why, sizeof(why)))
+				return TRUE;
+			snprintf(message, sizeof(message), "The host's map %.63s cannot be played: %s.", file, why);
 		}
 		else if (family != _map_family_custom_edition && map_family_find(family, file, path, sizeof(path)))
 		{

@@ -1018,13 +1018,49 @@ void ui_map_list_refresh(
 	ui_campaign_list_count = 0;
 	for (index = 0; index < XBOX_MAP_COUNT; index++)
 		add_entry(xbox_maps[index], L"", L"", L"", index, index);
+	/* (none of them would load without their tag cache, which the platform
+	layer could not map: port/linux/src/xbox_memory.c. The player told why
+	once, in the menus' error, when there are maps that are not listed for
+	it; the list is the Xbox's maps alone) */
+	{
+		static boolean told;
+		char why[384];
+
+		if (!map_families_playable(why, sizeof(why)) && !told)
+		{
+			void display_error_text_deferred(wchar_t const *text, short local_player_index);
+			static wchar_t text[512];
+			char message[512];
+			long unlisted = 0;
+			long character;
+
+			for (family = _map_family_custom_edition; family < NUMBER_OF_MAP_FAMILIES; family++)
+			{
+				found.count = 0;
+				map_family_list(family, file_found, &found);
+				unlisted += found.count;
+				found.count = 0;
+				map_family_list_campaigns(family, file_found, &found);
+				unlisted += found.count;
+			}
+			if (unlisted)
+			{
+				told = TRUE;
+				error(_error_silent, "the menus' map list: %ld Halo PC maps not listed: %s", unlisted, why);
+				snprintf(message, sizeof(message), "%ld Halo PC map%s not listed. %s", unlisted,
+					unlisted == 1 ? " is" : "s are", why);
+				for (character = 0; message[character] && character < NUMBEROF(text) - 1; character++)
+					text[character] = (wchar_t)(unsigned char)message[character];
+				text[character] = 0;
+				display_error_text_deferred(text, NONE);
+			}
+		}
+	}
 	for (family = _map_family_custom_edition; family < NUMBER_OF_MAP_FAMILIES; family++)
 	{
 		extern int platform_ce_tag_cache_ready;
 		long file;
 
-		/* (none of them would load without their tag cache, which the
-		platform layer could not map: port/linux/src/xbox_memory.c) */
 		if (!platform_ce_tag_cache_ready)
 			break;
 		found.count = 0;

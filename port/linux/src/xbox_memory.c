@@ -48,13 +48,12 @@ protection is only remembered. Custom Edition maps do not run there.
 #ifdef HALO_BROWSER
 #include <emscripten/heap.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #else
 #include <errno.h>
-#ifdef HALO_ANDROID
 #include <stdio.h>
-#endif
 #include <string.h>
 #include <sys/mman.h>
 #include <unistd.h>
@@ -81,6 +80,7 @@ static BOOL arena_reserved = FALSE;
 static pthread_mutex_t arena_lock = PTHREAD_MUTEX_INITIALIZER;
 #ifdef HALO_CUSTOM_EDITION
 int platform_ce_tag_cache_ready = FALSE;
+char platform_ce_tag_cache_error[160];
 #endif
 #ifdef HALO_64BIT
 
@@ -137,10 +137,16 @@ static void contiguous_arena_reserve(void)
 		below = malloc(start - brk - 0x200000);
 	brk = (uintptr_t)sbrk(0);
 	if (brk <= start && sbrk((intptr_t)(end - brk)) != (void *)-1)
+	{
 		platform_ce_tag_cache_ready = TRUE;
+	}
 	else
+	{
+		snprintf(platform_ce_tag_cache_error, sizeof(platform_ce_tag_cache_error),
+			"the heap is at %p already, over the cache at %p", (void *)brk, (void *)start);
 		platform_log("cannot keep Custom Edition maps' tag cache at %p free (the heap is at %p): they will not load",
 			(void *)start, (void *)brk);
+	}
 	free(below);
 #else
 	(void)start;
@@ -248,10 +254,18 @@ static void contiguous_arena_reserve(void)
 		MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE | MAP_FIXED_NOREPLACE, -1, 0);
 	if (result != (void *)PLATFORM_CE_TAG_CACHE_BASE)
 	{
+		/* (EEXIST: something is mapped there already; on Android, the
+		Java runtime's heap on a device whose heap is very large:
+		port/android/host/host_memory.c) */
+		int error = result == MAP_FAILED ? errno : EEXIST;
+
 		if (result != MAP_FAILED)
 			munmap(result, PLATFORM_CE_TAG_CACHE_SIZE);
+		snprintf(platform_ce_tag_cache_error, sizeof(platform_ce_tag_cache_error),
+			"the memory at %p to %p could not be reserved (%s)", (void *)PLATFORM_CE_TAG_CACHE_BASE,
+			(void *)(PLATFORM_CE_TAG_CACHE_BASE + PLATFORM_CE_TAG_CACHE_SIZE), strerror(error));
 		platform_log("cannot reserve Custom Edition maps' tag cache at %p (%s): they will not load",
-			(void *)PLATFORM_CE_TAG_CACHE_BASE, strerror(errno));
+			(void *)PLATFORM_CE_TAG_CACHE_BASE, strerror(error));
 	}
 	else
 	{
@@ -272,6 +286,8 @@ static void contiguous_arena_reserve(void)
 	if (mmap(xbox_pointer(PLATFORM_CE_TAG_CACHE_BASE), PLATFORM_CE_TAG_CACHE_SIZE, PROT_READ | PROT_WRITE,
 		MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE | MAP_FIXED, -1, 0) != xbox_pointer(PLATFORM_CE_TAG_CACHE_BASE))
 	{
+		snprintf(platform_ce_tag_cache_error, sizeof(platform_ce_tag_cache_error),
+			"the memory for it could not be committed (%s)", strerror(errno));
 		platform_log("cannot commit Custom Edition maps' tag cache (%s)", strerror(errno));
 	}
 	else

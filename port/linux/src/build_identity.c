@@ -147,12 +147,23 @@ const char *build_identity_architecture(void)
 void build_identity_log(void)
 {
 	static int logged;
-	char network[256], table[32], following[64], path[1024];
+	char network[256], table[32], following[64], tag_cache[256], path[1024];
 	FILE *file;
 
 	if (logged)
 		return;
 	logged = 1;
+	tag_cache[0] = 0;
+#ifdef HALO_CUSTOM_EDITION
+	/* (Halo PC maps' tag cache not mapped: why, as the player is told, so
+	that the log alone says why none of them is listed or played) */
+	if (!platform_ce_tag_cache_ready)
+	{
+		snprintf(tag_cache, sizeof(tag_cache),
+			"Custom Edition maps' tag cache not mapped (%s): Halo PC maps are not listed or played",
+			platform_ce_tag_cache_error[0] ? platform_ce_tag_cache_error : "no reason recorded");
+	}
+#endif
 	if (delta_legacy_override())
 		snprintf(table, sizeof(table), "override");
 	else if (delta_legacy_serial())
@@ -173,10 +184,14 @@ void build_identity_log(void)
 #ifndef HALO_64BIT
 		fprintf(file, PLATFORM_LOG_PREFIX "%s\n" PLATFORM_LOG_PREFIX "%s\n" PLATFORM_LOG_PREFIX "%s\n", build_identity(),
 			network, following);
+		if (tag_cache[0])
+			fprintf(file, PLATFORM_LOG_PREFIX "%s\n", tag_cache);
 #endif
 		fclose(file);
 	}
 	platform_log("%s", build_identity());
 	platform_log("%s", network);
 	platform_log("%s", following);
+	if (tag_cache[0])
+		platform_log("%s", tag_cache);
 }

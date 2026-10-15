@@ -441,8 +441,11 @@ the Xbox maps in `maps/` and the Halo PC maps in `maps_ce`, `maps_md` or
 On Android, two limits apply. The maps need a fixed 23 MB of the app's
 memory, which Android's Java runtime takes on some devices with a very large
 Java heap (more than about 700 MB, such as some gaming handhelds). There
-the Halo PC maps are not listed, and the log says `cannot reserve Custom
-Edition maps' tag cache`. And the phone's texture cache is smaller than a
+the Halo PC maps are not listed: the game says so once, when it first
+lists its maps, and when a game on a Halo PC map is joined; the header of
+`debug.txt` says `Custom Edition maps' tag cache not mapped`, and the
+Android log `cannot reserve Custom Edition maps' tag cache`. And the
+phone's texture cache is smaller than a
 computer's, so on the heaviest maps (Foundation) some surfaces can show the
 wrong textures in their busiest views. See [port/android/README.md](port/android/README.md).
 

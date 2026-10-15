@@ -66,6 +66,9 @@ rest of a map's tags as it reads the Xbox's maps, trusting them.
 #include "errors.h"
 #include "main/console.h"
 #include "ce_map_checks.h"
+#include "halo_map_families.h"
+#include "../src/map_archive.h"
+#include "../src/map_file_hash.h"
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -790,6 +793,72 @@ void *ce_tags_pointer(
 /* a Custom Edition map, its header read and verified (cache_files_windows.c),
 checked as above before it is opened: FALSE, with the reason logged and shown,
 if it is refused */
+char const *ce_map_refusal(
+	void)
+{
+	return ce_refusal;
+}
+
+void ce_map_refused_verify(
+	char const *map_name,
+	char const *path,
+	unsigned long header_checksum,
+	char *verdict,
+	long size)
+{
+	char file[64], base[64];
+	unsigned int expected = 0;
+	unsigned int prefix = 0;
+	unsigned int hash_version = 0;
+	unsigned long version;
+	short family = map_family_parse(map_name, file, sizeof(file));
+	char const *kind = map_family_kind(family);
+
+	if (!map_file_hash_prefix(path, &prefix))
+	{
+		snprintf(verdict, (size_t)size, "its file %s could not be read whole to check it", path);
+	}
+	/* (a hashed name, <base>_<8 hex digits>: the file is the map of that
+	hash, to the byte, or it is not that map) */
+	else if (map_archive_hashed_name(file, base, sizeof(base), &expected))
+	{
+		if (prefix == expected)
+		{
+			snprintf(verdict, (size_t)size, "its file is intact (its hash begins %08x, as its name says): the map itself is refused",
+				prefix);
+		}
+		else
+		{
+			snprintf(verdict, (size_t)size, "its file is not the map its name says (its hash begins %08x, the name's %08x): "
+				"it is damaged, or another version. Delete %s, and the next join downloads it again", prefix, expected, path);
+		}
+	}
+	/* (the host's version of it: its whole-file hash's first digits, or an
+	older host's header checksum: map_archive_version_matches) */
+	else if ((version = map_family_game_version(map_name)) != 0)
+	{
+		map_file_hash_version(path, &hash_version);
+		if (map_archive_version_matches((unsigned int)version, (unsigned int)header_checksum, hash_version))
+		{
+			snprintf(verdict, (size_t)size, "its file is intact (its hash begins %08x; it is the host's version %08x): "
+				"the map itself is refused", prefix, (unsigned int)version);
+		}
+		else
+		{
+			snprintf(verdict, (size_t)size, "its file is not the host's map (its hash begins %08x, the host's version is %08x): "
+				"it is damaged, or another version. Delete %s, and the next join downloads it again", prefix,
+				(unsigned int)version, path);
+		}
+	}
+	else
+	{
+		snprintf(verdict, (size_t)size, "its file's hash begins %08x (nothing to check it against: no hashed name, and no "
+			"host naming its version)", prefix);
+	}
+	error(_error_silent, "%s map %s: %s", kind, map_name, verdict);
+	console_warning("%s map %s: %s", kind, map_name, verdict);
+}
+
 boolean ce_map_check(
 	HANDLE file,
 	char const *map_name,

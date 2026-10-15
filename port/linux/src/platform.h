@@ -201,6 +201,9 @@ once it is mapped: a Custom Edition map is not opened without it
 #define PLATFORM_CE_TAG_CACHE_SIZE 0x01700000U
 #ifdef HALO_CUSTOM_EDITION
 extern int platform_ce_tag_cache_ready;
+/* why it is not mapped, when it is not (empty once it is): the player is
+told, and debug.txt (build_identity.c) */
+extern char platform_ce_tag_cache_error[160];
 #endif
 
 /* the host's page size, which protection works in (4 KB or more) */
