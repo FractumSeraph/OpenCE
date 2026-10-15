@@ -3,7 +3,7 @@
 # installed as /usr/local/sbin/halo-alerts, run by halo-alerts.service):
 #
 #   - a suspect: the fair play checks' "fair play: suspect" log line
-#     (port/linux/game/network_fairplay.c) on FractumSnap or FractumSlayer,
+#     (port/linux/game/network_fairplay.c) on FractumFFA or FractumSlayer,
 #     with the player's name, why, and the game's recording (network.record_games);
 #   - a game server that crashed (systemd: its process dumped core or was
 #     killed by a signal), which systemd starts again within seconds, too
@@ -29,10 +29,10 @@ import urllib.request
 
 WEBHOOK_FILE = "/etc/halo-alerts/webhook"
 NAME = "Halo servers"
-PANELS = {"FractumSnap": "https://halovps.fractumseraph.net:8443/", "FractumSlayer": "https://halovps.fractumseraph.net:8444/"}
+PANELS = {"FractumFFA": "https://halovps.fractumseraph.net:8443/", "FractumSlayer": "https://halovps.fractumseraph.net:8444/"}
 # the game servers: their units, names on the game list, and data folders
 SERVERS = {
-    "halo-dedicated": ("FractumSnap", "/opt/halo-dedicated/data"),
+    "halo-dedicated": ("FractumFFA", "/opt/halo-dedicated/data"),
     "halo-fractumslayer": ("FractumSlayer", "/opt/halo-fractumslayer/data"),
 }
 # what must be running, and what must not have failed (oneshots run by timers)

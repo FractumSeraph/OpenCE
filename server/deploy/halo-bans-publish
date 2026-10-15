@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Publishes FractumSeraph's servers' shared ban list (server/deploy/halo-bans-publish; installed as
 # /usr/local/sbin/halo-bans-publish, run every 2 minutes by
-# halo-bans-publish.timer): the bans of /opt/halo-bans/bans.txt (FractumSnap's
+# halo-bans-publish.timer): the bans of /opt/halo-bans/bans.txt (FractumFFA's
 # and FractumSlayer's, which both servers' data/bans.txt link to) that are
 # still on and have a hardware id, WITHOUT their IP addresses or Discord users
 # (personal data), to /srv/halo-bans/shared.txt, which Caddy serves at
@@ -46,7 +46,7 @@ except FileNotFoundError:
 os.makedirs(os.path.dirname(TARGET), exist_ok=True)
 temporary = TARGET + ".new"
 with open(temporary, "w", encoding="utf-8") as target:
-    target.write("# FractumSeraph's Halo servers' shared ban list (FractumSnap, FractumSlayer).\n"
+    target.write("# FractumSeraph's Halo servers' shared ban list (FractumFFA, FractumSlayer).\n"
                  "# A line a ban, as bans.txt has them: hardware ids, no IP addresses.\n"
                  "# Hosts of github.com/FractumSeraph/OpenCE take it with\n"
                  "# network.shared_bans = \"https://halovps.fractumseraph.net/bans/shared.txt\".\n")

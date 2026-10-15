@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Keeps FractumSeraph's dedicated servers (FractumSnap: halo-dedicated, and
+# Keeps FractumSeraph's dedicated servers (FractumFFA: halo-dedicated, and
 # FractumSlayer: halo-fractumslayer, one program in /opt/halo-dedicated/bin)
 # on the fork's latest release (server/deploy/halo-gameservers-update;
 # installed as /usr/local/sbin/halo-gameservers-update, run every 30 minutes
@@ -32,7 +32,7 @@ ASSET = "chupathingyce-server-linux-x64.zip"
 BIN = "/opt/halo-dedicated/bin"
 PROGRAM = os.path.join(BIN, "chupathingyce-server")
 UNITS = ["halo-dedicated", "halo-fractumslayer"]
-SERVERS = ["FractumSnap", "FractumSlayer"]
+SERVERS = ["FractumFFA", "FractumSlayer"]
 GAME_LIST = "https://halo.milenko.org/v1/games"
 
 
