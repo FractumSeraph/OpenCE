@@ -55,9 +55,9 @@ Your own builds all have the same signature (the debug key of WSL,
 (`adb install -r`).
 
 To keep the saved games before you remove the app, enter
-`adb pull /sdcard/Android/data/dev.horrible.chupathingyce/files/save/u` (the profiles).
+`adb pull /sdcard/Android/data/net.fractumseraph.halo/files/save/u` (the profiles).
 After the new install, before the first start of the app, enter
-`adb push u /sdcard/Android/data/dev.horrible.chupathingyce/files/save/u`. The app reads
+`adb push u /sdcard/Android/data/net.fractumseraph.halo/files/save/u`. The app reads
 and overwrites what adb pushes. adb cannot add files to `save/u` or `save/z` once the app made them, or
 change files that the app wrote, so push before the first start. adb cannot read
 some files that the app writes (the `blam.lst` files of `save/z`), so `adb pull`
@@ -73,8 +73,9 @@ of the whole `save` folder stops there.
 
 `ninja android` builds only the game image and the native libraries.
 
-The app is `dev.horrible.chupathingyce`, and its name on the device is
-ChupathingyCE. Refer to "App ID, signing and versions".
+The app is `net.fractumseraph.halo` in this fork (ChupathingyCE's is
+`dev.horrible.chupathingyce`), and its name on the device is Halo FS.
+Refer to "App ID, signing and versions".
 
 ## The native 64-bit build (experimental)
 
@@ -91,7 +92,7 @@ shared with the usual build.
 `port/android/app/build-native64/outputs/apk/debug/app-debug.apk`. It is
 the same Gradle module built with `-Pnative64`, so the two builds' APKs
 sit side by side. It is the same app: the same ID
-(`dev.horrible.chupathingyce`), name, key and version code. Either build
+(`net.fractumseraph.halo` in this fork), name, key and version code. Either build
 installs over the other and keeps the data folder and the saves. Its
 updates come from the release asset `chupathingyce-android64-<config>.zip`,
 the usual build's from `chupathingyce-android-<config>.zip` (refer to
@@ -123,7 +124,7 @@ The game needs the `maps/` folder of the game. The app downloads it from
 this fork's site (https://halo.fractumseraph.net/assets/maps/, about 1.8 GB),
 or extracts it from an Xbox disc image (`.xiso` or `.iso`) of any version of
 the game. The app keeps the data in
-`/sdcard/Android/data/dev.horrible.chupathingyce/files`.
+`/sdcard/Android/data/net.fractumseraph.halo/files`.
 
 To download the data: start the app and push **Download the maps**. The game
 starts when the download is done; a download stopped part way goes on from
@@ -142,9 +143,9 @@ To install the data from a disc image:
 To install the data from a computer:
 
 1. Start the app one time. The app makes its folders.
-2. Enter `adb push <folder>/. /sdcard/Android/data/dev.horrible.chupathingyce/files/`.
+2. Enter `adb push <folder>/. /sdcard/Android/data/net.fractumseraph.halo/files/`.
 
-| Item | Location in `/sdcard/Android/data/dev.horrible.chupathingyce/files` |
+| Item | Location in `/sdcard/Android/data/net.fractumseraph.halo/files` |
 | --- | --- |
 | Saved games (`z:\` and `u:\`) | `save` |
 | Halo PC (Custom Edition) maps, with `bitmaps.map`, `sounds.map` and `loc.map` | `maps_ce` |
@@ -154,7 +155,7 @@ To install the data from a computer:
 | Settings | `config.toml` |
 
 To make a copy of the saved games, enter
-`adb pull /sdcard/Android/data/dev.horrible.chupathingyce/files/save`.
+`adb pull /sdcard/Android/data/net.fractumseraph.halo/files/save`.
 
 The app plays Halo PC (Custom Edition, HaloMD and retail) maps as the other
 builds do: refer to "Halo PC maps" in the main
@@ -176,7 +177,7 @@ archive). This is the way in on recent Android versions, where file
 managers cannot open the app's folder.
 
 Or copy the files from a computer, for example
-`adb push <folder>/. /sdcard/Android/data/dev.horrible.chupathingyce/files/maps_ce/`.
+`adb push <folder>/. /sdcard/Android/data/net.fractumseraph.halo/files/maps_ce/`.
 The older `maps/ce` and `md_maps` of earlier versions are moved into
 `maps_ce` and `maps_md` when the game starts (unless
 `game.move_old_map_folders` is `"no"`).
@@ -296,9 +297,9 @@ Removing the app's data or the app removes the layout.
 The settings are in `config.toml` in the data folder of the app. To change
 them:
 
-1. Enter `adb pull /sdcard/Android/data/dev.horrible.chupathingyce/files/config.toml`.
+1. Enter `adb pull /sdcard/Android/data/net.fractumseraph.halo/files/config.toml`.
 2. Change the file.
-3. Enter `adb push config.toml /sdcard/Android/data/dev.horrible.chupathingyce/files/`.
+3. Enter `adb push config.toml /sdcard/Android/data/net.fractumseraph.halo/files/`.
 
 At the first start, the game writes the file with the default values. To
 get the default values again, delete the file.
@@ -362,7 +363,8 @@ copy of `maps/` and `save/`.
 
 ### App ID
 
-The app ID is `dev.horrible.chupathingyce`. Release 0.6.2b and the builds
+ChupathingyCE's app ID is `dev.horrible.chupathingyce` (this fork's:
+`net.fractumseraph.halo`, under "Signing"). Release 0.6.2b and the builds
 before it were `com.halo.decomp`, the app ID of upstream. Android sees the two as
 different apps: the new app does not install over the old app, and it does
 not see the data of the old app. To move to the new app:

@@ -68,8 +68,7 @@ play together.
 
 **The game for Windows, Mac, Linux and Android**, this fork's builds of the
 latest `main` (each push that builds on every platform is a release,
-`v<version>-fs.<run>` (the run's number in five digits, as `v0.7.1e-fs.00057`); the game updates itself from these releases, except
-the Android app: see below the table). At the
+`v<version>-fs.<run>` (the run's number in five digits, as `v0.7.1e-fs.00057`); the game updates itself from these releases). At the
 first start it offers to download the game's maps (see
 [Game data](#game-data)), and it downloads Custom Edition maps as a game
 needs them ([docs/map_torrents.md](docs/map_torrents.md)):
@@ -81,20 +80,23 @@ needs them ([docs/map_torrents.md](docs/map_torrents.md)):
 | Linux (64-bit) | [chupathingyce-linux64-release.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-linux64-release.zip) | [chupathingyce-linux64-debug.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-linux64-debug.zip) |
 | Linux (32-bit) | [chupathingyce-linux-release.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-linux-release.zip) | [chupathingyce-linux-debug.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-linux-debug.zip) |
 | Mac | [chupathingyce-macos-release.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-macos-release.zip) | [chupathingyce-macos-debug.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-macos-debug.zip) |
-| Android | [chupathingyce-android-release.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-android-release.zip) | [chupathingyce-android-debug.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-android-debug.zip) |
+| Android | [halo-fs-android.apk](https://github.com/FractumSeraph/OpenCE/releases/latest/download/halo-fs-android.apk) (or [chupathingyce-android-release.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-android-release.zip)) | [chupathingyce-android-debug.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-android-debug.zip) |
 | Dedicated server (Linux x64) | [chupathingyce-server-linux-x64.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-server-linux-x64.zip) | |
 | Dedicated server (Linux arm64) | [chupathingyce-server-linux-arm64.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-server-linux-arm64.zip) | |
 | Dedicated server (Linux x86) | [chupathingyce-server-linux-x86.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-server-linux-x86.zip) | |
 
-**The Android app of these releases is unsigned.** Android does not install
-an unsigned app: sign the APK in `chupathingyce-android-release.zip` with
-your own key (`apksigner`) before you install it. (The debug zip's APK is
-signed with the build machine's own debug key, which can differ from one
-build to the next, and then does not install over an earlier one.) For the
-same reason the Android app does not update itself from this fork's
-releases: that needs the release job to sign the app, with a signing key
-stored as the repository's secrets, which it does not do yet.
-ChupathingyCE's own releases are signed.
+**The Android app** is "Halo FS" (`net.fractumseraph.halo`, beside
+ChupathingyCE's app rather than over it), signed with this fork's key, whose
+certificate's SHA-256 fingerprint is
+`79:2A:A0:CD:51:3B:A0:22:0A:4E:0E:AD:65:08:33:A8:39:74:79:15:69:FA:49:57:9C:92:47:96:48:A8:85:99`;
+each release installs over the one before, and the app updates itself. Its
+download page, with how to install it, is
+https://halo.fractumseraph.net/assets/android/index.html
+(`port/web/assets/android/index.html`). Each release has the app bare as
+`halo-fs-android.apk`, and the native 64-bit build (experimental) as
+`halo-fs-android64.apk`. The debug zip's APK is signed with the build
+machine's own debug key, which can differ from one build to the next, and
+then does not install over an earlier one.
 
 **The browser version, to host it yourself** (no game data included):
 

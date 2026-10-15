@@ -1053,13 +1053,21 @@ jobs:
             fi
             (cd "$dir" && zip -qry "$GITHUB_WORKSPACE/release/$zipname.zip" .)
           done
+          # (the release apps bare as well, signed with the fork's key, at
+          # names that stay the same, for a phone to install from a link:
+          # releases/latest/download/halo-fs-android.apk is always the newest;
+          # halo.fractumseraph.net/android.html links them)
+          for build in android android64; do
+            apk=$(find "artifacts/chupathingyce-$build-release-unsigned" -name '*.apk' | head -n 1)
+            if [ -n "$apk" ]; then cp "$apk" "release/halo-fs-$build.apk"; fi
+          done
           ls -l release
           {
             echo "Built from $GITHUB_SHA on $GITHUB_REF_NAME (version $version)."
             echo
             echo "The release builds are for playing; the debug builds stop at the first failed assertion."
           } > notes.txt
-          gh release create "v$version" release/*.zip --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+          gh release create "v$version" release/*.zip release/*.apk --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
             --title "$version" --notes-file notes.txt --latest
           # (the newest five of these kept)
           gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName,createdAt \
