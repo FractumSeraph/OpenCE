@@ -7,3 +7,4 @@ server/deploy/halo-bans-publish text eol=lf
 server/deploy/halo-gameservers-update text eol=lf
 server/deploy/halo-backup text eol=lf
 server/deploy/halo-backup-receive text eol=lf
+server/deploy/halo-alerts text eol=lf

@@ -1,0 +1,17 @@
+[Unit]
+Description=Discord alerts for the Halo VPS: fair play suspects, and anything down (halo-alerts)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+ExecStart=/usr/local/sbin/halo-alerts
+Restart=always
+RestartSec=30
+# (it reads the journal, asks systemd and the web, and writes nothing)
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

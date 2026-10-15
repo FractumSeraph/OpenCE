@@ -352,6 +352,40 @@ def test_web_session_lifecycle(harness):
     assert sum(harness.token in line for line in harness.lines) == 1
 
 
+def test_recordings(harness, tmp_path):
+    """(this fork) The games recorded (network.record_games): listed newest
+    first, one saved whole with a session (and audited), nothing else of the
+    folder or beside it, and nothing without a session."""
+    folder = tmp_path / "recordings"
+    folder.mkdir()
+    data = b"HREC" + bytes(range(256)) * 1200
+    (folder / "2026-10-15_06-08-31_bloodgulch.hrec").write_bytes(data)
+    (folder / "2026-10-15_07-00-00_sneak.hrec").write_bytes(b"HREC")
+    (folder / "notes.txt").write_text("not a recording")
+    (tmp_path / "secret.hrec").write_bytes(b"outside the folder")
+    assert http(harness, "GET", "/v1/recordings").status == 401
+    assert http(harness, "GET", "/v1/recordings/2026-10-15_06-08-31_bloodgulch.hrec").status == 401
+    jar = {"Cookie": f"chce_session={login(harness).session}"}
+    listing = http(harness, "GET", "/v1/recordings", jar)
+    assert listing.status == 200, listing.body
+    entries = listing.json()["recordings"]
+    assert [entry["name"] for entry in entries] == ["2026-10-15_07-00-00_sneak.hrec", "2026-10-15_06-08-31_bloodgulch.hrec"]
+    assert entries[1]["bytes"] == len(data) and listing.json()["count"] == 2
+    one = http(harness, "GET", "/v1/recordings/2026-10-15_06-08-31_bloodgulch.hrec", jar)
+    assert one.status == 200 and one.body == data
+    assert one.headers["content-type"] == "application/octet-stream"
+    assert 'filename="2026-10-15_06-08-31_bloodgulch.hrec"' in one.headers["content-disposition"]
+    # (who took it, in the audit file)
+    audit = tmp_path / "control_audit.log"
+    for _ in range(100):
+        if audit.exists() and "2026-10-15_06-08-31_bloodgulch.hrec" in audit.read_text():
+            break
+        time.sleep(0.05)
+    assert "2026-10-15_06-08-31_bloodgulch.hrec" in audit.read_text()
+    for name in ("../secret.hrec", "..%2Fsecret.hrec", "notes.txt", "missing.hrec", ".hrec", "a/b.hrec"):
+        assert http(harness, "GET", "/v1/recordings/" + name, jar).status != 200, name
+
+
 def test_web_login_limits(harness):
     """Wrong logins count as wrong tokens: five, and the address is refused;
     a session already made still works."""

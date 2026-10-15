@@ -567,6 +567,38 @@
     $('suspects-last-count').textContent = String(last.count);
     suspectRows($('suspects-body'), now.players);
     suspectRows($('suspects-last-body'), last.players);
+    await loadRecordings();
+  }
+
+  // (this fork: the games recorded, network.record_games)
+  async function loadRecordings() {
+    const data = await api('/v1/recordings');
+    const body = $('recordings-body');
+    $('recordings-count').textContent = String(data.count);
+    body.replaceChildren();
+    if (!data.recordings.length) {
+      const row = element('tr');
+      const cell = element('td', 'No recordings (HALO_NET_RECORD_GAMES=true records every game)', 'empty');
+      cell.colSpan = 4;
+      row.append(cell);
+      body.append(row);
+      return;
+    }
+    data.recordings.slice(0, 100).forEach((entry) => {
+      const row = element('tr');
+      const save = element('td', null, 'actions');
+      const link = element('a', 'Save');
+      link.href = '/v1/recordings/' + encodeURIComponent(entry.name);
+      link.setAttribute('download', entry.name);
+      save.append(link);
+      row.append(
+        element('td', entry.name.replace(/\.hrec$/, '')),
+        element('td', (entry.bytes / 1048576).toFixed(1) + ' MB', 'num'),
+        element('td', new Date(entry.time * 1000).toLocaleString()),
+        save,
+      );
+      body.append(row);
+    });
   }
 
   // ---------- log

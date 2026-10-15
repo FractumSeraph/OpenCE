@@ -80,6 +80,12 @@ platform_log) are kept in a ring here, any public address in them hidden
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
+/* (this fork: the recordings folder listed, respond_recordings) */
+#ifdef _WIN32
+#include <io.h>
+#else
+#include <dirent.h>
+#endif
 
 /* a socket closed, the wake pipe read and written, standard input read: on
 Windows, Winsock's sockets and the console's thread (server/platform/win32) */
@@ -2286,6 +2292,185 @@ static void respond_audit(struct connection *connection)
 	respond_json(connection, 200, &body, NULL);
 }
 
+/* ---------- recordings (this fork: network.record_games, network_recording.c) */
+
+/* the folder in the data folder, and how many are listed, and how large one
+sent may be */
+#define RECORDINGS_FOLDER "recordings"
+#define MAXIMUM_LISTED_RECORDINGS 500
+#define MAXIMUM_RECORDING_BYTES (256L * 1024L * 1024L)
+
+struct recording_entry
+{
+	char name[96];
+	long long size;
+	long long time;
+};
+
+/* whether a name is a recording's own: letters, digits, '-', '_', '.' (no
+folder, no "..") and ".hrec" */
+static int recording_name_valid(const char *name)
+{
+	size_t length = strlen(name);
+	size_t index;
+
+	if (length < 6 || length >= sizeof(((struct recording_entry *)0)->name) || strcmp(name + length - 5, ".hrec") ||
+		name[0] == '.' || strstr(name, ".."))
+	{
+		return 0;
+	}
+	for (index = 0; index < length; index++)
+	{
+		char c = name[index];
+
+		if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_' ||
+			c == '.'))
+		{
+			return 0;
+		}
+	}
+	return 1;
+}
+
+static void recording_folder(char *path, size_t size)
+{
+	snprintf(path, size, "%s/%s", platform_data_root() && platform_data_root()[0] ? platform_data_root() : ".",
+		RECORDINGS_FOLDER);
+}
+
+static int recording_entry_newer(const void *a, const void *b)
+{
+	const struct recording_entry *first = (const struct recording_entry *)a;
+	const struct recording_entry *second = (const struct recording_entry *)b;
+
+	/* (their names begin with their time) */
+	return strcmp(second->name, first->name);
+}
+
+/* the folder's recordings, newest first: how many */
+static int list_recordings(struct recording_entry *entries, int maximum)
+{
+	char folder[1024];
+	int count = 0;
+
+	recording_folder(folder, sizeof(folder));
+#ifdef _WIN32
+	{
+		char pattern[1100];
+		struct _finddata_t found;
+		intptr_t find;
+
+		snprintf(pattern, sizeof(pattern), "%s/*.hrec", folder);
+		find = _findfirst(pattern, &found);
+		if (find != -1)
+		{
+			do
+			{
+				if (count < maximum && recording_name_valid(found.name))
+				{
+					snprintf(entries[count].name, sizeof(entries[count].name), "%s", found.name);
+					entries[count].size = (long long)found.size;
+					entries[count].time = (long long)found.time_write;
+					count++;
+				}
+			}
+			while (_findnext(find, &found) == 0);
+			_findclose(find);
+		}
+	}
+#else
+	{
+		DIR *directory = opendir(folder);
+		struct dirent *item;
+
+		while (directory && (item = readdir(directory)) != NULL)
+		{
+			char path[1200];
+			struct stat status;
+
+			if (count >= maximum || !recording_name_valid(item->d_name))
+				continue;
+			snprintf(path, sizeof(path), "%s/%s", folder, item->d_name);
+			if (stat(path, &status) || !S_ISREG(status.st_mode))
+				continue;
+			snprintf(entries[count].name, sizeof(entries[count].name), "%s", item->d_name);
+			entries[count].size = (long long)status.st_size;
+			entries[count].time = (long long)status.st_mtime;
+			count++;
+		}
+		if (directory)
+			closedir(directory);
+	}
+#endif
+	qsort(entries, (size_t)count, sizeof(*entries), recording_entry_newer);
+	return count;
+}
+
+/* the recordings, as JSON: name, bytes, when last written */
+static void respond_recordings(struct connection *connection)
+{
+	static struct recording_entry entries[MAXIMUM_LISTED_RECORDINGS];
+	struct json_body body;
+	int count = list_recordings(entries, MAXIMUM_LISTED_RECORDINGS);
+	int index;
+
+	json_begin(&body);
+	json_printf(&body, "{\"recordings\": [");
+	for (index = 0; index < count; index++)
+	{
+		json_printf(&body, "%s{\"name\": ", index ? ", " : "");
+		json_string(&body, entries[index].name);
+		json_printf(&body, ", \"bytes\": %lld, \"time\": %lld}", entries[index].size, entries[index].time);
+	}
+	json_printf(&body, "], \"count\": %d}", count);
+	respond_json(connection, 200, &body, NULL);
+}
+
+/* a recording, whole, to save (in the audit file: who took which) */
+static void respond_recording(struct connection *connection, const struct auth *auth, const char *name)
+{
+	char folder[1024];
+	char path[1200];
+	char headers[256];
+	FILE *file;
+	long size;
+	char *data;
+
+	if (!recording_name_valid(name))
+	{
+		respond_error(connection, 404, "no such recording", NULL);
+		return;
+	}
+	recording_folder(folder, sizeof(folder));
+	snprintf(path, sizeof(path), "%s/%s", folder, name);
+	file = fopen(path, "rb");
+	if (!file)
+	{
+		respond_error(connection, 404, "no such recording", NULL);
+		return;
+	}
+	if (fseek(file, 0, SEEK_END) || (size = ftell(file)) < 0 || size > MAXIMUM_RECORDING_BYTES ||
+		fseek(file, 0, SEEK_SET))
+	{
+		fclose(file);
+		respond_error(connection, 413, "the recording is too large to send here: copy it off the server", NULL);
+		return;
+	}
+	data = malloc((size_t)size + 1);
+	if (!data || fread(data, 1, (size_t)size, file) != (size_t)size)
+	{
+		free(data);
+		fclose(file);
+		respond_error(connection, 503, "the recording could not be read", NULL);
+		return;
+	}
+	fclose(file);
+	server_audit(auth->session >= 0 ? "web" : "api", auth->name, auth->role, "recording", name, NULL, 1, NULL);
+	snprintf(headers, sizeof(headers), "Content-Disposition: attachment; filename=\"%s\"\r\n", name);
+	respond_bytes(connection, 200, "application/octet-stream", data, (size_t)size, headers);
+	free(data);
+}
+
 /* the accounts, for the panel's owners */
 static void respond_accounts(struct connection *connection)
 {
@@ -3014,6 +3199,23 @@ static void handle_request(struct connection *connection, struct control_request
 		respond_error(connection, 400, "no query is taken here", NULL);
 		return;
 	}
+	/* (this fork) the games recorded, and one to save: a moderator's, as
+	sv_suspects is (they hold players' addresses) */
+	if (!strcmp(request->path, "/v1/recordings") || !strncmp(request->path, "/v1/recordings/", 15))
+	{
+		if (request->method != CONTROL_METHOD_GET)
+		{
+			respond_error(connection, 405, "GET only", "Allow: GET\r\n");
+			return;
+		}
+		if (!require(connection, &auth, CONTROL_PERMISSION_WARN))
+			return;
+		if (!strcmp(request->path, "/v1/recordings"))
+			respond_recordings(connection);
+		else
+			respond_recording(connection, &auth, request->path + 15);
+		return;
+	}
 	if (!strcmp(request->path, "/v1/log") || !strcmp(request->path, "/v1/audit"))
 	{
 		uint64_t since;
@@ -3253,6 +3455,9 @@ static void write_response(struct connection *connection)
 		}
 	}
 	connection->sent += (size_t)count;
+	/* (port, this fork: RESPONSE_SECONDS without a byte sent, not for the
+	whole response: a recording downloaded, megabytes, on a slow link) */
+	connection->deadline = monotonic_seconds() + RESPONSE_SECONDS;
 	if (connection->sent >= connection->response_length)
 	{
 		if (!connection->tls)

@@ -175,8 +175,11 @@ the folder holds more than `HALO_NET_RECORDINGS_MEGABYTES`
 oldest go. A game in progress is on disk to within 10 seconds. Keep the
 folder private: it holds players' addresses.
 
-To watch one, copy it off the server (`scp`, or your backups) and open it
-at https://halo.fractumseraph.net/assets/replay/ (`port/web/assets/replay`).
+To watch one, save it from the control panel's **Suspects** tab
+(**Recordings**: `GET /v1/recordings`, and `/v1/recordings/<name>` for one;
+a moderator's, as `sv_suspects` is, and each one taken is in the audit
+file), or copy it off the server, and open it at
+https://halo.fractumseraph.net/assets/replay/ (`port/web/assets/replay`).
 The file is read in your browser and sent nowhere. The page draws the map's
 walls and every player with their aim. It follows a player through their
 eyes (1), from behind them (2) or freely (3), with players behind walls
