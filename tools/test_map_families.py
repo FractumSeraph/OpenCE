@@ -176,6 +176,10 @@ int map_archive_version_matches(unsigned int version, unsigned int checksum, uns
 void platform_log(char const *format, ...)
 {
 }
+/* (port/linux/src/xbox_memory.c: the tag cache mapped, as a machine that
+plays them has it: map_families_playable) */
+int platform_ce_tag_cache_ready = 1;
+char platform_ce_tag_cache_error[160];
 """
 FILES_HARNESS = r"""
 #include <stdio.h>
