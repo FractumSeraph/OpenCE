@@ -7,15 +7,48 @@
 # by this account alone; nginx serves it, conf.d/000-default-server.d/halo.conf,
 # only to a request with the VPS's archive token). It answers "ok <sha256>",
 # and "pruned <name>" for each it deleted to keep the folder under its size.
+#
+# "public <server> <name> <bytes>" is a game's public copy instead
+# (network.record_public: no addresses, hardware ids or fair play verdicts),
+# or its carnage report's link (<name>.json), kept in ~/halo-replays/<server>/
+# for anyone: nginx serves it at /replays/ with its listing in JSON
+# (conf.d/000-default-server.d/halo.conf), the replay viewer's.
 umask 077
 KEEP_GIGABYTES=200
+KEEP_PUBLIC_GIGABYTES=100
 set -- $SSH_ORIGINAL_COMMAND
-[ "$1" = receive ] && [ $# -eq 4 ] || { echo "receive <server> <name> <bytes>, nothing else" >&2; exit 1; }
-server=$2 name=$3 bytes=$4
+[ "$1" = receive ] || [ "$1" = public ] || { echo "receive|public <server> <name> <bytes>, nothing else" >&2; exit 1; }
+[ $# -eq 4 ] || { echo "receive|public <server> <name> <bytes>, nothing else" >&2; exit 1; }
+verb=$1 server=$2 name=$3 bytes=$4
 case $server in *[!a-z-]*|"") echo "not a server: $server" >&2; exit 1;; esac
 case $name in *[!A-Za-z0-9_.-]*|.*|*..*) echo "not a recording: $name" >&2; exit 1;; esac
-case $name in *.hrec) ;; *) echo "not a recording: $name" >&2; exit 1;; esac
+case $verb:$name in receive:*.hrec|public:*.hrec|public:*.json) ;; *) echo "not a recording: $name" >&2; exit 1;; esac
 case $bytes in *[!0-9]*|"") echo "not a size: $bytes" >&2; exit 1;; esac
+if [ "$verb" = public ]; then
+	# (anyone may read these: they hold nothing private)
+	umask 022
+	root="$HOME/halo-replays"
+	dir="$root/$server"
+	mkdir -p "$dir"
+	chmod 755 "$root" "$dir"
+	[ "$bytes" -le 1073741824 ] || { echo "too large: $bytes" >&2; exit 1; }
+	cat > "$dir/.$name.part" || { rm -f "$dir/.$name.part"; exit 1; }
+	got=$(wc -c < "$dir/.$name.part")
+	if [ "$got" -ne "$bytes" ]; then
+		rm -f "$dir/.$name.part"
+		echo "got $got bytes of $bytes: refused" >&2
+		exit 1
+	fi
+	mv "$dir/.$name.part" "$dir/$name"
+	echo "ok $(sha256sum "$dir/$name" | cut -d' ' -f1)"
+	limit=$((KEEP_PUBLIC_GIGABYTES * 1024 * 1024))
+	while [ "$(du -sk "$root" | cut -f1)" -gt "$limit" ]; do
+		oldest=$(find "$root" -name '*.hrec' -printf '%f %p\n' | sort | head -1 | cut -d' ' -f2)
+		[ -n "$oldest" ] || break
+		rm -f "$oldest" "${oldest%.hrec}.json"
+	done
+	exit 0
+fi
 root="$HOME/halo-recordings"
 dir="$root/$server"
 mkdir -p "$dir"

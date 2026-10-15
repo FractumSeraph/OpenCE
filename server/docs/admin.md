@@ -278,10 +278,21 @@ handle_path /replays/fractumffa/* {
 The viewer then watches a server's game as it is played at
 `index.html?live=<that folder's address>`, and opens a finished one at
 `index.html?file=<its address>`. Opened with neither, it lists the games of
-the servers named in `servers.json` beside it (`[{"name", "public": the
-folder's address}]`): FractumSeraph's at
+the servers named in `servers.json` beside it (`[{"name", "live": the
+folder's address, "replays": where finished ones are kept, if elsewhere}]`,
+or `"public"` for one folder holding both): FractumSeraph's at
 https://halo.fractumseraph.net/assets/replay/. A public copy shows no fair
 play panels.
+
+A small server need not keep its finished games. FractumSeraph's VPS keeps
+only the game being played: `halo-recordings-offload` moves each finished
+public copy and its `<name>.json` to the seedbox (`halo-recordings-receive
+public <server> <name> <bytes>`, the same restricted key), into
+`~/halo-replays/<server>/`, which nginx serves to anyone at
+https://halo.fractumseraph.net/replays/ with its listing in JSON
+(`autoindex_format json`), up to 100 GB, the oldest going first. The
+servers' own limits there are small (`HALO_NET_RECORD_PUBLIC_MEGABYTES=300`,
+`HALO_NET_RECORDINGS_MEGABYTES=1024`).
 
 ### Why there is no `sv_password`
 

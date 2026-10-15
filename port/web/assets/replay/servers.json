@@ -1,4 +1,4 @@
 [
-  { "name": "FractumFFA", "public": "https://halovps.fractumseraph.net/replays/fractumffa/" },
-  { "name": "FractumSlayer", "public": "https://halovps.fractumseraph.net/replays/fractumslayer/" }
+  { "name": "FractumFFA", "live": "https://halovps.fractumseraph.net/replays/fractumffa/", "replays": "/replays/halo-dedicated/" },
+  { "name": "FractumSlayer", "live": "https://halovps.fractumseraph.net/replays/fractumslayer/", "replays": "/replays/halo-fractumslayer/" }
 ]

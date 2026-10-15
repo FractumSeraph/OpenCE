@@ -19,6 +19,7 @@
 # asks for (server/docs/admin.md, "Recordings"). Its log: journalctl -u
 # halo-recordings-offload.
 import hashlib
+import json
 import os
 import subprocess
 import sys
@@ -80,9 +81,73 @@ def send(unit, path, name, size):
     return digest, pruned
 
 
+def send_public(unit, path, name, size):
+    """a public copy (or its report's link) to the seedbox's public replays: its SHA-256 there"""
+    with open(path, "rb") as file:
+        result = subprocess.run(["ssh", "-T", "-i", KEY, "-o", "BatchMode=yes", "-o", "ConnectTimeout=60", TARGET,
+                                 f"public {unit} {name} {size}"], stdin=file, capture_output=True, text=True,
+                                timeout=3600)
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or f"ssh exited {result.returncode}")
+    for line in result.stdout.splitlines():
+        words = line.split()
+        if len(words) == 2 and words[0] == "ok":
+            return words[1]
+    return None
+
+
+def offload_public(unit, data, now):
+    """a server's finished public copies (network.record_public, recordings/public) moved to the seedbox,
+    which serves them to anyone at https://halo.fractumseraph.net/replays/<unit>/; the game being played
+    (live.json) stays, as the VPS serves it live. Whether one failed."""
+    folder = os.path.join(data, "recordings", "public")
+    if not os.path.isdir(folder):
+        return False
+    playing = None
+    try:
+        with open(os.path.join(folder, "live.json"), encoding="utf-8") as file:
+            status = json.load(file)
+        if status.get("live"):
+            playing = status.get("file")
+    except (OSError, ValueError):
+        pass
+    failed = False
+    names = sorted(os.listdir(folder))
+    for name in names:
+        path = os.path.join(folder, name)
+        if not os.path.isfile(path) or name == "live.json" or name.endswith(".new"):
+            continue
+        if not (name.endswith(".hrec") or name.endswith(".json")) or name == playing:
+            continue
+        # (a report's link goes with its copy, or alone once its copy has gone)
+        if name.endswith(".json") and name[:-5] + ".hrec" in names:
+            continue
+        status = os.stat(path)
+        if now - status.st_mtime < (QUIET_SECONDS if name.endswith(".hrec") else 60):
+            continue
+        moving = [(name, path, status.st_size)]
+        report = name[:-5] + ".json"
+        if name.endswith(".hrec") and os.path.isfile(os.path.join(folder, report)):
+            moving.append((report, os.path.join(folder, report), os.stat(os.path.join(folder, report)).st_size))
+        try:
+            for moved_name, moved_path, size in moving:
+                if send_public(unit, moved_path, moved_name, size) != sha256(moved_path):
+                    raise RuntimeError(f"the seedbox's copy of {moved_name} is not this one")
+        except Exception as error:
+            log(f"{unit}: public {name} not moved: {error}")
+            failed = True
+            continue
+        for moved_name, moved_path, size in moving:
+            os.remove(moved_path)
+        log(f"{unit}: public {name} ({status.st_size / 1048576:.1f} MB) moved to the seedbox")
+    return failed
+
+
 def main():
     now = time.time()
     failed = False
+    for unit, data in SERVERS.items():
+        failed = offload_public(unit, data, now) or failed
     for unit, data in SERVERS.items():
         folder = os.path.join(data, "recordings")
         if not os.path.isdir(folder):

@@ -853,12 +853,16 @@ async function listGames() {
   if (!Array.isArray(servers) || !servers.length) return;
   box.style.display = "";
   for (const server of servers) {
-    const base = new URL(String(server.public).replace(/\/?$/, "/"), location.href).href;
+    // (live: the folder of the game being played; replays: where finished
+    // ones are kept, if elsewhere; public: both in one folder)
+    const folder = value => value ? new URL(String(value).replace(/\/?$/, "/"), location.href).href : null;
+    const base = folder(server.live || server.public);
+    const kept = folder(server.replays);
     const section = document.createElement("section");
     section.innerHTML = `<h2></h2><p class="live-line"></p><ol></ol>`;
     section.querySelector("h2").textContent = server.name;
     box.append(section);
-    fetch(new URL("live.json", base), { cache: "no-store" }).then(r => r.ok ? r.json() : null).then(status => {
+    if (base) fetch(new URL("live.json", base), { cache: "no-store" }).then(r => r.ok ? r.json() : null).then(status => {
       const p = section.querySelector(".live-line");
       if (status && status.live) {
         const a = document.createElement("a");
@@ -868,22 +872,28 @@ async function listGames() {
         p.append(a);
       } else p.textContent = "No game right now.";
     }).catch(() => {});
-    // (the folder's listing, as the web server gives it: Caddy's file_server browse, in JSON)
-    fetch(base, { headers: { Accept: "application/json" }, cache: "no-store" }).then(r => r.ok ? r.json() : []).then(files => {
+    // (each folder's listing in JSON, as its web server gives it: Caddy's
+    // file_server browse, nginx's autoindex_format json; a game in both once)
+    const listing = address => fetch(address, { headers: { Accept: "application/json" }, cache: "no-store" })
+      .then(r => r.ok ? r.json() : []).then(files => (Array.isArray(files) ? files : [])
+        .filter(f => f && /\.hrec$/.test(f.name)).map(f => ({ name: f.name, url: new URL(f.name, address).href })))
+      .catch(() => []);
+    Promise.all([kept ? listing(kept) : [], base ? listing(base) : []]).then(([older, newer]) => {
       const list = section.querySelector("ol");
-      const games = (Array.isArray(files) ? files : []).filter(f => /\.hrec$/.test(f.name))
-        .sort((a, b) => b.name.localeCompare(a.name)).slice(0, 15);
+      const byName = new Map();
+      for (const f of [...older, ...newer]) byName.set(f.name, f);
+      const games = [...byName.values()].sort((a, b) => b.name.localeCompare(a.name)).slice(0, 20);
       for (const f of games) {
         const m = /^(\d{4}-\d\d-\d\d)_(\d\d)-(\d\d)-\d\d_(.+)\.hrec$/.exec(f.name);
         const li = document.createElement("li");
         const a = document.createElement("a");
-        a.href = `?file=${encodeURIComponent(new URL(f.name, base).href)}`;
+        a.href = `?file=${encodeURIComponent(f.url)}`;
         a.textContent = m ? `${m[4]} · ${m[1]} ${m[2]}:${m[3]}` : f.name;
         li.append(a);
         list.append(li);
       }
       if (!games.length) list.outerHTML = "<p>No games recorded yet.</p>";
-    }).catch(() => {});
+    });
   }
 }
 
