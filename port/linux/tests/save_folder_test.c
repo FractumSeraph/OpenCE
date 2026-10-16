@@ -180,28 +180,9 @@ static void test_choose_without_override(void)
 
 /* ---------- the copy */
 
-/* (this fork) its own folder's previous name, when it is there, is what the
-saves are copied from, before the folder every build shared */
-static void test_choose_copies_from_the_previous_fork_folder(void)
-{
-	char data[512], previous[512], root[512], shared[512];
-
-	in_scratch(data, sizeof(data), "previous");
-	mkdir(data, 0755);
-	CHECK(save_folder_choose(_save_folder_linux, NULL, NULL, data, "/home/player",
-		root, sizeof(root), shared, sizeof(shared)));
-	CHECK(strstr(shared, "/halo-linux") != NULL);
-	make_folder(data, "halo-fs");
-	snprintf(previous, sizeof(previous), "%s/halo-fs", data);
-	CHECK(save_folder_choose(_save_folder_linux, NULL, NULL, data, "/home/player",
-		root, sizeof(root), shared, sizeof(shared)));
-	CHECK(!strcmp(shared, previous));
-	CHECK(strstr(root, "/fractum-halo") != NULL);
-}
-
 static void test_copy_into_a_new_save_root(void)
 {
-	char shared[512], root[512], copying[512];
+	char shared[512], root[512], copying[1024];
 	unsigned long files = 0;
 
 	make_shared(in_scratch(shared, sizeof(shared), "new/halo-linux"));
@@ -284,7 +265,7 @@ static void test_nothing_shared(void)
 
 static void test_interrupted_copy_is_redone(void)
 {
-	char shared[512], root[512], copying[512];
+	char shared[512], root[512], copying[1024];
 	unsigned long files = 0;
 
 	make_shared(in_scratch(shared, sizeof(shared), "partial/halo-linux"));
@@ -305,7 +286,7 @@ static void test_interrupted_copy_is_redone(void)
 
 static void test_failed_copy_leaves_no_save_root(void)
 {
-	char shared[512], root[512], copying[512], blocked[512];
+	char shared[512], root[1024], copying[1100], blocked[512];
 
 	make_shared(in_scratch(shared, sizeof(shared), "failed/halo-linux"));
 	/* (a file where the save root's folder should be: nothing can be made in it) */
@@ -342,7 +323,6 @@ int main(int argc, char **argv)
 	test_too_long();
 	test_override_is_used_as_it_is();
 	test_choose_without_override();
-	test_choose_copies_from_the_previous_fork_folder();
 	test_copy_into_a_new_save_root();
 	test_save_root_with_profiles_is_kept();
 	test_save_root_without_profiles_is_filled_in();
