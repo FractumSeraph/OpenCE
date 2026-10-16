@@ -460,7 +460,8 @@ static struct
 	/* a game map's build (the pause menu's SETTINGS): what the map has not
 	got is none, not a failure */
 	boolean game_map;
-	/* a campaign map's (its pause screen's): the game stays paused */
+	/* a local campaign map's (its pause screen's): the game stays paused
+	(not a network co-op game's, whose clock runs on: OpenCE's) */
 	boolean campaign_map;
 } build;
 
@@ -2014,7 +2015,8 @@ void menu_tags_loaded(
 	memset(&build, 0, sizeof(build));
 	build.menus = menus;
 	build.game_map = game_map;
-	build.campaign_map = game_map && tag_loaded(UI_WIDGET_DEFINITION_TAG, SOLO_PAUSE_SCREEN) != NONE;
+	build.campaign_map = game_map && tag_loaded(UI_WIDGET_DEFINITION_TAG, SOLO_PAUSE_SCREEN) != NONE &&
+		game_connection() == _game_connection_local && !network_game_is_active();
 	widget_count = menus->widget_count;
 	build.widget_tags = malloc((widget_count + 1) * sizeof(long));
 	build.text_tags = malloc((widget_count + 1) * sizeof(long));
