@@ -75,8 +75,8 @@ game; if there isn't one, that player waits for a second.
 | `team_slayer.txt` | Team Slayer on every map. |
 | `slayer.txt` | Slayer and Team Slayer, every map. |
 | `bloodgulch.txt` | Blood Gulch only, Team Slayer and Slayer in turn, for the biggest games. |
-| `gearbox.txt` | Halo PC's stock maps as Custom Edition has them (`@ce`), Slayer and Team Slayer in turn. |
-| `gearbox.txt` | Halo PC's own maps (`@ce`), Slayer and Team Slayer in turn. |
+| `gearbox.txt` | Halo PC's own maps as Custom Edition has them (`@ce`), Slayer and Team Slayer in turn. |
+| `mlg_2v2.txt` | MLG Team Slayer (the `mlg_team_slayer` game type file, below) on the eight small maps the MLG circuit played: Chill Out, Prisoner, Damnation, Hang 'Em High, Battle Creek, Wizard, Derelict, Rat Race. For a 2v2 server (`HALO_DEDICATED_MAXIMUM_PLAYERS=4`), or 4v4 (`8`); the Windows download's `start-mlg-2v2.cmd` sets one up. |
 
 ## Playlists made on the server
 
@@ -112,6 +112,14 @@ time_limit = 20
 lives = 0
 health = 150
 ```
+
+The download has one such file, `admin/gametypes/mlg_team_slayer.toml`:
+MLG Team Slayer, the rules the MLG circuit played Halo: Combat Evolved by.
+Team Slayer to 50 kills with no time limit, no motion tracker, friendly
+fire on, every player starting with the pistol and the assault rifle,
+the map's own weapons, no vehicles, and the teams as the players chose
+them (no auto balance). `mlg_2v2.txt` plays it; change the file, or copy
+it under another name, for your own rules.
 
 `sv_gametype <name>` lists every setting, its value, and the file's;
 `sv_gametypes` lists the files and the built-ins. A file that does not read

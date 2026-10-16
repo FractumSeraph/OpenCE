@@ -321,9 +321,10 @@ WINDOWS_SERVERS = {"server-windows": "x86", "server-windows64": "x64"}
 
 def server_dist(platform: str, config: str, outputs: list) -> int:
     """dist/chupathingyce-server-linux-<arch>[-debug] (or -windows-<arch>):
-    the server, its README, its playlists, its blocked names list and the notices its parts'
-    licenses ask for; on Windows SDL3.dll beside it, the brokers' list, the
-    guide (server/docs/windows.md) and a script that starts it"""
+    the server, its README, its playlists and the game type files they name,
+    its blocked names list and the notices its parts' licenses ask for; on
+    Windows SDL3.dll beside it, the brokers' list, the guide
+    (server/docs/windows.md) and the scripts that start it"""
     windows = platform in WINDOWS_SERVERS
     arch = WINDOWS_SERVERS[platform] if windows else platform[len("server-"):]
     system = "windows" if windows else "linux"
@@ -340,6 +341,7 @@ def server_dist(platform: str, config: str, outputs: list) -> int:
         shutil.copy2(ROOT / "port/assets/network/brokers.txt", dist / "brokers.txt")
         shutil.copy2(ROOT / "server/docs/windows.md", dist / "WINDOWS.md")
         shutil.copy2(ROOT / "server/deploy/windows/start-server.cmd", dist / "start-server.cmd")
+        shutil.copy2(ROOT / "server/deploy/windows/start-mlg-2v2.cmd", dist / "start-mlg-2v2.cmd")
     elif config == "release":
         # a release's download without its debug information (about 20 MB
         # of 33); build/server-<arch>/ keeps the full program, and a debug
@@ -348,6 +350,11 @@ def server_dist(platform: str, config: str, outputs: list) -> int:
     shutil.copy2(ROOT / "server/README.md", dist / "README.md")
     for playlist in sorted((ROOT / "server/playlists").glob("*.txt")):
         shutil.copy2(playlist, dist / "playlists")
+    # (the game type files the playlists name, read from the data folder's
+    # admin/gametypes: server/docs/playlists.md)
+    (dist / "admin" / "gametypes").mkdir(parents=True)
+    for gametype in sorted((ROOT / "server/deploy/gametypes").glob("*.toml")):
+        shutil.copy2(gametype, dist / "admin" / "gametypes")
     # (sv_name_filter's list, read from the data folder)
     shutil.copy2(ROOT / "server/blocked_names.txt", dist / "blocked_names.txt")
     for source, name in (("port/third_party/mbedtls/LICENSE", "mbedtls-LICENSE.txt"),

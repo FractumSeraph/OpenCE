@@ -1,0 +1,52 @@
+# MLG Team Slayer (server/docs/playlists.md, "Game type files"): the
+# competitive 2v2 and 4v4 rules the MLG circuit played Halo: Combat Evolved
+# by, as a game type file. Team Slayer to 50 kills with no clock, no motion
+# tracker, friendly fire on, and every player starting with the pistol and
+# the assault rifle, whatever the map gives; the map's weapons and
+# grenades as the map places them, no vehicles, and the teams as the
+# players chose them (no auto balance). The server's download has this
+# file in admin/gametypes; a playlist names it like a built-in
+# (playlists/mlg_2v2.txt). sv_gametype mlg_team_slayer lists every setting.
+base = "team_slayer"
+name = "MLG TS"
+score_limit = 50
+time_limit = 0
+teams = true
+
+[players]
+lives = 0
+health = 100
+shields = true
+respawn_time = 5
+respawn_growth = 0
+suicide_penalty = 5
+odd_man_out = false
+invisible = false
+
+[items]
+weapon_set = "normal"
+starting_equipment = "generic"
+map_weapons = true
+infinite_grenades = false
+loadout = "custom"
+primary_weapon = "pistol"
+secondary_weapon = "assault_rifle"
+
+[indicators]
+objectives = "nav_points"
+players_on_radar = "none"
+friends_on_screen = true
+
+[team_play]
+friendly_fire = "on"
+friendly_fire_penalty = 0
+auto_balance = false
+
+[vehicles]
+red = "none"
+blue = "none"
+
+[slayer]
+death_bonus = false
+kill_penalty = false
+kill_in_order = false

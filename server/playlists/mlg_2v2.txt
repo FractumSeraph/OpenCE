@@ -1,0 +1,18 @@
+# MLG 2v2 Team Slayer (server/src/dedicated.c): the small maps the MLG
+# circuit played Halo: Combat Evolved on, each with the MLG Team Slayer
+# game type file (admin/gametypes/mlg_team_slayer.toml: 50 kills, no clock,
+# no motion tracker, pistol and assault rifle starts, no vehicles, friendly
+# fire on). Run it with HALO_DEDICATED_MAXIMUM_PLAYERS=4 for 2v2, 8 for 4v4
+# (start-mlg-2v2.cmd sets 4). A team game needs a player on each team, so
+# with one player waiting the server waits for a second.
+# One entry a line: the map, then the game type, played in order.
+
+# map            game type
+chillout         mlg_team_slayer
+prisoner         mlg_team_slayer
+damnation        mlg_team_slayer
+hangemhigh       mlg_team_slayer
+beavercreek      mlg_team_slayer
+wizard           mlg_team_slayer
+carousel         mlg_team_slayer
+ratrace          mlg_team_slayer

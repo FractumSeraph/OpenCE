@@ -4,6 +4,15 @@ What changed in the ChupathingyCE Dedicated Server. The server is released
 with the game and has its version; the game's own changes are in its
 release notes.
 
+## 0.7.5c
+
+- An MLG 2v2 Team Slayer server out of the box: the `mlg_2v2.txt` playlist
+  (the eight small maps the MLG circuit played), the `mlg_team_slayer` game
+  type file (Team Slayer to 50, no clock, no motion tracker, friendly fire
+  on, pistol and assault rifle starts, no vehicles, no auto balance) in the
+  download's `admin/gametypes`, and on Windows `start-mlg-2v2.cmd`, which
+  runs it for four players with a lasting invite link.
+
 ## 0.7.5b
 
 - No server changes of its own; built from the same code as the game's 0.7.5b.

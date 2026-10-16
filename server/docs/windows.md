@@ -37,6 +37,30 @@ server as they reach anyone's invite link. `set HALO_NET_LASTING_INVITE=true`
 in `start-server.cmd` keeps that link the same each time the server starts. On a cloud server, open one UDP
 port, as on Linux (the README's "It shows, but nobody can join").
 
+## An MLG 2v2 server
+
+The download also has `start-mlg-2v2.cmd`: a competitive 2v2 Team Slayer
+server with the rules and the maps the MLG circuit played Halo: Combat
+Evolved by. It plays `playlists\mlg_2v2.txt` (Chill Out, Prisoner,
+Damnation, Hang 'Em High, Battle Creek, Wizard, Derelict and Rat Race, in
+turn) with the `mlg_team_slayer` game type file
+(`admin\gametypes\mlg_team_slayer.toml`): Team Slayer to 50 kills with no
+clock, no motion tracker, friendly fire on, every player starting with the
+pistol and the assault rifle, the map's own weapons, no vehicles, and the
+teams as the players chose them. It takes four players and waits for all
+four before the countdown starts, and its invite link stays the same from
+one start to the next (`HALO_NET_LASTING_INVITE=true`), to give out.
+
+Set it up as in the quick start (the maps in `maps\`), open
+`start-mlg-2v2.cmd` in Notepad, set the server's name, and double-click
+it. The lines at its top change the rest: `HALO_DEDICATED_PUBLIC=false`
+keeps it off the Server Browser for a private scrim (players join by the
+invite link the window prints), `HALO_DEDICATED_MINIMUM_PLAYERS=2` starts
+a game as soon as one player is on each team, and
+`HALO_DEDICATED_MAXIMUM_PLAYERS=8` makes it a 4v4. The game type's own
+settings are in the `.toml` file, one a line (`sv_gametype mlg_team_slayer`
+on the console lists them all); [Playlists](playlists.md) has the format.
+
 ## Settings
 
 Every setting is an environment variable, as on Linux
