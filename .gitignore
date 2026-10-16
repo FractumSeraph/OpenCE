@@ -23,6 +23,9 @@ compile_commands.json
 xbox/
 !source/**/xbox/
 
+# The game's log, written to the data root (a run from the repository root)
+/debug.txt
+
 # Locally extracted proprietary game data (never commit)
 /assets
 # (but the high-res assets, drawn for the port: tools/hud_assets.py)
