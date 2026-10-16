@@ -14,6 +14,12 @@ test_linux_port.py fails when the sources differ from the record. An item
 changed or removed is one older builds cannot read: raise the version and
 say why in NETCODE.md. An item added (a message kind, a bit) may be one they
 ignore. Then record it: network_format.py --record
+
+To compare this tree's wire format with another source tree's (an OpenCE
+build, before matching its network version), extract that build's source
+and run: network_format.py --compare <its checkout>. Both sides' items are
+listed where they differ; anything not explained (their own message kinds,
+which this build drops as unknown) must be matched first.
 """
 
 import hashlib
@@ -41,8 +47,10 @@ def _hash(text):
     return hashlib.sha256(" ".join(text.split()).encode()).hexdigest()[:12]
 
 
-def items():
-    """the wire format's items, name to value"""
+def items(root=None):
+    """the wire format's items, name to value (of this tree, or the source
+    tree at root)"""
+    ROOT = Path(root) if root else globals()["ROOT"]
     paths = sorted((ROOT / "port/linux/game").glob("network_*.[ch]"))
     paths += sorted((ROOT / "port/linux/game").glob("map_share*.[ch]"))
     paths += [ROOT / "source/networking/network_messages.c", ROOT / "source/networking/network_messages.h"]
@@ -120,8 +128,8 @@ def items():
     return result
 
 
-def version():
-    limits = (ROOT / "port/linux/include/halo_port_limits.h").read_text()
+def version(root=None):
+    limits = ((Path(root) if root else ROOT) / "port/linux/include/halo_port_limits.h").read_text()
     return int(re.search(r"#define HALO_PORT_NETWORK_VERSION (\d+)", limits).group(1))
 
 
@@ -162,8 +170,22 @@ def record():
     RECORD.write_text(f"version {version()}\n" + "".join(f"{name} {new[name]}\n" for name in sorted(new)))
 
 
+def compare(root):
+    """this tree's items against the source tree's at root, as lines to show"""
+    ours, theirs = items(), items(root)
+    lines = [f"network version: here {version()}, there {version(root)}"]
+    for name in sorted(ours.keys() | theirs.keys()):
+        if ours.get(name) != theirs.get(name):
+            lines.append(f"{name}\n  here:  {ours.get(name, '(none)')}\n  there: {theirs.get(name, '(none)')}")
+    if len(lines) == 1:
+        lines.append("the wire formats are the same")
+    return lines
+
+
 if __name__ == "__main__":
     if sys.argv[1:] == ["--record"]:
         record()
+    elif len(sys.argv) == 3 and sys.argv[1] == "--compare":
+        print("\n".join(compare(sys.argv[2])))
     else:
         print("\n".join(check()) or "the wire format is the one recorded")

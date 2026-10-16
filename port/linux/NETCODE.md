@@ -231,6 +231,20 @@ OpenCE's current builds (so their clients join its hosts), without that
 message (its hosts do not send it, its clients drop it), and joins hosts of
 9 and 10. The game browser lists the range's games.
 
+`port/linux/network_format.txt` records the wire format of the current
+version (`tools/network_format.py`): `test_linux_port.py` fails when the
+sources' messages, kinds, bits, structs sent whole or the sizes of their
+arrays differ from it.
+
+Before matching a new OpenCE build's network version, compare its wire
+format with ours: extract that build's source (for example `git archive
+<its tag> source port/linux | tar -x -C /tmp/opence`) and run
+`python3 tools/network_format.py --compare /tmp/opence`. Their own message
+kinds (votes to kick, voice, map sharing) are expected there, as is our
+`server_pregame_keep_alive` field list (the same bytes on the wire); match
+anything else before taking the number. The tool is OpenCE's (Addison Bair,
+MrBruh), CC0.
+
 A client plays by its host's rules: in another's game (searching for it,
 in its lobby, or playing it) the developer console, the telnet console
 and the cheat buttons run only commands that change nothing of the game

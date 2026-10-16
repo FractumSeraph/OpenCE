@@ -3556,7 +3556,7 @@ boolean server_ok_to_countdown(
 				teams_full ? "yes" : "NO",
 				(long)server->game.player_count, (long)server->game.minimum_players,
 				server->countdown_state.paused ? "yes" : "no",
-				reason ? " (failed:" : "",
+				!ok ? " (failed:" : "",
 				(reason & 1) ? " machines" : "",
 				(reason & 16) ? " bomb handshakes" : "",
 				reason ? ")" : "");

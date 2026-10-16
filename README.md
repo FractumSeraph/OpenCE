@@ -767,6 +767,10 @@ builds are made only with free tools and libraries.
   [bnunu/halo-1](https://github.com/bnunu/halo-1), of the Xbox build 2342.
 - The port ChupathingyCE started from: OpenCE and its contributors, up to
   October 9, 2026.
+- Later fixes taken from OpenCE (CC0), with their authors kept in the
+  history: Paul Hontz, xshxdex98, hkmodd, eltanschauung, justinfilip, Luke,
+  MrBruh, Addison Bair, thelinkin3000, Brendan Turner and chestahh. The wire
+  format tool (`tools/network_format.py`) is Addison Bair's and MrBruh's.
 - ChupathingyCE: [Milenko](https://github.com/MrMilenko) and contributors. The
   icon is MrBruh's helmet, with tusks.
 - Fonts: Cyborg Interface Gothic, the high-res text's font, by fizzy, made
