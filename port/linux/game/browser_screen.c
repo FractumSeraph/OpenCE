@@ -1102,6 +1102,55 @@ boolean browser_screen_open_map_offer(
 	return TRUE;
 }
 
+/* the listed game an invite (its link, or the text around it) is for, if
+the game list knows it: its name and its map as players name it, for the
+clipboard's invite (invite_prompt.c) */
+boolean browser_screen_invite_game(
+	char const *link,
+	char *name,
+	long name_size,
+	char *map,
+	long map_size)
+{
+	static struct browser_game games[BROWSER_MAXIMUM_GAMES];
+	char invite[BROWSER_INVITE_LENGTH + 1];
+	char const *start = NULL;
+	char const *search;
+	long length = 0;
+	short count, index;
+
+	for (search = link; *search && !start; search++)
+	{
+		if (!_strnicmp(search, "halo://join/", 12))
+			start = search + 12;
+	}
+	if (!start)
+		return FALSE;
+	while (length < BROWSER_INVITE_LENGTH && ((start[length] >= '0' && start[length] <= '9') ||
+		((start[length] | 0x20) >= 'a' && (start[length] | 0x20) <= 'f')))
+	{
+		invite[length] = start[length];
+		length++;
+	}
+	invite[length] = 0;
+	if (length < BROWSER_INVITE_LENGTH)
+		return FALSE;
+	count = (short)browser_get_games(games, BROWSER_MAXIMUM_GAMES);
+	for (index = 0; index < count; index++)
+	{
+		if (strlen(games[index].invite) == BROWSER_INVITE_LENGTH &&
+			!_strnicmp(games[index].invite, invite, BROWSER_INVITE_LENGTH))
+		{
+			char text[64];
+
+			utf8_name(games[index].name, name, name_size);
+			snprintf(map, (size_t)map_size, "%s", map_display_name(games[index].map, text, sizeof(text)));
+			return TRUE;
+		}
+	}
+	return FALSE;
+}
+
 /* Y: a game of this machine's, as System Link's Y makes one (the new game's
 map chosen next; once it starts, the game list lists it) */
 static void create_game(

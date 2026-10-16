@@ -703,6 +703,13 @@ void moderation_screen_process(void);
 void moderation_screen_render(void);
 /* the menus' pointer, while it is up (its own taps and clicks) */
 void browser_screen_pointer(struct halo_ui_pointer const *pointer);
+/* port: the question before joining a clipboard's invite
+(port/linux/game/invite_prompt.c) */
+boolean invite_prompt_active(void);
+void invite_prompt_update(boolean menu_open);
+void invite_prompt_process(void);
+void invite_prompt_pointer(struct halo_ui_pointer const *pointer);
+void invite_prompt_render(void);
 /* (ONLINE GAMES, below: its list moves focus item by item) */
 boolean ui_widget_online_games_list(struct widget_instance *widget);
 #endif
@@ -7140,14 +7147,17 @@ static void ui_widgets_process_mouse(
 			ui_debug_log_keyboard_tap(pointer.click_x, pointer.click_y, hit);
 	}
 #ifdef HALO_GAME_BROWSER
-	/* Online Games takes the pointer itself, as the virtual keyboard does */
-	if (pointer_active && !keyboard_active && browser_screen_active())
+	/* Online Games takes the pointer itself, as the virtual keyboard does
+	(and the clipboard invite's question, over it) */
+	if (pointer_active && !keyboard_active && invite_prompt_active())
+		invite_prompt_pointer(&pointer);
+	else if (pointer_active && !keyboard_active && browser_screen_active())
 		browser_screen_pointer(&pointer);
 #endif
 	if (!pointer_active || keyboard_active
 #ifdef HALO_GAME_BROWSER
 		/* (nor over Online Games: a click left in the queue would pick a game) */
-		|| browser_screen_active()
+		|| browser_screen_active() || invite_prompt_active()
 #endif
 		/* port: (nor under a map's download screen, which hides the menus) */
 		|| download_screen_active()
@@ -7789,7 +7799,10 @@ void render_ui_widgets(
 	if (browser_screen_active())
 		browser_screen_render();
 	if (first_players_render)
+	{
 		moderation_screen_render();
+		invite_prompt_render();
+	}
 #endif
 	/* port: a map's download screen, over the menus */
 	if (first_players_render)
@@ -8863,6 +8876,14 @@ void process_ui_widgets(
 		return;
 	}
 #ifdef HALO_GAME_BROWSER
+	/* port: an invite on the clipboard, asked about over the menus */
+	invite_prompt_update(widget_globals.active_widgets[0] != NULL);
+	if (invite_prompt_active())
+	{
+		invite_prompt_process();
+
+		return;
+	}
 	if (browser_screen_active())
 	{
 		browser_screen_process();

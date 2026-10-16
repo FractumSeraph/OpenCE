@@ -631,10 +631,12 @@ static const struct config_setting config_settings[] =
 		_environment_value, _platform_all,
 		"How many megabytes of public copies (network.record_public) to keep:\n"
 		"the oldest go first. 0 keeps them all." },
-	{ "network.join_from_clipboard", _config_boolean, "true", "HALO_NET_JOIN_FROM_CLIPBOARD", _environment_value,
+	{ "network.join_from_clipboard", _config_string, "\"ask\"", "HALO_NET_JOIN_FROM_CLIPBOARD", _environment_value,
 		_platform_all,
-		"Join the game of an invite link found on the clipboard when the game\n"
-		"comes to the front." },
+		"An invite link found on the clipboard when the game comes to the front:\n"
+		"\"ask\" asks whether to join its game (No is kept for that invite),\n"
+		"\"always\" joins it, \"never\" leaves it. true and false, of older\n"
+		"versions, are \"always\" and \"never\"." },
 	{ "network.map_downloads", _config_string, "\"ask\"", "HALO_NET_MAP_DOWNLOADS", _environment_value,
 		_platform_all,
 		"A Custom Edition map a game you join needs and you don't have: \"ask\"\n"
@@ -1715,6 +1717,8 @@ static void config_set_from_text(struct config_value *value, enum config_type ty
 	}
 }
 
+static int config_was_boolean(const char *name);
+
 /* the value in the file, if it is there and of the setting's type */
 static void config_set_from_file(struct config_value *value, const struct config_setting *setting,
 	toml_datum_t table)
@@ -1751,6 +1755,12 @@ static void config_set_from_file(struct config_value *value, const struct config
 		{
 			free(value->string);
 			value->string = strdup(datum.u.s);
+		}
+		/* (true or false, as an older version had it: config_old_words) */
+		else if (datum.type == TOML_BOOLEAN && config_was_boolean(setting->name))
+		{
+			free(value->string);
+			value->string = strdup(datum.u.boolean ? "true" : "false");
 		}
 		else
 		{
@@ -2192,6 +2202,7 @@ static const struct
 	{ "network.protocol", { "auto", "opence", "delta", NULL }, NULL },
 	{ "network.map_downloads", { "ask", "always", "never", NULL }, "\"ask\"" },
 	{ "network.fair_play", { "refuse", "log", "off", NULL }, "\"refuse\"" },
+	{ "network.join_from_clipboard", { "ask", "always", "never", NULL }, "\"ask\"" },
 	{ "discord.presence", { "full", "minimal", "off", NULL }, "\"full\"" },
 	{ "network.platform_limits", { "on", "off", NULL }, "\"on\"" },
 	{ "network.coop_friendly_fire", { "off", "on", "shields_only", "explosives_only", NULL }, NULL },
@@ -2200,6 +2211,35 @@ static const struct
 };
 
 #define NUMBER_OF_CONFIG_WORDS (sizeof(config_words) / sizeof(config_words[0]))
+
+/* an older version's value of a word setting, read as the word that took
+its place (a setting that was true or false: the file's true and false are
+taken as these words' "true" and "false": config_set_from_file) */
+static const struct
+{
+	const char *name;
+	const char *old_word;
+	const char *word;
+} config_old_words[] =
+{
+	{ "network.join_from_clipboard", "true", "always" },
+	{ "network.join_from_clipboard", "false", "never" },
+};
+
+#define NUMBER_OF_CONFIG_OLD_WORDS (sizeof(config_old_words) / sizeof(config_old_words[0]))
+
+/* whether the setting once was true or false, which the file may still say */
+static int config_was_boolean(const char *name)
+{
+	size_t index;
+
+	for (index = 0; index < NUMBER_OF_CONFIG_OLD_WORDS; index++)
+	{
+		if (!strcmp(config_old_words[index].name, name))
+			return 1;
+	}
+	return 0;
+}
 
 /* the word settings' values as their readers compare them (lowercase:
 "Borderless" is "borderless"), and the log told of one that is none of
@@ -2219,6 +2259,16 @@ static void config_check_words(void)
 		if (index < 0 || !(config_settings[index].platforms & CONFIG_PLATFORM))
 			continue;
 		value = &config_values[index];
+		for (word = 0; word < NUMBER_OF_CONFIG_OLD_WORDS; word++)
+		{
+			if (!strcmp(config_old_words[word].name, config_words[word_index].name) &&
+				!SDL_strncasecmp(value->string, config_old_words[word].old_word, strlen(config_old_words[word].old_word) + 1))
+			{
+				free(value->string);
+				value->string = strdup(config_old_words[word].word);
+				break;
+			}
+		}
 		for (word = 0; words[word] && SDL_strncasecmp(value->string, words[word], strlen(words[word]) + 1); word++)
 		{
 		}
