@@ -381,6 +381,11 @@ static void player_totals(struct player_datum const *player, int place, int scor
 	case game_engine_race:
 		totals->laps = statistics->multiplayer_statistics.race_statistics.laps;
 		break;
+	/* (Bomb's scores and carries are CTF's: game_engine_bomb.c) */
+	case game_engine_bomb:
+		totals->flag_grabs = statistics->multiplayer_statistics.ctf_statistics.flag_grabs;
+		totals->flag_scores = statistics->multiplayer_statistics.ctf_statistics.flag_scores;
+		break;
 	}
 }
 
@@ -405,7 +410,7 @@ static void begin_game(long tick)
 	/* (a built-in variant has no name of its own: its game type's) */
 	if (!game.gametype[0])
 	{
-		static char const *const engines[] = { "", "CTF", "Slayer", "Oddball", "King of the Hill", "Race" };
+		static char const *const engines[] = { "", "CTF", "Slayer", "Oddball", "King of the Hill", "Race", "Bomb" };
 		long engine = variant->game_engine_index;
 
 		snprintf(game.gametype, sizeof(game.gametype), "%s%s", variant->universal_variant.teams && engine == 2 ? "Team " : "",
@@ -659,6 +664,23 @@ static void update_objectives(struct tracked *tracked, struct player_datum *play
 			objective(tracked, player, tick, EVENT_LOG_OBJECTIVE_RACE_LAP, position);
 		tracked->laps = statistics->race_statistics.laps;
 		break;
+	/* (Bomb's goals are CTF's statistics; its carrier, the unit's hands) */
+	case game_engine_bomb:
+	{
+		long bomb_index = game_engine_bomb_weapon();
+		boolean holding = bomb_index != NONE && player->unit_index != NONE &&
+			unit_has_weapon(player->unit_index, bomb_index);
+
+		if (holding && !tracked->holding_ball)
+			objective(tracked, player, tick, EVENT_LOG_OBJECTIVE_BOMB_GRAB, position);
+		for (value = tracked->flag_scores; value < statistics->ctf_statistics.flag_scores; value++)
+			objective(tracked, player, tick, EVENT_LOG_OBJECTIVE_BOMB_SCORE, position);
+		if (!holding && tracked->holding_ball && tracked->flag_scores == statistics->ctf_statistics.flag_scores)
+			objective(tracked, player, tick, EVENT_LOG_OBJECTIVE_BOMB_DROP, position);
+		tracked->holding_ball = holding;
+		tracked->flag_scores = statistics->ctf_statistics.flag_scores;
+		break;
+	}
 	}
 }
 

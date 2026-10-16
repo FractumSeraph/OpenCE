@@ -126,6 +126,11 @@ void test_input_hold_action(int hold)
 	(void)hold;
 }
 
+void test_input_hold_melee(int hold)
+{
+	(void)hold;
+}
+
 void test_input_hold_fire(int hold)
 {
 	(void)hold;

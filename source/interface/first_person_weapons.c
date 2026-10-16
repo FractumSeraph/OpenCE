@@ -132,6 +132,8 @@ symbols in this file:
 #include "shaders/shaders.h"
 /* port: port/linux/game/shield_color.c */
 real_rgb_color const *shield_color_colors(long unit_index, real_rgb_color const *colors);
+#include "game/game_engine.h"
+
 
 /* ---------- constants */
 
@@ -528,8 +530,14 @@ void first_person_weapon_draw(
 						model_effect.type= _render_model_effect_type_none;
 					}
 
+					/* (port: the arms alone for a melee-only Bomb game's unseen
+					fists, game_engine_bomb.c) */
 					if (first_person_weapon->weapon_node_remapping_table_valid &&
-						weapon_definition->weapon.interface_definition.first_person_model.index!=NONE)
+						weapon_definition->weapon.interface_definition.first_person_model.index!=NONE
+#ifdef HALO_GAME_BROWSER
+						&& !game_engine_bomb_hides_weapon(weapon->definition_index)
+#endif
+						)
 					{
 						model_remap_node_matrices_to_match_animation_graph(
 							weapon_definition->weapon.interface_definition.first_person_model.index,
@@ -576,8 +584,15 @@ void first_person_weapon_draw(
 						}
 					}
 
+					/* (port: the unseen fists' arms only while they strike: none
+					of the pistol's readying or idling) */
 					if (first_person_weapon->hands_node_remapping_table_valid &&
-						first_person_interface->hands.index!=NONE)
+						first_person_interface->hands.index!=NONE
+#ifdef HALO_GAME_BROWSER
+						&& (!game_engine_bomb_hides_weapon(weapon->definition_index) ||
+							first_person_weapon->state==_first_person_weapon_state_melee)
+#endif
+						)
 					{
 						model_remap_node_matrices_to_match_animation_graph(
 							first_person_interface->hands.index,
@@ -1578,6 +1593,16 @@ static void first_person_weapon_message(
 		{
 			state= (short)first_person_weapon_state_from_weapon_message(message_type);
 		}
+#ifdef HALO_GAME_BROWSER
+		/* (port: a melee-only Bomb game's unseen fists go straight to rest:
+		none of the pistol's draw or holster, game_engine_bomb.c) */
+		if ((state==_first_person_weapon_state_ready || state==_first_person_weapon_state_put_away) &&
+			first_person_weapon->weapon_index!=NONE &&
+			game_engine_bomb_hides_weapon(weapon_get(first_person_weapon->weapon_index)->definition_index))
+		{
+			state= _first_person_weapon_state_idle;
+		}
+#endif
 		if (state!=NONE)
 		{
 			first_person_weapon_set_state(local_player_index, state, TRUE);

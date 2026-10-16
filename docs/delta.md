@@ -136,11 +136,15 @@ shares.
 | 8 | `vote` | map and game type votes |
 | 9 | `console_slots` | retired before use: a console's slots are its platform key's limits (below). Never set, never reused |
 | 10 | `moderation` | a dedicated server's moderators sign in and act from the game (below, "Moderation") |
+| 11 | `bomb` | Bomb game types (Bomb, Grifball, Open Pitch: [bomb.md](bomb.md)) and their player traits (TRAITS). Room-wide: a host playing one drops every machine without it |
+| 12 | `ping` | a host that answers pings before joining (Online Games); taken, never set yet |
+| 13 | `bomb_movement` | TRAITS' movement and melee traits (jump, gravity, melee reach), for a player whose machine and host both agreed to it |
+| 14 | `bomb_traits` | TRAITS at 22 (Grifball test builds 2 and 3 sent it as 18, chat's CHAT_CONFIG). Room-wide with `bomb`: a host playing a Bomb game type drops every machine without both |
 
 The registry lives in the repository next to the compatibility table and is
 the single source for the bit numbers. Built so far: `platform`, `profile`,
-`ce_maps`, `moderation` (see "Moderation"), and `chat` and `server_messages`
-(see "Chat"). The first two's values are
+`ce_maps`, `moderation` (see "Moderation"), `chat` and `server_messages`
+(see "Chat"), and `bomb` ([bomb.md](bomb.md)). The first two's values are
 claims, shown as claims, never used for game state:
 
 - **`platform`**: each machine's platform key (below), and so each player's
@@ -278,6 +282,7 @@ a later version may append):
 | 19 | CHAT_SAY | client to host | sequence (4, above the session's last), scope (1: 0 everyone, 1 team), reserved (1), text length (1, 1 to 120), reserved (1), text (UTF-8) |
 | 20 | CHAT_LINE | host to client | line (4, the host's count), kind (1: 0 player, 1 moderator, 2 server, 3 system), scope (1), speaker's machine (1; 255 none), speaker's player (1, the game's player index; 255 none), name length (1, at most 47), text length (1, 1 to 200), reserved (2), name (UTF-8), text (UTF-8) |
 | 21 | CHAT_REFUSED | host to client | sequence (4, the CHAT_SAY's), reason (1: 1 chat off, 2 that scope is not taken, 3 muted, 4 too fast, 5 blocked words, 6 text that cannot be shown), reserved (3) |
+| 22 | TRAITS | host to client | kind (1: 0 none, 1 Bomb), reserved (3), everyone's then the carrier's player traits, 12 bytes each: health, damage, resistance, speed (2 each, percent), shields (1: 0 unchanged, 1 none, 2 normal, 3 overshield), highlight (1), reserved (2); values past their ranges ([bomb.md](bomb.md)) refused. Grifball test builds 2 and 3 sent it as 18, which is CHAT_CONFIG's (a host drops those builds from a Bomb game: `bomb_traits`) |
 
 A roster covers every machine of the game, in as many datagrams as it takes
 (32 machines each). A client forgets a machine the roster has not named for

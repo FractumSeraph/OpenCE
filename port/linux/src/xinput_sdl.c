@@ -770,8 +770,6 @@ still, only turning and looking up and down (where remote players aim and
 whether they stand) */
 static int test_input_holding_action;
 static Uint64 test_input_holding_action_since;
-/* (port, this fork: debug.network_test_aim's trigger, held) */
-static int test_input_holding_fire;
 
 /* the automated tests (port/linux/game/network_test.c): the scripted player
 stands still, holding the action button (X: picking up, swapping weapons)
@@ -783,8 +781,18 @@ void test_input_hold_action(int hold)
 	test_input_holding_action = hold;
 }
 
-/* (this fork) the automated tests' aim (network_test.c, debug.network_test_aim):
-the player stands still, holding the trigger, aimed by the test */
+/* ... and the melee button (B) held, the player standing still */
+static int test_input_holding_melee;
+
+void test_input_hold_melee(int hold)
+{
+	test_input_holding_melee = hold;
+}
+
+/* ... and the trigger (right), the player standing still: a flag or ball
+in hand is thrown down */
+static int test_input_holding_fire;
+
 void test_input_hold_fire(int hold)
 {
 	test_input_holding_fire = hold;
@@ -918,6 +926,11 @@ static void test_input_gamepad(XINPUT_GAMEPAD *pad)
 	if (test_input_menu[0])
 	{
 		test_input_menu_gamepad(pad);
+		return;
+	}
+	if (test_input_holding_melee)
+	{
+		pad->bAnalogButtons[XINPUT_GAMEPAD_B] = 255;
 		return;
 	}
 	if (test_input_holding_fire)

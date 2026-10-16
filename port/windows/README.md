@@ -18,6 +18,11 @@ You do not need the Xbox SDK.
   SDK. It does not use the MSVC compiler.
 - LLVM (clang and lld), Python 3 and ninja in the `PATH`. For example,
   enter `scoop install llvm python ninja`.
+- `llvm-rc` (LLVM's resource compiler, with the LLVM above) in the `PATH`.
+  It puts the icon and the version information of `port/windows/halo.rc`
+  in the executable. `python tools/windows_icon.py` makes the icon,
+  `port/windows/halo.ico`, from `port/art/icon.svg` (needs `rsvg-convert`);
+  it is committed, so a build does not need it.
 - A network connection for the first build. `configure.py` downloads the
   Visual C++ development package of SDL 3.4.16 to
   `build/windows/third_party`.

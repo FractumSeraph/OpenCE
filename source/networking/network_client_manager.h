@@ -40,6 +40,7 @@ boolean network_game_client_join_first_available_game(
 boolean network_game_client_has_local_player(
 	struct network_game_client *client,
 	short local_player_index);
+boolean network_game_client_split_teams(void);
 boolean network_game_client_set_team(
 	char team_index);
 /* whether the advertised game's host has this machine's network version
