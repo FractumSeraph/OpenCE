@@ -1188,12 +1188,12 @@ static GLuint texture_entry_result(struct texture_entry *entry, GLenum *target,
 				texture that is neither a Halo PC meter's nor a multipurpose
 				map's: the cache marks those, xbox_texture_cache.c) */
 				!entry->description.pc_meter && !entry->description.pc_multipurpose &&
-				platform_is_contiguous((void *)entry->address) &&
-				platform_is_contiguous((void *)(entry->address + entry->size - 1)))
+				platform_is_contiguous(xbox_pointer(entry->address)) &&
+				platform_is_contiguous(xbox_pointer(entry->address + entry->size - 1)))
 			{
 				unsigned long *pixels = malloc(entry->description.width * entry->description.height * 4);
 
-				if (pixels && decode_level(&entry->description, 0, (const unsigned char *)entry->address, NULL, pixels))
+				if (pixels && decode_level(&entry->description, 0, (const unsigned char *)xbox_pointer(entry->address), NULL, pixels))
 					entry->hud_upscale = hud_hires_upscale_texture((const unsigned char *)pixels,
 						entry->description.width, entry->description.height, kind, &entry->hud_upscale_levels);
 				free(pixels);

@@ -17,8 +17,8 @@ static BOOL text_typing, text_typing_enter_armed, text_typing_enter_blocked, tex
 /* (text chat's line, which keys_held_over_switch also counts: never up here) */
 static BOOL chat_typing;
 /* (the last input's scheme, for the button prompts: keyboard_gamepad sets it) */
-static int last_input_scheme;
-static BOOL last_input_seen;
+int last_input_scheme;
+BOOL last_input_seen;
 static struct { boolean active, shift_active, caps_active, symbols_active;
     void *keyboard; short row, column; word buffer_size; short last_event, last_key,
     number_of_event_repeats, caption_index; boolean last_exit_saved_text, first_key_replaces_buffer;
