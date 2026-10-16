@@ -210,8 +210,8 @@ static const struct config_setting config_settings[] =
 		"after a change. Not all of the PC screens are wired yet." },
 #else
 	{ "display.menus", _config_string, "\"xbox\"", "HALO_MENUS", _environment_value, _platform_all,
-		"The menus: \"xbox\" for the Xbox's (with Online Games), \"pc\" for the\n"
-		"PC version's screens and Server Browser, rebuilt from port/assets/menus\n"
+		"The menus: \"xbox\" for the Xbox's (with Online Games), \"gearbox\" for\n"
+		"Gearbox's Halo PC screens and Server Browser (\"pc\" still works), rebuilt from port/assets/menus\n"
 		"(a menus folder here for your own) with this port's fonts and redrawn\n"
 		"pictures, not Halo PC's files. Read when the game starts: restart it\n"
 		"after a change. Not all of the PC screens are wired yet." },
@@ -1762,7 +1762,7 @@ setting at the default of the version that wrote it, so that a default
 changed since never reached it: its lines holding this version's default
 are commented out at it, as a new file has them, and config_version
 written. Any other value stays, being the player's, even an older
-version's default (the player may have chosen it: display.menus = "pc"),
+version's default (the player may have chosen it: display.menus = "gearbox"),
 which the log says. Returns the new text, or NULL if the file has its
 version */
 static char *config_update_layout(const char *text, toml_datum_t table)
@@ -1880,7 +1880,7 @@ static const struct
 	{ "display.mode", { "", "fullscreen", "borderless", "windowed", NULL }, "display.fullscreen's" },
 	{ "display.resolution_scaling", { "native", "original", NULL }, "\"native\"" },
 	{ "display.anti_aliasing", { "off", "fxaa", "smaa", "ssaa2x", "msaa2x", "msaa4x", "msaa8x", NULL }, NULL },
-	{ "display.menus", { "xbox", "pc", NULL }, NULL },
+	{ "display.menus", { "xbox", "gearbox", "pc", NULL }, NULL },
 	{ "display.player_names", { "all", "allies", "allys", "enemies", "none", NULL }, "\"all\"" },
 	{ "display.scoreboard_team_layout", { "teams", "score", NULL }, "\"teams\"" },
 	{ "audio.resampling", { "sinc", "linear", NULL }, "\"sinc\"" },
