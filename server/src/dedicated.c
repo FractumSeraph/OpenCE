@@ -96,6 +96,9 @@ enum
 	POSTGAME_MILLISECONDS = 20000,
 	/* a game with no players left ended this long after the last left */
 	EMPTY_GAME_MILLISECONDS = 30000,
+	/* a game that ended is still in progress this long after (its own
+	switch to postgame takes about 7 seconds): it is sent to postgame */
+	ENDED_GAME_MILLISECONDS = 20000,
 	/* a frame at most this often: with nothing drawn, no display's refresh
 	paces the main loop (60 a second, twice the game's ticks) */
 	FRAME_MILLISECONDS = 16,
@@ -173,6 +176,8 @@ static struct
 	unsigned long score_time;
 	long score;
 	unsigned long empty_time;
+	/* when the game in progress ended (0: it has not) */
+	unsigned long ended_time;
 	unsigned long start_time;
 
 	/* a map and game type a command chose (sv_map): to be played next, and
@@ -686,6 +691,7 @@ void dedicated_server_update(
 			dedicated.score_time = now;
 			dedicated.score = 0;
 			dedicated.empty_time = 0;
+			dedicated.ended_time = 0;
 		}
 		/* a command ended it (sv_end_game, sv_map, sv_mapcycle_next), once it
 		can end */
@@ -696,8 +702,10 @@ void dedicated_server_update(
 			game_engine_end_game();
 		}
 		/* everyone left: the game ends (as the score limit ends it) and the
-		next entry's lobby opens */
-		if (game && game->player_count == 0)
+		next entry's lobby opens. Not while a machine is still downloading
+		the map: its players are held out of the game until it is done, and
+		the game they join must not be over already */
+		if (game && game->player_count == 0 && !network_game_server_map_downloads_pending())
 		{
 			if (!dedicated.empty_time)
 				dedicated.empty_time = now;
@@ -709,6 +717,25 @@ void dedicated_server_update(
 		}
 		else
 			dedicated.empty_time = 0;
+		/* a game that ended goes to postgame on its own clock (the engine's
+		postgame timer, in game ticks). One that never had a player can sit
+		ended and in progress for good, with every player who joins it
+		shown the carnage report at once (its game state says it is over):
+		sent to postgame, and from there to the next lobby */
+		if (game_engine_running() && !game_engine_can_score())
+		{
+			if (!dedicated.ended_time)
+				dedicated.ended_time = now;
+			else if (now - dedicated.ended_time >= ENDED_GAME_MILLISECONDS)
+			{
+				error(_error_silent, "dedicated: the game ended %d seconds ago and is still in progress; to postgame",
+					ENDED_GAME_MILLISECONDS / 1000);
+				network_game_server_switch_to_postgame(server);
+				dedicated.ended_time = 0;
+			}
+		}
+		else
+			dedicated.ended_time = 0;
 		/* nobody has scored for a while (idle players, or no one fighting):
 		the game ends rather than sitting there */
 		if (game_engine_running())

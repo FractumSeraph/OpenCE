@@ -23,12 +23,12 @@ port/linux/include/delta.h). What the browser offers:
 - chat and server_messages: text chat (port/linux/game/chat.c), as the
   native builds have it: T, Y and H on a keyboard, the touch controls' Chat
   button (xinput_sdl.c, platform_web_chat_say);
-- bomb, bomb_movement and bomb_traits: Bomb, Grifball and Open Pitch
-  (source/game/game_engine_bomb.c), whose host drops a machine without them.
-Not offered: profile (no player ID is shared). The signed legacy table's
+Not offered: profile (no player ID is shared); bomb, bomb_movement and
+bomb_traits (the browser build has no Bomb engine: a host playing Bomb,
+Grifball or Open Pitch drops a browser with a notice). The signed legacy table's
 kill switch (web_delta.c) turns any of these off. The session is the
 game's own (delta_peer_game.c, delta_peer_game_browser_session), so what the
-game reads of it (chat's lines, Bomb's traits) is this client's; its socket,
+game reads of it (chat's lines) is this client's; its socket,
 platform and map check are the browser's, here. */
 
 #include "platform.h"
@@ -160,10 +160,10 @@ void web_delta_peer_initialize(struct delta_peer *peer)
 	native builds have it) */
 	local.capabilities |= (delta_u32)1 << _delta_capability_chat |
 		(delta_u32)1 << _delta_capability_server_messages;
-	/* (Bomb game types and their traits, source/game/game_engine_bomb.c: a
-	host playing one drops a machine without bomb and bomb_traits) */
-	local.capabilities |= (delta_u32)1 << _delta_capability_bomb |
-		(delta_u32)1 << _delta_capability_bomb_movement | (delta_u32)1 << _delta_capability_bomb_traits;
+	/* (not bomb, bomb_movement or bomb_traits: the browser build has no Bomb
+	engine, source/game/game_engine_bomb.c being HALO_GAME_BROWSER's alone,
+	so a host playing a Bomb game type drops it with a notice rather than
+	keep a player whose game cannot play it) */
 	local.legacy_version = HALO_PORT_NETWORK_VERSION;
 	/* (the platform policy's row for an unknown platform; a browser hosts
 	no Delta game: its own rooms are the site's) */

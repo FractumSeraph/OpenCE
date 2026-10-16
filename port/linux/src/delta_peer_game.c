@@ -306,7 +306,7 @@ int delta_peer_protocol(void)
 {
 #ifdef HALO_BROWSER
 	/* (the browser runs its client in this session, so that what the game
-	reads here, chat and Bomb's traits, is the browser's: web_delta_peer.c) */
+	reads here, chat's lines, is the browser's: web_delta_peer.c) */
 	if (!delta_game.ready)
 	{
 		delta_game.ready = 1;

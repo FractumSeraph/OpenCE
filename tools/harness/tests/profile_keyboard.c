@@ -14,6 +14,8 @@ struct platform_input_state { unsigned char keys[TEST_SCANCODE_COUNT], mouse_but
 typedef struct { unsigned short wButtons; BYTE bAnalogButtons[8]; SHORT sThumbLX, sThumbLY; } XINPUT_GAMEPAD;
 #define SDL_BUTTON_X1 4
 static BOOL text_typing, text_typing_enter_armed, text_typing_enter_blocked, text_typing_keyboard, text_typing_field;
+/* (text chat's line, which keys_held_over_switch also counts: never up here) */
+static BOOL chat_typing;
 static struct { boolean active, shift_active, caps_active, symbols_active;
     void *keyboard; short row, column; word buffer_size; short last_event, last_key,
     number_of_event_repeats, caption_index; boolean last_exit_saved_text, first_key_replaces_buffer;

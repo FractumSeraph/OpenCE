@@ -44,6 +44,11 @@ boolean network_game_server_reset_to_pregame(
 void network_game_server_pause_countdown(
 	struct network_game_server *server,
 	boolean pause_countdown);
+/* port: whether a machine is still downloading the game's map, its players
+held until it is done (the dedicated server does not call such a game empty:
+server/src/dedicated.c) */
+boolean network_game_server_map_downloads_pending(
+	void);
 /* port: drop the joins a finished game left waiting, so the next one
 starts with none (network_test.c's host) */
 void network_game_server_port_clear_queued_players(

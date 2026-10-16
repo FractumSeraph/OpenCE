@@ -890,6 +890,21 @@ static boolean network_game_server_map_pending[MAXIMUM_NETWORK_MACHINE_COUNT];
 put back when the download is done (they spawn then, not before) */
 static struct network_player network_game_server_held_players[MAXIMUM_NETWORK_PLAYER_COUNT];
 static long network_game_server_held_player_count;
+
+boolean network_game_server_map_downloads_pending(
+	void)
+{
+	long machine_index;
+
+	if (network_game_server_held_player_count > 0)
+		return TRUE;
+	for (machine_index = 0; machine_index < MAXIMUM_NETWORK_MACHINE_COUNT; machine_index++)
+	{
+		if (network_game_server_map_pending[machine_index])
+			return TRUE;
+	}
+	return FALSE;
+}
 enum
 {
 #ifdef HALO_BROWSER

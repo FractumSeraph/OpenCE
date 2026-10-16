@@ -16,7 +16,7 @@ ChupathingyCE's, do; what is the browser's own is in `port/web` or inside
 | The legacy number | Joins hosts of network versions 11 to 24, as their builds do (OpenCE: its own version only). |
 | The signed legacy table | Fetched and checked (Ed25519); its kill switch obeyed. |
 | Delta List | The in-game Server Browser shows each game's host (DEDICATED, LINUX, DELTA / OPENCE), who is playing and the score to win, and lists the games only their site has. |
-| Delta Peer | A client of their hosts: the handshake, its platform key (platform "unknown": their registry has no browser), the Custom Edition map's identity (size and BLAKE2b-256 hash), a dedicated server's notices on the HUD, text chat (`chat`, `server_messages`) and Bomb game types (`bomb`, `bomb_movement`, `bomb_traits`: Bomb, Grifball and Open Pitch, whose host drops a machine without them). |
+| Delta Peer | A client of their hosts: the handshake, its platform key (platform "unknown": their registry has no browser), the Custom Edition map's identity (size and BLAKE2b-256 hash), a dedicated server's notices on the HUD, text chat (`chat`, `server_messages`). Not Bomb game types: the browser build has no Bomb engine (`game_engine_bomb.c` and its hooks are `HALO_GAME_BROWSER`'s), so a host playing Bomb, Grifball or Open Pitch drops a browser with a notice. |
 | Delta Stats | A game joined through an invite reported, and the player's lines confirmed with this browser's player key (the player can turn it off). |
 | Delta Link | Link profile: a code typed at halo.milenko.org/connect links this browser's key to a profile there. |
 
@@ -30,7 +30,7 @@ shared in games), signing in as a server's moderator, event logs.
 | --- | --- |
 | `port/linux/include/delta.h`, `port/linux/src/delta*.c` | ChupathingyCE's own, as their builds compile them: the registries, the compatibility table of OpenCE's network versions (`DELTA_LEGACY_VERSIONS`), the signed legacy table, Delta Peer's wire format and sessions. |
 | `web_delta.c` | Hands the signed legacy table that the page fetched to `delta.c` (`web_delta_offer_table`), which checks it and keeps it as it keeps any other. |
-| `web_delta_peer.c` | Delta Peer's client side, over a socket of the game's Winsock layer; the map identity check; notices. The session is the game's own (`delta_peer_game.c`'s, `delta_peer_game_browser_session`), so what the game reads of it, chat's lines and Bomb's traits, is the browser's. |
+| `web_delta_peer.c` | Delta Peer's client side, over a socket of the game's Winsock layer; the map identity check; notices. The session is the game's own (`delta_peer_game.c`'s, `delta_peer_game_browser_session`), so what the game reads of it, chat's lines, is the browser's. |
 | `web_delta_list.c` | Delta List's games for the Server Browser (`menu_functions.c`). |
 | `web_delta_stats.c` | A joined game's report (`game_engine.c`, HALO_BROWSER) to the page. |
 
