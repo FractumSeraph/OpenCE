@@ -74,7 +74,7 @@ of the whole `save` folder stops there.
 `ninja android` builds only the game image and the native libraries.
 
 The app is `net.fractumseraph.halo` in this fork (ChupathingyCE's is
-`dev.horrible.chupathingyce`), and its name on the device is Halo FS.
+`dev.horrible.chupathingyce`), and its name on the device is Fractum Halo.
 Refer to "App ID, signing and versions".
 
 ## The native 64-bit build (experimental)
@@ -387,7 +387,7 @@ beside the app adds a suffix, for example
 ### Signing
 
 **This fork (FractumSeraph/OpenCE)** has an app ID of its own,
-`net.fractumseraph.halo` ("Halo FS"), so that its app installs beside
+`net.fractumseraph.halo` ("Fractum Halo"), so that its app installs beside
 ChupathingyCE's (`dev.horrible.chupathingyce`), whose key it does not have;
 its data folder is `/sdcard/Android/data/net.fractumseraph.halo/files`. Its
 releases are signed with its own key: its pushes to `main` write

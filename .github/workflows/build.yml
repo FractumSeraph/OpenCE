@@ -1055,11 +1055,16 @@ jobs:
           done
           # (the release apps bare as well, signed with the fork's key, at
           # names that stay the same, for a phone to install from a link:
-          # releases/latest/download/halo-fs-android.apk is always the newest;
-          # halo.fractumseraph.net/android.html links them)
+          # releases/latest/download/fractum-halo-android.apk is always the
+          # newest; halo.fractumseraph.net/assets/android/ links them. The
+          # app's first name's files too (halo-fs-*.apk, "Halo FS"), for links
+          # given out under it)
           for build in android android64; do
             apk=$(find "artifacts/chupathingyce-$build-release-unsigned" -name '*.apk' | head -n 1)
-            if [ -n "$apk" ]; then cp "$apk" "release/halo-fs-$build.apk"; fi
+            if [ -n "$apk" ]; then
+              cp "$apk" "release/fractum-halo-$build.apk"
+              cp "$apk" "release/halo-fs-$build.apk"
+            fi
           done
           ls -l release
           {

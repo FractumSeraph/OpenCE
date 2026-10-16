@@ -111,7 +111,7 @@ static void test_linux_default_in_xdg_data_home(void)
 	char path[256];
 
 	CHECK(save_folder_default(_save_folder_linux, "C:/AppData", "/data", "/home/player", path, sizeof(path)));
-	CHECK(!strcmp(path, "/data/halo-fs"));
+	CHECK(!strcmp(path, "/data/fractum-halo"));
 	CHECK(save_folder_shared(_save_folder_linux, NULL, "/data", "/home/player", path, sizeof(path)));
 	CHECK(!strcmp(path, "/data/halo-linux"));
 }
@@ -121,7 +121,7 @@ static void test_linux_default_without_xdg(void)
 	char path[256];
 
 	CHECK(save_folder_default(_save_folder_linux, NULL, "", "/home/player", path, sizeof(path)));
-	CHECK(!strcmp(path, "/home/player/.local/share/halo-fs"));
+	CHECK(!strcmp(path, "/home/player/.local/share/fractum-halo"));
 	CHECK(save_folder_shared(_save_folder_linux, NULL, NULL, "/home/player", path, sizeof(path)));
 	CHECK(!strcmp(path, "/home/player/.local/share/halo-linux"));
 	CHECK(!save_folder_default(_save_folder_linux, NULL, NULL, NULL, path, sizeof(path)));
@@ -134,7 +134,7 @@ static void test_windows_default(void)
 
 	CHECK(save_folder_default(_save_folder_windows, "C:\\Users\\Player\\AppData\\Roaming", "/data",
 		"/home/player", path, sizeof(path)));
-	CHECK(!strcmp(path, "C:\\Users\\Player\\AppData\\Roaming/HaloFS"));
+	CHECK(!strcmp(path, "C:\\Users\\Player\\AppData\\Roaming/FractumHalo"));
 	CHECK(save_folder_shared(_save_folder_windows, "C:\\Roaming", NULL, NULL, path, sizeof(path)));
 	CHECK(!strcmp(path, "C:\\Roaming/halo"));
 	CHECK(!save_folder_default(_save_folder_windows, NULL, "/data", "/home/player", path, sizeof(path)));
@@ -168,17 +168,36 @@ static void test_choose_without_override(void)
 
 	CHECK(save_folder_choose(_save_folder_linux, "", NULL, "/data", "/home/player",
 		root, sizeof(root), shared, sizeof(shared)));
-	CHECK(!strcmp(root, "/data/halo-fs"));
+	CHECK(!strcmp(root, "/data/fractum-halo"));
 	CHECK(!strcmp(shared, "/data/halo-linux"));
 	CHECK(save_folder_choose(_save_folder_windows, NULL, "C:\\Roaming", NULL, NULL,
 		root, sizeof(root), shared, sizeof(shared)));
-	CHECK(!strcmp(root, "C:\\Roaming/HaloFS"));
+	CHECK(!strcmp(root, "C:\\Roaming/FractumHalo"));
 	CHECK(!strcmp(shared, "C:\\Roaming/halo"));
 	CHECK(!save_folder_choose(_save_folder_windows, NULL, NULL, "/data", "/home/player",
 		root, sizeof(root), shared, sizeof(shared)));
 }
 
 /* ---------- the copy */
+
+/* (this fork) its own folder's previous name, when it is there, is what the
+saves are copied from, before the folder every build shared */
+static void test_choose_copies_from_the_previous_fork_folder(void)
+{
+	char data[512], previous[512], root[512], shared[512];
+
+	in_scratch(data, sizeof(data), "previous");
+	mkdir(data, 0755);
+	CHECK(save_folder_choose(_save_folder_linux, NULL, NULL, data, "/home/player",
+		root, sizeof(root), shared, sizeof(shared)));
+	CHECK(strstr(shared, "/halo-linux") != NULL);
+	make_folder(data, "halo-fs");
+	snprintf(previous, sizeof(previous), "%s/halo-fs", data);
+	CHECK(save_folder_choose(_save_folder_linux, NULL, NULL, data, "/home/player",
+		root, sizeof(root), shared, sizeof(shared)));
+	CHECK(!strcmp(shared, previous));
+	CHECK(strstr(root, "/fractum-halo") != NULL);
+}
 
 static void test_copy_into_a_new_save_root(void)
 {
@@ -323,6 +342,7 @@ int main(int argc, char **argv)
 	test_too_long();
 	test_override_is_used_as_it_is();
 	test_choose_without_override();
+	test_choose_copies_from_the_previous_fork_folder();
 	test_copy_into_a_new_save_root();
 	test_save_root_with_profiles_is_kept();
 	test_save_root_without_profiles_is_filled_in();

@@ -217,8 +217,8 @@ Do the set-up in Desktop Mode: unpack the release, put `maps/` next to
 | `u:\` | `u/` in the save root. This folder contains the user data. |
 
 The save root is `paths.saves` in `config.toml`. If that setting is empty,
-the save root is `$XDG_DATA_HOME/halo-fs` (usually
-`~/.local/share/halo-fs`). The first time the game starts with that
+the save root is `$XDG_DATA_HOME/fractum-halo` (usually
+`~/.local/share/fractum-halo`). The first time the game starts with that
 save root, it copies the saves from the folder earlier versions used
 (`$XDG_DATA_HOME/halo-linux` or `~/.local/share/halo-linux`), without the
 map cache, which it rebuilds. That folder is left as it was. The file

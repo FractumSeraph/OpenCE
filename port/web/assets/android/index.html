@@ -1,9 +1,9 @@
 <!doctype html>
 <!--
   The Android app's download page (halo.fractumseraph.net/assets/android/):
-  the fork's signed app (net.fractumseraph.halo, "Halo FS"), always the
+  the fork's signed app (net.fractumseraph.halo, "Fractum Halo"), always the
   newest release's (.github/workflows/build.yml attaches the apps bare as
-  halo-fs-android.apk and halo-fs-android64.apk, so the links never change),
+  fractum-halo-android.apk and fractum-halo-android64.apk, so the links never change),
   the key's fingerprint, and how to install it. Linked from the page's
   footer (port/web/shell.html).
 -->
@@ -14,7 +14,7 @@
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#0b0d12">
 <link rel="icon" href="../pwa/icon-192.png" sizes="192x192" type="image/png">
-<title>Halo FS for Android</title>
+<title>Fractum Halo for Android</title>
 <style>
 :root{color-scheme:dark;font-family:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   --bg:#050807;--panel:rgba(12,21,18,.92);--line:rgba(151,189,169,.18);--text:#e9f3ee;--muted:#9fb7ab;
@@ -51,17 +51,17 @@ footer{margin-top:2.5rem;font-size:.9rem;color:var(--muted)}
   <header>
     <img src="../pwa/icon-192.png" alt="">
     <div>
-      <h1>Halo FS for Android</h1>
+      <h1>Fractum Halo for Android</h1>
       <div class="muted">Halo: Combat Evolved on your phone, with online play</div>
     </div>
   </header>
 
   <div class="card">
-    <a class="download" href="https://github.com/FractumSeraph/OpenCE/releases/latest/download/halo-fs-android.apk">
+    <a class="download" href="https://github.com/FractumSeraph/OpenCE/releases/latest/download/fractum-halo-android.apk">
       Download the app (.apk)
       <small>The newest version. Needs Android 9 or later on a 64-bit phone.</small>
     </a>
-    <a class="secondary" href="https://github.com/FractumSeraph/OpenCE/releases/latest/download/halo-fs-android64.apk">
+    <a class="secondary" href="https://github.com/FractumSeraph/OpenCE/releases/latest/download/fractum-halo-android64.apk">
       Native 64-bit build (experimental)
     </a>
     <p class="muted" style="margin:.8rem 0 0">Both builds are the same app, so either one installs over the other
@@ -75,12 +75,12 @@ footer{margin-top:2.5rem;font-size:.9rem;color:var(--muted)}
       then go back and tap <strong>Install</strong>.</li>
     <li>If Google Play Protect warns that it doesn't know the developer, tap <strong>More details</strong>,
       then <strong>Install anyway</strong>. The app isn't on the Play Store, so Play Protect has never seen it.</li>
-    <li>Open <strong>Halo FS</strong> and tap <strong>Download the maps</strong> (about 1.8 GB, so use Wi-Fi).
+    <li>Open <strong>Fractum Halo</strong> and tap <strong>Download the maps</strong> (about 1.8 GB, so use Wi-Fi).
       If you own the Xbox game, <strong>Choose disc image</strong> uses your own disc image instead.</li>
   </ol>
   <p class="note">If Android says the app can't be installed or conflicts with an existing package, an older
-    copy signed with a different key is on the phone. Uninstall <strong>Halo FS</strong> first, then
-    install again. Halo FS has its own app ID, so it installs beside the ChupathingyCE app and doesn't replace it.</p>
+    copy signed with a different key is on the phone. Uninstall <strong>Fractum Halo</strong> first, then
+    install again. Fractum Halo has its own app ID, so it installs beside the ChupathingyCE app and doesn't replace it.</p>
 
   <h2>How to play</h2>
   <ul>
@@ -106,7 +106,7 @@ footer{margin-top:2.5rem;font-size:.9rem;color:var(--muted)}
   <p>Every release is signed with the same key. Its certificate's SHA-256 fingerprint is:</p>
   <div class="fingerprint">79:2A:A0:CD:51:3B:A0:22:0A:4E:0E:AD:65:08:33:A8:39:74:79:15:69:FA:49:57:9C:92:47:96:48:A8:85:99</div>
   <p class="muted">To check a downloaded file on a computer with the Android SDK, run
-    <code>apksigner verify --print-certs halo-fs-android.apk</code>. Its <em>SHA-256 digest</em> line should match
+    <code>apksigner verify --print-certs fractum-halo-android.apk</code>. Its <em>SHA-256 digest</em> line should match
     the fingerprint above (without the colons).</p>
 
   <footer>

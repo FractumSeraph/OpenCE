@@ -9,8 +9,8 @@ directory when it has maps/, else assets/ in the current directory or two
 levels above the executable (the repository root for build/linux/halo).
 Every other drive letter X:\ is the subdirectory X/ of the save root (z:\ holds the persistent cache and saves,
 u:\ user data, t:\ title data): paths.saves, else the game's own folder
-(save_folder.c): $XDG_DATA_HOME/halo-fs or ~/.local/share/halo-fs,
-%APPDATA%/HaloFS on Windows. Path components are
+(save_folder.c): $XDG_DATA_HOME/fractum-halo or ~/.local/share/fractum-halo,
+%APPDATA%/FractumHalo on Windows. Path components are
 matched case-insensitively, like the Xbox's FATX volumes.
 */
 

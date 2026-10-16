@@ -35,8 +35,8 @@ enum save_folder_copy_result
 
 /* the save root's usual place, given the environment (appdata is
 %APPDATA%, data_home $XDG_DATA_HOME, home $HOME; NULL or empty when not
-set): %APPDATA%/HaloFS on Windows, $XDG_DATA_HOME/halo-fs or
-~/.local/share/halo-fs on Linux. 0 when the environment gives none. */
+set): %APPDATA%/FractumHalo on Windows, $XDG_DATA_HOME/fractum-halo or
+~/.local/share/fractum-halo on Linux. 0 when the environment gives none. */
 int save_folder_default(enum save_folder_system system, const char *appdata, const char *data_home,
 	const char *home, char *path, unsigned long size);
 

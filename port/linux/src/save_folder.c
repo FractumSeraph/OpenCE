@@ -19,11 +19,17 @@ the saves from the folder the game shared with other builds (save_folder.h).
 
 #define PATH_SIZE 1024
 
-/* this fork's own save folder (FractumSeraph/OpenCE, "Halo FS", as its Android
-app's data folder is net.fractumseraph.halo's): ChupathingyCE's is
+/* this fork's own save folder (FractumSeraph/OpenCE, "Fractum Halo", as its
+Android app's data folder is net.fractumseraph.halo's): ChupathingyCE's is
 ChupathingyCE and chupathingyce, which an installed ChupathingyCE keeps */
-#define SAVE_FOLDER_WINDOWS_NAME "HaloFS"
-#define SAVE_FOLDER_LINUX_NAME "halo-fs"
+#define SAVE_FOLDER_WINDOWS_NAME "FractumHalo"
+#define SAVE_FOLDER_LINUX_NAME "fractum-halo"
+/* its name for a few hours (release 0.7.5c-fs.00128, "Halo FS"): a save root
+made then is copied from first, before the folder every build shared */
+#define SAVE_FOLDER_PREVIOUS_WINDOWS_NAME "HaloFS"
+#define SAVE_FOLDER_PREVIOUS_LINUX_NAME "halo-fs"
+
+static int directory_exists(const char *path);
 
 static int is_set(const char *value)
 {
@@ -101,6 +107,19 @@ int save_folder_choose(enum save_folder_system system, const char *override, con
 		return 0;
 	if (!save_folder_shared(system, appdata, data_home, home, shared, shared_size) && shared_size)
 		shared[0] = '\0';
+	/* (this fork: its previous own folder, when there is one, is where the
+	saves are copied from) */
+	if (shared_size)
+	{
+		char previous[PATH_SIZE];
+
+		if (folder_path(system, appdata, data_home, home, SAVE_FOLDER_PREVIOUS_WINDOWS_NAME,
+			SAVE_FOLDER_PREVIOUS_LINUX_NAME, previous, sizeof(previous)) && directory_exists(previous) &&
+			strlen(previous) < shared_size)
+		{
+			snprintf(shared, shared_size, "%s", previous);
+		}
+	}
 	return 1;
 }
 

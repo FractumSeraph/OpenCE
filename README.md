@@ -23,46 +23,64 @@ then [ChupathingyCE's](#chupathingyce), then [OpenCE's](#opence).
   maps of the HaloMaps.org and HaloNet archives are unpacked at
   [halomaps.fractumseraph.net](https://halomaps.fractumseraph.net/maps/),
   each with a torrent, seeded around the clock. Join a game on a map you
-  don't have and the game downloads it, from other players over BitTorrent
-  and from the site, checks it against its index, and joins: nothing to
-  find or install by hand. The maps page also has every `.torrent` in one
-  download.
-- **Plays with OpenCE's newest builds before ChupathingyCE does.** OpenCE's
-  network version 26 changed how machines find each other on the internet
-  (each says its WebRTC, so that browsers join), which ChupathingyCE's
-  builds don't speak yet. This fork's builds speak both: they join hosts of
-  versions 11 to 26, ask a host in both forms and answer each machine in
-  its own, and their hosts announce 26. ChupathingyCE's signed table of
-  versions still applies once it is newer than that (`docs/delta.md`).
+  don't have and the game downloads it, from the host and other players
+  (map sharing, never renaming a map you have), over BitTorrent and from
+  the site, checks it, and joins: nothing to find or install by hand. The
+  maps page also has every `.torrent` in one download.
+- **Watch games live, or again.** Servers can keep a public copy of every
+  game (`network.record_public`): each player's moves, aim and kills, with
+  no address or hardware id, held back 30 seconds while the game is played
+  so that no one watching can help a player. Anyone watches them at
+  [halo.fractumseraph.net/assets/replay](https://halo.fractumseraph.net/assets/replay/),
+  live or once the game is over, through any player's eyes, behind them or
+  freely, each game linked to its stats on halo.milenko.org.
+- **Tools against cheaters.** A host checks each hit and move for shots
+  through walls, off aim, teleports and flying, and refuses or logs them
+  (`network.fair_play`; `sv_suspects` on a dedicated server); records every
+  game for its admins (`network.record_games`), who watch it in the replay
+  viewer with the hits it doubted marked; and its moderators can **Watch**
+  any player through their eyes, as Halo PC's SightJack did. Hosts can share
+  ban lists (`network.shared_bans`): FractumSeraph's servers publish theirs,
+  without IP addresses.
+- **Invite links that last.** A host's `halo://join/` link can stay the same
+  from run to run (`network.lasting_invite`), to post on a website.
 - **The game's maps at the first start.** The Windows, Mac, Linux and
   Android builds offer to download the Xbox maps (about 1.8 GB) instead of
   asking for a disc image (see [Game data](#game-data)).
+- **Fractum Halo for Android, signed.** An app of its own
+  (`net.fractumseraph.halo`), beside ChupathingyCE's, signed with this
+  fork's key so that every release installs over the last and updates
+  itself: [download page](https://halo.fractumseraph.net/assets/android/index.html).
+  The Windows and Linux builds keep their saves in a folder of their own
+  too (`%APPDATA%\FractumHalo`, `~/.local/share/fractum-halo`).
 - **The newest of both projects.** ChupathingyCE's features, plus OpenCE's
-  newest work that ChupathingyCE hasn't taken in yet: in-game Settings in
-  the campaign, field of view and viewmodel settings, OpenCE's touch
-  controls (profile buttons, gyroscope aiming, aim assist, opacity), the
-  high-resolution controller buttons, a screenshot key (F10), sound tag
-  files played over a map's sounds for those making them
-  (`audio.loose_sounds`), the portable Linux build for SteamOS, the
+  work that ChupathingyCE hasn't taken in: field of view and viewmodel
+  settings, OpenCE's touch controls (profile buttons, gyroscope aiming, aim
+  assist, opacity), the high-resolution controller buttons, a screenshot
+  key (F10), sound tag files played over a map's sounds for those making
+  them (`audio.loose_sounds`), the portable Linux build for SteamOS, the
   profiling build, and its CUSTOM SINGLEPLAYER and CUSTOM MULTIPLAYER map
   lists (Custom Edition campaign maps alone or as network co-op, a map's
   own `.bmp` picture and `.txt` description), your own legs in first
   person, energy shields that glow and take your armor's color, the
   shield's flare on your arms, and native builds that play with OpenCE's
   browser build over WebRTC.
-- **Servers of its own.** An internet-play broker (`halovps.fractumseraph.net:1883`,
-  the first of the five in every build's list), the maps' BitTorrent tracker, the
-  browser lobby and the gateway that lets a browser join native games, and
-  a dedicated server, **FractumSeraph** (Capture the Flag on Coldsnap).
+- **Servers of its own.** Two dedicated servers, **FractumFFA** (free for
+  all Slayer on small Custom Edition maps) and **FractumSlayer** (Team
+  Slayer), which update themselves when empty and can be watched live; an
+  internet-play broker (`halovps.fractumseraph.net:1883`, the first of the
+  five in every build's list), the maps' BitTorrent tracker, the browser
+  lobby and the gateway that lets a browser join native games.
 - **Its own releases.** Every change that builds on every platform is a
   release of this repository, and the game updates itself from them.
 - **Host it yourself.** The browser version comes as a kit to run on your
   own computer, a VPS or a plain web host (see [Download](#download)).
 
 Where the two projects do the same thing two ways, the fork keeps one
-working version; nothing sent over the network differs from theirs (it
-speaks both projects' forms where they differ), so players of all three
-play together.
+working version; nothing sent over the network differs from theirs, so
+players of all three play together: this fork's builds speak network
+version 29, as OpenCE's and ChupathingyCE's newest do, and join hosts of
+versions 11 to 30, in either project's form (`docs/delta.md`).
 
 ## Download
 
@@ -80,12 +98,12 @@ needs them ([docs/map_torrents.md](docs/map_torrents.md)):
 | Linux (64-bit) | [chupathingyce-linux64-release.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-linux64-release.zip) | [chupathingyce-linux64-debug.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-linux64-debug.zip) |
 | Linux (32-bit) | [chupathingyce-linux-release.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-linux-release.zip) | [chupathingyce-linux-debug.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-linux-debug.zip) |
 | Mac | [chupathingyce-macos-release.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-macos-release.zip) | [chupathingyce-macos-debug.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-macos-debug.zip) |
-| Android | [halo-fs-android.apk](https://github.com/FractumSeraph/OpenCE/releases/latest/download/halo-fs-android.apk) (or [chupathingyce-android-release.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-android-release.zip)) | [chupathingyce-android-debug.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-android-debug.zip) |
+| Android | [fractum-halo-android.apk](https://github.com/FractumSeraph/OpenCE/releases/latest/download/fractum-halo-android.apk) (or [chupathingyce-android-release.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-android-release.zip)) | [chupathingyce-android-debug.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-android-debug.zip) |
 | Dedicated server (Linux x64) | [chupathingyce-server-linux-x64.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-server-linux-x64.zip) | |
 | Dedicated server (Linux arm64) | [chupathingyce-server-linux-arm64.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-server-linux-arm64.zip) | |
 | Dedicated server (Linux x86) | [chupathingyce-server-linux-x86.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-server-linux-x86.zip) | |
 
-**The Android app** is "Halo FS" (`net.fractumseraph.halo`, beside
+**The Android app** is "Fractum Halo" (`net.fractumseraph.halo`, beside
 ChupathingyCE's app rather than over it), signed with this fork's key, whose
 certificate's SHA-256 fingerprint is
 `79:2A:A0:CD:51:3B:A0:22:0A:4E:0E:AD:65:08:33:A8:39:74:79:15:69:FA:49:57:9C:92:47:96:48:A8:85:99`;
@@ -93,8 +111,8 @@ each release installs over the one before, and the app updates itself. Its
 download page, with how to install it, is
 https://halo.fractumseraph.net/assets/android/index.html
 (`port/web/assets/android/index.html`). Each release has the app bare as
-`halo-fs-android.apk`, and the native 64-bit build (experimental) as
-`halo-fs-android64.apk`. The debug zip's APK is signed with the build
+`fractum-halo-android.apk`, and the native 64-bit build (experimental) as
+`fractum-halo-android64.apk`. The debug zip's APK is signed with the build
 machine's own debug key, which can differ from one build to the next, and
 then does not install over an earlier one.
 
@@ -301,9 +319,9 @@ saves go in `/sdcard/Android/data/net.fractumseraph.halo/files`. On a
 Mac, the maps, settings and saves go in
 `~/Library/Application Support/ChupathingyCE`.
 On Linux, the maps and settings (`config.toml`) go next to the `halo`
-executable, and the saves in `~/.local/share/halo-fs` (or
-`$XDG_DATA_HOME/halo-fs`). On Windows, the saves go in
-`%APPDATA%\HaloFS`. The first start copies your profiles, saved games
+executable, and the saves in `~/.local/share/fractum-halo` (or
+`$XDG_DATA_HOME/fractum-halo`). On Windows, the saves go in
+`%APPDATA%\FractumHalo`. The first start copies your profiles, saved games
 and game types from the folder earlier versions used (`halo-linux`, or
 `%APPDATA%\halo` on Windows), which is left as it was. The 64-bit and
 32-bit builds use the same places, so switching from one to the other keeps

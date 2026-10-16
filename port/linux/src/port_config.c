@@ -477,7 +477,7 @@ static const struct config_setting config_settings[] =
 		"single quotes: 'C:\\Games\\Halo'." },
 	{ "paths.saves", _config_string, "\"\"", "HALO_SAVE_ROOT", _environment_value, _platform_desktop,
 		"Where saved games and profiles go; empty for the usual place\n"
-		"(~/.local/share/halo-fs, or %APPDATA%\\HaloFS on Windows)." },
+		"(~/.local/share/fractum-halo, or %APPDATA%\\FractumHalo on Windows)." },
 	{ "paths.custom_edition", _config_string, "\"\"", "HALO_CUSTOM_EDITION_ROOT", _environment_value, _platform_desktop,
 		"A folder of Custom Edition maps, or a Halo Custom Edition install\n"
 		"(its maps folder), looked in after maps_ce and custom_maps for\n"

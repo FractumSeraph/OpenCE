@@ -69,7 +69,7 @@ off the lists as it goes.
 
 The data folder is the current folder, unless `HALO_DATA_ROOT` says
 otherwise. The server writes its log, `debug.txt`, there, and its saves in
-`~/.local/share/halo-fs` unless `HALO_SAVE_ROOT` says otherwise
+`~/.local/share/fractum-halo` unless `HALO_SAVE_ROOT` says otherwise
 ([Settings](docs/settings.md)). When `debug.txt` reaches 64 MB, it is renamed
 `debug.old.txt` and a new `debug.txt` starts.
 
