@@ -142,7 +142,8 @@ const char *platform_data_root(void)
 #if !defined(HALO_ANDROID) && !defined(HALO_WEB)
 			{
 				/* (the macOS application's data goes in its folder in
-				Application Support, not in the application: port_config.c) */
+				Application Support, not in the application, and an
+				AppImage's in the save root's place: port_config.c) */
 				char app_folder[MAX_PATH];
 				const char *destination = platform_app_folder(app_folder, sizeof(app_folder))
 					? app_folder : executable_directory;
@@ -154,6 +155,10 @@ const char *platform_data_root(void)
 				{
 					snprintf(root, sizeof(root), "%s", destination);
 				}
+				/* (with no maps anywhere, the log still goes where it can
+				be written) */
+				else if (!has_maps(root) && destination == app_folder)
+					snprintf(root, sizeof(root), "%s", destination);
 			}
 #endif
 			if (!has_maps(root))

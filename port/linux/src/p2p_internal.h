@@ -128,6 +128,19 @@ server browser or on the game list (going private, or a password: those who
 saw it must not get in); under p2p_lock */
 void p2p_new_invite_if_listed(void);
 
+/* ---------- p2p.c: pings before joining (p2p_probe.c), under p2p_lock */
+
+/* a PROBE the host heard on its topic, opened: its answer (signed; the
+caller seals it) into answer, which holds P2P_PROBE_MAXIMUM_MESSAGE bytes,
+and the prober's reply id (P2P_PROBE_ID_SIZE bytes); returns the answer's
+size, 0 for none (not hosting, over the budget, a resend not due) */
+int p2p_probe_request_heard(const unsigned char *message, int size, unsigned char *answer, unsigned char *reply);
+/* the tokens of the probes waiting for an answer (whose keys may open
+one); returns their count */
+int p2p_probe_asking_tokens(unsigned char (*tokens)[P2P_TOKEN_SIZE], int maximum);
+/* a PROBE_ANSWER opened with the key of that token */
+void p2p_probe_answer_heard(const unsigned char *token, const unsigned char *message, int size);
+
 /* ---------- p2p_signal.c: signalling through public MQTT brokers */
 
 /* connects to the brokers, if not already; called from the p2p thread */
@@ -152,6 +165,13 @@ the host; 0 if there is no room, or the request to the host is of another
 token. Stopped by its identifier */
 int p2p_signal_join_player(const unsigned char *player_hash, const unsigned char *token);
 void p2p_signal_stop_joining_player(const unsigned char *identifier);
+/* a PROBE to the host whose key has this hash, of the invite with this
+token: sealed and published once on every broker (p2p_probe.c resends) */
+void p2p_signal_probe(const unsigned char *host_hash, const unsigned char *token, const unsigned char *message,
+	int size);
+/* the prober's reply topic (hceu/3/ and the reply id in hex) listened on;
+NULL for none */
+void p2p_signal_probe_topic(const unsigned char *reply);
 /* whether any broker is connected */
 int p2p_signal_connected(void);
 /* every broker's connection made anew at once: after the p2p thread was

@@ -402,9 +402,6 @@ static BOOL text_typing_enter_armed;
 static BOOL text_typing_enter_blocked;
 /* (the on-screen keyboard's, and a menu's text field's: menu_functions.c) */
 static BOOL text_typing_keyboard, text_typing_field;
-/* text chat's line or log is up (platform_chat_typing): every key goes to it,
-escape too (it closes them), and nothing bound acts */
-static BOOL chat_typing;
 
 static void text_typing_update(void)
 {
@@ -523,10 +520,13 @@ static void keyboard_gamepad(const struct platform_input_state *input, XINPUT_GA
 	pad->bAnalogButtons[XINPUT_GAMEPAD_BLACK] |= analog(k[SDL_SCANCODE_C]);
 }
 
-/* the keys held when the game, menus or console switch count as up until let go
-of: the escape that opens the pause menu does not also back out of it, nor
-the one that closes it (or the console, or a chat line) pause the game
-again */
+static BOOL chat_typing;
+
+/* the keys held when the game, the menus or the console switch, or text
+chat's line or log opens or closes, count as up until let go of: the escape
+that opens the pause menu does not also back out of it, nor the one that
+closes it (or the console, or the chat's line) pause the game again, nor the
+enter that sends a line press anything */
 static void keys_held_over_switch(struct platform_input_state *input)
 {
 	static unsigned char held[SDL_SCANCODE_COUNT];
@@ -774,9 +774,32 @@ static void keyboard_controls(unsigned long held, XINPUT_GAMEPAD *pad)
 	keyboard_actions_held = held;
 }
 
+/* text chat's typing (platform_chat_typing: chat_typing, above), and escape
+pressed while it types (platform_chat_escape) */
+static BOOL chat_escape_held, chat_escape_pressed;
+
 void platform_chat_typing(int typing)
 {
 	chat_typing = typing != 0;
+	chat_escape_pressed = FALSE;
+}
+
+int platform_chat_escape(void)
+{
+	BOOL pressed = chat_escape_pressed;
+
+	chat_escape_pressed = FALSE;
+	return pressed;
+}
+
+/* (escape, seen as the key itself rather than as a keystroke) */
+static void chat_escape_update(const struct platform_input_state *input)
+{
+	BOOL held = input->keys[SDL_SCANCODE_ESCAPE] != 0;
+
+	if (chat_typing && held && !chat_escape_held)
+		chat_escape_pressed = TRUE;
+	chat_escape_held = held;
 }
 
 unsigned long halo_keyboard_actions(short controller_index)
@@ -1331,6 +1354,7 @@ DWORD WINAPI XInputGetState(HANDLE device, PXINPUT_STATE state)
 		keyboard_actions_held = 0;
 		keys_held_over_switch(&input);
 		test_input_menu_keys(&input);
+		chat_escape_update(&input);
 		/* (nothing bound while the console or a chat line is being typed) */
 		console_active = console_is_active() != 0 || chat_typing;
 		held = console_active ? 0 : keyboard_bound_actions(&input);
@@ -1416,8 +1440,8 @@ DWORD WINAPI XInputDebugGetKeystroke(PXINPUT_DEBUG_KEYSTROKE keystroke)
 
 		/* key ups always pass, so no key is left latched down; while typing,
 		escape does not (it cancels, as B: the game's own escape leaves the
-		menus, main.c). A chat line takes every key, escape too, which
-		closes it (port/linux/game/chat.c) */
+		menus, main.c); text chat's line and log take every key, escape
+		included (chat.c: it closes them) */
 		if (key_up || next.virtual_key == VK_OEM_3_BACKQUOTE || console_is_active() || chat_typing ||
 			(text_typing && next.virtual_key != 0x1B /* escape */))
 		{

@@ -225,6 +225,19 @@ static const struct config_setting config_settings[] =
 	{ "display.player_name_scale", _config_real, "1.0", "HALO_PLAYER_NAME_SCALE", _environment_value, _platform_all,
 		"How large the players' names are drawn: 1.0 three quarters of the size of\n"
 		"the HUD's text, 0.25 to 4." },
+	{ "display.follow_camera", _config_string, "\"long_waits\"", "HALO_FOLLOW_CAMERA", _environment_value,
+		_platform_all,
+		"In multiplayer, when a dead player's camera follows a living player\n"
+		"from behind (a teammate, or in a game without teams the killer or the\n"
+		"leader; LB and RB, or Q and E, switch who) once the death camera is\n"
+		"done: \"long_waits\" only while the wait to respawn is long (see\n"
+		"display.follow_camera_after, out of lives, or a game type's next\n"
+		"round), \"always\", or \"off\" for the original death camera only." },
+	{ "display.follow_camera_after", _config_real, "5.0", "HALO_FOLLOW_CAMERA_AFTER", _environment_value,
+		_platform_all,
+		"For display.follow_camera's \"long_waits\": how many seconds of the\n"
+		"wait to respawn must be left once the death camera is done (3\n"
+		"seconds after the death) for the camera to follow someone." },
 	{ "display.scoreboard_team_layout", _config_string, "\"teams\"", "HALO_SCOREBOARD_TEAM_LAYOUT", _environment_value,
 		_platform_all,
 		"How the scoreboard lists a team game's players: \"teams\" in a column for\n"
@@ -648,6 +661,10 @@ static const struct config_setting config_settings[] =
 		"The server browser: public games are listed through the signalling\n"
 		"brokers, and Join Game > Server Browser shows them. False lists no\n"
 		"game of this machine's and shows none." },
+	{ "network.ping_games", _config_boolean, "true", "HALO_NET_PING_GAMES", _environment_value, _platform_all,
+		"Online Games pings the listed games whose hosts answer pings, before\n"
+		"joining (the host sees this machine's public address, as when\n"
+		"joining). False: no pings; the games' estimated pings (~) only." },
 	{ "network.host_public", _config_boolean, "true", "HALO_NET_HOST_PUBLIC", _environment_value, _platform_all,
 		"Whether a new game of Create Game > Internet starts as PUBLIC (listed\n"
 		"in everyone's server browser: anyone can see and join it) or, false,\n"
@@ -1119,6 +1136,27 @@ int platform_app_folder(char *path, unsigned long size)
 	snprintf(path, (size_t)size, "%s/Library/Application Support/ChupathingyCE", home);
 	SDL_CreateDirectory(path);
 	return 1;
+#elif defined(__linux__) && !defined(HALO_ANDROID)
+	/* an AppImage (which sets APPIMAGE) runs from its own file, mounted
+	read-only: its data and settings go in the save root's usual place
+	(save_folder.c), or a test's HALO_SAVE_ROOT */
+	const char *appimage = getenv("APPIMAGE");
+	const char *save_root = getenv("HALO_SAVE_ROOT");
+	const char *data_home = getenv("XDG_DATA_HOME");
+	const char *home = getenv("HOME");
+
+	if (!appimage || !*appimage)
+		return 0;
+	if (save_root && *save_root)
+		snprintf(path, (size_t)size, "%s", save_root);
+	else if (data_home && *data_home)
+		snprintf(path, (size_t)size, "%s/chupathingyce", data_home);
+	else if (home && *home)
+		snprintf(path, (size_t)size, "%s/.local/share/chupathingyce", home);
+	else
+		return 0;
+	SDL_CreateDirectory(path);
+	return 1;
 #else
 	(void)path;
 	(void)size;
@@ -1132,8 +1170,10 @@ static void config_path(char *path, size_t size)
 	snprintf(path, size, "/storage/config.toml");
 	return;
 #endif
-#ifdef __APPLE__
+#ifndef HALO_ANDROID
 	char folder[1024];
+#endif
+#ifdef __APPLE__
 	const char *save_root = getenv("HALO_SAVE_ROOT");
 
 	/* (a copy given a save root of its own, a test's, keeps its settings
@@ -1143,7 +1183,10 @@ static void config_path(char *path, size_t size)
 		snprintf(path, size, "%s/config.toml", save_root);
 		return;
 	}
-	/* (the application's folder: not the application, which is signed) */
+#endif
+#ifndef HALO_ANDROID
+	/* (the application's folder: not the application, which is signed, or
+	the AppImage, which cannot be written) */
 	if (platform_app_folder(folder, sizeof(folder)))
 	{
 		snprintf(path, size, "%s/config.toml", folder);
@@ -2113,6 +2156,7 @@ static const struct
 	{ "display.menus", { "xbox", "gearbox", "pc", NULL }, NULL },
 	{ "display.player_names", { "all", "allies", "allys", "enemies", "none", NULL }, "\"all\"" },
 	{ "display.scoreboard_team_layout", { "teams", "score", NULL }, "\"teams\"" },
+	{ "display.follow_camera", { "long_waits", "always", "off", NULL }, "\"long_waits\"" },
 	{ "audio.resampling", { "sinc", "linear", NULL }, "\"sinc\"" },
 	{ "input.touch_controls", { "on", "auto", "off", NULL }, "\"on\"" },
 	{ "game.console_log", { "important", "all", "none", NULL }, "\"important\"" },

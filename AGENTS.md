@@ -215,7 +215,9 @@ otherwise.
 
 ### Third-party code and licences
 
-The repository is CC0. Vendored code goes in `port/third_party/<name>`,
+The repository is GPL-3.0-or-later since ChupathingyCE's 0.8.0 (this fork took
+it in on 2026-10-16; README.md, License); OpenCE's code stays CC0 in OpenCE's
+own repository. Vendored code goes in `port/third_party/<name>`,
 copied unchanged, with a README naming the upstream, the version or commit,
 the checksum and what uses it. GPL code (OpenSauce, Reclaimer) may be read
 as documentation of file formats, never copied.

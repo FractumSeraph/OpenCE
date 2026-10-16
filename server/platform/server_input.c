@@ -90,6 +90,11 @@ void platform_chat_typing(int typing)
 	(void)typing;
 }
 
+int platform_chat_escape(void)
+{
+	return 0;
+}
+
 void platform_text_field(int typing, int password)
 {
 	(void)typing;

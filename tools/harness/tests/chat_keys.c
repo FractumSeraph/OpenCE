@@ -36,6 +36,8 @@ typedef struct _XINPUT_DEBUG_KEYSTROKE *PXINPUT_DEBUG_KEYSTROKE;
 /* the key layer's state (xinput_sdl.c's statics) */
 static BOOL text_typing;
 static BOOL chat_typing;
+/* (escape seen as the key itself while a line is up: xinput_sdl.c) */
+static BOOL chat_escape_pressed;
 static boolean console_active;
 #define console_is_active() console_active
 
@@ -128,7 +130,11 @@ static void open_line(void)
 	chat.typing = TRUE;
 	chat.input[0] = 0;
 	chat.input_length = 0;
+	/* (an escape pressed before the line came up does not close it) */
+	chat_escape_pressed = TRUE;
 	platform_chat_typing(TRUE);
+	CHECK(chat_typing && !chat_escape_pressed, "the key layer's chat %d, escape pressed %d", chat_typing,
+		chat_escape_pressed);
 }
 
 int main(int argc, char **argv)

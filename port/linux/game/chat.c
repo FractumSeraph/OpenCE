@@ -1004,6 +1004,19 @@ void chat_update(void)
 		unsigned long pressed = held & ~chat.actions_held;
 
 		chat.actions_held = held;
+		/* (escape always closes the line or the log) */
+		if (platform_chat_escape() && (chat.typing || chat.log_open))
+		{
+			struct key_stroke key;
+
+			chat.log_open = FALSE;
+			if (chat.typing)
+				typing_end();
+			else
+				platform_chat_typing(FALSE);
+			while (input_get_key(&key))
+				;
+		}
 		if (chat.typing)
 			typing_keys();
 		else if (chat.log_open)
@@ -1049,10 +1062,11 @@ void chat_update(void)
 		chat.actions_held = 0;
 		if (chat.typing)
 			typing_end();
-		/* (the log goes too: its keys are read only in the game, so one left
-		up here would hold the keyboard back from the menus, the lobby's or
-		a new map's) */
-		chat.log_open = FALSE;
+		if (chat.log_open)
+		{
+			chat.log_open = FALSE;
+			platform_chat_typing(FALSE);
+		}
 #ifdef HALO_BROWSER
 		/* (no game to say it in: the touch controls' line goes) */
 		{
@@ -1064,9 +1078,10 @@ void chat_update(void)
 #endif
 	}
 	/* (the key layer holds every bound key back while it believes a line or
-	the log is up: told again each frame, so that no way out of them leaves
-	the keyboard driving nothing) */
-	platform_chat_typing(chat.typing || chat.log_open);
+	the log is up: told again each frame neither is, so that no way out of
+	them leaves the keyboard driving nothing) */
+	if (!chat.typing && !chat.log_open)
+		platform_chat_typing(FALSE);
 }
 
 /* ---------- drawing */

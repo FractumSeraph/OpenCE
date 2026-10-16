@@ -137,7 +137,7 @@ shares.
 | 9 | `console_slots` | retired before use: a console's slots are its platform key's limits (below). Never set, never reused |
 | 10 | `moderation` | a dedicated server's moderators sign in and act from the game (below, "Moderation") |
 | 11 | `bomb` | Bomb game types (Bomb, Grifball, Open Pitch: [bomb.md](bomb.md)) and their player traits (TRAITS). Room-wide: a host playing one drops every machine without it |
-| 12 | `ping` | a host that answers pings before joining (Online Games); taken, never set yet |
+| 12 | `ping` | the host answers Online Games' pings before joining; announced on Delta List only, never in a HELLO (see "Pings before joining") |
 | 13 | `bomb_movement` | TRAITS' movement and melee traits (jump, gravity, melee reach), for a player whose machine and host both agreed to it |
 | 14 | `bomb_traits` | TRAITS at 22 (Grifball test builds 2 and 3 sent it as 18, chat's CHAT_CONFIG). Room-wide with `bomb`: a host playing a Bomb game type drops every machine without both |
 
@@ -753,7 +753,7 @@ last):
 | `platform_key` | the host machine's platform key (see "Platform keys"), 16 hexadecimal digits |
 | `arch` | `x64`, `x86`, `arm64` or `arm` |
 | `build` | the build's version (`0.7.1b`) |
-| `capabilities` | the capabilities it offers, 8 hexadecimal digits |
+| `capabilities` | the capabilities it offers, 8 hexadecimal digits; bit 12 (`ping`) is set here alone, by a host that answers pings before joining |
 | `machines` | while hosting with Delta: the game's machines by platform, `pc_linux:2,xbox:1,legacy:1` (`legacy`: a machine without Delta; `unknown`: a Delta machine that does not share its platform; a dedicated server leaves itself out). Counts only, never a player (`delta_peer_game_host_summary`) |
 
 Compatibility both ways: a site from before these fields ignores them (it
@@ -766,8 +766,9 @@ From them the site lists each game's `platform`, `hosting` (`official`: our
 `[D]` servers, by their hosts; `dedicated`; `player`), `protocol` (`delta`,
 `opence`), `family` (`xbox`, `ce`, `pc`, `md`, by the map's suffix) and
 `machines`; OpenCE's public games (the brokers) are `opence` and nothing
-more. The game's browser reads them from `/v1/games.txt?fields=17` (fields
-14 to 17: platform, hosting, protocol, machines) and shows them: the Online
+more. The game's browser reads them from `/v1/games.txt?fields=19` (field
+13 the region; 14 to 17: platform, hosting, protocol, machines; 18 an
+OpenCE game's gametype; 19 the announced capabilities) and shows them: the Online
 Games screen's rows (a platform tag before the name, `SRV` for a server),
 its details (a Host line; the machines beside IN GAME) and the PC menus'
 Server Browser's Rules line. The console list adds platform, hosting and
@@ -776,6 +777,88 @@ protocol after its tenth field, which Warthog's reader passes over.
 A player's own copy also says its platform (`"platform"`) when it confirms
 its line (`/v1/claim`) or reports a game it joined (`/v1/client_report`),
 for the site's "Played on" profile badges.
+
+### Pings before joining (built, 0.8.0)
+
+Online Games shows each listed game's ping before joining: a measured one
+where the host answers, `~NN` (an estimate) where it can't, nothing where
+nothing is known; sorting by Ping puts measured first, then estimated, then
+none. The numbers fill in as they arrive.
+
+There was nothing to reuse: Halo PC servers answer GameSpy queries on
+their game port, but nothing of that is in the decomp, OpenCE or our
+builds, and no client knows a host's address before signalling (the list
+never gives one). Player hosts and dedicated servers are reached the same
+way, so one mechanism serves both: a probe through signalling, then a
+small ping on the host's tunnel socket bound to the probe.
+
+Signalling (sealed with the invite token's key and published on the
+host's topic, like JOIN; OpenCE and older builds act only on `J` there):
+
+| | Layout |
+| --- | --- |
+| PROBE (`P`), prober to host | `'P'`, version 1, probe id (16, random), reply id (16, random a run; the answer goes to `hceu/3/<its hex>`), address count (1, at most 4), addresses (6 each) |
+| PROBE_ANSWER (`Q`), host to prober | `'Q'`, version 1, probe id (16), the host's Ed25519 key (32), address count (1, at most 4), addresses (6 each), Ed25519 signature (64) of `"chupathingy probe"` and everything before it |
+
+A prober takes an answer only when the key's X25519 form hashes to the
+invite's host hash and the signature checks, so no one watching the brokers
+can point it at another machine.
+
+The tunnel socket (magic `0x6A`; the tunnel's is `0x69`; older builds drop
+it unread): every datagram 24 bytes: magic (1), type (1: PING, 2: PONG, 3:
+PUNCH), sequence (2), probe id (16), the prober's clock (4, echoed).
+
+A probe is never a peer: no session, no X25519 work, no virtual address,
+no stand-in, no broadcast, no slot, no player count; the game never hears
+of it. The host keeps its id in a 16-entry table for 10 seconds, and
+answers a PING only with a live id, with a PONG of the same 24 bytes, to
+the PING's source.
+
+| Limit (`p2p_probe.h`) | |
+| --- | --- |
+| new probes a host takes | 8 at once, then one each 250 ms |
+| a probe's answer said again (the prober's resend) | at most once a second, at no new cost |
+| PONGs a probe | 8 |
+| the host's PUNCH (for a host behind NAT) | 2 rounds to at most 4 addresses, stopped by the first PING |
+| a prober's probes at once | 4 |
+| PROBE resent | every 1.5 s, 3 times; given up after 5 s |
+| PINGs | every 200 ms to each address, until 3 PONGs or 5 s; the lowest round trip is shown |
+| a host measured again | after 60 s (a failed one too) |
+
+Amplification and spoofing: a PONG is never larger than its PING, and a
+PING without a live id gets nothing. Probe ids can be read by anyone with a
+listed game's token watching the brokers, so a spoofer can at most have 8
+PONGs of 24 bytes sent to a victim per id, after paying for a sealed MQTT
+publish (larger than that) within the brokers' own limits and the host's 4
+new probes a second. The PUNCH goes to addresses the prober names, as
+JOIN's punch does today, within the same budget. A forged PONG can only
+make one row's number wrong; the number is never used for anything else.
+
+Privacy: no address is shown or logged (the log says "answering pings",
+"pinging the listed games", counts only). The prober learns a host's
+addresses only through its signed answer, as joining does, and keeps them
+in memory. A host sees a prober's public address, as it sees anyone's who
+joins; `network.ping_games = false` turns probing off (estimates only).
+
+Estimates: `GET /v1/anchors.txt` lists `anchor<TAB>host<TAB>port<TAB>
+regions` lines (regions: continents `EU` or countries `EU-DE`, as a game's
+region). The client times a TCP connection to each (twice, the lower kept;
+nothing is sent), once a run, the first time Online Games opens with online
+play on, and estimates a game from its region: the lowest anchor naming its
+country, else its continent. The site's defaults are our own hosts for
+North America and a cloud provider's regional endpoints elsewhere
+(`--anchors` replaces them).
+
+Compatibility: only hosts that announce bit 12 are probed; older hosts show
+an estimate or nothing. A site from before field 19 gives no capabilities:
+no probes, estimates only if it has anchors. Nothing else changes meaning,
+and the legacy table's per-capability kill switch turns `ping` off (no
+answering, no probing). No pings at all with online play off.
+
+`port/linux/tests/ping_test.c` (`tools/test_ping.py`) tests the formats
+with hostile input, the host's limits, the prober's measuring, the anchors
+and the Ping column's order; `HALO_NETWORK_TEST=browse` opens Online Games
+and logs each game's ping, for two copies on one machine.
 
 ## Delta Stats
 

@@ -147,9 +147,12 @@ one that cannot be moved stays where it is), and logs each: how many moved */
 int platform_old_map_folders_move(void);
 /* the macOS application's folder for its data and settings, when the game
 runs as an application (ChupathingyCE.app): ~/Library/Application
-Support/ChupathingyCE, made if need be, into path; 0 otherwise (and on
-other systems). An application's own files are not written: it is signed,
-and may be where its player cannot write (port_config.c) */
+Support/ChupathingyCE, made if need be, into path; on Linux, when the game
+runs as an AppImage, the save root's usual place (HALO_SAVE_ROOT, else
+$XDG_DATA_HOME/chupathingyce or ~/.local/share/chupathingyce); 0 otherwise
+(and on other systems). An application's own files are not written: it is
+signed, and may be where its player cannot write, and an AppImage is
+mounted read-only (port_config.c) */
 int platform_app_folder(char *path, unsigned long size);
 const char *platform_save_root(void);
 /* the folder of Custom Edition maps paths.custom_edition names, which the

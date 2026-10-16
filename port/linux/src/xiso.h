@@ -12,6 +12,10 @@ all the files' */
 typedef void (*xiso_progress_proc)(void *context, const char *file, unsigned long long done,
 	unsigned long long total);
 
+/* whether the file is an Xbox disc image (of the game partition or a whole
+disc) */
+int xiso_is_image(const char *image_path);
+
 /* copies the image's maps folder to <destination>/maps; returns nonzero on
 success, or 0 with the reason (for the player) in error. Called from any
 thread */

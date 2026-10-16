@@ -18,10 +18,13 @@ and the debug keyboard that the game's console reads.
 #include "gl.h"
 #include "port_config.h"
 #include "p2p.h"
+#include "posix.h"
 #include "xiso.h"
 #ifndef HALO_ANDROID
 #include "update.h"
 #endif
+#include "pc_disc.h"
+#include "ce_installer.h"
 #include "touch_input.h"
 #include "delta.h"
 #include "shared_bans.h"
@@ -193,6 +196,8 @@ static void old_map_folders_offer(BOOL quiet)
 }
 
 #ifndef HALO_ANDROID
+static BOOL data_has_xbox_maps(const char *destination);
+
 /* the maps folder checked to hold the Xbox maps (platform_maps_folder_check).
 When it holds Halo PC's instead, or no ui.map, the player is told where each
 kind goes and the game quits, rather than failing to load Halo PC's ui.map
@@ -240,6 +245,13 @@ static void data_check_maps(void)
 			maps.ui_version == 609 ? "Halo PC (Custom Edition)" : "Halo PC", where);
 		break;
 	default:
+		/* (a maps folder without ui.map and no Halo PC maps in it, as "make
+		the folders" leaves it: the choices offered again) */
+		if (!quiet && !maps.stray_pc_maps && platform_offer_game_data(maps.root) &&
+			data_has_xbox_maps(maps.root))
+		{
+			return;
+		}
 		snprintf(message, sizeof(message),
 			"Halo's Xbox maps were not found: %s/maps has no ui.map.%s\n\n%s\n\n"
 			"To copy the Xbox maps out of your disc image, move the maps folder aside and start "
@@ -419,8 +431,28 @@ static void show_pointer(BOOL shown)
 
 #if !defined(HALO_ANDROID) && !defined(HALO_WEB)
 
-/* ---------- first start without game data (xbox_files.c; OpenCE's web
-page imports it itself) */
+/* ---------- first start without game data (xbox_files.c)
+
+The player is offered choices, never told to find a disc: Halo's maps from
+an Xbox disc image (the default, and the only data the game needs), Halo
+PC's maps from its CD image or Custom Edition's installer as optional
+extras (into maps_pc and maps_ce), or the folders made empty for them to
+fill themselves. A file picked is told apart by what it holds, not its
+name: an Xbox disc image (xiso.c), Custom Edition's installer
+(ce_installer.c), or a CD image (pc_disc.c).
+
+This fork's: with a download URL (data.download_url), the maps folder
+downloaded from it instead, the multiplayer maps alone or everything
+(data_download), and the campaign's maps later when a level needs them
+(platform_offer_missing_map) */
+
+enum
+{
+	_data_unknown,
+	_data_xbox_disc,
+	_data_halo_pc_disc,
+	_data_custom_edition_installer,
+};
 
 #ifdef _WIN32
 #define DATA_PATH_SEPARATOR "\\"
@@ -431,12 +463,13 @@ page imports it itself) */
 struct data_extraction
 {
 	pthread_mutex_t lock;
-	/* the disc image the maps folder is copied out of, or "" when it is
-	downloaded from url instead (data_download) */
+	int kind;
+	/* the file the maps are copied out of, or "" when they are downloaded
+	from url instead (data_download) */
 	char image[1024];
 	char url[1024];
 	char destination[1024];
-	/* which of the list's files are wanted (DATA_MAPS_*) */
+	/* which of the list's files a download takes (DATA_MAPS_*) */
 	int wanted;
 	char file[256];
 	unsigned long long done;
@@ -717,10 +750,25 @@ static BOOL data_download(struct data_extraction *extraction)
 static void *data_extraction_thread(void *context)
 {
 	struct data_extraction *extraction = context;
-	BOOL succeeded = extraction->url[0] ? data_download(extraction) :
-		xiso_extract_maps(extraction->image, extraction->destination, data_extraction_progress,
-			extraction, extraction->error, sizeof(extraction->error)) != 0;
+	BOOL succeeded;
 
+	if (extraction->url[0])
+		succeeded = data_download(extraction);
+	else switch (extraction->kind)
+	{
+	case _data_halo_pc_disc:
+		succeeded = pc_disc_extract_maps(extraction->image, extraction->destination, data_extraction_progress,
+			extraction, extraction->error, sizeof(extraction->error)) != 0;
+		break;
+	case _data_custom_edition_installer:
+		succeeded = ce_installer_extract_maps(extraction->image, extraction->destination,
+			data_extraction_progress, extraction, extraction->error, sizeof(extraction->error)) != 0;
+		break;
+	default:
+		succeeded = xiso_extract_maps(extraction->image, extraction->destination, data_extraction_progress,
+			extraction, extraction->error, sizeof(extraction->error)) != 0;
+		break;
+	}
 	pthread_mutex_lock(&extraction->lock);
 	extraction->succeeded = succeeded;
 	extraction->finished = TRUE;
@@ -728,14 +776,20 @@ static void *data_extraction_thread(void *context)
 	return NULL;
 }
 
-/* copies the maps out of the disc image, or downloads them from url when
-image is NULL (the files wanted: DATA_MAPS_*), showing how far it has got;
-closing the window quits, but for a download while the game runs
-(in_game), which goes on to its end */
-static BOOL data_extract(const char *image, const char *url, const char *destination, int wanted, BOOL in_game,
-	char *error, int error_size)
+/* copies the maps out of the file picked (a kind of _data_*), or downloads
+them from url when image is NULL (the files wanted: DATA_MAPS_*), showing how
+far it has got; closing the window quits, but for a download while the game
+runs (in_game), which goes on to its end. The bytes written in written (0
+when the folder had them all) */
+static BOOL data_extract(int kind, const char *image, const char *url, const char *destination, int wanted,
+	BOOL in_game, unsigned long long *written, char *error, int error_size)
 {
 	static struct data_extraction extraction;
+	const char *title = !image ? (wanted == DATA_MAPS_CAMPAIGN ? "Downloading the campaign's maps..." :
+		"Downloading the maps folder...") :
+		kind == _data_halo_pc_disc ? "Importing Halo PC maps..." :
+		kind == _data_custom_edition_installer ? "Importing Custom Edition maps..." :
+		"Extracting the maps folder...";
 	SDL_Window *window;
 	SDL_Renderer *renderer = NULL;
 	pthread_t thread;
@@ -743,6 +797,7 @@ static BOOL data_extract(const char *image, const char *url, const char *destina
 
 	memset(&extraction, 0, sizeof(extraction));
 	pthread_mutex_init(&extraction.lock, NULL);
+	extraction.kind = kind;
 	snprintf(extraction.image, sizeof(extraction.image), "%s", image ? image : "");
 	snprintf(extraction.url, sizeof(extraction.url), "%s", image ? "" : url);
 	snprintf(extraction.destination, sizeof(extraction.destination), "%s", destination);
@@ -755,7 +810,7 @@ static BOOL data_extract(const char *image, const char *url, const char *destina
 	/* (waited for through extraction.finished; the Windows port's threads
 	cannot be joined) */
 	pthread_detach(thread);
-	window = SDL_CreateWindow("ChupathingyCE", 640, 150, 0);
+	window = SDL_CreateWindow("Fractum Halo", 640, 150, 0);
 	if (window)
 	{
 		renderer = SDL_CreateRenderer(window, NULL);
@@ -792,8 +847,7 @@ static BOOL data_extract(const char *image, const char *url, const char *destina
 			SDL_RenderClear(renderer);
 			SDL_SetRenderDrawColor(renderer, 230, 230, 230, 255);
 			SDL_SetRenderScale(renderer, 2.0f, 2.0f);
-			SDL_RenderDebugText(renderer, 10.0f, 10.0f, !extraction.url[0] ? "Extracting the maps folder..." :
-				wanted == DATA_MAPS_CAMPAIGN ? "Downloading the campaign's maps..." : "Downloading the maps folder...");
+			SDL_RenderDebugText(renderer, 10.0f, 10.0f, title);
 			SDL_SetRenderScale(renderer, 1.0f, 1.0f);
 			snprintf(line, sizeof(line), "%s  (%llu of %llu MB)", file, done >> 20, total >> 20);
 			SDL_RenderDebugText(renderer, 20.0f, 70.0f, line);
@@ -810,6 +864,7 @@ static BOOL data_extract(const char *image, const char *url, const char *destina
 		SDL_DestroyRenderer(renderer);
 	if (window)
 		SDL_DestroyWindow(window);
+	*written = extraction.done;
 	if (!extraction.succeeded)
 		snprintf(error, (size_t)error_size, "%s", extraction.error);
 	return extraction.succeeded;
@@ -831,18 +886,27 @@ static void SDLCALL data_image_chosen(void *userdata, const char * const *files,
 	SDL_SetAtomicInt(&choice->done, 1);
 }
 
-/* the disc image the player picks; FALSE if they pick none */
-static BOOL data_choose_image(char *path, int size)
+/* the file the player picks (Halo PC's first with halo_pc); FALSE if they
+pick none */
+static BOOL data_choose_image(char *path, int size, BOOL halo_pc)
 {
-	static const SDL_DialogFileFilter filters[] =
+	static const SDL_DialogFileFilter xbox_filters[] =
 	{
+		{ "Xbox disc images", "iso;xiso" },
+		{ "Halo PC CD images and the Custom Edition installer", "iso;exe" },
+		{ "All files", "*" },
+	};
+	static const SDL_DialogFileFilter halo_pc_filters[] =
+	{
+		{ "Halo PC CD images and the Custom Edition installer", "iso;exe" },
 		{ "Xbox disc images", "iso;xiso" },
 		{ "All files", "*" },
 	};
 	static struct data_image_choice choice;
 
 	memset(&choice, 0, sizeof(choice));
-	SDL_ShowOpenFileDialog(data_image_chosen, &choice, NULL, filters, 2, NULL, false);
+	SDL_ShowOpenFileDialog(data_image_chosen, &choice, NULL, halo_pc ? halo_pc_filters : xbox_filters, 3, NULL,
+		false);
 	/* the dialog answers through events (and on some systems another
 	thread) */
 	while (!SDL_GetAtomicInt(&choice.done))
@@ -856,26 +920,112 @@ static BOOL data_choose_image(char *path, int size)
 	return TRUE;
 }
 
+/* what a picked file holds (an Xbox image of a whole disc has a CD's file
+system too, so it is looked for first) */
+static int data_kind(const char *path)
+{
+	if (xiso_is_image(path))
+		return _data_xbox_disc;
+	if (ce_installer_is_installer(path))
+		return _data_custom_edition_installer;
+	if (pc_disc_is_image(path))
+		return _data_halo_pc_disc;
+	return _data_unknown;
+}
+
+/* whether the Xbox maps are in destination's maps folder */
+static BOOL data_has_xbox_maps(const char *destination)
+{
+	char maps[1100];
+	char on_disk[256];
+
+	snprintf(maps, sizeof(maps), "%s/maps", destination);
+	return posix_find_entry_case_insensitive(maps, "ui.map", on_disk, sizeof(on_disk)) != 0;
+}
+
+/* "make the folders": the maps folders made empty, what goes where shown,
+and checked again when the player says so; TRUE once the Xbox maps are
+there, FALSE to go back to the choices */
+static BOOL data_make_folders(const char *destination)
+{
+	static const char *const folders[] = { "maps", "maps_ce", "maps_pc", "maps_md" };
+	static const SDL_MessageBoxButtonData buttons[] =
+	{
+		{ SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, 1, "Check again" },
+		{ SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, 0, "Back" },
+	};
+	char message[1400];
+	size_t index;
+
+	for (index = 0; index < sizeof(folders) / sizeof(folders[0]); index++)
+	{
+		char path[1100];
+
+		snprintf(path, sizeof(path), "%s/%s", destination, folders[index]);
+		posix_make_directory(path);
+	}
+	platform_log("made the maps folders in %s", destination);
+	snprintf(message, sizeof(message),
+		"The folders are in %s:\n\n"
+		"maps: the Xbox maps (the maps folder of your Halo: Combat Evolved disc, with ui.map). "
+		"Fractum Halo needs these to play.\n"
+		"maps_ce: Custom Edition maps, with Custom Edition's bitmaps.map, sounds.map and loc.map.\n"
+		"maps_pc: the maps from your Halo PC disc.\n"
+		"maps_md: HaloMD maps.\n\n"
+		"Put the files in, then choose Check again.",
+		destination);
+	for (;;)
+	{
+		SDL_MessageBoxData question = { SDL_MESSAGEBOX_INFORMATION, NULL, "Fractum Halo", message, 2, buttons,
+			NULL };
+		int answer = 0;
+
+		if (!SDL_ShowMessageBox(&question, &answer) || answer != 1)
+			return FALSE;
+		if (data_has_xbox_maps(destination))
+		{
+			platform_log("the Xbox maps are in %s/maps", destination);
+			return TRUE;
+		}
+		snprintf(message, sizeof(message),
+			"There is no ui.map in %s/maps yet.\n\n"
+			"Copy the maps folder of your Xbox disc there, then choose Check again.",
+			destination);
+	}
+}
+
 BOOL platform_offer_game_data(const char *destination)
 {
-	/* (with a download URL: the multiplayer maps or everything, or a disc
-	image, or quit; without: a disc image, or quit) */
+	enum
+	{
+		_choice_quit,
+		_choice_xbox,
+		_choice_halo_pc,
+		_choice_folders,
+		_choice_download_all,
+		_choice_download_multiplayer,
+	};
+	/* (with a download URL, its two downloads first) */
 	static const SDL_MessageBoxButtonData download_buttons[] =
 	{
-		{ SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, 3, "Multiplayer only" },
-		{ 0, 2, "Everything" },
-		{ 0, 1, "Disc image..." },
-		{ SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, 0, "Quit" },
+		{ SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, _choice_download_multiplayer, "Multiplayer only" },
+		{ 0, _choice_download_all, "Everything" },
+		{ 0, _choice_xbox, "Xbox disc image" },
+		{ 0, _choice_halo_pc, "Halo PC or Custom Edition" },
+		{ 0, _choice_folders, "Make the folders" },
+		{ SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, _choice_quit, "Quit" },
 	};
-	static const SDL_MessageBoxButtonData image_buttons[] =
+	static const SDL_MessageBoxButtonData buttons[] =
 	{
-		{ SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, 1, "Yes" },
-		{ SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, 0, "No" },
+		{ SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, _choice_xbox, "Xbox disc image" },
+		{ 0, _choice_halo_pc, "Halo PC or Custom Edition" },
+		{ 0, _choice_folders, "Make the folders" },
+		{ SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, _choice_quit, "Quit" },
 	};
 	const char *url = config_string("data.download_url");
 	BOOL download = !strncmp(url, "https://", 8) && url[strlen(url) - 1] == '/';
 	char host[128] = "";
-	char message[1400];
+	char message[1800];
 
 	/* not for runs nobody is watching */
 	if (config_boolean("debug.hidden_window") || config_real("debug.exit_after") > 0.0 ||
@@ -890,61 +1040,109 @@ BOOL platform_offer_game_data(const char *destination)
 
 		snprintf(host, sizeof(host), "%.*s", (int)(end - start), start);
 		snprintf(message, sizeof(message),
-			"Halo's game data (its maps folder) was not found. Download it from %s into %s?\n\n"
+			"Fractum Halo plays Halo with the maps from the Xbox disc. Download them from %s into %s?\n\n"
 			"Multiplayer only: the multiplayer maps, the menus and Halo Custom Edition's shared maps, "
 			"about 0.5 GB. The campaign's maps are offered when you first play the campaign.\n\n"
 			"Everything: the campaign's maps as well, about 2 GB.\n\n"
-			"Or choose Disc image to copy it out of an Xbox disc image (.iso) of Halo: Combat Evolved instead.",
+			"Or add them yourself:\n"
+			"Xbox disc image: copy the maps folder out of a disc image (.iso) of Halo: Combat Evolved.\n"
+			"Halo PC or Custom Edition (optional): add the maps from your Halo PC CD image (.iso) or the "
+			"Custom Edition installer (halocesetup_en_1.00.exe).\n"
+			"Make the folders: make the empty map folders, and put the files in yourself.",
 			host, destination);
 	}
 	else
 	{
 		snprintf(message, sizeof(message),
-			"Halo's game data (its maps folder) was not found.\n\n"
-			"Extract the maps folder from an Xbox disc image (.iso) of Halo: Combat Evolved? "
-			"It is copied to %s/maps (about 2 GB).\n\n"
-			"(Or put the maps folder there yourself, or set paths.data in config.toml.)",
+			"Fractum Halo plays Halo with the maps from your Xbox disc. How do you want to add them?\n\n"
+			"Xbox disc image: copy the maps folder out of a disc image (.iso) of Halo: Combat Evolved, "
+			"about 2 GB, into %s/maps.\n\n"
+			"Halo PC or Custom Edition (optional): add the maps from your Halo PC CD image (.iso) or the "
+			"Custom Edition installer (halocesetup_en_1.00.exe).\n\n"
+			"Make the folders: make the empty map folders, and put the files in yourself.\n\n"
+			"(Or set paths.data in config.toml.)",
 			destination);
 	}
 	for (;;)
 	{
-		SDL_MessageBoxData question = { SDL_MESSAGEBOX_INFORMATION, NULL, "ChupathingyCE", message,
-			download ? 4 : 2, download ? download_buttons : image_buttons, NULL };
+		SDL_MessageBoxData question = { SDL_MESSAGEBOX_INFORMATION, NULL, "Fractum Halo", message,
+			download ? 6 : 4, download ? download_buttons : buttons, NULL };
 		char image[1024];
 		char error[512];
-		int answer = 0;
+		unsigned long long written = 0;
+		int answer = _choice_quit;
+		int kind;
 
-		if (!SDL_ShowMessageBox(&question, &answer) || answer == 0)
+		if (!SDL_ShowMessageBox(&question, &answer) || answer == _choice_quit)
 		{
 			platform_log("no game data: quitting");
 			exit(EXIT_SUCCESS);
 		}
-		if (answer == 2 || answer == 3)
+		if (answer == _choice_download_all || answer == _choice_download_multiplayer)
 		{
-			int wanted = answer == 3 ? DATA_MAPS_MULTIPLAYER : DATA_MAPS_ALL;
+			int wanted = answer == _choice_download_multiplayer ? DATA_MAPS_MULTIPLAYER : DATA_MAPS_ALL;
 
 			platform_log("downloading the maps folder (%s) from %s to %s",
 				wanted == DATA_MAPS_MULTIPLAYER ? "multiplayer only" : "everything", url, destination);
-			if (data_extract(NULL, url, destination, wanted, FALSE, error, sizeof(error)))
+			if (data_extract(_data_xbox_disc, NULL, url, destination, wanted, FALSE, &written, error,
+				sizeof(error)))
 			{
 				platform_log("downloaded the maps folder");
 				return TRUE;
 			}
 			platform_log("download failed: %s", error);
-			SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Halo", error, NULL);
+			SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Fractum Halo", error, NULL);
 			continue;
 		}
-		/* no image picked: ask again */
-		if (!data_choose_image(image, sizeof(image)))
+		if (answer == _choice_folders)
+		{
+			if (data_make_folders(destination))
+				return TRUE;
 			continue;
-		platform_log("extracting the maps folder from %s to %s", image, destination);
-		if (data_extract(image, NULL, destination, DATA_MAPS_ALL, FALSE, error, sizeof(error)))
+		}
+		/* no file picked: ask again */
+		if (!data_choose_image(image, sizeof(image), answer == _choice_halo_pc))
+			continue;
+		kind = data_kind(image);
+		if (kind == _data_unknown)
+		{
+			platform_log("%s is no disc image or installer this reads", image);
+			SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Fractum Halo",
+				"That file is not an Xbox disc image, a Halo PC CD image or the Custom Edition installer.",
+				NULL);
+			continue;
+		}
+		platform_log("importing maps from %s to %s", image, destination);
+		if (!data_extract(kind, image, NULL, destination, DATA_MAPS_ALL, FALSE, &written, error, sizeof(error)))
+		{
+			platform_log("extraction failed: %s", error);
+			SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Fractum Halo", error, NULL);
+			continue;
+		}
+		if (kind == _data_xbox_disc)
 		{
 			platform_log("extracted the maps folder");
 			return TRUE;
 		}
-		platform_log("extraction failed: %s", error);
-		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "ChupathingyCE", error, NULL);
+		{
+			const char *folder = kind == _data_halo_pc_disc ? "maps_pc" : "maps_ce";
+			char done[1400];
+
+			platform_log("imported %llu MB of maps into %s/%s", written >> 20, destination, folder);
+			snprintf(done, sizeof(done), "%s\n\nFractum Halo still needs the Xbox maps to play: choose "
+				"Xbox disc image or a download next.",
+				written ? (kind == _data_halo_pc_disc ? "The Halo PC maps are in maps_pc." :
+					"The Custom Edition maps are in maps_ce.") :
+				(kind == _data_halo_pc_disc ? "maps_pc already has these maps." :
+					"maps_ce already has these maps."));
+			if (data_has_xbox_maps(destination))
+			{
+				SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "Fractum Halo",
+					written ? "The maps are added." : "The folder already has these maps.", NULL);
+				return TRUE;
+			}
+			SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "Fractum Halo", done, NULL);
+		}
 	}
 }
 
@@ -962,8 +1160,9 @@ BOOL platform_offer_missing_map(const char *name)
 	const char *url = config_string("data.download_url");
 	char message[512];
 	char error[512];
+	unsigned long long written = 0;
 	int answer = 0;
-	SDL_MessageBoxData question = { SDL_MESSAGEBOX_INFORMATION, NULL, "ChupathingyCE", message, 2, buttons, NULL };
+	SDL_MessageBoxData question = { SDL_MESSAGEBOX_INFORMATION, NULL, "Fractum Halo", message, 2, buttons, NULL };
 
 	if (!data_is_campaign_map(name) || strncmp(url, "https://", 8) || url[strlen(url) - 1] != '/' ||
 		config_boolean("debug.hidden_window") || config_real("debug.exit_after") > 0.0)
@@ -976,13 +1175,14 @@ BOOL platform_offer_missing_map(const char *name)
 	if (!SDL_ShowMessageBox(&question, &answer) || answer != 1)
 		return FALSE;
 	platform_log("downloading the campaign's maps from %s to %s", url, platform_data_root());
-	if (data_extract(NULL, url, platform_data_root(), DATA_MAPS_CAMPAIGN, TRUE, error, sizeof(error)))
+	if (data_extract(_data_xbox_disc, NULL, url, platform_data_root(), DATA_MAPS_CAMPAIGN, TRUE, &written, error,
+		sizeof(error)))
 	{
 		platform_log("downloaded the campaign's maps");
 		return TRUE;
 	}
 	platform_log("download failed: %s", error);
-	SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "ChupathingyCE", error, NULL);
+	SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Fractum Halo", error, NULL);
 	return FALSE;
 }
 
@@ -1542,8 +1742,8 @@ BOOL platform_video_initialize(unsigned long width, unsigned long height)
 	setenv("mesa_glthread", "true", 0);
 #endif
 
-	/* "ChupathingyCE 0.5.0b" */
-	snprintf(title, sizeof(title), "ChupathingyCE %s", updater_version());
+	/* "Fractum Halo 0.8.0-fs.00140" (this fork's name: ChupathingyCE names its builds Chupathingy) */
+	snprintf(title, sizeof(title), "Fractum Halo %s", updater_version());
 #ifdef HALO_ANDROID
 	{
 		int scale = (int)config_integer("display.window_scale");

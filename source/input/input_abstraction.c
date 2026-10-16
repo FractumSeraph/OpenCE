@@ -322,6 +322,24 @@ byte input_abstraction_port_accept(
 		keyboard_controls[controller_index].ticks[_game_control_jump] : 0;
 }
 
+/* port: which way the controller's player cycles a dead player's follow
+camera (port/linux/game/follow_camera.c) on the keyboard: the flashlight key
+(Q) back, the action key (E) or switch weapons (Tab) on, as held this tick */
+short input_abstraction_port_follow_cycle(
+	short controller_index)
+{
+	byte const *ticks;
+
+	if (controller_index < 0 || controller_index >= MAXIMUM_GAMEPADS)
+		return 0;
+	ticks = keyboard_controls[controller_index].ticks;
+	if (ticks[_game_control_action] || ticks[_game_control_switch_weapons])
+		return 1;
+	if (ticks[_game_control_flashlight])
+		return -1;
+	return 0;
+}
+
 /* port: how far the controller's player pulls the fire control, which a
 trigger with an analog rate of fire reads (weapons.c): a game input state's
 buttons count the ticks a control is held, not its pressure, so a click

@@ -900,6 +900,22 @@ static void crash_line(const char *format, ...)
 	write_to_error_file(line, 1);
 }
 
+/* the game's executable's file name (halo.exe, or what it is renamed to), for
+the crash lines; found before a crash */
+static char crash_module_name[64] = "halo.exe";
+
+static void crash_find_module_name(void)
+{
+	char path[PATH_SIZE];
+	DWORD length = GetModuleFileNameA(NULL, path, PATH_SIZE);
+	const char *file;
+
+	if (!length || length >= PATH_SIZE)
+		return;
+	file = strrchr(path, '\\');
+	snprintf(crash_module_name, sizeof(crash_module_name), "%s", file ? file + 1 : path);
+}
+
 static LONG WINAPI crash_filter(EXCEPTION_POINTERS *exception)
 {
 	static volatile LONG crashed_thread = 0;
@@ -917,9 +933,10 @@ static LONG WINAPI crash_filter(EXCEPTION_POINTERS *exception)
 		Sleep(INFINITE);
 	/* the minidump first, before anything here can fail */
 	dumped = crash_reports_armed() && crash_dump(exception);
-	/* (where halo.exe is: tools/symbolize_crash.py finds the lines of the
-	addresses below from it and halo.pdb) */
-	crash_line("crash: halo.exe at %p, %s", (void *)GetModuleHandleW(NULL), build_identity());
+	/* (where the game's executable is, by its file name, halo.exe:
+	tools/symbolize_crash.py finds the lines of the addresses below from it
+	and its .pdb) */
+	crash_line("crash: %s at %p, %s", crash_module_name, (void *)GetModuleHandleW(NULL), build_identity());
 #ifdef HALO_64BIT
 	{
 		CONTEXT unwound = *context;
@@ -1033,6 +1050,7 @@ static void crash_reports_install(void)
 		ExitProcess(0);
 	}
 
+	crash_find_module_name();
 	SetUnhandledExceptionFilter(crash_filter);
 	/* (room on the main thread's stack for the filter after a stack overflow) */
 	SetThreadStackGuarantee(&guarantee);

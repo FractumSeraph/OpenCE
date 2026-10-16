@@ -108,6 +108,7 @@ symbols in this file:
 #include "tag_files/tag_files.h"
 #include "text/draw_string.h"
 #include "coop_spectate.h" /* port: port/linux/game/coop_spectate.c */
+#include "follow_camera.h" /* port: port/linux/game/follow_camera.c */
 #include "network_coop.h" /* port: port/linux/game/network_coop.c */
 #if defined(HALO_GAME_BROWSER) || defined(HALO_BROWSER)
 #include "chat.h" /* port: port/linux/game/chat.c */
@@ -1428,6 +1429,9 @@ void hud_draw_screen(
 		/* port: who a dead network co-op player is watching */
 		if (player->unit_index == NONE && coop_spectating() && !cinematic_in_progress())
 			coop_spectate_draw(render.local_player_index);
+		/* port: who a dead multiplayer player's camera follows */
+		if (player->unit_index == NONE && game_engine_running() && !cinematic_in_progress())
+			follow_camera_draw(render.local_player_index);
 		/* port: the network co-op vote to skip a cinematic */
 		if (cinematic_in_progress())
 			coop_skip_vote_draw(render.local_player_index);

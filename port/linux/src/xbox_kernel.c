@@ -65,7 +65,16 @@ void platform_log(const char *format, ...)
 		an application's working directory is / */
 		extern char platform_log_path[];
 
+		char folder[1024], path[1100];
+
 		handle = platform_log_path[0] ? fopen(platform_log_path, "a") : NULL;
+		/* (before then, the application's folder, when it has one: the
+		macOS application's, or an AppImage's, port_config.c) */
+		if (!platform_log_path[0] && platform_app_folder(folder, sizeof(folder)))
+		{
+			snprintf(path, sizeof(path), "%s/debug.txt", folder);
+			handle = fopen(path, "a");
+		}
 	}
 	if (!handle)
 		handle = fopen("assets/debug.txt", "a");
