@@ -1730,10 +1730,13 @@ BOOL platform_video_initialize(unsigned long width, unsigned long height)
 	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 0);
 	SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 0);
-#ifdef HALO_WEB
-	/* an opaque canvas: the game keeps scratch values in destination alpha,
-	which a page would otherwise blend the picture by (black, or the page's
-	colours through it) */
+#if defined(HALO_WEB) || !defined(HALO_ANDROID)
+	/* an opaque canvas or window: the game keeps scratch values in
+	destination alpha, which a page would otherwise blend the picture by
+	(black, or the page's colours through it), and SDL asks for an alpha
+	channel by default, which some compositors (Windows' with some drivers,
+	Wayland's) blend with what is behind the window, showing the desktop
+	through the game */
 	SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 0);
 #endif
 	if (config_boolean("debug.gl_debug"))

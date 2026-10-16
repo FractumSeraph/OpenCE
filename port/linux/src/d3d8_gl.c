@@ -1730,6 +1730,17 @@ static void gl_initialize(void)
 			(host_gl_has_extension("GL_EXT_texture_compression_dxt1") &&
 			host_gl_has_extension("GL_ANGLE_texture_compression_dxt3") &&
 			host_gl_has_extension("GL_ANGLE_texture_compression_dxt5"));
+		{
+			/* Adreno's driver takes DXT textures but drew the maps' speckled
+			(dark dots a block apart, on the ground and the walls), where
+			the game's own unpacking (xbox_textures.c, as on Mali) does not */
+			const char *decode = config_string("display.texture_decode");
+			const char *renderer = (const char *)glGetString(GL_RENDERER);
+
+			if (!strcmp(decode, "cpu") ||
+				(strcmp(decode, "gpu") && renderer && strstr(renderer, "Adreno")))
+				xgpu_capabilities.s3tc = FALSE;
+		}
 		platform_log("OpenGL ES %d.%d: copy image %d, border clamp %d, anisotropy %d, S3TC %d, sample counting %d, "
 			"base vertex %d (%s)",
 			(int)major, (int)minor, xgpu_capabilities.copy_image, xgpu_capabilities.border_clamp,
@@ -6619,6 +6630,50 @@ static void front_buffer_take(void)
 	device.front_buffer_taken = device.frame + 1;
 }
 
+/* the loading screen's picture (progress_bar.c, made by the CPU in
+port/linux/game/loading_screen.c): `rgba` bytes, its top row first, over the
+whole back buffer */
+void halo_draw_picture(const unsigned char *rgba, long width, long height)
+{
+	static GLuint texture;
+	static long texture_width, texture_height;
+	struct render_target_entry *back_buffer;
+
+	if (!device.gl_ready || !rgba || width <= 0 || height <= 0)
+		return;
+	back_buffer = render_target_get(&device.back_buffer);
+	if (!back_buffer)
+		return;
+	/* (what the back buffer's multisampled pixels hold first, so that the
+	display's resolve leaves the picture) */
+	render_target_resolve(&back_buffer->target);
+	if (!texture)
+		glGenTextures(1, &texture);
+	glBindTexture(GL_TEXTURE_2D, texture);
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+	if (texture_width != width || texture_height != height)
+	{
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, (GLsizei)width, (GLsizei)height, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+		texture_width = width;
+		texture_height = height;
+	}
+	else
+	{
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, (GLsizei)width, (GLsizei)height, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
+	}
+	glBindFramebuffer(GL_READ_FRAMEBUFFER, framebuffer_get(texture, 0));
+	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, framebuffer_get(back_buffer->target.texture, 0));
+	glDisable(GL_SCISSOR_TEST);
+	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+	/* (row 0 of the render target is the top of the picture, as of this
+	texture) */
+	glBlitFramebuffer(0, 0, (GLint)width, (GLint)height, 0, 0, (GLint)back_buffer->target.gl_width,
+		(GLint)back_buffer->target.gl_height, GL_COLOR_BUFFER_BIT, GL_LINEAR);
+	xgpu_gl_state_invalidate();
+	gl_check_errors("picture");
+}
+
 void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destination_rectangle,
 	void *unused, void *unused2)
 {
@@ -6692,6 +6747,17 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 		/* the overlay's screens, over the picture at the window's resolution
 		(ui_overlay.c) */
 		ui_overlay_present(x, y, width, height, window_width, window_height);
+#endif
+#ifndef HALO_ANDROID
+		/* the picture's alpha is the render target's, which the game uses
+		for its own blending, not coverage: the window is opaque whatever
+		the driver gave its pixels (sdl_platform.c asks for none) */
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+		glDisable(GL_SCISSOR_TEST);
+		glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_TRUE);
+		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT);
+		glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 #endif
 		platform_video_swap();
 		xgpu_gl_state_invalidate();

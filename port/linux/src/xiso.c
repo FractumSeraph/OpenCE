@@ -1,7 +1,7 @@
 /*
 XISO.C
 
-Copies the maps folder out of an Xbox disc image (an "xiso", or a whole
+Copies the maps folder, and the Bink movies, out of an Xbox disc image (an "xiso", or a whole
 disc's ".iso"), for the desktop ports' first start without game data
 (sdl_platform.c). The Android app does the same in Java (XisoExtractor.java
 in port/android, a port of this file).
@@ -44,6 +44,14 @@ is written to <destination>/maps.partial, which becomes <destination>/maps
 (in place of an empty maps folder) once all of them are there, so an
 interrupted copy never leaves maps/ui.map behind and the next start asks
 again.
+
+The disc's bink folder holds the movies (intro.bik, credits.bik, attract1.bik
+to attract3.bik, and one more of each per language on some discs). Each .bik
+file the destination's bink folder lacks is copied there, after the maps,
+under the disc's name: the game looks for d:\\bink\\<name>.bik, and finds
+it whatever the case. A file already there is never replaced. A disc without
+a bink folder, or a movie that cannot be copied, does not fail the
+extraction: the game skips movies it cannot find.
 */
 
 /* (the desktop ports only: the Android app imports the game data itself) */
@@ -523,6 +531,51 @@ done:
 	free(tga);
 }
 
+static int name_has_ending(const char *name, const char *ending)
+{
+	size_t length = strlen(name), ending_length = strlen(ending);
+
+	return length >= ending_length && same_name(name + length - ending_length, ending);
+}
+
+/* whether <directory>/<name> exists, whatever the case of its name */
+static int file_exists(const char *directory, const char *name)
+{
+	char found[256];
+
+	return posix_find_entry_case_insensitive(directory, name, found, sizeof(found)) != 0;
+}
+
+/* lists the .bik files of the disc's bink folder that <destination>/bink
+lacks, into movies */
+static void list_missing_movies(struct xiso_image *image, const struct xiso_list *root, const char *destination,
+	struct xiso_list *movies)
+{
+	struct xiso_list all = { NULL, 0, 0, 0 };
+	char folder[MAXIMUM_PATH];
+	int index, movie;
+
+	for (index = 0; index < root->count; index++)
+	{
+		const struct xiso_entry *entry = &root->entries[index];
+
+		if (!entry->directory || !same_name(entry->path, "bink"))
+			continue;
+		if (list_directory(image, entry->sector, entry->size, "", 0, 0, &all))
+		{
+			snprintf(folder, sizeof(folder), "%s/bink", destination);
+			for (movie = 0; movie < all.count; movie++)
+			{
+				if (!all.entries[movie].directory && name_has_ending(all.entries[movie].path, ".bik") &&
+					!file_exists(folder, all.entries[movie].path))
+					list_add(movies, &all.entries[movie]);
+			}
+		}
+		break;
+	}
+	free(all.entries);
+}
+
 int xiso_is_image(const char *image_path)
 {
 	struct xiso_image image;
@@ -546,6 +599,7 @@ int xiso_extract_maps(const char *image_path, const char *destination, xiso_prog
 	struct xiso_image image;
 	struct xiso_list root = { NULL, 0, 0, 0 };
 	struct xiso_list files = { NULL, 0, 0, 0 };
+	struct xiso_list movies = { NULL, 0, 0, 0 };
 	const struct xiso_entry *maps;
 	/* (port, this fork: the root's default.xbe, which has the loading
 	screen's picture) */
@@ -612,6 +666,10 @@ int xiso_extract_maps(const char *image_path, const char *destination, xiso_prog
 		goto done;
 	}
 
+	list_missing_movies(&image, &root, destination, &movies);
+	for (index = 0; index < movies.count; index++)
+		total += movies.entries[index].size;
+
 	snprintf(partial, sizeof(partial), "%s/maps.partial", destination);
 	snprintf(final, sizeof(final), "%s/maps", destination);
 	posix_make_directory(partial);
@@ -640,8 +698,33 @@ int xiso_extract_maps(const char *image_path, const char *destination, xiso_prog
 	}
 	result = 1;
 
+	/* the movies, each as <name>.partial first, so a copy that stops never
+	leaves a short file the next start would take for the movie */
+	if (movies.count)
+	{
+		snprintf(final, sizeof(final), "%s/bink", destination);
+		posix_make_directory(final);
+	}
+	for (index = 0; index < movies.count; index++)
+	{
+		const struct xiso_entry *entry = &movies.entries[index];
+		char movie[MAXIMUM_PATH * 2];
+
+		snprintf(path, sizeof(path), "%s/%s.partial", final, entry->path);
+		snprintf(movie, sizeof(movie), "%s/%s", final, entry->path);
+		platform_log("extracting bink/%s (%u bytes)", entry->path, entry->size);
+		if (!copy_file(&image, entry, path, buffer, &done, total, progress, context) || rename(path, movie) != 0)
+		{
+			/* (the maps are all there: the game plays without movies) */
+			platform_log("could not copy bink/%s; the game skips it", entry->path);
+			unlink(path);
+			break;
+		}
+	}
+
 done:
 	close(image.descriptor);
+	free(movies.entries);
 	free(root.entries);
 	free(files.entries);
 	free(buffer);

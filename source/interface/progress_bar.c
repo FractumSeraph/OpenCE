@@ -186,6 +186,7 @@ symbols in this file:
 #include "rasterizer/xbox/rasterizer_xbox_pixel_shader.h"
 
 #include "interface/progress_bar_internal.h"
+#include "loading_screen.h" /* port: port/linux/game/loading_screen.c */
 
 /* ---------- constants */
 
@@ -1592,6 +1593,8 @@ void progress_bar_begin(
 {
 	progress_bar_mode.capture_frame= !skip_frame_capture;
 	progress_bar_mode.active= TRUE;
+	/* port: from black, as the Xbox's front buffer was cleared */
+	loading_screen_reset();
 	SetThreadPriority((void *)-2, 2);
 
 	return;
@@ -2041,6 +2044,9 @@ static void progress_bar_render(
 	long sound_index;
 	long stage;
 
+	/* port (this fork): no loading_screen_step_due here, ChupathingyCE's pace
+	for the picture its CPU makes: the Xbox's drawing below runs, and draws
+	each frame it is called for */
 	wobble_phase+= 0.01f;
 	progress= (real)((sin(wobble_phase)*0.05 + progress - last_t)*0.2 + last_t);
 	if (progress>1.0)
@@ -2062,6 +2068,12 @@ static void progress_bar_render(
 		}
 	}
 
+	/* port (this fork): the Xbox's own drawing, as it is: d3d8_gl.c has its
+	front buffer (the trails of the light) and its fixed-function draws
+	(fdad410f, 2428d2a2), and the map download screen draws through it
+	(progress_bar_download_display). ChupathingyCE draws the same picture with
+	the CPU instead (port/linux/game/loading_screen.c, halo_draw_picture),
+	which this fork leaves unused */
 	current_time= GetTickCount();
 	IDirect3DDevice8_GetTransform(global_d3d_device, D3DTS_WORLD, &progress_bar_globals.saved_world);
 	IDirect3DDevice8_GetTransform(global_d3d_device, D3DTS_VIEW, &progress_bar_globals.saved_view);

@@ -125,7 +125,8 @@ this fork's site (https://halo.fractumseraph.net/assets/maps/: the
 multiplayer maps alone, about 0.5 GB with Halo Custom Edition's shared maps,
 or everything with the campaign's, about 2 GB; `MapsDownloader.java`),
 or extracts it from an Xbox disc image (`.xiso` or `.iso`) of any version of
-the game. The app keeps the data in
+the game, with the Bink movies (`bink/`) that the folder lacks (not played
+on this build yet). The app keeps the data in
 `/sdcard/Android/data/net.fractumseraph.halo/files`.
 
 To download the data: start the app and push **Download multiplayer maps**
@@ -319,6 +320,7 @@ These settings are only for Android:
 | `input.touch_aim_assist` | `true` (the default): the touch controls' swipe aiming gets the aim assist of a controller (the aim slows over a target and follows a moving one). `false`: none, as with a mouse; the bullets' own autoaim stays. |
 | `input.touch_controls` | The touch controls in a game. `"on"` (the default): shown on a touchscreen, also with a controller connected. `"auto"`: shown only while no controller is connected. `"off"`: never shown. A device without a touchscreen never shows them. The menus take taps with each value. |
 | `display.screen_width` | The number of columns of the 480-line picture. `0` (the default): the shape of the display (1068 on a 20:9 phone). `640`: the 4:3 shape of the Xbox. |
+| `display.texture_decode` | Where the compressed (DXT) textures of the maps are unpacked. `"auto"` (the default): by the game on Adreno graphics (Snapdragon), whose driver draws them with dark speckles, and by the driver on other graphics. `"gpu"`: by the driver. `"cpu"`: by the game, as they load (more memory, as on Mali). |
 | `debug.sample_seconds` | Refer to "Find problems". |
 | `debug.memory_watch` | `true` (the default): the app notices the game's writes to textures and vertices by page protection. `false`: it compares page contents once a frame instead, which is slower. Refer to "Limits". |
 
@@ -682,7 +684,8 @@ assembly of the port is necessary:
 
 ## Limits
 
-- Bink video is not available. The game skips the movies.
+- Bink video is not available on this build. The game skips the movies.
+  The app still copies the disc's `bink/` movies with `maps/`.
 - The Xbox memory is the 128 MB of a development kit, not the 512 MB of the
   computer builds. Thus the texture cache is 44 MB, not 128 MB
   (`port/linux/include/halo_port_capacity.h`). This is sufficient for the

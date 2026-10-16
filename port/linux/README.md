@@ -170,7 +170,8 @@ get it. This occurs at the first start:
 
 - "Xbox disc image" (the default) opens a file picker. Select an Xbox disc
   image (`.xiso` or `.iso`). The game copies `maps/` next to the executable
-  and shows the progress.
+  and shows the progress. It also copies the disc's Bink movies (`bink/`,
+  the `.bik` files), only the ones `bink/` lacks.
 - "Halo PC or Custom Edition" opens the same picker for optional extras: a
   Halo PC CD image (`.iso`) fills `maps_pc/` (pc_disc.c), and Custom
   Edition's installer (`halocesetup_en_1.00.exe`) fills `maps_ce/`
@@ -185,7 +186,10 @@ Either picker finds out what a file is from its contents, not its name.
 
 The game writes the copy to `maps.partial`. When the copy is complete, the
 game changes the name to `maps`. If the copy stops before it is complete,
-the game asks for the disc image again at the next start.
+the game asks for the disc image again at the next start. The movies follow
+the maps, each written as `<name>.partial` first. A movie that is already in
+`bink/` is never replaced, and a movie that can't be copied does not stop the
+extraction.
 
 ### Steam Deck
 
@@ -527,6 +531,8 @@ the setting for one start of the game. It has priority over the file.
 | `display.player_name_scale` | `1.0` | `HALO_PLAYER_NAME_SCALE` | How large the players' names are drawn: `1.0` is three quarters of the size of the HUD's text, from `0.25` to `4`. With high-res text, larger names are rasterized at their size, so they stay sharp. |
 | `display.follow_camera` | `"long_waits"` | `HALO_FOLLOW_CAMERA` | In multiplayer, when a dead player's camera follows a living player from behind once the original death camera is done (3 seconds): a teammate in a team game, the killer (or the leader) in a game without teams. LB and RB (Q and E, or the mouse wheel, on the keyboard) switch who, and a "FOLLOWING" line near the bottom says who; it returns to the player's own view on respawn. `"long_waits"`: only when the wait to respawn is long (`display.follow_camera_after`), the player is out of lives or odd man out, or the game type holds spawns until its next round; a short respawn keeps the original death camera. `"always"`: after every death. `"off"`: the original death camera only. Only what this machine shows changes, so it works in any host's game. Split screen: each player's own. |
 | `display.follow_camera_after` | `5.0` | `HALO_FOLLOW_CAMERA_AFTER` | For `display.follow_camera`'s `"long_waits"`: how many seconds of the wait to respawn must be left once the death camera is done for the camera to follow someone. |
+| `display.powerup_timers` | `false` | `HALO_POWERUP_TIMERS` | `true`: a small line of the HUD's text near the top of the view shows the seconds left on the player's active camouflage, overshield and full spectrum vision while one is on ("CAMO 12   OVERSHIELD 41"). The overshield's time is what is left of it above full: it counts down only in multiplayer, where it drains, so in campaign it shows none. Split screen: each player's own. `false`: none, as the original game. |
+| `display.loading_screen_min_seconds` | `0.0` | `HALO_LOADING_SCREEN_MIN_SECONDS` | Keep the original loading screen (the picture with the glow that crosses it) up for at least this many seconds, up to 30, when a level loads, as loading from the Xbox's disc did; the port's loads are usually over before it shows. Also when the level is already loaded (a restart). Only in a game no other machine is in (campaign, split screen): a game on the network (system link, online, network co-op) loads as fast as it can, so that no machine waits on another. Never for the main menu. `0`: no wait. |
 | `display.scoreboard_team_layout` | `"teams"` | `HALO_SCOREBOARD_TEAM_LAYOUT` | How the multiplayer scoreboard (hold BACK, or tab) lists a team game's players. `"teams"`: a column for each team, red on the left and blue on the right. `"score"`: all the players in order of score. With more players than fit, the mouse wheel and Page Up / Page Down scroll the scoreboard. |
 | `display.scoreboard_background` | `true` | `HALO_SCOREBOARD_BACKGROUND` | `true`: the multiplayer scoreboard (hold BACK, or tab) has a panel behind its text, for clearer text. |
 | `display.show_quit_players` | `true` | `HALO_SHOW_QUIT_PLAYERS` | `true`: players who quit stay on the multiplayer scoreboard (hold BACK, or tab) and the score in the corner, as in the original game. `false`: they are left off, and the players still in the game are ranked among themselves, as OpenCE does. Only what this machine draws changes. |
@@ -1447,7 +1453,7 @@ crafted file) is refused, and the level starts over.
 | Memory | The port reserves the Xbox memory at `0x80000000`. Thus the game gets the fixed addresses that it expects. |
 | Saved games | The Xbox `UDATA` layout, with SHA-1 signatures. |
 | Networking | Winsock on BSD sockets. System link on a local network and on the internet. |
-| Bink video | Not available. The game skips the movies. |
+| Bink video | Not available on this build. The game skips the movies, although the disc extraction copies them to `bink/` (`d:\bink\*.bik`) for a build that plays them (macOS does). |
 
 ## How the port operates
 
@@ -1543,6 +1549,9 @@ Other changes:
 | `rasterizer/rasterizer.c` | The 128 KB of vertices of the debug display of a model's vertices are static, not on the stack: the compiler inlines the function in `render_model`, and the Windows build probed the stack a page at a time for every model drawn. |
 | `render/render.c` | The 3D view of each window is antialiased before the HUD is drawn (`display.anti_aliasing`). |
 | `interface/hud.c` | In multiplayer, players' names are drawn above their heads (`display.player_names`, `display.player_name_scale`). |
+| `interface/hud.c` | The seconds left on a player's powerups (`display.powerup_timers`, `game/powerup_timers.c`). |
+| `interface/progress_bar.c` | The loading screen is made by the CPU (`game/loading_screen.c`) and put over the back buffer (`src/d3d8_gl.c`): the Xbox drew it from its front buffer, through a texture made from that buffer's address, with no vertex shader, which the port's Direct3D does not have. |
+| `game/game.c` | A level's load holds the loading screen for `display.loading_screen_min_seconds`. |
 | `rasterizer/rasterizer_text.c`, `text/draw_string.c` | Text is drawn from an atlas of the fonts' glyphs, rasterized at the resolution the game draws at (`src/text_hires.c`), when the font has every character of the string. Text can be drawn scaled about a point (`rasterizer_text_set_scale`), as the players' names are. Each glyph's advance is centred on the font tag character's, so the layout is the same, and a glyph is cut at a text box only where the font tag's character visibly was. |
 | `interface/first_person_weapons.c` | The first-person hands are drawn with the unit's shield modifier shader, as its body is (`display.viewmodel_shield`). |
 | `render/render_objects.c`, `objects/objects.c` | In first person, your own body is drawn from the waist down with the pose `first_person_legs.c` makes (`display.first_person_legs`); the waist it found and the mesh `object_mesh.c` read are forgotten on a new map. |
