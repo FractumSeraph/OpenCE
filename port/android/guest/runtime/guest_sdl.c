@@ -311,11 +311,6 @@ const char *SDL_GetAudioDeviceName(SDL_AudioDeviceID device)
 	return NULL;
 }
 
-void SDL_DestroyAudioStream(SDL_AudioStream *stream)
-{
-	(void)stream;
-}
-
 SDL_AudioStream *SDL_OpenAudioDeviceStream(SDL_AudioDeviceID device, const SDL_AudioSpec *spec,
 	SDL_AudioStreamCallback callback, void *userdata)
 {

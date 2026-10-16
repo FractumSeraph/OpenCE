@@ -290,12 +290,7 @@ bool SDL_PutAudioStreamData(SDL_AudioStream *stream, const void *buffer, int len
 
 /* (OpenCE's voice chat, which the game's network code carries: the server
 neither talks nor listens, port/linux/src/voice_audio.c, so its streams
-are never opened and these never get one) */
-void SDL_DestroyAudioStream(SDL_AudioStream *stream)
-{
-	(void)stream;
-}
-
+are never opened and these never get one; SDL_DestroyAudioStream is above) */
 int SDL_GetAudioStreamAvailable(SDL_AudioStream *stream)
 {
 	(void)stream;
