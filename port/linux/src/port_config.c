@@ -336,6 +336,31 @@ static const struct config_setting config_settings[] =
 		"same as input.mouse_sensitivity." },
 
 	/* the keyboard and mouse's own controls (port/linux/src/xinput_sdl.c) */
+	{ "chat.enabled", _config_boolean, "true", "HALO_CHAT", _environment_value, _platform_all,
+		"Text chat with other Chupathingy players (on a Chupathingy host; T says\n"
+		"a line to everyone, Y to your team). false: no chat at all, neither\n"
+		"said nor shown; a server's own lines still show." },
+	{ "chat.show", _config_string, "\"all\"", "HALO_CHAT_SHOW", _environment_value, _platform_all,
+		"Which players' lines show: \"all\", \"team\" (your team's alone) or\n"
+		"\"off\" (none; you can still talk)." },
+	{ "chat.filter", _config_string, "\"mask\"", "HALO_CHAT_FILTER", _environment_value, _platform_all,
+		"Blocked words in lines you are shown: \"mask\" stars them out, \"hide\"\n"
+		"leaves such a line out, \"show\" shows it as sent. The words are the\n"
+		"blocked names list's and your own (chat.filter_file). Nobody is told,\n"
+		"and nobody is kicked." },
+	{ "chat.filter_file", _config_string, "\"chat_filter.txt\"", "HALO_CHAT_FILTER_FILE", _environment_value,
+		_platform_all,
+		"Your own blocked words, one a line (a file in the save folder): a word\n"
+		"alone is blocked anywhere in a word; \"whole <word>\" only as a whole\n"
+		"word. Lines starting with # are comments." },
+	{ "chat.streamer_mode", _config_boolean, "false", "HALO_CHAT_STREAMER_MODE", _environment_value, _platform_all,
+		"For streaming: other players' names in chat show as their team (or\n"
+		"\"Player\"), and blocked words are starred out at least." },
+	{ "chat.quick_messages", _config_string,
+		"\"Nice shot|Need backup|On my way|Thanks|Good game|Sorry\"", "HALO_CHAT_QUICK_MESSAGES",
+		_environment_value, _platform_all,
+		"A controller's quick lines, separated by |: D-pad up picks the next,\n"
+		"D-pad down says it (to your team in a team game). Empty: none." },
 	{ "controls.move_forward", _config_string, "\"W\"", "HALO_KEY_MOVE_FORWARD", _environment_value, _platform_all,
 		"The keyboard and mouse's controls, which Settings > Controls Setup\n"
 		"changes: up to two keys or buttons each, separated by a comma. Keys by\n"
@@ -391,6 +416,12 @@ static const struct config_setting config_settings[] =
 		"Save a PNG screenshot beside maps/ (press once per capture)." },
 	{ "controls.push_to_talk", _config_string, "\"V\"", "HALO_KEY_PUSH_TO_TALK", _environment_value, _platform_all,
 		"Voice chat: talk while it is held (audio.voice_chat \"push_to_talk\")." },
+	{ "controls.chat_all", _config_string, "\"T\"", "HALO_KEY_CHAT_ALL", _environment_value, _platform_all,
+		"Saying a line to everyone (text chat; Enter sends, Escape cancels)." },
+	{ "controls.chat_team", _config_string, "\"Y\"", "HALO_KEY_CHAT_TEAM", _environment_value, _platform_all,
+		"Saying a line to your team." },
+	{ "controls.chat_log", _config_string, "\"H\"", "HALO_KEY_CHAT_LOG", _environment_value, _platform_all,
+		"The chat's recent lines and its players, where M mutes one for you." },
 
 	{ "game.enhanced_animations", _config_boolean, "true", "HALO_ENHANCED_ANIMATIONS", _environment_value, _platform_all,
 		"The player bipeds' grenade throws keep their legs moving (crouched,\n"
@@ -551,6 +582,13 @@ static const struct config_setting config_settings[] =
 		"falls back on its own, and nobody waits for it); \"opence\" turns\n"
 		"Delta off (OpenCE's protocol alone, as an OpenCE build). \"delta\"\n"
 		"plays as auto for now: Delta-only games come later." },
+	{ "network.chat", _config_string, "\"on\"", "HALO_NET_CHAT", _environment_value, _platform_all,
+		"Text chat in the games this machine hosts: \"on\", \"team\" (team lines\n"
+		"alone) or \"off\". Lines only pass between Chupathingy machines; nothing\n"
+		"is written down." },
+	{ "network.chat_filter", _config_boolean, "true", "HALO_NET_CHAT_FILTER", _environment_value, _platform_all,
+		"In the games this machine hosts, lines with blocked words are not passed\n"
+		"on (their sender is told). Nobody is kicked." },
 	{ "network.share_profile", _config_boolean, "false", "HALO_NET_SHARE_PROFILE", _environment_value,
 		_platform_all,
 		"Show the other ChupathingyCE players of a game this copy's player ID\n"
@@ -684,9 +722,10 @@ static const struct config_setting config_settings[] =
 		"listed there, and System Link shows its games; empty for none." },
 	{ "network.list_hosted_games", _config_boolean, "true", "HALO_NET_LIST_GAMES", _environment_value, _platform_all,
 		"List the system link games this machine hosts on network.browser_url,\n"
-		"where anyone can find and join them, and send each one's carnage report\n"
-		"there when it ends. False keeps them to invites and the local network,\n"
-		"and sends no report." },
+		"where anyone can find and join them (only public games without a\n"
+		"password), and send each one's carnage report there when it ends.\n"
+		"False keeps them to invites and the local network, and sends no\n"
+		"report." },
 	{ "network.report_joined_games", _config_boolean, "true", "HALO_NET_REPORT_GAMES", _environment_value,
 		_platform_all,
 		"When an internet game this machine joined ends, send network.browser_url\n"
@@ -892,6 +931,10 @@ static const struct config_setting config_settings[] =
 	{ "debug.update_answer", _config_string, "\"\"", "HALO_UPDATE_ANSWER", _environment_value, _platform_desktop,
 		"The answer to the new version question, for automated tests: \"yes\",\n"
 		"\"no\" or \"never\" (do not ask again, confirmed); empty asks." },
+	{ "debug.chat_test", _config_string, "\"\"", "HALO_CHAT_TEST", _environment_value, _platform_all,
+		"For testing text chat (port/linux/game/chat.c): steps of\n"
+		"\"<seconds>:<all|team|server|mute|unmute|localmute|log|close|type>[:<text>]\"\n"
+		"separated by ;, from when this copy joins a game. Empty: none." },
 	{ "debug.exit_after", _config_real, "0.0", "HALO_EXIT_AFTER", _environment_value, _platform_all,
 		"Quit this many seconds after the window opens; 0 never." },
 	{ "debug.hidden_window", _config_boolean, "false", "HALO_HIDDEN_WINDOW", _environment_set_is_true, _platform_desktop,
@@ -1662,13 +1705,16 @@ static const struct
 {
 	const char *name;
 	const char *default_value;
+	/* whether a file of the current layout holding it is moved to the
+	current default too (the value was never a choice a player made) */
+	int follow;
 } config_old_defaults[] =
 {
 	/* upstream's, which ChupathingyCE kept until v0.5.2b */
-	{ "display.menus", "\"pc\"" },
+	{ "display.menus", "\"pc\"", 0 },
 	/* OpenCE's Discord application, which ChupathingyCE kept until v0.7.5c
 	(Discord showed "OpenCE" as being played) */
-	{ "discord.application_id", "\"1553978809840050229\"" },
+	{ "discord.application_id", "\"1553978809840050229\"", 1 },
 };
 
 #define NUMBER_OF_CONFIG_OLD_DEFAULTS (sizeof(config_old_defaults) / sizeof(config_old_defaults[0]))
@@ -1861,6 +1907,116 @@ static char *config_update_layout(const char *text, toml_datum_t table)
 	platform_log("settings: config.toml updated (config_version %d): %d lines at this version's default commented "
 		"out, to follow it; every other value is kept", CONFIG_VERSION, defaults);
 	return out.buffer;
+}
+
+/* whether the line is blank */
+static int config_line_blank(const char *line, const char *end)
+{
+	while (line < end && (*line == ' ' || *line == '\t' || *line == '\r'))
+		line++;
+	return line == end;
+}
+
+/* whether the line is a comment */
+static int config_line_comment(const char *line, const char *end)
+{
+	while (line < end && (*line == ' ' || *line == '\t'))
+		line++;
+	return line < end && *line == '#';
+}
+
+/* a file that holds, for a setting whose old default is followed, that
+default as a value: the setting's lines are taken out of it (the value, and
+a copy commented out at that default with its help text of that day, each
+with the comment above it and one blank line), and config_add_missing then
+writes it again as this version has it, commented out at the current
+default, so that it follows. Returns the new text, or NULL if there was
+nothing to change */
+static char *config_follow_old_defaults(const char *text, toml_datum_t table)
+{
+	char *result = NULL;
+	size_t old;
+
+	for (old = 0; old < NUMBER_OF_CONFIG_OLD_DEFAULTS; old++)
+	{
+		const char *source = result ? result : text;
+		const struct config_setting *setting;
+		struct config_text out = { NULL, 0, 0 };
+		toml_datum_t datum;
+		const char *dot, *line;
+		const char **starts;
+		size_t count = 0, capacity = 0, line_index, found = 0;
+		unsigned char *drop;
+		char section[64], current[64] = "";
+		long index = config_old_defaults[old].follow ? config_setting_index(config_old_defaults[old].name) : -1;
+
+		if (index < 0)
+			continue;
+		setting = &config_settings[index];
+		datum = toml_seek(table, setting->name);
+		if (!config_datum_is(datum, setting->type, config_old_defaults[old].default_value) ||
+			config_datum_is(datum, setting->type, setting->default_value))
+			continue;
+		dot = strchr(setting->name, '.');
+		snprintf(section, sizeof(section), "%.*s", (int)(dot - setting->name), setting->name);
+		for (line = source; *line; line += strcspn(line, "\n") + (line[strcspn(line, "\n")] ? 1 : 0))
+			capacity++;
+		starts = malloc((capacity + 1) * sizeof(*starts));
+		drop = calloc(capacity + 1, 1);
+		if (!starts || !drop)
+		{
+			free(starts);
+			free(drop);
+			continue;
+		}
+		for (line = source; *line; line += strcspn(line, "\n") + (line[strcspn(line, "\n")] ? 1 : 0))
+			starts[count++] = line;
+		starts[count] = line;
+		for (line_index = 0; line_index < count; line_index++)
+		{
+			const char *start = starts[line_index];
+			const char *end = start + strcspn(start, "\n");
+
+			if (config_line_section(start, end, current, sizeof(current)))
+				continue;
+			if (!strcmp(current, section) &&
+				(config_line_key(start, end, dot + 1) || config_line_commented_key(start, end, dot + 1)))
+			{
+				size_t back = line_index;
+
+				drop[line_index] = 1;
+				found++;
+				while (back > 0 && config_line_comment(starts[back - 1], starts[back - 1] + strcspn(starts[back - 1], "\n")))
+					drop[--back] = 1;
+				if (back > 0 && config_line_blank(starts[back - 1], starts[back - 1] + strcspn(starts[back - 1], "\n")))
+					drop[back - 1] = 1;
+			}
+		}
+		if (found)
+		{
+			for (line_index = 0; line_index < count; line_index++)
+			{
+				if (!drop[line_index])
+				{
+					char *copy = config_copy(starts[line_index], (size_t)(starts[line_index + 1] - starts[line_index]));
+
+					if (copy)
+						config_append(&out, copy);
+					free(copy);
+				}
+			}
+			if (out.buffer)
+			{
+				free(result);
+				result = out.buffer;
+				platform_log("settings: %s = %s was an older version's default; it follows this version's (%s) now",
+					setting->name, config_old_defaults[old].default_value, setting->default_value);
+			}
+		}
+		free(starts);
+		free(drop);
+	}
+	return result;
 }
 
 /* ---------- words */
@@ -2158,6 +2314,29 @@ static void config_load(void)
 					toml_free(updated_result);
 					free(updated);
 					updated = NULL;
+				}
+			}
+			{
+				/* (a value that was an older version's default, followed) */
+				char *followed = config_follow_old_defaults(text, result.toptab);
+				toml_result_t followed_result;
+
+				if (followed)
+				{
+					followed_result = toml_parse(followed, (int)strlen(followed));
+					if (followed_result.ok)
+					{
+						toml_free(result);
+						free(text);
+						result = followed_result;
+						text = followed;
+						updated = text;
+					}
+					else
+					{
+						toml_free(followed_result);
+						free(followed);
+					}
 				}
 			}
 			for (index = 0; index < NUMBER_OF_CONFIG_SETTINGS; index++)

@@ -500,8 +500,10 @@ static const char *const binding_settings[NUMBER_OF_HALO_KEYBOARD_ACTIONS] =
 	"controls.reload", "controls.zoom", "controls.switch_weapon", "controls.switch_grenade", "controls.action",
 	"controls.flashlight", "controls.scoreboard", "controls.pause",
 	/* (OpenCE's: the screenshot key, and voice chat's push to talk, which the
-	game itself does not read: halo_push_to_talk_held) */
-	"controls.screenshot", "controls.push_to_talk",
+	game itself does not read: halo_push_to_talk_held; then text chat's:
+	chat.c reads them) */
+	"controls.screenshot", "controls.push_to_talk", "controls.chat_all", "controls.chat_team",
+	"controls.chat_log",
 };
 
 static const struct
@@ -711,6 +713,14 @@ static void keyboard_controls(unsigned long held, XINPUT_GAMEPAD *pad)
 	if (held & (1UL << HALO_KEYBOARD_SCOREBOARD))
 		pad->wButtons |= XINPUT_GAMEPAD_BACK;
 	keyboard_actions_held = held;
+}
+
+/* text chat's typing (platform_chat_typing) */
+static BOOL chat_typing;
+
+void platform_chat_typing(int typing)
+{
+	chat_typing = typing != 0;
 }
 
 unsigned long halo_keyboard_actions(short controller_index)
@@ -1252,7 +1262,8 @@ DWORD WINAPI XInputGetState(HANDLE device, PXINPUT_STATE state)
 		keyboard_actions_held = 0;
 		keys_held_over_switch(&input);
 		test_input_menu_keys(&input);
-		console_active = console_is_active() != 0;
+		/* (nothing bound while the console or a chat line is being typed) */
+		console_active = console_is_active() != 0 || chat_typing;
 		held = console_active ? 0 : keyboard_bound_actions(&input);
 		keyboard_screenshot(held);
 		if (!console_active)

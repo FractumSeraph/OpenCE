@@ -617,3 +617,16 @@ def test_tag_validator_survives_damaged_maps():
     result = subprocess.run([str(MAP_VALIDATE), "--fuzz", "300", "--seed", "1", *map(str, chosen)],
                             capture_output=True, text=True, timeout=1800)
     assert result.returncode == 0, (result.stdout + result.stderr)[-6000:]
+
+
+def test_menus_quit_on_android():
+    """The menus' Quit quits on Android too (it did nothing there): Android's
+    build has no SDL_PushEvent, so platform_request_quit marks it and the
+    next platform_pump_events exits."""
+    root = MENUS.parent.parent.parent
+    platform = (root / "port/linux/src/sdl_platform.c").read_text()
+    request = re.search(r"^void platform_request_quit\(.*?^\}", platform, re.M | re.S).group(0)
+    assert re.search(r"#ifdef HALO_ANDROID\s*android_quit_requested = TRUE;\s*#else", request)
+    pump = re.search(r"^void platform_pump_events\(.*?^\}", platform, re.M | re.S).group(0)
+    assert re.search(r"if \(android_quit_requested\)\s*\{[^}]*exit\(EXIT_SUCCESS\);", pump)
+    assert "SDL_PushEvent" not in (root / "port/android/host_imports.list").read_text()

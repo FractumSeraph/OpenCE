@@ -101,7 +101,11 @@
           <tbody id="players-body"></tbody>
         </table>
       </div>
-      <p class="hint">Kick drops every player on that machine (split screen); they may join again. Ban keeps the machine out by its hardware id and address. Warn shows in a Chupathingy player's game. These are the actions of the game's Moderation screen (Y over the pause menu). Role: the role of a player whose game proved its moderator key.</p>
+      <form id="say-form" class="row">
+        <label>Server message <input id="say-text" maxlength="200" required></label>
+        <button type="submit" class="primary">Say</button>
+      </form>
+      <p class="hint">Kick drops every player on that machine (split screen); they may join again. Ban keeps the machine out by its hardware id and address. Warn shows in a Chupathingy player's game. Mute stops passing on a player's chat lines until they leave. A server message shows in every Chupathingy player's chat. These are the actions of the game's Moderation screen (Y over the pause menu). Role: the role of a player whose game proved its moderator key.</p>
     </section>
 
     <section class="panel" data-panel="maps" hidden>

@@ -357,6 +357,7 @@
   async function loadPlayers(background) {
     const data = await api('/v1/players', { background: background });
     const body = $('players-body');
+    $('say-form').hidden = !can(0x002);
     $('players-count').textContent = data.count + ' of ' + data.maximum_players;
     body.replaceChildren();
     if (!data.players.length) {
@@ -372,6 +373,10 @@
       const team = element('td', player.team || '-', player.team ? 'team-' + player.team : '');
       const actions = element('td', null, 'actions');
       if (can(0x002)) actions.append(button('Warn', 'small', () => warn(player)));
+      if (can(0x002) && player.chat) {
+        actions.append(player.chat === 'muted' ? button('Unmute chat', 'small', () => mute(player, false)) :
+          button('Mute chat', 'small', () => mute(player, true)));
+      }
       if (can(0x004)) actions.append(button('Kick', 'small', () => kick(player)));
       if (can(0x008)) actions.append(button('Ban', 'small danger', () => ban(player)));
       row.append(
@@ -406,6 +411,21 @@
     try {
       if (!(await stillThere(player))) return;
       await command('sv_warn ' + player.number + ' ' + quote(answer.reason));
+    } catch (error) {
+      failed(error);
+    }
+  }
+
+  // text chat: a muted player's lines are not passed on until they leave
+  // (or are unmuted); their game is told
+  async function mute(player, on) {
+    const answer = await confirmAction(on ? 'Mute ' + player.name + "'s chat? Their lines are not passed on until they leave; their game is told." :
+      'Unmute ' + player.name + "'s chat?", on ? 'Mute' : 'Unmute', false, false);
+    if (!answer) return;
+    try {
+      if (!(await stillThere(player))) return;
+      await command((on ? 'sv_mute ' : 'sv_unmute ') + player.number);
+      await loadPlayers(false);
     } catch (error) {
       failed(error);
     }
@@ -1184,6 +1204,15 @@
     $('token-form').addEventListener('submit', tokenLogin);
     $('setup-form').addEventListener('submit', setup);
     $('set-form').addEventListener('submit', saveSetting);
+    $('say-form').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      try {
+        await command('sv_say ' + quote($('say-text').value));
+        $('say-text').value = '';
+      } catch (error) {
+        failed(error);
+      }
+    });
     $('link-start').addEventListener('click', linkStart);
     $('link-stop').addEventListener('click', linkStop);
     $('playlist-new-form').addEventListener('submit', (event) => {

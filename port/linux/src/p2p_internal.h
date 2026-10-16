@@ -124,8 +124,8 @@ int p2p_peer_reoffered(const unsigned char *identifier, const unsigned char *sec
 of the game) */
 void p2p_invite_received(const char *text);
 /* a new invite (token) for the game hosted, if its invite was listed in the
-server browser (going private: those who saw it must not get in); under
-p2p_lock */
+server browser or on the game list (going private, or a password: those who
+saw it must not get in); under p2p_lock */
 void p2p_new_invite_if_listed(void);
 
 /* ---------- p2p_signal.c: signalling through public MQTT brokers */
@@ -338,6 +338,9 @@ void p2p_lobby_update(const unsigned char *token, int player_count, int maximum_
 int p2p_lobby_listed(void);
 /* ... listed with no password: anyone can join it by its invite */
 int p2p_lobby_open(void);
+/* whether the game hosted is public and has no password, so its invite may
+be shown to anyone (under p2p_lock) */
+int p2p_lobby_hosting_open(void);
 int p2p_lobby_browsing(void);
 /* a message on a slot (its key hash in hex) through a broker; retained: the
 slot's retained copy, sent on subscribing */

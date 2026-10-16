@@ -38,6 +38,11 @@ enum halo_keyboard_action
 	/* (voice chat's, which the game itself does not read:
 	halo_push_to_talk_held) */
 	HALO_KEYBOARD_PUSH_TO_TALK,
+	/* text chat's (port/linux/game/chat.c reads them; the game does not):
+	a line to everyone, to the team, and the recent lines */
+	HALO_KEYBOARD_CHAT_ALL,
+	HALO_KEYBOARD_CHAT_TEAM,
+	HALO_KEYBOARD_CHAT_LOG,
 	NUMBER_OF_HALO_KEYBOARD_ACTIONS
 };
 
@@ -48,5 +53,10 @@ unsigned long halo_keyboard_actions(short controller_index);
 /* whether voice chat's push to talk is held (controls.push_to_talk), in the
 game and in the menus alike */
 int halo_push_to_talk_held(void);
+
+/* text chat's line is being typed, or its log is open (chat.c): the
+keyboard's keys go to it alone, as with the console (none drives the
+player or the menus) */
+void platform_chat_typing(int typing);
 
 #endif

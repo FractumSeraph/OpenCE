@@ -16,6 +16,8 @@ the file.
 | `HALO_DEDICATED_IDLE_LIMIT` | `5` | A game in which nobody scores for this many minutes ends. `0`: never. |
 | `HALO_DEDICATED_PUBLIC` | `true` | A public game, listed in every in-game Server Browser (OpenCE's and ChupathingyCE's) through internet play's brokers. `false`: not listed there; the game list still lists it, and its invite still works. |
 | `HALO_DEDICATED_NAME_FILTER` | `false` | `true`: players with a blocked name are warned and kicked ([below](#blocked-names)); `sv_name_filter 1` on the console does the same. |
+| `HALO_DEDICATED_CHAT` | `2` | Text chat between ChupathingyCE players: `2` on, `1` team lines alone, `0` off (`sv_chat` sets it; the environment wins over the settings file). |
+| `HALO_DEDICATED_CHAT_FILTER` | `true` | A chat line with a word of `blocked_names.txt`'s list (the game has it built in) is not passed on; its sender's game says "Not sent: blocked words". Nobody is kicked. |
 | `HALO_DEDICATED_COMMANDS` | (none) | A file of [commands](admin.md#startup-commands) in the data folder, run once the server first hosts. |
 | `HALO_DEDICATED_CONSOLE` | on in a terminal | Commands typed on the server's standard input ([the console](admin.md#the-console)). `true`: read them even when it is not a terminal; `false`: never. |
 | `HALO_DEDICATED_CONTROL` | (off) | The [control API](admin.md#the-control-api)'s address: a port (`8080`, on 127.0.0.1 only) or an address and port (`127.0.0.1:8080`, `[::1]:8080`, `0.0.0.0:8443`). Its token is made and printed the first time, and the first owner's setup link. The [control panel](moderation.md#the-control-panel) is on the same address: plain HTTP on the loopback address, HTTPS beyond it. |
@@ -28,8 +30,17 @@ the file.
 
 The settings file's keys (`sv_settings` lists them, with where each value
 comes from): `name`, `maximum_players`, `minimum_players`, `idle_limit`,
-`public` (from the next start), `name_filter`, and the playlist
-`sv_playlist_use` chose.
+`public` (from the next start), `name_filter`, `chat`, `chat_filter`, and
+the playlist `sv_playlist_use` chose.
+
+## Text chat
+
+ChupathingyCE players talk over Delta Peer ([docs/delta.md](../../docs/delta.md#chat)):
+the server checks each line (its rate, its text, the player's mute, the
+filter) and passes it to everyone, or to the speaker's team. It writes
+nothing of what is said: not to the log, not to the audit file. What it
+does write is the admins' own: `sv_say`'s messages and each mute, in the
+audit file. OpenCE players are never sent a line and never say one.
 
 ## Blocked names
 

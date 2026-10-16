@@ -53,6 +53,8 @@ enum
 	_delta_moderation_action_ban = 3,
 	_delta_moderation_action_end_game = 4,
 	_delta_moderation_action_next_map = 5,
+	_delta_moderation_action_mute = 6,
+	_delta_moderation_action_unmute = 7,
 	_delta_moderation_notice_warning = 1,
 	_delta_moderation_notice_info = 2,
 };
@@ -63,6 +65,8 @@ int delta_peer_game_moderation_capable(int machine_index);
 int delta_peer_game_moderation_notice(int machine_index, int kind, char const *text);
 int delta_peer_game_moderation_bind(int machine_index, unsigned int request, char const *account, char const *server);
 void delta_peer_game_moderation_roles_changed(void);
+/* (text chat's, port/linux/game/chat.h) */
+void chat_set_moderator_check(int (*check)(int machine_index));
 
 /* ---------- globals */
 
@@ -191,7 +195,9 @@ static int hook_action(
 	(void)context;
 	if (reason && reason[0])
 		quoted(reason, reason_word, sizeof(reason_word));
-	if (action == _delta_moderation_action_warn || action == _delta_moderation_action_kick || action == _delta_moderation_action_ban)
+	if (action == _delta_moderation_action_warn || action == _delta_moderation_action_kick ||
+		action == _delta_moderation_action_ban || action == _delta_moderation_action_mute ||
+		action == _delta_moderation_action_unmute)
 	{
 		target = server_commands_machine_player(target_machine, NULL, 0);
 		if (!target)
@@ -216,6 +222,15 @@ static int hook_action(
 			snprintf(line, sizeof(line), "sv_ban %ld %dm %s", target, minutes, reason_word);
 		else
 			snprintf(line, sizeof(line), "sv_ban %ld forever %s", target, reason_word);
+		break;
+	case _delta_moderation_action_mute:
+		if (minutes > 0)
+			snprintf(line, sizeof(line), "sv_mute %ld %d", target, minutes > 24 * 60 ? 24 * 60 : minutes);
+		else
+			snprintf(line, sizeof(line), "sv_mute %ld", target);
+		break;
+	case _delta_moderation_action_unmute:
+		snprintf(line, sizeof(line), "sv_unmute %ld", target);
 		break;
 	case _delta_moderation_action_end_game:
 		snprintf(line, sizeof(line), "sv_end_game");
@@ -290,6 +305,16 @@ static void tell_role(
 		snprintf(moderation.told[machine_index], sizeof(moderation.told[machine_index]), "%s", text);
 }
 
+/* (text chat's) whether a machine's player signed in with a key that has a
+role here: their lines are marked as a moderator's */
+static int machine_is_moderator(
+	int machine_index)
+{
+	unsigned char key[32];
+
+	return server_moderation_machine_key(machine_index, key) && server_roles_key_role(key, NULL, NULL, 0) > 0;
+}
+
 /* ---------- public code */
 
 void server_moderation_update(
@@ -310,6 +335,7 @@ void server_moderation_update(
 		delta_peer_game_set_moderation_host(&host);
 		/* (this fork) */
 		network_distributed_full_view_proc = full_view;
+		chat_set_moderator_check(machine_is_moderator);
 	}
 	/* the roles changed elsewhere (the panel's accounts, the site's list):
 	the moderators' games told again */

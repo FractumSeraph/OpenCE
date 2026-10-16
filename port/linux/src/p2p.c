@@ -364,9 +364,10 @@ static struct
 	unsigned char token[P2P_TOKEN_SIZE];
 	/* whether the server browser's exit hook is set (lobby_quit) */
 	int lobby_quit_registered;
-	/* whether the server browser listed this token (p2p_lobby.c): going
-	private makes a new one */
+	/* whether the server browser listed this token (p2p_lobby.c), or the
+	game list (browser.c): going private or a password makes a new one */
 	int token_listed;
+	int token_announced;
 	char invite[P2P_LINK_SIZE];
 	int invite_copied;
 	/* the game's players and its most (p2p_set_game_player_counts; 0: not
@@ -1917,6 +1918,21 @@ int p2p_peer_address(const unsigned char *peer_identifier, unsigned long *addres
 	return result;
 }
 
+int p2p_peer_ping(const unsigned char *peer_identifier)
+{
+	struct peer *peer;
+	int ping = -1;
+
+	if (!p2p.running)
+		return -1;
+	pthread_mutex_lock(&p2p_lock);
+	peer = find_peer(peer_identifier);
+	if (peer && peer->connected && peer->round_trip > 0 && peer->round_trip < 10000)
+		ping = (int)peer->round_trip;
+	pthread_mutex_unlock(&p2p_lock);
+	return ping;
+}
+
 /* ---------- the game's ports: all that peers may reach */
 
 void p2p_socket_port(int socket, int stream, int listening, unsigned short port)
@@ -2648,6 +2664,31 @@ int p2p_hosting_invite(char *text, int size)
 	return result;
 }
 
+int p2p_hosting_listable_invite(char *text, int size)
+{
+	int result;
+
+	pthread_mutex_lock(&p2p_lock);
+	result = p2p.running && p2p.hosting && p2p.has_token && p2p_lobby_hosting_open();
+	if (result)
+		snprintf(text, (size_t)size, "%s", p2p.invite + strlen("halo://join/"));
+	pthread_mutex_unlock(&p2p_lock);
+	return result;
+}
+
+void p2p_hosting_invite_announced(const char *invite)
+{
+	pthread_mutex_lock(&p2p_lock);
+	if (p2p.has_token && !strcmp(p2p.invite + strlen("halo://join/"), invite))
+	{
+		p2p.token_announced = 1;
+		/* (made private, or given a password, while it was being announced) */
+		if (!p2p_lobby_hosting_open())
+			p2p_new_invite_if_listed();
+	}
+	pthread_mutex_unlock(&p2p_lock);
+}
+
 #endif
 /* (p2p.h) */
 const char *p2p_invite_log_text(const char *invite, char *text, int size)
@@ -2866,6 +2907,7 @@ static void make_invite(void)
 	}
 	p2p.has_token = 1;
 	p2p.token_listed = 0;
+	p2p.token_announced = 0;
 	p2p_key_hash(p2p_public_key(), bytes);
 	memcpy(bytes + P2P_KEY_HASH_SIZE, p2p.token, P2P_TOKEN_SIZE);
 	p2p_hex(bytes, sizeof(bytes), text);
@@ -2874,7 +2916,7 @@ static void make_invite(void)
 
 void p2p_new_invite_if_listed(void)
 {
-	if (!p2p.has_token || !p2p.token_listed)
+	if (!p2p.has_token || (!p2p.token_listed && !p2p.token_announced))
 		return;
 	make_invite();
 	{

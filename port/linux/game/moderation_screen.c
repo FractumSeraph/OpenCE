@@ -93,6 +93,9 @@ struct moderation_choice
 static struct moderation_choice const moderation_choices[] =
 {
 	{ "Warn", _delta_moderation_action_warn, 0, DELTA_MODERATION_WARN, TRUE },
+	{ "Mute chat", _delta_moderation_action_mute, 0, DELTA_MODERATION_WARN, TRUE },
+	{ "Mute chat 10 minutes", _delta_moderation_action_mute, 10, DELTA_MODERATION_WARN, TRUE },
+	{ "Unmute chat", _delta_moderation_action_unmute, 0, DELTA_MODERATION_WARN, TRUE },
 	{ "Kick", _delta_moderation_action_kick, 0, DELTA_MODERATION_KICK, TRUE },
 	{ "Ban 1 hour", _delta_moderation_action_ban, 60, DELTA_MODERATION_BAN_TIMED, TRUE },
 	{ "Ban 1 day", _delta_moderation_action_ban, 24 * 60, DELTA_MODERATION_BAN_TIMED, TRUE },

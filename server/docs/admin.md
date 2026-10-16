@@ -38,6 +38,10 @@ the duration.
 | `sv_status` | The server: name, version and network version, the OpenCE build it follows (the legacy table's, [Delta](../../docs/delta.md#following-opence)), state (lobby, loading, in game, carnage report), map and game type, playlist entry, players, whether it is public, uptime. |
 | `sv_players` | The players: number, name, team, score and ping (in a game), and their machine's hardware id. |
 | `sv_warn <player> <reason>` | Warns the player: a ChupathingyCE game shows the reason (Delta Peer); the warning is in the audit file either way. |
+| `sv_say <text>` | A server message: a line in the chat of every ChupathingyCE player, in their HUD font, marked "Server". In double quotes for more than a word. OpenCE players do not see it. In the audit file. |
+| `sv_chat [on\|team\|off]` | Shows or sets the players' text chat: `on`, `team` (team lines alone) or `off`. Saved in the settings file (`chat`: 2, 1 or 0), in effect at once. On unless set. |
+| `sv_mute <player> [minutes]` | Stops passing on a player's chat lines, until they leave the game or for 1 to 1440 minutes. Their game is told ("You are muted"); server messages still reach them. In the audit file. |
+| `sv_unmute <player>` | Passes a muted player's chat lines on again. |
 | `sv_kick <player> [reason]` | Drops the player, and every other player on their machine (split screen). They see "game closed" and may join again; a ChupathingyCE game is told the reason first. |
 | `sv_ban <player> [duration] [reason]` | Drops the player and keeps their machine out: for ever, or for a while (`30m`, `2h`, `7d`, `1w`, `1d12h`; a bare number is minutes). Every player in the game is told. bans.txt's reason says by whom, how long and why. |
 | `sv_unban <ban>` | Takes a ban out, by its number in `sv_banlist`. |

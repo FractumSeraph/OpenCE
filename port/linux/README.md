@@ -302,6 +302,9 @@ gamepads' only.
 | pause menu | escape |
 | screenshot | F10 |
 | talk in voice chat (hold) | V |
+| say a line to everyone (text chat) | T |
+| say a line to your team | Y |
+| the chat's recent lines and players (M mutes one for you) | H |
 
 Always: \` opens the developer console, F12 releases or captures the mouse,
 F11 changes between fullscreen and window. Screenshot (default F10,
@@ -493,6 +496,12 @@ the setting for one start of the game. It has priority over the file.
 | `display.server_message_text_color` | `""` | `HALO_SERVER_MESSAGE_TEXT_COLOR` | The banner's text colour, `"#RRGGBB"` or `"#RRGGBBAA"`. Empty, or a value that does not parse (logged once): the default, light for a notice and amber for a warning. Applies to both kinds. |
 | `display.server_message_border_color` | `""` | `HALO_SERVER_MESSAGE_BORDER_COLOR` | The banner's outline colour, `"#RRGGBB"` or `"#RRGGBBAA"`. Empty, or a value that does not parse: the default, blue for a notice and amber for a warning. Applies to both kinds. |
 | `display.server_message_background_color` | `""` | `HALO_SERVER_MESSAGE_BACKGROUND_COLOR` | The banner's background colour, `"#RRGGBB"` or `"#RRGGBBAA"`. Empty, or a value that does not parse: the default, dark blue. |
+| `chat.enabled` | `true` | `HALO_CHAT` | Text chat with other Chupathingy players, in a game whose host is a Chupathingy copy or server (Delta Peer's `chat`; OpenCE players are never sent a line). T says a line to everyone, Y to your team; Enter sends, Escape cancels, and while you type the keyboard drives nothing else. The lines show at the lower left above the motion sensor, in the HUD's message font and tint (a size smaller, with a heavier shadow), four at a time, and fade after 6 seconds; H shows the last ones and the players, where up and down choose one and M mutes them for you alone. `false`: no chat at all, neither said nor shown; the server's own lines still show (as `display.server_messages` says). Nothing of what is said is written down. |
+| `chat.show` | `"all"` | `HALO_CHAT_SHOW` | Which players' lines show: `"all"`, `"team"` (your team's alone) or `"off"` (none; you can still talk). |
+| `chat.filter` | `"mask"` | `HALO_CHAT_FILTER` | Blocked words in the lines you are shown: `"mask"` stars them out, `"hide"` leaves such a line out, `"show"` shows it as sent. The words are the blocked names list's (`server/blocked_names.txt`, built in) and your own (`chat.filter_file`). Nobody is told and nobody is kicked. |
+| `chat.filter_file` | `"chat_filter.txt"` | `HALO_CHAT_FILTER_FILE` | Your own blocked words, a file in the save folder: a word a line (blocked anywhere in a word), or `whole <word>` (only as a whole word); `#` starts a comment. |
+| `chat.streamer_mode` | `false` | `HALO_CHAT_STREAMER_MODE` | `true`: other players' names in chat show as their team (or "Player"), and blocked words are starred out even with `chat.filter = "show"`. |
+| `chat.quick_messages` | `"Nice shot\|Need backup\|On my way\|Thanks\|Good game\|Sorry"` | `HALO_CHAT_QUICK_MESSAGES` | A controller's quick lines, separated by `\|`: D-pad up shows the next, D-pad down says it (to your team in a team game). Empty: none. |
 | `display.per_pixel_lighting` | `false` | `HALO_PER_PIXEL_LIGHTING` | `false`: the models (characters, weapons, vehicles, scenery) are lit at each vertex and the light is blended between them, as on the Xbox. The light across a curved surface then shows facets, and a point light that passes close lights only the vertices it reaches. `true`: the models are lit at each pixel by the same lights (the ambient light, two distant lights and two point lights), which changes their look. |
 | `display.shield_glow` | `false` | `HALO_SHIELD_GLOW` | `true`: as a unit's energy shield flares (hit, charging, falling), it lights what is around it and itself, as a plasma bolt does, in the shield shader's own color (a Spartan's gold, an Elite's blue), rising and falling with the flare seen on the body. An ordinary dynamic light of the game's, drawn with a light definition the map has (`shield_glow.c`). Up to 8 units near the camera. |
 | `display.shield_glow_intensity` | `default` | `HALO_SHIELD_GLOW_INTENSITY` | The shield glow's reach and brightness: `default`, or `light_show` (three times as far, and at full strength from a third of the flare: a light is no brighter than full). The units glowing are those near any local player's camera, so each of a split screen's views has the same. |
@@ -539,6 +548,8 @@ the setting for one start of the game. It has priority over the file.
 | `network.tunnel_port` | `0` | `HALO_NET_TUNNEL_PORT` | The UDP port for internet play. `0`: the game selects a port. Refer to "Internet play". |
 | `network.allow_upnp` | `true` | `HALO_NET_ALLOW_UPNP` | `true`: internet play can ask the router to forward its port (UPnP). `false`: the game does not ask. Refer to "Internet play". |
 | `network.protocol` | `"auto"` | `HALO_NET_PROTOCOL` | Delta Peer, the messages between ChupathingyCE machines beside OpenCE's protocol (UDP port 5160; `docs/delta.md`). `"auto"`: Delta with the machines that speak it, plain OpenCE with the others. `"opence"`: Delta off. `"delta"`: as `"auto"` for now. |
+| `network.chat` | `"on"` | `HALO_NET_CHAT` | Text chat in the games this copy hosts: `"on"`, `"team"` (team lines alone) or `"off"`. |
+| `network.chat_filter` | `true` | `HALO_NET_CHAT_FILTER` | In the games this copy hosts, a line with a blocked word (the blocked names list's) is not passed on, and its sender is told. Nobody is kicked. |
 | `network.share_profile` | `false` | `HALO_NET_SHARE_PROFILE` | `true`: the other ChupathingyCE players of a game see this copy's player ID (its game list profile), over Delta. |
 | `network.platform_limits` | `"on"` | `HALO_NET_PLATFORM_LIMITS` | `"on"`: Delta hosts keep a game to the players this platform takes (an original Xbox: 16). `"off"`: this machine joins games of any size. |
 | `network.host_platform_limits` | `true` | `HALO_NET_HOST_PLATFORM_LIMITS` | `true`: a game this machine hosts keeps to the players its Delta machines' platforms take. `false`: their limits are ignored, for testing. |
@@ -566,7 +577,7 @@ the setting for one start of the game. It has priority over the file.
 | `network.stun_servers` | Google and Cloudflare | `HALO_NET_STUN` | The public STUN servers (`host:port`, with commas between them) that give the internet address of a machine. |
 | `network.legacy_table` | `""` | `HALO_LEGACY_TABLE` | For testing, and for admins: a legacy table file, not signed, next to `config.toml` unless a full path. Its row for the wire of the build sets the OpenCE network versions that the game announces and joins, in place of the signed tables. The log shows a warning at start. Refer to `docs/delta.md`. Empty: none. |
 | `network.browser_url` | `"https://halo.milenko.org"` | `HALO_NET_BROWSER` | The game list server: hosted games are listed there, System Link shows its games, and the reports below go there. Empty: none. |
-| `network.list_hosted_games` | `true` | `HALO_NET_LIST_GAMES` | `true`: the system link games this machine hosts are listed on `network.browser_url` (halo.milenko.org), where anyone can find and join them. `false`: they are kept to invites and the local network, and no carnage report of them is sent. |
+| `network.list_hosted_games` | `true` | `HALO_NET_LIST_GAMES` | `true`: the system link games this machine hosts are listed on `network.browser_url` (halo.milenko.org), where anyone can find and join them. Only public games without a password are listed. `false`: they are kept to invites and the local network, and no carnage report of them is sent. |
 | `network.report_joined_games` | `true` | `HALO_NET_REPORT_GAMES` | When an internet game this machine joined ends, the game sends `network.browser_url` its scores as this machine saw them, with this copy's player ID, and confirms this machine's players' lines in the host's report of the game (`POST /v1/claim`), which puts the game on their profiles. `false`: neither, for games this machine joins. Games it hosts are still reported and confirmed. |
 | `network.report_events` | `true` | `HALO_NET_REPORT_EVENTS` | Delta Stats: the games this machine hosts are recorded (kills with weapons and positions, accuracy, medals, objectives, vehicles, pickups) and sent to `network.browser_url` when each ends. Players are their names, never a hardware ID or an address; an OpenCE player is only their name, team and that game's score, place, kills and deaths. `false`: no events are recorded or sent. The carnage report of a hosted game is separate: it is sent while the game is listed (`network.list_hosted_games`). Refer to `docs/delta.md`. |
 | `network.events_token` | `""` | `HALO_EVENTS_TOKEN` | Delta Stats: a dedicated server's token, from the game list's operator, so that its games count as a trusted server's. Empty: the game must be listed there, from this machine, for its events to be taken. |
@@ -600,6 +611,7 @@ the setting for one start of the game. It has priority over the file.
 | `debug.menu_open` | `""` | `HALO_MENU_OPEN` | Start on this screen of the menus (`main_menu/settings_select/...`, as `port/assets/menus` names it), a player profile being edited, to look at it. |
 | `debug.gpu_skip_vertex_shaders`, `debug.gpu_debug_expression`, `debug.gpu_debug_flat`, `debug.gpu_debug_texture0` | off | `HALO_GPU_SKIP_VS`, `HALO_GPU_DEBUG_EXPR`, `HALO_GPU_DEBUG_FLAT`, `HALO_GPU_DEBUG_T0` | Tools to find problems in the graphics: skip the draws of a vertex shader, or replace the output of all pixel shaders with a GLSL expression (for example `t0.rgb`). |
 | `debug.network_test`, `debug.network_test_start`, `debug.network_test_kill`, `debug.network_test_score`, `debug.network_test_shoot`, `debug.network_test_aim`, `debug.network_test_watch`, `debug.network_test_cheat`, `debug.network_test_vehicle`, `debug.network_test_pickup`, `debug.network_test_pickup_weapon`, `debug.network_test_public`, `debug.test_input` | off | `HALO_NETWORK_TEST`, `HALO_NETWORK_TEST_START`, `HALO_NETWORK_TEST_KILL`, `HALO_NETWORK_TEST_SCORE`, `HALO_NETWORK_TEST_SHOOT`, `HALO_NETWORK_TEST_AIM`, `HALO_NETWORK_TEST_WATCH`, `HALO_NETWORK_TEST_CHEAT`, `HALO_NETWORK_TEST_VEHICLE`, `HALO_NETWORK_TEST_PICKUP`, `HALO_NETWORK_TEST_PICKUP_WEAPON`, `HALO_NETWORK_TEST_PUBLIC`, `HALO_TEST_INPUT` | Automatic tests of system link (`game/network_test.c`). Refer to `NETCODE.md`. |
+| `debug.chat_test` | `""` | `HALO_CHAT_TEST` | A script of text chat for the tests (`game/chat.c`): `"<seconds>:<what>[:<text>]"` steps separated by `;`, from when this copy is in a game: `all` and `team` say a line, `server` says one as the host's server, `mute` and `unmute` mute a machine as a moderator does (the host), `localmute` mutes one for this copy, `log` and `close` open and close the log, `type` shows a line being typed. |
 | `debug.touch_targets` | `false` | `HALO_TOUCH_TARGETS` | Outlines the tap targets of the menus (item green, value blue, list slot yellow, legend button red, the band beside the slots of a list orange, keys of the on-screen keyboard white), marks where the last finger went down and the last tap landed for 3 seconds, and logs each tap with the target that it hit (for a value, also where it splits into previous and next): to judge the accuracy of touch. |
 | `debug.solo_game` | `false` | `HALO_SOLO_GAME` | A system link or split screen game can start with one player, alone on this machine: to test multiplayer maps without a second machine. |
 | `debug.network_latency`, `debug.network_loss`, `debug.network_corrupt`, `debug.network_corrupt_stream`, `debug.network_corrupt_after` | `0` | `HALO_NETWORK_LATENCY`, `HALO_NETWORK_LOSS`, `HALO_NETWORK_CORRUPT`, `HALO_NETWORK_CORRUPT_STREAM`, `HALO_NETWORK_CORRUPT_AFTER` | The game holds all the data that it receives for this number of milliseconds, ignores this percentage of the datagrams, and damages this percentage of the datagrams it receives, and this percentage of its reads of streams, at random (bytes changed, cut short, stretched or replaced), from this many seconds after the start. Use the first two to test the netcode as on the internet, and the others to test that nothing another machine sends can crash the game (a damaged stream is closed, so a little goes a long way; a host's messages to its own client are damaged too, so start damaging once the game has started). |
@@ -1233,7 +1245,22 @@ activity sent (without the invite).
 
 Builds with the game list (`configure.py --game-browser`) have Online Games
 in the Multiplayer menu: the games on `network.browser_url`
-(halo.milenko.org). Each copy of the game has a player key in the save root
+(halo.milenko.org). The screen looks like the Xbox's menus, drawn by the
+game itself in the menus' fonts (`port/assets/fonts`). Each game's map has a
+tag for its family: XBX (the Xbox's maps), HCE (Custom Edition), HMD
+(HaloMD) and GBX (Halo PC retail). A lock marks a game with a password, as
+its public listing says. The ping column shows the round trip to a host
+that this machine is connected to (a game that you join), else nothing:
+nothing measures a host before you join it. Sorted by ping, such games come
+last. The details show the map's picture from the menus, or from Halo PC's
+`ui.map`. Without either, a stock map's picture comes from the site
+(stats.chupathingy.org/art/maps), downloaded in the background only while
+`network.online` is on and kept in the save root's `map_art` folder. Any
+other map gets a card with its name in its family's color. RB (Link Profile)
+shows only while this copy is not linked to a profile: linked on this copy
+(kept in the save root's `game_list_profile.txt`), or a profile the site
+has for this copy's player ID. Once linked, Start's prompt names the
+profile. Each copy of the game has a player key in the save root
 (`game_list_player.key`). The key confirms the player's lines in finished
 games. The game sends the key only to an HTTPS server, or to a server on
 this computer (`http://127.0.0.1`, `http://localhost`) for tests.

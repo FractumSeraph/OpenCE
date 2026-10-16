@@ -64,7 +64,7 @@ short ui_map_list_campaign_picture_index(long index);
 /* a Custom Edition or HaloMD map (a family of halo_map_families.h), by its
 file's name (the server browser's): its name (Halo PC's own, HaloMD's mod
 list's, or the file's made readable; every build), Halo PC's picture of it
-(or NULL), and whether its family's folders have it (builds with
+(one of Halo PC's own maps; else NULL), and whether its family's folders have it (builds with
 HALO_CUSTOM_EDITION) */
 void ui_map_list_family_name(short family, char const *file, wchar_t *name, long size);
 struct bitmap_data *ui_map_list_family_picture(short family, char const *file);

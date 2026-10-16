@@ -19,6 +19,7 @@ and OpenCE players are kicked and banned like anyone else.
 | --- | --- | --- | --- |
 | Status, players, bans, the log, the audit file, playlists, settings | yes | yes | yes |
 | Warn a player (`sv_warn`) | yes | yes | yes |
+| Mute a player's chat (`sv_mute`, `sv_unmute`), a server message (`sv_say`) | yes | yes | yes |
 | Kick (`sv_kick`) | yes | yes | yes |
 | Ban for up to 7 days (`sv_ban <player> 2h`) | yes | yes | yes |
 | Ban for longer, or for ever | | yes | yes |
@@ -78,14 +79,17 @@ until it is fixed.
 | `sv_mod_add <moderator key> <role> [name]` | The same, with the key itself (a moderator can read theirs on the Moderation screen). |
 | `sv_mod_remove <key or name>` | Takes a moderator out (the key's first 8 or more digits will do). |
 | `sv_warn <player> <reason>` | A warning in the player's game (a ChupathingyCE game shows it; any warning is in the audit file). |
+| `sv_mute <player> [minutes]`, `sv_unmute <player>` | A player's chat lines not passed on (until they leave, or for a while), and on again. |
+| `sv_say <text>` | A server message in every ChupathingyCE player's chat. |
 | `sv_kick <player> [reason]`, `sv_ban <player> [duration] [reason]` | As before, with a reason. A ChupathingyCE player sees it as their game drops them. |
 
 ### In the game
 
 A moderator in a ChupathingyCE game opens the Moderation screen (Y on a
 controller, or M, from the pause menu) on a server that offers it, signs in
-(A), and picks a player and an action: warn, kick, ban for an hour, a day,
-7 days, 30 days, or forever, end game, next map (the control panel's
+(A), and picks a player and an action: warn, mute chat (until they leave, or 10
+minutes), unmute chat, kick, ban for an hour, a day, 7 days, 30 days, or
+forever, end game, next map (the control panel's
 actions, by the same names). Only the actions their role allows are shown,
 and the server checks each again. Once signed in, the screen shows their
 role and where it comes from (this server's moderators file, their panel

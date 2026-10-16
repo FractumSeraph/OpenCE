@@ -29,6 +29,14 @@ int p2p_join_invite(const char *text);
 /* the invite of the game this machine hosts on the internet (its 44 digits,
 without halo://join/); 0 when it hosts none (browser.c) */
 int p2p_hosting_invite(char *text, int size);
+/* as p2p_hosting_invite, but 0 also when the game is private or has a
+password: only a public game without a password is listed by its invite
+(browser.c) */
+int p2p_hosting_listable_invite(char *text, int size);
+/* the game list took the hosted game's invite (browser.c): the token is
+public now, so going private or setting a password makes a new one; one
+that is no longer public is replaced at once */
+void p2p_hosting_invite_announced(const char *invite);
 #ifdef HALO_GAME_BROWSER
 unsigned long p2p_peer_public_address(unsigned long game_address);
 unsigned long p2p_public_address(void);
@@ -41,6 +49,9 @@ const unsigned char *p2p_identifier(void);
 /* the address the game reaches the machine with this identifier at, if it
 is an internet play peer (reached yet or not) */
 int p2p_peer_address(const unsigned char *identifier, unsigned long *address);
+/* the last round trip to the machine with this identifier in milliseconds
+(the tunnel's own pings), if the tunnel has reached it; -1 if not */
+int p2p_peer_ping(const unsigned char *identifier);
 
 /* a destination the game sends to or connects to (stream: a TCP socket;
 socket: the game's UDP socket connected to it, else -1): 1 if it is a peer's
