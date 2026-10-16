@@ -374,7 +374,8 @@ boolean hud_hires_button_draw(struct icon_hud_element_definition const *icon,
 
 	if (!config_boolean("display.high_res_hud") || !hud_globals)
 		return FALSE;
-	buttons = hud_globals->messaging.button_icons.address;
+	/* (port, this fork: Xbox addresses, offsets in the 64-bit builds) */
+	buttons = XBOX_POINTER(struct icon_hud_element_definition const, hud_globals->messaging.button_icons.address);
 	if (!buttons) return FALSE;
 	for (index = 0; index < 6 && index < hud_globals->messaging.button_icons.count; index++)
 		if (icon == buttons + index) break;
@@ -401,7 +402,7 @@ boolean hud_hires_button_draw(struct icon_hud_element_definition const *icon,
 				bitmap_delete(bitmap);
 				break;
 			}
-			hud_hires_register_placeholder(asset, bitmap->hardware_format);
+			hud_hires_register_placeholder(asset, XBOX_POINTER(unsigned long const, bitmap->hardware_format));
 			hud_buttons[index].asset = asset;
 			hud_buttons[index].bitmap = bitmap;
 			break;
