@@ -296,8 +296,26 @@ static int game_moderation_binding(void *context, delta_u32 host_ipv4, char *bin
 	return -1;
 }
 
+#ifdef HALO_BROWSER
+/* port/web/src/web_delta_peer.c's: the browser's own session (what it
+offers, its platform), set up in this one */
+void web_delta_peer_initialize(struct delta_peer *peer);
+#endif
+
 int delta_peer_protocol(void)
 {
+#ifdef HALO_BROWSER
+	/* (the browser runs its client in this session, so that what the game
+	reads here, chat and Bomb's traits, is the browser's: web_delta_peer.c) */
+	if (!delta_game.ready)
+	{
+		delta_game.ready = 1;
+		delta_game.socket = INVALID_SOCKET;
+		delta_game.protocol = _delta_peer_protocol_auto;
+		web_delta_peer_initialize(&delta_game.peer);
+	}
+	return delta_game.protocol;
+#endif
 	if (!delta_game.ready)
 	{
 		const char *protocol = config_string("network.protocol");
@@ -604,6 +622,17 @@ void delta_peer_game_stop(int host)
 	if (delta_game.ready && delta_game.role == (host ? _role_host : _role_client))
 		stop();
 }
+
+#ifdef HALO_BROWSER
+/* the browser's client (web_delta_peer.c): the session, a client's while a
+game is joined; its socket and frames are the browser's own */
+struct delta_peer *delta_peer_game_browser_session(int joined)
+{
+	delta_peer_protocol();
+	delta_game.role = joined ? _role_client : _role_none;
+	return &delta_game.peer;
+}
+#endif
 
 /* ---------- what the game reads */
 

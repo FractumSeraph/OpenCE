@@ -688,7 +688,7 @@ typedef char screenshot_and_framerate_globals_size_assert[
 	sizeof(struct _screenshot_and_framerate_globals) == 0x38B ? 1 : -1];
 
 void network_test_update(boolean main_menu_loaded, real seconds);
-#ifdef HALO_GAME_BROWSER
+#if defined(HALO_GAME_BROWSER) || defined(HALO_BROWSER)
 void chat_update(void);
 #endif
 
@@ -3559,8 +3559,8 @@ static boolean main_loop_iteration(
 			}
 			/* port: map sharing, in the lobby and in game (port/linux/game/map_share.c) */
 			map_share_update();
-#ifdef HALO_GAME_BROWSER
-			/* text chat (port/linux/game/chat.c) */
+#if defined(HALO_GAME_BROWSER) || defined(HALO_BROWSER)
+			/* text chat (port/linux/game/chat.c; the browser's too) */
 			chat_update();
 #endif
 			profile_scope_enter(main_network_start_frame_section)

@@ -146,6 +146,7 @@ body.has-controller .touch-layer { display: none; }
 .touch-button.system .glyph { font: 800 9px/1 -apple-system, BlinkMacSystemFont, Roboto, sans-serif; letter-spacing: 0.08em; }
 .touch-button.back { left: calc(50% - 62px); }
 .touch-button.start { left: calc(50% + 8px); }
+.touch-button.chat { left: calc(50% + 78px); }
 
 /* the d-pad: a round plate with a cross, each arm a button */
 .touch-dpad {
@@ -361,6 +362,7 @@ shrinks on small phones. */
 .touch-layer.modern .m-pause { left: calc(50% + 8 * var(--u)); }
 .touch-layer.modern .m-talk { left: calc(50% + 68 * var(--u)); }
 .touch-layer.modern .m-talk.pressed { background: rgba(80, 200, 120, .55); }
+.touch-layer.modern .m-chat { left: calc(50% - 112 * var(--u)); }
 
 /* the stick: a ring of glass that appears where the thumb lands */
 .touch-layer.modern .touch-stick {
@@ -556,6 +558,19 @@ body.halo-touch-mode .touch-menu-button { display: block; }
 .touch-menu select { min-height: 34px; border-radius: 8px; border: 1px solid var(--panel-edge); background: #0e1117; color: var(--text); padding: 0 8px; }
 .touch-menu .row { display: flex; flex-wrap: wrap; gap: 8px; }
 .touch-menu .small { color: var(--muted); font-size: 12.5px; margin: 0; }
+
+/* text chat's box: at the top, clear of the phone's keyboard */
+.touch-chat { align-items: flex-start; padding-top: calc(10px + env(safe-area-inset-top)); background: rgba(5, 6, 9, 0.5); }
+.touch-chat .panel { gap: 10px; padding: 12px 14px; }
+.touch-chat input[type=text] {
+  min-height: 40px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--panel-edge);
+  background: #0e1117;
+  color: var(--text);
+  font: 16px/1.2 -apple-system, BlinkMacSystemFont, Roboto, "Segoe UI", sans-serif;
+}
 
 .touch-ui-button,
 .editor-bar button {

@@ -192,8 +192,9 @@ not match its definition traps in a browser.
   game in WebAssembly with WebGL 2, the page and its online play (rooms,
   invites, quick games, joining native hosts through the native gateway),
   touch controls, installing as an app, Custom Edition maps served by the
-  site, maps kept in the browser, voice chat, and ChupathingyCE's Delta
-  (Delta List, Delta Peer and Delta Stats) through the site's relay. Its
+  site, maps kept in the browser, voice chat, text chat and Bomb game types
+  with ChupathingyCE hosts, and ChupathingyCE's Delta (Delta List, Delta
+  Peer and Delta Stats) through the site's relay. Its
   details are in [The browser build](#the-browser-build) above.
 - **Online services** (`services/`): the lobby service for browser games
   (`services/signaling`), the native gateway that lets a browser join a

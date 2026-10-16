@@ -19,10 +19,17 @@ port/linux/include/delta.h). What the browser offers:
   server hashed: map-hashes.mjs, index.json) differs leaves rather than play
   another map;
 - moderation: a dedicated server's warnings and notices (MOD_NOTICE) are
-  shown on the HUD. The browser has no moderator key: it never signs in.
+  shown on the HUD. The browser has no moderator key: it never signs in;
+- chat and server_messages: text chat (port/linux/game/chat.c), as the
+  native builds have it: T, Y and H on a keyboard, the touch controls' Chat
+  button (xinput_sdl.c, platform_web_chat_say);
+- bomb, bomb_movement and bomb_traits: Bomb, Grifball and Open Pitch
+  (source/game/game_engine_bomb.c), whose host drops a machine without them.
 Not offered: profile (no player ID is shared). The signed legacy table's
-kill switch (web_delta.c) turns any of these off. Nothing a host says
-changes the game but leaving on a map that is not the host's. */
+kill switch (web_delta.c) turns any of these off. The session is the
+game's own (delta_peer_game.c, delta_peer_game_browser_session), so what the
+game reads of it (chat's lines, Bomb's traits) is this client's; its socket,
+platform and map check are the browser's, here. */
 
 #include "platform.h"
 #include "posix.h"
@@ -40,6 +47,9 @@ wchar_t); web_platform.c's custom_maps index */
 void network_game_abort(void);
 void display_error_text_when_main_menu_loaded(const unsigned short *text);
 int web_custom_map_identity(const char *file_name, unsigned long long *size, unsigned char *hash);
+/* port/linux/src/delta_peer_game.c's: the game's session, a client's while a
+game is joined */
+struct delta_peer *delta_peer_game_browser_session(int joined);
 /* the game's Winsock layer (xnet.c; halo_linux_winsock_names.h names them) */
 SOCKET WSAAPI halo_ws_socket(int family, int type, int protocol);
 int WSAAPI halo_ws_closesocket(SOCKET socket);
@@ -56,7 +66,8 @@ u_short WSAAPI halo_ws_ntohs(u_short value);
 static struct
 {
 	int ready;
-	struct delta_peer peer;
+	/* the game's session (delta_peer_game.c), run here as the browser's client */
+	struct delta_peer *peer;
 	/* joined a host: the session is a client's */
 	int client;
 	SOCKET socket;
@@ -127,15 +138,13 @@ static int web_legacy_table_offer(void *context, const unsigned char *table, int
 	return delta_legacy_relay() && delta_legacy_offer((const char *)table, size);
 }
 
-static void web_delta_ready(void)
+/* the session's setup, which delta_peer_game.c asks for when the game
+first reads it (delta_peer_protocol) */
+void web_delta_peer_initialize(struct delta_peer *peer)
 {
 	struct delta_peer_env env;
 	struct delta_peer_local local;
 
-	if (web_delta.ready)
-		return;
-	web_delta.ready = 1;
-	web_delta.socket = INVALID_SOCKET;
 	memset(&env, 0, sizeof(env));
 	env.send_datagram = web_send;
 	env.log_line = web_log;
@@ -147,6 +156,14 @@ static void web_delta_ready(void)
 	memset(&local, 0, sizeof(local));
 	local.capabilities = (delta_u32)1 << _delta_capability_platform | (delta_u32)1 << _delta_capability_ce_maps |
 		(delta_u32)1 << _delta_capability_moderation;
+	/* (text chat and the host's own lines: port/linux/game/chat.c, as the
+	native builds have it) */
+	local.capabilities |= (delta_u32)1 << _delta_capability_chat |
+		(delta_u32)1 << _delta_capability_server_messages;
+	/* (Bomb game types and their traits, source/game/game_engine_bomb.c: a
+	host playing one drops a machine without bomb and bomb_traits) */
+	local.capabilities |= (delta_u32)1 << _delta_capability_bomb |
+		(delta_u32)1 << _delta_capability_bomb_movement | (delta_u32)1 << _delta_capability_bomb_traits;
 	local.legacy_version = HALO_PORT_NETWORK_VERSION;
 	/* (the platform policy's row for an unknown platform; a browser hosts
 	no Delta game: its own rooms are the site's) */
@@ -156,7 +173,16 @@ static void web_delta_ready(void)
 	local.key.flags = 0;
 	local.key.host_players = 0;
 	snprintf(local.build, sizeof(local.build), "OpenCE web %d", HALO_PORT_NETWORK_VERSION);
-	delta_peer_initialize(&web_delta.peer, &env, &local);
+	delta_peer_initialize(peer, &env, &local);
+}
+
+static void web_delta_ready(void)
+{
+	if (web_delta.ready)
+		return;
+	web_delta.ready = 1;
+	web_delta.socket = INVALID_SOCKET;
+	web_delta.peer = delta_peer_game_browser_session(0);
 }
 
 /* ---------- the socket */
@@ -211,7 +237,7 @@ static void receive(void)
 		if (length < (int)sizeof(from) || from.sin_family != AF_INET)
 			continue;
 		/* (one too big is dropped by the session: read as one byte more) */
-		delta_peer_receive(&web_delta.peer, GetTickCount(), (delta_u32)from.sin_addr.s_addr, halo_ws_ntohs(from.sin_port),
+		delta_peer_receive(web_delta.peer, GetTickCount(), (delta_u32)from.sin_addr.s_addr, halo_ws_ntohs(from.sin_port),
 			data, size);
 	}
 }
@@ -226,7 +252,7 @@ judge (it says which map is missing) */
 static void client_map(void)
 {
 	struct delta_wire_map theirs;
-	delta_u32 generation = delta_peer_host_map(&web_delta.peer, &theirs);
+	delta_u32 generation = delta_peer_host_map(web_delta.peer, &theirs);
 	char file_name[DELTA_WIRE_MAP_NAME_SIZE + 8];
 	unsigned long long size, their_size;
 	unsigned char hash[DELTA_WIRE_MAP_HASH_SIZE];
@@ -271,9 +297,10 @@ static void client_map(void)
 static void stop(void)
 {
 	if (web_delta.client)
-		delta_peer_stop(&web_delta.peer);
+		delta_peer_stop(web_delta.peer);
 	close_socket();
 	web_delta.client = 0;
+	delta_peer_game_browser_session(0);
 	web_delta.map_checked = 0;
 	web_delta.notices_shown = 0;
 	web_delta.state_said = 0;
@@ -292,15 +319,16 @@ void web_delta_peer_client_frame(int joined, unsigned int host_ipv4, int host_sp
 		return;
 	}
 	web_delta.client = 1;
+	delta_peer_game_browser_session(1);
 	if (host_speaks_delta && !open_socket())
 		host_speaks_delta = 0;
 	receive();
-	delta_peer_client_frame(&web_delta.peer, GetTickCount(), joined, (delta_u32)host_ipv4, DELTA_PEER_PORT,
+	delta_peer_client_frame(web_delta.peer, GetTickCount(), joined, (delta_u32)host_ipv4, DELTA_PEER_PORT,
 		host_speaks_delta, (unsigned char)(machine_index >= 0 && machine_index < DELTA_PEER_MAXIMUM_MACHINES ?
 			machine_index : DELTA_WIRE_NO_MACHINE), player_machines);
-	if (!web_delta.state_said && web_delta.peer.client_state >= _delta_peer_client_delta)
+	if (!web_delta.state_said && web_delta.peer->client_state >= _delta_peer_client_delta)
 	{
-		platform_log("Delta Peer: %s", web_delta.peer.client_state == _delta_peer_client_delta ?
+		platform_log("Delta Peer: %s", web_delta.peer->client_state == _delta_peer_client_delta ?
 			"the host speaks Delta" : "the legacy protocol alone with this host");
 		web_delta.state_said = 1;
 	}
@@ -317,7 +345,7 @@ void web_delta_peer_stop(void)
 for the HUD (the game's 16-bit characters): 1 if there is one */
 int web_delta_peer_take_notice(unsigned short *text, int size)
 {
-	const struct delta_peer_client_moderation *moderation = &web_delta.peer.client_moderation;
+	const struct delta_peer_client_moderation *moderation = &web_delta.peer->client_moderation;
 	int index;
 
 	if (!web_delta.ready || !web_delta.client || size <= 0 || moderation->notice_count == web_delta.notices_shown)
@@ -345,5 +373,5 @@ int web_delta_peer_take_notice(unsigned short *text, int size)
 /* the client's handshake (enum delta_peer_client_state) */
 int web_delta_peer_client_state(void)
 {
-	return web_delta.ready && web_delta.client ? web_delta.peer.client_state : _delta_peer_client_off;
+	return web_delta.ready && web_delta.client ? web_delta.peer->client_state : _delta_peer_client_off;
 }

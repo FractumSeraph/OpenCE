@@ -16,13 +16,13 @@ ChupathingyCE's, do; what is the browser's own is in `port/web` or inside
 | The legacy number | Joins hosts of network versions 11 to 24, as their builds do (OpenCE: its own version only). |
 | The signed legacy table | Fetched and checked (Ed25519); its kill switch obeyed. |
 | Delta List | The in-game Server Browser shows each game's host (DEDICATED, LINUX, DELTA / OPENCE), who is playing and the score to win, and lists the games only their site has. |
-| Delta Peer | A client of their hosts: the handshake, its platform key (platform "unknown": their registry has no browser), the Custom Edition map's identity (size and BLAKE2b-256 hash), a dedicated server's notices on the HUD. |
+| Delta Peer | A client of their hosts: the handshake, its platform key (platform "unknown": their registry has no browser), the Custom Edition map's identity (size and BLAKE2b-256 hash), a dedicated server's notices on the HUD, text chat (`chat`, `server_messages`) and Bomb game types (`bomb`, `bomb_movement`, `bomb_traits`: Bomb, Grifball and Open Pitch, whose host drops a machine without them). |
 | Delta Stats | A game joined through an invite reported, and the player's lines confirmed with this browser's player key (the player can turn it off). |
 | Delta Link | Link profile: a code typed at halo.milenko.org/connect links this browser's key to a profile there. |
 
 Not done: hosting with Delta (a browser's games are its own rooms, which
 native builds cannot join), the `profile` capability (no player ID is
-shared in games), signing in as a server's moderator, chat, event logs.
+shared in games), signing in as a server's moderator, event logs.
 
 ## What is here
 
@@ -30,7 +30,7 @@ shared in games), signing in as a server's moderator, chat, event logs.
 | --- | --- |
 | `port/linux/include/delta.h`, `port/linux/src/delta*.c` | ChupathingyCE's own, as their builds compile them: the registries, the compatibility table of OpenCE's network versions (`DELTA_LEGACY_VERSIONS`), the signed legacy table, Delta Peer's wire format and sessions. |
 | `web_delta.c` | Hands the signed legacy table that the page fetched to `delta.c` (`web_delta_offer_table`), which checks it and keeps it as it keeps any other. |
-| `web_delta_peer.c` | Delta Peer's client side, over a socket of the game's Winsock layer; the map identity check; notices. |
+| `web_delta_peer.c` | Delta Peer's client side, over a socket of the game's Winsock layer; the map identity check; notices. The session is the game's own (`delta_peer_game.c`'s, `delta_peer_game_browser_session`), so what the game reads of it, chat's lines and Bomb's traits, is the browser's. |
 | `web_delta_list.c` | Delta List's games for the Server Browser (`menu_functions.c`). |
 | `web_delta_stats.c` | A joined game's report (`game_engine.c`, HALO_BROWSER) to the page. |
 
@@ -43,8 +43,26 @@ The hooks in shared files, all under `HALO_BROWSER`: `network_client_manager.c`
 (the join range; Delta Peer's frame, its stop, the joined game's
 advertisement flags, notices to the HUD), `p2p_lobby.c` (the listings'
 range), `menu_functions.c` (the Server Browser's Delta List), `game_engine.c`
-(the joined game's report) and `main.c` (its frame). If OpenCE changes those
-places, keep the hooks.
+(the joined game's report) and `main.c` (its frame). Text chat's, under
+`HALO_GAME_BROWSER || HALO_BROWSER`: `chat.c` itself (and its line from the
+touch controls), `main.c` (`chat_update`) and `hud.c` (`chat_draw`); and
+`delta_peer_game.c` (`delta_peer_protocol` and
+`delta_peer_game_browser_session`: the browser's session). If OpenCE or
+ChupathingyCE changes those places, keep the hooks.
+
+## Text chat
+
+ChupathingyCE's text chat (`port/linux/game/chat.c`; their `docs/delta.md`,
+Chat) works in the browser as in their builds: in a game whose host speaks
+Delta and takes chat (a ChupathingyCE player's game or dedicated server,
+this fork's included), T says a line to everyone, Y to the team and H shows
+the recent lines and the players (M mutes one). The host routes every line;
+an OpenCE host has no chat (the game says "Chat needs a Chupathingy host").
+On a phone the touch controls' Chat button (the speech bubble; CHAT in the
+Xbox layout) opens a text box with Everyone and Team: the page hands the
+line to the game a character at a time (`platform_web_chat_put`, then
+`platform_web_chat_say`, `xinput_sdl.c`) and `chat.c` says it on the game's
+thread as a typed one. Lines are printable ASCII, as a keyboard types them.
 
 ## The join range (the legacy number)
 

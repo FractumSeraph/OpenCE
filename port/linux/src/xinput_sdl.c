@@ -272,6 +272,61 @@ EMSCRIPTEN_KEEPALIVE void platform_web_touch_look(float dx, float dy)
 		mouse_aimed_ms = SDL_GetTicks();
 	pthread_mutex_unlock(&mouse_lock);
 }
+
+/* Text chat from the touch controls' text box (touch-controls.js), for a
+phone with no keyboard: the page puts the line's characters one by one, then
+says it to everyone or the team; port/linux/game/chat.c takes it on the
+game's thread (platform_chat_take_line) and says it as a typed line. Only
+printable ASCII is kept, as the keyboard types. Called on the page's main
+thread. */
+enum
+{
+	WEB_CHAT_LINE_SIZE = 81
+};
+
+static pthread_mutex_t web_chat_lock = PTHREAD_MUTEX_INITIALIZER;
+static char web_chat_typed[WEB_CHAT_LINE_SIZE];
+static int web_chat_typed_length;
+static char web_chat_line[WEB_CHAT_LINE_SIZE];
+static int web_chat_team;
+static BOOL web_chat_pending;
+
+EMSCRIPTEN_KEEPALIVE void platform_web_chat_put(int character)
+{
+	pthread_mutex_lock(&web_chat_lock);
+	if (character >= ' ' && character <= '~' && web_chat_typed_length < WEB_CHAT_LINE_SIZE - 1)
+		web_chat_typed[web_chat_typed_length++] = (char)character;
+	pthread_mutex_unlock(&web_chat_lock);
+}
+
+EMSCRIPTEN_KEEPALIVE void platform_web_chat_say(int team)
+{
+	pthread_mutex_lock(&web_chat_lock);
+	memcpy(web_chat_line, web_chat_typed, (size_t)web_chat_typed_length);
+	web_chat_line[web_chat_typed_length] = 0;
+	web_chat_team = team != 0;
+	web_chat_pending = web_chat_typed_length > 0;
+	web_chat_typed_length = 0;
+	pthread_mutex_unlock(&web_chat_lock);
+}
+
+int platform_chat_take_line(int *team, char *text, int size)
+{
+	int taken;
+
+	if (size <= 0)
+		return 0;
+	pthread_mutex_lock(&web_chat_lock);
+	taken = web_chat_pending;
+	if (taken)
+	{
+		snprintf(text, (size_t)size, "%s", web_chat_line);
+		*team = web_chat_team;
+		web_chat_pending = FALSE;
+	}
+	pthread_mutex_unlock(&web_chat_lock);
+	return taken;
+}
 #endif
 
 /* collects the motion the game has not asked for yet; motion that nobody
@@ -347,6 +402,9 @@ static BOOL text_typing_enter_armed;
 static BOOL text_typing_enter_blocked;
 /* (the on-screen keyboard's, and a menu's text field's: menu_functions.c) */
 static BOOL text_typing_keyboard, text_typing_field;
+/* text chat's line or log is up (platform_chat_typing): every key goes to it,
+escape too (it closes them), and nothing bound acts */
+static BOOL chat_typing;
 
 static void text_typing_update(void)
 {
@@ -467,12 +525,13 @@ static void keyboard_gamepad(const struct platform_input_state *input, XINPUT_GA
 
 /* the keys held when the game, menus or console switch count as up until let go
 of: the escape that opens the pause menu does not also back out of it, nor
-the one that closes it (or the console) pause the game again */
+the one that closes it (or the console, or a chat line) pause the game
+again */
 static void keys_held_over_switch(struct platform_input_state *input)
 {
 	static unsigned char held[SDL_SCANCODE_COUNT];
 	static int context = -1;
-	int next_context = (input->menus != FALSE) | (console_is_active() ? 2 : 0);
+	int next_context = (input->menus != FALSE) | (console_is_active() || chat_typing ? 2 : 0);
 	int scancode;
 
 	if (context != next_context)
@@ -714,9 +773,6 @@ static void keyboard_controls(unsigned long held, XINPUT_GAMEPAD *pad)
 		pad->wButtons |= XINPUT_GAMEPAD_BACK;
 	keyboard_actions_held = held;
 }
-
-/* text chat's typing (platform_chat_typing) */
-static BOOL chat_typing;
 
 void platform_chat_typing(int typing)
 {
@@ -1360,8 +1416,9 @@ DWORD WINAPI XInputDebugGetKeystroke(PXINPUT_DEBUG_KEYSTROKE keystroke)
 
 		/* key ups always pass, so no key is left latched down; while typing,
 		escape does not (it cancels, as B: the game's own escape leaves the
-		menus, main.c) */
-		if (key_up || next.virtual_key == VK_OEM_3_BACKQUOTE || console_is_active() ||
+		menus, main.c). A chat line takes every key, escape too, which
+		closes it (port/linux/game/chat.c) */
+		if (key_up || next.virtual_key == VK_OEM_3_BACKQUOTE || console_is_active() || chat_typing ||
 			(text_typing && next.virtual_key != 0x1B /* escape */))
 		{
 			keystroke->VirtualKey = next.virtual_key;

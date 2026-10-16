@@ -109,7 +109,7 @@ symbols in this file:
 #include "text/draw_string.h"
 #include "coop_spectate.h" /* port: port/linux/game/coop_spectate.c */
 #include "network_coop.h" /* port: port/linux/game/network_coop.c */
-#ifdef HALO_GAME_BROWSER
+#if defined(HALO_GAME_BROWSER) || defined(HALO_BROWSER)
 #include "chat.h" /* port: port/linux/game/chat.c */
 #endif
 #include "text/font_group.h"
@@ -1431,8 +1431,8 @@ void hud_draw_screen(
 		/* port: the network co-op vote to skip a cinematic */
 		if (cinematic_in_progress())
 			coop_skip_vote_draw(render.local_player_index);
-#ifdef HALO_GAME_BROWSER
-		/* port: text chat's lines (port/linux/game/chat.c) */
+#if defined(HALO_GAME_BROWSER) || defined(HALO_BROWSER)
+		/* port: text chat's lines (port/linux/game/chat.c; the browser's too) */
 		if (!cinematic_in_progress())
 			chat_draw(render.local_player_index);
 #endif

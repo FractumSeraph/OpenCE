@@ -28,9 +28,13 @@ and chat.quick_messages; a player's host network.chat and
 network.chat_filter; a dedicated server its own (chat_host_set).
 
 debug.chat_test runs a script of lines, for the automated tests.
+
+The browser build has it too (HALO_BROWSER): its client is the browser's
+Delta Peer (port/web/src/web_delta_peer.c), and a phone's touch controls
+say a line from their own text box (xinput_sdl.c, platform_web_chat_say).
 */
 
-#ifdef HALO_GAME_BROWSER
+#if defined(HALO_GAME_BROWSER) || defined(HALO_BROWSER)
 
 #include "cseries.h"
 #include "cseries/cseries_windows.h"
@@ -66,6 +70,11 @@ int config_boolean(char const *name);
 char const *config_string(char const *name);
 unsigned long config_changes(void);
 void platform_log(char const *format, ...);
+#ifdef HALO_BROWSER
+/* port/linux/src/xinput_sdl.c's: a line from the touch controls' text box
+(team: to the team), 1 if there is one */
+int platform_chat_take_line(int *team, char *text, int size);
+#endif
 
 /* ---------- constants */
 
@@ -1017,6 +1026,21 @@ void chat_update(void)
 			}
 			if (config_boolean("chat.enabled") && !chat.typing)
 				quick_buttons();
+#ifdef HALO_BROWSER
+			/* (a line from the touch controls' text box: said as a typed one) */
+			{
+				char text[INPUT_SIZE];
+				int team;
+
+				if (!chat.typing && !chat.log_open && platform_chat_take_line(&team, text, (int)sizeof(text)))
+				{
+					short scope = team ? _delta_chat_scope_team : _delta_chat_scope_all;
+
+					if (may_talk(scope))
+						say(scope, text, (int)strlen(text));
+				}
+			}
+#endif
 		}
 		test_step();
 	}
@@ -1025,6 +1049,15 @@ void chat_update(void)
 		chat.actions_held = 0;
 		if (chat.typing)
 			typing_end();
+#ifdef HALO_BROWSER
+		/* (no game to say it in: the touch controls' line goes) */
+		{
+			char text[INPUT_SIZE];
+			int team;
+
+			platform_chat_take_line(&team, text, (int)sizeof(text));
+		}
+#endif
 	}
 }
 

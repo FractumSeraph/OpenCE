@@ -200,6 +200,7 @@ controls while it is connected.
     pause: '<path d="M9 5v14M15 5v14"/>',
     talk: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',
     score: '<path d="M4 20v-7h5v7M9.5 20V5h5v15M15 20v-4h5v4"/>',
+    chat: '<path d="M4 5h16v11H10l-5 4v-4H4z"/><path d="M8 9h8M8 12h5"/>',
   };
 
   function icon(name) {
@@ -226,6 +227,8 @@ controls while it is connected.
       ["down", "", BUTTON.DPAD_DOWN, "dpad down", ""],
       ["left", "", BUTTON.DPAD_LEFT, "dpad left", ""],
       ["right", "", BUTTON.DPAD_RIGHT, "dpad right", ""],
+      // text chat: a text box for a line (openChat)
+      ["chat", "CHAT", null, "system chat", ""],
     ],
     // a modern mobile shooter's layout: a large fire button under the right
     // thumb that also aims while held; in the menus the stick moves and
@@ -246,6 +249,8 @@ controls while it is connected.
       ["start", { icon: "pause" }, BUTTON.START, "m m-top m-pause", "Pause"],
       // voice chat's push to talk (controls.push_to_talk: V), held
       ["talk", { icon: "talk" }, null, "m m-top m-talk", "Talk"],
+      // text chat: a text box for a line (openChat)
+      ["chat", { icon: "chat" }, null, "m m-top m-chat", "Chat"],
     ],
   };
 
@@ -420,6 +425,8 @@ controls while it is connected.
         held.delete(touch.identifier);
         if (entry && entry.kind === "button") {
           buttonState.set(entry.id, Math.max(0, (buttonState.get(entry.id) || 0) - 1));
+          // (opened as the finger lifts: the phone's keyboard needs a touch)
+          if (entry.id === "chat" && event.type === "touchend") openChat();
         }
         if (touch.identifier === stick.id) {
           stick.id = null;
@@ -529,7 +536,7 @@ controls while it is connected.
 
   // ---------- touch mode in this port's shell
 
-  const state = { active: false, layer: null, menu: null, editor: null, autoStarted: false };
+  const state = { active: false, layer: null, menu: null, chat: null, editor: null, autoStarted: false };
 
   function gameArea() {
     return document.getElementById("game-area");
@@ -593,6 +600,7 @@ controls while it is connected.
       rebuildLayer();
     } else {
       closeMenu();
+      closeChat();
       if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
     }
     const toggle = document.getElementById("touch-mode-toggle");
@@ -644,7 +652,7 @@ controls while it is connected.
           <button type="button" class="touch-ui-button" data-online>Play online…</button>
           <button type="button" class="touch-ui-button" data-install hidden>Install app</button>
         </div>
-        <p class="small">Drag on the right side to aim. Press START (Pause) for the game's own menu.</p>
+        <p class="small">Drag on the right side to aim. Press START (Pause) for the game's own menu. Chat (the speech bubble) says a line in a Chupathingy host's game.</p>
         <p class="small"><a href="https://github.com/FractumSeraph/OpenCE#download" target="_blank" rel="noopener noreferrer">Get the Android, Windows &amp; Linux version</a>: faster, with direct internet play.</p>
         <div class="row">
           <button type="button" class="touch-ui-button primary" data-close>Back to the game</button>
@@ -707,6 +715,105 @@ controls while it is connected.
   function closeMenu() {
     if (state.menu) state.menu.remove();
     state.menu = null;
+  }
+
+  // ---------- text chat
+
+  // The Chat button's text box: a line said to everyone or the team, as the
+  // keyboard's T and Y say one (port/linux/game/chat.c). The line goes to the
+  // game a character at a time (platform_web_chat_put, printable ASCII as a
+  // keyboard types; others are dropped there), then is said
+  // (platform_web_chat_say). The game shows why a line could not be said
+  // (no Chupathingy host, muted, the host's mode) over its HUD.
+  const CHAT_LENGTH = 80;
+
+  function chatText(text) {
+    return text.normalize("NFKD")
+      .replace(/[‘’‚′]/g, "'")
+      .replace(/[“”„″]/g, '"')
+      .replace(/[–—]/g, "-")
+      .replace(/…/g, "...")
+      .replace(/[^\x20-\x7E]/g, "")
+      .trim()
+      .slice(0, CHAT_LENGTH);
+  }
+
+  function sendChat(text, team) {
+    const module = global.Module;
+    const put = module && module._platform_web_chat_put;
+    const say = module && module._platform_web_chat_say;
+    const line = chatText(text);
+    if (typeof put !== "function" || typeof say !== "function" || !line) return;
+    try {
+      for (let index = 0; index < line.length; index++) put(line.charCodeAt(index));
+      say(team ? 1 : 0);
+    } catch (_error) {
+      /* the runtime is not ready yet */
+    }
+  }
+
+  function openChat() {
+    closeChat();
+    const area = gameArea();
+    if (!area) return;
+    releaseEverything();
+    const box = document.createElement("div");
+    box.className = "touch-menu touch-chat";
+    box.innerHTML = `<form class="panel" role="dialog" aria-label="Chat">
+        <div class="row" role="radiogroup" aria-label="Say it to">
+          <button type="button" class="touch-ui-button" data-scope="all" role="radio">Everyone</button>
+          <button type="button" class="touch-ui-button" data-scope="team" role="radio">Team</button>
+        </div>
+        <input type="text" data-line maxlength="${CHAT_LENGTH}" autocomplete="off" autocapitalize="sentences"
+          spellcheck="true" enterkeyhint="send" aria-label="Chat line" placeholder="Say something">
+        <div class="row">
+          <button type="submit" class="touch-ui-button primary">Send</button>
+          <button type="button" class="touch-ui-button" data-cancel>Cancel</button>
+        </div>
+      </form>`;
+    const form = box.querySelector("form");
+    const input = box.querySelector("[data-line]");
+    let team = settings.chatTeam === true;
+    function showScope() {
+      for (const button of box.querySelectorAll("[data-scope]")) {
+        const chosen = (button.dataset.scope === "team") === team;
+        button.classList.toggle("primary", chosen);
+        button.setAttribute("aria-checked", chosen ? "true" : "false");
+      }
+    }
+    for (const button of box.querySelectorAll("[data-scope]")) {
+      button.onclick = () => {
+        team = button.dataset.scope === "team";
+        settings.chatTeam = team;
+        saveSettings();
+        showScope();
+        input.focus();
+      };
+    }
+    showScope();
+    // (the keys typed here are the text box's, not the game's: SDL reads the
+    // window's)
+    for (const type of ["keydown", "keyup", "keypress"]) {
+      box.addEventListener(type, event => {
+        if (type === "keydown" && event.key === "Escape") closeChat();
+        event.stopPropagation();
+      });
+    }
+    form.addEventListener("submit", event => {
+      event.preventDefault();
+      sendChat(input.value, team);
+      closeChat();
+    });
+    box.querySelector("[data-cancel]").onclick = closeChat;
+    box.addEventListener("click", event => { if (event.target === box) closeChat(); });
+    area.appendChild(box);
+    state.chat = box;
+    input.focus();
+  }
+
+  function closeChat() {
+    if (state.chat) state.chat.remove();
+    state.chat = null;
   }
 
   function openEditor() {
