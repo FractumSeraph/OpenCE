@@ -8064,30 +8064,6 @@ port/linux/game/menu_functions.c) the screens it shares with one player's
 campaign, New Game's levels and the difficulty, are player 1's (their rows
 the first controller's), and either player's controller uses them: player 1's
 is the one that chose co-op, player 2's the one that chose their profile */
-/* port: whether this machine has, or is adding, a second player
-(port/linux/game/menu_functions.c): co-op, split screen, the lobby's */
-extern unsigned char pc_menu_split_players(void);
-
-/* port: with one person playing, any controller drives the first player's
-menus, not only the first port's: a phone can list a device of its own (its
-touch controls) before the gamepad, which then reads port 2, and a player
-picks up whichever pad is at hand. Its screens read every controller's
-events (ui_widgets_update), and take them (below). With two or more
-players, each controller keeps to its own player's menus */
-static boolean widget_takes_any_controller(
-	struct widget_instance const *widget)
-{
-	return widget->local_player_index == 0 && !pc_menu_split_players() &&
-		(we_are_at_the_main_menu || local_player_count() <= 1);
-}
-
-/* port: the controller whose events a screen reads (NONE: every one's) */
-static short widget_event_controller(
-	struct widget_instance const *widget)
-{
-	return widget_takes_any_controller(widget) ? NONE : widget->local_player_index;
-}
-
 static boolean widget_takes_events_of_controller(
 	struct widget_instance const *widget,
 	short controller_index)
