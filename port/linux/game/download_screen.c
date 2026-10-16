@@ -3,9 +3,12 @@ DOWNLOAD_SCREEN.C
 
 The screen a map's download shows over the menus: Halo's loading screen
 (source/interface/progress_bar.c), its light sweeping from left to right as
-the map comes (map_torrents.h: over BitTorrent in the native builds, from
-the site in the browser's), with the map's name, how the download goes and
-B to stop it under it, in the menus' fonts. The menus behind it go on, so
+the map comes, with the map's name, how the download goes and B to stop it
+under it, in the menus' fonts. Whichever download is under way: over
+BitTorrent (map_torrents.h; from the site in the browser's build), from the
+map repositories and archives the Online Games screen offers (map_download.h,
+ChupathingyCE's; its panel is behind it), or from the host's own map sharing
+(map_share.h), whose B leaves the lobby as the menus behind do. The menus behind it go on, so
 that the join waiting for the map follows once it is there
 (menu_functions.c: map_fetch_update, lobby_browser_web_join_update), but
 they take no presses while it is up: B stops the download, and the join
@@ -39,6 +42,10 @@ enum
 
 /* port/linux/src (map_torrents.h, port_config.c) */
 int map_torrents_download_progress(float *fraction, char *name, int size);
+#ifdef HALO_GAME_BROWSER
+#include "../src/map_download.h"
+#endif
+#include "map_share.h"
 int map_torrents_fetching(char *status, int size);
 int config_boolean(char const *name);
 /* menu_functions.c */
@@ -61,6 +68,74 @@ static struct
 } download_screen;
 
 /* ---------- private code */
+
+/* which download the screen follows */
+enum
+{
+	_download_none,
+	_download_torrents,
+	_download_repositories,
+	_download_host,
+};
+
+/* the download under way (the first of BitTorrent's, the repositories' and
+the host's that is), its share done, the map's name and a line of how it
+goes */
+static short download_screen_source(
+	float *fraction,
+	char *name,
+	int name_size,
+	char *status,
+	int status_size)
+{
+	status[0] = 0;
+	if (map_torrents_download_progress(fraction, name, name_size))
+	{
+		char text[256];
+
+		/* (the status line's numbers: "Downloading <name>: " is the title's) */
+		if (map_torrents_fetching(text, sizeof(text)))
+		{
+			char const *numbers = strstr(text, ": ");
+
+			snprintf(status, (size_t)status_size, "%s", numbers ? numbers + 2 : text);
+		}
+		return _download_torrents;
+	}
+#ifdef HALO_GAME_BROWSER
+	{
+		struct map_download_progress progress;
+
+		map_download_get(&progress);
+		if (progress.state == MAP_DOWNLOAD_RUNNING)
+		{
+			char *extension;
+
+			*fraction = progress.total ? (float)progress.received / (float)progress.total : 0.0f;
+			snprintf(name, (size_t)name_size, "%s", progress.name);
+			extension = strrchr(name, '.');
+			if (extension && !strcmp(extension, ".map"))
+				*extension = 0;
+			if (progress.detail[0])
+				snprintf(status, (size_t)status_size, "%s", progress.detail);
+			else if (progress.total)
+				snprintf(status, (size_t)status_size, "%u of %u MB", (progress.received + 0x80000) >> 20,
+					(progress.total + 0x80000) >> 20);
+			return _download_repositories;
+		}
+	}
+#endif
+	{
+		real share;
+
+		if (map_share_download_status(&share, name, name_size, status, status_size))
+		{
+			*fraction = share;
+			return _download_host;
+		}
+	}
+	return _download_none;
+}
 
 /* a line of text centered at y in the menus' 640x480, in a menu font */
 static void download_screen_line(
@@ -87,15 +162,12 @@ boolean download_screen_active(
 {
 	float fraction;
 	char name[64];
+	char status[160];
 
-	/* (not over Online Games, whose panel shows its downloads:
-	browser_screen.c, map_download.c) */
-#ifdef HALO_GAME_BROWSER
-	if (browser_screen_active())
-		return FALSE;
-#endif
+	/* (over Online Games too: its panel, which shows the repositories'
+	downloads, is behind it; browser_screen.c, map_download.c) */
 	return main_menu_is_active() && config_boolean("maps.download_screen") &&
-		map_torrents_download_progress(&fraction, name, sizeof(name));
+		download_screen_source(&fraction, name, sizeof(name), status, sizeof(status)) != _download_none;
 }
 
 /* each frame the menus run while the screen is up (ui_widget.c's
@@ -104,12 +176,25 @@ void download_screen_process(
 	void)
 {
 	struct event_record event;
+	float fraction;
+	char name[64];
+	char status[160];
+	short source = download_screen_source(&fraction, name, sizeof(name), status, sizeof(status));
 
+	/* (the host's map sharing: the menus behind take the presses, B leaving
+	the lobby, which ends the download) */
+	if (source == _download_host)
+		return;
 	while (get_next_event(&event, NONE))
 	{
 		if (event.type == DOWNLOAD_EVENT_BUTTON && event.data.button.index == _gamepad_analog_button_b)
 		{
-			ui_widget_port_map_fetch_cancel();
+#ifdef HALO_GAME_BROWSER
+			if (source == _download_repositories)
+				map_download_cancel();
+			else
+#endif
+				ui_widget_port_map_fetch_cancel();
 			break;
 		}
 	}
@@ -128,13 +213,15 @@ void download_screen_render(
 	float fraction;
 	char name[64];
 	char text[256];
+	char status[160];
 	real progress;
 	rectangle2d bounds;
 	short index;
+	short source = _download_none;
 
 	/* (nothing drawn without a renderer: debug.null_renderer, a server's) */
 	if (!download_screen_active() || config_boolean("debug.null_renderer") ||
-		!map_torrents_download_progress(&fraction, name, sizeof(name)))
+		(source = download_screen_source(&fraction, name, sizeof(name), status, sizeof(status))) == _download_none)
 	{
 		if (download_screen.shown)
 		{
@@ -163,13 +250,8 @@ void download_screen_render(
 			text[index] = (char)(text[index] - 'a' + 'A');
 	}
 	download_screen_line("ui\\large_ui", 300, &title_color, text);
-	/* (the status line's numbers: "Downloading <name>: " is the title's) */
-	if (map_torrents_fetching(text, sizeof(text)))
-	{
-		char const *numbers = strstr(text, ": ");
-
-		download_screen_line("ui\\small_ui", 334, &status_color, numbers ? numbers + 2 : text);
-	}
+	if (status[0])
+		download_screen_line("ui\\small_ui", 334, &status_color, status);
 	/* (the B button's icon, as the menus' legends draw it: from the left, as
 	the icon and the words after it are each placed after the one before) */
 	bounds.x0 = 290;
@@ -178,5 +260,6 @@ void download_screen_render(
 	bounds.y1 = 402;
 	draw_string_set_draw_mode(tag_loaded(FONT_GROUP_TAG, "ui\\small_ui"), NONE, DOWNLOAD_TEXT_LEFT, 0,
 		&legend_color);
-	draw_string_and_hack_in_icons(&bounds, NULL, NULL, 0, L"%b-button=STOP", FALSE);
+	draw_string_and_hack_in_icons(&bounds, NULL, NULL, 0, source == _download_host ? L"%b-button=LEAVE" :
+		L"%b-button=STOP", FALSE);
 }

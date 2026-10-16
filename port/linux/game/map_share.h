@@ -139,6 +139,15 @@ boolean map_share_game_map_version(
 map no time to precache until they are) */
 boolean map_share_downloading(
 	char const *level_name);
+/* port (this fork): the download from the host under way, for Halo's
+loading screen (download_screen.c): its share done, the map's name and a
+line of how it goes; FALSE when there is none */
+boolean map_share_download_status(
+	real *fraction,
+	char *name,
+	long name_size,
+	char *status,
+	long status_size);
 /* whether this machine's players wait to join the host's game: until its
 settings name the map (a game in progress would start them at once), and
 for a game in progress until the map is downloaded (network_client_manager.c) */

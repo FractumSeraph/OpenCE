@@ -1522,6 +1522,41 @@ boolean map_share_downloading(
 		!csstrcmp(download->level_name, wire_level_name);
 }
 
+boolean map_share_download_status(
+	real *fraction,
+	char *name,
+	long name_size,
+	char *status,
+	long status_size)
+{
+	struct download const *download = &map_share_globals.download;
+	char const *level_name;
+	short sources = 0;
+	short index;
+
+	if (download->state != _download_asking && download->state != _download_transferring)
+		return FALSE;
+	level_name = tag_name_strip_path(download->level_name);
+	snprintf(name, (size_t)name_size, "%.*s", (int)map_share_name_base_length(level_name), level_name);
+	*fraction = download->total_bytes ? (real)download->done_bytes / (real)download->total_bytes : 0.0f;
+	if (download->state == _download_asking)
+	{
+		snprintf(status, (size_t)status_size, "Asking the host for the map");
+		return TRUE;
+	}
+	for (index = 0; index < MAXIMUM_CONNECTIONS; index++)
+	{
+		struct connection const *connection = &map_share_globals.connections[index];
+
+		sources += connection->used && connection->state == _connection_open && connection->hello_heard;
+	}
+	snprintf(status, (size_t)status_size, "%lu of %lu MB from %d player%s, %lu KB/s",
+		(download->done_bytes + 0x80000) >> 20, (download->total_bytes + 0x80000) >> 20, (int)sources,
+		sources == 1 ? "" : "s", (download->last_window_time ?
+			download->last_window_bytes * 1000 / download->last_window_time : 0) >> 10);
+	return TRUE;
+}
+
 boolean map_share_holds_players(
 	void)
 {
@@ -3485,6 +3520,14 @@ void map_share_render(
 
 	if (download->state != _download_asking && download->state != _download_transferring)
 		return;
+	/* (port, this fork: Halo's loading screen shows it instead, when it is
+	up: download_screen.c) */
+	{
+		boolean download_screen_active(void);
+
+		if (download_screen_active())
+			return;
+	}
 	font_tag_index = interface_get_tag_index(_interface_font_terminal);
 	if (font_tag_index == NONE)
 		return;
