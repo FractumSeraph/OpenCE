@@ -95,6 +95,20 @@ int platform_chat_escape(void)
 	return 0;
 }
 
+/* (no keyboard: the button prompts stay the controller's, halo_keyboard.h) */
+int halo_keyboard_prompts(void)
+{
+	return 0;
+}
+
+int halo_keyboard_action_shown(int action, char *shown, unsigned long size)
+{
+	(void)action;
+	if (size)
+		shown[0] = 0;
+	return 0;
+}
+
 void platform_text_field(int typing, int password)
 {
 	(void)typing;

@@ -553,12 +553,6 @@ static const struct config_setting config_settings[] =
 		"(its maps folder), looked in after maps_ce and custom_maps for\n"
 		"Custom Edition maps and their bitmaps.map, sounds.map and loc.map\n"
 		"(game.custom_edition); empty for none (OpenCE's setting)." },
-	{ "data.download_url", _config_string, "\"https://halo.fractumseraph.net/assets/maps/\"", "HALO_DATA_DOWNLOAD_URL",
-		_environment_value, _platform_desktop,
-		"Where the first start offers to download the maps folder from, when\n"
-		"there is none: an https:// folder holding its files and maps.txt (the\n"
-		"files' names and sizes, a line each; services/selfhost's\n"
-		"assets/maps/). Empty offers only an Xbox disc image." },
 	{ "paths.logs", _config_string, "\"\"", "HALO_LOG_ROOT", _environment_value, _platform_desktop,
 		"Where the logs go (debug.txt, halo.log and crash reports waiting to be\n"
 		"sent); empty for logs/ in the data folder, beside maps." },
@@ -566,6 +560,12 @@ static const struct config_setting config_settings[] =
 		"Where the game keeps what it can make again; empty for cache/ in the\n"
 		"save folder." },
 
+	{ "data.download_url", _config_string, "\"https://halo.fractumseraph.net/assets/maps/\"", "HALO_DATA_DOWNLOAD_URL",
+		_environment_value, _platform_desktop,
+		"Where the first start offers to download the maps folder from, when\n"
+		"there is none: an https:// folder holding its files and maps.txt (the\n"
+		"files' names and sizes, a line each; services/selfhost's\n"
+		"assets/maps/). Empty offers only an Xbox disc image." },
 	{ "network.address", _config_string, "\"\"", "HALO_NET_ADDRESS", _environment_value, _platform_all,
 		"This machine's IPv4 address for system link, for a machine on several\n"
 		"networks; empty chooses one." },
