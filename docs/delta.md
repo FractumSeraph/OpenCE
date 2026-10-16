@@ -882,8 +882,10 @@ player can turn it off (`network.report_events`, `HALO_NET_REPORT_EVENTS`
 set to false): our [D] servers, community servers and ChupathingyCE
 players who host, unless they opt out. That setting stops the events
 batch only. The host's carnage report (`/v1/report`) is a separate upload:
-it goes whenever the game is listed, and only `network.list_hosted_games =
-false` (or an empty `network.browser_url`) stops it. Everything is what the host saw, so it is exact; nothing a
+it goes whenever the game is listed, and `network.report_hosted_games =
+false` (`HALO_NET_REPORT_HOSTED`) stops it and the events batch while the
+game stays listed; `network.list_hosted_games = false` (or an empty
+`network.browser_url`) stops it too, with the listing. Everything is what the host saw, so it is exact; nothing a
 client says is taken. Co-op (campaign) games are never recorded.
 
 ### Players
@@ -902,7 +904,8 @@ them: their own copy of the game claims their line of the same game's
 report with its player key (`/v1/claim`); the site then marks the same
 line of the events. A copy claims a game it joined only with
 `network.report_joined_games` on (the default), the setting that also sends
-its own report of the game; a game it hosted, always. A host's word about who a player is is never taken. No
+its own report of the game; a game it hosted, unless
+`network.report_hosted_games` is off. A host's word about who a player is is never taken. No
 IP address is ever recorded or sent, by the game or the site.
 
 ### The batch (schema 2)

@@ -320,7 +320,7 @@ def test_report_joined_games_stops_claims():
     game list about a game it joined: its own report of the game
     (browser_client_report) and the claim of its players' lines in the
     host's report (browser_claim_game, /v1/claim). A game it hosts is
-    claimed either way."""
+    claimed unless network.report_hosted_games is off."""
     root = MENUS.parent.parent.parent
     browser = (root / "port/linux/src/browser.c").read_text()
     for function in ("browser_client_report", "browser_claim_game"):
@@ -332,6 +332,28 @@ def test_report_joined_games_stops_claims():
     readme = (root / "port/linux/README.md").read_text()
     row = next(line for line in readme.splitlines() if line.startswith("| `network.report_joined_games`"))
     assert "/v1/claim" in row
+
+
+def test_report_hosted_games_keeps_listing():
+    """network.report_hosted_games = false stops what a host sends the game
+    list about its games (the carnage report, the Delta Stats batch and its
+    own players' claims) and not the listing, and the Privacy screen sets
+    it."""
+    root = MENUS.parent.parent.parent
+    browser = (root / "port/linux/src/browser.c").read_text()
+    for function in ("browser_report_game", "browser_claim_game"):
+        body = re.search(r"^void " + function + r"\(.*?^\}", browser, re.M | re.S).group(0)
+        assert 'config_boolean("network.report_hosted_games")' in body, function
+    hosting = re.search(r"^static void update_hosting\(.*?^\}", browser, re.M | re.S).group(0)
+    assert "report_hosted_games" not in hosting
+    upload = (root / "port/linux/src/event_upload.c").read_text()
+    assert 'config_boolean("network.report_hosted_games")' in upload
+    privacy = (MENUS / "ce/main_menu.settings_select.player_setup.player_profile_edit.privacy_setup.xml").read_text()
+    for setting in ("network.report_hosted_games", "network.report_events", "network.report_joined_games",
+                    "crash_reports.upload"):
+        assert f'setting="{setting}"' in privacy, setting
+    readme = (root / "port/linux/README.md").read_text()
+    assert any(line.startswith("| `network.report_hosted_games`") for line in readme.splitlines())
 
 
 def c_format_json(format_text: str, values: list) -> str:

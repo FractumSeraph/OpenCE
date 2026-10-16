@@ -809,9 +809,14 @@ static const struct config_setting config_settings[] =
 	{ "network.list_hosted_games", _config_boolean, "true", "HALO_NET_LIST_GAMES", _environment_value, _platform_all,
 		"List the system link games this machine hosts on network.browser_url,\n"
 		"where anyone can find and join them (only public games without a\n"
-		"password), and send each one's carnage report there when it ends.\n"
-		"False keeps them to invites and the local network, and sends no\n"
-		"report." },
+		"password), and send each one's carnage report there when it ends\n"
+		"(network.report_hosted_games). False keeps them to invites and the\n"
+		"local network, and sends no report." },
+	{ "network.report_hosted_games", _config_boolean, "true", "HALO_NET_REPORT_HOSTED", _environment_value,
+		_platform_all,
+		"Send network.browser_url the stats of the games this machine hosts: a\n"
+		"listed game's carnage report and its Delta Stats (network.report_events).\n"
+		"False sends neither, and the game stays listed (network.list_hosted_games)." },
 	{ "network.report_joined_games", _config_boolean, "true", "HALO_NET_REPORT_GAMES", _environment_value,
 		_platform_all,
 		"When an internet game this machine joined ends, send network.browser_url\n"
@@ -826,7 +831,7 @@ static const struct config_setting config_settings[] =
 		"for the site's match pages, heatmaps and leaderboards. Players are their\n"
 		"names, never a hardware ID or an address; an OpenCE player is only their\n"
 		"name, team, score, place, kills and deaths. False records and sends no\n"
-		"events; a listed game's carnage report still goes (list_hosted_games)." },
+		"events; a listed game's carnage report still goes (report_hosted_games)." },
 	{ "network.events_token", _config_string, "\"\"", "HALO_EVENTS_TOKEN", _environment_value, _platform_all,
 		"A dedicated server's Delta Stats token, from the game list's operator:\n"
 		"its games count as a trusted server's. Empty: the game must be listed\n"

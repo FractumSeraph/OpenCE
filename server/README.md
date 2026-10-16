@@ -205,7 +205,7 @@ It is on by default; set `HALO_NET_REPORT_EVENTS=false` to turn it off:
 
 | Setting | Default | |
 | --- | --- | --- |
-| `HALO_NET_REPORT_EVENTS` | `true` | `false` stops recording and sending games' events. The carnage report still goes while the server is listed (`HALO_NET_LIST_GAMES=false` stops that). |
+| `HALO_NET_REPORT_EVENTS` | `true` | `false` stops recording and sending games' events. The carnage report still goes while the server is listed (`HALO_NET_REPORT_HOSTED=false` stops it and the events, and the server stays listed). |
 | `HALO_EVENTS_TOKEN` | (none) | A token from the site's operator: the games count as a trusted server's. Without one, the site takes a game only while the server lists it, from the same address (as the carnage report). |
 | `HALO_EVENTS_POSITIONS` | `2` | Seconds between position samples (0 none). |
 | `HALO_EVENTS_LIMIT` | `40000` | The most events a game keeps (about 60 bytes each); past it the position samples thin out first. |

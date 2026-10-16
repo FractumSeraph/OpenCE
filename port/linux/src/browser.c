@@ -1790,9 +1790,13 @@ void browser_report_game(int teams, int red_score, int blue_score, int duration_
 	const struct browser_report_player *players, int count, const char *extra)
 {
 	char invite[BROWSER_INVITE_LENGTH + 1];
-	char *report = report_json(teams, red_score, blue_score, duration_seconds, players, count, extra,
-		p2p_hosting_invite(invite, sizeof(invite)) ? invite : NULL);
+	char *report;
 
+	/* (a host can stay listed and keep its games' stats to itself) */
+	if (!config_boolean("network.report_hosted_games"))
+		return;
+	report = report_json(teams, red_score, blue_score, duration_seconds, players, count, extra,
+		p2p_hosting_invite(invite, sizeof(invite)) ? invite : NULL);
 	if (!report)
 		return;
 	pthread_once(&browser_once, start_thread);
@@ -1846,7 +1850,7 @@ void browser_claim_game(const unsigned short (*names)[BROWSER_PLAYER_NAME_LENGTH
 	/* (a game it joined only with network.report_joined_games: a claim
 	tells the site this copy played in it, as a report of it would) */
 	if (count <= 0 || !config_string("network.browser_url")[0] ||
-		(!p2p_hosting_invite(invite, sizeof(invite)) &&
+		((!config_boolean("network.report_hosted_games") || !p2p_hosting_invite(invite, sizeof(invite))) &&
 			(!config_boolean("network.report_joined_games") || !p2p_joined_invite(invite, sizeof(invite)))))
 		return;
 	if (count > MAXIMUM_CLAIM_NAMES)
