@@ -1213,7 +1213,16 @@ int platform_missing_map_message(const char *name, char *text, int size)
 
 	for (index = 0; index < sizeof(levels) / sizeof(levels[0]); index++)
 	{
-		if (!SDL_strcasecmp(name, levels[index]))
+		/* (case aside, by hand: the Android guest has only the SDL functions
+		guest_sdl.c bridges, and no SDL_strcasecmp) */
+		const char *a = name, *b = levels[index];
+
+		while (*a && *b && (*a >= 'A' && *a <= 'Z' ? *a - 'A' + 'a' : *a) == *b)
+		{
+			a++;
+			b++;
+		}
+		if (!*a && !*b)
 		{
 			snprintf(text, (size_t)size, "The campaign's maps aren't on this device. In the touch controls' Options, "
 				"or holding the app's icon, choose Download campaign maps (about 1.6 GB).");
