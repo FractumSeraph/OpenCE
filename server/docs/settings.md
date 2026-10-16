@@ -18,6 +18,10 @@ the file.
 | `HALO_DEDICATED_NAME_FILTER` | `false` | `true`: players with a blocked name are warned and kicked ([below](#blocked-names)); `sv_name_filter 1` on the console does the same. |
 | `HALO_DEDICATED_CHAT` | `2` | Text chat between ChupathingyCE players: `2` on, `1` team lines alone, `0` off (`sv_chat` sets it; the environment wins over the settings file). |
 | `HALO_DEDICATED_CHAT_FILTER` | `true` | A chat line with a word of `blocked_names.txt`'s list (the game has it built in) is not passed on; its sender's game says "Not sent: blocked words". Nobody is kicked. |
+| `HALO_DEDICATED_CHAT_COOLDOWN` | `5` | Once a player says lines faster than the chat allows (1 a second, 3 at once), their chat pauses for this many seconds and their game says "Chat paused for 5 seconds" (an older game says "Not sent: slow down"). `0`: no pause, each line past the limit is refused alone. Up to 600. |
+| `HALO_DEDICATED_WELCOME` | (none) | A welcome: a server message each Chupathingy player gets in their chat as they join, up to 127 printable ASCII characters (`sv_welcome` sets it). OpenCE players do not see it. |
+| `HALO_DEDICATED_POSTGAME_SECONDS` | `20` | How long the carnage report shows after each game before the next game's lobby, 0 to 300 seconds. |
+| `HALO_DEDICATED_SKIP_LOBBY` | `false` | `true`: after the carnage report, if enough players stayed (`HALO_DEDICATED_MINIMUM_PLAYERS`, and teams as the game needs), the next game starts after a 3-second countdown instead of waiting out the lobby's. Otherwise the lobby opens as always. |
 | `HALO_DEDICATED_COMMANDS` | (none) | A file of [commands](admin.md#startup-commands) in the data folder, run once the server first hosts. |
 | `HALO_DEDICATED_CONSOLE` | on in a terminal | Commands typed on the server's standard input ([the console](admin.md#the-console)). `true`: read them even when it is not a terminal; `false`: never. |
 | `HALO_DEDICATED_CONTROL` | (off) | The [control API](admin.md#the-control-api)'s address: a port (`8080`, on 127.0.0.1 only) or an address and port (`127.0.0.1:8080`, `[::1]:8080`, `0.0.0.0:8443`). Its token is made and printed the first time, and the first owner's setup link. The [control panel](moderation.md#the-control-panel) is on the same address: plain HTTP on the loopback address, HTTPS beyond it. |
@@ -30,8 +34,10 @@ the file.
 
 The settings file's keys (`sv_settings` lists them, with where each value
 comes from): `name`, `maximum_players`, `minimum_players`, `idle_limit`,
-`public` (from the next start), `name_filter`, `chat`, `chat_filter`, and
-the playlist `sv_playlist_use` chose.
+`public` (from the next start), `name_filter`, `chat`, `chat_filter`,
+`welcome`, `postgame_seconds`, `skip_lobby`, `chat_cooldown`, and the
+playlist `sv_playlist_use` chose. `sv_set welcome Hello and welcome` takes
+the rest of the line as the value (quotes optional).
 
 ## Text chat
 
@@ -66,7 +72,11 @@ read as those letters (`0` as `o`, `1` as `i`, `@` as `a`, ...), and also
 with each run of a repeated letter squeezed to one.
 
 A game everyone has left ends after 30 seconds. After each game the
-carnage report shows for 20 seconds, then the next entry's lobby opens.
+carnage report shows for 20 seconds (`HALO_DEDICATED_POSTGAME_SECONDS`), then
+the next entry's lobby opens, or with `HALO_DEDICATED_SKIP_LOBBY` the next
+game starts at once when enough players stayed. The playlist vote on the
+Chupathingy site changes the playlist files each week; it needs no lobby time
+in the game.
 
 ## Folders
 

@@ -2504,6 +2504,8 @@ static struct
 static wchar_t const *const engine_names[] = { L"", L"CTF", L"SLAYER", L"ODDBALL", L"KING OF THE HILL", L"RACE", L"BOMB" };
 #define ENGINE_NAME(engine) engine_names[PIN(engine, 0, (long)NUMBEROF(engine_names) - 1)]
 static short const maximum_players[] = { 2, 4, 8, 12, 16, 24, 32, 48, 64, 96, 128 };
+/* the most players a hosted game starts with (16), up to the list's 128 */
+#define HOST_DEFAULT_MAXIMUM_PLAYERS_INDEX 4
 
 static struct
 {
@@ -2541,7 +2543,7 @@ static struct
 	/* Server Setup's PASSWORD (a public internet game's; empty: none), kept
 	while the game runs, never written down */
 	char game_password[PASSWORD_LENGTH + 1];
-} multiplayer = { .maximum_players_index = NUMBEROF(maximum_players) - 1 };
+} multiplayer = { .maximum_players_index = HOST_DEFAULT_MAXIMUM_PLAYERS_INDEX };
 
 /* ---- a text field (Direct Link's link, the game's name): the keyboard
 types into it (Ctrl+V pastes), its row's A (enter) is done, B (escape)

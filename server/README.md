@@ -90,7 +90,9 @@ one machine, use [Docker or systemd](docs/docker.md).
   ChupathingyCE.
 - Plays the playlist's entries in order: once enough players have joined,
   the lobby counts down by itself; after each game the carnage report shows
-  for 20 seconds, then the next entry's lobby opens.
+  for 20 seconds (`HALO_DEDICATED_POSTGAME_SECONDS`), then the next entry's
+  lobby opens (`HALO_DEDICATED_SKIP_LOBBY` starts the next game at once when
+  enough players stayed).
 - Ends a game nobody has scored in for 5 minutes, or 30 seconds after
   everyone has left it.
 - Plays a team entry's next entry without teams while a single player waits

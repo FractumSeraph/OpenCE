@@ -5479,6 +5479,25 @@ void network_game_server_dedicated_start_countdown(
 
 	return;
 }
+
+/* the dedicated server's lobby skipped (HALO_DEDICATED_SKIP_LOBBY): a short
+countdown, when one may run; TRUE if it started */
+boolean network_game_server_dedicated_start_countdown_now(
+	struct network_game_server *server,
+	long milliseconds)
+{
+	if (!server ||
+		server->state != _network_game_server_state_pregame ||
+		server->countdown_state.paused ||
+		server->countdown_state.active ||
+		!server_ok_to_countdown(server))
+	{
+		return FALSE;
+	}
+	network_game_server_begin_game_start_countdown(server, milliseconds);
+
+	return server->countdown_state.active;
+}
 #endif
 
 #ifdef HALO_GAME_BROWSER

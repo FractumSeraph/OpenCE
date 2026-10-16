@@ -1625,37 +1625,47 @@ static void *pause_button(struct cache_file_tag_instance *instances, struct ui_w
 	return button;
 }
 
-/* the list's buttons: SETTINGS (and the host's END GAME) put after RESUME
-GAME (resume), the rows after them moved down; returns how far the list
-grew, 0 if it was not */
+/* the list's buttons: SETTINGS (Gearbox's menus: settings) and the host's
+END GAME (end_game) put after RESUME GAME (resume), the rows after them
+moved down; returns how far the list grew, 0 if it was not */
 static short pause_list_patch(struct cache_file_tag_instance *instances, struct ui_widget_definition *list, long resume,
-	boolean end_game)
+	boolean settings, boolean end_game)
 {
 	struct ui_widget_child_reference *children = xbox_pointer(list->child_widgets.address);
-	long count = list->child_widgets.count, added = end_game ? 2 : 1, child;
+	long count = list->child_widgets.count, added = (settings != FALSE) + (end_game != FALSE), child;
 	struct ui_widget_child_reference *grown = allocate((count + added) * sizeof(struct ui_widget_child_reference));
 	struct ui_widget_definition const *model = tag_get(UI_WIDGET_DEFINITION_TAG, children[resume].widget_tag.index);
-	long settings_widget = widget_named(PAUSE_SETTINGS_SCREEN);
+	long settings_widget = settings ? widget_named(PAUSE_SETTINGS_SCREEN) : NONE;
 	short spacing = count >= 2 ? (short)(children[count - 1].vertical_offset - children[count - 2].vertical_offset) :
 		PAUSE_BUTTON_SPACING;
 	void *buttons[2];
 	long tags[2];
+	char const *names[2];
 
-	if (!grown || settings_widget == NONE || spacing <= 0)
+	if (!grown || !added || (settings && settings_widget == NONE) || spacing <= 0)
 		return 0;
-	tags[0] = next_tag();
-	buttons[0] = pause_button(instances, model, "pause/settings_button", "SETTINGS",
-		function_index("profile set edit begin", "pause", 0), build.widget_tags[settings_widget]);
-	tags[1] = end_game ? next_tag() : NONE;
-	buttons[1] = end_game ? pause_button(instances, model, "pause/end_game_button", "END GAME",
-		function_index("port pause end game", "pause", 0), NONE) : NULL;
-	if (!buttons[0] || (end_game && !buttons[1]))
-		return 0;
+	added = 0;
+	if (settings)
+	{
+		names[added] = "pause/settings_button";
+		tags[added] = next_tag();
+		buttons[added++] = pause_button(instances, model, "pause/settings_button", "SETTINGS",
+			function_index("profile set edit begin", "pause", 0), build.widget_tags[settings_widget]);
+	}
+	if (end_game)
+	{
+		names[added] = "pause/end_game_button";
+		tags[added] = next_tag();
+		buttons[added++] = pause_button(instances, model, "pause/end_game_button", "END GAME",
+			function_index("port pause end game", "pause", 0), NONE);
+	}
 	for (child = 0; child < added; child++)
 	{
-		instance_set(instances, UI_WIDGET_DEFINITION_TAG, tags[child],
-			child ? "pause/end_game_button" : "pause/settings_button", "", buttons[child]);
+		if (!buttons[child])
+			return 0;
 	}
+	for (child = 0; child < added; child++)
+		instance_set(instances, UI_WIDGET_DEFINITION_TAG, tags[child], names[child], "", buttons[child]);
 	memcpy(grown, children, (resume + 1) * sizeof(*grown));
 	for (child = 0; child < added; child++)
 	{
@@ -1782,7 +1792,7 @@ static void pause_box_grow(struct cache_file_tag_instance *instances, struct ui_
 the one running quit_function (a custom map's), patched
 once (the screens share it), and the screen moved to fit it */
 static void pause_screen_patch(struct cache_file_tag_instance *instances, long screen_tag, long quit_function,
-	boolean end_game, long *patched_list, short *grow, boolean *box_grown)
+	boolean settings, boolean end_game, long *patched_list, short *grow, boolean *box_grown)
 {
 	struct ui_widget_definition *definition = tag_get(UI_WIDGET_DEFINITION_TAG, screen_tag);
 	struct ui_widget_child_reference *children = xbox_pointer(definition->child_widgets.address);
@@ -1810,7 +1820,7 @@ static void pause_screen_patch(struct cache_file_tag_instance *instances, long s
 			resume--;
 		if (resume < 0 || resume == NONE || *patched_list != NONE)
 			continue;
-		*grow = pause_list_patch(instances, candidate, resume, end_game);
+		*grow = pause_list_patch(instances, candidate, resume, settings, end_game);
 		if (!*grow)
 			return;
 		*patched_list = children[child].widget_tag.index;
@@ -1867,7 +1877,9 @@ static void pause_screen_patch(struct cache_file_tag_instance *instances, long s
 	}
 }
 
-static void pause_patch(struct cache_file_tag_instance *instances)
+/* settings: Gearbox's menus' SETTINGS too (the Xbox's menus have only the
+host's END GAME) */
+static void pause_patch(struct cache_file_tag_instance *instances, boolean settings)
 {
 	long collection = tag_loaded('Soul', MULTIPLAYER_COLLECTION);
 	long solo_screen = tag_loaded(UI_WIDGET_DEFINITION_TAG, SOLO_PAUSE_SCREEN);
@@ -1880,7 +1892,10 @@ static void pause_patch(struct cache_file_tag_instance *instances)
 	/* the campaign's (a network co-op game's too): no END GAME, which is
 	the multiplayer game engine's */
 	if (solo_screen != NONE)
-		pause_screen_patch(instances, solo_screen, NONE, FALSE, &patched_list, &grow, &box_grown);
+	{
+		if (settings)
+			pause_screen_patch(instances, solo_screen, NONE, TRUE, FALSE, &patched_list, &grow, &box_grown);
+	}
 	else if (collection != NONE)
 	{
 		struct tag_block const *screens = tag_get('Soul', collection);
@@ -1891,11 +1906,56 @@ static void pause_patch(struct cache_file_tag_instance *instances)
 			long screen_tag = XBOX_POINTER(struct tag_reference const, screens->address)[screen].index;
 
 			if (screen_tag != NONE)
-				pause_screen_patch(instances, screen_tag, quit_function, host, &patched_list, &grow, &box_grown);
+				pause_screen_patch(instances, screen_tag, quit_function, settings, host, &patched_list, &grow, &box_grown);
 		}
 	}
 	if (patched_list != NONE)
-		platform_log("menus: the pause menu has SETTINGS%s", host && solo_screen == NONE ? " and END GAME" : "");
+	{
+		platform_log("menus: the pause menu has %s", !settings ? "END GAME" :
+			host && solo_screen == NONE ? "SETTINGS and END GAME" : "SETTINGS");
+	}
+}
+
+/* the Xbox's menus: a multiplayer map's pause menu gets the host's END GAME
+alone (its own tags, as the Gearbox menus' pause_patch makes them; let go
+by menu_tags_unloaded) */
+static void pause_patch_xbox(void)
+{
+	struct cache_file_tag_instance *instances;
+	long index;
+
+	memset(&build, 0, sizeof(build));
+	build.game_map = TRUE;
+	instances = instances_grow(PAUSE_PATCH_TAGS, &build.first_index, &build.first_salt);
+	if (!instances)
+	{
+		menu_tags_release();
+		memset(&build, 0, sizeof(build));
+		return;
+	}
+	/* (nothing a name finds, until pause_patch makes them) */
+	for (index = build.first_index; index < build.first_index + PAUSE_PATCH_TAGS; index++)
+	{
+		instances[index].group_tag = NONE;
+		instances[index].tag_index = NONE;
+#ifdef HALO_64BIT
+		if (!menu_tags.empty_name)
+			menu_tags.empty_name = allocate(1);
+		instances[index].name = XBOX_ADDRESS(menu_tags.empty_name);
+#else
+		instances[index].name = "";
+#endif
+	}
+	cache_files_set_tag_instances(instances, build.first_index + PAUSE_PATCH_TAGS);
+	pause_patch(instances, FALSE);
+	if (build.failed)
+	{
+		platform_log("menus: the pause menu's END GAME not added");
+		menu_tags_release();
+	}
+	else
+		cache_files_set_tag_instances(instances, build.first_index + build.next);
+	memset(&build, 0, sizeof(build));
 }
 
 /* whether display.menus asks for Gearbox's Halo PC menus: "gearbox" (or the
@@ -1933,9 +1993,19 @@ void menu_tags_loaded(
 	boolean game_map = strcmp(map_name, "ui") != 0;
 
 	/* (ui.map, and a multiplayer map: its pause menu's SETTINGS) */
-	if ((game_map && tag_loaded('Soul', MULTIPLAYER_COLLECTION) == NONE &&
-		tag_loaded(UI_WIDGET_DEFINITION_TAG, SOLO_PAUSE_SCREEN) == NONE) || !menus_pc_chosen())
+	if (game_map && tag_loaded('Soul', MULTIPLAYER_COLLECTION) == NONE &&
+		tag_loaded(UI_WIDGET_DEFINITION_TAG, SOLO_PAUSE_SCREEN) == NONE)
 	{
+		return;
+	}
+	/* the Xbox's menus: only a multiplayer game's host's END GAME */
+	if (!menus_pc_chosen())
+	{
+		if (game_map && tag_loaded(UI_WIDGET_DEFINITION_TAG, SOLO_PAUSE_SCREEN) == NONE &&
+			global_network_game_server_get() != NULL)
+		{
+			pause_patch_xbox();
+		}
 		return;
 	}
 	menus = halo_menus_load();
@@ -2032,7 +2102,7 @@ void menu_tags_loaded(
 		goto failed;
 	if (game_map)
 	{
-		pause_patch(instances);
+		pause_patch(instances, TRUE);
 		if (build.failed)
 			goto failed;
 		/* (those it made) */
