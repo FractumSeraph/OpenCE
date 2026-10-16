@@ -688,6 +688,14 @@ the list gives for this platform and examines its size and SHA-256 against
 the list. A release from before version 0.8.0 has no list. For such a
 release, the game examines the signature of the zip (`<zip>.sig`).
 
+This fork's builds (Fractum Halo, FractumSeraph/OpenCE) look for updates in
+the fork's releases, which the fork's own release key signs (the release job
+of `.github/workflows/build.yml`, with the `UPDATE_SIGNING_KEY` secret; its
+public half and its recovery key's are in `update_key.h` and
+`UpdateManifest.java` beside ChupathingyCE's). A fork build from before
+2026-10-16 knows only ChupathingyCE's key, so it cannot install the fork's
+releases: install a newer one by hand once.
+
 Builds that you make yourself have no build number. They do not look for
 updates.
 

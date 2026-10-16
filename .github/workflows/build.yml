@@ -1027,13 +1027,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          sparse-checkout: VERSION
+          sparse-checkout: |
+            VERSION
+            tools/update_sign.py
+            port/linux/src/update_key.h
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
+          # the fork's release key's private half (Ed25519 PEM), which signs
+          # the update files; its public half is in update_key.h and
+          # UpdateManifest.java
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
         run: |
           version="$(cat VERSION)-fs.$(printf '%05d' "$GITHUB_RUN_NUMBER")"
           mkdir release
@@ -1061,13 +1068,29 @@ jobs:
             apk=$(find "artifacts/chupathingyce-$build-release-unsigned" -name '*.apk' | head -n 1)
             if [ -n "$apk" ]; then cp "$apk" "release/fractum-halo-$build.apk"; fi
           done
+          # (the update files signed for the self-updaters: each zip's .sig, and
+          # the release's list of them, updates.json and its .sig; checked
+          # against update_key.h before they go out. tools/update_sign.py)
+          files=(release/*.zip release/*.apk)
+          if [ -n "$UPDATE_SIGNING_KEY" ]; then
+            key="$RUNNER_TEMP/update-key.pem"
+            (umask 077 && printf '%s\n' "$UPDATE_SIGNING_KEY" > "$key")
+            python3 tools/update_sign.py sign "$key" "$version" release/*.zip >/dev/null
+            python3 tools/update_sign.py manifest "$key" "$version" --tag "v$version" --debug-tag "v$version" \
+              --commit "$GITHUB_SHA" release/*.zip >/dev/null
+            rm -f "$key"
+            python3 tools/update_sign.py verify "$version" release/*.zip
+            files+=(release/*.sig release/updates.json)
+          else
+            echo "::warning::no UPDATE_SIGNING_KEY secret: this release is not signed, and the self-updaters will not install it"
+          fi
           ls -l release
           {
             echo "Built from $GITHUB_SHA on $GITHUB_REF_NAME (version $version)."
             echo
             echo "The release builds are for playing; the debug builds stop at the first failed assertion."
           } > notes.txt
-          gh release create "v$version" release/*.zip release/*.apk --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+          gh release create "v$version" "${files[@]}" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
             --title "$version" --notes-file notes.txt --latest
           # (the newest five of these kept)
           gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName,createdAt \

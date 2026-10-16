@@ -31,6 +31,9 @@ final class UpdateManifest {
     static final String[] KEYS = {
         "c664b381ef69c556d47315b839803be80039771fa8dd1051dd6f955708c1c662",
         "322c5909e9772f70148cf9ac114883fc2ad1a1501c71aed7103e6e4bf769e088",
+        // (FractumSeraph's fork's release key, then its recovery key)
+        "c1206ca2beca78e11cb10530dd6e733c4561a6f1762d495db1a66253f35a243e",
+        "bb1421e0147f1210a8446532f67096fce887c7b597875c55271298e47188f8d3",
     };
     /** (an Ed25519 public key's DER: this prefix, then its 32 bytes) */
     private static final String ED25519_SPKI_PREFIX = "302a300506032b6570032100";
