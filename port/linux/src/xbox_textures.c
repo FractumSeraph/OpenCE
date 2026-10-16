@@ -1183,7 +1183,11 @@ static GLuint texture_entry_result(struct texture_entry *entry, GLenum *target,
 				format_information(entry->description.format).kind != _texel_p8 &&
 				entry->description.width <= 256 && entry->description.height <= 256 &&
 				kind &&
-				custom_edition_texels_order(entry->address) == _custom_edition_channels_xbox &&
+				/* (port, this fork: OpenCE's "texels in the Xbox's channel
+				order" is, with ChupathingyCE's Custom Edition loader, a
+				texture that is neither a Halo PC meter's nor a multipurpose
+				map's: the cache marks those, xbox_texture_cache.c) */
+				!entry->description.pc_meter && !entry->description.pc_multipurpose &&
 				platform_is_contiguous((void *)entry->address) &&
 				platform_is_contiguous((void *)(entry->address + entry->size - 1)))
 			{
