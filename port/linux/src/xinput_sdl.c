@@ -540,6 +540,7 @@ static void keys_held_over_switch(struct platform_input_state *input)
 	static int context = -1;
 	int next_context = (input->menus != FALSE) | (console_is_active() || chat_typing ? 2 : 0);
 	int scancode;
+	int now = (input->menus != FALSE) | (chat_typing ? 2 : 0);
 
 	if (context != next_context)
 	{
