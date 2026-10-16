@@ -45,8 +45,10 @@ then [ChupathingyCE's](#chupathingyce), then [OpenCE's](#opence).
 - **Invite links that last.** A host's `halo://join/` link can stay the same
   from run to run (`network.lasting_invite`), to post on a website.
 - **The game's maps at the first start.** The Windows, Mac, Linux and
-  Android builds offer to download the Xbox maps (about 1.8 GB) instead of
-  asking for a disc image (see [Game data](#game-data)).
+  Android builds offer to download the Xbox maps instead of asking for a
+  disc image: the multiplayer maps alone (about 0.5 GB, with Halo Custom
+  Edition's shared maps), or everything with the campaign (about 2 GB); the
+  campaign's maps can be downloaded later (see [Game data](#game-data)).
 - **Fractum Halo for Android, signed.** An app of its own
   (`net.fractumseraph.halo`), beside ChupathingyCE's, signed with this
   fork's key so that every release installs over the last and updates
@@ -129,12 +131,25 @@ The kits' instructions: [services/selfhost/README.md](services/selfhost/README.m
 
 ## Game data
 
-At the first start the game offers to download its `maps/` folder (about
-1.8 GB) from this fork's site, https://halo.fractumseraph.net/assets/maps/
-(the setting `data.download_url`; empty turns it off), or to extract it from
-an Xbox disc image of Halo: Combat Evolved, as ChupathingyCE's builds do (see
-"You need your own copy of Halo" below). On Android the launcher has a
-**Download the maps** button.
+At the first start the game offers to download its `maps/` folder from this
+fork's site, https://halo.fractumseraph.net/assets/maps/ (the setting
+`data.download_url`; empty turns it off), or to extract it from an Xbox disc
+image of Halo: Combat Evolved, as ChupathingyCE's builds do (see "You need
+your own copy of Halo" below). The download is either:
+
+- **Multiplayer only** (about 0.5 GB): the multiplayer maps, the menus'
+  `ui.map`, and Halo Custom Edition's shared maps (`bitmaps.map`,
+  `sounds.map` and `loc.map`, into `maps_ce`), which every Custom Edition
+  map needs. The campaign's ten maps are left out: the first time a campaign
+  level is played, the game offers to download them (about 1.6 GB) and
+  waits for them. On Android they come from the touch controls' Options,
+  or from the app icon's **Download campaign maps** shortcut (hold the
+  icon).
+- **Everything** (about 2 GB): the campaign's maps as well.
+
+A copy of Custom Edition's shared maps already in `maps_ce` is kept as it
+is. The site's `maps.txt` names those three as `custom_maps/<name>` (its
+folder beside `maps/`); builds from before this skip such lines.
 
 ## The browser build
 

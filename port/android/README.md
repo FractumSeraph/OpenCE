@@ -121,14 +121,20 @@ A crash report gives addresses in `libmain.so`. To get the names, enter
 ## Game data
 
 The game needs the `maps/` folder of the game. The app downloads it from
-this fork's site (https://halo.fractumseraph.net/assets/maps/, about 1.8 GB),
+this fork's site (https://halo.fractumseraph.net/assets/maps/: the
+multiplayer maps alone, about 0.5 GB with Halo Custom Edition's shared maps,
+or everything with the campaign's, about 2 GB; `MapsDownloader.java`),
 or extracts it from an Xbox disc image (`.xiso` or `.iso`) of any version of
 the game. The app keeps the data in
 `/sdcard/Android/data/net.fractumseraph.halo/files`.
 
-To download the data: start the app and push **Download the maps**. The game
-starts when the download is done; a download stopped part way goes on from
-where it was the next time.
+To download the data: start the app and push **Download multiplayer maps**
+or **Download everything**. The game starts when the download is done; a
+download stopped part way goes on from where it was the next time. After
+Multiplayer only, the campaign's maps come from the touch controls' Options
+(**Download campaign maps**, while the game runs) or the app icon's
+shortcut of that name (hold the icon); a campaign level played without them
+says so.
 
 To install the data from a disc image:
 

@@ -97,6 +97,43 @@ public class HaloActivity extends SDLActivity {
         state.putString("pending-layout-export", pendingLayoutExport);
     }
 
+    /**
+     * The campaign's maps, which a Multiplayer only first start left out
+     * (MapsDownloader), downloaded while the game runs: the touch controls'
+     * Options. The game finds them the next time a campaign level loads.
+     */
+    public void downloadCampaignMaps() {
+        java.io.File dataRoot = getExternalFilesDir(null);
+        if (dataRoot == null)
+            return;
+        if (MapsDownloader.haveCampaign(dataRoot)) {
+            Toast.makeText(this, "The campaign's maps are already here.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("Downloading the campaign's maps")
+            .setMessage("Asking for the list of maps... (about 1.6 GB; play on while it downloads)")
+            .setPositiveButton("Hide", null)
+            .create();
+        dialog.show();
+        new Thread(() -> {
+            try {
+                MapsDownloader.download(dataRoot, MapsDownloader.CAMPAIGN,
+                    (text, permille) -> runOnUiThread(() -> dialog.setMessage(text)));
+                runOnUiThread(() -> {
+                    dialog.dismiss();
+                    Toast.makeText(this, "The campaign's maps are downloaded.", Toast.LENGTH_LONG).show();
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    dialog.dismiss();
+                    Toast.makeText(this, "Downloading the campaign's maps failed: " + e.getMessage(),
+                        Toast.LENGTH_LONG).show();
+                });
+            }
+        }).start();
+    }
+
     /** Halo PC maps from the system's file picker (MapImporter); no storage permission */
     public void chooseMapFiles() {
         MapImporter.choose(this);

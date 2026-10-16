@@ -49,5 +49,11 @@ menus (source/render/render.c): the window's bounds on the screen */
 void halo_screen_anti_alias(short x0, short y0, short x1, short y1);
 /* the mouse in the menus (source/interface/ui_widget.c) */
 #include "halo_ui_pointer.h"
+/* a level not in the maps folder (source/cache/cache_files_windows.c): a
+campaign map left out of the first start's Multiplayer only, offered for
+download (port/linux/src/sdl_platform.c; nonzero once it is here), and the
+words the damaged disc error says instead for it (nonzero for such a map) */
+int platform_offer_missing_map(const char *name);
+int platform_missing_map_message(const char *name, char *text, int size);
 
 #endif

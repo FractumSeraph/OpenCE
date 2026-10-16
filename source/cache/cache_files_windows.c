@@ -831,6 +831,23 @@ void cache_files_display_map_error(
 		return;
 	}
 #endif
+	/* port: a campaign map left out of the first start's download says how
+	to get it (platform_missing_map_message) */
+	{
+		char missing[256];
+		wchar_t text[256];
+		short index;
+
+		if (platform_missing_map_message(tag_name_strip_path(map_name), missing, (int)sizeof(missing)))
+		{
+			platform_log("%s", missing);
+			for (index = 0; missing[index] && index < NUMBEROF(text) - 1; index++)
+				text[index] = (wchar_t)(unsigned char)missing[index];
+			text[index] = 0;
+			display_error_damaged_media_text(text);
+			return;
+		}
+	}
 	display_error_damaged_media();
 
 	return;
@@ -846,8 +863,14 @@ boolean cache_files_precache_map_begin(
 	{
 		struct cache_file_header header;
 		char path[256];
+		boolean found = cache_file_read_header_from_dvd(cache_map_name, &header);
 
-		if (cache_file_read_header_from_dvd(cache_map_name, &header))
+		/* port: a campaign map the first start left out (Multiplayer only:
+		port/linux/src/sdl_platform.c) is offered for download, and read
+		once it is here */
+		if (!found && copy_map && platform_offer_missing_map(cache_map_name))
+			found = cache_file_read_header_from_dvd(cache_map_name, &header);
+		if (found)
 		{
 			long buffer_size = cache_copy_buffer_size(copy_map);
 			short map_file_index = cached_map_files_find_free_map(

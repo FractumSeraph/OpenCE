@@ -23,14 +23,8 @@ import android.widget.TextView;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.util.ArrayList;
-import java.util.List;
 import java.nio.channels.FileChannel;
-import java.util.Collections;
 
 /**
  * Starts the game once its data is in place.
@@ -41,21 +35,23 @@ import java.util.Collections;
  * If it is missing, this screen lets the player pick an Xbox disc image of
  * the game (.xiso or .iso, any version) with the system file picker, and
  * copies its maps folder there (XisoExtractor), as the desktop games do; or
- * download it (MAPS_URL: a folder holding the files and maps.txt, their names
- * and sizes, as the desktop games' data.download_url); or they can push the
- * maps folder with adb.
+ * download it (MapsDownloader: the multiplayer maps alone, about a quarter
+ * of the size, or everything with the campaign's), as the desktop games do;
+ * or they can push the maps folder with adb. Opened by the launcher icon's
+ * "Download campaign maps" shortcut (ACTION_DOWNLOAD_CAMPAIGN), it downloads
+ * the campaign's maps a Multiplayer only first start left out, then starts.
  */
 public class LauncherActivity extends Activity {
     private static final int PICK_IMAGE = 1;
-    /* where the maps folder can be downloaded from (services/selfhost's
-       assets/maps/, with maps.txt) */
-    private static final String MAPS_URL = "https://halo.fractumseraph.net/assets/maps/";
+    /* the launcher icon's shortcut (addShortcuts): the campaign's maps */
+    static final String ACTION_DOWNLOAD_CAMPAIGN = "net.fractumseraph.halo.DOWNLOAD_CAMPAIGN";
 
     private File dataRoot;
     private TextView status;
     private ProgressBar progress;
     private Button pick;
     private Button download;
+    private Button downloadAll;
     private final Handler handler = new Handler(Looper.getMainLooper());
 
     @Override
@@ -68,7 +64,16 @@ public class LauncherActivity extends Activity {
             new File(dataRoot, "maps").mkdirs();
         passOnHardwareId();
         passOnInvite(getIntent());
-        addImportShortcut();
+        addShortcuts();
+        // (the shortcut: the campaign's maps, then the game)
+        if (haveData() && ACTION_DOWNLOAD_CAMPAIGN.equals(getIntent().getAction())
+                && !MapsDownloader.haveCampaign(dataRoot)) {
+            buildInterface();
+            setBusy(true);
+            status.setText("Asking for the list of maps...");
+            new Thread(() -> downloadMaps(MapsDownloader.CAMPAIGN)).start();
+            return;
+        }
         if (haveData()) {
             startGame();
             return;
@@ -129,25 +134,32 @@ public class LauncherActivity extends Activity {
     }
 
     /**
-     * "Import maps" on the launcher icon (a long press): Halo PC maps from
-     * the system's file picker (MapImportActivity), for players whose file
-     * manager cannot open the app's folder.
+     * The launcher icon's shortcuts (a long press): "Import maps", Halo PC
+     * maps from the system's file picker (MapImportActivity), for players
+     * whose file manager cannot open the app's folder; and "Download
+     * campaign maps", for a first start that took the multiplayer maps alone.
      */
-    private void addImportShortcut() {
+    private void addShortcuts() {
         try {
             ShortcutManager shortcuts = getSystemService(ShortcutManager.class);
             if (shortcuts == null)
                 return;
             Intent intent = new Intent(this, MapImportActivity.class).setAction(Intent.ACTION_VIEW);
-            ShortcutInfo shortcut = new ShortcutInfo.Builder(this, "import-maps")
+            ShortcutInfo importShortcut = new ShortcutInfo.Builder(this, "import-maps")
                 .setShortLabel("Import maps")
                 .setLongLabel("Import Halo PC maps")
                 .setIcon(Icon.createWithResource(this, R.mipmap.ic_launcher))
                 .setIntent(intent)
                 .build();
-            shortcuts.setDynamicShortcuts(Collections.singletonList(shortcut));
+            ShortcutInfo campaignShortcut = new ShortcutInfo.Builder(this, "download-campaign")
+                .setShortLabel("Campaign maps")
+                .setLongLabel("Download campaign maps")
+                .setIcon(Icon.createWithResource(this, R.mipmap.ic_launcher))
+                .setIntent(new Intent(this, LauncherActivity.class).setAction(ACTION_DOWNLOAD_CAMPAIGN))
+                .build();
+            shortcuts.setDynamicShortcuts(java.util.Arrays.asList(importShortcut, campaignShortcut));
         } catch (RuntimeException e) {
-            // (a launcher without shortcuts: the touch controls' Options has the import)
+            // (a launcher without shortcuts: the touch controls' Options has both)
         }
     }
 
@@ -180,7 +192,9 @@ public class LauncherActivity extends Activity {
         layout.addView(title);
 
         TextView message = new TextView(this);
-        message.setText("Download the game's maps folder (about 1.8 GB) into the app's storage, or choose "
+        message.setText("Download the game's maps folder into the app's storage: the multiplayer maps alone "
+            + "(about 0.5 GB, with Halo Custom Edition's shared maps; the campaign's can be downloaded later, "
+            + "from the touch controls' Options), or everything with the campaign (about 2 GB). Or choose "
             + "an Xbox disc image of Halo: Combat Evolved (an .iso or .xiso file, any version) on this "
             + "device to copy it from; you can delete the image afterwards.\n\n"
             + "You can also copy a maps folder from a computer:\n"
@@ -192,13 +206,23 @@ public class LauncherActivity extends Activity {
         layout.addView(message);
 
         download = new Button(this);
-        download.setText("Download the maps (1.8 GB)");
+        download.setText("Download multiplayer maps (0.5 GB)");
         download.setOnClickListener(v -> {
             setBusy(true);
             status.setText("Asking for the list of maps...");
-            new Thread(this::downloadMaps).start();
+            new Thread(() -> downloadMaps(MapsDownloader.MULTIPLAYER)).start();
         });
         layout.addView(download, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        downloadAll = new Button(this);
+        downloadAll.setText("Download everything, with the campaign (2 GB)");
+        downloadAll.setOnClickListener(v -> {
+            setBusy(true);
+            status.setText("Asking for the list of maps...");
+            new Thread(() -> downloadMaps(MapsDownloader.ALL)).start();
+        });
+        layout.addView(downloadAll, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
             LinearLayout.LayoutParams.WRAP_CONTENT));
 
         pick = new Button(this);
@@ -262,6 +286,7 @@ public class LauncherActivity extends Activity {
     private void setBusy(boolean busy) {
         pick.setEnabled(!busy);
         download.setEnabled(!busy);
+        downloadAll.setEnabled(!busy);
         progress.setVisibility(busy ? View.VISIBLE : View.GONE);
         if (!busy)
             download.requestFocus();
@@ -274,85 +299,10 @@ public class LauncherActivity extends Activity {
         });
     }
 
-    private static HttpURLConnection open(String url) throws java.io.IOException {
-        HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
-        connection.setConnectTimeout(20000);
-        connection.setReadTimeout(60000);
-        connection.setRequestProperty("User-Agent", "OpenCE");
-        if (connection.getResponseCode() != HttpURLConnection.HTTP_OK)
-            throw new java.io.IOException(url + " answered " + connection.getResponseCode());
-        return connection;
-    }
-
-    /**
-     * Downloads the maps folder from MAPS_URL: maps.txt, then each file into
-     * <name>.partial, renamed once its size is right. Files already here at
-     * their size are kept, so a download stopped part way goes on.
-     */
-    private void downloadMaps() {
+    /** the maps folder's files wanted (MapsDownloader.ALL, MULTIPLAYER or CAMPAIGN), then the game */
+    private void downloadMaps(int wanted) {
         try {
-            File folder = new File(dataRoot, "maps");
-            folder.mkdirs();
-            List<String> names = new ArrayList<>();
-            List<Long> sizes = new ArrayList<>();
-            long total = 0;
-            HttpURLConnection list = open(MAPS_URL + "maps.txt");
-            try (java.io.BufferedReader reader = new java.io.BufferedReader(
-                    new java.io.InputStreamReader(list.getInputStream(), "UTF-8"))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    String[] parts = line.split("\t");
-                    if (parts.length < 2 || !parts[0].matches("[A-Za-z0-9_-][A-Za-z0-9_.-]{0,62}"))
-                        continue;
-                    long size = Long.parseLong(parts[1].trim());
-                    names.add(parts[0]);
-                    sizes.add(size);
-                    total += size;
-                }
-            } finally {
-                list.disconnect();
-            }
-            if (names.isEmpty())
-                throw new java.io.IOException("the list of maps is empty");
-            long done = 0;
-            byte[] buffer = new byte[1 << 16];
-            for (int which = 0; which < names.size(); which++) {
-                String name = names.get(which);
-                long size = sizes.get(which);
-                File file = new File(folder, name);
-                if (file.isFile() && file.length() == size) {
-                    done += size;
-                    continue;
-                }
-                File partial = new File(folder, name + ".partial");
-                HttpURLConnection connection = open(MAPS_URL + name);
-                try (InputStream in = connection.getInputStream();
-                     OutputStream out = new FileOutputStream(partial)) {
-                    long received = 0;
-                    long reported = 0;
-                    int read;
-                    while ((read = in.read(buffer)) > 0) {
-                        out.write(buffer, 0, read);
-                        received += read;
-                        if (received - reported >= (1 << 20)) {
-                            reported = received;
-                            long at = done + received;
-                            report("Downloading maps/" + name + " (" + (at >> 20) + " of " + (total >> 20) + " MB)",
-                                (int) (at * 1000 / total));
-                        }
-                    }
-                } finally {
-                    connection.disconnect();
-                }
-                if (partial.length() != size) {
-                    partial.delete();
-                    throw new java.io.IOException(name + " did not arrive whole");
-                }
-                file.delete();
-                if (!partial.renameTo(file))
-                    throw new java.io.IOException("could not put " + name + " in place");
-                done += size;
-            }
+            MapsDownloader.download(dataRoot, wanted, this::report);
             handler.post(() -> {
                 if (haveData()) {
                     startGame();

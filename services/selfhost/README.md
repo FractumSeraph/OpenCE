@@ -185,7 +185,12 @@ own XISO.
 The server also lists them as `assets/maps/maps.txt` (each file's name and
 size; `server/static-site.mjs` writes it for a static host). The desktop and
 Android games' first start can download the maps folder from such a folder
-(`data.download_url` in their `config.toml`).
+(`data.download_url` in their `config.toml`): every file, or all but the
+campaign's ten maps (Multiplayer only), whose players download those the
+first time they play the campaign. When `public/assets/custom_maps/` holds
+Halo Custom Edition's shared maps (`bitmaps.map`, `sounds.map`, `loc.map`),
+`maps.txt` names them too, as `custom_maps/<name>`, and the games put them in
+`maps_ce`; builds from before skip those lines.
 
 Put the loading screen's picture beside them as `loading.tga`, and the game
 draws the Xbox's loading screen (the Halo ring and LOADING...) instead of

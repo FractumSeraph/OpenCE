@@ -236,6 +236,22 @@ BOOL platform_offer_game_data(const char *destination)
 	return FALSE;
 }
 
+/* nor a map's download (sdl_platform.c's, for a campaign map the game's
+first start left out): a level a server lacks is its admin's to add */
+BOOL platform_offer_missing_map(const char *name)
+{
+	(void)name;
+	return FALSE;
+}
+
+int platform_missing_map_message(const char *name, char *text, int size)
+{
+	(void)name;
+	(void)text;
+	(void)size;
+	return 0;
+}
+
 /* as sdl_platform.c's (display.interpolation, on unless set off): the game's
 main loop then runs unthrottled by the Xbox's 60 Hz display, which with no
 display to wait for would spin; the director paces it (dedicated.c) */

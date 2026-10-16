@@ -436,6 +436,8 @@ struct data_extraction
 	char image[1024];
 	char url[1024];
 	char destination[1024];
+	/* which of the list's files are wanted (DATA_MAPS_*) */
+	int wanted;
 	char file[256];
 	unsigned long long done;
 	unsigned long long total;
@@ -467,11 +469,62 @@ file. */
 
 #define DATA_DOWNLOAD_FILES 64
 
+/* the list's files a download takes: all of them; all but the campaign's
+maps (the first start's "Multiplayer only", about a quarter of the size);
+or the campaign's maps alone (the rest of them, when the campaign is first
+played: platform_offer_missing_map). The list may also name Halo Custom
+Edition's shared maps as custom_maps/<name>, the site's folder beside maps/,
+which go into maps_ce (bitmaps.map, sounds.map and loc.map: every Custom
+Edition map needs them); a build that does not know such lines skips them,
+as names with a folder */
+enum
+{
+	DATA_MAPS_ALL,
+	DATA_MAPS_MULTIPLAYER,
+	DATA_MAPS_CAMPAIGN
+};
+
 struct data_download_file
 {
 	char name[64];
 	unsigned long long size;
+	/* (custom_maps/<name>: into maps_ce) */
+	BOOL custom_edition;
 };
+
+/* whether a maps folder's file is one of the campaign's levels (the Xbox's
+ten: everything else there is the menus' and the multiplayer maps) */
+static BOOL data_is_campaign_map(const char *name)
+{
+	static const char *const levels[] = { "a10", "a30", "a50", "b30", "b40", "c10", "c20", "c40", "d20", "d40" };
+	size_t index;
+
+	for (index = 0; index < sizeof(levels) / sizeof(levels[0]); index++)
+	{
+		if (!SDL_strncasecmp(name, levels[index], 3) && (!name[3] || !SDL_strcasecmp(name + 3, ".map")))
+			return TRUE;
+	}
+	return FALSE;
+}
+
+/* whether a name is one of Halo Custom Edition's shared maps, the only
+files a list may name in custom_maps/ */
+static BOOL data_is_custom_edition_shared(const char *name)
+{
+	return !SDL_strcasecmp(name, "bitmaps.map") || !SDL_strcasecmp(name, "sounds.map") ||
+		!SDL_strcasecmp(name, "loc.map");
+}
+
+/* whether a download takes a file of the list (DATA_MAPS_*): the campaign's
+maps alone, or all but them, or everything */
+static BOOL data_download_wanted(int wanted, const char *name, BOOL custom_edition)
+{
+	if (wanted == DATA_MAPS_CAMPAIGN)
+		return !custom_edition && data_is_campaign_map(name);
+	if (wanted == DATA_MAPS_MULTIPLAYER)
+		return custom_edition || !data_is_campaign_map(name);
+	return TRUE;
+}
 
 struct data_download_progress
 {
@@ -534,6 +587,9 @@ static BOOL data_download(struct data_extraction *extraction)
 {
 	static struct data_download_file files[DATA_DOWNLOAD_FILES];
 	char folder[1100];
+	char custom_edition_folder[1100];
+	char custom_edition_url[1200];
+	char *last_slash;
 	char path[1200];
 	char partial[1300];
 	char url[1200];
@@ -558,16 +614,26 @@ static BOOL data_download(struct data_extraction *extraction)
 	while (list && fgets(line, sizeof(line), list) && count < DATA_DOWNLOAD_FILES)
 	{
 		char *tab = strchr(line, '\t');
+		char *name = line;
+		BOOL custom_edition = FALSE;
 		unsigned long long size;
 
 		if (!tab || line[0] == '#')
 			continue;
 		*tab = 0;
 		size = strtoull(tab + 1, NULL, 10);
-		if (!data_download_name_valid(line) || !size)
+		if (!strncmp(line, "custom_maps/", 12))
+		{
+			name = line + 12;
+			custom_edition = TRUE;
+			if (!data_is_custom_edition_shared(name))
+				continue;
+		}
+		if (!data_download_name_valid(name) || !size || !data_download_wanted(extraction->wanted, name, custom_edition))
 			continue;
-		snprintf(files[count].name, sizeof(files[count].name), "%s", line);
+		snprintf(files[count].name, sizeof(files[count].name), "%s", name);
 		files[count].size = size;
+		files[count].custom_edition = custom_edition;
 		total += size;
 		count++;
 	}
@@ -583,17 +649,45 @@ static BOOL data_download(struct data_extraction *extraction)
 	extraction->total = total;
 	pthread_mutex_unlock(&extraction->lock);
 
+	/* (custom_maps/: the folder beside the URL's, https://host/assets/maps/
+	-> https://host/assets/custom_maps/; its files go into maps_ce) */
+	snprintf(custom_edition_folder, sizeof(custom_edition_folder), "%s" DATA_PATH_SEPARATOR "maps_ce",
+		extraction->destination);
+	snprintf(custom_edition_url, sizeof(custom_edition_url), "%s", extraction->url);
+	custom_edition_url[strlen(custom_edition_url) - 1] = 0;
+	last_slash = strrchr(custom_edition_url, '/');
+	if (last_slash && last_slash > custom_edition_url + 8)
+		snprintf(last_slash + 1, sizeof(custom_edition_url) - (size_t)(last_slash + 1 - custom_edition_url),
+			"custom_maps/");
+	else
+		custom_edition_url[0] = 0;
+
 	for (which = 0; which < count; which++)
 	{
 		struct data_download_progress progress = { extraction, files[which].name, done, 0 };
 
-		snprintf(path, sizeof(path), "%s" DATA_PATH_SEPARATOR "%s", folder, files[which].name);
-		if (data_file_size(path) == (long long)files[which].size)
+		if (files[which].custom_edition)
 		{
-			done += files[which].size;
-			continue;
+			/* (a player's own copy of a Custom Edition shared map is never
+			replaced, whatever its size) */
+			snprintf(path, sizeof(path), "%s" DATA_PATH_SEPARATOR "%s", custom_edition_folder, files[which].name);
+			if (!custom_edition_url[0] || data_file_size(path) >= 0 || !update_make_directory(custom_edition_folder))
+			{
+				done += files[which].size;
+				continue;
+			}
+			snprintf(url, sizeof(url), "%s%s", custom_edition_url, files[which].name);
 		}
-		snprintf(url, sizeof(url), "%s%s", extraction->url, files[which].name);
+		else
+		{
+			snprintf(path, sizeof(path), "%s" DATA_PATH_SEPARATOR "%s", folder, files[which].name);
+			if (data_file_size(path) == (long long)files[which].size)
+			{
+				done += files[which].size;
+				continue;
+			}
+			snprintf(url, sizeof(url), "%s%s", extraction->url, files[which].name);
+		}
 		snprintf(partial, sizeof(partial), "%s.partial", path);
 		platform_log("downloading %s", url);
 		if (!update_download(url, partial, files[which].size, data_download_received, &progress, extraction->error,
@@ -635,8 +729,11 @@ static void *data_extraction_thread(void *context)
 }
 
 /* copies the maps out of the disc image, or downloads them from url when
-image is NULL, showing how far it has got; closing the window quits */
-static BOOL data_extract(const char *image, const char *url, const char *destination, char *error, int error_size)
+image is NULL (the files wanted: DATA_MAPS_*), showing how far it has got;
+closing the window quits, but for a download while the game runs
+(in_game), which goes on to its end */
+static BOOL data_extract(const char *image, const char *url, const char *destination, int wanted, BOOL in_game,
+	char *error, int error_size)
 {
 	static struct data_extraction extraction;
 	SDL_Window *window;
@@ -649,6 +746,7 @@ static BOOL data_extract(const char *image, const char *url, const char *destina
 	snprintf(extraction.image, sizeof(extraction.image), "%s", image ? image : "");
 	snprintf(extraction.url, sizeof(extraction.url), "%s", image ? "" : url);
 	snprintf(extraction.destination, sizeof(extraction.destination), "%s", destination);
+	extraction.wanted = wanted;
 	if (pthread_create(&thread, NULL, data_extraction_thread, &extraction) != 0)
 	{
 		snprintf(error, (size_t)error_size, "Could not start the extraction.");
@@ -672,7 +770,7 @@ static BOOL data_extract(const char *image, const char *url, const char *destina
 
 		while (SDL_PollEvent(&event))
 		{
-			if (event.type == SDL_EVENT_QUIT || event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED)
+			if (event.type == SDL_EVENT_QUIT || (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED && !in_game))
 			{
 				platform_log("extraction cancelled");
 				exit(EXIT_SUCCESS);
@@ -694,8 +792,8 @@ static BOOL data_extract(const char *image, const char *url, const char *destina
 			SDL_RenderClear(renderer);
 			SDL_SetRenderDrawColor(renderer, 230, 230, 230, 255);
 			SDL_SetRenderScale(renderer, 2.0f, 2.0f);
-			SDL_RenderDebugText(renderer, 10.0f, 10.0f,
-				extraction.url[0] ? "Downloading the maps folder..." : "Extracting the maps folder...");
+			SDL_RenderDebugText(renderer, 10.0f, 10.0f, !extraction.url[0] ? "Extracting the maps folder..." :
+				wanted == DATA_MAPS_CAMPAIGN ? "Downloading the campaign's maps..." : "Downloading the maps folder...");
 			SDL_SetRenderScale(renderer, 1.0f, 1.0f);
 			snprintf(line, sizeof(line), "%s  (%llu of %llu MB)", file, done >> 20, total >> 20);
 			SDL_RenderDebugText(renderer, 20.0f, 70.0f, line);
@@ -760,11 +858,12 @@ static BOOL data_choose_image(char *path, int size)
 
 BOOL platform_offer_game_data(const char *destination)
 {
-	/* (with a download URL: download, or a disc image, or quit; without:
-	a disc image, or quit) */
+	/* (with a download URL: the multiplayer maps or everything, or a disc
+	image, or quit; without: a disc image, or quit) */
 	static const SDL_MessageBoxButtonData download_buttons[] =
 	{
-		{ SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, 2, "Download" },
+		{ SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, 3, "Multiplayer only" },
+		{ 0, 2, "Everything" },
 		{ 0, 1, "Disc image..." },
 		{ SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, 0, "Quit" },
 	};
@@ -791,8 +890,10 @@ BOOL platform_offer_game_data(const char *destination)
 
 		snprintf(host, sizeof(host), "%.*s", (int)(end - start), start);
 		snprintf(message, sizeof(message),
-			"Halo's game data (its maps folder) was not found.\n\n"
-			"Download it from %s (about 1.8 GB)? It goes into %s/maps.\n\n"
+			"Halo's game data (its maps folder) was not found. Download it from %s into %s?\n\n"
+			"Multiplayer only: the multiplayer maps, the menus and Halo Custom Edition's shared maps, "
+			"about 0.5 GB. The campaign's maps are offered when you first play the campaign.\n\n"
+			"Everything: the campaign's maps as well, about 2 GB.\n\n"
 			"Or choose Disc image to copy it out of an Xbox disc image (.iso) of Halo: Combat Evolved instead.",
 			host, destination);
 	}
@@ -808,7 +909,7 @@ BOOL platform_offer_game_data(const char *destination)
 	for (;;)
 	{
 		SDL_MessageBoxData question = { SDL_MESSAGEBOX_INFORMATION, NULL, "ChupathingyCE", message,
-			download ? 3 : 2, download ? download_buttons : image_buttons, NULL };
+			download ? 4 : 2, download ? download_buttons : image_buttons, NULL };
 		char image[1024];
 		char error[512];
 		int answer = 0;
@@ -818,10 +919,13 @@ BOOL platform_offer_game_data(const char *destination)
 			platform_log("no game data: quitting");
 			exit(EXIT_SUCCESS);
 		}
-		if (answer == 2)
+		if (answer == 2 || answer == 3)
 		{
-			platform_log("downloading the maps folder from %s to %s", url, destination);
-			if (data_extract(NULL, url, destination, error, sizeof(error)))
+			int wanted = answer == 3 ? DATA_MAPS_MULTIPLAYER : DATA_MAPS_ALL;
+
+			platform_log("downloading the maps folder (%s) from %s to %s",
+				wanted == DATA_MAPS_MULTIPLAYER ? "multiplayer only" : "everything", url, destination);
+			if (data_extract(NULL, url, destination, wanted, FALSE, error, sizeof(error)))
 			{
 				platform_log("downloaded the maps folder");
 				return TRUE;
@@ -834,7 +938,7 @@ BOOL platform_offer_game_data(const char *destination)
 		if (!data_choose_image(image, sizeof(image)))
 			continue;
 		platform_log("extracting the maps folder from %s to %s", image, destination);
-		if (data_extract(image, NULL, destination, error, sizeof(error)))
+		if (data_extract(image, NULL, destination, DATA_MAPS_ALL, FALSE, error, sizeof(error)))
 		{
 			platform_log("extracted the maps folder");
 			return TRUE;
@@ -842,6 +946,86 @@ BOOL platform_offer_game_data(const char *destination)
 		platform_log("extraction failed: %s", error);
 		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "ChupathingyCE", error, NULL);
 	}
+}
+
+/* a level the game cannot find in its maps folder (cache_files_windows.c):
+one of the campaign's, left out by the first start's Multiplayer only, is
+offered for download with the rest of the campaign's maps; TRUE once they
+are here */
+BOOL platform_offer_missing_map(const char *name)
+{
+	static const SDL_MessageBoxButtonData buttons[] =
+	{
+		{ SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, 1, "Download" },
+		{ SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, 0, "Not now" },
+	};
+	const char *url = config_string("data.download_url");
+	char message[512];
+	char error[512];
+	int answer = 0;
+	SDL_MessageBoxData question = { SDL_MESSAGEBOX_INFORMATION, NULL, "ChupathingyCE", message, 2, buttons, NULL };
+
+	if (!data_is_campaign_map(name) || strncmp(url, "https://", 8) || url[strlen(url) - 1] != '/' ||
+		config_boolean("debug.hidden_window") || config_real("debug.exit_after") > 0.0)
+	{
+		return FALSE;
+	}
+	snprintf(message, sizeof(message),
+		"The campaign's maps aren't downloaded (Multiplayer only was chosen at the first start).\n\n"
+		"Download them now (about 1.6 GB)? The game waits until they are here.");
+	if (!SDL_ShowMessageBox(&question, &answer) || answer != 1)
+		return FALSE;
+	platform_log("downloading the campaign's maps from %s to %s", url, platform_data_root());
+	if (data_extract(NULL, url, platform_data_root(), DATA_MAPS_CAMPAIGN, TRUE, error, sizeof(error)))
+	{
+		platform_log("downloaded the campaign's maps");
+		return TRUE;
+	}
+	platform_log("download failed: %s", error);
+	SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "ChupathingyCE", error, NULL);
+	return FALSE;
+}
+
+/* what the damaged disc error says instead for a level that is not here: a
+campaign map's way to get the campaign's maps (0 for any other) */
+int platform_missing_map_message(const char *name, char *text, int size)
+{
+	if (!data_is_campaign_map(name))
+		return 0;
+	snprintf(text, (size_t)size, "The campaign's maps aren't downloaded. Choose the campaign again to download them "
+		"(about 1.6 GB).");
+	return 1;
+}
+#else
+BOOL platform_offer_missing_map(const char *name)
+{
+	(void)name;
+	return FALSE;
+}
+
+int platform_missing_map_message(const char *name, char *text, int size)
+{
+#if defined(HALO_ANDROID) && !defined(HALO_BROWSER)
+	/* (the app downloads them: TouchControls' Options, LauncherActivity's
+	shortcut) */
+	static const char *const levels[] = { "a10", "a30", "a50", "b30", "b40", "c10", "c20", "c40", "d20", "d40" };
+	size_t index;
+
+	for (index = 0; index < sizeof(levels) / sizeof(levels[0]); index++)
+	{
+		if (!SDL_strcasecmp(name, levels[index]))
+		{
+			snprintf(text, (size_t)size, "The campaign's maps aren't on this device. In the touch controls' Options, "
+				"or holding the app's icon, choose Download campaign maps (about 1.6 GB).");
+			return 1;
+		}
+	}
+#else
+	(void)text;
+	(void)size;
+	(void)name;
+#endif
+	return 0;
 }
 #endif
 

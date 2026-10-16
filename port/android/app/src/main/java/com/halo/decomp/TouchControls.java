@@ -810,7 +810,8 @@ public final class TouchControls extends View implements SensorEventListener, In
     }
 
     private void showOptions() {
-        String[] items = {"General", "Edit buttons layout", "Look sensitivity", "Import maps"};
+        String[] items = {"General", "Edit buttons layout", "Look sensitivity", "Import maps",
+            "Download campaign maps"};
         AlertDialog dialog = new AlertDialog.Builder(getContext())
             .setTitle("Options")
             .setItems(items, (d, which) -> {
@@ -821,9 +822,12 @@ public final class TouchControls extends View implements SensorEventListener, In
                     setHidden(false);
                 } else if (which == 2) {
                     post(this::showSensitivity);
-                } else {
+                } else if (which == 3) {
                     // (ChupathingyCE's: Halo PC maps from the system's file picker)
                     ((HaloActivity) getContext()).chooseMapFiles();
+                } else {
+                    // (this fork: the campaign's maps a Multiplayer only first start left out)
+                    ((HaloActivity) getContext()).downloadCampaignMaps();
                 }
             })
             .setNegativeButton("Close", null)

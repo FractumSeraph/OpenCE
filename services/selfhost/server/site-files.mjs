@@ -99,7 +99,13 @@ export function customMapList(folder, mapHashes) {
 // (data.download_url, port/linux/src/sdl_platform.c; LauncherActivity.java):
 // a line each, the file's name, a tab, its size in bytes. With them the
 // loading screen's picture, loading.tga, when the folder has it
-// (tools/xiso_extract.py --loading-tga makes it from the disc).
+// (tools/xiso_extract.py --loading-tga makes it from the disc). Then Halo
+// Custom Edition's shared maps (bitmaps.map, sounds.map, loc.map), which
+// every Custom Edition map needs, when the custom_maps folder beside it has
+// them, as custom_maps/<name>: the games put them in maps_ce, and builds
+// from before skip such lines (a name with a folder).
+export const CUSTOM_EDITION_SHARED_MAPS = ["bitmaps.map", "sounds.map", "loc.map"];
+
 export function gameMapList(folder) {
   let lines = [];
   try {
@@ -109,6 +115,16 @@ export function gameMapList(folder) {
       .sort();
   } catch {
     // (no maps here: players bring their own)
+  }
+  if (lines.length) {
+    for (const name of CUSTOM_EDITION_SHARED_MAPS) {
+      try {
+        const stat = fs.statSync(path.join(folder, "..", "custom_maps", name));
+        if (stat.isFile()) lines.push(`custom_maps/${name}\t${stat.size}`);
+      } catch {
+        // (not here: the games fetch it when a Custom Edition map needs it)
+      }
+    }
   }
   return lines.length ? lines.join("\n") + "\n" : "";
 }
