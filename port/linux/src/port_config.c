@@ -923,12 +923,12 @@ static const struct config_setting config_settings[] =
 	{ "update.auto", _config_boolean, "true", "HALO_UPDATE_AUTO", _environment_value, _platform_all,
 		"Look for a new version when the game starts, and offer to update to it;\n"
 		"false never looks (the game's \"Do not ask again\" writes false here)." },
-	{ "crash_reports.upload", _config_string, "\"ask\"", "HALO_CRASH_REPORTS", _environment_value, _platform_desktop,
+	{ "crash_reports.upload", _config_string, "\"yes\"", "HALO_CRASH_REPORTS", _environment_value, _platform_desktop,
 		"Send a report of each crash to the developers, through network.browser_url\n"
 		"(port/linux/src/crash_report.h: the build, where it crashed, the end of the\n"
-		"log without IP addresses, and on Windows a minidump): \"yes\" sends them,\n"
-		"\"no\" never does, \"ask\" asks after the next crash and writes the answer\n"
-		"here." },
+		"log without IP addresses, and on Windows a minidump): \"yes\" sends them\n"
+		"(this fork's default), \"no\" never does, \"ask\" asks after the next crash\n"
+		"and writes the answer here." },
 
 	{ "debug.network_test", _config_string, "\"\"", "HALO_NETWORK_TEST", _environment_value, _platform_all,
 		"Automated system link sessions for testing (port/linux/game/network_test.c):\n"
@@ -2212,7 +2212,7 @@ static const struct
 	{ "network.platform_limits", { "on", "off", NULL }, "\"on\"" },
 	{ "network.coop_friendly_fire", { "off", "on", "shields_only", "explosives_only", NULL }, NULL },
 	{ "network.coop_enemies_mode", { "none", "per_player", "multiplier", NULL }, "\"none\"" },
-	{ "crash_reports.upload", { "ask", "yes", "no", NULL }, "\"ask\"" },
+	{ "crash_reports.upload", { "ask", "yes", "no", NULL }, "\"yes\"" },
 };
 
 #define NUMBER_OF_CONFIG_WORDS (sizeof(config_words) / sizeof(config_words[0]))

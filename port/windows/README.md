@@ -175,8 +175,9 @@ groups the crashes and tells the developers:
    game stops. A minidump contains the stacks and the registers of the
    threads, and the list of the modules. It does not contain the other
    memory of the game.
-2. At the first crash, the copy asks the player whether to send crash
-   reports. `crash_reports.upload` in `config.toml` keeps the answer:
+2. The copy sends the report when `crash_reports.upload` in `config.toml`
+   is `"yes"`, this fork's default. With `"ask"`, at the first crash the
+   copy asks the player whether to send crash reports and keeps the answer:
    `"yes"` sends this report and all the reports after it, and `"no"` sends
    no reports and does not ask again. The answer `"no"` deletes the report.
 3. The copy sends the report, then deletes it. If it cannot send it (for
