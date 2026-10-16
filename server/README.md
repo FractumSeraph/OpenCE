@@ -68,10 +68,12 @@ halo.milenko.org within a few seconds. Ctrl+C stops it, and takes its game
 off the lists as it goes.
 
 The data folder is the current folder, unless `HALO_DATA_ROOT` says
-otherwise. The server writes its log, `debug.txt`, there, and its saves in
-`~/.local/share/fractum-halo` unless `HALO_SAVE_ROOT` says otherwise
-([Settings](docs/settings.md)). When `debug.txt` reaches 64 MB, it is renamed
-`debug.old.txt` and a new `debug.txt` starts.
+otherwise. The server writes its log, `debug.txt`, in `logs/` there
+(`HALO_LOG_ROOT` puts it elsewhere; until 0.8.0 it was in the data folder
+itself), and its saves in `~/.local/share/fractum-halo` unless
+`HALO_SAVE_ROOT` says otherwise ([Settings](docs/settings.md)). When
+`debug.txt` reaches 64 MB, it is renamed `debug.old.txt` and a new
+`debug.txt` starts.
 
 To keep a server running all the time, with restarts and several servers on
 one machine, use [Docker or systemd](docs/docker.md).
@@ -221,7 +223,7 @@ and players can hide their stats from their profile.
   `HALO_DATA_ROOT` to it.
 - **"cannot read the playlist".** `HALO_DEDICATED` is a path inside the data
   folder: `playlists/my_playlist.txt`, not a path from elsewhere.
-- **It doesn't show on the site.** The log is `debug.txt` in the data folder.
+- **It doesn't show on the site.** The log is `logs/debug.txt` in the data folder.
   The server needs to reach the internet (HTTPS to halo.milenko.org, and UDP).
 - **It shows, but nobody can join.** If the player sees a message, it
   probably names a version mismatch. If they just can't connect (the log

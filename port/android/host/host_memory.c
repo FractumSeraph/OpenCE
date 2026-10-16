@@ -36,6 +36,7 @@ instead (host_watch_hash.c).
 #include <sys/mman.h>
 #include <sys/prctl.h>
 #include <sys/system_properties.h>
+#include <sys/utsname.h>
 #include <ucontext.h>
 #include <unistd.h>
 
@@ -127,6 +128,12 @@ only a slice with no page in use (present or swapped out): ART's other
 spaces (its heap, bitmaps and card tables) are live, and unmapping them
 would corrupt it where failing to start is at least clear. */
 #define ART_LARGE_OBJECT_SPACE "[anon:dalvik-free list large object space]"
+/* Older ART (Android 9) backs its named spaces with ashmem instead: the same
+space then shows as this file, with " (deleted)" after it. Its pages belong
+to the ashmem file, and the zygote's objects there need not be mapped in
+this process's page table yet, so pagemap cannot tell them: mincore, which
+reads the file's pages, decides (range_usage) */
+#define ART_LARGE_OBJECT_SPACE_ASHMEM "/dev/ashmem/dalvik-free list large object space"
 
 /* what range_usage found */
 enum
@@ -356,12 +363,13 @@ static int range_usage_mincore(uint64_t mapping_start, uint64_t from, uint64_t t
 
 /* whether any page from..to (page aligned) of the mapping starting at
 mapping_start holds data */
-static int range_usage(uint64_t mapping_start, uint64_t from, uint64_t to, struct range_usage *usage)
+static int range_usage(uint64_t mapping_start, uint64_t from, uint64_t to, int file_backed, struct range_usage *usage)
 {
-	int result;
+	int result = RANGE_UNKNOWN;
 
 	memset(usage, 0, sizeof(*usage));
-	result = range_usage_pagemap(from, to, usage);
+	if (!file_backed)
+		result = range_usage_pagemap(from, to, usage);
 	if (result == RANGE_UNKNOWN)
 	{
 		memset(usage, 0, sizeof(*usage));
@@ -384,7 +392,7 @@ static int reclaim_art_overlap(uint64_t address, uint64_t size)
 		uint64_t from, to;
 		struct range_usage usage;
 		char *name;
-		int name_offset = 0;
+		int name_offset = 0, file_backed;
 
 		if (sscanf(line, "%llx-%llx %*s %*s %*s %*s %n", &lo, &hi, &name_offset) < 2 || !name_offset)
 			continue;
@@ -394,13 +402,15 @@ static int reclaim_art_overlap(uint64_t address, uint64_t size)
 		name[strcspn(name, "\n")] = '\0';
 		from = lo > address ? lo : address;
 		to = hi < address + size ? hi : address + size;
-		if (strcmp(name, ART_LARGE_OBJECT_SPACE))
+		file_backed = !strncmp(name, ART_LARGE_OBJECT_SPACE_ASHMEM, strlen(ART_LARGE_OBJECT_SPACE_ASHMEM)) &&
+			(!name[strlen(ART_LARGE_OBJECT_SPACE_ASHMEM)] || !strcmp(name + strlen(ART_LARGE_OBJECT_SPACE_ASHMEM), " (deleted)"));
+		if (strcmp(name, ART_LARGE_OBJECT_SPACE) && !file_backed)
 		{
 			finding(HOST_LOG_ERROR, "a fixed guest range is overlapped by %08llx-%08llx (%s), which is not ART's large object space; left alone",
 				lo, hi, name[0] ? name : "unnamed");
 			continue;
 		}
-		switch (range_usage(lo, from, to, &usage))
+		switch (range_usage(lo, from, to, file_backed, &usage))
 		{
 		case RANGE_IN_USE:
 			finding(HOST_LOG_ERROR,
@@ -442,6 +452,10 @@ static int reserve(uint64_t address, uint64_t size, int reclaim_art)
 	{
 		/* (a kernel older than 4.17 takes MAP_FIXED_NOREPLACE as a hint,
 		and maps elsewhere when something is in the way) */
+		if (reclaim_art)
+			finding(HOST_LOG_INFO, "%08llx-%08llx is taken; the kernel mapped %p instead (MAP_FIXED_NOREPLACE "
+				"taken as a hint, kernel older than 4.17)", (unsigned long long)address,
+				(unsigned long long)(address + size), result);
 		munmap(result, size);
 		errno = EEXIST;
 	}
@@ -479,11 +493,17 @@ void host_memory_report_low_mappings(FILE *file)
 
 	__system_property_get("ro.product.model", model);
 	__system_property_get("dalvik.vm.heapsize", heap);
+	struct utsname kernel;
+
 	__system_property_get("ro.build.version.release", release);
+	if (uname(&kernel) != 0)
+		strcpy(kernel.release, "unknown");
+	host_logf(HOST_LOG_INFO, "device: %s, Android %s, kernel %s, Java heap %s", model[0] ? model : "unknown",
+		release[0] ? release : "unknown", kernel.release, heap[0] ? heap : "unknown");
 	if (file)
 	{
-		fprintf(file, "device: %s, Android %s, Java heap %s\n", model[0] ? model : "unknown",
-			release[0] ? release : "unknown", heap[0] ? heap : "unknown");
+		fprintf(file, "device: %s, Android %s, kernel %s, Java heap %s\n", model[0] ? model : "unknown",
+			release[0] ? release : "unknown", kernel.release, heap[0] ? heap : "unknown");
 		fprintf(file, "why:\n%s\nmappings below 4 GB:\n", findings[0] ? findings : "(no reason recorded)\n");
 	}
 	if (!maps)

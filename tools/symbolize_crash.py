@@ -4,7 +4,10 @@ build's debug.txt or halo.log (port/windows/src/win32_crash.c), or on the
 calls of a crash report as the site keeps it (halo.exe+0x1a2b3c, one a
 line: port/linux/src/crash_report.h):
 
-    python tools/symbolize_crash.py debug.txt path/to/halo.exe
+    python tools/symbolize_crash.py logs/debug.txt path/to/halo.exe
+
+(Both logs are in logs/ in the game's data folder since 0.8.0; before, debug.txt
+was in the data folder itself and halo.log beside halo.exe.)
 
 halo.exe must be the build that crashed (32- or 64-bit), with its halo.pdb
 beside it (a release's symbols, chupathingyce-<platform>-<config>-symbols,

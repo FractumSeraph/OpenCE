@@ -157,7 +157,7 @@ To install the data from a computer:
 | Halo PC (Custom Edition) maps, with `bitmaps.map`, `sounds.map` and `loc.map` | `maps_ce` |
 | HaloMD maps | `maps_md` |
 | Halo PC (retail) maps | `maps_pc` |
-| Log | `debug.txt` |
+| Log | `logs/debug.txt` (`debug.txt` until 0.8.0) |
 | Settings | `config.toml` |
 
 To make a copy of the saved games, enter
@@ -558,7 +558,11 @@ Thus:
    part that covers the fixed addresses, and only if no page of it is in
    use (`/proc/self/pagemap`, or `mincore` and the swap of that part if
    the device refuses `pagemap`). The host never takes the other spaces of
-   ART.
+   ART. Kernels older than 4.17 (for example the Galaxy S10 on Android 12)
+   take `MAP_FIXED_NOREPLACE` as a hint, and the host then also tries this
+   step. Older ART (Android 9) backs the space with ashmem
+   (`/dev/ashmem/dalvik-free list large object space`); then only `mincore`
+   decides, because it sees the pages of the ashmem file.
 
 If the addresses are not available, the game shows a message, and writes
 the mappings below 4 GB to `memory_map.txt` in the data folder and to the
@@ -664,7 +668,7 @@ assembly of the port is necessary:
 ## Find problems
 
 - Enter `adb logcat -s chupathingyce` to see the log of the port and the errors of
-  the game. `files/debug.txt` is the log of the game.
+  the game. `files/logs/debug.txt` is the log of the game.
 - If the guest code stops, the log shows the registers and the frame chain.
   To find the functions, enter
   `llvm-symbolizer --obj=build/android/halo_guest.elf <address>`.

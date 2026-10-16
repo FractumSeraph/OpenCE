@@ -289,7 +289,7 @@ static void crash_reports_start(void)
 		"The answer is kept in config.toml (crash_reports.upload): Yes sends the report of this crash and of "
 		"every later one, No never sends one.";
 	SDL_MessageBoxData question = { SDL_MESSAGEBOX_WARNING, NULL, "ChupathingyCE crashed", text, 2, buttons, NULL };
-	char folder[1024], log[1024];
+	char folder[1024], log[1024], old_folder[1024], old_log[1024];
 	const char *consent;
 	int pending, answer = 0;
 
@@ -300,9 +300,12 @@ static void crash_reports_start(void)
 	if (browser_headless())
 		return;
 #endif
-	snprintf(folder, sizeof(folder), "%s/crashes", platform_data_root());
-	snprintf(log, sizeof(log), "%s/debug.txt", platform_data_root());
-	if (!posix_crash_install(folder, log) || !(pending = posix_crash_pending()))
+	snprintf(folder, sizeof(folder), "%s/crashes", platform_folder(_port_folder_logs));
+	snprintf(log, sizeof(log), "%s/debug.txt", platform_folder(_port_folder_logs));
+	/* (and those from before the logs folder, in the data root, still sent) */
+	snprintf(old_folder, sizeof(old_folder), "%s/crashes", platform_data_root());
+	snprintf(old_log, sizeof(old_log), "%s/debug.txt", platform_data_root());
+	if (!posix_crash_install(folder, log, old_folder, old_log) || !(pending = posix_crash_pending()))
 		return;
 	consent = config_string("crash_reports.upload");
 	if (!strcmp(consent, "no"))

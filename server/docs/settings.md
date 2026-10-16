@@ -72,8 +72,10 @@ carnage report shows for 20 seconds, then the next entry's lobby opens.
 
 | Variable | Default | What it does |
 | --- | --- | --- |
-| `HALO_DATA_ROOT` | the current folder, else the program's | The data folder: `maps/` (with `ui.map`), `maps_ce/`, `maps_md/`, `maps_pc/`, `playlists/` (the older `maps/ce/`, `md_maps/` and OpenCE's `custom_maps/` are read too). The server's log, `debug.txt`, goes here. |
+| `HALO_DATA_ROOT` | the current folder, else the program's | The data folder: `maps/` (with `ui.map`), `maps_ce/`, `maps_md/`, `maps_pc/`, `playlists/` (the older `maps/ce/`, `md_maps/` and OpenCE's `custom_maps/` are read too). The server's log goes in `logs/` here (`logs/debug.txt`). |
 | `HALO_SAVE_ROOT` | `~/.local/share/fractum-halo` | Where the server keeps its saves (the game's profile and scratch files, about 33 MB). Give each server on a machine its own. |
+| `HALO_LOG_ROOT` | `logs/` in the data folder | Where the server's log (`debug.txt`) goes. |
+| `HALO_CACHE_ROOT` | `cache/` in the save folder (`/data/cache` in the Docker image) | Where the server keeps what it can make again. |
 
 The server also writes `config.toml`, its settings at their defaults, beside
 the program if it can (an image's or a system folder's program cannot, which
@@ -123,7 +125,7 @@ it does not know.
 
 ## The files it writes
 
-In the data folder: `debug.txt` (its log), `bans.txt` (its bans, read on
+In the data folder: `logs/debug.txt` (its log; `HALO_LOG_ROOT` puts `logs/` elsewhere, and `HALO_CACHE_ROOT` the cache, `/data/cache` in the Docker image), `bans.txt` (its bans, read on
 every join: [admin.md](admin.md#bans)), `cheaters.txt` (players dropped for
 cheating), `control_credentials.txt` (the control API's credentials, its tokens' hashes,
 once the API is turned on), `control_accounts.txt` (the control panel's

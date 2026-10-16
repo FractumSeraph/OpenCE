@@ -29,6 +29,7 @@ the SDK headers are read, exactly as game code sees them. */
 #include "halo_linux_winsock_names.h"
 #undef HALO_LINUX_WINSOCK_NAMES_UNDEFINE
 #include "build_identity.h"
+#include "port_folders.h"
 
 /* ---------- logging */
 
@@ -161,6 +162,14 @@ places): a Halo Custom Edition install's maps folder, when it names an
 install, else the folder itself; "" for none. (OpenCE's setting, which
 names an install) */
 const char *platform_custom_edition_root(void);
+/* one of the game's own folders (port_folders.h: data/ and logs/ in the
+data root, cache/ and private/ in the save root, or paths.logs and
+paths.cache), made if need be */
+const char *platform_folder(enum port_folder folder);
+/* the logs folder before the data root is known, as near as can be told
+without asking the player anything (Windows' halo.log and crash reporter
+start before the game does), made if need be; 0 when there is none */
+int platform_logs_folder_early(char *path, unsigned long size);
 #ifdef HALO_GAME_BROWSER
 /* a web page opened in the web browser (from any thread: the main thread
 opens it) */

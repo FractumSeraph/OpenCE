@@ -42,6 +42,10 @@ clock runs on).
 #ifdef HALO_CUSTOM_EDITION
 #include "halo_ui_map_list.h"
 #endif
+#include "halo_keyboard.h"
+#ifdef HALO_GAME_BROWSER
+#include "../src/ui_overlay.h"
+#endif
 
 #include <stdlib.h>
 #include <string.h>
@@ -2200,4 +2204,72 @@ struct pc_menu_setting *pc_menu_setting_get(
 			return &menu_tags.settings[index];
 	}
 	return NULL;
+}
+
+/* ---------- the menus' button pictures as the keyboard's keys
+
+ui.map's pictures of the controller's buttons in the menus' prompts ("A =
+SELECT", "B = BACK": ui\shell\bitmaps\a_butn and the rest, and their
+smaller _sm), drawn as the keyboard's key caps while the keyboard or mouse
+was used last (halo_keyboard_prompts), as Online Games draws its prompts
+(ui_overlay.c: the keys xinput_sdl.c presses those buttons with), ending
+where the picture ends, so that the words after it stay clear. */
+
+boolean pc_menu_button_key_cap(
+	long bitmap_tag_index,
+	short x0,
+	short y0,
+	short x1,
+	short y1,
+	float alpha)
+{
+#ifdef HALO_GAME_BROWSER
+	static struct
+	{
+		char const *name;
+		int button;
+	} const buttons[] =
+	{
+		{ "a_butn", UI_BUTTON_A },
+		{ "b_butn", UI_BUTTON_B },
+		{ "x_butn", UI_BUTTON_X },
+		{ "y_butn", UI_BUTTON_Y },
+		{ "black_butn", UI_BUTTON_RIGHT_SHOULDER },
+		{ "start_butn", UI_BUTTON_START },
+		{ "back_butn", UI_BUTTON_BACK },
+	};
+	char const *name;
+	char const *last;
+	long index;
+
+	if (bitmap_tag_index == NONE || !halo_keyboard_prompts())
+		return FALSE;
+	name = tag_get_name(bitmap_tag_index);
+	if (!name || strncmp(name, "ui\\shell\\bitmaps\\", 17))
+		return FALSE;
+	last = name + 17;
+	for (index = 0; index < (long)(sizeof(buttons) / sizeof(buttons[0])); index++)
+	{
+		size_t length = strlen(buttons[index].name);
+
+		if (!strncmp(last, buttons[index].name, length) && (!last[length] || !strcmp(last + length, "_sm")))
+		{
+			float size = (float)(y1 - y0) * 0.62f;
+			float width = ui_overlay_button_width(buttons[index].button, size);
+			unsigned int shade = (unsigned int)(alpha < 0.f ? 0.f : alpha > 1.f ? 255.f : alpha * 255.f);
+
+			ui_overlay_button(buttons[index].button, size, (float)x1 - width,
+				(float)y0 + ((float)(y1 - y0) - size) * 0.5f, 0xFFFFFF00 | shade);
+			return TRUE;
+		}
+	}
+#else
+	(void)bitmap_tag_index;
+	(void)x0;
+	(void)y0;
+	(void)x1;
+	(void)y1;
+	(void)alpha;
+#endif
+	return FALSE;
 }

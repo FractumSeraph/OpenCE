@@ -380,6 +380,19 @@ static boolean setting_text(char const *name, char *text, unsigned int size, boo
 				scale = 1;
 			snprintf(text, size, "%ldx%ld", 640 * scale, 480 * scale);
 		}
+		/* (Video Setup's Frame Rate: 30 while display.interpolation is off,
+		the game's own frames, whatever display.max_fps says) */
+		if (!strcmp(name, "display.max_fps"))
+		{
+			char interpolation[16] = "";
+
+			if (default_value)
+				config_default("display.interpolation", interpolation, sizeof(interpolation));
+			else
+				config_text("display.interpolation", interpolation, sizeof(interpolation));
+			if (!strcmp(interpolation, "false"))
+				snprintf(text, size, "30");
+		}
 		return TRUE;
 	}
 	for (index = 0; index < NUMBEROF(profile_settings); index++)
@@ -412,6 +425,11 @@ static boolean setting_write(char const *name, char const *value)
 {
 	short index;
 
+	/* (Video Setup's Frame Rate: 30 draws the game's own frames, with
+	display.interpolation off; the others blend between them) */
+	if (!strcmp(name, "display.max_fps") &&
+		!config_write("display.interpolation", strcmp(value, "30") ? "true" : "false"))
+		return FALSE;
 	if (strncmp(name, "profile.", 8))
 		return config_write(name, value);
 	for (index = 0; index < NUMBEROF(profile_settings); index++)

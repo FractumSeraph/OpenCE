@@ -395,6 +395,17 @@ Where the game's `maps` folder is:
 | Windows | next to `halo.exe` |
 | Android | `/sdcard/Android/data/net.fractumseraph.halo/files` |
 
+Beside the maps folders, the game keeps folders of its own:
+
+| Folder | What is in it |
+| --- | --- |
+| `logs` (beside `maps`) | The game's logs: `debug.txt`, crash reports waiting to be sent, and on Windows `halo.log`. Attach these to a bug report. |
+| `data` (beside `maps`) | Things you add that are not maps: your own font in `data/fonts` (`display.high_res_font`). |
+| `cache` (in the save folder) | What the game can make again; safe to delete. |
+
+Until 0.8.0, `debug.txt` was beside `maps` (and on Windows `halo.log` beside
+`halo.exe`). The game leaves an old one where it is.
+
 Copy the `.map` files from your own Halo PC install. On Android, Import
 maps (hold the app's icon, or the touch controls' Options in the game)
 picks `.map` files or `.zip` archives with Android's own file picker and
@@ -571,7 +582,7 @@ starts, with every setting listed, commented out at its default, and a line
 or two saying what each one does. To change one, remove the `#` in front of it
 and edit the value; the game reads the file when it starts, so restart it
 after a change. A line that starts with `#` does nothing. If a change seems
-to do nothing, look in `debug.txt` for lines starting `config.toml` or
+to do nothing, look in `logs/debug.txt` for lines starting `config.toml` or
 `settings:`: they name a misspelled setting, one in the wrong `[section]`, a
 line still commented out, a line the game skipped because of a mistake (a
 value missing its quotes, `menus = pc` for `menus = "pc"`, or `False` for
@@ -592,20 +603,25 @@ A few people look for most:
 | --- | --- |
 | `display.mode` | `"fullscreen"`, `"borderless"` or `"windowed"`. F11 switches between a window and the whole screen. When it is set, `display.fullscreen` is ignored; when it is empty, `display.fullscreen = true` is borderless and `false` a window. |
 | `display.window_scale` | The window's size, as a multiple of 640x480. |
-| `display.vsync`, `display.max_fps` | Vertical sync, and a frame rate cap (0 for none). |
+| `display.vsync`, `display.max_fps` | Vertical sync, and a frame rate cap with V-Sync off (0 for twice the display's refresh rate, -1 for none). |
+| `display.interpolation` | `false` keeps the game's own 30 frames a second; Video Setup's Frame Rate at 30 (Xbox) sets it. |
+| `display.direct_camera` | Instant aim: the view turns the frame the mouse moves. On by default; config.toml only. |
 | `display.menus` | `"xbox"` (the default; `"pc"` in the browser) or `"pc"`, the Halo PC style menus with their Server Browser. |
 | `display.high_res_text` | `true` draws the game's text (menus and HUD) with sharp fonts at your resolution; `false` uses the maps' original bitmap fonts. The Server Browser and the moderation overlays use the system's fonts either way. For a blocky look overall, also set `display.resolution_scaling = "original"`. |
+| `display.high_res_font`, `display.high_res_font_large` | Your own font file for the sharp text and Online Games, in place of the built-in fonts: put it in `data/fonts` beside `maps` and give its name (`high_res_font = "MyFont.ttf"`), or a full path. `_large` sets one for the large text only. Empty uses the built-in fonts; a file that can't be read is noted in `logs/debug.txt` and the built-in font is used. The font is yours: Chupathingy ships none but its own free ones, and never sends yours anywhere. |
 | `display.field_of_view` | How wide the first-person view is, in degrees: 70 (the Xbox's) by default, 50 to 120. |
 | `display.match_timer` | `true` shows a timed multiplayer game's time left at the top of the screen (off by default). |
 | `display.player_names` | Names over players' heads: `"all"`, `"allies"`, `"enemies"` or `"none"`. |
 | `game.unlock_all_levels` | `true` gives new profiles every campaign level. By default a new profile starts at The Pillar of Autumn, as on the Xbox. Profiles made by earlier versions had every level open; `profile_reset_campaign` in the console starts one over. |
 | `audio.volume`, `audio.music_volume`, `audio.effects_volume` | Volumes, from 0.0 to 1.0. |
 | `input.mouse_sensitivity`, `input.invert_mouse` | Mouse aim. |
+| `input.keyboard_prompts` | `true` (the default) shows the bound key in the HUD's and menus' button prompts after you use the keyboard or mouse, as Halo PC did; `false` always shows the controller's buttons. |
 | `controls.*` | Every key: `controls.jump = "Space"`, or two at once, such as `"F, Mouse 4"`. |
 | `network.browser_url` | The game list Online Games shows (halo.milenko.org). |
 | `network.host_public` | Whether games you host are listed for everyone (true) or only joinable by invite (false). |
 | `update.auto` | Whether the game updates itself. |
 | `paths.data`, `paths.saves` | Where the maps and the saves are, if not the usual place. |
+| `paths.logs`, `paths.cache` | Where the logs and the cache go, if not the usual place (below). |
 
 Settings you leave at their default follow each new version's default, so
 leaving the file alone is always safe. Every setting can also be given as an
@@ -752,7 +768,10 @@ builds are made only with free tools and libraries.
   October 9, 2026.
 - ChupathingyCE: [Milenko](https://github.com/MrMilenko) and contributors. The
   icon is MrBruh's helmet, with tusks.
-- Fonts: [Noto Sans](https://fonts.google.com/noto) (SIL OFL) and
+- Fonts: Cyborg Interface Gothic, the high-res text's font, by fizzy, made
+  to match Halo's interface font from Overpass and glyphs of their own
+  (SIL OFL); [Overpass](https://github.com/RedHatOfficial/Overpass) (SIL OFL);
+  [Noto Sans](https://fonts.google.com/noto) (SIL OFL) and
   [Kenney's Input Prompts](https://kenney.nl/assets/input-prompts) (CC0).
 - Controller button icons by snapchipper, CC0 (`port/assets/prompts`).
 - High-res HUD art: Aerocatia's and Jessie's redraws from

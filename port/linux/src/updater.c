@@ -317,13 +317,22 @@ static int zip_extract_entry(SDL_IOStream *zip, unsigned long local_offset, int 
 
 /* whether an entry's name is one of a release's files, which are all at the
 zip's top, named with letters, digits and . _ + - (a folder, or a name that
-could leave update.partial/ or mean something else to the system, is not) */
+could leave update.partial/ or mean something else to the system, is not;
+nor are the game's own folders, data, logs, cache and private: an update
+never touches what is in them, port_folders.h) */
 static int zip_name_allowed(const char *name)
 {
+	static const char *const folders[] = { "data", "logs", "cache", "private" };
 	const char *c;
+	size_t index;
 
 	if (!*name || *name == '.')
 		return 0;
+	for (index = 0; index < sizeof(folders) / sizeof(*folders); index++)
+	{
+		if (!SDL_strcasecmp(name, folders[index]))
+			return 0;
+	}
 	for (c = name; *c; c++)
 	{
 		if (!((*c >= 'a' && *c <= 'z') || (*c >= 'A' && *c <= 'Z') || (*c >= '0' && *c <= '9') || *c == '.' ||

@@ -558,6 +558,7 @@ symbols in this file:
 #include "interface/terminal.h"
 #include "interface/ui_widget.h"
 #include "input/input.h"
+#include "input/input_abstraction.h"
 #include "items/equipment_definitions.h"
 #include "items/item_definitions.h"
 #include "items/weapon_definitions.h"
@@ -10003,6 +10004,10 @@ boolean game_engine_get_state_message(
 				NONE,
 				message,
 				message_character_count);
+			/* port: the scoreboard's key for BACK while the keyboard or
+			mouse was used last (Halo PC's prompts) */
+			if (result)
+				input_abstraction_port_back_word(message, message_character_count);
 		}
 		else if (player->state_message != NONE)
 		{

@@ -71,6 +71,17 @@ void input_abstraction_port_button_controls(
 	short *controls);
 boolean input_abstraction_port_look_inverted(
 	short controller_index);
+/* port: the keyboard's key for a button icon (hud_messaging.c and
+ui_widget.c's hud_icon_type), while it shows the keys (Halo PC's prompts) */
+boolean input_abstraction_port_icon_key(
+	short local_player_index,
+	short icon_type,
+	boolean menus,
+	wchar_t *text,
+	long count);
+void input_abstraction_port_back_word(
+	wchar_t *message,
+	long count);
 
 /* ---------- globals */
 

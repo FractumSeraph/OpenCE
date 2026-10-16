@@ -1415,6 +1415,16 @@ boolean pc_menu_frame_placement(
 	short *width,
 	short *height,
 	short *texel_y);
+/* port: a picture of a controller's button in the menus' prompts drawn
+as the keyboard's key cap instead, while the keyboard or mouse was used
+last (port/linux/game/menu_tags.c): TRUE when it was */
+boolean pc_menu_button_key_cap(
+	long bitmap_tag_index,
+	short x0,
+	short y0,
+	short x1,
+	short y1,
+	float alpha);
 /* port: the row of the bitmap draw_bitmap_in_rect starts from (a frame the
 menus place, pc_menu_frame_placement): 0 but while one is drawn */
 static short draw_bitmap_texel_y = 0;
@@ -1532,6 +1542,9 @@ static struct ui_widget_bss_prefix ui_widget_globals_storage;
 #define dpad_event_times ui_widget_globals_storage.dpad_event_times
 real_argb_color ui_plasma_effect_color;
 short local_player_index_for_draw_string_and_hack_in_icons;
+/* port: draw_string_and_hack_in_icons draws a widget's text (the menus'
+keys for the buttons, not the game's: input_abstraction_port_icon_key) */
+static boolean draw_string_icons_for_menus = FALSE;
 
 /* January defines this and never references it, as we do not */
 real const _one_over_255 = 1.0f / 255.0f;
@@ -4374,6 +4387,24 @@ void draw_string_and_hack_in_icons(
 			short icon_index;
 
 			current = icon_spec + wcslen(icon_names[icon_type]);
+			/* port: the keyboard's key, "[E]", in place of the controller's
+			button while the keyboard or mouse was used last (the menus'
+			own keys in the menus: input_abstraction_port_icon_key) */
+			{
+				wchar_t key_text[48];
+
+				if (icon_type <= _icon_look &&
+					input_abstraction_port_icon_key(
+						local_player_index_for_draw_string_and_hack_in_icons,
+						icon_type,
+						draw_string_icons_for_menus,
+						key_text,
+						NUMBEROF(key_text)))
+				{
+					render_state_text(bounds, &cursor_bounds, key_text);
+					continue;
+				}
+			}
 			remapped_icon_type = remap_sticks_for_local_player(
 				icon_type,
 				local_player_index_for_draw_string_and_hack_in_icons);
@@ -5682,7 +5713,11 @@ static void widget_instance_render_text_box(
 		ui_widget_port_text_wrap(*text, &bounds, width);
 	}
 	if (string_has_icons_to_draw(*text))
+	{
+		draw_string_icons_for_menus = TRUE;
 		draw_string_and_hack_in_icons(&bounds, &clip, NULL, 0, *text, FALSE);
+		draw_string_icons_for_menus = FALSE;
+	}
 	else
 		rasterizer_draw_unicode_string(&bounds, &clip, NULL, 0, *text);
 
@@ -7422,7 +7457,17 @@ static void widget_instance_render_recursive(
 			short frame_x, frame_y, frame_width, frame_height, texel_y = 0;
 			boolean shown = TRUE;
 
-			if (pc_menu_frame_placement(bitmap, &frame_x, &frame_y, &frame_width, &frame_height, &texel_y))
+			if (pc_menu_button_key_cap(
+				definition->background_bitmap.index,
+				bounds.x0,
+				bounds.y0,
+				bounds.x1,
+				bounds.y1,
+				(float)alpha))
+			{
+				shown = FALSE;
+			}
+			else if (pc_menu_frame_placement(bitmap, &frame_x, &frame_y, &frame_width, &frame_height, &texel_y))
 			{
 				bounds.x0 += frame_x;
 				bounds.y0 += frame_y;
