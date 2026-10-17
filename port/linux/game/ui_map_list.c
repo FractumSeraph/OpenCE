@@ -898,10 +898,12 @@ enum
 	SCENARIO_READ_SIZE = 0x358,
 };
 
+#ifndef HALO_BROWSER
 static unsigned long little_long(unsigned char const *bytes)
 {
 	return bytes[0] | (bytes[1] << 8) | ((unsigned long)bytes[2] << 16) | ((unsigned long)bytes[3] << 24);
 }
+#endif
 
 static boolean map_file_details(
 	short family,
@@ -909,6 +911,15 @@ static boolean map_file_details(
 	long *spawns,
 	long *vehicles)
 {
+#ifdef HALO_BROWSER
+	/* (none in the browser: its maps are the site's, and reading each one's
+	file, a request apiece, held the game up while the list was filled) */
+	(void)family;
+	(void)file;
+	(void)spawns;
+	(void)vehicles;
+	return FALSE;
+#else
 	char path[512];
 	unsigned char header[MAP_FILE_HEADER_SIZE], index[16], tag[MAP_FILE_TAG_SIZE];
 	unsigned char scenario[SCENARIO_READ_SIZE];
@@ -942,6 +953,7 @@ static boolean map_file_details(
 	}
 	fclose(stream);
 	return read;
+#endif
 }
 
 /* a Custom Edition, HaloMD or Halo PC map's row: its file's name (without
