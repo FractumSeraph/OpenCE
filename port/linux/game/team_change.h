@@ -44,9 +44,12 @@ is a team change's (nobody's kill, nothing counted, no penalty); and, for
 every death, the team change waiting for it made */
 boolean team_change_death(long dead_player_index);
 void team_change_player_died(long dead_player_index);
-/* a round-based game's new round (game_engine_bomb.c): the changes waiting
-for a death made */
-void team_change_round_started(void);
+
+/* (the host's, from a round-based game type's next round: game_engine_bomb.c)
+a change waiting for the player's death is made now: the host kills their
+unit as nobody's kill, and they respawn at once on the new team. TRUE if
+so (the player is not sent home) */
+boolean team_change_round_started(long player_index);
 
 /* each frame (main.c): the host offers team changes over Delta Peer, and a
 client shows what its host answered */

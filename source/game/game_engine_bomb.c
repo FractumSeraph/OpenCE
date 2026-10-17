@@ -315,6 +315,8 @@ boolean network_distributed_death_silent(long dead_player_index);
 void network_damage_host_kill_for_player(long object_index, long player_index);
 /* damage.c's */
 void damage_kill_object_no_statistics(long object_index);
+/* port/linux/game/team_change.c's */
+boolean team_change_round_started(long player_index);
 
 static void bomb_show_score(long player_index, long team_index);
 static void bomb_show_carry(long player_index);
@@ -1244,18 +1246,16 @@ static void bomb_start_round(boolean timed_out)
 	bomb_globals.round_ticks = round_time > 0 ? round_time * TICKS_PER_SECOND : NONE;
 	bomb_globals.round_start_time = game_time_get();
 	bomb_reset();
-	/* port (this fork): team changes waiting for a death are made now */
-	{
-		void team_change_round_started(void); /* port: port/linux/game/team_change.c */
-
-		team_change_round_started();
-	}
 	/* every player starts again at their own goal */
 	data_iterator_new(&iterator, player_data);
 	while ((player = (struct player_datum *)data_iterator_next(&iterator)) != NULL)
 	{
 		short team = VALID_INDEX(player->team_index, NUMBER_OF_BOMB_TEAMS) ? (short)player->team_index : 0;
 
+		/* (a team change waiting for the round: the player starts it on the
+		new team's end instead, the bomb already out of their hands) */
+		if (team_change_round_started(iterator.datum_index))
+			continue;
 		bomb_send_home(iterator.datum_index, counts[team]++);
 	}
 	bomb_events.rounds++;
@@ -2823,14 +2823,13 @@ long game_engine_bomb_countdown(
 	return (bomb_globals.hold_ticks - BOMB_BLAST_PAUSE_TICKS + TICKS_PER_SECOND - 1) / TICKS_PER_SECOND;
 }
 
-/* port (this fork): whether a Bomb game is under way (team_change.c) */
-boolean game_engine_bomb_running(
+/* whether no one spawns now (the blast's pause, before the next round) */
+boolean game_engine_bomb_rounds(
 	void)
 {
 	return bomb_running();
 }
 
-/* whether no one spawns now (the blast's pause, before the next round) */
 boolean game_engine_bomb_holds_spawns(
 	void)
 {

@@ -82,13 +82,13 @@ enum delta_capability
 	from their player key, and kicks and bans from the game
 	(docs/delta.md, Moderation) */
 	_delta_capability_moderation = 10,
-	/* a host answers Online Games' pings before joining (p2p_probe.c):
-	announced on Delta List only, never offered in a HELLO or WELCOME
-	(docs/delta.md, Pings before joining) */
 	/* Bomb game types (Bomb, Grifball: docs/bomb.md) and their player traits
 	(TRAITS). Room-wide: a host plays a Bomb game type only with machines
 	that agreed to it, and drops any other (delta_peer_machine_lacks) */
 	_delta_capability_bomb = 11,
+	/* a host answers Online Games' pings before joining (p2p_probe.c):
+	announced on Delta List only, never offered in a HELLO or WELCOME
+	(docs/delta.md, Pings before joining) */
 	_delta_capability_ping = 12,
 	/* TRAITS' movement and melee traits (jump, gravity, melee reach): a
 	player has them only while its machine and the host both agreed to it,

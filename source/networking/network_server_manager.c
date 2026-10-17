@@ -3583,7 +3583,7 @@ boolean server_ok_to_countdown(
 				(reason & 1) ? " machines" : "",
 				(reason & 16) ? " bomb handshakes" : "",
 				(reason & 32) ? " every player downloading the map" : "",
-				reason ? ")" : "");
+				!ok ? ")" : "");
 		}
 	}
 
