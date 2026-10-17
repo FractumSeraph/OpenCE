@@ -186,7 +186,6 @@ symbols in this file:
 #include "rasterizer/xbox/rasterizer_xbox_pixel_shader.h"
 
 #include "interface/progress_bar_internal.h"
-#include "loading_screen.h" /* port: port/linux/game/loading_screen.c */
 
 /* ---------- constants */
 
@@ -1593,8 +1592,6 @@ void progress_bar_begin(
 {
 	progress_bar_mode.capture_frame= !skip_frame_capture;
 	progress_bar_mode.active= TRUE;
-	/* port: from black, as the Xbox's front buffer was cleared */
-	loading_screen_reset();
 	SetThreadPriority((void *)-2, 2);
 
 	return;

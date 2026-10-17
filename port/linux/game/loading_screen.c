@@ -20,6 +20,14 @@ this one, however fast the frames come.
 
 #include "loading_screen.h"
 
+/* port (this fork): the loading screen is the Xbox's own drawing on the GPU
+(progress_bar.c, d3d8_gl.c's front buffer and fixed-function draws), with
+its light bar and the map download screen, so none of this CPU copy is
+built: its two 640 by 480 frames were 2.3 MB of the Android guest image,
+which then outgrew the 64 MB the app reserved for it (fs.00142-00144 did not
+start on Android) */
+#ifdef HALO_CPU_LOADING_SCREEN
+
 /* ---------- constants */
 
 #define LOADING_SCREEN_WIDTH 640
@@ -195,3 +203,5 @@ void loading_screen_draw(
 	}
 	halo_draw_picture(&loading_screen.frame[0][0][0], LOADING_SCREEN_WIDTH, LOADING_SCREEN_HEIGHT);
 }
+
+#endif /* HALO_CPU_LOADING_SCREEN */
