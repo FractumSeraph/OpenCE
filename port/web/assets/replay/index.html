@@ -685,7 +685,10 @@ function buildWalls() {
   scene.add(walls);
   geometry.computeBoundingSphere();
   const s = geometry.boundingSphere;
-  scene.fog.far = s.radius * 3;
+  // (the fog from beyond the map's middle to past its far side, as the map
+  // is big: a small one's far side is nearer than a fixed start would be)
+  scene.fog.near = s.radius * 1.5;
+  scene.fog.far = s.radius * 4;
   // (the free camera over where the players went: a map's walls reach out to
   // its sky, far from where anyone plays)
   const play = playArea();
