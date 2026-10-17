@@ -135,6 +135,7 @@ button.on{background:rgba(127,211,164,.35);border-color:var(--accent)}
     <button id="heat" title="Where players died (red) and killed (green) all game (M)">Heatmap</button>
     <button id="killcam" title="The selected player's last death, through their killer's eyes (K)">Kill cam</button>
     <button id="link" title="Copy a link to this moment">Copy link</button>
+    <button id="realmap" class="on" title="The map as the game draws it (textures, lighting), or its walls (G)" style="display:none">Real map</button>
     <button id="record" title="Save the view as a video">Record video</button>
     <span id="recording">REC</span>
     <span id="live"></span>
@@ -167,6 +168,7 @@ button.on{background:rgba(127,211,164,.35);border-color:var(--accent)}
 <script type="module">
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { readHaloMap } from "./halomap.js";
 
 /* ---------- the recording (network_recording.c's format) */
 
@@ -534,6 +536,8 @@ sun.position.set(0.4, 0.3, 1);
 scene.add(sun);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enabled = false;
+// (#debug in the address: the scene for the browser's console)
+if (location.hash === "#debug") window.replayDebug = { THREE, scene, camera, controls, get rec() { return rec; } };
 
 function resize() {
   const w = view.clientWidth, h = view.clientHeight;
@@ -589,9 +593,24 @@ function buildWalls() {
   scene.add(walls);
   geometry.computeBoundingSphere();
   const s = geometry.boundingSphere;
-  controls.target.copy(s.center);
-  camera.position.set(s.center.x + s.radius * 0.6, s.center.y - s.radius * 0.6, s.center.z + s.radius * 0.5);
   scene.fog.far = s.radius * 3;
+  // (the free camera over where the players went: a map's walls reach out to
+  // its sky, far from where anyone plays)
+  const play = playArea();
+  const center = play ? play.center : s.center, radius = play ? play.radius : s.radius;
+  controls.target.copy(center);
+  camera.position.set(center.x + radius * 0.8, center.y - radius * 0.8, center.z + radius * 0.7);
+}
+
+// (the players' positions every second: their middle and how far they spread)
+function playArea() {
+  const box = new THREE.Box3();
+  for (let i = 0; i < rec.frames.length; i += rec.game.rate) {
+    for (const e of rec.frames[i].entries) box.expandByPoint(new THREE.Vector3(e.x, e.y, e.z));
+  }
+  if (box.isEmpty()) return null;
+  const center = box.getCenter(new THREE.Vector3());
+  return { center, radius: Math.max(8, box.getSize(new THREE.Vector3()).length() / 2) };
 }
 
 function makeFigure(slot) {
@@ -1095,6 +1114,175 @@ function killText(k) {
     (k.bits & KILL_BITS.BETRAYAL ? " (betrayal)" : "");
 }
 
+/* ---------- the map as the game draws it (halomap.js): its level's
+geometry with its textures and baked lighting, read from the map file the
+site keeps (a Custom Edition map, and Halo PC's bitmaps.map for the stock
+textures), a part at a time by range requests; the walls stay for the
+minimap, and show again while it loads or if it cannot be had */
+
+const MAP_SOURCES = [
+  name => new URL(`../custom_maps/${encodeURIComponent(name)}.map`, location.href).href,
+  name => `https://halomaps.fractumseraph.net/maps/${encodeURIComponent(name)}.map`,
+];
+const BITMAPS_URL = new URL("../custom_maps/bitmaps.map", location.href).href;
+const PAGE = 1 << 20;
+let realMap = null, realMapOn = true, realMapLoading = 0;
+
+// (a file's bytes by range requests, a megabyte's page at a time, each page
+// fetched once; a server that sends the whole file answers every page)
+function rangeReader(url) {
+  const pages = new Map();
+  let whole = null;
+  const page = index => {
+    if (!pages.has(index)) {
+      pages.set(index, fetch(url, { headers: { Range: `bytes=${index * PAGE}-${index * PAGE + PAGE - 1}` } }).then(async answer => {
+        if (answer.status === 200) { whole = new Uint8Array(await answer.arrayBuffer()); return null; }
+        // (a page past the file's end: nothing)
+        if (answer.status === 416) return new Uint8Array(0);
+        if (answer.status !== 206) throw new Error(`${url}: ${answer.status}`);
+        return new Uint8Array(await answer.arrayBuffer());
+      }));
+    }
+    return pages.get(index);
+  };
+  return async (offset, length) => {
+    if (whole) return whole.subarray(offset, offset + length);
+    const out = new Uint8Array(length);
+    const first = Math.floor(offset / PAGE), last = Math.floor((offset + Math.max(0, length - 1)) / PAGE);
+    const parts = await Promise.all(Array.from({ length: last - first + 1 }, (_, k) => page(first + k)));
+    if (whole) return whole.subarray(offset, offset + length);
+    let at = 0;
+    for (let k = 0; k < parts.length && at < length; k++) {
+      const part = parts[k], start = k === 0 ? offset - first * PAGE : 0;
+      const n = Math.min(part.length - start, length - at);
+      if (n <= 0) break;
+      out.set(part.subarray(start, start + n), at);
+      at += n;
+    }
+    // (a range that runs past the file's end: the bytes there are)
+    return at < length ? out.subarray(0, at) : out;
+  };
+}
+
+// (the first of the map's addresses that answers)
+async function findMap(name) {
+  for (const address of MAP_SOURCES.map(source => source(name))) {
+    try {
+      const answer = await fetch(address, { headers: { Range: "bytes=0-3" } });
+      if (answer.ok) return address;
+    } catch (error) { /* (the next) */ }
+  }
+  return null;
+}
+
+let mapStatusText = "";
+function mapStatus(text) {
+  mapStatusText = text;
+  let line = document.getElementById("map-status");
+  if (!line) { line = document.createElement("div"); line.id = "map-status"; document.getElementById("game").append(line); }
+  line.textContent = text;
+}
+
+async function loadRealMap() {
+  const loading = ++realMapLoading;
+  clearRealMap();
+  mapStatusText = "";
+  document.getElementById("realmap").style.display = "none";
+  const name = rec.map ? rec.map.file : mapName(rec.game.map);
+  if (!name || (rec.map && rec.map.family !== 1 && rec.map.family !== 0)) return;
+  const address = await findMap(name);
+  if (loading !== realMapLoading) return;
+  if (!address) { mapStatus("The map's file is not on this site: its walls only."); return; }
+  mapStatus("Reading the map...");
+  try {
+    const data = await readHaloMap({ map: rangeReader(address), bitmaps: rangeReader(BITMAPS_URL),
+      onProgress: (fraction, text) => {
+        if (loading === realMapLoading) mapStatus(`${text || "Reading the map"} (${Math.round((fraction || 0) * 100)}%)`);
+      } });
+    if (loading !== realMapLoading) return;
+    const group = new THREE.Group();
+    const textures = new Map();
+    const texture = ref => {
+      if (!ref) return null;
+      if (!textures.has(ref.key)) {
+        const t = new THREE.DataTexture(new Uint8Array([128, 128, 128, 255]), 1, 1);
+        t.needsUpdate = true;
+        textures.set(ref.key, t);
+        ref.read().then(image => {
+          if (loading !== realMapLoading || !image) return;
+          t.image = { data: image.rgba, width: image.width, height: image.height };
+          t.wrapS = t.wrapT = THREE.RepeatWrapping;
+          t.magFilter = THREE.LinearFilter;
+          t.minFilter = THREE.LinearMipmapLinearFilter;
+          t.generateMipmaps = true;
+          t.needsUpdate = true;
+        }).catch(() => {});
+      }
+      return textures.get(ref.key);
+    };
+    let triangles = 0;
+    for (const bsp of data.bsps) {
+      for (const mesh of bsp.meshes) {
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute("position", new THREE.BufferAttribute(mesh.positions, 3));
+        if (mesh.normals) geometry.setAttribute("normal", new THREE.BufferAttribute(mesh.normals, 3));
+        if (mesh.uvs) geometry.setAttribute("uv", new THREE.BufferAttribute(mesh.uvs, 2));
+        if (mesh.lightmapUvs) geometry.setAttribute("uv1", new THREE.BufferAttribute(mesh.lightmapUvs, 2));
+        geometry.setIndex(new THREE.BufferAttribute(mesh.indices, 1));
+        triangles += mesh.indices.length / 3;
+        const map = texture(mesh.baseMap), lightMap = mesh.lightmapUvs ? texture(mesh.lightmap) : null;
+        if (map) map.colorSpace = THREE.SRGBColorSpace;
+        if (lightMap) lightMap.channel = 1;
+        const material = lightMap ?
+          new THREE.MeshBasicMaterial({ map, lightMap, lightMapIntensity: 1.6, side: mesh.twoSided ? THREE.DoubleSide : THREE.FrontSide }) :
+          new THREE.MeshLambertMaterial({ map, color: map ? 0xffffff : 0x8a9488, side: mesh.twoSided ? THREE.DoubleSide : THREE.FrontSide });
+        // (the shader's blending: cut-out leaves and fences by alpha test,
+        // glass and effects blended, adding or multiplying as the game does)
+        if (mesh.alphaTest) material.alphaTest = 0.5;
+        else if (mesh.transparent) {
+          material.transparent = true;
+          material.depthWrite = false;
+          if (mesh.blend === "add") material.blending = THREE.AdditiveBlending;
+          else if (mesh.blend === "multiply") material.blending = THREE.MultiplyBlending;
+          else if (!map) material.opacity = 0.35;
+        }
+        group.add(new THREE.Mesh(geometry, material));
+      }
+    }
+    if (!triangles) throw new Error("the map has no level geometry to draw");
+    realMap = { group, textures };
+    if (data.sky && data.sky.color) {
+      const c = data.sky.color;
+      scene.background = new THREE.Color(c[0], c[1], c[2]);
+      scene.fog.color.copy(scene.background);
+    }
+    scene.add(group);
+    document.getElementById("realmap").style.display = "";
+    applyRealMap();
+    mapStatus(`The map as the game draws it: ${triangles} triangles, ${textures.size} textures`);
+  } catch (error) {
+    if (loading === realMapLoading) mapStatus(`The map could not be read (${error.message}): its walls only.`);
+    clearRealMap();
+  }
+}
+
+function applyRealMap() {
+  const on = realMapOn && !!realMap;
+  if (realMap) realMap.group.visible = on;
+  if (walls) walls.visible = !on;
+  document.getElementById("realmap").classList.toggle("on", on);
+}
+
+function clearRealMap() {
+  if (!realMap) return;
+  scene.remove(realMap.group);
+  realMap.group.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+  for (const t of realMap.textures.values()) t.dispose();
+  realMap = null;
+  scene.background = new THREE.Color(0x0b1410);
+  scene.fog.color.set(0x0b1410);
+}
+
 /* ---------- the panels and the timeline */
 
 const fmt = t => { const s = Math.max(0, (t - rec.first) / rec.game.rate); return `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, "0")}`; };
@@ -1317,6 +1505,7 @@ document.getElementById("hudbutton").onclick = e => { hudOn = !hudOn; e.target.c
 document.getElementById("scores").onclick = e => { scoresOn = !scoresOn; e.target.classList.toggle("on", scoresOn); scoresDrawnAt = -1e9; renderScoreboard(); };
 document.getElementById("heat").onclick = e => { heatOn = !heatOn; e.target.classList.toggle("on", heatOn); if (heatMesh) heatMesh.visible = heatOn; };
 document.getElementById("killcam").onclick = () => startKillcam();
+document.getElementById("realmap").onclick = () => { realMapOn = !realMapOn; applyRealMap(); };
 document.getElementById("link").onclick = async () => {
   // (this moment: the recording's address, the time from its start and the player)
   const query = new URLSearchParams(location.search);
@@ -1343,6 +1532,7 @@ addEventListener("keydown", e => {
   else if (e.key === "h" || e.key === "H") document.getElementById("hudbutton").click();
   else if (e.key === "m" || e.key === "M") document.getElementById("heat").click();
   else if (e.key === "k" || e.key === "K") document.getElementById("killcam").click();
+  else if (e.key === "g" || e.key === "G") document.getElementById("realmap").click();
   else if (e.key === "Tab") { e.preventDefault(); document.getElementById("scores").click(); }
   else if (e.key === "[" || e.key === "]") {
     const slots = [...rec.players.keys()].sort((a, b) => a - b);
@@ -1423,6 +1613,7 @@ function describeGame() {
       ((rec.highlights || []).length ? ` · ${rec.highlights.length} highlights` : "")])
     gameLine(text);
   if (rec.report) gameLine("Carnage report and stats", rec.report);
+  if (mapStatusText) mapStatus(mapStatusText);
   return map;
 }
 
@@ -1447,6 +1638,7 @@ function show(r) {
   buildWalls();
   buildMinimap();
   buildHeat();
+  loadRealMap();
   const map = describeGame();
   scrub.min = String(rec.first);
   scrub.max = String(rec.last);

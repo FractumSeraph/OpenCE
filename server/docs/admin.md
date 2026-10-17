@@ -215,7 +215,12 @@ walls shown through them (X), their HUD (H: shields, health, rounds,
 grenades, motion tracker), the scoreboard (Tab), a minimap, a heatmap of
 deaths and kills (M) and a kill cam (K: the player's last death through
 the killer's eyes). **Copy link** gives a link to the moment (`?t=1m30s`,
-`&p=<player>`). Its list and timeline mark the hits the checks
+`&p=<player>`). The level is drawn as the game draws it, with its textures
+and baked lighting, from the map's own file (`halomap.js` reads a Custom
+Edition map, and Halo PC's `bitmaps.map` for the stock textures, a part at
+a time): the site's `assets/custom_maps/`, else
+`halomaps.fractumseraph.net/maps/`. **Real map** (G) shows the walls instead;
+a map not found or not readable (the Xbox's compressed maps) shows its walls. Its list and timeline mark the hits the checks
 refused (red) or doubted (orange), and the kills; a click on one jumps to
 two seconds before it, through the shooter's eyes. **Record video** saves
 the view as a video for a ban's evidence. A recording a server keeps
