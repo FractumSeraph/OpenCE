@@ -96,6 +96,7 @@ button.on{background:rgba(127,211,164,.35);border-color:var(--accent)}
 @media (max-width:820px){body{grid-template-columns:1fr;grid-template-rows:1fr auto 40vh}
   #side{grid-column:1;grid-row:3;border-left:0;border-top:1px solid var(--line)}}
 </style>
+<script src="../loading/loading-screen.js"></script>
 <script type="importmap">
 {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
 "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
@@ -1317,8 +1318,28 @@ function mapStatus(text) {
   line.textContent = text;
 }
 
+// (Halo's loading screen over the view while the map is read: the light
+// sweeping as the game's download screen draws it, ../loading/loading-screen.js)
+let loadingScreen = null;
+function loadingScreenShow(options) {
+  if (typeof HaloLoadingScreen !== "function") return;
+  if (!loadingScreen) {
+    loadingScreen = new HaloLoadingScreen(document.getElementById("view"), options);
+    loadingScreen.root.style.zIndex = "30";
+  } else loadingScreen.set(options);
+}
+function loadingScreenEnd() {
+  if (loadingScreen) loadingScreen.stop();
+  loadingScreen = null;
+}
+
 async function loadRealMap() {
   const loading = ++realMapLoading;
+  try { await loadRealMapAs(loading); }
+  finally { if (loading === realMapLoading) loadingScreenEnd(); }
+}
+
+async function loadRealMapAs(loading) {
   clearRealMap();
   mapStatusText = "";
   document.getElementById("realmap").style.display = "none";
@@ -1328,10 +1349,15 @@ async function loadRealMap() {
   if (loading !== realMapLoading) return;
   if (!address) { mapStatus("The map's file is not on this site: its walls only."); return; }
   mapStatus("Reading the map...");
+  loadingScreenShow({ title: `Loading ${name}`, status: "Reading the map...", progress: null });
   try {
     const data = await readHaloMap({ map: rangeReader(address), bitmaps: rangeReader(BITMAPS_URL),
       onProgress: (fraction, text) => {
-        if (loading === realMapLoading) mapStatus(`${text || "Reading the map"} (${Math.round((fraction || 0) * 100)}%)`);
+        if (loading !== realMapLoading) return;
+        mapStatus(`${text || "Reading the map"} (${Math.round((fraction || 0) * 100)}%)`);
+        // (the light sweeps again and again: the reading's share jumps, its
+        // textures and models read as they are needed)
+        loadingScreenShow({ status: text || "Reading the map", progress: null });
       } });
     if (loading !== realMapLoading) return;
     const group = new THREE.Group();

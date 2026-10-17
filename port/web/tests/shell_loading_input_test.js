@@ -34,6 +34,9 @@ assert.match(shell, /.loading-panel \{[\s\S]*?height: 5.25rem;/,
 assert.match(shell, /#loading progress\[hidden\][\s\S]*?visibility: hidden;/,
   'hidden progress must retain its reserved layout slot');
 assert.match(shell, /url\("assets\/ui\/shell\/halo-ce-ring-menu\.jpg"\)/);
+assert.match(shell, /<script src="assets\/loading\/loading-screen\.js"><\/script>/,
+  "the startup overlay draws Halo's loading screen (the map download screen's light)");
+assert.doesNotMatch(shell, /Calibrating ring interface/);
 assert.doesNotMatch(shell, /hud-frame\.png/,
   'the decorative blue HUD frame must not cover the game on constrained devices');
 

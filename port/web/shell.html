@@ -1192,12 +1192,16 @@
       box-shadow: none;
       place-items: center;
       translate: none;
+      /* Halo's loading screen (assets/loading/loading-screen.js) covers it;
+      the ring picture shows only before that script has run */
       background:
         linear-gradient(90deg, rgba(1, 8, 24, .7), rgba(1, 14, 34, .46) 53%, rgba(0, 7, 20, .64)),
         linear-gradient(180deg, rgba(0, 7, 20, .12), rgba(0, 7, 20, .52)),
         url("assets/ui/shell/halo-ce-ring-menu.jpg") center / cover no-repeat,
         #020713;
     }
+    #loading .halo-loading-screen { z-index: 2; }
+    #loading.halo-loading .loading-panel { visibility: hidden; }
     #loading::before,
     #loading::after {
       content: "";
@@ -1708,6 +1712,39 @@
         <progress id="progress" value="0" max="100" hidden></progress>
       </div>
     </section>
+    <script src="assets/loading/loading-screen.js"></script>
+    <script>
+      /* Halo's loading screen over the page's while it starts (as the game's
+      map download screen draws it): the label's text under it, the bar's
+      share as the light's place (a sweep again and again when the bar is
+      hidden); gone with the overlay, back with it */
+      (function () {
+        const box = document.getElementById("loading");
+        const label = document.getElementById("loading-label");
+        const bar = document.getElementById("progress");
+        let screen = null;
+        function update() {
+          if (typeof HaloLoadingScreen !== "function") return;
+          if (box.hidden) {
+            if (screen) screen.stop();
+            screen = null;
+            return;
+          }
+          const options = {
+            status: label.textContent,
+            progress: bar.hidden || !(bar.max > 0) ? null : bar.value / bar.max,
+          };
+          if (!screen) {
+            screen = new HaloLoadingScreen(box, Object.assign({ title: "Loading Halo" }, options));
+            box.classList.add("halo-loading");
+          } else screen.set(options);
+        }
+        new MutationObserver(update).observe(label, { childList: true, characterData: true, subtree: true });
+        new MutationObserver(update).observe(bar, { attributes: true });
+        new MutationObserver(update).observe(box, { attributes: true, attributeFilter: ["hidden"] });
+        update();
+      })();
+    </script>
     <section id="diagnostics-overlay" role="dialog" aria-modal="true"
              aria-labelledby="diagnostics-title" hidden>
       <div class="diagnostics-heading">
@@ -3198,7 +3235,7 @@
         }
         runtimeStage = "calibrating";
         statusElement.textContent = "Starting display…";
-        loadingLabel.textContent = "Calibrating ring interface…";
+        loadingLabel.textContent = "Starting the game…";
         progressElement.hidden = true;
         waitForPresentedGame();
         return;
