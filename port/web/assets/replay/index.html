@@ -76,7 +76,7 @@ button.on{background:rgba(127,211,164,.35);border-color:var(--accent)}
 #games a{color:var(--accent)}
 #games .button{color:var(--bg)}
 #overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
-#view #minimap{position:absolute;right:10px;top:10px;left:auto;width:180px;height:180px;border:1px solid var(--line);border-radius:8px;
+#view #minimap{position:absolute;right:10px;top:10px;left:auto;width:min(180px,26vmin);height:min(180px,26vmin);border:1px solid var(--line);border-radius:8px;
   background:rgba(5,10,8,.6);display:none}
 #scoreboard{position:absolute;left:50%;top:12%;transform:translateX(-50%);min-width:22rem;max-width:90%;display:none;
   background:rgba(8,14,12,.92);border:1px solid var(--line);border-radius:10px;padding:12px 16px;font-variant-numeric:tabular-nums}
@@ -92,6 +92,7 @@ button.on{background:rgba(127,211,164,.35);border-color:var(--accent)}
 .event.objective{border-left-color:#5aa9ff}
 .event.chat{border-left-color:#ccc}
 .event.pickup{border-left-color:#6b8}
+@media (max-width:600px){#hud .who{font-size:15px}#hud .sub{font-size:11px}#hud{left:10px;top:8px}}
 @media (max-width:820px){body{grid-template-columns:1fr;grid-template-rows:1fr auto 40vh}
   #side{grid-column:1;grid-row:3;border-left:0;border-top:1px solid var(--line)}}
 </style>
@@ -1024,36 +1025,43 @@ function drawOverlay(states) {
   if (!rec) return;
   const s = selected != null ? states.get(selected) : null;
   const pose = s ? poseAt(selected, tick) : null;
-  og.font = "600 13px system-ui, sans-serif";
+  // (everything drawn here in proportion to the view: a phone's is small,
+  // its text no smaller than can be read)
+  const k = Math.max(0.5, Math.min(1, Math.min(w, h) / 640));
+  const font = (weight, size) => `${weight} ${Math.max(10, Math.round(size * k))}px system-ui, sans-serif`;
+  og.font = font(600, 13);
   og.textBaseline = "top";
+  const lineHeight = Math.max(10, Math.round(13 * k)) + 5;
   if (hudOn && s && cameraMode !== "free") {
     // (shields, then health: the top left, below the name)
-    const x = 14, y = 58, bw = 180;
+    // (just under the name and its line, wherever they end)
+    const hudBox = document.getElementById("hud").getBoundingClientRect(), viewBox = view.getBoundingClientRect();
+    const x = 14, y = Math.round(hudBox.bottom - viewBox.top + 6), bw = Math.round(180 * k);
     og.fillStyle = "rgba(0,0,0,.45)"; og.fillRect(x - 2, y - 2, bw + 4, 22);
     og.fillStyle = s.shield > 1 ? "#8cff6a" : "#5ab0ff"; og.fillRect(x, y, bw * Math.min(1, s.shield), 10);
     if (s.shield > 1) { og.fillStyle = "#c8ff9a"; og.fillRect(x, y, bw * Math.min(1, s.shield - 1), 10); }
     og.fillStyle = s.body > 0.3 ? "#7fd67f" : "#ff6b5a"; og.fillRect(x, y + 12, bw * s.body, 6);
     // (the weapon, its rounds and the grenades: the top right, beside the minimap)
-    const right = w - (minimapShown ? 206 : 16);
+    const right = w - (minimapShown ? minimap.clientWidth + 26 : 16);
     og.textAlign = "right";
     og.fillStyle = "#e9f3ee";
-    og.font = "700 15px system-ui, sans-serif";
+    og.font = font(700, 15);
     og.fillText(weaponName(s.weapon) || "-", right, 14);
-    og.font = "600 13px system-ui, sans-serif";
+    og.font = font(600, 13);
     if (pose) {
       og.fillStyle = "#cfe";
-      if (pose.loaded || pose.total) og.fillText(`${pose.loaded} / ${pose.total}`, right, 34);
-      og.fillText(`frag ${pose.frags}   plasma ${pose.plasmas}`, right, 52);
+      if (pose.loaded || pose.total) og.fillText(`${pose.loaded} / ${pose.total}`, right, 16 + lineHeight);
+      og.fillText(`frag ${pose.frags}   plasma ${pose.plasmas}`, right, 16 + 2 * lineHeight);
       const doing = [pose.flags & 4 ? "melee" : "", pose.flags & 8 ? "throwing a grenade" : "", pose.flags & 16 ? "reloading" : "",
         pose.flags & 1 ? "flashlight" : "", pose.flags & 2 ? "camouflaged" : "", pose.other !== 0xFFFF ? `also ${tagName(pose.other)}` : ""]
         .filter(Boolean).join(" · ");
       og.fillStyle = "#9fb7ab";
-      og.fillText(doing, right, 70);
+      og.fillText(doing, right, 16 + 3 * lineHeight);
     }
     og.textAlign = "left";
     // (the motion tracker: the bottom left; players within 25 units who move
     // or fire show, as in the game; crouching walkers do not)
-    const r = 70, cx = 16 + r, cy = h - 16 - r;
+    const r = Math.round(70 * k), cx = 12 + r, cy = h - 12 - r;
     og.fillStyle = "rgba(10,30,40,.55)"; og.beginPath(); og.arc(cx, cy, r, 0, Math.PI * 2); og.fill();
     og.strokeStyle = "rgba(120,200,255,.5)"; og.lineWidth = 1;
     for (const k of [0.33, 0.66, 1]) { og.beginPath(); og.arc(cx, cy, r * k, 0, Math.PI * 2); og.stroke(); }
@@ -1084,11 +1092,11 @@ function drawOverlay(states) {
   }
   lines.sort((a, b) => a.tick - b.tick);
   og.textAlign = "right";
-  og.font = "600 13px system-ui, sans-serif";
+  og.font = font(600, 13);
   lines.slice(-7).forEach((line, i, all) => {
-    const y = h - 22 - (all.length - 1 - i) * 18;
+    const y = h - lineHeight - 4 - (all.length - 1 - i) * lineHeight;
     const width = og.measureText(line.text).width;
-    og.fillStyle = "rgba(0,0,0,.45)"; og.fillRect(w - 18 - width - 6, y - 2, width + 12, 18);
+    og.fillStyle = "rgba(0,0,0,.45)"; og.fillRect(w - 18 - width - 6, y - 2, width + 12, lineHeight);
     og.fillStyle = line.color; og.fillText(line.text, w - 18, y);
   });
   og.textAlign = "left";
@@ -1099,7 +1107,7 @@ function drawOverlay(states) {
     if (medal) {
       const key = rec.tags.get(medal.tags[0]) || "";
       og.textAlign = "center";
-      og.font = "800 28px system-ui, sans-serif";
+      og.font = font(800, 28);
       og.fillStyle = "#f5c542";
       og.fillText(MEDALS[key] || key.replace(/_/g, " "), w / 2, h * 0.22);
       og.textAlign = "left";
