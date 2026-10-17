@@ -53,10 +53,17 @@ Called each frame from game_stats_update (main.c).
 #include "units/units.h"
 #include "units/unit_definitions.h"
 #include "tag_files/tag_files.h"
+#include "cache/cache_files.h"
+#include "main/main.h"
+#include "scenario/scenario.h"
+#include "scenario/scenario_definitions.h"
+#include "structures/structure_bsp_definitions.h"
 #include "../src/browser.h"
 #include "../src/event_log.h"
 #include "network_fairplay.h"
 #include "network_recording.h"
+#include "../src/delta_maps.h"
+#include "../src/map_report.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -164,6 +171,8 @@ static struct
 	int position_ticks;
 	struct tracked players[MAXIMUM_TRACKED];
 	struct kill_context kill;
+	/* the map's facts are in the batch (or can't be: no file to name) */
+	boolean map_info_done;
 	/* the dedicated server's minute */
 	unsigned long health_time;
 	unsigned long frame_time;
@@ -385,6 +394,77 @@ static void end_ride(struct tracked *tracked, long tick)
 	tracked->vehicle_index = NONE;
 }
 
+/* the map's facts for the batch (map_report.h): its identity as Delta Peer's
+MAP has it, its cache header's, its scenario's game types, spawns and world
+bounds. Asked again at each part while its file is being hashed (on a thread
+of its own); nothing about players */
+static void map_info_update(void)
+{
+	static struct map_report report;
+	static char json[EVENT_LOG_MAP_INFO_SIZE];
+	struct delta_wire_map identity;
+	char const *name = main_get_multiplayer_map_name();
+	void const *header = cache_file_loaded_header();
+	struct scenario *scenario = global_scenario_try_and_get();
+	int result;
+	long index;
+
+	if (game_events.map_info_done)
+		return;
+	result = name && name[0] && header && scenario ? delta_maps_identity(name, &identity) : -1;
+	/* (being hashed: the next part asks again) */
+	if (!result)
+		return;
+	game_events.map_info_done = TRUE;
+	if (result < 0)
+		return;
+	csmemset(&report, 0, sizeof(report));
+	report.family = identity.family;
+	snprintf(report.file, sizeof(report.file), "%s", identity.name);
+	report.size_low = (unsigned int)identity.size_low;
+	report.size_high = (unsigned int)identity.size_high;
+	report.has_hash = (identity.flags & DELTA_WIRE_MAP_HASHED) != 0;
+	csmemcpy(report.hash, identity.hash, sizeof(report.hash));
+	if (!map_report_read_header((unsigned char const *)header, MAP_REPORT_HEADER_SIZE, &report))
+		return;
+	snprintf(report.scenario, sizeof(report.scenario), "%s",
+		global_scenario_index != NONE ? tag_get_name(global_scenario_index) : "");
+	report.spawns = (int)scenario->players.count;
+	if (scenario->players.count > 0)
+		report.gametypes |= MAP_REPORT_SLAYER;
+	for (index = 0; index < scenario->netgame_flags.count; index++)
+	{
+		struct scenario_netgame_flag const *flag =
+			TAG_BLOCK_GET_ELEMENT(&scenario->netgame_flags, index, struct scenario_netgame_flag);
+
+		switch (flag->type)
+		{
+		case _netgame_flag_ctf_flag: report.gametypes |= MAP_REPORT_CTF; break;
+		case _netgame_flag_oddball_ball_spawn: report.gametypes |= MAP_REPORT_ODDBALL; break;
+		case _netgame_flag_hill: report.gametypes |= MAP_REPORT_KING; break;
+		case _netgame_flag_race_track: report.gametypes |= MAP_REPORT_RACE; break;
+		default: break;
+		}
+	}
+	if (global_structure_bsp_index != NONE)
+	{
+		struct structure_bsp *bsp = global_structure_bsp_get();
+
+		if (bsp)
+		{
+			report.has_bounds = 1;
+			report.bounds[0] = bsp->world_bounds.x0;
+			report.bounds[1] = bsp->world_bounds.x1;
+			report.bounds[2] = bsp->world_bounds.y0;
+			report.bounds[3] = bsp->world_bounds.y1;
+			report.bounds[4] = bsp->world_bounds.z0;
+			report.bounds[5] = bsp->world_bounds.z1;
+		}
+	}
+	if (map_report_json(&report, json, (int)sizeof(json)))
+		event_log_map_info(json);
+}
+
 /* the game's statistics of a player, as the log's totals */
 static void player_totals(long player_index, struct player_datum const *player, int place, int score, struct event_log_player_totals *totals)
 {
@@ -507,6 +587,9 @@ static void begin_game(long tick)
 	game_events.recording = TRUE;
 	/* (each event in the game's recording too: recorded) */
 	event_log_listen(recorded);
+	game_events.map_info_done = FALSE;
+	/* (and its file's hash begun, for the batch's map facts) */
+	map_info_update();
 	game_events.started_tick = tick;
 	game_events.last_tick = tick;
 	game_events.part_time = system_milliseconds();
@@ -584,6 +667,7 @@ static void send_game(boolean final, int reason)
 		end.team_scores[1] = (int)game_engine_get_team_score(1);
 	}
 	end.end_time = event_upload_time();
+	map_info_update();
 	event_upload_invite(invite, sizeof(invite));
 	snprintf(game_id, sizeof(game_id), "%s", event_log_game_id());
 	count = event_log_count();
