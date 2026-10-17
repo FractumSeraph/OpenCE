@@ -266,7 +266,7 @@ These files are in the data root:
 | `logs/debug.txt` | The log of the game. At start-up, the game shows the logs folder and the data root in the terminal. A crash writes its report (the faulting address and the calls that led to it) here as well; the `reference address` line at the top of each session places those addresses in the build. |
 | `logs/crashes/` | Crash reports that wait to be sent (Linux and macOS; refer to "Crash reports"). |
 | `init.txt` | Console commands that the game does at start-up. For example, `map_name levels\a10\a10` starts the first campaign level. |
-| `mods/` | Mods: folders of Halo PC tag files whose sounds, bitmaps and text play over the maps' on this machine, in the order of the main menu's Mods (`load_order.toml`). Refer to [docs/mods.md](../../docs/mods.md). |
+| `mods/` | Mods: folders of Halo PC tag files whose sounds, bitmaps, text and models play over the maps' on this machine, in the order of the main menu's Mods (`load_order.toml`). Refer to [docs/mods.md](../../docs/mods.md). |
 
 The settings are in `config.toml` next to the executable. Refer to
 "Settings". Internet play's MQTT brokers are in `brokers.txt` next to it
@@ -571,10 +571,11 @@ the setting for one start of the game. It has priority over the file.
 | `audio.effects_volume` | `1.0` | `HALO_EFFECTS_VOLUME` | The volume of the other sounds (effects and speech), of the master volume. |
 | `audio.buffer_frames` | `2048` on macOS, `1024` on Android, `512` elsewhere | `HALO_AUDIO_BUFFER_FRAMES` | The audio device's buffer, in sample frames at 48 kHz, from `64` to `8192`. Larger rides out stalls that would cut the sound out; smaller has less delay (512 is 11 ms, 1024 is 21 ms, 2048 is 43 ms). |
 | `audio.reverb` | `true` | `HALO_REVERB` | `true`: the sounds of the world reverberate as the place the player is in does: the sound environments of the maps (a corridor, a cave, a large hall, outdoors) set the reverberation, as the I3DL2 reverb of the Xbox did. A sound behind a wall or a door is muffled in it too. `false`: no reverberation (sounds behind a wall are still muffled). |
+| `audio.resampler` | `"sinc"` | `HALO_AUDIO_RESAMPLER` | How the sounds are converted to the output's rate (48 kHz): `"sinc"` with a band-limited low pass, which keeps out the images above the sound's own rate; `"linear"` between neighbouring samples, which lets some of them through and sounds brighter for it. Audio Setup's SOUND PROCESSING screen sets it, with `audio.reverb`. |
 | `audio.voice_chat` | `"push_to_talk"` | `HALO_VOICE_CHAT` | How you talk in voice chat: `"push_to_talk"` (while `controls.push_to_talk` is held; the microphone opens when you first press it), `"open_mic"` (when the microphone hears speech), or `"off"`. You hear the other players in every case. Refer to "Voice chat". |
 | `audio.voice_volume` | `1.0` | `HALO_VOICE_VOLUME` | The volume of the voices of the other players, `0` to `2`. |
 | `audio.output_device`, `audio.input_device` | `"default"` | `HALO_AUDIO_OUTPUT_DEVICE`, `HALO_AUDIO_INPUT_DEVICE` | The speakers and the microphone, by the name that Settings > Audio shows, or `"default"` for the device of the system. If the device is not found, the game uses the device of the system. Not on Android. |
-| `audio.resampling` | `"sinc"` | `HALO_AUDIO_RESAMPLING` | How the sounds, most of them recorded at 22 kHz, are brought to the output's 48 kHz. `"sinc"`: a windowed sinc low pass keeps each sound's band (flat to about 9 kHz for a 22 kHz sound) and nothing above it. `"linear"`: linear interpolation, as before OpenCE's build 130: the top of each sound's band is duller (-4 dB at 8 kHz) and images of the band reach up to 22 kHz, a brighter, grainier sound. |
+| `audio.resampling` | `"sinc"` | `HALO_AUDIO_RESAMPLING` | How the sounds, most of them recorded at 22 kHz, are brought to the output's 48 kHz. `"sinc"`: a windowed sinc low pass keeps each sound's band (flat to about 9 kHz for a 22 kHz sound) and nothing above it. `"linear"`: linear interpolation, as before OpenCE's build 130: the top of each sound's band is duller (-4 dB at 8 kHz) and images of the band reach up to 22 kHz, a brighter, grainier sound. ChupathingyCE's name for the choice `audio.resampler` makes (Audio Setup's Sound Processing screen sets that one): either set to `"linear"` resamples linearly. |
 | `input.mouse_sensitivity` | `1.0` | `HALO_MOUSE_SENSITIVITY` | The multiplier for the mouse aim. |
 | `input.mouse_vertical_sensitivity` | `0.0` | `HALO_MOUSE_VERTICAL_SENSITIVITY` | The multiplier for the vertical mouse aim. `0`: the same as `input.mouse_sensitivity`. |
 | `input.invert_mouse` | `false` | `HALO_MOUSE_INVERT=1` sets `true` | `true`: the vertical mouse aim is inverted. |
@@ -1394,19 +1395,20 @@ name of the profile) gives `ok <code> <seconds> <token>`.
 
 A mod is a folder in `mods/` in the data root with a `mod.toml` and a
 `tags` folder of Halo PC tag files, as the Halo Editing Kit and Invader write
-them: sounds, bitmaps and string lists that play over the maps' tags of the
-same names, on this machine only (a high-res audio or texture pack, a
-translation). Every mod in the folder is on, in alphabetical order moved
-as the mods ask (`load_after`, `load_before`); the main menu's Mods (the
-PC menus' and, in this fork, the Chupathingy menus', below SETTINGS) lists
-them as a resource pack list does, the mod at the top playing over those
-below it, turns them off and moves them, and keeps that in
-`mods/load_order.toml`. Mods that say they cannot be played together
-(`incompatible`) are asked about at startup. The console's `mods_list` lists
-them, `mods_reload` reads their files again and `mods_enable false` plays
-the maps' own tags. The game checks every file before it plays it, and
-leaves out (with a line in `debug.txt`) one it cannot trust or that does not
-fit the map's tag it replaces. A mod changes nothing that the machines of a
+them: sounds, bitmaps, string lists and models that play over the maps' tags
+of the same names, on this machine only (a high-res audio or texture pack, a
+translation, higher-detail models that keep the map's nodes, markers and
+regions). Every mod in the folder is on, in alphabetical order moved as the
+mods ask (`load_after`, `load_before`); the main menu's Mods (the PC menus'
+and, in this fork, the Chupathingy menus', below SETTINGS) lists them as a
+resource pack list does, the mod at the top playing over those below it,
+turns them off and moves them, and keeps that in `mods/load_order.toml`.
+Mods that say they cannot be played together (`incompatible`) are asked
+about at startup. The console's `mods_list` lists them, `mods_reload` reads
+their files again and `mods_enable false` plays the maps' own tags. The game
+checks every file before it plays it, and leaves out (with a line in
+`debug.txt`) one it cannot trust or that does not fit the map's tag it
+replaces. A mod changes nothing that the machines of a
 network game agree on. Refer to [docs/mods.md](../../docs/mods.md).
 
 ## Map checks

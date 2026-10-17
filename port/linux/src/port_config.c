@@ -338,6 +338,10 @@ static const struct config_setting config_settings[] =
 		"Reverberate the world's sounds as the place the player is in does (the\n"
 		"maps' sound environments, as the Xbox's I3DL2 reverb did); false keeps\n"
 		"them dry." },
+	{ "audio.resampler", _config_string, "\"sinc\"", "HALO_AUDIO_RESAMPLER", _environment_value, _platform_all,
+		"How sounds are converted to the output's rate: \"sinc\" with a\n"
+		"band-limited low pass; \"linear\" between neighbouring samples,\n"
+		"brighter for the aliasing it lets through." },
 	{ "audio.voice_chat", _config_string, "\"push_to_talk\"", "HALO_VOICE_CHAT", _environment_value, _platform_all,
 		"Talking in network games' voice chat: \"push_to_talk\" (while\n"
 		"controls.push_to_talk is held; the microphone opens the first time),\n"
@@ -358,7 +362,9 @@ static const struct config_setting config_settings[] =
 		"output's 48 kHz: \"sinc\" keeps their band and nothing above it;\n"
 		"\"linear\" interpolates between their samples, as the game did before\n"
 		"OpenCE's build 130: their top octave duller, and images of their band\n"
-		"above it (a brighter, grainier sound)." },
+		"above it (a brighter, grainier sound). audio.resampler, which Audio\n"
+		"Setup's Sound Processing screen sets, is the same choice: either at\n"
+		"\"linear\" resamples linearly." },
 
 	{ "input.touch_controls", _config_string, "\"on\"", "HALO_TOUCH_CONTROLS", _environment_value, _platform_android | _platform_web,
 		"The on-screen touch controls in a game: \"on\" shows them on a\n"

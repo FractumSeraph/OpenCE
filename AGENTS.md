@@ -253,7 +253,7 @@ as documentation of file formats, never copied.
 | [port/web/src/DELTA.md](port/web/src/DELTA.md) | Delta in the browser build |
 | [services/selfhost/HOSTING-VPS.md](services/selfhost/HOSTING-VPS.md), [HOSTING-STATIC.md](services/selfhost/HOSTING-STATIC.md) | Hosting the browser build on a VPS, or on a static web host |
 | [services/selfhost/README.md](services/selfhost/README.md) | Hosting the browser build |
-| [docs/mods.md](docs/mods.md) | Mods: folders of Halo PC tag files whose sounds, bitmaps and text play over a map's on one machine |
+| [docs/mods.md](docs/mods.md) | Mods: folders of Halo PC tag files whose sounds, bitmaps, text and models play over a map's on one machine |
 | [port/assets/menus/README.md](port/assets/menus/README.md) | The menu files' format and how to write them again |
 | [port/assets/menus/NON_HANDDRAWN.md](port/assets/menus/NON_HANDDRAWN.md) | Menu pictures that are not redraws |
 | [port/assets/menus/UNWIRED.md](port/assets/menus/UNWIRED.md) | Menu functions that do nothing yet |

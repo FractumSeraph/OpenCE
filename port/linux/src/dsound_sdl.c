@@ -30,9 +30,10 @@ Without an audio device, a clock thread runs the same mixer into a scratch
 buffer, so streams still drain at their real rate.
 
 audio.volume sets the master volume (default 1.0); audio.reverb = false
-turns the reverb off; audio.resampling = "linear" resamples by linear
-interpolation instead (resampling); audio.enabled = false skips opening a
-device; audio.buffer_frames sets the device's buffer (port_config.c).
+turns the reverb off; audio.resampler = "linear" (or ChupathingyCE's
+audio.resampling = "linear") resamples between neighbouring frames instead
+of with the sinc low pass; audio.enabled = false skips opening a device;
+audio.buffer_frames sets the device's buffer (port_config.c).
 */
 
 #include "platform.h"
@@ -193,8 +194,6 @@ static DSI3DL2LISTENER environment =
 static unsigned long environment_serial;
 /* audio.reverb */
 static BOOL reverb_enabled = TRUE;
-/* audio.resampling = "linear" */
-static BOOL resampling_linear = FALSE;
 
 static float gain_from_millibels(LONG millibels)
 {
@@ -510,6 +509,30 @@ next, so the blend is a multiply and an add a tap */
 static float resampler_phases[RESAMPLER_TABLE_STEPS + 1][RESAMPLER_TAPS] RESAMPLER_ALIGNED;
 static float resampler_deltas[RESAMPLER_TABLE_STEPS][RESAMPLER_TAPS] RESAMPLER_ALIGNED;
 
+/* how a voice's frames are converted to the output's rate: the windowed sinc
+low pass, or between the two frames either side (linear: it lets more of the
+images above the source's rate through, which some hear as brighter) */
+enum resampler_mode
+{
+	RESAMPLER_SINC,
+	RESAMPLER_LINEAR
+};
+/* audio.resampler */
+static enum resampler_mode resampler_mode = RESAMPLER_SINC;
+
+/* audio.resampler's mode: sinc for any value but "linear"; port (this fork):
+ChupathingyCE's audio.resampling = "linear" too, the same choice under its
+name (a config file's that has it; Audio Setup's Sound Processing screen sets
+audio.resampler) */
+static enum resampler_mode resampler_mode_read(void)
+{
+	const char *setting = config_string("audio.resampler");
+	const char *chupathingy = config_string("audio.resampling");
+
+	return (setting && !strcmp(setting, "linear")) || (chupathingy && !strcmp(chupathingy, "linear")) ?
+		RESAMPLER_LINEAR : RESAMPLER_SINC;
+}
+
 static double bessel_i0(double x)
 {
 	double sum = 1.0, term = 1.0;
@@ -804,14 +827,16 @@ static void mix_voice(struct sdl_stream *stream, float *output, float *send, uns
 			/* a voice turned all the way down (out of earshot), and not
 			sending to the reverb, only moves on */
 		}
-		else if (resampling_linear)
+		else if (resampler_mode == RESAMPLER_LINEAR)
 		{
-			const float *a = stream->history[stream->center % RESAMPLER_HISTORY];
-			const float *b = stream->history[(stream->center + 1) % RESAMPLER_HISTORY];
+			/* (the frame the output is at and the next, side by side
+			however the ring wraps) */
+			const float *left_frames = stream->history[0] + stream->center % RESAMPLER_HISTORY;
+			const float *right_frames = stream->history[1] + stream->center % RESAMPLER_HISTORY;
 			float fraction = (float)stream->phase;
 
-			sample_left = a[0] + (b[0] - a[0]) * fraction;
-			sample_right = a[1] + (b[1] - a[1]) * fraction;
+			sample_left = left_frames[0] + (left_frames[1] - left_frames[0]) * fraction;
+			sample_right = right_frames[0] + (right_frames[1] - right_frames[0]) * fraction;
 		}
 		else if (scale == 1.0f)
 		{
@@ -1450,7 +1475,7 @@ static void audio_start(void)
 	configured_master_volume = (float)config_real("audio.volume");
 	master_volume = master_muted ? 0.0f : configured_master_volume;
 	reverb_enabled = config_boolean("audio.reverb");
-	resampling_linear = !strcmp(config_string("audio.resampling"), "linear");
+	resampler_mode = resampler_mode_read();
 	resampler_initialize();
 	resampler_phases_initialize();
 	reverb_initialize();
@@ -1779,7 +1804,7 @@ VOID WINAPI DirectSoundDoWork(void)
 {
 	static unsigned long volume_read_at = (unsigned long)-1;
 
-	/* (audio.volume, audio.reverb and audio.resampling read again when the
+	/* (audio.volume, audio.reverb and audio.resampler read again when the
 	settings change: on the game's thread, not the mixer's, whose lock the
 	config's file I/O would hold) */
 	if (volume_read_at != config_changes())
@@ -1789,7 +1814,7 @@ VOID WINAPI DirectSoundDoWork(void)
 		/* (a muted page stays muted: platform_audio_set_muted) */
 		master_volume = master_muted ? 0.0f : configured_master_volume;
 		reverb_enabled = config_boolean("audio.reverb");
-		resampling_linear = !strcmp(config_string("audio.resampling"), "linear");
+		resampler_mode = resampler_mode_read();
 	}
 	streams_complete_finished();
 }

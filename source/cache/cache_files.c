@@ -1723,10 +1723,10 @@ long scenario_tags_load(
 				ui_widget_online_games_tags_loaded();
 			}
 #endif
-			/* port: the mods' sounds, bitmaps and text played over the
-			map's, last, over the menus' tags too, and with the high-res HUD
-			standing for the map's bitmaps, not a mod's (the main menu's Mods:
-			port/linux/game/mods.c) */
+			/* port: the mods' sounds, bitmaps, text and models played over
+			the map's, last, over the menus' tags too, and with the high-res
+			HUD standing for the map's bitmaps, not a mod's (the main menu's
+			Mods: port/linux/game/mods.c) */
 			{
 				extern void mods_tags_loaded(char const *map_name);
 
