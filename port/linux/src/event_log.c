@@ -504,6 +504,9 @@ static int keep(struct event_log_record const *record)
 	return 1;
 }
 
+/* port (this fork): told every event added (event_log_listen) */
+static void (*event_log_listener)(struct event_log_record const *record);
+
 /* a medal: its event (its totals are the batch's own count of them) */
 static void add_medal(int tick, int slot, char const *key)
 {
@@ -523,7 +526,11 @@ static void add_medal(int tick, int slot, char const *key)
 	medal.tag[0] = (short)event_log_tag(key);
 	medal.tag[1] = medal.tag[2] = EVENT_LOG_NONE;
 	if (medal.tag[0] != EVENT_LOG_NONE)
+	{
 		keep(&medal);
+		if (event_log_listener)
+			event_log_listener(&medal);
+	}
 }
 
 /* whether a tag's path begins with prefix (any case, either slash) */
@@ -1082,6 +1089,11 @@ char const *event_log_game_id(void)
 	return event_log.recording ? event_log.id : "";
 }
 
+void event_log_listen(void (*listener)(struct event_log_record const *record))
+{
+	event_log_listener = listener;
+}
+
 char const *event_log_tag_text(int tag)
 {
 	return event_log.recording && valid_tag(tag) ? event_log.tags[tag] : NULL;
@@ -1244,6 +1256,9 @@ int event_log_add(struct event_log_record const *source)
 		count_dropped(&record);
 		return 0;
 	}
+	/* (told first, before the medals it earns) */
+	if (event_log_listener)
+		event_log_listener(&record);
 	/* (the kill first, then the medals it earns) */
 	if (record.type == EVENT_LOG_KILL)
 	{

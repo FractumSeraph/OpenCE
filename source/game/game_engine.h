@@ -504,6 +504,9 @@ boolean game_engine_bomb_silent_death(long killing_player_index, long dead_playe
 long game_engine_bomb_silent_respawn_ticks(void);
 long game_engine_bomb_countdown(void);
 boolean game_engine_bomb_holds_spawns(void);
+/* port (this fork): whether the game under way is a Bomb game (team_change.c
+lets a round play out) */
+boolean game_engine_bomb_running(void);
 /* whether a landing hurts: not in Grifball (one hit kills, and a fall would
 be one); falling for too long still kills */
 boolean game_engine_bomb_landing_damage(void);

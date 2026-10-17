@@ -918,7 +918,7 @@ export async function readHaloMap({ map, bitmaps = null, onProgress = null }) {
       compressed: (tags.u16(at + 0x3a) & 1) !== 0, frames: null, animated: null,
     };
     if (result.compressed) return result;
-    if (nodeCount < 1 || nodeCount > MAX_MODEL_NODES || frameCount < 1 || frameCount > 0x10000)
+    if (nodeCount < 1 || nodeCount > MAX_MODEL_NODES || frameCount < 1 || frameCount > 0x2000)
       fail(`${result.name} has ${nodeCount} nodes and ${frameCount} frames`);
     // (which nodes the frames hold a rotation, translation or scale of; the
     // others' are the animation's defaults)

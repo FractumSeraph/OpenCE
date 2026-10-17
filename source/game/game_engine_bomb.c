@@ -2818,6 +2818,12 @@ long game_engine_bomb_countdown(
 }
 
 /* whether no one spawns now (the blast's pause, before the next round) */
+boolean game_engine_bomb_running(
+	void)
+{
+	return bomb_running();
+}
+
 boolean game_engine_bomb_holds_spawns(
 	void)
 {

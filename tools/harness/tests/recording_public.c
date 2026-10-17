@@ -160,6 +160,22 @@ int main(int argc, char **argv)
 		CHECK(live, "a kill event and a pose are the game being played");
 		return 0;
 	}
+	/* a team's chat line left out, a line to everyone kept */
+	if (!strcmp(case_name, "no-team-chat"))
+	{
+		byte *at = record(_record_chat, 12);
+
+		memset(at, 0xaa, 12);
+		at[5] = RECORDING_CHAT_SCOPE_TEAM;
+		at = record(_record_chat, 12);
+		memset(at, 0xbb, 12);
+		at[5] = 0;
+		length = public_records(in, in_length, out, &live);
+		CHECK(length == 5 + 12, "%lu bytes, not the line to everyone", length);
+		CHECK(!found((byte const *)"\xaa\xaa\xaa\xaa", 4, length), "the team's line is in the public copy");
+		CHECK(found((byte const *)"\xbb\xbb\xbb\xbb", 4, length), "the line to everyone is not kept");
+		return 0;
+	}
 	fprintf(stderr, "unknown case %s\n", case_name);
 	return 2;
 }

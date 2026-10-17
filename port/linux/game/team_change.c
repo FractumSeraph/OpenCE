@@ -145,10 +145,16 @@ int team_change_host_margin(void)
 }
 
 /* whether a change waits for the player's next death, so a round plays
-out (a round-based game type's: Bomb's, once it is in) */
+out (a round-based game type's: Bomb's, which this fork has; a carrier
+killed for the change would end the round) */
 static boolean team_change_waits_for_respawn(void)
 {
+#ifdef HALO_GAME_BROWSER
+	return game_engine_bomb_running();
+#else
+	/* (no Bomb engine in a build without it: game_engine_bomb.c) */
 	return FALSE;
+#endif
 }
 
 /* ---------- the host's */
@@ -381,6 +387,12 @@ boolean team_change_pause_offered(void)
 	struct network_game *game = server ? network_game_server_get_game(server) :
 		client ? network_game_client_get_game(client) : NULL;
 
+#ifndef HALO_GAME_BROWSER
+	/* (a build with no Delta Peer, this fork's browser build, asks no host:
+	only its own game's players can change) */
+	if (!server)
+		return FALSE;
+#endif
 	return game && game->variant.universal_variant.teams && !network_coop_active() &&
 		config_boolean("display.pause_change_teams");
 }

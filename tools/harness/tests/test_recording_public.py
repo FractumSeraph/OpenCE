@@ -9,7 +9,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from harness import build, enum_with, function, mutated, read, run  # noqa: E402
 
-CASES = ["no-private-data", "hit-without-verdict", "no-moves", "truncated", "no-moderation-events"]
+CASES = ["no-private-data", "hit-without-verdict", "no-moves", "truncated", "no-moderation-events", "no-team-chat"]
 
 # a fault in public_records, and the case that must catch it
 NEGATIVE_CONTROLS = {
@@ -19,6 +19,7 @@ NEGATIVE_CONTROLS = {
     "moves-kept": (("if (type == _record_move)\n\t\t\tcontinue;", ""), "no-moves"),
     "join-shown-live": (("type != _record_tag && type != _record_player &&", "type != _record_tag &&"),
                         "no-private-data"),
+    "team-chat-kept": (("payload[5] == RECORDING_CHAT_SCOPE_TEAM", "0"), "no-team-chat"),
     "flags-kept": (("(payload[4] == RECORDING_EVENT_MODERATION || payload[4] == RECORDING_EVENT_FLAG)", "(0)"),
                    "no-moderation-events"),
 }
