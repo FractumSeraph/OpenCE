@@ -56,6 +56,7 @@ Called each frame from game_stats_update (main.c).
 #include "../src/browser.h"
 #include "../src/event_log.h"
 #include "network_fairplay.h"
+#include "network_recording.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -251,6 +252,39 @@ static int slot_of(long player_index)
 	return tracked ? tracked->slot : EVENT_LOG_NONE;
 }
 
+/* port (this fork): the player (absolute index) a slot of the log is, NONE */
+static short player_of_slot(int slot)
+{
+	short index;
+
+	if (slot == EVENT_LOG_NONE)
+		return NONE;
+	for (index = 0; index < MAXIMUM_TRACKED; index++)
+	{
+		if (game_events.players[index].used && game_events.players[index].slot == slot)
+			return index;
+	}
+	return NONE;
+}
+
+/* port (this fork): an event added to the log, and to the game's recording
+(network_recording.c), its slots there the players' indices and its tags
+their names; not the samples (positions, pings, the server's health) */
+static void log_add(struct event_log_record const *record)
+{
+	event_log_add(record);
+	if (record->type != EVENT_LOG_POSITION && record->type != EVENT_LOG_PING && record->type != EVENT_LOG_HEALTH)
+	{
+		char const *tags[3];
+		int index;
+
+		for (index = 0; index < 3; index++)
+			tags[index] = event_log_tag_text(record->tag[index]);
+		network_recording_event(record->tick, record->type, player_of_slot(record->player),
+			player_of_slot(record->other), tags, record->value, record->bits, record->position, record->other_position);
+	}
+}
+
 /* the player whose unit an object is (a vehicle's: its driver's, or its
 gunner's) */
 static long player_of_object(long object_index)
@@ -339,7 +373,7 @@ static void record_simple(int type, int slot, long tick, int tag, int value0, in
 	record.value[1] = value1;
 	if (position)
 		csmemcpy(record.position, position, sizeof(record.position));
-	event_log_add(&record);
+	log_add(&record);
 }
 
 static void end_ride(struct tracked *tracked, long tick)
@@ -615,7 +649,7 @@ static void objective(struct tracked *tracked, struct player_datum *player, long
 	record.value[1] = (int)player->team_index;
 	if (position)
 		csmemcpy(record.position, position, sizeof(record.position));
-	event_log_add(&record);
+	log_add(&record);
 }
 
 static void update_objectives(struct tracked *tracked, struct player_datum *player, long tick, float const *position)
@@ -916,7 +950,7 @@ static void update_health(long tick)
 		record.value[2] = (int)(100.0 * game_events.frame_most + 0.5);
 		record.value[3] = resident;
 		record.bits = (unsigned int)cpu;
-		event_log_add(&record);
+		log_add(&record);
 		game_events.health_time = now;
 		game_events.frames = 0;
 		game_events.frame_sum = 0.0;
@@ -1107,7 +1141,7 @@ void game_events_player_killed(
 				record.tag[1] = (short)tag_of(vehicle->definition_index);
 		}
 	}
-	event_log_add(&record);
+	log_add(&record);
 	context->set = FALSE;
 }
 

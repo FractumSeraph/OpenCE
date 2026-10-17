@@ -298,6 +298,9 @@ char const *event_log_game_id(void);
 /* a tag's path (or a short text) kept once, its index: EVENT_LOG_NONE for
 none, or once the game's table is full */
 int event_log_tag(char const *text);
+/* port (this fork): a tag index's text, NULL for none (the game's recording,
+network_recording.c, names its tags) */
+char const *event_log_tag_text(int tag);
 
 /* a player who joined, their slot; EVENT_LOG_NONE once the game's slots
 are full */

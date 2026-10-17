@@ -9,7 +9,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from harness import build, enum_with, function, mutated, read, run  # noqa: E402
 
-CASES = ["no-private-data", "hit-without-verdict", "no-moves", "truncated"]
+CASES = ["no-private-data", "hit-without-verdict", "no-moves", "truncated", "no-moderation-events"]
 
 # a fault in public_records, and the case that must catch it
 NEGATIVE_CONTROLS = {
@@ -17,8 +17,10 @@ NEGATIVE_CONTROLS = {
                           "no-private-data"),
     "verdict-kept": (("csmemset(out + written + 5 + 18, 0, 9);", ";"), "hit-without-verdict"),
     "moves-kept": (("if (type == _record_move)\n\t\t\tcontinue;", ""), "no-moves"),
-    "join-shown-live": (("type == _record_frame || type == _record_hit", "type == _record_player || type == _record_hit"),
+    "join-shown-live": (("type != _record_tag && type != _record_player &&", "type != _record_tag &&"),
                         "no-private-data"),
+    "flags-kept": (("(payload[4] == RECORDING_EVENT_MODERATION || payload[4] == RECORDING_EVENT_FLAG)", "(0)"),
+                   "no-moderation-events"),
 }
 
 
@@ -27,7 +29,8 @@ def generated(fault=None):
     code = function(source, "public_records")
     if fault:
         code = mutated(code, *fault)
-    return (("records.inc", enum_with(source, "_record_player") + "\n"), ("under_test.inc", code + "\n"))
+    records = enum_with(source, "_record_player") + "\n" + enum_with(source, "RECORDING_EVENT_MODERATION") + "\n"
+    return (("records.inc", records), ("under_test.inc", code + "\n"))
 
 
 @pytest.mark.parametrize("case", CASES)

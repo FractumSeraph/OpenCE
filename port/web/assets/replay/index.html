@@ -75,6 +75,23 @@ button.on{background:rgba(127,211,164,.35);border-color:var(--accent)}
 #games ol{margin:8px 0 0;padding-left:1.2rem;font-size:13px;line-height:1.6}
 #games a{color:var(--accent)}
 #games .button{color:var(--bg)}
+#overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+#view #minimap{position:absolute;right:10px;top:10px;left:auto;width:180px;height:180px;border:1px solid var(--line);border-radius:8px;
+  background:rgba(5,10,8,.6);display:none}
+#scoreboard{position:absolute;left:50%;top:12%;transform:translateX(-50%);min-width:22rem;max-width:90%;display:none;
+  background:rgba(8,14,12,.92);border:1px solid var(--line);border-radius:10px;padding:12px 16px;font-variant-numeric:tabular-nums}
+#scoreboard h3{margin:0 0 8px;font-size:15px}
+#scoreboard table{width:100%;border-collapse:collapse;font-size:13px}
+#scoreboard th{color:var(--muted);font-weight:600;text-align:right;padding:3px 6px}
+#scoreboard td{text-align:right;padding:3px 6px;border-top:1px solid var(--line)}
+#scoreboard th:first-child,#scoreboard td:first-child{text-align:left}
+#stats{padding:0 12px;font-size:12px;color:var(--muted);line-height:1.55;max-height:22vh;overflow:auto}
+#stats b{color:var(--text);font-weight:600}
+#fairplay-filters{display:contents}
+.event.highlight{border-left-color:#f5c542}
+.event.objective{border-left-color:#5aa9ff}
+.event.chat{border-left-color:#ccc}
+.event.pickup{border-left-color:#6b8}
 @media (max-width:820px){body{grid-template-columns:1fr;grid-template-rows:1fr auto 40vh}
   #side{grid-column:1;grid-row:3;border-left:0;border-top:1px solid var(--line)}}
 </style>
@@ -95,6 +112,9 @@ button.on{background:rgba(127,211,164,.35);border-color:var(--accent)}
     <p style="font-size:12px">or drop it here</p>
   </div>
   <div id="hud"><div class="who"></div><div class="sub"></div></div>
+  <canvas id="overlay"></canvas>
+  <canvas id="minimap" width="220" height="220" title="The map from above"></canvas>
+  <div id="scoreboard"></div>
 </div>
 <div id="bar">
   <div id="track"><div id="marks"></div><input id="scrub" type="range" min="0" max="0" value="0" step="1"></div>
@@ -102,7 +122,7 @@ button.on{background:rgba(127,211,164,.35);border-color:var(--accent)}
     <button id="play" title="Play or pause (Space)">Play</button>
     <button id="back" title="Back 5 seconds (Left)">-5s</button>
     <button id="fwd" title="Forward 5 seconds (Right)">+5s</button>
-    <select id="speed" title="Speed"><option>0.25</option><option>0.5</option><option selected>1</option><option>2</option><option>4</option></select>
+    <select id="speed" title="Speed (slow motion below 1)"><option>0.1</option><option>0.25</option><option>0.5</option><option selected>1</option><option>2</option><option>4</option></select>
     <span id="time">0:00.0</span>
     <span class="spacer"></span>
     <button id="cam-first" class="on" title="Through the player's eyes (1)">Eyes</button>
@@ -110,6 +130,11 @@ button.on{background:rgba(127,211,164,.35);border-color:var(--accent)}
     <button id="cam-free" title="Free camera: drag to turn, scroll to zoom (3)">Free</button>
     <button id="xray" title="Players through walls (X)">X-ray</button>
     <button id="lines" class="on" title="Everyone's aim (A)">Aim lines</button>
+    <button id="hudbutton" class="on" title="The player's HUD: health, shields, ammo, motion tracker (H)">HUD</button>
+    <button id="scores" title="The scoreboard (Tab)">Scores</button>
+    <button id="heat" title="Where players died (red) and killed (green) all game (M)">Heatmap</button>
+    <button id="killcam" title="The selected player's last death, through their killer's eyes (K)">Kill cam</button>
+    <button id="link" title="Copy a link to this moment">Copy link</button>
     <button id="record" title="Save the view as a video">Record video</button>
     <span id="recording">REC</span>
     <span id="live"></span>
@@ -120,13 +145,21 @@ button.on{background:rgba(127,211,164,.35);border-color:var(--accent)}
   <div id="game">No recording open.</div>
   <h2>Players</h2>
   <div id="players"></div>
+  <h2>Stats</h2>
+  <div id="stats"></div>
   <h2 id="events-title">Hits and kills</h2>
   <div id="filters">
+    <span id="fairplay-filters">
     <label><input type="checkbox" id="f-refused" checked>refused</label>
     <label><input type="checkbox" id="f-suspicious" checked>doubted</label>
     <label><input type="checkbox" id="f-ok">others</label>
-    <label><input type="checkbox" id="f-kills" checked>kills</label>
     <label><input type="checkbox" id="f-moves" checked>teleports, flying</label>
+    </span>
+    <label><input type="checkbox" id="f-kills" checked>kills</label>
+    <label><input type="checkbox" id="f-highlights" checked>highlights</label>
+    <label><input type="checkbox" id="f-objectives" checked>objectives</label>
+    <label><input type="checkbox" id="f-pickups">pickups, rides</label>
+    <label><input type="checkbox" id="f-chat" checked>chat</label>
     <label><input type="checkbox" id="f-selected">selected player only</label>
   </div>
   <div id="events"></div>
@@ -139,17 +172,19 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
 const HIT = { WALL: 1, SOLID: 2, OFF_AIM: 4, SNAP: 8, REFUSED: 16 };
 
-async function inflate(bytes) {
-  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate"));
+async function inflate(bytes, format = "deflate") {
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream(format));
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
-// (the file's start: "HREC" and its version)
+// (the file's start: "HREC" and its version: 1, or 2 with the world's
+// objects, the players' poses, the game's events, scores, chat and map)
 function checkHeader(bytes) {
   if (bytes.length < 8 || String.fromCharCode(...bytes.subarray(0, 4)) !== "HREC")
     throw new Error("This is not a Halo recording (.hrec).");
   const version = new DataView(bytes.buffer, bytes.byteOffset, 8).getUint32(4, true);
-  if (version !== 1) throw new Error(`Recording version ${version}: this viewer reads version 1.`);
+  if (version < 1 || version > 2) throw new Error(`Recording version ${version}: this viewer reads versions 1 and 2.`);
+  return version;
 }
 
 // (the whole blocks from at on, and where the next begins: a block cut short
@@ -158,13 +193,14 @@ async function readBlocks(bytes, at) {
   const file = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const chunks = [];
   while (at + 9 <= bytes.length) {
-    // ('R': the records as they are; 'B': compressed with zlib, as the first recordings were)
+    // ('R': the records as they are; 'G': a gzip member; 'B': compressed
+    // with zlib, as the first recordings were)
     const kind = file.getUint8(at);
-    if (kind !== 0x52 && kind !== 0x42) break;
+    if (kind !== 0x52 && kind !== 0x42 && kind !== 0x47) break;
     const size = file.getUint32(at + 5, true);
     if (at + 9 + size > bytes.length) break;
     const block = bytes.subarray(at + 9, at + 9 + size);
-    chunks.push(kind === 0x42 ? await inflate(block) : block);
+    chunks.push(kind === 0x42 ? await inflate(block) : kind === 0x47 ? await inflate(block, "gzip") : block);
     at += 9 + size;
   }
   return { chunks, at };
@@ -174,6 +210,9 @@ function newRecording() {
   return {
     game: { time: 0, rate: 30, server: "", map: "", type: "" }, vertices: null, polygons: [],
     players: new Map(), tags: new Map(), frames: [], hits: [], kills: [], moves: [], end: null, first: 0, last: 0,
+    // (version 2: the world's objects by datum index, the poses, events,
+    // scores, chat lines and the map's file)
+    objects: new Map(), poses: [], events: [], scores: [], chats: [], map: null,
   };
 }
 
@@ -239,6 +278,62 @@ function addChunks(r, chunks) {
         case 7: r.kills.push({ tick: u32(), killer: u8(), victim: u8(), headshot: u8() === 1 }); break;
         case 8: r.end = u32(); break;
         case 9: r.moves.push({ tick: u32(), player: u8(), kind: u8(), amount: f32() }); break;
+        case 10: {
+          const tick = u32(), whole = u8(), count = u16();
+          for (let i = 0; i < count; i++) {
+            const id = u32(), type = u8(), tag = u16(), x = f32(), y = f32(), z = f32();
+            const f = [i16() / 32767, i16() / 32767, i16() / 32767], u = [i16() / 32767, i16() / 32767, i16() / 32767];
+            const rest = u8();
+            let track = r.objects.get(id);
+            if (!track) { track = { id, type, tag, samples: [], start: tick, end: null }; r.objects.set(id, track); }
+            track.samples.push({ tick, x, y, z, f, u, rest: rest & 1 });
+          }
+          if (whole) r.wholeTicks = (r.wholeTicks || 0) + 1;
+          break;
+        }
+        case 11: {
+          const tick = u32(), count = u16();
+          for (let i = 0; i < count; i++) { const track = r.objects.get(u32()); if (track && track.end == null) track.end = tick; }
+          break;
+        }
+        case 12: {
+          const tick = u32(), count = u8(), entries = new Map();
+          for (let i = 0; i < count; i++) {
+            const slot = u8();
+            entries.set(slot, { facing: i16() / 10000, vx: i16() / 1000, vy: i16() / 1000, vz: i16() / 1000, state: u8(),
+              action: u8(), flags: u8(), graph: u16(), animation: u16(), frame: u16(), camo: u8() / 255, frags: u8(),
+              plasmas: u8(), loaded: u16(), total: u16(), other: u16(), seat: u8() });
+          }
+          r.poses.push({ tick, entries });
+          break;
+        }
+        case 13: {
+          const e = { tick: u32(), type: u8(), player: u8(), other: u8(), tags: [u16(), u16(), u16()],
+            values: [view.getInt32(q, true), view.getInt32(q + 4, true), view.getInt32(q + 8, true), view.getInt32(q + 12, true)] };
+          q += 16;
+          e.bits = u32();
+          e.pos = [f32(), f32(), f32()];
+          e.other_pos = [f32(), f32(), f32()];
+          r.events.push(e);
+          break;
+        }
+        case 14: {
+          const s = { tick: u32(), toWin: view.getInt32(q, true), red: view.getInt32(q + 4, true), blue: view.getInt32(q + 8, true) };
+          q += 12;
+          const count = u8();
+          s.players = [];
+          for (let i = 0; i < count; i++) s.players.push({ slot: u8(), team: u8(), kills: i16(), deaths: i16(), assists: i16(),
+            suicides: i16(), betrayals: i16() });
+          r.scores.push(s);
+          break;
+        }
+        case 15: r.chats.push({ tick: u32(), kind: u8(), scope: u8(), speaker: u8(), name: text(), text: text() }); break;
+        case 16: {
+          const family = u8(), file = text();
+          const hash = [...chunk.subarray(q, q + 32)].map(b => b.toString(16).padStart(2, "0")).join("");
+          r.map = { family, file, hash: /^0+$/.test(hash) ? "" : hash };
+          break;
+        }
       }
       p = end;
     }
@@ -247,6 +342,179 @@ function addChunks(r, chunks) {
     r.first = r.frames[0].tick;
     r.last = r.frames[r.frames.length - 1].tick;
   }
+  r.objectList = [...r.objects.values()];
+}
+
+/* ---------- what the events mean (event_log.h's EVENT_LOG_*) */
+
+const EVENT = { KILL: 0, MEDAL: 1, OBJECTIVE: 2, PICKUP: 3, RIDE: 4, SPAWN: 5 };
+const KILL_BITS = { HEADSHOT: 1, BETRAYAL: 2, SUICIDE: 4, KILLER_POSITION: 8, VICTIM_POSITION: 16, STICK: 32, RIDING: 64, FROM_GRAVE: 128 };
+const DAMAGE = ["", "bullets", "plasma", "melee", "a grenade", "an explosion", "a vehicle", "a fall"];
+const OBJECTIVES = ["took the flag", "returned the flag", "captured the flag", "took the ball", "dropped the ball",
+  "took the hill", "left the hill", "finished a lap", "took the bomb", "dropped the bomb", "scored with the bomb"];
+const MEDALS = { double_kill: "Double Kill", triple_kill: "Triple Kill", killtacular: "Killtacular",
+  killtrocity: "Killtrocity", killing_spree: "Killing Spree", killing_frenzy: "Killing Frenzy",
+  running_riot: "Running Riot", rampage: "Rampage", beat_down: "Beat Down", sniper_kill: "Sniper Kill",
+  grenade_stick: "Stuck!" };
+
+function tagName(id) {
+  const name = rec && rec.tags.get(id);
+  return name ? name.split("\\").pop() : "";
+}
+
+// (a kill: from the events when the recording has them, else the kill records)
+function killEvents(r = rec) {
+  const kills = r.events.filter(e => e.type === EVENT.KILL);
+  if (kills.length) return kills.map(e => ({ tick: e.tick, killer: e.player === 255 ? e.other : e.player,
+    victim: e.other, world: e.player === 255, headshot: !!(e.bits & KILL_BITS.HEADSHOT), weapon: e.tags[0], damage: e.values[0],
+    bits: e.bits, killerPos: e.bits & KILL_BITS.KILLER_POSITION ? e.pos : null,
+    victimPos: e.bits & KILL_BITS.VICTIM_POSITION ? e.other_pos : null }));
+  return r.kills.map(k => ({ tick: k.tick, killer: k.killer, victim: k.victim, world: false, headshot: k.headshot,
+    weapon: 0xFFFF, damage: 0, bits: 0, killerPos: null, victimPos: null }));
+}
+
+/* ---------- the world's objects (version 2): vehicles, items lying about,
+projectiles and grenades, as boxes and glows where the game had them */
+
+const objectMeshes = new Map();
+const flashes = [];
+
+function objectLook(track) {
+  const name = (rec.tags.get(track.tag) || "").toLowerCase();
+  const leaf = name.split("\\").pop();
+  if (track.type === 1) {
+    const size = /scorpion/.test(name) ? [3.6, 2.3, 1.4] : /banshee/.test(name) ? [2.6, 3.4, 0.8] :
+      /ghost/.test(name) ? [2.1, 1.6, 0.7] : /turret|gun/.test(name) ? [1.2, 1.2, 1.4] : /warthog/.test(name) ? [2.3, 1.45, 1.0] :
+      [2, 1.4, 1];
+    const color = /banshee|ghost|wraith|shade/.test(name) ? 0x8a5fd0 : 0x7d8f6a;
+    return { kind: "vehicle", size, color, label: leaf };
+  }
+  if (track.type === 5) {
+    if (/grenade/.test(name)) return { kind: "grenade", color: /plasma/.test(name) ? 0x6fd3ff : 0x5c7a3a, size: 0.08 };
+    if (/rocket/.test(name)) return { kind: "projectile", color: 0xffa040, size: 0.12, trail: 0xffc070 };
+    if (/plasma|needle|bolt|fuel/.test(name)) return { kind: "projectile", color: /needle/.test(name) ? 0xff6fd8 : /fuel/.test(name) ? 0x8cff6a : 0x6fd3ff, size: 0.07, trail: 0x9fe4ff };
+    return { kind: "projectile", color: 0xfff3a0, size: 0.035, trail: 0xfff3a0 };
+  }
+  if (track.type === 3 || track.type === 2 || track.type === 4) {
+    if (/over ?shield/.test(name)) return { kind: "powerup", color: 0x58ff7a, size: 0.25, label: "Overshield" };
+    if (/camouflage/.test(name)) return { kind: "powerup", color: 0x7fb8ff, size: 0.25, label: "Camouflage" };
+    if (/health/.test(name)) return { kind: "item", color: 0xf0f0f0, size: [0.35, 0.25, 0.15], label: "Health pack" };
+    if (/grenade/.test(name)) return { kind: "item", color: /plasma/.test(name) ? 0x6fd3ff : 0x5c7a3a, size: [0.12, 0.12, 0.12] };
+    if (/flag/.test(name)) return { kind: "item", color: 0xffffff, size: [0.1, 0.1, 1.6], label: "Flag" };
+    if (/ball|skull/.test(name)) return { kind: "item", color: 0xffe066, size: [0.3, 0.3, 0.3], label: "Ball" };
+    return { kind: "item", color: 0xb8c2c8, size: [0.7, 0.14, 0.12], label: leaf };
+  }
+  return null;
+}
+
+function makeObjectMesh(track) {
+  const look = objectLook(track);
+  if (!look) return null;
+  const group = new THREE.Group();
+  let mesh;
+  if (look.kind === "vehicle" || look.kind === "item") {
+    const [x, y, z] = look.size;
+    mesh = new THREE.Mesh(new THREE.BoxGeometry(x, y, z), new THREE.MeshLambertMaterial({ color: look.color }));
+    mesh.position.z = look.kind === "vehicle" ? z / 2 : z / 2;
+  } else {
+    mesh = new THREE.Mesh(new THREE.SphereGeometry(look.size, 10, 8), new THREE.MeshBasicMaterial({ color: look.color,
+      transparent: look.kind === "powerup", opacity: look.kind === "powerup" ? 0.75 : 1 }));
+  }
+  group.add(mesh);
+  if (look.label && (look.kind === "vehicle" || look.kind === "powerup" || /flag|ball/i.test(look.label))) {
+    const label = makeLabel(look.label, look.color);
+    label.position.z = look.kind === "vehicle" ? look.size[2] + 0.4 : 0.6;
+    label.scale.multiplyScalar(0.8);
+    group.add(label);
+  }
+  let trail = null;
+  if (look.trail) {
+    trail = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]),
+      new THREE.LineBasicMaterial({ color: look.trail, transparent: true, opacity: 0.8 }));
+    trail.frustumCulled = false;
+    scene.add(trail);
+  }
+  scene.add(group);
+  return { group, look, trail };
+}
+
+function sampleIndex(samples, t) {
+  let lo = 0, hi = samples.length - 1;
+  if (t < samples[0].tick) return -1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (samples[mid].tick <= t) lo = mid; else hi = mid - 1;
+  }
+  return lo;
+}
+
+const basis = new THREE.Matrix4(), xAxis = new THREE.Vector3(), yAxis = new THREE.Vector3(), zAxis = new THREE.Vector3();
+
+function drawObjects(t) {
+  const seen = new Set();
+  for (const track of rec.objectList || []) {
+    const end = track.end != null ? track.end : rec.last + 1;
+    if (t < track.start || t >= end) continue;
+    const i = sampleIndex(track.samples, t);
+    if (i < 0) continue;
+    let o = objectMeshes.get(track.id);
+    if (o === undefined) { o = makeObjectMesh(track); objectMeshes.set(track.id, o); }
+    if (!o) continue;
+    seen.add(track.id);
+    const a = track.samples[i], b = track.samples[i + 1];
+    const f = b && b.tick - a.tick <= 6 ? Math.min(1, (t - a.tick) / (b.tick - a.tick)) : 0;
+    const x = b && f ? a.x + (b.x - a.x) * f : a.x, y = b && f ? a.y + (b.y - a.y) * f : a.y, z = b && f ? a.z + (b.z - a.z) * f : a.z;
+    o.group.visible = true;
+    o.group.position.set(x, y, z);
+    xAxis.set(...a.f).normalize();
+    zAxis.set(...a.u).normalize();
+    yAxis.crossVectors(zAxis, xAxis);
+    if (xAxis.lengthSq() > 0.5 && zAxis.lengthSq() > 0.5) o.group.setRotationFromMatrix(basis.makeBasis(xAxis, yAxis, zAxis));
+    if (o.look.kind === "powerup") o.group.children[0].scale.setScalar(1 + 0.15 * Math.sin(t / 4));
+    if (o.trail) {
+      // (a tracer: where it was over its last few samples)
+      const points = [];
+      for (let k = Math.max(0, i - 6); k <= i; k++) points.push(new THREE.Vector3(track.samples[k].x, track.samples[k].y, track.samples[k].z));
+      points.push(new THREE.Vector3(x, y, z));
+      o.trail.geometry.setFromPoints(points);
+      o.trail.visible = true;
+    }
+  }
+  for (const [id, o] of objectMeshes) {
+    if (o && !seen.has(id)) { o.group.visible = false; if (o.trail) o.trail.visible = false; }
+  }
+  // (a projectile's end: a flash where it was last, larger for a grenade or rocket)
+  let used = 0;
+  for (const track of rec.objectList || []) {
+    if (track.type !== 5 || track.end == null || t < track.end || t > track.end + 12) continue;
+    const last = track.samples[track.samples.length - 1];
+    const name = (rec.tags.get(track.tag) || "").toLowerCase();
+    const big = /grenade|rocket|fuel|tank/.test(name);
+    let flash = flashes[used];
+    if (!flash) {
+      flash = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8), new THREE.MeshBasicMaterial({ color: 0xffb050, transparent: true }));
+      scene.add(flash);
+      flashes.push(flash);
+    }
+    used++;
+    const k = (t - track.end) / 12;
+    flash.visible = true;
+    flash.position.set(last.x, last.y, last.z);
+    flash.scale.setScalar((big ? 2.2 : 0.18) * (0.3 + k));
+    flash.material.color.setHex(big ? 0xffa040 : 0xfff0b0);
+    flash.material.opacity = (1 - k) * (big ? 0.7 : 0.9);
+    if (used >= 64) break;
+  }
+  for (let k = used; k < flashes.length; k++) flashes[k].visible = false;
+}
+
+function clearObjects() {
+  for (const o of objectMeshes.values()) {
+    if (!o) continue;
+    scene.remove(o.group);
+    if (o.trail) scene.remove(o.trail);
+  }
+  objectMeshes.clear();
 }
 
 /* ---------- the scene (Halo's world units, z up) */
@@ -419,13 +687,33 @@ function draw() {
     figure.aim.visible = aimLines && !(cameraMode === "first" && slot === selected);
     const own = cameraMode === "first" && slot === selected;
     figure.body.visible = figure.head.visible = figure.label.visible = !own;
+    // (version 2: camouflage shows as the game shows it, nearly clear; the
+    // visor shows where it aims)
+    const pose = poseAt(slot, tick);
+    const camo = pose && pose.flags & 2 ? Math.max(0.12, 1 - pose.camo * 0.88) : 1;
     for (const m of [figure.body, figure.head]) {
       m.material.depthTest = !xray;
-      m.material.transparent = xray;
-      m.material.opacity = xray ? 0.85 : 1;
+      m.material.transparent = xray || camo < 1;
+      m.material.opacity = xray ? 0.85 : camo;
       m.renderOrder = xray ? 2 : 0;
     }
+    if (!figure.visor) {
+      figure.visor = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.16, 0.06), new THREE.MeshBasicMaterial({ color: 0xffc040 }));
+      figure.group.add(figure.visor);
+      figure.flash = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), new THREE.MeshBasicMaterial({ color: 0xfff0a0,
+        transparent: true, opacity: 0.9 }));
+      figure.group.add(figure.flash);
+    }
+    const dirAim = aimVector(s);
+    figure.visor.visible = !own;
+    figure.visor.position.set(dirAim.x * 0.1, dirAim.y * 0.1, s.eye + dirAim.z * 0.1);
+    figure.visor.rotation.z = s.yaw;
+    // (a muzzle flash while the trigger is down, every other tick)
+    figure.flash.visible = !!(s.flags & 2) && Math.floor(tick) % 2 === 0;
+    figure.flash.position.set(dirAim.x * 0.7, dirAim.y * 0.7, s.eye - 0.12 + dirAim.z * 0.7);
   }
+  drawObjects(tick);
+  drawDeaths(tick);
   // (the hits of the last second: where they went from the shooter's eyes)
   for (const line of hitLines) { scene.remove(line); line.geometry.dispose(); }
   hitLines = [];
@@ -452,9 +740,14 @@ function draw() {
     if (cameraMode === "first") {
       camera.position.copy(eye);
       camera.lookAt(eye.clone().add(dir));
+      followAt = null;
     } else {
+      // (behind: eased toward its place, so the view follows smoothly)
       const flat = new THREE.Vector3(dir.x, dir.y, 0).normalize();
-      camera.position.copy(eye).addScaledVector(flat, -2.2).add(new THREE.Vector3(0, 0, 0.6));
+      const want = eye.clone().addScaledVector(flat, -2.2).add(new THREE.Vector3(0, 0, 0.6));
+      if (!followAt || followAt.distanceTo(want) > 8) followAt = want.clone();
+      followAt.lerp(want, 0.18);
+      camera.position.copy(followAt);
       camera.lookAt(eye.clone().addScaledVector(dir, 6));
     }
     camera.updateProjectionMatrix();
@@ -472,11 +765,334 @@ function draw() {
     sub.textContent = s ? `health ${Math.round(s.body * 100)}%  shields ${Math.round(Math.min(s.shield, 1) * 100)}%  ${weaponName(s.weapon)}${s.flags & 16 ? "  (riding)" : ""}${s.flags & 1 ? "  crouching" : ""}${s.flags & 2 ? "  firing" : ""}` : "dead";
   } else { who.textContent = ""; sub.textContent = ""; }
   renderer.render(scene, camera);
+  drawOverlay(states);
+  drawMinimap(states);
+  if (scoresOn && Math.abs(tick - scoresDrawnAt) >= 15) { scoresDrawnAt = tick; renderScoreboard(); }
+  updateKillcam();
+}
+let followAt = null, scoresDrawnAt = -1e9;
+
+/* ---------- the kill cam (K): the selected player's last death, through the
+killer's eyes, slowed for its last second */
+
+let killcam = null;
+function startKillcam() {
+  if (!rec || selected == null) return;
+  const deaths = (rec.killList || []).filter(k => k.victim === selected && !k.world && k.killer !== k.victim);
+  const k = deaths.filter(d => d.tick <= tick).pop() || deaths[0];
+  if (!k) return;
+  killcam = { victim: selected, tick: k.tick, speed };
+  select(k.killer);
+  setCamera("first");
+  seek(k.tick - 4 * rec.game.rate);
+  setPlaying(true);
+}
+function updateKillcam() {
+  if (!killcam) return;
+  const left = killcam.tick - tick;
+  speed = left < rec.game.rate && left > -rec.game.rate ? 0.35 : killcam.speed;
+  if (tick > killcam.tick + 1.5 * rec.game.rate) {
+    speed = killcam.speed;
+    const victim = killcam.victim;
+    killcam = null;
+    select(victim);
+  }
 }
 
 function weaponName(id) {
   const name = rec.tags.get(id);
   return name ? name.split("\\").pop() : "";
+}
+
+/* ---------- version 2's poses: facing, camouflage, flashlight, ammo, grenades */
+
+function poseAt(slot, t) {
+  const poses = rec.poses;
+  if (!poses.length) return null;
+  let lo = 0, hi = poses.length - 1;
+  if (t < poses[0].tick) return null;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (poses[mid].tick <= t) lo = mid; else hi = mid - 1;
+  }
+  return poses[lo].entries.get(slot) || null;
+}
+
+/* ---------- deaths: a marker where each player fell, for a few seconds; the
+heatmap: every death (red) and kill (green) of the game at once */
+
+let deathMarks = [], heatOn = false, heatMesh = null;
+const deathGeometry = new THREE.BoxGeometry(0.7, 0.08, 0.04);
+
+function drawDeaths(t) {
+  let used = 0;
+  for (const k of rec.killList || []) {
+    if (!k.victimPos || t < k.tick || t > k.tick + 8 * rec.game.rate) continue;
+    let mark = deathMarks[used];
+    if (!mark) {
+      const material = new THREE.MeshBasicMaterial({ color: 0xff4a3a, transparent: true });
+      mark = new THREE.Group();
+      const a = new THREE.Mesh(deathGeometry, material), b = new THREE.Mesh(deathGeometry, material);
+      a.rotation.z = Math.PI / 4; b.rotation.z = -Math.PI / 4;
+      mark.add(a, b);
+      mark.material = material;
+      scene.add(mark);
+      deathMarks.push(mark);
+    }
+    used++;
+    mark.visible = true;
+    mark.position.set(k.victimPos[0], k.victimPos[1], k.victimPos[2] + 0.05);
+    mark.material.opacity = 1 - (t - k.tick) / (8 * rec.game.rate);
+  }
+  for (let i = used; i < deathMarks.length; i++) deathMarks[i].visible = false;
+}
+
+function buildHeat() {
+  if (heatMesh) { scene.remove(heatMesh); heatMesh = null; }
+  const spots = [];
+  for (const k of rec.killList || []) {
+    if (k.victimPos) spots.push([k.victimPos, 0xff3b2f]);
+    if (k.killerPos && !k.world && k.killer !== k.victim) spots.push([k.killerPos, 0x4cd964]);
+  }
+  if (!spots.length) return;
+  heatMesh = new THREE.InstancedMesh(new THREE.CircleGeometry(0.9, 18),
+    new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.35, depthWrite: false }), spots.length);
+  const m = new THREE.Matrix4(), c = new THREE.Color();
+  spots.forEach(([p, color], i) => {
+    m.makeTranslation(p[0], p[1], p[2] + 0.03);
+    heatMesh.setMatrixAt(i, m);
+    heatMesh.setColorAt(i, c.setHex(color));
+  });
+  heatMesh.visible = heatOn;
+  scene.add(heatMesh);
+}
+
+/* ---------- the HUD over the view (the selected player's): shields and
+health, the weapon's rounds, grenades, the motion tracker, kills, medals and
+chat as they come */
+
+const overlay = document.getElementById("overlay");
+const og = overlay.getContext("2d");
+let hudOn = true;
+
+function enemyOf(a, b) {
+  return !teams || playerAt(a, tick).team !== playerAt(b, tick).team;
+}
+
+function drawOverlay(states) {
+  const w = overlay.clientWidth, h = overlay.clientHeight, dpr = Math.min(devicePixelRatio, 2);
+  if (overlay.width !== Math.round(w * dpr) || overlay.height !== Math.round(h * dpr)) {
+    overlay.width = Math.round(w * dpr);
+    overlay.height = Math.round(h * dpr);
+  }
+  og.setTransform(dpr, 0, 0, dpr, 0, 0);
+  og.clearRect(0, 0, w, h);
+  if (!rec) return;
+  const s = selected != null ? states.get(selected) : null;
+  const pose = s ? poseAt(selected, tick) : null;
+  og.font = "600 13px system-ui, sans-serif";
+  og.textBaseline = "top";
+  if (hudOn && s && cameraMode !== "free") {
+    // (shields, then health: the top left, below the name)
+    const x = 14, y = 58, bw = 180;
+    og.fillStyle = "rgba(0,0,0,.45)"; og.fillRect(x - 2, y - 2, bw + 4, 22);
+    og.fillStyle = s.shield > 1 ? "#8cff6a" : "#5ab0ff"; og.fillRect(x, y, bw * Math.min(1, s.shield), 10);
+    if (s.shield > 1) { og.fillStyle = "#c8ff9a"; og.fillRect(x, y, bw * Math.min(1, s.shield - 1), 10); }
+    og.fillStyle = s.body > 0.3 ? "#7fd67f" : "#ff6b5a"; og.fillRect(x, y + 12, bw * s.body, 6);
+    // (the weapon, its rounds and the grenades: the top right, beside the minimap)
+    const right = w - (minimapShown ? 206 : 16);
+    og.textAlign = "right";
+    og.fillStyle = "#e9f3ee";
+    og.font = "700 15px system-ui, sans-serif";
+    og.fillText(weaponName(s.weapon) || "-", right, 14);
+    og.font = "600 13px system-ui, sans-serif";
+    if (pose) {
+      og.fillStyle = "#cfe";
+      if (pose.loaded || pose.total) og.fillText(`${pose.loaded} / ${pose.total}`, right, 34);
+      og.fillText(`frag ${pose.frags}   plasma ${pose.plasmas}`, right, 52);
+      const doing = [pose.flags & 4 ? "melee" : "", pose.flags & 8 ? "throwing a grenade" : "", pose.flags & 16 ? "reloading" : "",
+        pose.flags & 1 ? "flashlight" : "", pose.flags & 2 ? "camouflaged" : "", pose.other !== 0xFFFF ? `also ${tagName(pose.other)}` : ""]
+        .filter(Boolean).join(" · ");
+      og.fillStyle = "#9fb7ab";
+      og.fillText(doing, right, 70);
+    }
+    og.textAlign = "left";
+    // (the motion tracker: the bottom left; players within 25 units who move
+    // or fire show, as in the game; crouching walkers do not)
+    const r = 70, cx = 16 + r, cy = h - 16 - r;
+    og.fillStyle = "rgba(10,30,40,.55)"; og.beginPath(); og.arc(cx, cy, r, 0, Math.PI * 2); og.fill();
+    og.strokeStyle = "rgba(120,200,255,.5)"; og.lineWidth = 1;
+    for (const k of [0.33, 0.66, 1]) { og.beginPath(); og.arc(cx, cy, r * k, 0, Math.PI * 2); og.stroke(); }
+    const facing = s.yaw;
+    for (const [slot, o] of states) {
+      if (slot === selected) continue;
+      const dx = o.x - s.x, dy = o.y - s.y, d = Math.hypot(dx, dy);
+      if (d > 25) continue;
+      const op = poseAt(slot, tick);
+      const speed = op ? Math.hypot(op.vx, op.vy, op.vz) : 1;
+      if (!(o.flags & 2) && (speed < 0.03 || o.flags & 1)) continue;
+      const angle = Math.atan2(dy, dx) - facing;
+      const px = cx + Math.sin(-angle) * (d / 25) * r, py = cy - Math.cos(angle) * (d / 25) * r;
+      og.fillStyle = enemyOf(selected, slot) ? "#ff4a3a" : "#ffe066";
+      og.beginPath(); og.arc(px, py, 4, 0, Math.PI * 2); og.fill();
+    }
+    og.fillStyle = "#e9f3ee"; og.beginPath(); og.moveTo(cx, cy - 6); og.lineTo(cx - 4, cy + 4); og.lineTo(cx + 4, cy + 4); og.fill();
+  }
+  // (the kill feed and chat: the bottom right, as they come)
+  const lines = [];
+  for (const k of rec.killList || []) {
+    if (k.tick > tick || k.tick < tick - 5 * rec.game.rate) continue;
+    lines.push({ tick: k.tick, color: "#ffd2cc", text: killText(k) });
+  }
+  for (const c of rec.chats) {
+    if (c.tick > tick || c.tick < tick - 8 * rec.game.rate) continue;
+    lines.push({ tick: c.tick, color: c.speaker === 255 ? "#9fb7ab" : "#e9f3ee", text: c.speaker === 255 ? c.text : `${c.name}: ${c.text}` });
+  }
+  lines.sort((a, b) => a.tick - b.tick);
+  og.textAlign = "right";
+  og.font = "600 13px system-ui, sans-serif";
+  lines.slice(-7).forEach((line, i, all) => {
+    const y = h - 22 - (all.length - 1 - i) * 18;
+    const width = og.measureText(line.text).width;
+    og.fillStyle = "rgba(0,0,0,.45)"; og.fillRect(w - 18 - width - 6, y - 2, width + 12, 18);
+    og.fillStyle = line.color; og.fillText(line.text, w - 18, y);
+  });
+  og.textAlign = "left";
+  // (a medal of the selected player's, big, for two seconds)
+  if (selected != null) {
+    const medal = rec.events.find(e => e.type === EVENT.MEDAL && e.player === selected && e.tick <= tick &&
+      e.tick > tick - 2 * rec.game.rate);
+    if (medal) {
+      const key = rec.tags.get(medal.tags[0]) || "";
+      og.textAlign = "center";
+      og.font = "800 28px system-ui, sans-serif";
+      og.fillStyle = "#f5c542";
+      og.fillText(MEDALS[key] || key.replace(/_/g, " "), w / 2, h * 0.22);
+      og.textAlign = "left";
+    }
+  }
+}
+
+/* ---------- the minimap: the floors from above, the players on them */
+
+const minimap = document.getElementById("minimap");
+const mg = minimap.getContext("2d");
+let minimapShown = false, minimapBase = null, minimapBounds = null;
+
+function buildMinimap() {
+  minimapBase = null;
+  minimap.style.display = "none";
+  minimapShown = false;
+  if (!rec.vertices || !rec.polygons.length) return;
+  const v = rec.vertices;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  // (where the players went, not the sky's walls far off: every second's
+  // positions, with a margin; the map's walls if no one moved)
+  for (let i = 0; i < rec.frames.length; i += rec.game.rate) {
+    for (const e of rec.frames[i].entries) { x0 = Math.min(x0, e.x); x1 = Math.max(x1, e.x); y0 = Math.min(y0, e.y); y1 = Math.max(y1, e.y); }
+  }
+  if (!(x1 - x0 > 5 || y1 - y0 > 5)) {
+    for (let i = 0; i < v.length; i += 3) { x0 = Math.min(x0, v[i]); x1 = Math.max(x1, v[i]); y0 = Math.min(y0, v[i + 1]); y1 = Math.max(y1, v[i + 1]); }
+  }
+  const margin = Math.max(x1 - x0, y1 - y0) * 0.12 + 4;
+  x0 -= margin; y0 -= margin; x1 += margin; y1 += margin;
+  const size = Math.max(x1 - x0, y1 - y0) || 1;
+  x0 -= (size - (x1 - x0)) / 2; y0 -= (size - (y1 - y0)) / 2;
+  minimapBounds = { x0, y0, size };
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = 440;
+  const g = canvas.getContext("2d");
+  const map = (x, y) => [((x - x0) / size) * 420 + 10, 430 - ((y - y0) / size) * 420];
+  // (each floor: a polygon whose face points up, lighter the higher it is)
+  let z0 = Infinity, z1 = -Infinity;
+  for (let i = 2; i < v.length; i += 3) { z0 = Math.min(z0, v[i]); z1 = Math.max(z1, v[i]); }
+  for (const polygon of rec.polygons) {
+    if (polygon.flags & 2) continue;
+    const c = polygon.corners;
+    const ax = v[c[1] * 3] - v[c[0] * 3], ay = v[c[1] * 3 + 1] - v[c[0] * 3 + 1], az = v[c[1] * 3 + 2] - v[c[0] * 3 + 2];
+    const bx = v[c[2] * 3] - v[c[0] * 3], by = v[c[2] * 3 + 1] - v[c[0] * 3 + 1], bz = v[c[2] * 3 + 2] - v[c[0] * 3 + 2];
+    const nx = ay * bz - az * by, ny = az * bx - ax * bz, nz = ax * by - ay * bx;
+    const n = Math.hypot(nx, ny, nz) || 1;
+    if (Math.abs(nz / n) < 0.6) continue;
+    const height = (v[c[0] * 3 + 2] - z0) / ((z1 - z0) || 1);
+    g.fillStyle = `rgba(${90 + height * 120},${110 + height * 110},${100 + height * 100},.85)`;
+    g.beginPath();
+    c.forEach((index, k) => { const [px, py] = map(v[index * 3], v[index * 3 + 1]); k ? g.lineTo(px, py) : g.moveTo(px, py); });
+    g.closePath();
+    g.fill();
+  }
+  minimapBase = canvas;
+  minimap.style.display = "block";
+  minimapShown = true;
+}
+
+function drawMinimap(states) {
+  if (!minimapShown || !minimapBase) return;
+  const { x0, y0, size } = minimapBounds;
+  const W = minimap.width, H = minimap.height;
+  const map = (x, y) => [((x - x0) / size) * (W - 10) + 5, H - 5 - ((y - y0) / size) * (H - 10)];
+  mg.clearRect(0, 0, W, H);
+  mg.drawImage(minimapBase, 0, 0, W, H);
+  for (const track of rec.objectList || []) {
+    if (track.type !== 1) continue;
+    const end = track.end != null ? track.end : rec.last + 1;
+    if (tick < track.start || tick >= end) continue;
+    const i = sampleIndex(track.samples, tick);
+    if (i < 0) continue;
+    const [px, py] = map(track.samples[i].x, track.samples[i].y);
+    mg.fillStyle = "#cfd8b0"; mg.fillRect(px - 3, py - 3, 6, 6);
+  }
+  for (const [slot, s] of states) {
+    const [px, py] = map(s.x, s.y);
+    mg.fillStyle = "#" + colorOf(slot).toString(16).padStart(6, "0");
+    mg.beginPath(); mg.arc(px, py, slot === selected ? 5 : 3.5, 0, Math.PI * 2); mg.fill();
+    if (slot === selected) {
+      mg.strokeStyle = "#fff"; mg.lineWidth = 1.5;
+      mg.beginPath(); mg.moveTo(px, py); mg.lineTo(px + Math.cos(s.yaw) * 12, py - Math.sin(s.yaw) * 12); mg.stroke();
+    }
+  }
+}
+
+/* ---------- the scoreboard (Tab): the latest score record's tally */
+
+let scoresOn = false;
+function scoreAt(t) {
+  let best = null;
+  for (const s of rec.scores) { if (s.tick <= t) best = s; else break; }
+  return best;
+}
+
+function renderScoreboard() {
+  const box = document.getElementById("scoreboard");
+  box.style.display = scoresOn && rec ? "block" : "none";
+  if (!scoresOn || !rec) return;
+  const score = scoreAt(tick);
+  const rows = score ? score.players.slice() : [...rec.players.keys()].map(slot => ({ slot, team: playerAt(slot, tick).team,
+    kills: (rec.killList || []).filter(k => k.killer === slot && k.victim !== slot && k.tick <= tick).length,
+    deaths: (rec.killList || []).filter(k => k.victim === slot && k.tick <= tick).length, assists: 0 }));
+  rows.sort((a, b) => b.kills - a.kills || a.deaths - b.deaths);
+  const head = score && teams ? `Red ${score.red} · Blue ${score.blue}` : "";
+  const toWin = score && score.toWin ? ` · to ${score.toWin}` : "";
+  let html = `<h3>${escapeHtml(mapName(rec.game.map))} · ${escapeHtml(rec.game.type || "")} ${head}${toWin} · ${fmt(tick)}</h3><table>` +
+    "<tr><th>Player</th><th>Kills</th><th>Deaths</th><th>Assists</th><th>K/D</th></tr>";
+  for (const r of rows) {
+    const color = "#" + colorOf(r.slot).toString(16).padStart(6, "0");
+    html += `<tr><td style="color:${color}">${escapeHtml(playerAt(r.slot, tick).name)}</td><td>${r.kills}</td><td>${r.deaths}</td>` +
+      `<td>${r.assists}</td><td>${(r.kills / Math.max(1, r.deaths)).toFixed(2)}</td></tr>`;
+  }
+  box.innerHTML = html + "</table>";
+}
+
+function escapeHtml(text) {
+  return String(text).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function killText(k) {
+  const name = slot => playerAt(slot, k.tick).name;
+  const how = k.weapon !== 0xFFFF ? tagName(k.weapon) : DAMAGE[k.damage] || "";
+  if (k.world || k.killer === k.victim) return `${name(k.victim)} died${how ? ` (${how})` : ""}`;
+  return `${name(k.killer)} killed ${name(k.victim)}${how ? ` with ${how}` : ""}${k.headshot ? " (headshot)" : ""}` +
+    (k.bits & KILL_BITS.BETRAYAL ? " (betrayal)" : "");
 }
 
 /* ---------- the panels and the timeline */
@@ -486,8 +1102,10 @@ const fmt = t => { const s = Math.max(0, (t - rec.first) / rec.game.rate); retur
 function select(slot) {
   selected = slot;
   if (cameraMode === "free") setCamera("first");
+  followAt = null;
   renderPlayers();
   renderEvents();
+  renderStats();
 }
 
 function setCamera(mode) {
@@ -534,11 +1152,48 @@ function eventList() {
     if (only && m.player !== selected) continue;
     list.push({ tick: m.tick, kind: "refused", move: m });
   }
-  if (want("f-kills")) for (const k of rec.kills) {
+  if (want("f-kills")) for (const k of rec.killList || []) {
     if (only && k.killer !== selected && k.victim !== selected) continue;
-    list.push({ tick: k.tick, kind: "kill", kill: k });
+    list.push({ tick: k.tick, kind: "kill", kill: k, slot: k.world ? k.victim : k.killer });
   }
+  if (want("f-highlights")) for (const h of rec.highlights || []) {
+    if (only && h.player !== selected) continue;
+    list.push({ tick: h.tick, kind: "highlight", highlight: h, slot: h.player });
+  }
+  for (const e of rec.events) {
+    const objective = e.type === EVENT.OBJECTIVE, pickup = e.type === EVENT.PICKUP || e.type === EVENT.RIDE;
+    if (!(objective && want("f-objectives")) && !(pickup && want("f-pickups"))) continue;
+    if (only && e.player !== selected) continue;
+    list.push({ tick: e.tick, kind: objective ? "objective" : "pickup", event: e, slot: e.player === 255 ? null : e.player });
+  }
+  if (want("f-chat")) for (const c of rec.chats) list.push({ tick: c.tick, kind: "chat", chat: c, slot: null });
   return list.sort((a, b) => a.tick - b.tick);
+}
+
+// (the game's highlights: its medals where the recording has them, else the
+// multikills worked out from the kills, two or more within four seconds)
+function findHighlights(r) {
+  const medals = r.events.filter(e => e.type === EVENT.MEDAL).map(e => {
+    const key = r.tags.get(e.tags[0]) || "";
+    return { tick: e.tick, player: e.player, text: MEDALS[key] || key.replace(/_/g, " ") };
+  });
+  if (medals.length) return medals;
+  const out = [], names = ["", "", "Double Kill", "Triple Kill", "Killtacular", "Killtrocity"];
+  const byKiller = new Map();
+  for (const k of r.killList || []) {
+    if (k.world || k.killer === k.victim) continue;
+    if (!byKiller.has(k.killer)) byKiller.set(k.killer, []);
+    byKiller.get(k.killer).push(k.tick);
+  }
+  for (const [killer, ticks] of byKiller) {
+    let run = 1;
+    for (let i = 1; i <= ticks.length; i++) {
+      if (i < ticks.length && ticks[i] - ticks[i - 1] <= 4 * r.game.rate) { run++; continue; }
+      if (run >= 2) out.push({ tick: ticks[i - 1], player: killer, text: names[Math.min(run, 5)] || `${run} kills` });
+      run = 1;
+    }
+  }
+  return out.sort((a, b) => a.tick - b.tick);
 }
 
 function describe(e) {
@@ -549,8 +1204,15 @@ function describe(e) {
       4: "hovering in the air: flying" }[e.move.kind] || "a move refused";
     return `${name(e.move.player)} ${why} (refused)`;
   }
-  if (e.kill) return e.kill.killer === e.kill.victim ? `${name(e.kill.victim)} died` :
-    `${name(e.kill.killer)} killed ${name(e.kill.victim)}${e.kill.headshot ? " (headshot)" : ""}`;
+  if (e.kill) return killText(e.kill);
+  if (e.highlight) return `${name(e.highlight.player)}: ${e.highlight.text}`;
+  if (e.chat) return e.chat.speaker === 255 ? e.chat.text : `${e.chat.name}: ${e.chat.text}`;
+  if (e.event) {
+    const ev = e.event, who = ev.player === 255 ? "Someone" : name(ev.player);
+    if (ev.type === EVENT.OBJECTIVE) return `${who} ${OBJECTIVES[ev.values[0]] || "did the objective"}`;
+    if (ev.type === EVENT.RIDE) return `${who} rode a ${tagName(ev.tags[0]) || "vehicle"} as ${["driver", "gunner", "passenger"][ev.values[0]] || "passenger"}`;
+    return `${who} picked up ${tagName(ev.tags[0]) || "something"}`;
+  }
   const h = e.hit, why = [];
   if (h.verdict & HIT.SOLID) why.push("through solid wall"); else if (h.verdict & HIT.WALL) why.push("through wall");
   if (h.verdict & HIT.OFF_AIM) why.push(`${h.angle.toFixed(0)}° off aim`);
@@ -569,9 +1231,9 @@ function renderEvents() {
     row.querySelector(".t").textContent = fmt(e.tick);
     row.querySelector(".d").textContent = describe(e);
     row.onclick = () => {
-      // (two seconds before, through the shooter's eyes)
-      const slot = e.hit ? e.hit.shooter : e.move ? e.move.player : e.kill.killer;
-      select(slot);
+      // (two seconds before, through the shooter's (or player's) eyes)
+      const slot = e.hit ? e.hit.shooter : e.move ? e.move.player : e.slot;
+      if (slot != null && slot !== 255) select(slot);
       seek(e.tick - 2 * rec.game.rate);
       setPlaying(true);
     };
@@ -583,11 +1245,48 @@ function renderEvents() {
   marks.innerHTML = "";
   const span = Math.max(1, rec.last - rec.first);
   for (const e of list) {
-    if (e.kind === "ok") continue;
+    if (e.kind === "ok" || e.kind === "pickup") continue;
     const m = document.createElement("i");
     m.style.left = `${((e.tick - rec.first) / span) * 100}%`;
-    m.style.background = e.kind === "refused" ? "var(--bad)" : e.kind === "suspicious" ? "var(--warn)" : "#8aa";
+    m.style.background = { refused: "var(--bad)", suspicious: "var(--warn)", highlight: "#f5c542", objective: "#5aa9ff",
+      chat: "#ccc" }[e.kind] || "#8aa";
+    if (e.kind === "highlight") m.style.height = "12px";
     marks.append(m);
+  }
+}
+
+/* ---------- each player's game: kills, deaths, headshots, best spree, weapons */
+
+function renderStats() {
+  const box = document.getElementById("stats");
+  const list = rec.killList || [];
+  const slots = selected != null ? [selected] : [...rec.players.keys()];
+  box.innerHTML = "";
+  for (const slot of slots) {
+    const kills = list.filter(k => k.killer === slot && !k.world && k.victim !== slot);
+    const deaths = list.filter(k => k.victim === slot);
+    const weapons = new Map();
+    for (const k of kills) {
+      const w = k.weapon !== 0xFFFF ? tagName(k.weapon) : DAMAGE[k.damage] || "";
+      if (w) weapons.set(w, (weapons.get(w) || 0) + 1);
+    }
+    const favorite = [...weapons].sort((a, b) => b[1] - a[1])[0];
+    let spree = 0, best = 0;
+    for (const k of list) {
+      if (k.killer === slot && !k.world && k.victim !== slot) best = Math.max(best, ++spree);
+      if (k.victim === slot) spree = 0;
+    }
+    const pickups = rec.events.filter(e => e.type === EVENT.PICKUP && e.player === slot).length;
+    const rides = rec.events.filter(e => e.type === EVENT.RIDE && e.player === slot).length;
+    const highlights = (rec.highlights || []).filter(h => h.player === slot).length;
+    const div = document.createElement("div");
+    div.innerHTML = `<b></b>: <span></span>`;
+    div.querySelector("b").textContent = playerAt(slot, rec.last).name;
+    div.querySelector("span").textContent = `${kills.length} kills, ${deaths.length} deaths` +
+      `, ${kills.filter(k => k.headshot).length} headshots, best spree ${best}` +
+      (highlights ? `, ${highlights} medals` : "") + (favorite ? `, mostly ${favorite[0]} (${favorite[1]})` : "") +
+      (rec.poses.length ? `, ${pickups} pickups, ${rides} rides` : "");
+    box.append(div);
   }
 }
 
@@ -612,7 +1311,25 @@ document.getElementById("cam-third").onclick = () => setCamera("third");
 document.getElementById("cam-free").onclick = () => setCamera("free");
 document.getElementById("xray").onclick = e => { xray = !xray; e.target.classList.toggle("on", xray); };
 document.getElementById("lines").onclick = e => { aimLines = !aimLines; e.target.classList.toggle("on", aimLines); };
-for (const id of ["f-refused", "f-suspicious", "f-ok", "f-kills", "f-moves", "f-selected"]) document.getElementById(id).onchange = renderEvents;
+for (const id of ["f-refused", "f-suspicious", "f-ok", "f-kills", "f-moves", "f-selected", "f-highlights", "f-objectives",
+  "f-pickups", "f-chat"]) document.getElementById(id).onchange = renderEvents;
+document.getElementById("hudbutton").onclick = e => { hudOn = !hudOn; e.target.classList.toggle("on", hudOn); };
+document.getElementById("scores").onclick = e => { scoresOn = !scoresOn; e.target.classList.toggle("on", scoresOn); scoresDrawnAt = -1e9; renderScoreboard(); };
+document.getElementById("heat").onclick = e => { heatOn = !heatOn; e.target.classList.toggle("on", heatOn); if (heatMesh) heatMesh.visible = heatOn; };
+document.getElementById("killcam").onclick = () => startKillcam();
+document.getElementById("link").onclick = async () => {
+  // (this moment: the recording's address, the time from its start and the player)
+  const query = new URLSearchParams(location.search);
+  query.delete("t"); query.delete("p");
+  if (!query.get("file") && !query.get("live")) { alert("A recording opened from this computer has no link: open it from a server's list."); return; }
+  const seconds = Math.max(0, Math.round((tick - rec.first) / rec.game.rate));
+  query.set("t", `${Math.floor(seconds / 60)}m${seconds % 60}s`);
+  if (selected != null) query.set("p", playerAt(selected, tick).name);
+  const url = `${location.origin}${location.pathname}?${query}`;
+  try { await navigator.clipboard.writeText(url); document.getElementById("link").textContent = "Copied"; }
+  catch (error) { prompt("The link to this moment:", url); }
+  setTimeout(() => { document.getElementById("link").textContent = "Copy link"; }, 1500);
+};
 addEventListener("keydown", e => {
   if (!rec || e.target.tagName === "INPUT" && e.target.type !== "range" && e.target.type !== "checkbox") return;
   if (e.key === " ") { e.preventDefault(); document.getElementById("play").click(); }
@@ -623,6 +1340,10 @@ addEventListener("keydown", e => {
   else if (e.key === "3") setCamera("free");
   else if (e.key === "x" || e.key === "X") document.getElementById("xray").click();
   else if (e.key === "a" || e.key === "A") document.getElementById("lines").click();
+  else if (e.key === "h" || e.key === "H") document.getElementById("hudbutton").click();
+  else if (e.key === "m" || e.key === "M") document.getElementById("heat").click();
+  else if (e.key === "k" || e.key === "K") document.getElementById("killcam").click();
+  else if (e.key === "Tab") { e.preventDefault(); document.getElementById("scores").click(); }
   else if (e.key === "[" || e.key === "]") {
     const slots = [...rec.players.keys()].sort((a, b) => a - b);
     if (!slots.length) return;
@@ -671,6 +1392,13 @@ function looksPublic(r) {
   return players.length > 0 && players.every(p => !p.hwid && !p.ip) && !r.moves.length && r.hits.every(h => !h.verdict);
 }
 
+// (what is worked out once a recording's records are read, and again as
+// more come live: the kills with their weapons, and the highlights)
+function digest(r) {
+  r.killList = killEvents(r);
+  r.highlights = findHighlights(r);
+}
+
 function gameLine(text, href) {
   const d = document.createElement("div");
   if (href) {
@@ -691,7 +1419,8 @@ function describeGame() {
   const map = mapName(rec.game.map);
   document.getElementById("game").innerHTML = "";
   for (const text of [`${map}${rec.game.type ? " · " + rec.game.type : ""}`, rec.game.server, date,
-    `${fmt(rec.last)} long · ${rec.hits.length} hits${publicCopy ? "" : " checked"} · ${rec.kills.length} kills`])
+    `${fmt(rec.last)} long · ${rec.hits.length} hits${publicCopy ? "" : " checked"} · ${(rec.killList || rec.kills).length} kills` +
+      ((rec.highlights || []).length ? ` · ${rec.highlights.length} highlights` : "")])
     gameLine(text);
   if (rec.report) gameLine("Carnage report and stats", rec.report);
   return map;
@@ -703,14 +1432,21 @@ function show(r) {
   document.getElementById("drop").style.display = "none";
   for (const figure of figures.values()) scene.remove(figure.group);
   figures = new Map();
+  clearObjects();
+  killcam = null;
+  digest(rec);
   publicCopy = looksPublic(rec);
-  document.getElementById("filters").style.display = publicCopy ? "none" : "";
-  document.getElementById("events-title").textContent = publicCopy ? "Kills" : "Hits and kills";
+  document.getElementById("fairplay-filters").style.display = publicCopy ? "none" : "";
+  document.getElementById("events-title").textContent = publicCopy ? "Kills and highlights" : "Hits and kills";
   if (publicCopy) for (const [id, on] of [["f-refused", false], ["f-suspicious", false], ["f-ok", false],
     ["f-kills", true], ["f-moves", false], ["f-selected", false]]) document.getElementById(id).checked = on;
   teams = [...rec.players.values()].some(list => list.some(p => p.team === 1)) &&
     [...rec.players.values()].every(list => list.every(p => p.team <= 1));
+  // (the version 2 buttons only where there is something to show)
+  for (const id of ["heat", "killcam", "scores"]) document.getElementById(id).style.display = rec.poses.length || id !== "heat" ? "" : "none";
   buildWalls();
+  buildMinimap();
+  buildHeat();
   const map = describeGame();
   scrub.min = String(rec.first);
   scrub.max = String(rec.last);
@@ -720,8 +1456,27 @@ function show(r) {
   setCamera(selected != null ? "first" : "free");
   renderPlayers();
   renderEvents();
+  renderStats();
   seek(rec.first);
+  applyMoment();
   document.title = `${map} replay`;
+}
+
+// (?t=1m30s or ?t=90, and ?p=<a player's name>: a link to a moment)
+let momentApplied = false;
+function applyMoment() {
+  if (momentApplied) return;
+  momentApplied = true;
+  const query = new URLSearchParams(location.search);
+  const t = query.get("t"), p = query.get("p");
+  if (p) {
+    const slot = [...rec.players.keys()].find(s => rec.players.get(s).some(entry => entry.name === p));
+    if (slot != null) select(slot);
+  }
+  if (t) {
+    const m = /^(?:(\d+)m)?(\d+(?:\.\d+)?)s?$/.exec(t.trim());
+    if (m) { seek(rec.first + ((Number(m[1] || 0) * 60) + Number(m[2])) * rec.game.rate); setPlaying(true); }
+  }
 }
 
 // (a public copy's game's carnage report on the game list: <name>.json beside it)
@@ -826,10 +1581,13 @@ async function livePoll() {
     } else if (read.chunks.length) {
       const players = rec.players.size;
       addChunks(rec, read.chunks);
+      digest(rec);
+      buildHeat();
       scrub.max = String(rec.last);
       describeGame();
       if (rec.players.size !== players) renderPlayers();
       renderEvents();
+      renderStats();
     }
     if (rec) liveBadge(status.live ? `LIVE · ${status.delay} s behind` : "Game over: watch it again", status.live);
   } catch (error) {

@@ -56,6 +56,7 @@ say a line from their own text box (xinput_sdl.c, platform_web_chat_say).
 #include "text/unicode.h"
 #include "halo_keyboard.h"
 #include "network_coop.h"
+#include "network_recording.h"
 #include "../src/delta_chat.h"
 #include "../src/delta_chat_game.h"
 #include "../src/delta_moderation.h"
@@ -462,6 +463,9 @@ static int route(struct delta_wire_chat_line const *line, short speaker_team, bo
 
 	if (!game)
 		return 0;
+	/* port (this fork): in the game's recording too (network_recording.c) */
+	network_recording_chat(line->kind, line->scope, line->speaker_player == 255 ? NONE : (short)line->speaker_player,
+		line->name, line->name_length, line->text, line->length);
 	csmemset(seen, 0, sizeof(seen));
 	for (index = 0; index < HALO_PORT_MAXIMUM_NETWORK_PLAYERS; index++)
 	{

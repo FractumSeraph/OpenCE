@@ -188,8 +188,15 @@ records every game (`port/linux/game/network_recording.c`) to
 `recordings/<date>_<time>_<map>.hrec` in the data folder: the map's walls,
 each player's name, team, address and hardware id, every tick each living
 player's position, eye height, aim, crouch, triggers, zoom, health, weapon
-and vehicle, each bullet's hit on a player with the fair play checks'
-verdict, and each kill. That is about 40 MB an hour of a full game; once
+and vehicle, and their pose (body facing, speed, animation, flashlight,
+camouflage, melee, grenade throw, reload, rounds, grenades, other weapon,
+seat); every two ticks the world's vehicles, the items no one holds,
+projectiles and grenades, doors and elevators; each bullet's hit on a player
+with the fair play checks' verdict, each kill, the game's events as Delta
+Stats records them (kills with their weapon and damage, medals, objectives,
+pickups, rides, spawns; with `HALO_NET_REPORT_EVENTS`), the scores every
+second, the chat, and the map's file and hash. Blocks are compressed (gzip):
+a full game is about 15 to 25 MB an hour; once
 the folder holds more than `HALO_NET_RECORDINGS_MEGABYTES`
 (`network.recordings_megabytes`, 2048 by default; 0 keeps everything) the
 oldest go. A game in progress is on disk to within 10 seconds. Keep the
@@ -201,9 +208,14 @@ a moderator's, as `sv_suspects` is, and each one taken is in the audit
 file), or copy it off the server, and open it at
 https://halo.fractumseraph.net/assets/replay/ (`port/web/assets/replay`).
 The file is read in your browser and sent nowhere. The page draws the map's
-walls and every player with their aim. It follows a player through their
-eyes (1), from behind them (2) or freely (3), with players behind walls
-shown through them (X). Its list and timeline mark the hits the checks
+walls, every player with their aim, and the world's vehicles, items,
+projectiles (with tracers) and explosions. It follows a player through
+their eyes (1), from behind them (2) or freely (3), with players behind
+walls shown through them (X), their HUD (H: shields, health, rounds,
+grenades, motion tracker), the scoreboard (Tab), a minimap, a heatmap of
+deaths and kills (M) and a kill cam (K: the player's last death through
+the killer's eyes). **Copy link** gives a link to the moment (`?t=1m30s`,
+`&p=<player>`). Its list and timeline mark the hits the checks
 refused (red) or doubted (orange), and the kills; a click on one jumps to
 two seconds before it, through the shooter's eyes. **Record video** saves
 the view as a video for a ban's evidence. A recording a server keeps

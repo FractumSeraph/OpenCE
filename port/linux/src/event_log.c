@@ -1082,6 +1082,11 @@ char const *event_log_game_id(void)
 	return event_log.recording ? event_log.id : "";
 }
 
+char const *event_log_tag_text(int tag)
+{
+	return event_log.recording && valid_tag(tag) ? event_log.tags[tag] : NULL;
+}
+
 int event_log_tag(char const *text)
 {
 	int index;

@@ -39,6 +39,20 @@ void network_recording_kill(short killer_index, short victim_index, boolean head
 (network_fairplay.h's NETWORK_FAIRPLAY_MOVE_*), and by how much */
 void network_recording_move(short player_index, byte kind, real amount);
 
+/* one of the game's events as Delta Stats' recorder notes it (game_events.c,
+event_log.h's EVENT_LOG_*: a kill with its damage, a medal, an objective, a
+pickup, a ride, a spawn, a moderator's action, an anti-cheat's flag): its
+players (player indices, NONE for none), its tags' names (NULL for none),
+values, bits and positions, as event_log_record has them */
+void network_recording_event(long tick, short type, short player_index, short other_index,
+	char const *const tags[3], int const values[4], unsigned long bits, float const position[3],
+	float const other_position[3]);
+/* a chat line the host sent on (chat.c): its kind and scope (delta_wire.h's),
+who said it (the game's player list's index, NONE for the server or the
+game) and their name, and its text */
+void network_recording_chat(byte kind, byte scope, short speaker_index, char const *name, int name_length,
+	char const *text, int length);
+
 /* the public copy (network.record_public) being written, or the last one:
 its file's name in recordings\public (0 if none), for the carnage
 report of its game to be linked to it */

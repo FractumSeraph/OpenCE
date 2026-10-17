@@ -136,6 +136,30 @@ int main(int argc, char **argv)
 		CHECK(length == 5 + 8, "%lu bytes from a block whose last record is cut short", length);
 		return 0;
 	}
+	/* (version 2) a moderator's action and an anti-cheat's flag left out; a
+	kill event and a pose kept, and both are the game being played */
+	if (!strcmp(case_name, "no-moderation-events"))
+	{
+		byte *at = record(_record_event, 57);
+
+		memset(at, 0x66, 57);
+		at[4] = RECORDING_EVENT_FLAG;
+		at = record(_record_event, 57);
+		memset(at, 0x77, 57);
+		at[4] = RECORDING_EVENT_MODERATION;
+		at = record(_record_event, 57);
+		memset(at, 0x88, 57);
+		at[4] = 0;
+		at = record(_record_pose, 5);
+		memset(at, 0x99, 5);
+		length = public_records(in, in_length, out, &live);
+		CHECK(length == 5 + 57 + 5 + 5, "%lu bytes, not the kill event and the pose", length);
+		CHECK(out[0] == _record_event && out[5 + 4] == 0, "the event kept is not the kill");
+		CHECK(!found((byte const *)"\x66\x66\x66\x66", 4, length), "the anti-cheat's flag is in the public copy");
+		CHECK(!found((byte const *)"\x77\x77\x77\x77", 4, length), "the moderator's action is in the public copy");
+		CHECK(live, "a kill event and a pose are the game being played");
+		return 0;
+	}
 	fprintf(stderr, "unknown case %s\n", case_name);
 	return 2;
 }
