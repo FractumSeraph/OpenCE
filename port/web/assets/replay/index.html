@@ -168,7 +168,7 @@ button.on{background:rgba(127,211,164,.35);border-color:var(--accent)}
 <script type="module">
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { readHaloMap } from "./halomap.js";
+import { readHaloMap, matrixFromPose, multiplyMatrices } from "./halomap.js";
 
 /* ---------- the recording (network_recording.c's format) */
 
@@ -468,6 +468,21 @@ function drawObjects(t) {
     const x = b && f ? a.x + (b.x - a.x) * f : a.x, y = b && f ? a.y + (b.y - a.y) * f : a.y, z = b && f ? a.z + (b.z - a.z) * f : a.z;
     o.group.visible = true;
     o.group.position.set(x, y, z);
+    // (the object's own model once the real map can give it: vehicles and
+    // items, not projectiles, which stay glows with their tracers)
+    if (realMap && !o.modelAsked && track.type !== 5 && track.type !== 7) {
+      o.modelAsked = true;
+      const asked = objectModel(rec.tags.get(track.tag));
+      if (asked) asked.then(parts => {
+        if (!parts || !realMap) return;
+        o.model = modelGroup(parts);
+        o.group.add(o.model);
+      });
+    }
+    if (o.model) {
+      o.model.visible = realMapOn;
+      o.group.children[0].visible = !realMapOn;
+    }
     xAxis.set(...a.f).normalize();
     zAxis.set(...a.u).normalize();
     yAxis.crossVectors(zAxis, xAxis);
@@ -723,8 +738,24 @@ function draw() {
         transparent: true, opacity: 0.9 }));
       figure.group.add(figure.flash);
     }
+    // (the map's own player model, posed by the recorded animation, where
+    // the real map is drawn: in the player's colour, camouflaged as above)
+    const real = realMap && realMapOn && realMap.player;
+    if (real && !own) {
+      posePlayer(figure, pose);
+      figure.skin.visible = true;
+      figure.skin.rotation.z = pose ? pose.facing : s.yaw;
+      const tint = new THREE.Color(colorOf(slot)).lerp(new THREE.Color(0xffffff), 0.45);
+      for (const m of figure.skinMaterials) {
+        m.color.copy(tint);
+        m.transparent = xray || camo < 1;
+        m.opacity = xray ? 0.85 : camo;
+        m.depthTest = !xray;
+      }
+    } else if (figure.skin) figure.skin.visible = false;
+    figure.body.visible = figure.head.visible = !own && !real;
     const dirAim = aimVector(s);
-    figure.visor.visible = !own;
+    figure.visor.visible = !own && !real;
     figure.visor.position.set(dirAim.x * 0.1, dirAim.y * 0.1, s.eye + dirAim.z * 0.1);
     figure.visor.rotation.z = s.yaw;
     // (a muzzle flash while the trigger is down, every other tick)
@@ -783,6 +814,11 @@ function draw() {
     who.style.color = "#" + colorOf(selected).toString(16).padStart(6, "0");
     sub.textContent = s ? `health ${Math.round(s.body * 100)}%  shields ${Math.round(Math.min(s.shield, 1) * 100)}%  ${weaponName(s.weapon)}${s.flags & 16 ? "  (riding)" : ""}${s.flags & 1 ? "  crouching" : ""}${s.flags & 2 ? "  firing" : ""}` : "dead";
   } else { who.textContent = ""; sub.textContent = ""; }
+  // (the sky: around the camera, wherever it is)
+  if (realMap && realMap.sky) {
+    realMap.sky.visible = realMapOn;
+    realMap.sky.position.copy(camera.position);
+  }
   renderer.render(scene, camera);
   drawOverlay(states);
   drawMinimap(states);
@@ -1250,7 +1286,8 @@ async function loadRealMap() {
       }
     }
     if (!triangles) throw new Error("the map has no level geometry to draw");
-    realMap = { group, textures };
+    realMap = { group, textures, texture, data, models: new Map(), objectModels: new Map(), animations: new Map(),
+      player: null, sky: null };
     if (data.sky && data.sky.color) {
       const c = data.sky.color;
       scene.background = new THREE.Color(c[0], c[1], c[2]);
@@ -1260,10 +1297,168 @@ async function loadRealMap() {
     document.getElementById("realmap").style.display = "";
     applyRealMap();
     mapStatus(`The map as the game draws it: ${triangles} triangles, ${textures.size} textures`);
+    // (then what stands on it: its scenery, its sky, and the players' model)
+    loadMapModels(loading).catch(() => {});
   } catch (error) {
     if (loading === realMapLoading) mapStatus(`The map could not be read (${error.message}): its walls only.`);
     clearRealMap();
   }
+}
+
+/* ---------- the map's models (halomap.js): its scenery, its sky, the
+objects' and players' own models, posed by the recorded animations */
+
+// (a model's meshes as three.js meshes, sharing geometry and materials
+// between every copy of it)
+function modelTemplate(model, { unlit = false } = {}) {
+  const parts = [];
+  for (const mesh of model.meshes) {
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.BufferAttribute(mesh.positions, 3));
+    if (mesh.normals) geometry.setAttribute("normal", new THREE.BufferAttribute(mesh.normals, 3));
+    if (mesh.uvs) geometry.setAttribute("uv", new THREE.BufferAttribute(mesh.uvs, 2));
+    geometry.setIndex(new THREE.BufferAttribute(mesh.indices, 1));
+    const map = realMap.texture(mesh.baseMap);
+    if (map) map.colorSpace = THREE.SRGBColorSpace;
+    const side = mesh.twoSided ? THREE.DoubleSide : THREE.FrontSide;
+    const material = unlit ? new THREE.MeshBasicMaterial({ map, side, fog: false, depthWrite: false }) :
+      new THREE.MeshLambertMaterial({ map, color: map ? 0xffffff : 0x8a9488, side });
+    if (mesh.alphaTest) material.alphaTest = 0.5;
+    else if (mesh.transparent) {
+      material.transparent = true;
+      material.depthWrite = false;
+      if (mesh.blend === "add") material.blending = THREE.AdditiveBlending;
+    }
+    parts.push({ geometry, material, mesh });
+  }
+  return parts;
+}
+
+function modelGroup(parts) {
+  const group = new THREE.Group();
+  for (const part of parts) group.add(new THREE.Mesh(part.geometry, part.material));
+  return group;
+}
+
+// (an object's model by its tag's name, once: NULL if it has none)
+function objectModel(name) {
+  if (!realMap || !name) return null;
+  if (!realMap.objectModels.has(name)) {
+    realMap.objectModels.set(name, realMap.data.readObjectModel(name).then(model => model && model.meshes.length ?
+      modelTemplate(model) : null).catch(() => null));
+  }
+  return realMap.objectModels.get(name);
+}
+
+async function loadMapModels(loading) {
+  const data = realMap.data;
+  // (the sky is its colour, the background's: its model's textures are the
+  // details the game's sky shading lays over that colour, noise alone)
+  // (the scenery, machines and lights the map places, each model read once)
+  let placed = 0;
+  for (const s of data.scenery.slice(0, 3000)) {
+    if (loading !== realMapLoading) return;
+    if (s.modelIndex == null || s.modelIndex < 0) continue;
+    const key = `${s.modelIndex}/${s.variant || 0}`;
+    if (!realMap.models.has(key)) {
+      realMap.models.set(key, data.readModel(s.modelIndex, { variant: s.variant || 0 }).then(model =>
+        model && model.meshes.length ? modelTemplate(model) : null).catch(() => null));
+    }
+    const parts = await realMap.models.get(key);
+    if (!parts || loading !== realMapLoading) continue;
+    const group = modelGroup(parts);
+    group.matrixAutoUpdate = false;
+    group.matrix.fromArray(s.matrix);
+    realMap.group.add(group);
+    placed++;
+  }
+  // (the players' model: the animation graph the poses name, as its model)
+  const graphs = new Set(rec.poses.slice(0, 300).flatMap(p => [...p.entries.values()].map(e => rec.tags.get(e.graph))).filter(Boolean));
+  let model = null;
+  for (const name of [...graphs, "characters\\cyborg_mp\\cyborg_mp", "characters\\cyborg\\cyborg"]) {
+    model = await data.readModel(name).catch(() => null);
+    if (model && model.meshes.length) break;
+  }
+  if (!model || loading !== realMapLoading) return;
+  realMap.player = { model, parts: modelTemplate(model), graph: [...graphs][0] || model.name };
+  mapStatus(`${mapStatusText.replace(/;.*$/, "")}; ${placed} pieces of scenery`);
+}
+
+// (an animation of the players' graph, read once)
+function animationOf(graph, index) {
+  const key = `${graph}/${index}`;
+  if (!realMap.animations.has(key)) {
+    realMap.animations.set(key, null);
+    realMap.data.readAnimation(graph, index).then(a => realMap && realMap.animations.set(key, a)).catch(() => {});
+  }
+  return realMap.animations.get(key);
+}
+
+// (a player's model posed: the recorded animation's frame, or the model's
+// own pose; skinned here, each vertex by its two nodes)
+const skinScratch = { matrices: [] };
+function posePlayer(figure, pose) {
+  const player = realMap.player, model = player.model, nodes = model.nodes;
+  if (!figure.skin) {
+    figure.skin = new THREE.Group();
+    figure.skinMaterials = [];
+    for (const part of player.parts) {
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(part.mesh.positions), 3));
+      if (part.mesh.normals) geometry.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(part.mesh.normals), 3));
+      if (part.mesh.uvs) geometry.setAttribute("uv", part.geometry.getAttribute("uv"));
+      geometry.setIndex(part.geometry.getIndex());
+      const material = part.material.clone();
+      figure.skinMaterials.push(material);
+      const m = new THREE.Mesh(geometry, material);
+      m.frustumCulled = false;
+      figure.skin.add(m);
+    }
+    figure.group.add(figure.skin);
+  }
+  // (each node's place: the animation's frame where it has one)
+  const graph = pose && rec.tags.get(pose.graph) || player.graph;
+  const animation = pose ? animationOf(graph, pose.animation) : null;
+  const frames = animation && animation.frames && animation.type !== 1 && animation.nodeCount === nodes.length ? animation : null;
+  const frame = frames ? Math.min(frames.frameCount - 1, Math.max(0, pose.frame)) : 0;
+  const world = skinScratch.matrices;
+  for (let i = 0; i < nodes.length; i++) {
+    let local;
+    if (frames) {
+      const at = (frame * nodes.length + i) * 8, f = frames.frames;
+      local = matrixFromPose([f[at + 4], f[at + 5], f[at + 6]], [f[at], f[at + 1], f[at + 2], f[at + 3]], f[at + 7] || 1);
+    } else local = matrixFromPose(nodes[i].translation, nodes[i].rotation, 1);
+    world[i] = nodes[i].parent >= 0 && nodes[i].parent < i ? multiplyMatrices(world[nodes[i].parent], local) : local;
+  }
+  const skinning = world.slice(0, nodes.length).map((m, i) => multiplyMatrices(m, nodes[i].inverseMatrix));
+  player.parts.forEach((part, k) => {
+    const source = part.mesh.positions, normals = part.mesh.normals, n = part.mesh.nodeIndices, w = part.mesh.nodeWeights;
+    const mesh = figure.skin.children[k];
+    const out = mesh.geometry.attributes.position.array, outNormal = mesh.geometry.attributes.normal && mesh.geometry.attributes.normal.array;
+    for (let v = 0; v < source.length / 3; v++) {
+      const x = source[v * 3], y = source[v * 3 + 1], z = source[v * 3 + 2];
+      let ox = 0, oy = 0, oz = 0, nx = 0, ny = 0, nz = 0;
+      for (let j = 0; j < 2; j++) {
+        const weight = w ? w[v * 2 + j] : (j === 0 ? 1 : 0);
+        if (!weight) continue;
+        const m = skinning[n ? Math.min(n[v * 2 + j], nodes.length - 1) : 0];
+        ox += weight * (m[0] * x + m[4] * y + m[8] * z + m[12]);
+        oy += weight * (m[1] * x + m[5] * y + m[9] * z + m[13]);
+        oz += weight * (m[2] * x + m[6] * y + m[10] * z + m[14]);
+        if (normals) {
+          const a = normals[v * 3], b = normals[v * 3 + 1], c = normals[v * 3 + 2];
+          nx += weight * (m[0] * a + m[4] * b + m[8] * c);
+          ny += weight * (m[1] * a + m[5] * b + m[9] * c);
+          nz += weight * (m[2] * a + m[6] * b + m[10] * c);
+        }
+      }
+      out[v * 3] = ox; out[v * 3 + 1] = oy; out[v * 3 + 2] = oz;
+      if (outNormal) { outNormal[v * 3] = nx; outNormal[v * 3 + 1] = ny; outNormal[v * 3 + 2] = nz; }
+    }
+    mesh.geometry.attributes.position.needsUpdate = true;
+    if (mesh.geometry.attributes.normal) mesh.geometry.attributes.normal.needsUpdate = true;
+    mesh.geometry.computeBoundingSphere();
+  });
 }
 
 function applyRealMap() {
@@ -1276,6 +1471,15 @@ function applyRealMap() {
 function clearRealMap() {
   if (!realMap) return;
   scene.remove(realMap.group);
+  if (realMap.sky) scene.remove(realMap.sky);
+  // (the models drawn from it: the players' and the objects')
+  for (const figure of figures.values()) {
+    if (figure.skin) { figure.group.remove(figure.skin); figure.skin = null; }
+  }
+  for (const o of objectMeshes.values()) {
+    if (o && o.model) { o.group.remove(o.model); o.model = null; }
+    if (o) { o.modelAsked = false; o.group.children[0].visible = true; }
+  }
   realMap.group.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
   for (const t of realMap.textures.values()) t.dispose();
   realMap = null;

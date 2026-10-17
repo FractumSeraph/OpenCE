@@ -219,7 +219,9 @@ the killer's eyes). **Copy link** gives a link to the moment (`?t=1m30s`,
 and baked lighting, from the map's own file (`halomap.js` reads a Custom
 Edition map, and Halo PC's `bitmaps.map` for the stock textures, a part at
 a time): the site's `assets/custom_maps/`, else
-`halomaps.fractumseraph.net/maps/`. **Real map** (G) shows the walls instead;
+`halomaps.fractumseraph.net/maps/`, with its scenery, the objects' own models,
+and each player as the map's player model, posed every tick by the animation
+and frame the recording has (version 2). **Real map** (G) shows the walls instead;
 a map not found or not readable (the Xbox's compressed maps) shows its walls. Its list and timeline mark the hits the checks
 refused (red) or doubted (orange), and the kills; a click on one jumps to
 two seconds before it, through the shooter's eyes. **Record video** saves
