@@ -129,10 +129,6 @@ then does not install over an earlier one.
 
 The kits' instructions: [services/selfhost/README.md](services/selfhost/README.md).
 
-### Arch-based Linux Distributions
-
-The above Linux binary release is available on the [AUR](https://aur.archlinux.org/packages/opence-bin).
-
 ## Game data
 
 At the first start the game offers to download its `maps/` folder from this
