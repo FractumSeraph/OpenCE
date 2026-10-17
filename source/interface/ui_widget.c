@@ -6240,20 +6240,35 @@ static short ui_mouse_key_button(
 		{ "start_butn", _gamepad_binary_button_start },
 		{ "back_butn", _gamepad_binary_button_back },
 	};
-	char const *name = tag_get_name(widget->definition_tag_index);
-	char const *leaf = name ? strrchr(name, '\\') : NULL;
-	long key_index;
+	struct ui_widget_definition const *definition = ui_widget_definition_get(widget->definition_tag_index);
+	/* the widget's own name, then its picture's: the Chupathingy menus'
+	prompts are chupathingy\prompts\a and so on, drawn with
+	chupathingy\prompts\a_butn (port/assets/menus/chupathingy/prompts.xml),
+	which a tap did not take, so that their settings pages had no way back
+	without a pad or keys */
+	char const *names[2];
+	long name_index;
 
-	leaf = leaf ? leaf + 1 : name;
-	for (key_index = 0; leaf && key_index < NUMBEROF(keys); key_index++)
+	names[0] = tag_get_name(widget->definition_tag_index);
+	names[1] = definition && definition->background_bitmap.index != NONE ?
+		tag_get_name(definition->background_bitmap.index) : NULL;
+	for (name_index = 0; name_index < NUMBEROF(names); name_index++)
 	{
-		long length = (long)strlen(keys[key_index].name);
+		char const *name = names[name_index];
+		char const *leaf = name ? strrchr(name, '\\') : NULL;
+		long key_index;
 
-		/* and the smaller icons of the dialogs, "a_butn_sm" */
-		if (!strncmp(leaf, keys[key_index].name, length) &&
-			(leaf[length] == '\0' || leaf[length] == '_'))
+		leaf = leaf ? leaf + 1 : name;
+		for (key_index = 0; leaf && key_index < NUMBEROF(keys); key_index++)
 		{
-			return keys[key_index].button_index;
+			long length = (long)strlen(keys[key_index].name);
+
+			/* and the smaller icons of the dialogs, "a_butn_sm" */
+			if (!strncmp(leaf, keys[key_index].name, length) &&
+				(leaf[length] == '\0' || leaf[length] == '_'))
+			{
+				return keys[key_index].button_index;
+			}
 		}
 	}
 
