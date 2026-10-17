@@ -279,8 +279,10 @@ def main() -> int:
     # license asks copies to carry its notice
     shutil.copy2(ROOT / "port/assets/icons/lucide/LICENSE", dist / "lucide-LICENSE.txt")
     # internet play's MQTT brokers, a file beside the game (network.brokers_file;
-    # Android's APK has its own copy)
-    if args.platform not in ANDROID_BUILDS:
+    # Android's APK has its own copy; the macOS application reads its settings
+    # folder in Application Support, never beside the app, so it uses the
+    # game's built-in list)
+    if args.platform not in ANDROID_BUILDS and args.platform != "macos":
         shutil.copy2(ROOT / "port/assets/network/brokers.txt", dist / "brokers.txt")
         # the Custom Edition maps' torrents, likewise (maps.torrent_index)
         shutil.copy2(ROOT / "port/assets/network/map_torrents.txt", dist / "map_torrents.txt")
