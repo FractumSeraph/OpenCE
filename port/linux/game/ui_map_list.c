@@ -961,10 +961,7 @@ static void add_pc_entry(
 	wchar_t lobby_name[DISPLAY_NAME_LENGTH];
 	wchar_t own_description[DESCRIPTION_LENGTH];
 	wchar_t details[DESCRIPTION_LENGTH];
-	wchar_t const *description = campaign ? L"A Halo Custom
-Edition campaign
-map" : L"A Halo Custom
-Edition map";
+	wchar_t const *description = campaign ? L"A Halo Custom\r\nEdition campaign\r\nmap" : L"A Halo Custom\r\nEdition map";
 	wchar_t const *mark = L"CE";
 	struct ui_map_entry *entry;
 	long ce_index = CE_UNKNOWN_LEVEL;
