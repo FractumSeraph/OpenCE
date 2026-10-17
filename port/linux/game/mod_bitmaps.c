@@ -819,7 +819,10 @@ static struct mod_bitmap *mod_bitmap_new(
 			TAG_BLOCK_GET_ELEMENT(&map_group->sequences, index, struct bitmap_group_sequence);
 		struct bitmap_group_sequence const *sequence = &bitmap->sequences[index];
 
-		if (sequence->sprites.count < map_sequence->sprites.count ||
+		/* port (this fork): as many sprites as the map's, not more: a
+		particle keeps its sprite's index, past the map's own once a
+		change of mods gives the map's bitmap back */
+		if (sequence->sprites.count != map_sequence->sprites.count ||
 			(map_sequence->bitmap_count > 0 && sequence->bitmap_count <= 0))
 		{
 			goto refused;

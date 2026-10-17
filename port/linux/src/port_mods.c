@@ -885,6 +885,11 @@ static void files_list(long mod, const char *path, const char *key, int depth)
 			platform_log("mods: the path of %s/%s is too long: it is left out", path, name);
 			continue;
 		}
+		/* port (this fork): a link is not followed, as a downloaded mod's
+		could point at the whole disk, walked at each scan (where it cannot
+		be told, the folder and file limits bound it) */
+		if (posix_is_link(child_path))
+			continue;
 		if (posix_stat(child_path, &information) != 0)
 			continue;
 		if (information.flags & _posix_file_is_directory)

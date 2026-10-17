@@ -858,7 +858,7 @@ static void upload(GLuint texture, GLenum target, const struct xgpu_texture_desc
 	BOOL decode_compressed = FALSE;
 	unsigned long *converted;
 	unsigned long face, level;
-#ifdef HALO_WEB
+#if defined(HALO_WEB) || defined(HALO_BROWSER)
 	/* for each order the texels keep their channels in (the Xbox's, a Halo
 	PC multipurpose map's, a Halo PC HUD meter's), the channel (red, green,
 	blue, alpha) each channel is taken from, as the texture swizzle below
@@ -877,7 +877,7 @@ static void upload(GLuint texture, GLenum target, const struct xgpu_texture_desc
 #endif
 	if (information.kind == _texel_bc7)
 		decode_compressed = TRUE;
-#ifdef HALO_WEB
+#if defined(HALO_WEB) || defined(HALO_BROWSER)
 	/* WebGL's S3TC takes 2D textures whose sides are multiples of 4; and a
 	texture whose channels are where Halo PC keeps them is decoded, to put
 	them in order (WebGL 2 has no texture swizzle) */
@@ -987,29 +987,14 @@ static void upload(GLuint texture, GLenum target, const struct xgpu_texture_desc
 					free(converted);
 					return;
 				}
-#ifdef HALO_BROWSER
-				/* WebGL 2 does not expose texture swizzles.  Convert the Xbox's
-				BGRA byte order to RGBA before uploading instead, and take each
-				channel from where a Custom Edition map keeps it. (Compressed
-				textures uploaded as they are keep the Xbox's order.) */
+#if defined(HALO_WEB) || defined(HALO_BROWSER)
 				{
-					unsigned long pixel;
-					unsigned long pixels = (unsigned long)width * (unsigned long)height * (unsigned long)depth;
-					unsigned char *rgba = (unsigned char *)converted;
-
-					for (pixel = 0; pixel < pixels; pixel++)
-					{
-						unsigned char blue = rgba[pixel * 4];
-
-						rgba[pixel * 4] = rgba[pixel * 4 + 2];
-						rgba[pixel * 4 + 2] = blue;
-					}
-				}
-#endif
-#ifdef HALO_WEB
-				{
-					/* BGRA (32-bit ARGB words) to the RGBA WebGL takes, each
-					channel from where the texels keep it */
+					/* BGRA (32-bit ARGB words) to the RGBA WebGL takes (WebGL 2
+					has no texture swizzle), each channel from where the texels
+					keep it: a Halo PC HUD meter's or multipurpose map's in this
+					fork's browser build too (it swapped blue and red alone, so
+					Custom Edition maps' meters drew their fill and shape
+					crossed) */
 					unsigned long texel, count = (unsigned long)width * (unsigned long)height * (unsigned long)depth;
 
 					for (texel = 0; texel < count; texel++)

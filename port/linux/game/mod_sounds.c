@@ -1308,6 +1308,11 @@ long mod_sounds_update(
 			struct sound_definition *definition = sound_definition_get(tag_index);
 
 			memcpy(&override->map_definition, definition, sizeof(*definition));
+			/* port (this fork): the map's own length stays, which scripts
+			(sound_impulse_time), the AI's conversations and dialogue time
+			themselves by: a mod plays on one machine, and must change no
+			game's timing (on a co-op host, everyone's) */
+			made->definition.longest_permutation_length = override->map_definition.longest_permutation_length;
 			definition_set(definition, &made->definition);
 			override->sound = made;
 			loaded_count++;

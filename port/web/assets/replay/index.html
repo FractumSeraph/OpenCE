@@ -1893,6 +1893,12 @@ function looksPublic(r) {
   return players.length > 0 && players.every(p => !p.hwid && !p.ip) && !r.moves.length && r.hits.every(h => !h.verdict);
 }
 
+// (whether the game has two teams: a player on blue, and none past it)
+function teamsOf(r) {
+  return [...r.players.values()].some(list => list.some(p => p.team === 1)) &&
+    [...r.players.values()].every(list => list.every(p => p.team <= 1));
+}
+
 // (what is worked out once a recording's records are read, and again as
 // more come live: the kills with their weapons, and the highlights)
 function digest(r) {
@@ -1949,8 +1955,7 @@ function show(r) {
   document.getElementById("events-title").textContent = publicCopy ? "Kills and highlights" : "Hits and kills";
   if (publicCopy) for (const [id, on] of [["f-refused", false], ["f-suspicious", false], ["f-ok", false],
     ["f-kills", true], ["f-moves", false], ["f-selected", false]]) document.getElementById(id).checked = on;
-  teams = [...rec.players.values()].some(list => list.some(p => p.team === 1)) &&
-    [...rec.players.values()].every(list => list.every(p => p.team <= 1));
+  teams = teamsOf(rec);
   // (the version 2 buttons only where there is something to show)
   for (const id of ["heat", "killcam", "scores"]) document.getElementById(id).style.display = rec.poses.length || id !== "heat" ? "" : "none";
   buildWalls();
@@ -2086,7 +2091,12 @@ async function livePoll() {
       joined.set(part, live.bytes.length);
       live.bytes = joined;
     }
-    if (live.offset === 0 && live.bytes.length >= 8 && live.at === 8) checkHeader(live.bytes);
+    // (the file's start checked before anything is read of it: a file too
+    // short to have it waits for the next poll)
+    if (live.offset === 0 && live.at === 8) {
+      if (live.bytes.length < 8) { live.timer = setTimeout(livePoll, LIVE_POLL_MS); return; }
+      checkHeader(live.bytes);
+    }
     const read = await readBlocks(live.bytes, live.at);
     if (token !== live.token) return;
     // (the blocks read let go: only what is not read yet is kept)
@@ -2118,7 +2128,10 @@ async function livePoll() {
       buildHeat();
       scrub.max = String(rec.last);
       describeGame();
-      if (rec.players.size !== players) renderPlayers();
+      // (a game watched live: blue's first player, or a team change, comes later)
+      const wereTeams = teams;
+      teams = teamsOf(rec);
+      if (rec.players.size !== players || teams !== wereTeams) renderPlayers();
       renderEvents();
       renderStats();
     }

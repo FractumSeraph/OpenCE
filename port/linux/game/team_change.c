@@ -281,6 +281,30 @@ static int team_change_decide(long player_index, short team, boolean forced, sho
 	return _delta_team_changed;
 }
 
+/* port (this fork): a round-based game's new round (Bomb's): every change
+waiting for a death made now, as the round's start puts everyone back at
+their goal and kills no one (a player who survived every round would
+never change) */
+void team_change_round_started(void)
+{
+	struct data_iterator iterator;
+	struct player_datum *player;
+
+	if (!global_network_game_server_get() || !player_data)
+		return;
+	data_iterator_new(&iterator, player_data);
+	while ((player = (struct player_datum *)data_iterator_next(&iterator)) != NULL)
+	{
+		struct team_change_player *change = change_of(iterator.datum_index);
+
+		if (!change || !change->waiting || change->killing || player->unit_index == NONE)
+			continue;
+		/* (its death makes the change, as an instant change's does) */
+		change->killing = TRUE;
+		unit_kill_no_statistics(player->unit_index);
+	}
+}
+
 boolean team_change_death(long dead_player_index)
 {
 	struct team_change_player *change = change_of(dead_player_index);

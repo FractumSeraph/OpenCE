@@ -1244,6 +1244,12 @@ static void bomb_start_round(boolean timed_out)
 	bomb_globals.round_ticks = round_time > 0 ? round_time * TICKS_PER_SECOND : NONE;
 	bomb_globals.round_start_time = game_time_get();
 	bomb_reset();
+	/* port (this fork): team changes waiting for a death are made now */
+	{
+		void team_change_round_started(void); /* port: port/linux/game/team_change.c */
+
+		team_change_round_started();
+	}
 	/* every player starts again at their own goal */
 	data_iterator_new(&iterator, player_data);
 	while ((player = (struct player_datum *)data_iterator_next(&iterator)) != NULL)
@@ -2817,13 +2823,14 @@ long game_engine_bomb_countdown(
 	return (bomb_globals.hold_ticks - BOMB_BLAST_PAUSE_TICKS + TICKS_PER_SECOND - 1) / TICKS_PER_SECOND;
 }
 
-/* whether no one spawns now (the blast's pause, before the next round) */
+/* port (this fork): whether a Bomb game is under way (team_change.c) */
 boolean game_engine_bomb_running(
 	void)
 {
 	return bomb_running();
 }
 
+/* whether no one spawns now (the blast's pause, before the next round) */
 boolean game_engine_bomb_holds_spawns(
 	void)
 {
