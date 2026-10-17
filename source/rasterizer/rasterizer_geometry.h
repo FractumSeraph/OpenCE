@@ -101,6 +101,26 @@ void rasterizer_geometry_compress_vertices(
 	void *uncompressed,
 	long uncompressed_size);
 
+/* ---------- prototypes/RASTERIZER_XBOX_HARDWARE_GEOMETRY.C */
+
+/* port: buffers made for geometry the Xbox caches carry ready made, as
+OpenCE declares them (its mods' models: port/linux/game/mod_models.c) */
+boolean rasterizer_vertex_buffer_new(
+	struct vertex_buffer *vertex_buffer,
+	long vertex_type,
+	long count,
+	void const *vertices,
+	long buffer_size);
+void rasterizer_vertex_buffer_delete(
+	struct vertex_buffer *vertex_buffer);
+boolean rasterizer_triangle_buffer_new(
+	struct triangle_buffer *triangle_buffer,
+	short triangle_type,
+	long count,
+	void const *triangles);
+void rasterizer_triangle_buffer_delete(
+	struct triangle_buffer *triangle_buffer);
+
 /* ---------- globals */
 
 /* ---------- public code */

@@ -521,6 +521,12 @@ int port_mods_file_read(long file, unsigned long offset, void *buffer, unsigned 
 	return 0;
 }
 
+long port_mods_file_order(long file)
+{
+	(void)file;
+	return -1;
+}
+
 const char *port_mods_file_mod(long file)
 {
 	(void)file;

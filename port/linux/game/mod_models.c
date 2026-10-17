@@ -744,7 +744,7 @@ static long map_marker_instances(
 			for (marker_index_in_permutation = 0; permutation &&
 				marker_index_in_permutation < permutation->markers.count; marker_index_in_permutation++)
 			{
-				byte const *marker = (byte const *)permutation->markers.address +
+				byte const *marker = (byte const *)xbox_pointer(permutation->markers.address) +
 					(unsigned long)marker_index_in_permutation * PERMUTATION_MARKER_SIZE;
 				struct marker_instance *found = &instances[count];
 
@@ -1287,8 +1287,8 @@ static boolean regions_make(
 		long permutation_index;
 
 		made->regions[region_index] = *map_region;
-		made->regions[region_index].permutations.address = made->permutations + next;
-		made->regions[region_index].permutations.definition = NULL;
+		made->regions[region_index].permutations.address = XBOX_ADDRESS(made->permutations + next);
+		made->regions[region_index].permutations.definition = XBOX_NULL;
 		for (permutation_index = 0; permutation_index < map_region->permutations.count; permutation_index++)
 		{
 			struct model_region_permutation *permutation = &made->permutations[next++];
@@ -1304,8 +1304,8 @@ static boolean regions_make(
 			}
 		}
 	}
-	made->model.regions.address = made->regions;
-	made->model.regions.definition = NULL;
+	made->model.regions.address = XBOX_ADDRESS(made->regions);
+	made->model.regions.definition = XBOX_NULL;
 
 	return TRUE;
 }
@@ -1338,16 +1338,16 @@ static boolean shaders_make(
 		csmemset(shader, 0, sizeof(*shader));
 		shader->shader.group_tag = tag_get_group_tag(tag_index);
 		shader->shader.index = tag_index;
-		shader->shader.name = tag_get_name(tag_index);
-		shader->shader.name_length = (long)strlen(shader->shader.name);
+		shader->shader.name = XBOX_ADDRESS(tag_get_name(tag_index));
+		shader->shader.name_length = (long)strlen(tag_get_name(tag_index));
 		/* (a negative one, the tool's none, is the shader's first: the
 		renderer takes the permutation modulo the bitmap's count) */
 		shader->permutation_index = MAX(0, mods_read_short(file->bytes + file->shaders +
 			(unsigned long)index * SHADER_REFERENCE_SIZE + SHADER_REFERENCE_PERMUTATION_OFFSET));
 	}
 	made->model.shaders.count = file->shader_count;
-	made->model.shaders.address = made->shaders;
-	made->model.shaders.definition = NULL;
+	made->model.shaders.address = XBOX_ADDRESS(made->shaders);
+	made->model.shaders.definition = XBOX_NULL;
 
 	return TRUE;
 }
@@ -1511,7 +1511,7 @@ static boolean geometries_make(
 
 		csmemset(geometry, 0, sizeof(*geometry));
 		geometry->parts.count = count;
-		geometry->parts.address = made->parts + first;
+		geometry->parts.address = XBOX_ADDRESS(made->parts + first);
 		for (part_index = 0; part_index < count; part_index++)
 		{
 			struct file_part const *source = &file->parts[first + part_index];
@@ -1568,8 +1568,8 @@ static boolean geometries_make(
 		first += count;
 	}
 	made->model.geometries.count = file->geometry_count;
-	made->model.geometries.address = made->geometries;
-	made->model.geometries.definition = NULL;
+	made->model.geometries.address = XBOX_ADDRESS(made->geometries);
+	made->model.geometries.definition = XBOX_NULL;
 	free(uncompressed);
 
 	return TRUE;
