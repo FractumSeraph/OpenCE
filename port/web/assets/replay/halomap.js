@@ -2,8 +2,9 @@
   halomap.js: a Halo Custom Edition map (a cache file, engine version 609)
   read in the browser, for the replay viewer (index.html): its structure
   BSPs as meshes ready to draw, each with its shader's base map and its
-  lightmap, and the sky's fog color. Plain JavaScript, no dependencies; the
-  files are read through range fetchers, so only what is drawn is fetched.
+  lightmap, its placed scenery, its sky, and any of its models and
+  animations on request. Plain JavaScript, no dependencies; the files are
+  read through range fetchers, so only what is drawn is fetched.
 
   readHaloMap({ map, bitmaps, onProgress }): map and bitmaps are each a
   fetchRange(offset, length) => Promise<Uint8Array> (bitmaps: Custom
@@ -11,10 +12,10 @@
   be left out, and those bitmaps are then null). onProgress(fraction, text)
   is told how far it has got. It returns
     { name, version, scenario, bsps: [ { name, lightmaps, meshes } ], sky,
-      scenery: [], warnings }
-  (sky: { name, color, ambient }, the sky's outdoor fog and ambient colors,
-  0 to 1, or null; warnings: what was left out of a damaged map), a mesh
-  being one lightmap material of a BSP:
+      scenery, warnings,
+      readModel, readObjectModel, listAnimations, readAnimation, listTags }
+  (warnings: what was left out of a damaged map), a BSP's mesh being one
+  of its lightmap materials:
     { shader, shaderGroup, baseMap, lightmap, detailMap, detailScale,
       positions, normals, uvs, lightmapUvs, indices,
       transparent, twoSided, alphaTest, blend }
@@ -22,6 +23,53 @@
   map's (its shader's scale and offset applied), lightmapUvs the lightmap's
   (null if the material has none), indices triangles wound counterclockwise
   seen from their front (the side their normals face), as three.js draws.
+
+  The sky: { name, color, ambient (its outdoor fog and ambient colors, 0 to
+  1), model (its model's tag name), modelIndex, geometry (that model, read
+  as readModel reads it: drawn around the eye, unlit, as Halo draws a sky
+  over the fog color) } or null.
+
+  The scenery: the scenario's placed scenery, machines, controls and light
+  fixtures, each { kind ("scenery", "machine", "control", "light
+  fixture"), tag, tagIndex (its object's tag), model, modelIndex (its
+  model's tag, or -1), animations, animationsIndex (its animation graph's,
+  or -1), variant, position, rotation (yaw, pitch, roll in radians, as
+  stored), matrix (its placement as the game makes it from them), bsps
+  (the BSPs it is on, a bit each) }. Its model is readModel(modelIndex,
+  { variant }), in the model's space, which matrix places in the world.
+
+  Tags are named by their name or by their index in the map's tag table
+  (a protected map gives many tags one name, so the index is the surer).
+  readModel(model, { variant }) and readObjectModel(object, { variant }) (any
+  object: a biped, vehicle, weapon, scenery, ...; it adds object,
+  objectIndex, objectGroup, animations and animationsIndex) give a model,
+  read once, or null:
+    { name, index, nodes, regions: [ { name, permutation, meshes } ], meshes }
+  each region showing the permutation the game would for the variant (of
+  those it may choose, "base" or "__base" else the first: the game picks at
+  random among several) at its most detailed level, meshes all of them:
+    { region, permutation, shader, shaderGroup, baseMap, positions, normals,
+      uvs, indices, nodeIndices, nodeWeights, transparent, twoSided,
+      alphaTest, blend }
+  positions in the model's space at its default pose; each vertex moved by
+  two nodes (nodeIndices, Uint16Array, two a vertex) with the weights
+  nodeWeights (Float32Array, summing to 1); uvs with the model's base map
+  scale and the shader's applied. Its nodes: { name, parent (-1 for a
+  root), firstChild, nextSibling, translation, rotation (x, y, z, w) from
+  the parent at the default pose, matrix (the default pose in the model's
+  space), inverseMatrix }. A vertex is posed by each node's posed matrix
+  times its inverseMatrix, weighted. Matrices are 4x4, column-major (three.js
+  Matrix4.fromArray); rotations are quaternions in the usual convention
+  (three.js Quaternion's), Halo's conjugated.
+
+  listAnimations(graph): [ { index, name, type, frameCount, compressed } ];
+  readAnimation(graph, index): { name, type, frameCount, nodeCount,
+  loopFrame, next, nodes (the graph's node names), compressed, animated:
+  { rotation, translation, scale } (Uint8Array a node: which the frames
+  hold), frames } with frames a Float32Array of frameCount * nodeCount *
+  8: each node's rotation (x, y, z, w), translation, scale, from its
+  parent, as a model's nodes' are (its nodes are the model's, in order).
+  listTags(group) gives the map's tags: [ { index, name, group } ].
 
   A bitmap ref ({ key, name, index, width, height, format, read }) is the
   same object wherever the same bitmap is used, so a viewer makes one
@@ -31,13 +79,21 @@
   A8Y8; cube maps, 3D bitmaps and P8 bump maps are not (their refs are null).
 
   The layouts are the game's (port/linux/game/tag_schema_render.c,
-  ce_bsp.c, ce_resources.c, source/structures/structure_bsp_definitions.h,
-  tools/ce_cache.py), and every count and pointer read is checked against
-  what holds it: a damaged map throws a HaloMapError (a damaged bitmap or
-  shader is left out, and named in warnings; a bitmap's read() may throw
-  one too), it never makes this read outside its file or allocate more
-  than the file could describe. A failed fetch is thrown as it is. Xbox
-  maps (version 5, compressed) are refused.
+  tag_schema_models.c, tag_schema_scenario.c, ce_bsp.c, ce_models.c,
+  ce_resources.c, object_mesh.c, source/structures/structure_bsp_definitions.h,
+  source/models/, tools/ce_cache.py), and every count and pointer read is
+  checked against what holds it: a damaged map throws a HaloMapError (a
+  damaged bitmap, shader, model or list of placements is left out, null,
+  and named in warnings; a bitmap's read() and readAnimation may throw one
+  too), it never makes this read outside its file or allocate more than
+  the file could describe. A failed fetch is thrown as it is. Xbox maps
+  (version 5, compressed) are refused.
+
+  An overlay animation (type 1) is added to the base pose, as
+  model_animations.c adds it: rotation base times overlay (in this
+  convention), translations added, scales multiplied; its nodes not
+  animated are the identity. A replacement (type 2) is a whole pose, as a
+  base animation's is.
 
   The shaders' base maps: an environment shader's base map (with its
   primary detail map and scale in detailMap and detailScale; alpha tested
@@ -108,6 +164,61 @@ const SCENARIO_SIZE = 0x5b0;
 const SKY_OUTDOOR_AMBIENT_COLOR = 0x48;
 const SKY_OUTDOOR_FOG_COLOR = 0x58;
 const SKY_SIZE = 0xd0;
+
+// a sky's model (tag_schema_render.c's sky_definition)
+const SKY_MODEL = 0x00;
+
+// a gbxmodel (model_definitions.h, ce_models.c: Halo PC's parts are larger
+// than the Xbox's, their local nodes at their end; a vertex is uncompressed:
+// position, normal, binormal, tangent, texture coordinates, two nodes and
+// their weights)
+const MODEL_SIZE = 0xe8;
+const MODEL_BASE_MAP_SCALE = 0x30;
+const MODEL_NODES = 0xb8;
+const MODEL_REGIONS = 0xc4;
+const MODEL_GEOMETRIES = 0xd0;
+const MODEL_SHADERS = 0xdc;
+const MODEL_NODE_SIZE = 0x9c;
+const MODEL_REGION_SIZE = 0x4c;
+const REGION_PERMUTATIONS = 0x40;
+const PERMUTATION_SIZE = 0x58;
+const PERMUTATION_FLAGS = 0x20;
+const PERMUTATION_VARIANT = 0x24;
+const PERMUTATION_GEOMETRIES = 0x40; // (super low to super high)
+const MODEL_GEOMETRY_SIZE = 0x30;
+const GEOMETRY_PARTS = 0x24;
+const MODEL_SHADER_SIZE = 0x20;
+const PART_SIZE = 0x84;
+const PART_SHADER_INDEX = 0x04;
+const PART_TRIANGLES = 0x44; // type, count, offset after the vertices
+const PART_VERTICES = 0x54; // type, count, and at 0x10 the offset
+const PART_LOCAL_NODES_FLAG = 2;
+const PART_LOCAL_NODE_COUNT = 0x6b;
+const PART_LOCAL_NODES = 0x6c;
+const MODEL_VERTEX_SIZE = 0x44;
+const MAX_MODEL_NODES = 64;
+
+// an object (object_definitions.h): its model and animation graph
+const OBJECT_SIZE = 0x17c;
+const OBJECT_MODEL = 0x28;
+const OBJECT_ANIMATIONS = 0x38;
+
+// the scenario's placed objects drawn here (scenario_definitions.h,
+// tag_schema_scenario.c): their kind, placements, palette, placement size
+const SCENARIO_PLACEMENTS = [
+  ["scenery", 0x210, 0x21c, 0x48],
+  ["machine", 0x294, 0x2a0, 0x40],
+  ["control", 0x2ac, 0x2b8, 0x40],
+  ["light fixture", 0x2c4, 0x2d0, 0x58],
+];
+const PALETTE_ENTRY_SIZE = 0x30;
+
+// an animation graph and its animations (model_animation_definitions.h)
+const ANIMATION_GRAPH_SIZE = 0x80;
+const GRAPH_NODES = 0x68;
+const GRAPH_ANIMATIONS = 0x74;
+const GRAPH_NODE_SIZE = 0x40;
+const ANIMATION_SIZE = 0xb4;
 
 // a bitmap group and its bitmaps (bitmap_group.h)
 const BITMAP_GROUP_SIZE = 0x6c;
@@ -551,6 +662,184 @@ export async function readHaloMap({ map, bitmaps = null, onProgress = null }) {
     return info;
   }
 
+  /* ---------- tags by name */
+
+  // (a tag by its name, or by its index in the tag table: a protected map
+  // gives many tags one name, of which a name finds the first of the group,
+  // so what this hands back names its tags by index too)
+  const byName = new Map();
+  for (let index = 0; index < tagCount; index++) {
+    const key = instances[index].name.toLowerCase();
+    if (!byName.has(key)) byName.set(key, []);
+    byName.get(key).push(index);
+  }
+  const findTag = (key, groups) => {
+    if (Number.isInteger(key)) {
+      if (key < 0 || key >= tagCount || (groups && !groups.includes(instances[key].group))) return null;
+      return { index: key, ...instances[key] };
+    }
+    if (typeof key !== "string") return null;
+    for (const index of byName.get(key.toLowerCase()) ?? []) {
+      if (!groups || groups.includes(instances[index].group)) return { index, ...instances[index] };
+    }
+    return null;
+  };
+
+  /* ---------- models */
+
+  // the model data block (the tags' header: its file offset, its vertices'
+  // size, its size): every gbxmodel part's vertices, then their triangles
+  const modelDataOffset = tags.u32(TAG_BASE + 20), vertexDataSize = tags.u32(TAG_BASE + 28);
+  const modelDataSize = tags.u32(TAG_BASE + 32);
+  const modelDataGood = vertexDataSize <= modelDataSize && modelDataOffset >= HEADER_SIZE &&
+    modelDataOffset + modelDataSize <= fileLength;
+
+  // a model by its tag and the variant its object is placed with, read once
+  const models = new Map();
+  const modelByTag = (tag, variant = 0) => {
+    if (!tag) return Promise.resolve(null);
+    const key = `${tag.index}:${variant | 0}`;
+    if (!models.has(key)) models.set(key, readModelTag(tag, variant | 0).catch(tolerate));
+    return models.get(key);
+  };
+
+  async function readModelTag(tag, variant) {
+    const at = root(tag, MODEL_SIZE);
+    if (at === null) fail(`${tag.name} is not a model in the map`);
+    if (!modelDataGood) fail("its model data is not in it");
+    // (its base map's scale: a gbxmodel's texture coordinates are fractions
+    // of it, ce_models.c)
+    const mapScale = [tags.f32(at + MODEL_BASE_MAP_SCALE) || 1, tags.f32(at + MODEL_BASE_MAP_SCALE + 4) || 1];
+    const nodes = readNodes(tags, tags.block(at + MODEL_NODES, MODEL_NODE_SIZE, MAX_MODEL_NODES, `${tag.name}'s nodes`),
+      tag.name);
+    const regionBlock = tags.block(at + MODEL_REGIONS, MODEL_REGION_SIZE, 32, `${tag.name}'s regions`);
+    const geometries = tags.block(at + MODEL_GEOMETRIES, MODEL_GEOMETRY_SIZE, 256, `${tag.name}'s geometries`);
+    const shaderBlock = tags.block(at + MODEL_SHADERS, MODEL_SHADER_SIZE, 256, `${tag.name}'s shaders`);
+    const regions = [], meshes = [];
+    for (let r = 0; r < regionBlock.count; r++) {
+      const region = regionBlock.address + r * MODEL_REGION_SIZE;
+      const permutations = tags.block(region + REGION_PERMUTATIONS, PERMUTATION_SIZE, 32,
+        `${tag.name}'s permutations`);
+      if (!permutations.count) continue;
+      const chosen = choosePermutation(permutations, variant);
+      const permutation = permutations.address + chosen * PERMUTATION_SIZE;
+      // (its most detailed geometry: super high, else the next one down)
+      let geometry = -1;
+      for (let level = 4; level >= 0 && geometry < 0; level--) {
+        const index = tags.i16(permutation + PERMUTATION_GEOMETRIES + level * 2);
+        if (index >= 0 && index < geometries.count) geometry = index;
+      }
+      const entry = { name: tags.string(region), permutation: tags.string(permutation), meshes: [] };
+      regions.push(entry);
+      if (geometry < 0) continue;
+      const parts = tags.block(geometries.address + geometry * MODEL_GEOMETRY_SIZE + GEOMETRY_PARTS, PART_SIZE, 32,
+        `${tag.name}'s parts`);
+      for (let p = 0; p < parts.count; p++) {
+        const mesh = await readPart(tag, parts.address + p * PART_SIZE, shaderBlock, nodes.length, mapScale);
+        if (!mesh) continue;
+        mesh.region = entry.name;
+        mesh.permutation = entry.permutation;
+        entry.meshes.push(mesh);
+        meshes.push(mesh);
+      }
+    }
+    return { name: tag.name, index: tag.index, nodes, regions, meshes };
+  }
+
+  // (the permutation a region shows, as objects.c chooses among those that
+  // may be chosen: of the placement's variant, or of variant 0 if none is,
+  // or with no variant, any below 100; of those, one named "base" or
+  // "__base", else the first. The game picks at random where several are)
+  function choosePermutation(permutations, variant) {
+    const list = (wanted) => {
+      const found = [];
+      for (let i = 0; i < permutations.count; i++) {
+        const at = permutations.address + i * PERMUTATION_SIZE;
+        if (tags.u32(at + PERMUTATION_FLAGS) & 1) continue;
+        const number = tags.i16(at + PERMUTATION_VARIANT);
+        if (wanted === null ? number < 100 : number === wanted) found.push(i);
+      }
+      return found;
+    };
+    let found = variant > 0 ? list(variant) : list(null);
+    if (!found.length && variant > 0) found = list(0);
+    if (!found.length) return 0;
+    const base = found.find((i) => /^(__)?base$/i.test(tags.string(permutations.address + i * PERMUTATION_SIZE)));
+    return base ?? found[0];
+  }
+
+  // a geometry part: its vertices and its triangle strip, from the model data
+  async function readPart(tag, part, shaderBlock, nodeCount, mapScale) {
+    const flags = tags.u32(part);
+    const shaderIndex = tags.i16(part + PART_SHADER_INDEX);
+    const stripType = tags.i16(part + PART_TRIANGLES);
+    const stripCount = tags.u32(part + PART_TRIANGLES + 4), stripOffset = tags.u32(part + PART_TRIANGLES + 8);
+    const vertexCount = tags.u32(part + PART_VERTICES + 4), vertexOffset = tags.u32(part + PART_VERTICES + 16);
+    if (!vertexCount || !stripCount) return null;
+    if (vertexCount > 0xffff || stripCount > 0x30000) fail(`${tag.name}'s part has ${vertexCount} vertices`);
+    const indexCount = stripType === 0 ? stripCount * 3 : stripCount + 2;
+    if (vertexOffset + vertexCount * MODEL_VERTEX_SIZE > vertexDataSize ||
+      stripOffset + indexCount * 2 > modelDataSize - vertexDataSize)
+      fail(`${tag.name}'s part's vertices or triangles are not in the model data`);
+    // (a part with local nodes names its vertices' nodes by their index in
+    // them, ce_models.c)
+    const localCount = flags & PART_LOCAL_NODES_FLAG ? Math.min(tags.u8(part + PART_LOCAL_NODE_COUNT), 22) : 0;
+    const local = [];
+    for (let i = 0; i < localCount; i++) local.push(tags.u8(part + PART_LOCAL_NODES + i));
+    const shaderTag = shaderIndex >= 0 && shaderIndex < shaderBlock.count ?
+      reference(tags, shaderBlock.address + shaderIndex * MODEL_SHADER_SIZE, null) : null;
+    const [bytes, strip, shader] = await Promise.all([
+      mapFile.read(modelDataOffset + vertexOffset, vertexCount * MODEL_VERTEX_SIZE),
+      mapFile.read(modelDataOffset + vertexDataSize + stripOffset, indexCount * 2),
+      shaderInfo(shaderTag),
+    ]);
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const f32 = (at) => { const value = view.getFloat32(at, true); return Number.isFinite(value) ? value : 0; };
+    const [uScale, vScale] = shader?.uvScale ?? [1, 1];
+    const [uOffset, vOffset] = shader?.uvOffset ?? [0, 0];
+    const positions = new Float32Array(vertexCount * 3), normals = new Float32Array(vertexCount * 3);
+    const uvs = new Float32Array(vertexCount * 2);
+    const nodeIndices = new Uint16Array(vertexCount * 2), nodeWeights = new Float32Array(vertexCount * 2);
+    const node = (index) => {
+      if (index >= 0 && index < localCount) index = local[index];
+      return index >= 0 && index < nodeCount ? index : -1;
+    };
+    for (let v = 0; v < vertexCount; v++) {
+      const at = v * MODEL_VERTEX_SIZE;
+      for (let k = 0; k < 3; k++) {
+        positions[v * 3 + k] = f32(at + k * 4);
+        normals[v * 3 + k] = f32(at + 12 + k * 4);
+      }
+      uvs[v * 2] = f32(at + 0x30) * mapScale[0] * uScale + uOffset;
+      uvs[v * 2 + 1] = f32(at + 0x34) * mapScale[1] * vScale + vOffset;
+      // (two nodes and the first's weight; a node it lacks is the first)
+      let first = node(view.getInt16(at + 0x38, true)), second = node(view.getInt16(at + 0x3a, true));
+      let weight = Math.min(1, Math.max(0, f32(at + 0x3c)));
+      if (first < 0) first = second < 0 ? 0 : second;
+      if (second < 0) { second = first; weight = 1; }
+      nodeIndices[v * 2] = first; nodeIndices[v * 2 + 1] = second;
+      nodeWeights[v * 2] = weight; nodeWeights[v * 2 + 1] = 1 - weight;
+    }
+    const indices = stripIndices(strip, indexCount, stripType !== 0, vertexCount);
+    return {
+      shader: shader?.shader ?? null, shaderGroup: shader?.shaderGroup ?? null, baseMap: shader?.baseMap ?? null,
+      positions, normals, uvs, indices, nodeIndices, nodeWeights,
+      transparent: shader?.transparent ?? false, twoSided: shader?.twoSided ?? false,
+      alphaTest: shader?.alphaTest ?? false, blend: shader?.blend ?? null,
+    };
+  }
+
+  // an object's model, by the object's tag (any object: a biped, vehicle,
+  // weapon, scenery, ...), with the object's animation graph's name
+  const OBJECT_GROUPS = ["bipd", "vehi", "weap", "eqip", "garb", "proj", "scen", "mach", "ctrl", "lifi", "plac",
+    "ssce", "obje"];
+  const objectModelTags = (tag) => {
+    const at = root(tag, OBJECT_SIZE);
+    if (at === null) return { model: null, animations: null };
+    return { model: reference(tags, at + OBJECT_MODEL, ["mod2", "mode"]),
+      animations: reference(tags, at + OBJECT_ANIMATIONS, ["antr"]) };
+  };
+
   /* ---------- the sky */
 
   let sky = null;
@@ -560,10 +849,159 @@ export async function readHaloMap({ map, bitmaps = null, onProgress = null }) {
     const skyRoot = root(skyTag, SKY_SIZE);
     if (skyRoot !== null) {
       const color = (field) => [0, 4, 8].map((k) => Math.min(1, Math.max(0, tags.f32(field + k))));
+      const modelTag = reference(tags, skyRoot + SKY_MODEL, ["mod2", "mode"]);
       sky = { name: skyTag.name, color: color(skyRoot + SKY_OUTDOOR_FOG_COLOR),
-        ambient: color(skyRoot + SKY_OUTDOOR_AMBIENT_COLOR) };
+        ambient: color(skyRoot + SKY_OUTDOOR_AMBIENT_COLOR), model: modelTag ? modelTag.name : null,
+        modelIndex: modelTag ? modelTag.index : -1, geometry: await modelByTag(modelTag) };
     }
   }
+
+  /* ---------- the scenery */
+
+  // (the scenario's scenery, machines, controls and light fixtures: each
+  // placed object's tag, its model's, where it is, and its rotation as the
+  // game makes it, matrix4x3_rotation_from_angles)
+  const scenery = [];
+  // (a damaged list is left out, and said in warnings)
+  for (const [kind, placements, palette, size] of SCENARIO_PLACEMENTS) try {
+    const list = tags.block(scenario + placements, size, 0x10000, `its ${kind} placements`);
+    const entries = tags.block(scenario + palette, PALETTE_ENTRY_SIZE, 0x10000, `its ${kind} palette`);
+    for (let i = 0; i < list.count; i++) {
+      const at = list.address + i * size;
+      const paletteIndex = tags.i16(at);
+      if (paletteIndex < 0 || paletteIndex >= entries.count) continue;
+      const objectTag = reference(tags, entries.address + paletteIndex * PALETTE_ENTRY_SIZE, OBJECT_GROUPS);
+      if (!objectTag) continue;
+      const { model, animations } = objectModelTags(objectTag);
+      const position = [0, 4, 8].map((k) => tags.f32(at + 0x08 + k));
+      const rotation = [0, 4, 8].map((k) => tags.f32(at + 0x14 + k));
+      scenery.push({
+        kind, tag: objectTag.name, tagIndex: objectTag.index, model: model ? model.name : null,
+        modelIndex: model ? model.index : -1, animations: animations ? animations.name : null,
+        animationsIndex: animations ? animations.index : -1, variant: tags.i16(at + 6), position, rotation, matrix: placementMatrix(position, rotation),
+        bsps: tags.u16(at + 0x20),
+      });
+    }
+  } catch (error) {
+    tolerate(error);
+  }
+
+  /* ---------- animations */
+
+  const animationGraph = (graph) => {
+    const tag = findTag(graph, ["antr"]);
+    const at = root(tag, ANIMATION_GRAPH_SIZE);
+    if (at === null) fail(`${graph} is not an animation graph in the map`);
+    return { tag, at, list: tags.block(at + GRAPH_ANIMATIONS, ANIMATION_SIZE, 4096, `${tag.name}'s animations`),
+      nodes: tags.block(at + GRAPH_NODES, GRAPH_NODE_SIZE, MAX_MODEL_NODES, `${tag.name}'s nodes`) };
+  };
+
+  // an animation's frames: each node's rotation (a quaternion x, y, z, w,
+  // in the convention the nodes' are given), translation and scale, 8
+  // numbers a node, nodeCount of them a frame; animated: which nodes' the
+  // frames hold (the others' are the animation's defaults, or for an
+  // overlay, nothing: the identity). Its type: 0 a base animation (each
+  // node's pose from its parent), 1 an overlay (added to the base's, as
+  // model_animations.c adds them: rotation base times overlay in this
+  // convention, translations added, scales multiplied), 2 a replacement.
+  // Compressed animations are not decoded (frames null)
+  function readAnimation(graphName, index) {
+    const graph = animationGraph(graphName);
+    if (!Number.isInteger(index) || index < 0 || index >= graph.list.count)
+      fail(`${graph.tag.name} has no animation ${index}`);
+    const at = graph.list.address + index * ANIMATION_SIZE;
+    const nodeCount = tags.i16(at + 0x2c), frameCount = tags.i16(at + 0x22), frameSize = tags.i16(at + 0x24);
+    const result = {
+      name: tags.string(at), type: tags.i16(at + 0x20), frameCount, nodeCount,
+      loopFrame: tags.i16(at + 0x2e), next: tags.i16(at + 0x38),
+      nodes: Array.from({ length: graph.nodes.count }, (_, i) => tags.string(graph.nodes.address + i * GRAPH_NODE_SIZE)),
+      compressed: (tags.u16(at + 0x3a) & 1) !== 0, frames: null, animated: null,
+    };
+    if (result.compressed) return result;
+    if (nodeCount < 1 || nodeCount > MAX_MODEL_NODES || frameCount < 1 || frameCount > 0x2000)
+      fail(`${result.name} has ${nodeCount} nodes and ${frameCount} frames`);
+    // (which nodes the frames hold a rotation, translation or scale of; the
+    // others' are the animation's defaults)
+    const bit = (field, node) => (tags.u32(at + field + (node >> 5) * 4) >>> (node & 31)) & 1;
+    let size = 0, defaults = 0;
+    for (let node = 0; node < nodeCount; node++) {
+      size += bit(0x6c, node) ? 8 : 0; defaults += bit(0x6c, node) ? 0 : 8;
+      size += bit(0x5c, node) ? 12 : 0; defaults += bit(0x5c, node) ? 0 : 12;
+      size += bit(0x7c, node) ? 4 : 0; defaults += bit(0x7c, node) ? 0 : 4;
+    }
+    const dataSize = tags.u32(at + 0xa0), data = tags.u32(at + 0xa0 + 12);
+    const defaultSize = tags.u32(at + 0x8c), defaultData = tags.u32(at + 0x8c + 12);
+    // (a base animation has every default; another may have none, its
+    // nodes then the identity)
+    const hasDefaults = defaultSize >= defaults;
+    if (size !== frameSize || dataSize < size * frameCount || (!hasDefaults && result.type === 0))
+      fail(`${result.name}'s frames are not the size its nodes say`);
+    if (size) tags.at(data, size * frameCount);
+    if (defaults && hasDefaults) tags.at(defaultData, defaults);
+    result.animated = { rotation: new Uint8Array(nodeCount), translation: new Uint8Array(nodeCount),
+      scale: new Uint8Array(nodeCount) };
+    for (let node = 0; node < nodeCount; node++) {
+      result.animated.rotation[node] = bit(0x6c, node);
+      result.animated.translation[node] = bit(0x5c, node);
+      result.animated.scale[node] = bit(0x7c, node);
+    }
+    const frames = new Float32Array(frameCount * nodeCount * 8);
+    for (let frame = 0; frame < frameCount; frame++) {
+      let cursor = data + frame * size, fallback = defaultData;
+      for (let node = 0; node < nodeCount; node++) {
+        const out = (frame * nodeCount + node) * 8;
+        // (where the node's next value is: the frame's, its default, or none)
+        const take = (flag, bytes) => {
+          if (bit(flag, node)) { const from = cursor; cursor += bytes; return from; }
+          if (!hasDefaults) return null;
+          const from = fallback; fallback += bytes; return from;
+        };
+        // (a rotation: four 16-bit fractions of 32767, i j k w, which Halo
+        // turns the other way to the usual convention: given conjugated)
+        const r = take(0x6c, 8);
+        if (r === null) setRotation(frames, out, 0, 0, 0, 1);
+        else setRotation(frames, out, tags.i16(r) / 32767, tags.i16(r + 2) / 32767, tags.i16(r + 4) / 32767,
+          tags.i16(r + 6) / 32767);
+        const t = take(0x5c, 12);
+        if (t !== null) {
+          frames[out + 4] = tags.f32(t); frames[out + 5] = tags.f32(t + 4); frames[out + 6] = tags.f32(t + 8);
+        }
+        const k = take(0x7c, 4);
+        frames[out + 7] = k === null ? 1 : tags.f32(k);
+      }
+    }
+    result.frames = frames;
+    return result;
+  }
+
+  // (the animations a graph has: their names and frame counts)
+  function listAnimations(graphName) {
+    const graph = animationGraph(graphName);
+    return Array.from({ length: graph.list.count }, (_, i) => {
+      const at = graph.list.address + i * ANIMATION_SIZE;
+      return { index: i, name: tags.string(at), type: tags.i16(at + 0x20), frameCount: tags.i16(at + 0x22),
+        compressed: (tags.u16(at + 0x3a) & 1) !== 0 };
+    });
+  }
+
+  // the loaders handed back (a tag named by its name or its index): a model,
+  // an object's model by the object's tag, an animation, the tags of a group
+  const loaders = {
+    readModel: (model, { variant = 0 } = {}) => modelByTag(findTag(model, ["mod2", "mode"]), variant),
+    readObjectModel: async (object, { variant = 0 } = {}) => {
+      const objectTag = findTag(object, OBJECT_GROUPS);
+      if (!objectTag) return null;
+      const { model, animations } = objectModelTags(objectTag);
+      const data = await modelByTag(model, variant);
+      return data && { ...data, object: objectTag.name, objectIndex: objectTag.index,
+        objectGroup: objectTag.group.trim(), animations: animations ? animations.name : null,
+        animationsIndex: animations ? animations.index : -1 };
+    },
+    readAnimation: async (graph, index) => readAnimation(graph, index),
+    listAnimations: async (graph) => listAnimations(graph),
+    listTags: (group) => instances.map((tag, index) => ({ index, name: tag.name, group: tag.group.trim() }))
+      .filter((tag) => !group || tag.group === group.trim()),
+  };
 
   /* ---------- the structure BSPs */
 
@@ -679,7 +1117,117 @@ export async function readHaloMap({ map, bitmaps = null, onProgress = null }) {
   }
 
   progress(1, "done");
-  return { name, version, scenario: scenarioTag.name, bsps, sky, scenery: [], warnings: [...warnings] };
+  return { name, version, scenario: scenarioTag.name, bsps, sky, scenery, ...loaders, warnings: [...warnings] };
+}
+
+/* ---------- nodes and matrices */
+
+// (matrices are 4x4, column-major, as three.js's Matrix4.fromArray takes
+// them)
+
+// a quaternion of Halo's put at out in frames, normalized and conjugated:
+// Halo's matrix of a quaternion (matrix4x3_rotation_from_quaternion) is the
+// usual one's transpose, so the usual convention's rotation is its conjugate
+function setRotation(frames, out, x, y, z, w) {
+  const length = Math.hypot(x, y, z, w) || 1;
+  frames[out] = -x / length; frames[out + 1] = -y / length; frames[out + 2] = -z / length;
+  frames[out + 3] = w / length;
+}
+
+// (a matrix of a translation, a rotation (x, y, z, w) and a scale)
+export function matrixFromPose(t, q, scale = 1) {
+  const [x, y, z, w] = q;
+  const m = new Float32Array(16);
+  m[0] = (1 - 2 * (y * y + z * z)) * scale; m[1] = 2 * (x * y + z * w) * scale; m[2] = 2 * (x * z - y * w) * scale;
+  m[4] = 2 * (x * y - z * w) * scale; m[5] = (1 - 2 * (x * x + z * z)) * scale; m[6] = 2 * (y * z + x * w) * scale;
+  m[8] = 2 * (x * z + y * w) * scale; m[9] = 2 * (y * z - x * w) * scale; m[10] = (1 - 2 * (x * x + y * y)) * scale;
+  m[12] = t[0]; m[13] = t[1]; m[14] = t[2]; m[15] = 1;
+  return m;
+}
+
+export function multiplyMatrices(a, b) {
+  const out = new Float32Array(16);
+  for (let column = 0; column < 4; column++) {
+    for (let row = 0; row < 4; row++) {
+      out[column * 4 + row] = a[row] * b[column * 4] + a[4 + row] * b[column * 4 + 1] +
+        a[8 + row] * b[column * 4 + 2] + a[12 + row] * b[column * 4 + 3];
+    }
+  }
+  return out;
+}
+
+// (a rotation and translation's inverse: the rotation transposed)
+function invertRigid(m) {
+  const out = new Float32Array(16);
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) out[j * 4 + i] = m[i * 4 + j];
+  for (let i = 0; i < 3; i++) out[12 + i] = -(out[i] * m[12] + out[4 + i] * m[13] + out[8 + i] * m[14]);
+  out[15] = 1;
+  return out;
+}
+
+// a model's nodes: each one's name, parent, its default translation and
+// rotation from its parent, and its default matrix in the model's space
+// (the space its vertices are in) and that matrix's inverse
+function readNodes(space, block, label) {
+  const nodes = [];
+  for (let i = 0; i < block.count; i++) {
+    const at = block.address + i * MODEL_NODE_SIZE;
+    const rotation = new Float32Array(4);
+    setRotation(rotation, 0, space.f32(at + 0x34), space.f32(at + 0x38), space.f32(at + 0x3c), space.f32(at + 0x40));
+    nodes.push({
+      name: space.string(at), parent: space.i16(at + 0x24), firstChild: space.i16(at + 0x22),
+      nextSibling: space.i16(at + 0x20),
+      translation: [space.f32(at + 0x28), space.f32(at + 0x2c), space.f32(at + 0x30)], rotation: [...rotation],
+      matrix: null, inverseMatrix: null,
+    });
+  }
+  if (!nodes.length) fail(`${label} has no nodes`);
+  // (each node's matrix after its parent's; a parent that is not a node, or
+  // one that leads back to the node, makes it a root: parent -1)
+  const state = new Uint8Array(nodes.length);
+  const place = (i) => {
+    if (state[i] === 2) return nodes[i].matrix;
+    state[i] = 1;
+    const parent = nodes[i].parent;
+    const parentMatrix = parent >= 0 && parent < nodes.length && state[parent] !== 1 ? place(parent) : null;
+    if (!parentMatrix) nodes[i].parent = -1;
+    const local = matrixFromPose(nodes[i].translation, nodes[i].rotation);
+    nodes[i].matrix = parentMatrix ? multiplyMatrices(parentMatrix, local) : local;
+    nodes[i].inverseMatrix = invertRigid(nodes[i].matrix);
+    state[i] = 2;
+    return nodes[i].matrix;
+  };
+  for (let i = 0; i < nodes.length; i++) place(i);
+  return nodes;
+}
+
+// an object's placement as the game makes it: its rotation from yaw, pitch
+// and roll (matrix4x3_rotation_from_angles), forward and up from it, left
+// from them (matrix4x3_rotation_from_vectors), and its position
+function placementMatrix(position, [yaw, pitch, roll]) {
+  const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+  const cr = Math.cos(roll), sr = Math.sin(roll);
+  const forward = [cy * cp, sy * cr - cy * sp * sr, cy * sp * cr + sy * sr];
+  const up = [-sp, -(cp * sr), cp * cr];
+  const left = [up[1] * forward[2] - up[2] * forward[1], up[2] * forward[0] - up[0] * forward[2],
+    up[0] * forward[1] - up[1] * forward[0]];
+  return Float32Array.from([...forward, 0, ...left, 0, ...up, 0, ...position, 1]);
+}
+
+// (a triangle strip's triangles, each odd one turned back, its degenerate
+// ones and those naming vertices it lacks left out; or a list's), wound
+// counterclockwise from the front as three.js draws
+function stripIndices(bytes, count, isStrip, vertexCount) {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const out = [];
+  for (let i = 0; i + 2 < count; i += isStrip ? 1 : 3) {
+    const a = view.getUint16(i * 2, true);
+    let b = view.getUint16(i * 2 + 2, true), c = view.getUint16(i * 2 + 4, true);
+    if (a === b || b === c || a === c || a >= vertexCount || b >= vertexCount || c >= vertexCount) continue;
+    if (isStrip && i & 1) [b, c] = [c, b];
+    out.push(a, c, b);
+  }
+  return Uint32Array.from(out);
 }
 
 /* ---------- bitmaps' pixels */

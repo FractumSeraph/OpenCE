@@ -301,6 +301,10 @@ int event_log_tag(char const *text);
 /* port (this fork): a tag index's text, NULL for none (the game's recording,
 network_recording.c, names its tags) */
 char const *event_log_tag_text(int tag);
+/* port (this fork): a function told every event as it is added, the medals
+the log makes from the kills included (the game's recording,
+game_events.c); NULL for none. On the thread that adds them, the game's */
+void event_log_listen(void (*listener)(struct event_log_record const *record));
 
 /* a player who joined, their slot; EVENT_LOG_NONE once the game's slots
 are full */

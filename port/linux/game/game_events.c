@@ -267,12 +267,13 @@ static short player_of_slot(int slot)
 	return NONE;
 }
 
-/* port (this fork): an event added to the log, and to the game's recording
-(network_recording.c), its slots there the players' indices and its tags
-their names; not the samples (positions, pings, the server's health) */
-static void log_add(struct event_log_record const *record)
+/* port (this fork): every event the log takes (event_log_listen: the
+medals it makes from the kills, and the moderators' actions, too), in the
+game's recording (network_recording.c), its slots there the players'
+indices and its tags their names; not the samples (positions, pings, the
+server's health) */
+static void recorded(struct event_log_record const *record)
 {
-	event_log_add(record);
 	if (record->type != EVENT_LOG_POSITION && record->type != EVENT_LOG_PING && record->type != EVENT_LOG_HEALTH)
 	{
 		char const *tags[3];
@@ -373,7 +374,7 @@ static void record_simple(int type, int slot, long tick, int tag, int value0, in
 	record.value[1] = value1;
 	if (position)
 		csmemcpy(record.position, position, sizeof(record.position));
-	log_add(&record);
+	event_log_add(&record);
 }
 
 static void end_ride(struct tracked *tracked, long tick)
@@ -504,6 +505,8 @@ static void begin_game(long tick)
 	for (index = 0; index < MAXIMUM_TRACKED; index++)
 		game_events.players[index].slot = EVENT_LOG_NONE;
 	game_events.recording = TRUE;
+	/* (each event in the game's recording too: recorded) */
+	event_log_listen(recorded);
 	game_events.started_tick = tick;
 	game_events.last_tick = tick;
 	game_events.part_time = system_milliseconds();
@@ -649,7 +652,7 @@ static void objective(struct tracked *tracked, struct player_datum *player, long
 	record.value[1] = (int)player->team_index;
 	if (position)
 		csmemcpy(record.position, position, sizeof(record.position));
-	log_add(&record);
+	event_log_add(&record);
 }
 
 static void update_objectives(struct tracked *tracked, struct player_datum *player, long tick, float const *position)
@@ -950,7 +953,7 @@ static void update_health(long tick)
 		record.value[2] = (int)(100.0 * game_events.frame_most + 0.5);
 		record.value[3] = resident;
 		record.bits = (unsigned int)cpu;
-		log_add(&record);
+		event_log_add(&record);
 		game_events.health_time = now;
 		game_events.frames = 0;
 		game_events.frame_sum = 0.0;
@@ -1141,7 +1144,7 @@ void game_events_player_killed(
 				record.tag[1] = (short)tag_of(vehicle->definition_index);
 		}
 	}
-	log_add(&record);
+	event_log_add(&record);
 	context->set = FALSE;
 }
 

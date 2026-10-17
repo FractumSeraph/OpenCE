@@ -50,7 +50,8 @@ a type a reader does not know it skips:
               datum index), type (1: objects.h's, a vehicle 1, a weapon 2,
               equipment 3, garbage 4, a projectile 5, a machine 7), tag (2),
               position (3 floats), forward and up (3 each, 2 bytes: times
-              32767), flags (1: at rest 1); every 2 ticks: vehicles, items
+              32767), flags (1: at rest 1); a whole pass of more than 2048
+              objects is several records; every 2 ticks: vehicles, items
               no one holds, projectiles and grenades, doors and elevators
  11 gone:     tick (4), count (2), then each object (4) gone since
  12 pose:     tick (4), count (1), then each living player's: player (1),
@@ -86,7 +87,8 @@ public copy, recordings\public\<the same name>, for anyone to watch, live
 or again (public_records): a player record without its hardware id and
 address (both empty), a hit without its verdict, degrees off aim and
 distance (zeros), and no move records, nor events of a moderator's action
-or an anti-cheat's flag; the format is the same, so any reader opens both.
+or an anti-cheat's flag, nor team chat; the format is the same, so any
+reader opens both.
 A block that shows the game being played (any record but the game's, its
 map's, its walls and its tags) is held back network.record_public_delay seconds before
 it is written, so that no one watching can tell its players where the
@@ -167,6 +169,9 @@ enum
 {
 	RECORDING_EVENT_MODERATION = 9,
 	RECORDING_EVENT_FLAG = 10,
+	/* a chat line's scope the public copy leaves out (delta_wire.h's
+	_delta_chat_scope_team) */
+	RECORDING_CHAT_SCOPE_TEAM = 1,
 };
 
 enum
@@ -180,7 +185,9 @@ enum
 	RECORDING_TAG_NAME_SIZE = 96,
 	/* the objects followed (by absolute index; one past it is not
 	recorded), how often (ticks), and how often every one of them is */
-	RECORDING_MAXIMUM_OBJECTS = 2048,
+	RECORDING_MAXIMUM_OBJECTS = MAXIMUM_OBJECTS_PER_MAP,
+	/* the objects one record holds, at most (a record is within a block) */
+	RECORDING_OBJECTS_PER_RECORD = 2048,
 	RECORDING_OBJECT_TICKS = 2,
 	RECORDING_WHOLE_OBJECT_TICKS = 5 * TICKS_PER_SECOND,
 	RECORDING_OBJECT_BYTES = 4 + 1 + 2 + 12 + 6 + 6 + 1,
@@ -230,8 +237,13 @@ static struct
 	long objects_time;
 	long whole_objects_time;
 	long score_time;
-	/* the player each slot had when last told (DATUM_INDEX_NEW), NONE */
+	/* the player each slot had when last told (DATUM_INDEX_NEW), NONE, and
+	their team then (a team change tells them again) */
 	long players[MAXIMUM_TRACKED_PLAYERS];
+	short player_teams[MAXIMUM_TRACKED_PLAYERS];
+	/* the game's last tick recorded (the end's: the game's time is reset by
+	then) */
+	long last_tick;
 	/* the public copy (network.record_public): its file, its name in the
 	public folder (kept after it ends, for its carnage report), what its
 	game is, and its blocks held back until they are old enough */
@@ -314,8 +326,8 @@ static void recording_write_block(
 /* the records as anyone may see them, written to out (as large as the
 records: nothing grows): a player's hardware id and address left out, a
 hit's fair play verdict, how far off aim and how far it went zeroed, and
-the moves the host refused left out, and the events of a moderator's
-action or an anti-cheat's flag; *live is set when a record shows the game
+the moves the host refused left out, the events of a moderator's action
+or an anti-cheat's flag, and team chat; *live is set when a record shows the game
 as it is played (any but the game's, its map's, its walls, its tags and its
 players) */
 static unsigned long public_records(
@@ -351,6 +363,10 @@ static unsigned long public_records(
 		{
 			continue;
 		}
+		/* (a chat line: tick 4, kind 1, then its scope; a team's own lines are
+		that team's, not for the other to read) */
+		if (type == _record_chat && size >= 6 && payload[5] == RECORDING_CHAT_SCOPE_TEAM)
+			continue;
 		if (type == _record_player && size >= 7 && 6 + 1 + (unsigned long)payload[6] <= size)
 		{
 			/* (tick, player, team and name kept; an empty hardware id and
@@ -874,7 +890,7 @@ static void recording_objects(
 	static long gone[RECORDING_MAXIMUM_OBJECTS];
 	long written_count = 0;
 	long gone_count = 0;
-	long index;
+	long index, first;
 	byte *at;
 
 	if (whole)
@@ -933,33 +949,42 @@ static void recording_objects(
 	}
 	if (!written_count && !whole)
 		return;
-	at = recording_begin(_record_objects, 4 + 1 + 2 + RECORDING_OBJECT_BYTES * (unsigned long)written_count);
-	if (!at)
-		return;
-	at = put_u32(at, (unsigned long)now);
-	at = put_u8(at, whole ? 1 : 0);
-	at = put_u16(at, (unsigned long)written_count);
-	for (index = 0; index < written_count; index++)
+	/* (a record of at most RECORDING_OBJECTS_PER_RECORD of them at a time:
+	a map's every object would be more than a block) */
+	for (first = 0; first < written_count || (first == 0 && whole); first += RECORDING_OBJECTS_PER_RECORD)
 	{
-		long absolute_index = written[index];
-		long object_index = recording.objects[absolute_index].object_index;
-		struct object_datum *datum = object_get(object_index);
-		short const *forward = recording.objects[absolute_index].forward;
-		short const *up = recording.objects[absolute_index].up;
+		long count = MIN(written_count - first, RECORDING_OBJECTS_PER_RECORD);
 
-		at = put_u32(at, (unsigned long)object_index);
-		at = put_u8(at, (unsigned long)datum->object.type);
-		at = put_u16(at, recording_tag(datum->definition_index));
-		at = put_real(at, datum->object.position.x);
-		at = put_real(at, datum->object.position.y);
-		at = put_real(at, datum->object.position.z);
-		at = put_u16(at, (unsigned long)(unsigned short)forward[0]);
-		at = put_u16(at, (unsigned long)(unsigned short)forward[1]);
-		at = put_u16(at, (unsigned long)(unsigned short)forward[2]);
-		at = put_u16(at, (unsigned long)(unsigned short)up[0]);
-		at = put_u16(at, (unsigned long)(unsigned short)up[1]);
-		at = put_u16(at, (unsigned long)(unsigned short)up[2]);
-		at = put_u8(at, magnitude_squared3d(&datum->object.translational_velocity) < 0.000001f ? 1 : 0);
+		at = recording_begin(_record_objects, 4 + 1 + 2 + RECORDING_OBJECT_BYTES * (unsigned long)count);
+		if (!at)
+			return;
+		at = put_u32(at, (unsigned long)now);
+		at = put_u8(at, whole ? 1 : 0);
+		at = put_u16(at, (unsigned long)count);
+		for (index = first; index < first + count; index++)
+		{
+			long absolute_index = written[index];
+			long object_index = recording.objects[absolute_index].object_index;
+			struct object_datum *datum = object_get(object_index);
+			short const *forward = recording.objects[absolute_index].forward;
+			short const *up = recording.objects[absolute_index].up;
+
+			at = put_u32(at, (unsigned long)object_index);
+			at = put_u8(at, (unsigned long)datum->object.type);
+			at = put_u16(at, recording_tag(datum->definition_index));
+			at = put_real(at, datum->object.position.x);
+			at = put_real(at, datum->object.position.y);
+			at = put_real(at, datum->object.position.z);
+			at = put_u16(at, (unsigned long)(unsigned short)forward[0]);
+			at = put_u16(at, (unsigned long)(unsigned short)forward[1]);
+			at = put_u16(at, (unsigned long)(unsigned short)forward[2]);
+			at = put_u16(at, (unsigned long)(unsigned short)up[0]);
+			at = put_u16(at, (unsigned long)(unsigned short)up[1]);
+			at = put_u16(at, (unsigned long)(unsigned short)up[2]);
+			at = put_u8(at, magnitude_squared3d(&datum->object.translational_velocity) < 0.000001f ? 1 : 0);
+		}
+		if (!written_count)
+			break;
 	}
 }
 
@@ -1114,6 +1139,7 @@ static void recording_start(
 
 	recording.started = TRUE;
 	recording.started_time = game_time_get();
+	recording.last_tick = game_time_get();
 	recording.flushed_time = game_time_get();
 	recording.length = 0;
 	recording.tag_count = 0;
@@ -1242,7 +1268,7 @@ static void recording_end(
 	{
 		at = recording_begin(_record_end, 4);
 		if (at)
-			put_u32(at, (unsigned long)game_time_get());
+			put_u32(at, (unsigned long)recording.last_tick);
 		recording_flush();
 		if (recording.file)
 			fclose(recording.file);
@@ -1283,9 +1309,10 @@ static void recording_note_player(
 	short character;
 	byte *at;
 
-	if (recording.players[player_index] == player_id)
+	if (recording.players[player_index] == player_id && recording.player_teams[player_index] == player->team_index)
 		return;
 	recording.players[player_index] = player_id;
+	recording.player_teams[player_index] = (short)player->team_index;
 	for (character = 0; character < (short)NUMBEROF(player->name) && player->name[character] &&
 		character < (short)sizeof(name) - 1; character++)
 	{
@@ -1343,6 +1370,7 @@ void network_recording_host_tick(
 	}
 	if (!recording.file)
 		return;
+	recording.last_tick = game_time_get();
 	for (player_index = 0; player_index < MAXIMUM_TRACKED_PLAYERS; player_index++)
 	{
 		struct player_datum *player = distributed_player(player_index);
