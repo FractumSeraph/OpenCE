@@ -3515,6 +3515,28 @@ static boolean server_alone(
 	return server->game.player_count == 1;
 }
 
+/* port: whether a player of the game is on a machine that has the map. A
+game whose every player is still downloading it would start with none of
+them in it: the host's clock runs only on its players' updates
+(update_client_get_maximum_possible_server_time), so it stayed at its first
+tick, and the players who joined once their download was done waited to
+spawn for ever. The lobby waits for one of them instead (a dedicated
+server's own machine has no player, and a player's host has the map) */
+static boolean server_has_a_player_with_the_map(
+	struct network_game_server *server)
+{
+	long player_index;
+
+	for (player_index = 0; player_index < MAXIMUM_NETWORK_PLAYER_COUNT; player_index++)
+	{
+		struct network_player const *player = &server->game.players[player_index];
+
+		if (network_player_is_valid(player) && !map_share_machine_needs_map(player->machine_index))
+			return TRUE;
+	}
+	return FALSE;
+}
+
 /* port: a machine joining or leaving is in the game before its player is.
 The countdown used to stop for that, and then start over, so a lobby rarely
 finished. The players already in the game decide. A machine with no player
@@ -3535,7 +3557,8 @@ boolean server_ok_to_countdown(
 #else
 	boolean bomb_ready = TRUE;
 #endif
-	boolean ok = enough_machines && teams_full && enough_players && bomb_ready;
+	boolean map_ready = server_has_a_player_with_the_map(server);
+	boolean ok = enough_machines && teams_full && enough_players && bomb_ready && map_ready;
 
 	/* port: a host nobody watches leaves no trace of why its lobby does not
 	start. The reason, logged as it changes (network_event is the engine's
@@ -3543,13 +3566,13 @@ boolean server_ok_to_countdown(
 	{
 		static int last_reason = -1;
 		int reason = (enough_machines ? 0 : 1) | (a_player_on_each ? 0 : 2) |
-			(teams_full ? 0 : 4) | (enough_players ? 0 : 8) | (bomb_ready ? 0 : 16);
+			(teams_full ? 0 : 4) | (enough_players ? 0 : 8) | (bomb_ready ? 0 : 16) | (map_ready ? 0 : 32);
 
 		if (reason != last_reason)
 		{
 			last_reason = reason;
 			network_event(
-				"lobby countdown %s: machines %s, a player on each machine %s, teams %s, players %ld of %ld, paused %s%s%s%s%s",
+				"lobby countdown %s: machines %s, a player on each machine %s, teams %s, players %ld of %ld, paused %s%s%s%s%s%s",
 				ok ? "ready" : "held",
 				enough_machines ? "yes" : "NO",
 				a_player_on_each ? "yes" : "NO",
@@ -3559,6 +3582,7 @@ boolean server_ok_to_countdown(
 				!ok ? " (failed:" : "",
 				(reason & 1) ? " machines" : "",
 				(reason & 16) ? " bomb handshakes" : "",
+				(reason & 32) ? " every player downloading the map" : "",
 				reason ? ")" : "");
 		}
 	}
