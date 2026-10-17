@@ -103,6 +103,9 @@ def test_make_writes_torrents_and_the_index(tmp_path):
         pieces = b"".join(hashlib.sha1(data[offset:offset + entry.piece_length]).digest()
                           for offset in range(0, len(data), entry.piece_length))
         assert info[b"pieces"] == pieces
+        # and the whole file's BLAKE2b-256, right after the info hash
+        assert entry.blake2b == hashlib.blake2b(data, digest_size=32).hexdigest()
+        assert f"\t{entry.info_hash}\tblake2b:{entry.blake2b}" in index.read_text(encoding="utf-8")
     # the index checks, and a second run hashes nothing new
     result = run("check", "--index", str(index), "--torrents", str(torrents))
     assert result.returncode == 0, result.stdout
@@ -110,6 +113,58 @@ def test_make_writes_torrents_and_the_index(tmp_path):
                  "--index", str(index))
     assert result.returncode == 0, result.stdout + result.stderr
     assert "0 files to hash" in result.stdout
+
+
+def test_blake2b_notes_each_maps_hash(tmp_path):
+    """An index made before the BLAKE2b-256 was noted has it added: of the
+    folders' files that are its entries (name, size and checksum), or from
+    what b2sum -l 256 printed of them; a hash that differs from the index's
+    is reported, not taken."""
+    maps = tmp_path / "maps"
+    maps.mkdir()
+    alpha = cache_bytes("alpha", size=400_000, checksum=0x11111111, seed=1)
+    beta = cache_bytes("beta", size=300_000, checksum=0x22222222, seed=2)
+    (maps / "alpha.map").write_bytes(alpha)
+    (maps / "beta.map").write_bytes(beta)
+    index = tmp_path / "index.txt"
+    result = run("make", "--maps", str(maps), "--torrents", str(tmp_path / "torrents"), "--index", str(index))
+    assert result.returncode == 0, result.stdout + result.stderr
+    entries = map_torrents.read_index(index)
+    for entry in entries.values():
+        entry.blake2b = None
+        entry.sources = ["halomaps:1234"]
+    map_torrents.write_index(index, entries)
+    # another version of beta in the folder is not beta's entry's file
+    (maps / "beta.map").write_bytes(cache_bytes("beta", size=300_000, checksum=0x33333333, seed=2))
+    result = run("blake2b", "--maps", str(maps), "--index", str(index))
+    assert result.returncode == 0, result.stdout + result.stderr
+    entries = map_torrents.read_index(index)
+    assert entries[("alpha.map", 0x11111111)].blake2b == hashlib.blake2b(alpha, digest_size=32).hexdigest()
+    assert entries[("beta.map", 0x22222222)].blake2b is None
+    # the archive source stays a source, after the hash
+    assert entries[("alpha.map", 0x11111111)].sources == ["halomaps:1234"]
+    line = next(line for line in index.read_text(encoding="utf-8").splitlines() if line.startswith("alpha.map"))
+    assert line.split("\t")[5:] == [f"blake2b:{hashlib.blake2b(alpha, digest_size=32).hexdigest()}",
+                                    "halomaps:1234"]
+    # what b2sum printed, of the folder's files somewhere else
+    beta_hash = hashlib.blake2b(beta, digest_size=32).hexdigest()
+    hashes = tmp_path / "maps.b2"
+    hashes.write_text(f"{'0' * 64}  ./alpha.map\n{beta_hash}  ./beta.map\n", encoding="utf-8")
+    result = run("blake2b", "--hashes", str(hashes), "--index", str(index))
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "alpha.map: another BLAKE2b-256" in result.stdout
+    entries = map_torrents.read_index(index)
+    assert entries[("beta.map", 0x22222222)].blake2b == beta_hash
+    assert entries[("alpha.map", 0x11111111)].blake2b == hashlib.blake2b(alpha, digest_size=32).hexdigest()
+
+
+def test_a_bad_blake2b_column_is_refused(tmp_path):
+    index = tmp_path / "index.txt"
+    line = "alpha.map\t11111111\t400000\t262144\t" + "a" * 40
+    for bad in ("blake2b:1234", f"blake2b:{'0' * 64}\tblake2b:{'1' * 64}", f"blake2b:{'g' * 64}"):
+        index.write_text(f"# {map_torrents.INDEX_FORMAT}\n{line}\t{bad}\n", encoding="utf-8")
+        with pytest.raises(SystemExit):
+            map_torrents.read_index(index)
 
 
 def test_the_info_dictionary_is_what_the_game_rebuilds():
@@ -163,9 +218,11 @@ def test_sources_notes_the_archives_zips_that_hold_each_map(tmp_path):
     entries = map_torrents.read_index(index)
     assert entries[("alpha.map", 0x11111111)].sources == ["halonet:alpha pack.zip", "halomaps:1234"]
     assert entries[("beta.map", 0x22222222)].sources == []
-    # the line the game reads: the sources after the info hash
+    # the line the game reads: the sources after the info hash and the
+    # BLAKE2b-256
     line = next(line for line in index.read_text(encoding="utf-8").splitlines() if line.startswith("alpha.map"))
-    assert line.split("\t")[5:] == ["halonet:alpha pack.zip", "halomaps:1234"]
+    assert line.split("\t")[5].startswith("blake2b:")
+    assert line.split("\t")[6:] == ["halonet:alpha pack.zip", "halomaps:1234"]
     # an archive not given keeps its columns; a rerun gives the same
     result = run("sources", "--halomaps", str(halomaps), "--index", str(index))
     assert result.returncode == 0, result.stdout + result.stderr
@@ -181,3 +238,8 @@ def test_the_committed_index_names_the_archives_zips():
     assert len(with_sources) > 5000
     for entry in with_sources:
         assert all(map_torrents.SOURCE_PATTERN.match(source) for source in entry.sources)
+
+
+def test_the_committed_index_has_each_maps_blake2b():
+    entries = map_torrents.read_index(map_torrents.DEFAULT_INDEX)
+    assert [entry.file_name for entry in entries.values() if not entry.blake2b] == []

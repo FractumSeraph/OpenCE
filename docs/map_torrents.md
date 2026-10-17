@@ -107,8 +107,10 @@ play's UPnP does not forward the torrent port yet.
 ## How a map is known: the index
 
 `port/assets/network/map_torrents.txt` lists every map's torrent, one a
-line: the file name, the header checksum, the size, the piece length and
-the info hash, then, a column each, the archives' zips that hold it:
+line: the file name, the header checksum, the size, the piece length, the
+info hash and the BLAKE2b-256 of the whole file (`blake2b:<64 hex digits>`,
+for checking a map got elsewhere without remaking its torrent: `b2sum -l 256`
+gives it), then, a column each, the archives' zips that hold it:
 `halonet:<zip file name>` (https://maps.halonet.net/maps/<zip file name>)
 and `halomaps:<file id>` (https://halomaps.org/hce/detail.cfm?fid=<file id>);
 5,827 of the 5,829 lines have at least one, which `python tools/map_torrents.py
@@ -146,7 +148,14 @@ python tools/map_torrents.py make --maps <folder> [--maps <folder>...]
 which writes `<info hash>.torrent` files (for seed boxes) and merges the
 entries into the index, remembering the files hashed in
 `<output folder>/.map_torrents_cache.json` so that a rerun hashes only new
-ones. `python tools/map_torrents.py check` checks an index against its
+ones; it notes each file's BLAKE2b-256 as it goes.
+`python tools/map_torrents.py blake2b --maps <folder>` notes the BLAKE2b-256
+of an index made before (of the folders' files that are its entries), or
+`--hashes <file>` takes what `b2sum -l 256` printed of the maps, on a machine
+whose Python lacks BLAKE2. The game reads the hash's column as one more of
+the archives' (`map_torrents.c`) and no archive takes it for its own
+(`archive_source`, `map_archives.c`), so older builds read the index as
+before. `python tools/map_torrents.py check` checks an index against its
 torrent files. `tools/test_map_torrents.py` tests the tool.
 
 ## Seeding the archive

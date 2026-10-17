@@ -87,7 +87,8 @@ struct index_entry
 	char info_hash[41];
 	/* into torrent_maps_index.names: the archives' zips that hold it, as the
 	index's columns after the info hash (tab-separated "halonet:<zip>",
-	"halomaps:<file id>"; map_archives.h), "" for none */
+	"halomaps:<file id>"; map_archives.h), "" for none; the file's
+	BLAKE2b-256 column (blake2b:<hash>) is kept with them, no archive's */
 	unsigned long sources;
 };
 
