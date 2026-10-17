@@ -858,6 +858,19 @@ static void upload(GLuint texture, GLenum target, const struct xgpu_texture_desc
 	BOOL decode_compressed = FALSE;
 	unsigned long *converted;
 	unsigned long face, level;
+#ifdef HALO_WEB
+	/* for each order the texels keep their channels in (the Xbox's, a Halo
+	PC multipurpose map's, a Halo PC HUD meter's), the channel (red, green,
+	blue, alpha) each channel is taken from, as the texture swizzle below
+	samples them where there is one */
+	static const unsigned char channel_sources[3][4] =
+	{
+		{ 0, 1, 2, 3 },
+		{ 2, 1, 3, 0 },
+		{ 3, 3, 3, 0 },
+	};
+	int channel_order = description->pc_meter ? 2 : description->pc_multipurpose ? 1 : 0;
+#endif
 
 #ifdef HALO_GLES
 	decode_compressed = description->compressed && !xgpu_capabilities.s3tc;
@@ -865,9 +878,12 @@ static void upload(GLuint texture, GLenum target, const struct xgpu_texture_desc
 	if (information.kind == _texel_bc7)
 		decode_compressed = TRUE;
 #ifdef HALO_WEB
-	/* WebGL's S3TC takes 2D textures whose sides are multiples of 4 */
+	/* WebGL's S3TC takes 2D textures whose sides are multiples of 4; and a
+	texture whose channels are where Halo PC keeps them is decoded, to put
+	them in order (WebGL 2 has no texture swizzle) */
 	decode_compressed |= description->compressed &&
-		(target == GL_TEXTURE_3D || (description->width & 3) || (description->height & 3));
+		(target == GL_TEXTURE_3D || (description->width & 3) || (description->height & 3) ||
+			channel_order != 0);
 #endif
 	converted = description->compressed && !decode_compressed ? NULL : malloc(largest * sizeof(unsigned long));
 	if (!converted && !(description->compressed && !decode_compressed))
@@ -882,7 +898,7 @@ static void upload(GLuint texture, GLenum target, const struct xgpu_texture_desc
 	/* the channel each channel is sampled from, set on every upload: a
 	texture object is reused for whatever pixels arrive at its address (WebGL
 	2 has no texture swizzle: the browser builds put the channels in order
-	before they are uploaded instead) */
+	before they are uploaded instead, below) */
 	{
 		GLint channels[4] = { GL_RED, GL_GREEN, GL_BLUE, GL_ALPHA };
 
@@ -992,14 +1008,32 @@ static void upload(GLuint texture, GLenum target, const struct xgpu_texture_desc
 #endif
 #ifdef HALO_WEB
 				{
-					/* BGRA (32-bit ARGB words) to the RGBA WebGL takes */
+					/* BGRA (32-bit ARGB words) to the RGBA WebGL takes, each
+					channel from where the texels keep it */
 					unsigned long texel, count = (unsigned long)width * (unsigned long)height * (unsigned long)depth;
 
 					for (texel = 0; texel < count; texel++)
 					{
 						unsigned long value = converted[texel];
 
-						converted[texel] = (value & 0xff00ff00UL) | ((value >> 16) & 0xffUL) | ((value & 0xffUL) << 16);
+						if (channel_order == 0)
+						{
+							converted[texel] = (value & 0xff00ff00UL) | ((value >> 16) & 0xffUL) | ((value & 0xffUL) << 16);
+						}
+						else
+						{
+							/* (red, green, blue and alpha, as stored) */
+							unsigned long stored[4];
+							unsigned long channel;
+
+							stored[0] = (value >> 16) & 0xffUL;
+							stored[1] = (value >> 8) & 0xffUL;
+							stored[2] = value & 0xffUL;
+							stored[3] = (value >> 24) & 0xffUL;
+							converted[texel] = 0;
+							for (channel = 0; channel < 4; channel++)
+								converted[texel] |= stored[channel_sources[channel_order][channel]] << (8 * channel);
+						}
 					}
 				}
 #endif

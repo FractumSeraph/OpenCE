@@ -3393,8 +3393,8 @@ struct hs_function_table_storage
 {
 #ifdef HALO_CUSTOM_EDITION
 	/* port: and Halo PC's functions the Xbox's have none of, and the
-	port's loose_sounds (below) */
-	struct hs_function_definition const *functions[418 + 3 + 24 + 2];
+	port's mods (below) */
+	struct hs_function_definition const *functions[418 + 3 + 24 + 3];
 #else
 	struct hs_function_definition const *functions[418];
 #endif
@@ -12113,42 +12113,56 @@ static struct hs_function_definition const sound_eax_enabled_definition=
 	0,
 };
 
-/* port: the sounds of tag files played over the map's, for those making
-them (audio.loose_sounds: port/linux/game/loose_sounds.c), at the console */
-void loose_sounds_reload(void);
-void loose_sounds_enable(boolean enabled);
+/* port: the mods' tags played over the map's on this machine
+(the main menu's Mods: port/linux/game/mods.c), at the console */
+void mods_reload(void);
+void mods_enable(boolean enabled);
+void mods_list(void);
 
-HS_EVALUATE_NO_ARGUMENTS(hs_loose_sounds_reload_evaluate, loose_sounds_reload)
-HS_EVALUATE_VOID_BOOLEAN(hs_loose_sounds_evaluate, loose_sounds_enable)
+HS_EVALUATE_NO_ARGUMENTS(hs_mods_reload_evaluate, mods_reload)
+HS_EVALUATE_VOID_BOOLEAN(hs_mods_enable_evaluate, mods_enable)
+HS_EVALUATE_NO_ARGUMENTS(hs_mods_list_evaluate, mods_list)
 
-static struct hs_function_definition const loose_sounds_reload_definition=
+static struct hs_function_definition const mods_reload_definition=
 {
 	_hs_type_void,
 	0,
-	"loose_sounds_reload",
+	"mods_reload",
 	hs_macro_function_parse,
-	hs_loose_sounds_reload_evaluate,
-	"reads the sound tag files under the data root's tags folder again (all sounds stop if any changed).",
+	hs_mods_reload_evaluate,
+	"finds the mods again and reads their tag files again (all sounds stop if any changed).",
 	NULL,
 	0,
 };
 
-static struct hs_function_definition_with_1_parameter const loose_sounds_definition=
+static struct hs_function_definition_with_1_parameter const mods_enable_definition=
 {
 	{
 		_hs_type_void,
 		0,
-		"loose_sounds",
+		"mods_enable",
 		hs_macro_function_parse,
-		hs_loose_sounds_evaluate,
-		"plays the map's sounds from the tags folder's sound tag files, or (false) from the map, until the map changes.",
+		hs_mods_enable_evaluate,
+		"plays the mods' sounds, bitmaps and text, or (false) the map's own, until the map changes.",
 		NULL,
 		1,
 		{ _hs_type_boolean },
 	},
 };
 
-long const hs_function_table_count= 418 + 3 + 24 + 2;
+static struct hs_function_definition const mods_list_definition=
+{
+	_hs_type_void,
+	0,
+	"mods_list",
+	hs_macro_function_parse,
+	hs_mods_list_evaluate,
+	"lists the mods in the mods folder, and what they play on this map.",
+	NULL,
+	0,
+};
+
+long const hs_function_table_count= 418 + 3 + 24 + 3;
 #else
 long const hs_function_table_count= 418;
 #endif
@@ -12611,8 +12625,9 @@ struct hs_function_table_storage hs_function_table=
 		&sound_set_env_definition.definition,
 		&sound_enable_eax_definition.definition,
 		&sound_eax_enabled_definition,
-		&loose_sounds_reload_definition,
-		&loose_sounds_definition.definition,
+		&mods_reload_definition,
+		&mods_enable_definition.definition,
+		&mods_list_definition,
 #endif
 	},
 	{
@@ -13142,9 +13157,10 @@ static boolean const hs_function_allowed_in_maps[]=
 	TRUE, /* sound_enable_eax */
 	TRUE, /* sound_eax_enabled */
 
-	/* the port's, for those making sounds */
-	FALSE, /* loose_sounds_reload */
-	FALSE, /* loose_sounds */
+	/* the port's, for this machine's mods */
+	FALSE, /* mods_reload */
+	FALSE, /* mods_enable */
+	FALSE, /* mods_list */
 #endif
 };
 typedef char verify_hs_function_allowed_in_maps_size[
@@ -15906,6 +15922,8 @@ static boolean hs_expression_changes_no_game(
 		"player0_look_yaw_rate", "player1_look_yaw_rate", "player2_look_yaw_rate", "player3_look_yaw_rate",
 		"player0_look_pitch_rate", "player1_look_pitch_rate", "player2_look_pitch_rate",
 		"player3_look_pitch_rate",
+		/* (a machine's mods are its own: mods.c) */
+		"mods_reload", "mods_enable", "mods_list",
 		"true", "false", "on", "off",
 	};
 	char const *character = expression;

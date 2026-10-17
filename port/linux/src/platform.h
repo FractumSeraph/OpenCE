@@ -155,6 +155,11 @@ $XDG_DATA_HOME/chupathingyce or ~/.local/share/chupathingyce); 0 otherwise
 signed, and may be where its player cannot write, and an AppImage is
 mounted read-only (port_config.c) */
 int platform_app_folder(char *path, unsigned long size);
+/* asks the player, in a box of its own that waits for the answer (before
+the window opens, or between frames), with `count` buttons (3 at most: Android's),
+`default_index` Enter's and Escape's: the index of the one chosen, or -1
+when it cannot ask */
+int platform_ask(const char *title, const char *text, const char *const *labels, int count, int default_index);
 const char *platform_save_root(void);
 /* the folder of Custom Edition maps paths.custom_edition names, which the
 Xbox drive h:\ is (map_families.c looks in it after maps_ce and the older

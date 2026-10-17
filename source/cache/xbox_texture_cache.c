@@ -631,11 +631,13 @@ static void texture_cache_initialize_hardware_format(
 			(bitmap->width - 1);
 #ifdef HALO_CUSTOM_EDITION
 		/* port: a Custom Edition map's linear bitmap has its rows as Halo PC
-		lays them out, a row's texels after the last's, whatever the pitch */
+		lays them out, a row's texels after the last's, whatever the pitch (a
+		mod's are padded as they load: port/linux/game/mod_bitmaps.c) */
 		{
 			extern boolean cache_file_tags_are_ce(void);
+			extern boolean mod_bitmaps_contain(struct bitmap_data const *bitmap);
 
-			if (cache_file_tags_are_ce())
+			if (cache_file_tags_are_ce() && !mod_bitmaps_contain(bitmap))
 				texture->Common |= D3DCOMMON_PORT_PC_LAYOUT;
 		}
 #endif
@@ -655,11 +657,13 @@ static void texture_cache_initialize_hardware_format(
 		texture->Size = 0;
 #ifdef HALO_CUSTOM_EDITION
 		/* port: a Custom Edition map's bitmap has its pixels as Halo PC lays
-		them out: uploaded as they are, not rearranged as the Xbox's */
+		them out: uploaded as they are, not rearranged as the Xbox's (a mod's
+		are made the Xbox's as they load: port/linux/game/mod_bitmaps.c) */
 		{
 			extern boolean cache_file_tags_are_ce(void);
+			extern boolean mod_bitmaps_contain(struct bitmap_data const *bitmap);
 
-			if (cache_file_tags_are_ce())
+			if (cache_file_tags_are_ce() && !mod_bitmaps_contain(bitmap))
 				texture->Common |= D3DCOMMON_PORT_PC_LAYOUT;
 		}
 #endif
@@ -691,6 +695,22 @@ static void texture_cache_initialize_hardware_format(
 			texture->Common |= D3DCOMMON_PORT_PC_MULTIPURPOSE;
 	}
 #endif
+	/* port: a mod's bitmap, a Halo PC tag's, drawn as a model shader's
+	multipurpose map or a HUD meter on any map: its channels Halo PC's
+	(port/linux/game/mod_bitmaps.c) */
+	{
+		extern short mod_bitmaps_channel_order(struct bitmap_data const *bitmap);
+
+		switch (mod_bitmaps_channel_order(bitmap))
+		{
+		case 1:
+			texture->Common |= D3DCOMMON_PORT_PC_MULTIPURPOSE;
+			break;
+		case 2:
+			texture->Common |= D3DCOMMON_PORT_PC_METER;
+			break;
+		}
+	}
 	IDirect3DBaseTexture8_Register(texture, xbox_pointer(bitmap->base_address));
 
 	return;
@@ -820,8 +840,11 @@ static boolean texture_cache_bitmap_valid(
 			bitmap_d3d_format_tables[linear ? _bitmap_d3d_format_table_linear : _bitmap_d3d_format_table_regular][bitmap->format]!=NONE &&
 			compressed_flag==compressed_format;
 	}
+	/* port: a mod's linear rows need not be whole steps of the pitch: they
+	are padded to them as its pixels load (port/linux/game/mod_bitmaps.c) */
 	if (valid && linear)
 	{
+		extern boolean mod_bitmaps_contain(struct bitmap_data const *bitmap);
 		long row_pitch = bitmap_mipmap_get_row_pitch(bitmap, 0);
 		long steps = (row_pitch+D3DTEXTURE_PITCH_ALIGNMENT-1)/D3DTEXTURE_PITCH_ALIGNMENT;
 		boolean any_pitch = FALSE;
@@ -839,7 +862,7 @@ static boolean texture_cache_bitmap_valid(
 #endif
 		valid =
 			row_pitch>0 &&
-			(row_pitch%D3DTEXTURE_PITCH_ALIGNMENT==0 || any_pitch) &&
+			(row_pitch%D3DTEXTURE_PITCH_ALIGNMENT==0 || any_pitch || mod_bitmaps_contain(bitmap)) &&
 			steps<=(long)((D3DSIZE_PITCH_MASK>>D3DSIZE_PITCH_SHIFT)+1);
 	}
 	if (!valid && !reported)
@@ -906,13 +929,27 @@ static boolean texture_cache_start_loading_bitmap(
 		bitmap->base_address = xbox_address(base_address);
 		texture->bitmap = bitmap;
 		texture_cache_initialize_hardware_format(bitmap, &texture->hardware_format);
-		texture->read_request_handle = cache_file_read(
-			bitmap->tag_index,
-			bitmap->pixels_offset,
-			bitmap->pixels_size,
-			base_address,
-			&texture->loaded,
-			block);
+		/* port: or, the bitmap of a mod played over the map's, from its
+		file, at once (port/linux/game/mod_bitmaps.c) */
+		{
+			extern boolean mod_bitmaps_read(struct bitmap_data *bitmap, void *buffer);
+
+			if (mod_bitmaps_read(bitmap, base_address))
+			{
+				texture->loaded = TRUE;
+				texture->read_request_handle = NONE;
+			}
+			else
+			{
+				texture->read_request_handle = cache_file_read(
+					bitmap->tag_index,
+					bitmap->pixels_offset,
+					bitmap->pixels_size,
+					base_address,
+					&texture->loaded,
+					block);
+			}
+		}
 
 		return TRUE;
 	}

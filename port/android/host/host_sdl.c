@@ -512,7 +512,8 @@ int host_sdl_show_simple_message_box(uint32_t flags, const char *title, const ch
 	return SDL_ShowSimpleMessageBox((SDL_MessageBoxFlags)flags, title, message, NULL) ? 1 : 0;
 }
 
-/* a question with buttons (the game list's key links, sdl_platform.c): each
+/* a question with buttons (the game list's key links, sdl_platform.c; the
+mods that cannot be played together, port_mods.c's platform_ask): each
 button's flags, its answer, and its text, a guest address; the answer
 chosen, -1 if none */
 int host_sdl_show_message_box(uint32_t flags, const char *title, const char *message, int count,

@@ -59,8 +59,9 @@ then [ChupathingyCE's](#chupathingyce), then [OpenCE's](#opence).
   work that ChupathingyCE hasn't taken in: field of view and viewmodel
   settings, OpenCE's touch controls (profile buttons, gyroscope aiming, aim
   assist, opacity), the high-resolution controller buttons, a screenshot
-  key (F10), sound tag files played over a map's sounds for those making
-  them (`audio.loose_sounds`), the portable Linux build for SteamOS, the
+  key (F10), mods (folders of Halo PC tag files whose sounds, bitmaps and
+  text play over a map's on your machine, with the main menu's Mods:
+  `docs/mods.md`), the portable Linux build for SteamOS, the
   profiling build, and its CUSTOM SINGLEPLAYER and CUSTOM MULTIPLAYER map
   lists (Custom Edition campaign maps alone or as network co-op, a map's
   own `.bmp` picture and `.txt` description), your own legs in first
@@ -150,6 +151,15 @@ your own copy of Halo" below). The download is either:
 A copy of Custom Edition's shared maps already in `maps_ce` is kept as it
 is. The site's `maps.txt` names those three as `custom_maps/<name>` (its
 folder beside `maps/`); builds from before this skip such lines.
+
+## Mods
+
+Mods are folders of Halo PC tag files, as the Halo Editing Kit and Invader
+write them, in `mods/` next to `maps/`: texture, sound and text packs that
+play over the maps' on your machine only, in any game. Each has a
+`mod.toml`. Every mod in the folder is on; the main menu's Mods turns them
+off and on and sets the order they load in.
+Refer to [docs/mods.md](docs/mods.md).
 
 ## The browser build
 

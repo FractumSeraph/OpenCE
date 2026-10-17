@@ -659,16 +659,14 @@ void scenario_tags_unload(
 		hud_hires_tags_unloaded();
 	}
 	sound_cache_close();
-#ifdef HALO_CUSTOM_EDITION
-	/* port: the sounds of tag files go, after the sound cache that held them
-	(port/linux/game/loose_sounds.c) */
-	{
-		extern void loose_sounds_tags_unloaded(void);
-
-		loose_sounds_tags_unloaded();
-	}
-#endif
 	texture_cache_close();
+	/* port: the mods' tags go, after the sound and texture caches that held
+	their sounds and bitmaps (port/linux/game/mods.c) */
+	{
+		extern void mods_tags_unloaded(void);
+
+		mods_tags_unloaded();
+	}
 	/* port: the menus' tags go, and the map's own table comes back
 	(port/linux/game/menu_tags.c): after the texture cache, which writes to
 	the bitmaps it has loaded as it closes, theirs among them */
@@ -1612,12 +1610,11 @@ long scenario_tags_load(
 					ce_header->checksum);
 				ce_hud_tags_loaded(global_tag_instances, ce_header->tag_count);
 			}
-			/* (and the sounds of tag files played over the map's, as below:
-			port/linux/game/loose_sounds.c) */
+			/* (and the mods' tags, as below) */
 			{
-				extern void loose_sounds_tags_loaded(void);
+				extern void mods_tags_loaded(char const *map_name);
 
-				loose_sounds_tags_loaded();
+				mods_tags_loaded(stripped_scenario_name);
 			}
 			/* (and last, its tags' names copied out of its tags, where what is
 			written could take away their ends: port/linux/game/ce_resources.c) */
@@ -1726,15 +1723,15 @@ long scenario_tags_load(
 				ui_widget_online_games_tags_loaded();
 			}
 #endif
-#ifdef HALO_CUSTOM_EDITION
-			/* port: the sounds of tag files played over the map's
-			(audio.loose_sounds: port/linux/game/loose_sounds.c) */
+			/* port: the mods' sounds, bitmaps and text played over the
+			map's, last, over the menus' tags too, and with the high-res HUD
+			standing for the map's bitmaps, not a mod's (the main menu's Mods:
+			port/linux/game/mods.c) */
 			{
-				extern void loose_sounds_tags_loaded(void);
+				extern void mods_tags_loaded(char const *map_name);
 
-				loose_sounds_tags_loaded();
+				mods_tags_loaded(stripped_scenario_name);
 			}
-#endif
 			result = cache_file_globals.tag_header->scenario_tag_index;
 		}
 		/* port: a map refused is closed for the next to open */

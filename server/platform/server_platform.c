@@ -24,6 +24,7 @@ never hosts.
 #include "platform.h"
 #include "sdl_platform.h"
 #include "port_config.h"
+#include "port_mods.h"
 #include "posix.h"
 #include "browser.h"
 #include "halo_port_limits.h"
@@ -359,6 +360,16 @@ void platform_show_message(const char *title, const char *message)
 	platform_log("%s: %s", title, message);
 }
 
+/* (nobody to ask: as if the question could not be shown) */
+int platform_ask(const char *title, const char *text, const char *const *labels, int count, int default_index)
+{
+	(void)labels;
+	(void)count;
+	(void)default_index;
+	platform_log("%s: %s", title, text);
+	return -1;
+}
+
 void platform_open_url(const char *url)
 {
 	(void)url;
@@ -462,4 +473,159 @@ void updater_start(void)
 const char *updater_version(void)
 {
 	return HALO_VERSION;
+}
+
+/* ---------- the mods (port_mods.c's, which the server leaves out)
+
+A server plays no mods: a mod is one machine's own, and a host's mod sounds
+would change how long its scripts and AI wait for dialogue for every player
+of its games (docs/mods.md). The game's mods (port/linux/game/mods.c) find
+none here, and play the maps' own tags. */
+
+long port_mods_scan(void)
+{
+	return 0;
+}
+
+unsigned long port_mods_scans(void)
+{
+	return 0;
+}
+
+long port_mods_played(void)
+{
+	return 0;
+}
+
+long port_mods_file_find(const char *tag_file, const char *map_name)
+{
+	(void)tag_file;
+	(void)map_name;
+	return -1;
+}
+
+int port_mods_file_stamp(long file, unsigned long *size, unsigned long stamp[2])
+{
+	(void)file;
+	(void)size;
+	(void)stamp;
+	return 0;
+}
+
+int port_mods_file_read(long file, unsigned long offset, void *buffer, unsigned long size)
+{
+	(void)file;
+	(void)offset;
+	(void)buffer;
+	(void)size;
+	return 0;
+}
+
+const char *port_mods_file_mod(long file)
+{
+	(void)file;
+	return "";
+}
+
+const char *port_mods_file_path(long file)
+{
+	(void)file;
+	return "";
+}
+
+long port_mods_count(void)
+{
+	return 0;
+}
+
+const char *port_mods_folder(long index)
+{
+	(void)index;
+	return "";
+}
+
+int port_mods_describe(long index, char *text, unsigned long size, const char *map_name)
+{
+	(void)index;
+	(void)map_name;
+	if (size > 0)
+		text[0] = 0;
+	return 0;
+}
+
+long port_mods_at(long position)
+{
+	(void)position;
+	return -1;
+}
+
+const char *port_mods_name(long index)
+{
+	(void)index;
+	return "";
+}
+
+int port_mods_on(long index)
+{
+	(void)index;
+	return 0;
+}
+
+int port_mods_status(long index, char *text, unsigned long size)
+{
+	(void)index;
+	if (size > 0)
+		text[0] = 0;
+	return _port_mod_fine;
+}
+
+int port_mods_details(long index, char *text, unsigned long size)
+{
+	(void)index;
+	if (size > 0)
+		text[0] = 0;
+	return 0;
+}
+
+long port_mods_move(long position, long places)
+{
+	(void)places;
+	return position;
+}
+
+void port_mods_turn(long index, int on)
+{
+	(void)index;
+	(void)on;
+}
+
+int port_mods_save(void)
+{
+	return 0;
+}
+
+void port_mods_revert(void)
+{
+}
+
+int port_mods_conflicts(char *text, unsigned long size)
+{
+	if (size > 0)
+		text[0] = 0;
+	return 0;
+}
+
+int port_mods_conflicting_names(char *text, unsigned long size)
+{
+	if (size > 0)
+		text[0] = 0;
+	return 0;
+}
+
+void port_mods_disable_conflicting(void)
+{
+}
+
+void port_mods_startup(void)
+{
 }

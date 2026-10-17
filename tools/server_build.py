@@ -70,11 +70,13 @@ SERVER_NATIVE_SOURCES = [SERVER_PLATFORM_DIR / "sdl_headless.c", SERVER_PLATFORM
                          SERVER_PLATFORM_DIR / "server_roles.c", SERVER_PLATFORM_DIR / "control_link_protocol.c",
                          SERVER_PLATFORM_DIR / "control_link.c", SERVER_PLATFORM_DIR / "server_events.c"]
 SERVER_WEBUI_DIR = SERVER_DIR / "webui"
-# the window, input and self-updater the server has none of
+# the window, input and self-updater the server has none of, and the mods
+# (a server plays none: server_platform.c)
 SERVER_EXCLUDED = {
     "port/linux/src/sdl_platform.c",
     "port/linux/src/xinput_sdl.c",
     "port/linux/src/updater.c",
+    "port/linux/src/port_mods.c",
 }
 SERVER_DEFINES = ["-DHALO_SERVER"]
 OUTPUT_NAME = "chupathingyce-server"

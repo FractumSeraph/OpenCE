@@ -451,6 +451,15 @@ HANDLE cache_files_ce_map_file(void)
 which tag_groups.h's block reads go by, set with fuzz_tags_are_ce) */
 boolean cache_file_is_ce;
 
+/* (mods.c's: the memory the mods' tags made, which ce_tags_pointer reads
+too; there are no mods here) */
+boolean mods_memory_contains(unsigned long address, long size)
+{
+	(void)address;
+	(void)size;
+	return FALSE;
+}
+
 /* (the maps' folder, where ce_hud.c looks for the Xbox ui.map for its
 controller buttons: none here) */
 char const *cache_files_map_directory(void)

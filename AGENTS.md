@@ -19,8 +19,8 @@ end.
 | Path | Contents |
 | --- | --- |
 | `source/` | The game: the decompilation's C files (435 compiled; `port/linux/port.json` leaves out libtiff and zlib's extras), compiled as they are with few changes (each marked, below) |
-| `port/linux/src/` | The platform layer the three ports share: Direct3D 8 on OpenGL (`d3d8_gl.c`), DirectSound and XInput on SDL3, files, threads, memory, sockets, settings (`port_config.c`), internet play (`p2p*.c`) |
-| `port/linux/game/` | The port's game-side code, compiled as the game's sources are: the distributed netcode (`network_*.c`), co-op, map sharing (`map_share*.c`), the menus (`menu_tags.c`, `menu_functions.c`), Halo PC's maps (`ce_*.c`, `map_families.c`), the tag validator (`tag_validate.c`, `tag_schema_*.c`), touch, FOV and more |
+| `port/linux/src/` | The platform layer the three ports share: Direct3D 8 on OpenGL (`d3d8_gl.c`), DirectSound and XInput on SDL3, files, threads, memory, sockets, settings (`port_config.c`), the mods folder (`port_mods.c`), internet play (`p2p*.c`) |
+| `port/linux/game/` | The port's game-side code, compiled as the game's sources are: the distributed netcode (`network_*.c`), co-op, map sharing (`map_share*.c`), the menus (`menu_tags.c`, `menu_functions.c`), Halo PC's maps (`ce_*.c`, `map_families.c`), the tag validator (`tag_validate.c`, `tag_schema_*.c`), mods (`mods.c`, `mod_*.c`), touch, FOV and more |
 | `port/linux/include/` | The port's headers: the limits (`halo_port_limits.h`, with `HALO_PORT_NETWORK_VERSION`), capacities (`halo_port_capacity.h`), the prefix header, `halo_linux_source_fixups.h` (port functions the game's sources call) |
 | `port/include/xdk/` | Stand-ins for the Xbox SDK's headers (declarations only) |
 | `port/windows/` | The Windows build's own files (`win32_*.c`, headers) |
@@ -34,7 +34,7 @@ end.
 | `services/` | The browser build's online services: the lobby (`signaling`), the native gateway (`native-gateway`), the self-hosting kits (`selfhost`), the Cloudflare static hosting (`web`) |
 | `infra/` | Deployment templates (`aws-native-gateway`: the native gateway on AWS) |
 | `tools/` | Build scripts (`linux_build.py`, `lp64_build.py`, `windows_build.py`, `macos_build.py`, `android_build.py`, `browser_build.py` (the browser build: `ninja browser`), `web_build.py` (OpenCE's), `server_build.py`, `ci_build.py`), generators (`ce_menus.py`, `port_settings.py`, `hud_assets.py`, `title_assets.py`, `embed_assets.py`, `xdk_headers.py`) and tests |
-| `docs/` | Longer design notes (`delta.md`, `map_torrents.md`, `parity.md`, `telemetry.md`, `bug-sweep.md`, `dedicated-server.md`) |
+| `docs/` | Longer design notes (`delta.md`, `map_torrents.md`, `parity.md`, `telemetry.md`, `bug-sweep.md`, `dedicated-server.md`, `mods.md`) |
 | `pgo/` | Profile-guided optimisation profiles |
 | `assets/` | Game data for local runs (gitignored: `maps/`, `maps_ce/`, `maps_md/`, `maps_pc/`) |
 | `.github/workflows/` | CI: builds every platform on each push, publishes releases from `main` (`build.yml`); the browser build and the self-hosting kits (`web.yml`) |
@@ -100,6 +100,7 @@ to nothing.
 python -m pytest -q tools/harness tools/test_touch_menu.py   # the engine's functions in a fake world
 python -m pytest -q tools/test_linux_port.py                # the build, the maps' checks (needs assets/maps)
 python -m pytest -q tools/test_profile.py tools/test_map_families.py tools/test_map_torrents.py tools/test_delta.py tools/test_bmp_files.py
+python -m pytest -q tools/test_mods.py                      # mods played over a map (needs assets/maps)
 python tools/test_touch_layout.py                           # the Android touch layout (JDK 17+)
 python tools/test_light_storage.py
 python tools/test_death_timing.py
@@ -252,6 +253,7 @@ as documentation of file formats, never copied.
 | [port/web/src/DELTA.md](port/web/src/DELTA.md) | Delta in the browser build |
 | [services/selfhost/HOSTING-VPS.md](services/selfhost/HOSTING-VPS.md), [HOSTING-STATIC.md](services/selfhost/HOSTING-STATIC.md) | Hosting the browser build on a VPS, or on a static web host |
 | [services/selfhost/README.md](services/selfhost/README.md) | Hosting the browser build |
+| [docs/mods.md](docs/mods.md) | Mods: folders of Halo PC tag files whose sounds, bitmaps and text play over a map's on one machine |
 | [port/assets/menus/README.md](port/assets/menus/README.md) | The menu files' format and how to write them again |
 | [port/assets/menus/NON_HANDDRAWN.md](port/assets/menus/NON_HANDDRAWN.md) | Menu pictures that are not redraws |
 | [port/assets/menus/UNWIRED.md](port/assets/menus/UNWIRED.md) | Menu functions that do nothing yet |

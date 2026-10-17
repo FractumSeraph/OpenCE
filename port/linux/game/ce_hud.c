@@ -65,6 +65,7 @@ hud_definitions.hpp agrees).
 #include "cseries_windows.h"
 #include "errors.h"
 #include "ce_map_checks.h"
+#include "ce_hud.h"
 #include "bitmaps/bitmap_group.h"
 #include "bitmaps/bitmaps.h"
 #include "rasterizer/rasterizer_swizzle.h"
@@ -608,6 +609,138 @@ static void ce_hud_grenade_interface(
 	ce_hud_element(hud + GRENADE_HUD_COUNT_BACKGROUND_OFFSET);
 	ce_hud_block_placements(hud + GRENADE_HUD_OVERLAY_ITEMS_OFFSET, WEAPON_HUD_OVERLAY_ITEM_SIZE, 0,
 		NO_ELEMENT_BITMAP, ce_hud_bitmap_halves_scale(hud + GRENADE_HUD_OVERLAY_BITMAP_OFFSET));
+}
+
+/* ---------- the placements, walked (ce_hud.h: the mods')
+
+The placements ce_hud_unit_interface, ce_hud_weapon_interface and
+ce_hud_grenade_interface halve, and the HUD globals' messages', each with the
+tag reference of the bitmap it draws, for port/linux/game/mod_bitmaps.c, on
+any map. (OpenCE's custom_edition_hud_placements_walk.) */
+
+/* the placement at `offset` in each element of a block, drawing the bitmap
+the tag reference `bitmap_offset` bytes after its placement names
+(NO_ELEMENT_BITMAP: none of its own) */
+static void ce_hud_walk_block(
+	byte *block,
+	unsigned long element_size,
+	unsigned long offset,
+	long bitmap_offset,
+	struct ce_hud_walk const *walk)
+{
+	long count = (long)ce_hud_read_long(block + TAG_BLOCK_COUNT_OFFSET);
+	unsigned long address = ce_hud_read_long(block + TAG_BLOCK_ADDRESS_OFFSET);
+	long index;
+
+	if (count <= 0 || !address)
+		return;
+	for (index = 0; index < count; index++)
+	{
+		byte *placement = (byte *)xbox_pointer(address) + index * element_size + offset;
+
+		walk->placement(walk->context, placement,
+			bitmap_offset != NO_ELEMENT_BITMAP ? placement + bitmap_offset : NULL, FALSE);
+	}
+}
+
+/* the items of a block, each `item_size` bytes starting with its placement,
+all drawing the bitmap the tag reference at `bitmap` names */
+static void ce_hud_walk_items(
+	byte *block,
+	unsigned long item_size,
+	byte const *bitmap,
+	struct ce_hud_walk const *walk)
+{
+	long count = (long)ce_hud_read_long(block + TAG_BLOCK_COUNT_OFFSET);
+	unsigned long address = ce_hud_read_long(block + TAG_BLOCK_ADDRESS_OFFSET);
+	long index;
+
+	if (count <= 0 || !address)
+		return;
+	for (index = 0; index < count; index++)
+		walk->placement(walk->context, (byte *)xbox_pointer(address) + index * item_size, bitmap, TRUE);
+}
+
+/* the items of each crosshair or overlay of a weapon HUD's block of them */
+static void ce_hud_walk_weapon_items(
+	byte *block,
+	unsigned long element_size,
+	unsigned long item_size,
+	struct ce_hud_walk const *walk)
+{
+	long count = (long)ce_hud_read_long(block + TAG_BLOCK_COUNT_OFFSET);
+	unsigned long address = ce_hud_read_long(block + TAG_BLOCK_ADDRESS_OFFSET);
+	long index;
+
+	if (count <= 0 || !address)
+		return;
+	for (index = 0; index < count; index++)
+	{
+		byte *element = (byte *)xbox_pointer(address) + index * element_size;
+
+		ce_hud_walk_items(element + WEAPON_HUD_ITEMS_OFFSET, item_size, element + WEAPON_HUD_ITEMS_BITMAP_OFFSET, walk);
+	}
+}
+
+void ce_hud_placements_walk(
+	void *definition,
+	unsigned long group_tag,
+	struct ce_hud_walk const *walk)
+{
+	static unsigned long const unit_elements[] =
+	{
+		UNIT_HUD_BACKGROUND_OFFSET,
+		UNIT_HUD_SHIELD_BACKGROUND_OFFSET,
+		UNIT_HUD_SHIELD_METER_OFFSET,
+		UNIT_HUD_HEALTH_BACKGROUND_OFFSET,
+		UNIT_HUD_HEALTH_METER_OFFSET,
+		UNIT_HUD_MOTION_SENSOR_BACKGROUND_OFFSET,
+		UNIT_HUD_MOTION_SENSOR_FOREGROUND_OFFSET,
+	};
+	static unsigned long const grenade_elements[] =
+	{
+		GRENADE_HUD_BACKGROUND_OFFSET,
+		GRENADE_HUD_COUNT_BACKGROUND_OFFSET,
+	};
+	byte *hud = definition;
+	unsigned long index;
+
+	if (!hud)
+		return;
+	switch (group_tag)
+	{
+	case 'unhi':
+		for (index = 0; index < NUMBEROF(unit_elements); index++)
+			walk->placement(walk->context, hud + unit_elements[index], hud + unit_elements[index] + ELEMENT_BITMAP_OFFSET,
+				FALSE);
+		walk->placement(walk->context, hud + UNIT_HUD_BLIP_PLACEMENT_OFFSET, NULL, FALSE);
+		ce_hud_walk_block(hud + UNIT_HUD_AUXILARY_OVERLAYS_OFFSET, AUXILARY_OVERLAY_SIZE, 0, ELEMENT_BITMAP_OFFSET, walk);
+		ce_hud_walk_block(hud + UNIT_HUD_AUXILARY_METERS_OFFSET, AUXILARY_METER_SIZE, AUXILARY_METER_BACKGROUND_OFFSET,
+			ELEMENT_BITMAP_OFFSET, walk);
+		ce_hud_walk_block(hud + UNIT_HUD_AUXILARY_METERS_OFFSET, AUXILARY_METER_SIZE, AUXILARY_METER_METER_OFFSET,
+			ELEMENT_BITMAP_OFFSET, walk);
+		break;
+	case 'wphi':
+		ce_hud_walk_block(hud + WEAPON_HUD_STATICS_OFFSET, WEAPON_HUD_STATIC_SIZE, WEAPON_HUD_ELEMENT_OFFSET,
+			ELEMENT_BITMAP_OFFSET, walk);
+		ce_hud_walk_block(hud + WEAPON_HUD_METERS_OFFSET, WEAPON_HUD_METER_SIZE, WEAPON_HUD_ELEMENT_OFFSET,
+			ELEMENT_BITMAP_OFFSET, walk);
+		ce_hud_walk_weapon_items(hud + WEAPON_HUD_CROSSHAIRS_OFFSET, WEAPON_HUD_CROSSHAIRS_SIZE,
+			WEAPON_HUD_CROSSHAIR_ITEM_SIZE, walk);
+		ce_hud_walk_weapon_items(hud + WEAPON_HUD_OVERLAYS_OFFSET, WEAPON_HUD_OVERLAYS_SIZE, WEAPON_HUD_OVERLAY_ITEM_SIZE,
+			walk);
+		break;
+	case 'grhi':
+		for (index = 0; index < NUMBEROF(grenade_elements); index++)
+			walk->placement(walk->context, hud + grenade_elements[index],
+				hud + grenade_elements[index] + ELEMENT_BITMAP_OFFSET, FALSE);
+		ce_hud_walk_items(hud + GRENADE_HUD_OVERLAY_ITEMS_OFFSET, WEAPON_HUD_OVERLAY_ITEM_SIZE,
+			hud + GRENADE_HUD_OVERLAY_BITMAP_OFFSET, walk);
+		break;
+	case 'hudg':
+		walk->placement(walk->context, hud + HUD_GLOBALS_MESSAGING_PLACEMENT_OFFSET, NULL, FALSE);
+		break;
+	}
 }
 
 /* ---------- the Xbox's button icons */

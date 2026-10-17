@@ -797,6 +797,7 @@ void *ce_tags_pointer(
 	long size)
 {
 	extern boolean cache_file_tags_are_ce(void);
+	extern boolean mods_memory_contains(unsigned long address, long size);
 	static byte scratch[0x40000];
 	static long misses;
 
@@ -804,6 +805,12 @@ void *ce_tags_pointer(
 	if (!size || (address >= CE_IMAGE_TAG_CACHE_BASE && size > 0 &&
 		ce_range_within(address - CE_IMAGE_TAG_CACHE_BASE, (unsigned long)size, CE_IMAGE_TAG_CACHE_SIZE)) ||
 		!cache_file_tags_are_ce())
+	{
+		return xbox_pointer(address);
+	}
+	/* (or the mods' tags', played over the map's and made outside its tag
+	cache: port/linux/game/mods.c) */
+	if (mods_memory_contains(address, size))
 	{
 		return xbox_pointer(address);
 	}
