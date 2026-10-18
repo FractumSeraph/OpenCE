@@ -1549,7 +1549,7 @@ static void update_anchors(void)
 	wanted = browser.anchors_wanted && !browser.anchors_started;
 	browser.anchors_started |= wanted;
 	pthread_mutex_unlock(&browser_lock);
-	if (!wanted || !config_boolean("network.online"))
+	if (!wanted || !p2p_native_online())
 		return;
 	if (pthread_create(&thread, NULL, anchors_thread, NULL) == 0)
 		pthread_detach(thread);
@@ -2222,7 +2222,7 @@ int browser_list_status(void)
 
 void browser_follow_listings(int on)
 {
-	int online = config_boolean("network.online");
+	int online = p2p_native_online();
 
 	p2p_lobby_browse(on && online);
 	/* (no pings with internet play off: no probe, no anchor timed) */

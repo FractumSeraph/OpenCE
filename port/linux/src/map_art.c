@@ -17,6 +17,7 @@ have (404) is not asked for again this run. The log says nothing of them
 #include "platform.h"
 #include "posix.h"
 #include "port_config.h"
+#include "p2p.h"
 #include "browser_http.h"
 #include "build_identity.h"
 #include "ui_font.h"
@@ -210,7 +211,7 @@ static void *load_thread(void *argument)
 		free(data);
 		data = NULL;
 	}
-	if (!pixels && config_boolean("network.online"))
+	if (!pixels && p2p_native_online())
 	{
 		data = download(path, &size, &missing);
 		if (data)

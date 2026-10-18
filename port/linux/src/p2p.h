@@ -46,6 +46,12 @@ int p2p_joined_invite(char *text, int size);
 
 /* this machine's identifier, which its XNADDR carries (6 bytes) */
 const unsigned char *p2p_identifier(void);
+/* port (this fork): whether internet play's own machinery runs (its UDP
+tunnel, the brokers' listings, the pings, the art's downloads): with
+network.online, and never in the browser's build, which a page has none of
+and which plays online through the page instead (its WebRTC and the native
+gateway), so that its INTERNET PLAY row shows the setting as it is */
+int p2p_native_online(void);
 /* the address the game reaches the machine with this identifier at, if it
 is an internet play peer (reached yet or not) */
 int p2p_peer_address(const unsigned char *identifier, unsigned long *address);

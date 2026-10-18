@@ -1943,6 +1943,12 @@ static const struct
 	/* OpenCE's Discord application, which ChupathingyCE kept until v0.7.5c
 	(Discord showed "OpenCE" as being played) */
 	{ "discord.application_id", "\"1553978809840050229\"", 1 },
+#ifdef HALO_BROWSER
+	/* the browser's internet play, which its page turned off until 2026-10-18
+	(its machinery is still off: p2p_native_online): never a player's choice,
+	shown again as the default */
+	{ "network.online", "false", 1 },
+#endif
 };
 
 #define NUMBER_OF_CONFIG_OLD_DEFAULTS (sizeof(config_old_defaults) / sizeof(config_old_defaults[0]))

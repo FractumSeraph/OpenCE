@@ -404,7 +404,8 @@ void platform_web_initialize(void)
 		platform_log("web: cannot mount persistent storage");
 	setenv("HALO_DATA_ROOT", "/assets", 1);
 	setenv("HALO_SAVE_ROOT", "/storage", 1);
-	setenv("HALO_NET_ONLINE", "false", 1);
+	/* (internet play's own machinery stays off here whatever network.online
+	says: p2p_native_online; the page plays online itself) */
 	setenv("HALO_NET_JOIN_FROM_CLIPBOARD", "false", 1);
 	setenv("HALO_FULLSCREEN", "false", 1);
 	setenv("HALO_WINDOW_SCALE", "1", 1);

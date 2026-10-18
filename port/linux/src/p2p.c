@@ -573,6 +573,15 @@ static int would_block(void)
 	return error == WSAEWOULDBLOCK || error == WSAEINPROGRESS;
 }
 
+int p2p_native_online(void)
+{
+#ifdef HALO_BROWSER
+	return 0;
+#else
+	return config_boolean("network.online");
+#endif
+}
+
 const unsigned char *p2p_identifier(void)
 {
 	/* its own lock: the p2p thread asks while holding p2p_lock */
@@ -2755,7 +2764,7 @@ int p2p_join_invite(const char *text)
 	p2p_identifier();
 	if (!p2p.running)
 	{
-		if (!config_boolean("network.online"))
+		if (!p2p_native_online())
 		{
 			platform_log("Internet play is off (network.online in config.toml): the invite is ignored");
 			return 0;
@@ -3942,7 +3951,7 @@ void p2p_initialize(unsigned long local_address)
 	int index;
 
 	p2p_identifier();
-	if (p2p.running || !config_boolean("network.online"))
+	if (p2p.running || !p2p_native_online())
 		return;
 	if (tunnel_port < 0 || tunnel_port > 65535)
 	{

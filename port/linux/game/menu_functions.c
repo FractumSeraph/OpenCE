@@ -4564,7 +4564,7 @@ static void lobby_browser_add_listed(void)
 	short index;
 
 	lobby_browser_listed.count = 0;
-	if (!config_boolean("network.online") || !config_boolean("network.public_lobby"))
+	if (!p2p_native_online() || !config_boolean("network.public_lobby"))
 		return;
 	lobby_browser_listed.count = (short)browser_get_games(lobby_browser_listed.games, BROWSER_MAXIMUM_GAMES);
 	for (index = 0; index < lobby_browser_listed.count; index++)
