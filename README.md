@@ -788,8 +788,10 @@ builds are made only with free tools and libraries.
   (SIL OFL); [Overpass](https://github.com/RedHatOfficial/Overpass) (SIL OFL);
   [Noto Sans](https://fonts.google.com/noto) (SIL OFL) and
   [Kenney's Input Prompts](https://kenney.nl/assets/input-prompts) (CC0); the
-  scoreboard's platform logos are cut from
-  [Font Awesome Free](https://fontawesome.com) by Fonticons, Inc. (SIL OFL).
+  scoreboard's platform logos are one-color marks from
+  [Simple Icons](https://simpleicons.org) (CC0) and Wikimedia Commons (public
+  domain), plus our own Xbox 360 ring and Wii U GamePad; the names and logos
+  are their owners' trademarks, used only to identify platforms.
 - Controller button icons by snapchipper, CC0 (`port/assets/prompts`).
 - High-res HUD art: Aerocatia's and Jessie's redraws from
   [halopc-restored](https://github.com/Aerocatia/halopc-restored), used with

@@ -1,72 +1,78 @@
 #!/usr/bin/env python3
 """Makes the scoreboard's platform logos, port/linux/ui/fonts/platform_icons.ttf,
-from Font Awesome Free's fonts (its brands and solid sets):
+from the one-color SVGs in port/linux/ui/fonts/platform_icons/:
 
-    python tools/platform_icons_font.py fa-brands-400.ttf fa-solid-900.ttf
+    python tools/platform_icons_font.py
 
-(from @fortawesome/fontawesome-free's webfonts; 6.7.2 made the one built
-in). Keeps the brands' Apple, Windows, Android, Linux, Xbox and Steam logos
-and the solid set's gamepad (the consoles Font Awesome has no logo for), as
-one font at their own code points, and renames it: the OFL reserves the
-name "Font Awesome" from modified fonts. Needs fontTools.
+Each SVG is 24 x 24 with a single filled path (no transforms, strokes or
+gradients; holes wind against their outline). It becomes one glyph at
+U+E100 plus its platform number (delta.h's enum delta_platform), named by
+the file: pc_windows.svg is platform 1. Needs fontTools.
 """
 
 import sys
 from pathlib import Path
 
-from fontTools import subset
-from fontTools.ttLib import TTFont
+from fontTools.fontBuilder import FontBuilder
+from fontTools.pens.cu2quPen import Cu2QuPen
+from fontTools.pens.transformPen import TransformPen
+from fontTools.pens.ttGlyphPen import TTGlyphPen
+from fontTools.svgLib.path import parse_path
+from xml.etree import ElementTree
 
 ROOT = Path(__file__).resolve().parent.parent
+SOURCES = ROOT / "port/linux/ui/fonts/platform_icons"
 OUTPUT = ROOT / "port/linux/ui/fonts/platform_icons.ttf"
-# apple, windows, android, linux, steam, xbox
-BRANDS = [0xF179, 0xF17A, 0xF17B, 0xF17C, 0xF1B6, 0xF412]
-# gamepad
-SOLID = [0xF11B]
-NAMES = {1: "Platform Icons", 3: "Platform Icons", 4: "Platform Icons", 6: "PlatformIcons",
-         16: "Platform Icons", 17: "Regular"}
+BASE = 0xE100
+# delta.h's enum delta_platform (unknown has no logo)
+PLATFORMS = {
+    "pc_windows": 1, "pc_macos": 2, "pc_linux": 3, "android": 4, "steam_deck": 5, "xbox": 6, "xbox360": 7,
+    "wiiu": 8, "switch": 9, "psp": 10, "vita": 11, "xbox_uwp": 12,
+}
+UNITS = 1024
+ASCENT = 880
+DESCENT = 144
+NAMES = {1: "Platform Icons", 2: "Regular", 3: "Platform Icons Regular", 4: "Platform Icons", 6: "PlatformIcons"}
 
 
-def cut(path: str, codes: list) -> TTFont:
-    """The font with only the glyphs of codes."""
-    font = TTFont(path)
-    options = subset.Options()
-    options.layout_features = []
-    options.name_IDs = ["*"]
-    options.notdef_outline = True
-    subsetter = subset.Subsetter(options)
-    subsetter.populate(unicodes=codes)
-    subsetter.subset(font)
-    return font
+def glyph(path: Path):
+    """The glyph of an SVG's path, y flipped and scaled from 24 units to the em."""
+    paths = [e.get("d") for e in ElementTree.parse(path).getroot().iter() if e.tag.endswith("path")]
+    if len(paths) != 1:
+        sys.exit(f"{path.name}: expected one path, found {len(paths)}")
+    scale = UNITS / 24
+    # (the logo spans the whole em: from the ascent down through the descent)
+    pen = TTGlyphPen(None)
+    parse_path(paths[0], TransformPen(Cu2QuPen(pen, 1.0, reverse_direction=True),
+                                      (scale, 0, 0, -scale, 0, ASCENT)))
+    return pen.glyph()
 
 
 def main() -> None:
-    if len(sys.argv) != 3:
-        sys.exit(__doc__)
-    brands = cut(sys.argv[1], BRANDS)
-    solid = cut(sys.argv[2], SOLID)
-    if brands["head"].unitsPerEm != solid["head"].unitsPerEm:
-        sys.exit("the fonts' units per em differ")
-    # (the solid set's glyphs moved into the brands' font)
-    order = brands.getGlyphOrder()
-    solid_map = solid.getBestCmap()
-    for code in SOLID:
-        source = solid_map[code]
-        name = f"solid_{code:04x}"
-        order = order + [name]
-        brands["glyf"].glyphs[name] = solid["glyf"][source]
-        brands["hmtx"].metrics[name] = solid["hmtx"].metrics[source]
-        for table in brands["cmap"].tables:
-            if table.isUnicode():
-                table.cmap[code] = name
-    brands["glyf"].glyphOrder = order
-    brands.setGlyphOrder(order)
-    brands["maxp"].numGlyphs = len(order)
-    for record in brands["name"].names:
-        if record.nameID in NAMES:
-            record.string = NAMES[record.nameID]
-    brands.save(OUTPUT)
-    print(f"wrote {OUTPUT.relative_to(ROOT)}")
+    files = sorted(SOURCES.glob("*.svg"))
+    unknown = [f.name for f in files if f.stem not in PLATFORMS]
+    if unknown or not files:
+        sys.exit(f"no platform for {unknown}" if unknown else "no SVGs")
+    files.sort(key=lambda f: PLATFORMS[f.stem])
+    order = [".notdef"] + [f.stem for f in files]
+    glyphs = {".notdef": TTGlyphPen(None).glyph()}
+    metrics = {".notdef": (UNITS, 0)}
+    cmap = {}
+    for f in files:
+        glyphs[f.stem] = glyph(f)
+        metrics[f.stem] = (UNITS, 0)
+        cmap[BASE + PLATFORMS[f.stem]] = f.stem
+    builder = FontBuilder(UNITS, isTTF=True)
+    builder.setupGlyphOrder(order)
+    builder.setupCharacterMap(cmap)
+    builder.setupGlyf(glyphs)
+    builder.setupHorizontalMetrics(metrics)
+    builder.setupHorizontalHeader(ascent=ASCENT, descent=-DESCENT)
+    builder.setupNameTable(NAMES)
+    builder.setupOS2(sTypoAscender=ASCENT, sTypoDescender=-DESCENT, usWinAscent=ASCENT, usWinDescent=DESCENT)
+    builder.setupPost()
+    builder.save(OUTPUT)
+    print(f"wrote {OUTPUT.relative_to(ROOT)}: {len(files)} logos")
 
 
 if __name__ == "__main__":

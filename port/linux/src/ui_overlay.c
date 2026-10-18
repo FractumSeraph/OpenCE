@@ -14,6 +14,7 @@ are the controller's button icons (a texture array, a layer each).
 
 #ifdef HALO_GAME_BROWSER
 
+#include "delta.h"
 #include "platform.h"
 #include "port_config.h"
 #include "text_hires.h"
@@ -687,25 +688,19 @@ float ui_overlay_button(int button, float size, float x, float y, unsigned int c
 
 /* ---------- the platforms' logos */
 
-/* (platform_icons.ttf, by delta.h's platform registry: unknown has none;
-Windows, macOS, Linux, Android, Steam Deck (Steam's), the original Xbox and
-the Xbox 360 (the Xbox's), then a gamepad for the Wii U and the Switch,
-which Font Awesome has no logo for) */
-static const unsigned int platform_glyphs[] =
-{
-	0, 0xF17A, 0xF179, 0xF17C, 0xF17B, 0xF1B6, 0xF412, 0xF412, 0xF11B, 0xF11B,
-};
+/* (platform_icons.ttf: one logo per platform of delta.h's registry, at
+U+E100 plus the platform's number; a platform without a logo in the font,
+and unknown, draw nothing) */
+#define PLATFORM_GLYPH_BASE 0xE100
 
 int ui_overlay_platform(int platform, float size, float x, float y, unsigned int color, int shadow)
 {
 	char text[4];
+	unsigned int glyph = PLATFORM_GLYPH_BASE + (unsigned int)platform;
 
-	if (platform <= 0 || platform >= (int)(sizeof(platform_glyphs) / sizeof(platform_glyphs[0])) ||
-		!posix_ui_font_has(POSIX_UI_FONT_PLATFORMS, platform_glyphs[platform]))
-	{
+	if (platform <= 0 || platform >= NUMBER_OF_DELTA_PLATFORMS || !posix_ui_font_has(POSIX_UI_FONT_PLATFORMS, glyph))
 		return 0;
-	}
-	utf8(platform_glyphs[platform], text);
+	utf8(glyph, text);
 	if (shadow)
 		add_text(POSIX_UI_FONT_PLATFORMS, size, x + 0.8f, y + 1.0f, UI_ALIGN_CENTER,
 			fade(0x000000FF, (float)(color & 0xFF) / 255.0f * 0.7f), text);
