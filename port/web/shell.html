@@ -1201,6 +1201,23 @@
         #020713;
     }
     #loading .halo-loading-screen { z-index: 2; }
+    /* (a start failed on a browser's old copy of the game's files, twice:
+    recoverStaleFiles) */
+    #stale-files-help {
+      position: relative;
+      z-index: 30;
+      max-width: min(34rem, calc(100vw - 2rem));
+      padding: 1rem 1.2rem;
+      border: 1px solid rgba(37, 166, 247, .45);
+      background: rgba(2, 13, 31, .94);
+      color: #d4efff;
+      font-size: .85rem;
+      line-height: 1.45;
+      white-space: normal;
+      text-align: left;
+    }
+    #stale-files-help h2 { margin: 0 0 .5rem; font-size: 1rem; color: #fff; }
+    #stale-files-help button { padding: .45rem .9rem; font: inherit; cursor: pointer; }
     #loading.halo-loading .loading-panel { visibility: hidden; }
     /* (the light finishing its way over the game as it appears, fading:
     assets/loading/loading-screen.js) */
@@ -3194,6 +3211,7 @@
     function revealPresentedGame(token) {
       if (gamePresented || token !== presentationWaitToken) return;
       gamePresented = true;
+      try { sessionStorage.removeItem(STALE_RETRY_KEY); } catch (_error) { /* storage blocked */ }
       runtimeStage = "presented";
       sendRuntimeTelemetry("game_presented", runtimeStage);
       gameArea.dataset.presented = "true";
@@ -3305,8 +3323,71 @@
       }
     }
 
+    /* A browser's old copy of halo.js beside a new halo.wasm (or the other
+       way round) fails the start ("ASM_CONSTS", a LinkError): a server that
+       answers "not modified" for a file of the same size and date can leave
+       one, as can a browser's own cache. The game's files are asked for
+       with the build in their address (tools/web_package.py stamps the
+       page's halo.js; locateFile, below, its halo.wasm), and a start that
+       fails that way anyway takes them again past the cache and reloads,
+       once; a second such failure says how to clear the site's cached files.
+       The game's data (the maps, the files the disc gave) is never touched. */
+    const STALE_RETRY_KEY = "halo-stale-files-retry";
+    const STALE_PATTERN = /ASM_CONSTS?|LinkError|CompileError|function signature mismatch|imported function|expected magic word|is not a function|wasm validation/i;
+
+    function buildQuery() {
+      const id = telemetryBuildId();
+      return id && id !== "unknown" ? `?v=${encodeURIComponent(id)}` : "";
+    }
+
+    async function refreshGameFiles() {
+      const query = buildQuery();
+      const files = ["./", "index.html", "halo.js", "halo.wasm", "coi-serviceworker.js"];
+      const addresses = files.concat(query ? [`halo.js${query}`, `halo.wasm${query}`] : []);
+      await Promise.all(addresses.map(address =>
+        fetch(address, { cache: "reload", credentials: "same-origin" }).then(answer => answer.arrayBuffer()).catch(() => null)));
+    }
+
+    function showStaleFilesHelp() {
+      const help = document.createElement("div");
+      help.id = "stale-files-help";
+      help.innerHTML =
+        "<h2>Halo needs a fresh copy of its files</h2>" +
+        "<p>Your browser kept parts of an older version of the game, which do not fit the new one.</p>" +
+        "<p><button type=\"button\" id=\"stale-files-reload\">Clear cached files and reload</button></p>" +
+        "<p>If that does not help, clear this site's cached files yourself: in Chrome or Edge, " +
+        "Settings &gt; Privacy &gt; Delete browsing data &gt; \"Cached images and files\"; in Firefox, " +
+        "Settings &gt; Privacy &amp; Security &gt; Cookies and Site Data &gt; Clear Data &gt; \"Cached Web Content\"; " +
+        "in Safari, Develop &gt; Empty Caches. On a computer, Ctrl+Shift+R (Cmd+Shift+R on a Mac) also reloads " +
+        "past the cache. Your maps and game data are kept either way.</p>";
+      loadingElement.append(help);
+      help.querySelector("#stale-files-reload").addEventListener("click", async () => {
+        help.querySelector("#stale-files-reload").disabled = true;
+        await refreshGameFiles();
+        try { sessionStorage.removeItem(STALE_RETRY_KEY); } catch (_error) { /* storage blocked */ }
+        location.reload();
+      });
+    }
+
+    // (TRUE when the failure is a stale file's, taken care of here)
+    function recoverStaleFiles(message) {
+      if (gamePresented || !STALE_PATTERN.test(String(message || ""))) return false;
+      let retried = 0;
+      try { retried = Number(sessionStorage.getItem(STALE_RETRY_KEY)) || 0; } catch (_error) { /* storage blocked */ }
+      if (Date.now() - retried > 10 * 60 * 1000) {
+        try { sessionStorage.setItem(STALE_RETRY_KEY, String(Date.now())); } catch (_error) { /* storage blocked */ }
+        setStatus("Getting the newest version of the game…");
+        refreshGameFiles().then(() => location.reload());
+        return true;
+      }
+      if (!document.getElementById("stale-files-help")) showStaleFilesHelp();
+      return false;
+    }
+
     var Module = {
       canvas,
+      // (the game's files with the build in their address: recoverStaleFiles)
+      locateFile: (path, prefix) => prefix + path + (/\.(wasm|js)$/.test(path) ? buildQuery() : ""),
       preRun: [setTestEnvironment, beginXisoGate],
       print: (...args) => {
         const line = args.join(" ");
@@ -3361,6 +3442,7 @@
       onAbort(reason) {
         diagnostic(`abort: ${reason}`);
         sendRuntimeFailure("runtime_abort", reason);
+        if (recoverStaleFiles(reason)) return;
         setStatus(`Aborted: ${reason || "the runtime stopped"}`);
       },
     };
@@ -3393,6 +3475,8 @@
       }
       diagnostic(source || message);
       sendRuntimeFailure("runtime_error", event.error || message, source);
+      if (recoverStaleFiles(`${message}
+${source || ""}`)) return;
       setStatus(`Could not start: ${message}`);
     });
     window.addEventListener("unhandledrejection", event => {
@@ -3409,6 +3493,8 @@
       }
       diagnostic(source || message);
       sendRuntimeFailure("runtime_error", event.reason || message, source);
+      if (recoverStaleFiles(`${message}
+${source || ""}`)) return;
       setStatus(`Could not start: ${message}`);
     });
   </script>

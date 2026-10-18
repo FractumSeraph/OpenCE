@@ -198,3 +198,18 @@ def test_the_menus_name_known_platforms_and_match_their_generator():
     for row in ("op_allow_upnp", "op_join_from_clipboard", "op_auto"):
         assert re.search(rf'<child widget="[^"]*/{row}"[^>]*platform="desktop android"', network), row
     assert re.search(r'<child widget="[^"]*/op_online"[^>]*platform="desktop android web"', network)
+
+
+def test_the_page_asks_for_the_build_s_own_halo_js():
+    """web_package.stamp: the page's halo.js is asked for with the build in
+    its address, so a browser's copy of another build's is never taken for
+    it (a server answers "not modified" for a file of the same size and
+    date), whether Emscripten quoted the attribute or a minifier did not."""
+    from tools import web_package
+
+    for html in (b'<meta name="halo-build-id" content="x"><script async src="halo.js"></script>',
+                 b'<meta content=x name=halo-build-id><script src=halo.js async></script>'):
+        stamped = web_package.stamp(html, "selfhost-0123")
+        assert b"halo-build-id" in stamped and b'content="selfhost-0123"' in stamped
+        assert b"halo.js?v=selfhost-0123" in stamped
+        assert stamped.count(b"halo.js") == 1

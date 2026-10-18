@@ -34,6 +34,8 @@ FOLDER = "halo-web"
 BUILD_META = re.compile(
     rb'<meta\b(?=[^>]*\bname=(?:["\']halo-build-id["\']|halo-build-id)(?=[\s>]))[^>]*>'
 )
+# (the game's script tag, as Emscripten writes it, quoted or not)
+HALO_SCRIPT = re.compile(rb'(<script\b[^>]*\bsrc=["\']?)halo\.js(["\'\s>])')
 
 README = """Halo: Combat Evolved in the browser (OpenCE)
 Build {build_id}, from {source}
@@ -60,9 +62,17 @@ repository). Without them, campaign and the rest of the game work offline.
 
 
 def stamp(html: bytes, build_id: str) -> bytes:
+    """The page's build, and its halo.js asked for with the build in its
+    address (halo.js?v=<build>): a browser's copy of an earlier build's is
+    never taken for it, as a server can answer "not modified" for a file of
+    the same size and date (the page's locateFile does the same for
+    halo.wasm: shell.html, recoverStaleFiles)."""
     html, count = BUILD_META.subn(f'<meta name="halo-build-id" content="{build_id}">'.encode(), html)
     if count != 1:
         sys.exit("halo.html has no halo-build-id meta tag")
+    html, count = HALO_SCRIPT.subn(rb"\g<1>halo.js?v=" + build_id.encode() + rb"\g<2>", html)
+    if count != 1:
+        sys.exit("halo.html has no <script src=halo.js>")
     return html
 
 

@@ -37,6 +37,18 @@ assert.match(shell, /url\("assets\/ui\/shell\/halo-ce-ring-menu\.jpg"\)/);
 assert.match(shell, /<script src="assets\/loading\/loading-screen\.js"><\/script>/,
   "the startup overlay draws Halo's loading screen (the map download screen's light)");
 assert.doesNotMatch(shell, /Calibrating ring interface/);
+// a start failing on a browser's old copy of the game's files takes them
+// again past the cache and reloads once, then says how to clear the cache
+assert(shell.includes('locateFile: (path, prefix) => prefix + path + (/\\.(wasm|js)$/.test(path) ? buildQuery() : "")'),
+  "halo.wasm must be asked for with the build in its address");
+const recover = shell.match(/function recoverStaleFiles\(message\) \{[\s\S]*?\n    \}/);
+assert(recover, "missing recoverStaleFiles");
+assert.match(recover[0], /sessionStorage/, "the automatic reload must happen once, not in a loop");
+assert.match(shell, /cache: "reload"/, "the game's files must be taken again past the browser's cache");
+assert.doesNotMatch(shell.match(/async function refreshGameFiles\(\) \{[\s\S]*?\n    \}/)[0], /caches\.delete|removeEntry|deleteDatabase/,
+  "recovering must never delete the player's maps or game data");
+for (const handler of ["onAbort(reason)", 'addEventListener("error"', 'addEventListener("unhandledrejection"'])
+  assert(shell.slice(shell.indexOf(handler), shell.indexOf(handler) + 900).includes("recoverStaleFiles("), `${handler} must try recoverStaleFiles`);
 assert.doesNotMatch(shell, /hud-frame\.png/,
   'the decorative blue HUD frame must not cover the game on constrained devices');
 
