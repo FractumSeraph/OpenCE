@@ -4,7 +4,10 @@
 #
 #   - a suspect: the fair play checks' "fair play: suspect" log line
 #     (port/linux/game/network_fairplay.c) on FractumFFA or FractumSlayer,
-#     with the player's name, why, and the game's recording (network.record_games);
+#     with the player's name, why, and the game's recording (network.record_games):
+#     links to watch the game live in the replay viewer (30 seconds behind)
+#     and, once the game is over, to its public recording at the moment the
+#     line came (half a minute before it), following the player;
 #   - a game server that crashed (systemd: its process dumped core or was
 #     killed by a signal), which systemd starts again within seconds, too
 #     soon for the minute's checks to see;
@@ -18,6 +21,7 @@
 # root alone): a webhook posts to its Discord channel for anyone who has it.
 # No address or hardware id is sent (Discord is someone else's): the control
 # panel's Suspects tab has them. Its own log: journalctl -u halo-alerts.
+import calendar
 import json
 import os
 import subprocess
@@ -25,11 +29,24 @@ import sys
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 WEBHOOK_FILE = "/etc/halo-alerts/webhook"
 NAME = "Halo servers"
 PANELS = {"FractumFFA": "https://halovps.fractumseraph.net:8443/", "FractumSlayer": "https://halovps.fractumseraph.net:8444/"}
+# the replay viewer, and each server's public recordings: the live game's
+# folder (Caddy, here) and where finished ones are kept (the seedbox's,
+# halo-recordings-offload)
+VIEWER = "https://halo.fractumseraph.net/assets/replay/"
+PUBLIC = {
+    "halo-dedicated": ("https://halovps.fractumseraph.net/replays/fractumffa/",
+                       "https://halo.fractumseraph.net/replays/halo-dedicated/"),
+    "halo-fractumslayer": ("https://halovps.fractumseraph.net/replays/fractumslayer/",
+                           "https://halo.fractumseraph.net/replays/halo-fractumslayer/"),
+}
+# how long before the suspect line the replay link starts
+REPLAY_LEAD_SECONDS = 30
 # the game servers: their units, names on the game list, and data folders
 SERVERS = {
     "halo-dedicated": ("FractumFFA", "/opt/halo-dedicated/data"),
@@ -104,6 +121,39 @@ def newest_recording(folder):
     return names[-1] if names else None
 
 
+def game_started(folder, recording):
+    """when the recording's game began (unix time): its public copy's
+    live.json says, else the file's name (UTC, as the server's clock)"""
+    try:
+        with open(os.path.join(folder, "recordings", "public", "live.json"), encoding="utf-8") as status:
+            live = json.load(status)
+        if live.get("file") == recording and isinstance(live.get("started"), (int, float)):
+            return float(live["started"])
+    except (OSError, ValueError):
+        pass
+    try:
+        return float(calendar.timegm(time.strptime(recording[:19], "%Y-%m-%d_%H-%M-%S")))
+    except ValueError:
+        return None
+
+
+def replay_links(unit, folder, recording, player, when):
+    """the replay viewer's links: the game live, and its public recording
+    at the moment (once it is over), following the player"""
+    if unit not in PUBLIC:
+        return []
+    live, kept = PUBLIC[unit]
+    lines = [f"Watch live (30 s behind): <{VIEWER}?live={urllib.parse.quote(live, safe='')}>"]
+    started = game_started(folder, recording) if recording else None
+    if recording and started:
+        seconds = max(0, int(when - started) - REPLAY_LEAD_SECONDS)
+        moment = f"{seconds // 60}m{seconds % 60:02d}s"
+        address = (f"{VIEWER}?file={urllib.parse.quote(kept + recording, safe='')}&t={moment}"
+                   f"&p={urllib.parse.quote(player, safe='')}")
+        lines.append(f"The moment ({seconds // 60}:{seconds % 60:02d} into the game; once it is over): <{address}>")
+    return lines
+
+
 # ---------- suspects, as the game servers log them
 
 def follow_suspects():
@@ -147,9 +197,16 @@ def follow_suspects():
                 continue
             said[key] = time.time()
             recording = newest_recording(folder) if folder else None
+            # (when the line came: journald's, in microseconds)
+            try:
+                when = int(entry.get("__REALTIME_TIMESTAMP")) / 1e6
+            except (TypeError, ValueError):
+                when = time.time()
             lines = [f"\N{TRIANGULAR FLAG ON POST} **Suspect on {server}: {player}**", f"{why}."]
+            lines += replay_links(unit, folder, recording, player, when)
             if recording:
-                lines.append(f"Recording: `{recording}` (the panel's Suspects tab, Recordings).")
+                lines.append(f"Private recording, with the fair play verdicts: `{recording}` "
+                             "(the panel's Suspects tab, Recordings).")
             lines.append(f"Watch them now (Moderation screen, Watch), or see `sv_suspects`: {PANELS.get(server, '')}")
             send("\n".join(lines))
             log(f"suspect on {server}: {player} ({why})")
