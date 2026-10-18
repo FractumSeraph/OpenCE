@@ -121,14 +121,15 @@
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_allow_upnp" x="54" y="95" platform="desktop android"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_join_from_clipboard" x="54" y="117" platform="desktop android"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_auto" x="54" y="139" platform="desktop android"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_player_names" x="54" y="161"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_player_name_scale" x="54" y="183"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_scoreboard_team_layout" x="54" y="205"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_scoreboard_background" x="54" y="227"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/multiplayer_hud/op_player_names" x="54" y="161"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/multiplayer_hud/op_player_name_scale" x="54" y="183"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/multiplayer_hud/op_scoreboard_team_layout" x="54" y="205"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/multiplayer_hud/op_scoreboard_background" x="54" y="227"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_map_downloads" x="54" y="249" platform="desktop android"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_presence" x="54" y="271" platform="desktop"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_show_server_name" x="54" y="293" platform="desktop"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_show_join" x="54" y="315" platform="desktop"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/streamer_mode/op_enabled" x="54" y="337"/>
 	</widget>
 	<widget name="chupathingy/settings/privacy_setup_screen" width="640" height="480" flags="pass_unhandled_to_focused_child pause_game" bitmap="bitmaps/gradient">
 		<on event="b" back="true"/>

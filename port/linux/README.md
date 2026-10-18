@@ -675,6 +675,10 @@ the setting for one start of the game. It has priority over the file.
 | `maps.torrent_index` | `"map_torrents.txt"` | `HALO_MAP_TORRENT_INDEX` | The index of the maps' torrents (`tools/map_torrents.py`), next to `config.toml` unless a full path. The builds put `port/assets/network/map_torrents.txt` there. |
 | `update.auto` | `true` | `HALO_UPDATE_AUTO` | `true`: at start-up, the game looks for a new version. Refer to "Updates". `false`: the game does not look. |
 | `crash_reports.upload` | `"yes"` (this fork's; ChupathingyCE's is `"ask"`) | `HALO_CRASH_REPORTS` | Desktop builds (releases and nightlies). `"yes"`: the game sends a report of each crash to the developers, through `network.browser_url`. `"no"`: the game sends no reports. `"ask"`: the game asks after the next crash (on Linux and macOS, when it starts the next time) and writes the answer here. On the Privacy screen (Gearbox menus). Refer to "Crash reports" below and in [port/windows/README.md](../windows/README.md#crash-reports). |
+| `streamer.enabled` | `false` | `HALO_STREAMER_MODE` | `true`: streamer mode hides offensive words, as stars, in the names and text of other players, maps and mods, at the levels below. Refer to "Streamer mode". STREAMER MODE in Settings > Network Setup > Streamer Mode. |
+| `streamer.slurs` | `"mild"` | `HALO_STREAMER_SLURS` | With `streamer.enabled`, the slurs (race, ethnicity, sexuality, gender, disability) hidden: `"off"`, `"severe"`, `"strong"` (strong and severe) or `"mild"` (all). CENSOR SLURS in Settings > Network Setup > Streamer Mode. |
+| `streamer.swearing` | `"strong"` | `HALO_STREAMER_SWEARING` | With `streamer.enabled`, the swearing and sexual words hidden: `"off"`, `"severe"`, `"strong"` or `"mild"`. CENSOR SWEARING in Settings > Network Setup > Streamer Mode. |
+| `streamer.insults` | `"off"` | `HALO_STREAMER_INSULTS` | With `streamer.enabled`, the insults that are not slurs hidden: `"off"`, `"severe"`, `"strong"` or `"mild"`. CENSOR INSULTS in Settings > Network Setup > Streamer Mode. |
 | `debug.update_answer` | `""` | `HALO_UPDATE_ANSWER` | The answer to the update question, for automatic tests: `yes`, `no` or `never`. Empty: the game asks. |
 | `debug.exit_after` | `0.0` | `HALO_EXIT_AFTER` | The game stops after this number of seconds. `0`: never. |
 | `debug.screenshot_directory`, `debug.screenshot_every` | `""`, `0` | `HALO_SCREENSHOT_DIR`, `HALO_SCREENSHOT_EVERY` | The game writes each Nth frame to this folder as a BMP file. |
@@ -1412,6 +1416,47 @@ checks every file before it plays it, and leaves out (with a line in
 replaces. A mod changes nothing that the machines of a
 network game agree on. Refer to [docs/mods.md](../../docs/mods.md).
 
+## Streamer mode
+
+Streamer mode (Settings > Network Setup > Streamer Mode, `streamer.enabled`)
+hides offensive words as stars wherever the game draws text that other
+people or files wrote: players' names over their heads, in the kill feed, on
+the scoreboards and in the lobbies, the server browser's games, the host's
+notices in the console, map and mod names, and the text of a map's or mod's
+own string lists, as well as the message boxes about mods and maps. It
+changes only what this machine shows: the names others see, and what the
+machines send each other, stay as they are.
+
+The words come from Surge AI's rated list of English profanities, reviewed
+for the game (`port/assets/text_filter`), in three groups, each with a level
+that hides that severity and worse:
+
+| Group | Setting | Default | What it has |
+| --- | --- | --- | --- |
+| SLURS | `streamer.slurs` | `"mild"` (all) | Slurs about race, ethnicity, nationality, religion, sexuality, gender and disability |
+| SWEARING | `streamer.swearing` | `"strong"` | Swearing and sexual words; the mildest (damn, hell) show at `"strong"` |
+| INSULTS | `streamer.insults` | `"off"` | Name-calling that is not a slur |
+
+A word is found however it is dressed: in capitals or with accents, in
+look-alike letters (Cyrillic, Greek, full-width, small capitals), in leet
+(`0` for o, `@` for a, `ph` for f), with its letters stretched ("fuuuck"),
+with punctuation between them (`f.u.c.k`), spaced out (`f u c k`, `fu ck`),
+and with characters the game does not draw (zero-width spaces, the menus'
+`|` codes) between them. Each word may be found inside a name, at a word's
+start, or only as a whole word, as fits it, and some words are never
+hidden though a hidden one is inside them (Scunthorpe). `python3
+tools/text_filter_terms.py --check "some text"` shows what would be hidden.
+
+What it cannot catch: letters added into a word or its letters scrambled, new
+spellings, a word split between two names or two lines, voice chat (mute a
+player from the scoreboard, or set `audio.voice_volume` to 0), and pictures.
+What you type is shown as you type it.
+
+Your own words: `text_filter.txt` in the data root, with lines of `add
+<word>` (hidden whenever streamer mode is on) and `allow <word>` (never
+hidden), read when the game starts and when the settings change. The web
+build's page draws its own list of mods, which is not filtered.
+
 ## Map checks
 
 The game reads a map's tags straight into memory and uses them as its own
@@ -1593,6 +1638,7 @@ Other changes:
 | `interface/hud.c` | The seconds left on a player's powerups (`display.powerup_timers`, `game/powerup_timers.c`). |
 | `interface/progress_bar.c` | The loading screen is made by the CPU (`game/loading_screen.c`) and put over the back buffer (`src/d3d8_gl.c`): the Xbox drew it from its front buffer, through a texture made from that buffer's address, with no vertex shader, which the port's Direct3D does not have. |
 | `game/game.c` | A level's load holds the loading screen for `display.loading_screen_min_seconds`. |
+| `text/draw_string.c`, `interface/terminal.c`, `interface/virtual_keyboard.c` | Streamer mode's words are hidden in every string drawn or measured (`game/text_filter.c`), but in the console's line and the virtual keyboard's text being typed. |
 | `rasterizer/rasterizer_text.c`, `text/draw_string.c` | Text is drawn from an atlas of the fonts' glyphs, rasterized at the resolution the game draws at (`src/text_hires.c`), when the font has every character of the string. Text can be drawn scaled about a point (`rasterizer_text_set_scale`), as the players' names are. Each glyph's advance is centred on the font tag character's, so the layout is the same, and a glyph is cut at a text box only where the font tag's character visibly was. |
 | `interface/first_person_weapons.c` | The first-person hands are drawn with the unit's shield modifier shader, as its body is (`display.viewmodel_shield`). |
 | `render/render_objects.c`, `objects/objects.c` | In first person, your own body is drawn from the waist down with the pose `first_person_legs.c` makes (`display.first_person_legs`); the waist it found and the mesh `object_mesh.c` read are forgotten on a new map. |
