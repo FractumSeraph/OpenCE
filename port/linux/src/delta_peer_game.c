@@ -821,7 +821,8 @@ int delta_peer_game_client_state(void)
 /* ---------- Delta List (browser.c) */
 
 static const char *const platform_names[NUMBER_OF_DELTA_PLATFORMS] = {
-	"unknown", "pc_windows", "pc_macos", "pc_linux", "android", "steam_deck", "xbox", "xbox360", "wiiu", "switch"
+	"unknown", "pc_windows", "pc_macos", "pc_linux", "android", "steam_deck", "xbox", "xbox360", "wiiu", "switch",
+	"psp", "vita", "xbox_uwp"
 };
 
 const char *delta_peer_platform_name(int platform)

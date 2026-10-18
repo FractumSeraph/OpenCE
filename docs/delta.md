@@ -197,7 +197,9 @@ allocation (Warthog builds with MSVC 7.1):
 The platform registry (`enum delta_platform`, one byte, never reused):
 0 unknown, 1 `pc_windows`, 2 `pc_macos`, 3 `pc_linux`, 4 `android`,
 5 `steam_deck` (Linux with Steam's `SteamDeck=1`), 6 `xbox`, 7 `xbox360`,
-8 `wiiu`, 9 `switch`.
+8 `wiiu`, 9 `switch`, 10 `psp`, 11 `vita`, 12 `xbox_uwp` (the Xbox One and
+Series in developer mode). 10 to 12 are ports others build on ours; their
+policy rows are placeholders until those ports play, as the consoles' are.
 
 ### Platform policy
 

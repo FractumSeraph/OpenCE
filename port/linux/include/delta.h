@@ -123,6 +123,11 @@ enum delta_platform
 	_delta_platform_xbox360 = 7,
 	_delta_platform_wiiu = 8,
 	_delta_platform_switch = 9,
+	/* ports built on ours by others: the PSP (Sheepdog01), the Vita (Lord
+	Birchwood), and the Xbox One/Series in developer mode (warthog-uwp) */
+	_delta_platform_psp = 10,
+	_delta_platform_vita = 11,
+	_delta_platform_xbox_uwp = 12,
 
 	NUMBER_OF_DELTA_PLATFORMS
 };
@@ -182,7 +187,10 @@ legacy table's "platform_policy" section is to tune them without a release
 	X(_delta_platform_xbox, 16, 16, 128, 6, 0) \
 	X(_delta_platform_xbox360, 16, 16, 128, 9, 1) \
 	X(_delta_platform_wiiu, 16, 16, 128, 10, 1) \
-	X(_delta_platform_switch, 16, 16, 128, 12, 1)
+	X(_delta_platform_switch, 16, 16, 128, 12, 1) \
+	X(_delta_platform_psp, 16, 16, 128, 6, 0) \
+	X(_delta_platform_vita, 16, 16, 128, 9, 0) \
+	X(_delta_platform_xbox_uwp, 128, 128, 128, 12, 1)
 
 /* ---------- the legacy number */
 
