@@ -1346,12 +1346,13 @@ let loadingScreen = null;
 function loadingScreenShow(options) {
   if (typeof HaloLoadingScreen !== "function") return;
   if (!loadingScreen) {
-    loadingScreen = new HaloLoadingScreen(document.getElementById("view"), options);
+    loadingScreen = new HaloLoadingScreen(document.getElementById("view"), Object.assign({ smooth: true }, options));
     loadingScreen.root.style.zIndex = "30";
   } else loadingScreen.set(options);
 }
+// (the light the rest of the way, fading over the map now read)
 function loadingScreenEnd() {
-  if (loadingScreen) loadingScreen.stop();
+  if (loadingScreen) loadingScreen.finish(null, 1300);
   loadingScreen = null;
 }
 
@@ -1371,15 +1372,15 @@ async function loadRealMapAs(loading) {
   if (loading !== realMapLoading) return;
   if (!address) { mapStatus("The map's file is not on this site: its walls only."); return; }
   mapStatus("Reading the map...");
-  loadingScreenShow({ title: `Loading ${name}`, status: "Reading the map...", progress: null });
+  loadingScreenShow({ title: `Loading ${name}`, status: "Reading the map...", progress: 0, ceiling: 0.9 });
   try {
     const data = await readHaloMap({ map: rangeReader(address), bitmaps: rangeReader(BITMAPS_URL),
       onProgress: (fraction, text) => {
         if (loading !== realMapLoading) return;
         mapStatus(`${text || "Reading the map"} (${Math.round((fraction || 0) * 100)}%)`);
-        // (the light sweeps again and again: the reading's share jumps, its
-        // textures and models read as they are needed)
-        loadingScreenShow({ status: text || "Reading the map", progress: null });
+        // (the light goes across once: the reading's share, as far as it
+        // goes, the light creeping on to most of the way between its jumps)
+        loadingScreenShow({ status: text || "Reading the map", progress: (fraction || 0) * 0.9 });
       } });
     if (loading !== realMapLoading) return;
     const group = new THREE.Group();

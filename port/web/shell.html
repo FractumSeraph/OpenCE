@@ -1202,6 +1202,9 @@
     }
     #loading .halo-loading-screen { z-index: 2; }
     #loading.halo-loading .loading-panel { visibility: hidden; }
+    /* (the light finishing its way over the game as it appears, fading:
+    assets/loading/loading-screen.js) */
+    .halo-loading-screen.halo-loading-finishing { z-index: 25; }
     #loading::before,
     #loading::after {
       content: "";
@@ -1715,27 +1718,49 @@
     <script src="assets/loading/loading-screen.js"></script>
     <script>
       /* Halo's loading screen over the page's while it starts (as the game's
-      map download screen draws it): the label's text under it, the bar's
-      share as the light's place (a sweep again and again when the bar is
-      hidden); gone with the overlay, back with it */
+      map download screen draws it), the label's text under it. The light
+      goes across once and never back: each stage of the start has its share
+      of the way (the WebAssembly's download, the files' preparing, Halo's
+      start, the display's), the bar's numbers placing it within the stage's
+      share and the light creeping on while there are none; when the overlay
+      goes (the game is drawn), it finishes its way over the game, briefly,
+      and fades */
       (function () {
         const box = document.getElementById("loading");
         const label = document.getElementById("loading-label");
         const bar = document.getElementById("progress");
+        const STAGES = [
+          // (the label's start, the stage's share: from, to)
+          [/^Preparing files/u, 0.55, 0.8],
+          [/^Starting Halo/u, 0.8, 0.9],
+          [/^Starting the game/u, 0.9, 0.97],
+        ];
         let screen = null;
+        let from = 0;
+        function stage(text) {
+          for (const [pattern, start, end] of STAGES) if (pattern.test(text)) return [start, end];
+          // (anything else, the WebAssembly's download first)
+          return [0, 0.55];
+        }
         function update() {
           if (typeof HaloLoadingScreen !== "function") return;
           if (box.hidden) {
-            if (screen) screen.stop();
+            if (!screen) return;
+            // (the rest of the way over the game, then gone)
+            const finishing = screen;
             screen = null;
+            from = 0;
+            box.parentElement.append(finishing.root);
+            finishing.finish(null, 1300);
             return;
           }
-          const options = {
-            status: label.textContent,
-            progress: bar.hidden || !(bar.max > 0) ? null : bar.value / bar.max,
-          };
+          const text = label.textContent || "";
+          const [start, end] = stage(text);
+          from = Math.max(from, start);
+          const share = bar.hidden || !(bar.max > 0) ? 0 : Math.min(1, bar.value / bar.max);
+          const options = { status: text, progress: from + (end - from) * share, ceiling: end - 0.01 };
           if (!screen) {
-            screen = new HaloLoadingScreen(box, Object.assign({ title: "Loading Halo" }, options));
+            screen = new HaloLoadingScreen(box, Object.assign({ title: "Loading Halo", smooth: true }, options));
             box.classList.add("halo-loading");
           } else screen.set(options);
         }

@@ -15,7 +15,13 @@ as the download screen writes them.
     screen.stop();
 
 A null progress sweeps the light again and again (the work's share is not
-known). A classic script: window.HaloLoadingScreen. */
+known). With smooth: true the light goes across once, never back: it eases
+toward the progress it is given (at most a sweep in some 2.5 seconds), then
+creeps on toward a ceiling (set({ progress, ceiling })) while nothing new is
+known, without the game's wobble; finish(done) takes it to the right edge,
+where it fades as the game's does, and calls done (finish(done, linger):
+the screen is taken away linger milliseconds after). A classic script:
+window.HaloLoadingScreen. */
 (function () {
   "use strict";
 
@@ -170,12 +176,18 @@ known). A classic script: window.HaloLoadingScreen. */
       this.titleElement = this.root.querySelector(".halo-loading-title");
       this.statusElement = this.root.querySelector(".halo-loading-status");
       element.prepend(this.root);
+      // (for the page's tests: where the light is, this.last)
+      this.root.haloLoadingScreen = this;
       // (progress_bar_render's: the light where it is drawn, its wobble)
       this.target = null;
       this.shown = 0;
       this.last = 0;
       this.wobble = 0;
       this.sweep = 0;
+      // (smooth: the ceiling it creeps toward, and finish's call)
+      this.smooth = !!(options && options.smooth);
+      this.ceiling = 0;
+      this.finished = null;
       this.clock = 0;
       this.running = true;
       this.picture = null;
@@ -195,6 +207,36 @@ known). A classic script: window.HaloLoadingScreen. */
         // next file's size is learned)
         else this.target = Math.max(this.target === null ? 0 : this.target, Math.min(1, Math.max(0.001, p)));
       }
+      if ("ceiling" in options && isFinite(options.ceiling)) this.ceiling = Math.max(this.ceiling, Math.min(1, options.ceiling));
+    }
+
+    /* the light to the right edge, then done() (smooth: it fades there as
+    the game's does; else at once), the screen gone linger milliseconds
+    after (a page's own fade of it) */
+    finish(done, linger) {
+      this.target = 1;
+      this.ceiling = 1;
+      // (faded out as it finishes, over what it uncovers)
+      if (linger) this.root.classList.add("halo-loading-finishing");
+      this.finished = () => {
+        this.running = false;
+        if (done) done();
+        setTimeout(() => this.root.remove(), linger || 0);
+      };
+      if (!this.smooth || !this.running) {
+        const end = this.finished;
+        this.finished = null;
+        end();
+        return;
+      }
+      // (whatever happens, not long: a hidden page draws nothing)
+      setTimeout(() => {
+        if (this.finished) {
+          const end = this.finished;
+          this.finished = null;
+          end();
+        }
+      }, 3000);
     }
 
     stop() {
@@ -217,17 +259,39 @@ known). A classic script: window.HaloLoadingScreen. */
 
     step() {
       let target = this.target;
-      if (target === null) {
-        // (not known: the light goes across again and again)
-        this.sweep = (this.sweep + 1) % SWEEP_FRAMES;
-        target = (this.sweep + 1) / SWEEP_FRAMES;
-        if (this.sweep === 0) this.last = 0;
+      let progress;
+      if (this.smooth) {
+        // (eased toward what is known, never faster than a sweep in about
+        // 2.5 seconds; past it, on toward the ceiling while nothing more is,
+        // a little slower the nearer it comes; never back)
+        const known = target === null ? 0 : target;
+        if (known > this.last) progress = this.last + Math.min(1 / 150, (known - this.last) * 0.08 + 0.0005);
+        else progress = this.last + Math.max(0, this.ceiling - this.last) * 0.004;
+        progress = Math.min(1, Math.max(this.last, progress));
+        this.last = progress;
+        if (progress >= 1 && this.finished) {
+          // (a few frames more, for the trails to fade, then done)
+          this.finishing = (this.finishing || 0) + 1;
+          if (this.finishing > 20) {
+            const end = this.finished;
+            this.finished = null;
+            end();
+            return;
+          }
+        }
+      } else {
+        if (target === null) {
+          // (not known: the light goes across again and again)
+          this.sweep = (this.sweep + 1) % SWEEP_FRAMES;
+          target = (this.sweep + 1) / SWEEP_FRAMES;
+          if (this.sweep === 0) this.last = 0;
+        }
+        this.wobble += 0.01;
+        progress = (Math.sin(this.wobble) * 0.05 + target - this.last) * 0.2 + this.last;
+        if (progress > 1) progress = 1;
+        if (progress < 0) progress = 0;
+        this.last = progress;
       }
-      this.wobble += 0.01;
-      let progress = (Math.sin(this.wobble) * 0.05 + target - this.last) * 0.2 + this.last;
-      if (progress > 1) progress = 1;
-      if (progress < 0) progress = 0;
-      this.last = progress;
       const brightness = Math.pow(Math.max(0, Math.sin(progress * 3.14159)), 0.9);
       const context = this.context;
 
@@ -279,6 +343,8 @@ known). A classic script: window.HaloLoadingScreen. */
   overflow:hidden;text-overflow:ellipsis;font-family:"Cyborg Interface Gothic","Overpass","Segoe UI",sans-serif}
 .halo-loading-title{top:62.5%;font-size:4.2cqh;color:rgb(230,237,252);letter-spacing:.02em}
 .halo-loading-status{top:69.6%;font-size:2.9cqh;color:rgb(143,166,199)}
+.halo-loading-finishing{pointer-events:none;animation:halo-loading-fade .9s ease-in .35s forwards}
+@keyframes halo-loading-fade{to{opacity:0}}
 `;
   document.head.append(style);
 
