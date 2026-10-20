@@ -3232,7 +3232,7 @@ void platform_pump_events(void)
 				ui_pointer.moved = TRUE;
 				break;
 			}
-#ifndef HALO_WEB
+#if !defined(HALO_ANDROID) && !defined(HALO_WEB)
 			if (mouse_warp_capture)
 			{
 				if ((int)event.motion.x == mouse_warp_x && (int)event.motion.y == mouse_warp_y)
