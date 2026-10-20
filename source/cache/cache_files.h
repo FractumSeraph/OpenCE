@@ -66,6 +66,8 @@ boolean cache_file_header_verify(
 	boolean fatal);
 boolean cache_files_give_time_to_precache(
 	char const *map_name);
+/* port: the name the map loaded was loaded by, and its cache header
+(cache_files.c) */
 char const *cache_file_loaded_map_name(
 	void);
 void const *cache_file_loaded_header(

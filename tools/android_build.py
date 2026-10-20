@@ -56,6 +56,7 @@ ZLIB_DEFINES = ("-DZ_PREFIX", "-Dz_errmsg=z_port_errmsg")
 MUSL_VERSION = "1.2.5"
 MUSL_DIR = THIRD_PARTY / f"musl-{MUSL_VERSION}"
 MUSL_URL = f"https://musl.libc.org/releases/musl-{MUSL_VERSION}.tar.gz"
+# (as tools/windows_build.py's and tools/linux_sysroot.py's SDL_VERSION)
 # (the download's SHA-256, and the tag's commit, when they were pinned)
 MUSL_SHA256 = "a9a118bbe84d8764da0ea0d28b3ab3fae8477fc7e4085d90102b8596fc7c75e4"
 SDL_TAG = "release-3.4.16"

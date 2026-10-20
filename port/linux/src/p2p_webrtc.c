@@ -26,7 +26,9 @@ play's, sealed as to any peer; WebRTC is only their way through.
   sends and the peer has not acknowledged in ABANDON_TIME is given up
   (FORWARD-TSN, RFC 3758); what it receives is acknowledged at once, with
   every gap that fits in the SACK (the browser counts a lost chunk missing,
-  and gives it up, only from newer chunks acknowledged past it).
+  and gives it up, only from newer chunks acknowledged past it; a SACK of
+  only some has it count the others in flight, and fill its window), and
+  again each SACK_INTERVAL while a gap stays.
   A gap the browser has not given up in SKIP_TIME is given up here: its
   TSNs are acknowledged as if a FORWARD-TSN had come. The channel's
   messages are never retransmitted, so a chunk missing that long is lost
@@ -38,7 +40,11 @@ play's, sealed as to any peer; WebRTC is only their way through.
   guess (500 ms) and gives up a gap every 200 ms, fewer than a lossy path
   opens. Firefox's dcsctp before Firefox 158 has no clock (its callbacks
   left TimeMillis returning 0: Mozilla's bug 2077997), so there its
-  FORWARD-TSN after a first chunk lost is its last.
+  FORWARD-TSN after a first chunk lost is its last; and Firefox's SCTP,
+  after one loss, gives up others only once its cumulative acknowledgement
+  has passed the first, which the gaps after it stop: without this end's
+  giving up, the channel would stall for seconds, then fall out of
+  TSN_WINDOW.
 
 Everything runs on the p2p thread, under p2p_lock.
 */
@@ -87,6 +93,8 @@ enum
 	200 ms; and dcsctp's retransmission timeout, 400 ms at least, which
 	would cut its congestion window to a packet, is not reached) */
 	SKIP_TIME = 200,
+	/* a SACK again, while a gap stays, this often */
+	SACK_INTERVAL = 200,
 	/* a path not checked in this long is not one the browser uses */
 	PATH_TIME = 30000,
 };
@@ -204,6 +212,8 @@ struct connection
 	unsigned long received_times[TSN_WINDOW];
 	int sack_due;
 	unsigned long skipped;
+	/* when the last SACK went */
+	unsigned long sack_time;
 	struct fragment fragments[MAXIMUM_FRAGMENTS];
 	/* sending: the next TSN, the peer's cumulative acknowledgement, when
 	each TSN past it was sent (by TSN modulo TSN_WINDOW), and the last
@@ -575,6 +585,7 @@ static void sctp_send_sack(struct connection *connection)
 	put_short(value + 10, 0);
 	sctp_send_chunk(connection, _chunk_sack, 0, value, 12 + blocks * 4);
 	connection->sack_due = 0;
+	connection->sack_time = p2p_now();
 }
 
 /* a message on the channel (stream 0, unordered), split as needed */
@@ -768,7 +779,7 @@ static void data_received(struct connection *connection, int flags, const unsign
 
 /* what the peer sent to TSN forward, and is missing, given up (by its
 FORWARD-TSN, or here: sctp_skip): the cumulative TSN moves past it, and
-past what came after it */
+past what came after it, and the fragments of messages given up are let go */
 static void give_up_to(struct connection *connection, unsigned int forward)
 {
 	int index;
@@ -826,6 +837,17 @@ static void sctp_skip(struct connection *connection)
 			sctp_log_state(connection, "its browser did not give up a lost chunk (FORWARD-TSN) in time, so this end does");
 		connection->skipped++;
 		give_up_to(connection, tsn - 1);
+	}
+}
+
+/* the gaps past the cumulative TSN not given up yet (sctp_skip) told again
+each SACK_INTERVAL, and a SACK due sent */
+static void gap_check(struct connection *connection)
+{
+	if (connection->sack_due || (tsn_after(connection->highest, connection->cumulative) &&
+		elapsed(connection->sack_time, SACK_INTERVAL)))
+	{
+		sctp_send_sack(connection);
 	}
 }
 
@@ -1221,7 +1243,10 @@ int p2p_webrtc_update(void)
 			sctp_skip(connection);
 		connection_receive(connection);
 		if (connection->state == _sctp_established)
+		{
 			sctp_forward(connection);
+			gap_check(connection);
+		}
 		else if (!elapsed(connection->created_time, PUNCH_TIME) && elapsed(connection->punch_time, PUNCH_INTERVAL))
 			punch(connection);
 	}

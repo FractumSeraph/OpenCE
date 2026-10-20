@@ -315,7 +315,8 @@ void tgaLoadImageData(
 
 /* ---------- globals */
 
-/* rasterizer_xbox.c */
+/* port: rasterizer_xbox.c's (rasterizer_xbox_internal.h, which this file
+does not include) */
 void rasterizer_forget_hardware_state(
 	void);
 

@@ -38,7 +38,7 @@ int gl_functions_load(void)
 		!strcmp(#name, "glMemoryBarrier") || !strcmp(#name, "glVertexAttribFormat") || \
 		!strcmp(#name, "glVertexAttribIFormat") || !strcmp(#name, "glVertexAttribBinding") || \
 		!strcmp(#name, "glBindVertexBuffer") || !strcmp(#name, "glGetQueryBufferObjectuiv") || \
-		!strcmp(#name, "glBindTextures"))
+		!strcmp(#name, "glBindTextures") || !strcmp(#name, "glCreateQueries"))
 #ifdef HALO_WEB
 /* WebGL 2 is OpenGL ES 3.0: the 3.1 and 3.2 functions it lacks
 (glCopyImageSubData, glDrawElementsBaseVertex, glMemoryBarrier) stay NULL,

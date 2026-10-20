@@ -319,6 +319,93 @@ boolean machine_update(
 	return TRUE;
 }
 
+/* port: (OpenCE's carry of an elevator's riders by the tick's own movement,
+which objects.c's object_update calls as machine_elevator_sample and
+machine_elevator_carry_riders below, in network games: these are OpenCE's
+functions for the same, kept for its callers and tests) */
+/* port: sample the floor around its node recomputation, rather than carrying
+riders by the previous tick's movement (wrong when an elevator reverses). */
+boolean machine_get_elevator_position(
+	long machine_index,
+	real_point3d *position)
+{
+	struct machine_datum *machine = machine_try_and_get(machine_index);
+	struct machine_definition *definition;
+	short node;
+
+	if (!machine)
+		return FALSE;
+	definition = machine_definition_get(machine->definition_index);
+	node = definition->machine.elevator_node_index;
+	if (!TEST_FLAG(definition->machine.flags, _machine_is_elevator_bit) ||
+		!VALID_INDEX(node, machine->object.node_matrices.size / sizeof(real_matrix4x3)))
+		return FALSE;
+	*position = object_get_node_matrix(machine_index, node)->position;
+	return TRUE;
+}
+
+/* port: objects.c calls this after computing the new collision nodes. The
+same displacement carries riders and moves their floor, including phase snaps. */
+void machine_move_elevator_riders(
+	long machine_index,
+	real_point3d const *previous_position)
+{
+	struct machine_datum *machine = machine_get(machine_index);
+	struct machine_definition *definition = machine_definition_get(machine->definition_index);
+	real_point3d *node_position;
+	long *elevator_object_index;
+	short object_count;
+	real_vector3d elevator_offset;
+	real_point3d new_position;
+	long elevator_object_indices[2048];
+
+	if (TEST_FLAG(definition->machine.flags, _machine_is_elevator_bit) &&
+		definition->machine.elevator_node_index != NONE)
+	{
+		real_matrix4x3 *node_matrix = object_get_node_matrix(
+			machine_index,
+			(unsigned short)definition->machine.elevator_node_index);
+
+		elevator_offset.i = node_matrix->position.x - previous_position->x;
+		node_position = &node_matrix->position;
+		elevator_offset.j = node_position->y - previous_position->y;
+		elevator_offset.k = node_position->z - previous_position->z;
+		if (elevator_offset.i != 0.0f || elevator_offset.j != 0.0f || elevator_offset.k != 0.0f)
+		{
+			object_count = objects_in_sphere(
+				_object_mask_biped,
+				_object_mask_biped,
+				&machine->object.location,
+				&machine->object.bounding_sphere_center,
+				machine->object.bounding_sphere_radius,
+				elevator_object_indices,
+				NUMBEROF(elevator_object_indices));
+			if (object_count > 0)
+			{
+				long remaining_object_count;
+
+				elevator_object_index = elevator_object_indices;
+				remaining_object_count = (unsigned short)object_count;
+				do
+				{
+					long biped_index = *elevator_object_index;
+					struct biped_datum *biped = biped_get(biped_index);
+
+					if (biped->biped.elevator_object_index == machine_index)
+					{
+						add_vectors3d(&elevator_offset, (real_vector3d const *)&biped->object.position, (real_vector3d *)&new_position);
+						object_translate(biped_index, &new_position, NULL);
+					}
+
+					elevator_object_index++;
+				}
+				while (--remaining_object_count);
+			}
+		}
+		machine->machine.elevator_position = *node_position;
+	}
+}
+
 /* ---------- elevators' riders */
 
 /* port: whether the machine is an elevator whose node can be sampled, and

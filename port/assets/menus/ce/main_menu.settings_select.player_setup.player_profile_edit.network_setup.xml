@@ -166,7 +166,7 @@
 		<string text="Show the name of the network game on Discord."/>
 		<string text="While hosting a public game, Discord shows a Join\ngame button that opens its invite."/>
 		<string text="Downloading Custom Edition maps you do not have,\nand helping send them to other players."/>
-		<string text="Players' names above their heads, and the\nscoreboard."/>
+		<string text="Players' names above their heads, the\nscoreboard, and the text chat."/>
 		<string text="Hide offensive words in names and text from\nother players, maps and mods, as stars."/>
 	</strings>
 </menus>

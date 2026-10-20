@@ -4,7 +4,8 @@ CE_HUD_SCALE.C (test)
 The real Custom Edition HUD conversion of port/linux/game/ce_hud.c: which
 placements are drawn at half their scale (Halo PC's high resolution scale
 flag, and a bitmap's half HUD scale or force HUD high resolution scale
-flags), that numbers keep their flag for hud_draw_numbers, the HUD digits
+flags: ChupathingyCE's, a placement given the bitmap it draws), numbers
+halved by their own flag (their digits by their bitmap: hud_bitmap_group_scale), the HUD digits
 halved and the bitmaps' flags cleared on the maps that rely on it, a model
 shader's detail after reflection flipped on those that rely on that, and
 what a map relies on found by its name and tag data checksum
@@ -259,14 +260,16 @@ int main(int argc, char **argv)
 			scale_of(GRENADE_HUD + GRENADE_HUD_COUNT_BACKGROUND_OFFSET));
 		return 0;
 	}
-	/* a number keeps its flag and scale: hud_draw_numbers halves its digits */
-	CASE("numbers-keep-flag")
+	/* a number's placement halved by its own flag, as any other's
+	(ChupathingyCE's: its digits are scaled by their bitmap as they are drawn,
+	hud_bitmap_group_scale) */
+	CASE("numbers-halved")
 	{
 		load("some map", 0x12345678);
-		CHECK(flagged(NUMBERS + WEAPON_HUD_ELEMENT_OFFSET) && scale_of(NUMBERS + WEAPON_HUD_ELEMENT_OFFSET) == 1.0f,
+		CHECK(!flagged(NUMBERS + WEAPON_HUD_ELEMENT_OFFSET) && scale_of(NUMBERS + WEAPON_HUD_ELEMENT_OFFSET) == 0.5f,
 			"a weapon's number: %g", scale_of(NUMBERS + WEAPON_HUD_ELEMENT_OFFSET));
-		CHECK(flagged(GRENADE_HUD + GRENADE_HUD_COUNT_NUMBERS_OFFSET) &&
-			scale_of(GRENADE_HUD + GRENADE_HUD_COUNT_NUMBERS_OFFSET) == 1.0f, "the grenade count: %g",
+		CHECK(!flagged(GRENADE_HUD + GRENADE_HUD_COUNT_NUMBERS_OFFSET) &&
+			scale_of(GRENADE_HUD + GRENADE_HUD_COUNT_NUMBERS_OFFSET) == 0.5f, "the grenade count: %g",
 			scale_of(GRENADE_HUD + GRENADE_HUD_COUNT_NUMBERS_OFFSET));
 		return 0;
 	}

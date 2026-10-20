@@ -974,13 +974,15 @@ static void updater_update(void)
 	}
 }
 
-/* the files a previous update left behind */
+/* the files a previous update left behind, and the notice of extract-xiso,
+which releases carried until the disc image readers were written again */
 static void updater_clean_up(void)
 {
 	static const char *const names[] =
 	{
 		"halo.old", "halo.exe.old", "chupathingy.old", "chupathingy.exe.old", "SDL3.dll.old", "libSDL3.so.0.old",
-		"SDL3-LICENSE.txt.old", "mbedtls-LICENSE.txt.old", "LICENSE.txt.old",
+		"SDL3-LICENSE.txt.old", "extract-xiso-LICENSE.txt.old", "mbedtls-LICENSE.txt.old", "LICENSE.txt.old",
+		"extract-xiso-LICENSE.txt",
 	};
 	char path[1200];
 	size_t index;
@@ -1028,10 +1030,20 @@ void updater_start(void)
 		updater_clean_up();
 	}
 	/* (not for builds other than a release's, the player's no, or runs nobody
-	is watching, but for a test with its answer) */
-	if (!(HALO_RELEASE_BUILD || UPDATER_TEST) || !config_boolean("update.auto") ||
-		(!config_string("debug.update_answer")[0] && (config_boolean("debug.hidden_window") ||
-			config_real("debug.exit_after") > 0.0 || config_string("debug.network_test")[0])))
+	is watching, but for a test with its answer; the log says which) */
+	if (!(HALO_RELEASE_BUILD || UPDATER_TEST))
+	{
+		platform_log("update: not looked for: only a release's builds update themselves (this one is not "
+			"built from a release's tag)");
+		return;
+	}
+	if (!config_boolean("update.auto"))
+	{
+		platform_log("update: not looked for: update.auto is false");
+		return;
+	}
+	if (!config_string("debug.update_answer")[0] && (config_boolean("debug.hidden_window") ||
+		config_real("debug.exit_after") > 0.0 || config_string("debug.network_test")[0]))
 	{
 		return;
 	}

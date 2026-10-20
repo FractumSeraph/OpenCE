@@ -125,10 +125,21 @@ enum
 	_distributed_message_map_share_offer = 84,
 	_distributed_message_map_share_sources = 85,
 	_distributed_message_map_share_progress = 86,
+	/* the text chat (network_chat.c): a player's line to the host,
+	reliably, which takes it only from the player's own machine's stream; and
+	the line the host sends on to each machine that hears it, reliably */
+	_distributed_message_chat_up = 87,
+	_distributed_message_chat_down = 88,
+	/* the host's text chat settings (network_chat.c): whether its players
+	may chat and send links, to every client, reliably */
+	_distributed_message_chat_config = 89,
+
 	/* the host's policy on aiming assist for the mouse and keyboard, reliably
 	to a client when it has loaded and when the host's setting changes
 	(network.block_mouse_aim_assist): 12 bytes, the header and a 16-bit
-	value (1: blocked) and 16 bits of 0. 90 as in OpenCE's network version 32. */
+	value (1: blocked) and 16 bits of 0. 90 as in OpenCE's network version 32
+	(whose network_aim_assist.c reads the same message: network_distributed.c
+	hands it on) */
 	_distributed_message_aim_assist_policy = 90,
 
 	NUMBER_OF_DISTRIBUTED_MESSAGES
@@ -240,6 +251,23 @@ real distributed_own_round_trip_ticks(void);
 back, as the host measures it) in milliseconds: 0 for the host's own
 players, NONE before it is known */
 long distributed_player_ping(short player_index);
+/* the latency meter (latency_meter.c): the round trips above timed in
+milliseconds by when this machine sent the tick they come back naming,
+nothing more sent; what is shown of them is refreshed twice a second in the
+tick (with Latency meter On), so the render reads it whole. (A client) its
+round trip to the host, NONE before it is known or on the host */
+long distributed_own_ping(void);
+/* a player's round trip as this machine times it: the host each client's
+(its own players' 0), a client its own players'; NONE for another's, or
+before it is known */
+long distributed_player_measured_ping(short player_index);
+/* (the host) its slowest client's, NONE for none */
+long distributed_slowest_client_ping(void);
+/* (a client) the host has sent nothing for two seconds */
+boolean distributed_connection_problem(void);
+/* (a client) the host has its players (or its vehicle) at that tick of this
+machine's, as told now: its own round trip timed */
+void distributed_note_own_round_trip(long time);
 /* (the host, in its tick) the client machine a player is on, NONE for none
 (the host's own players') */
 long distributed_player_machine(short player_index);
@@ -313,6 +341,19 @@ word network_votekick_status_entry_size(void);
 a client (blocked until it speaks, or always allowed by a host of a version
 that has no such policy), never in single player or the menus */
 boolean network_aim_assist_blocked(void);
+
+/* ---------- prototypes/NETWORK_CHAT.C */
+
+/* (the host) a client's line; from_stream: it came over the machine's own
+stream (anything else is refused) */
+void network_chat_handle_up(long machine_index, void const *entries, boolean from_stream);
+/* (a client) a line the host sent on; from_stream: it came over the host's
+connection's stream (anything else is refused) */
+void network_chat_handle_down(void const *entries, boolean from_stream);
+word network_chat_line_entry_size(void);
+/* (a client) the host's chat settings; from_stream: as above */
+void network_chat_handle_config(void const *entries, boolean from_stream);
+word network_chat_config_entry_size(void);
 
 /* ---------- prototypes/NETWORK_ACTORS.C */
 

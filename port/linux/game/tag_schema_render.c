@@ -1326,10 +1326,12 @@ static boolean bitmap_group_check(
 				its end, as bitmap_data_check has a bitmap's offset alone. A
 				negative one, the start of the file, was corrected again by
 				bitmap_data_check. Data starting at the end of the file is
-				moved to its start, and the bitmaps checked again) */
-				if (!file_contains(validation, group->pixel_data.file_offset, 1))
+				moved to its start, and the bitmaps checked again; data at the
+				start is left, so that an empty file is not checked forever) */
+				if (group->pixel_data.file_offset != 0 && !file_contains(validation, group->pixel_data.file_offset, 1))
 				{
-					tag_validate_correct(validation, "has its pixel data at the end of the map's %ld: 0", file_length);
+					tag_validate_correct(validation, "has its pixel data at %08lx, the end of the map's %ld: 0",
+						(unsigned long)group->pixel_data.file_offset, file_length);
 					group->pixel_data.file_offset = 0;
 					bitmap_index = -1;
 				}

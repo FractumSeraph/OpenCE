@@ -2831,6 +2831,7 @@ void rasterizer_forget_hardware_state(
 	void)
 {
 	rasterizer_state_cache.vertex_shader_index = INVALID_RASTERIZER_HARDWARE_STATE;
+	rasterizer_vertex_shader_runtime_forget();
 	SetupSmartStates();
 	return;
 }

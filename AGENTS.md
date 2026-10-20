@@ -33,6 +33,7 @@ end.
 | `server/` | The dedicated server (`tools/server_build.py`), its settings and playlists |
 | `services/` | The browser build's online services: the lobby (`signaling`), the native gateway (`native-gateway`), the self-hosting kits (`selfhost`), the Cloudflare static hosting (`web`) |
 | `infra/` | Deployment templates (`aws-native-gateway`: the native gateway on AWS) |
+| `port/tools/` | Stand-alone tools (`cache_file_report.c`) |
 | `tools/` | Build scripts (`linux_build.py`, `lp64_build.py`, `windows_build.py`, `macos_build.py`, `android_build.py`, `browser_build.py` (the browser build: `ninja browser`), `web_build.py` (OpenCE's), `server_build.py`, `ci_build.py`), generators (`ce_menus.py`, `port_settings.py`, `hud_assets.py`, `title_assets.py`, `embed_assets.py`, `xdk_headers.py`) and tests |
 | `docs/` | Longer design notes (`delta.md`, `map_torrents.md`, `parity.md`, `telemetry.md`, `bug-sweep.md`, `dedicated-server.md`, `mods.md`) |
 | `pgo/` | Profile-guided optimisation profiles |
@@ -47,7 +48,7 @@ ninja linux                    # build/linux/halo
 ninja android                  # the Android guest image and native libraries
 ninja android_apk              # the APK (Gradle)
 ninja web                      # OpenCE's browser build, build/web/site (Emscripten: port/web/README.md)
-ninja windows                  # on Windows only
+ninja windows                  # on Windows, or on Linux after configure.py --windows-cross
 ninja linux64                  # build/linux64/halo, 64-bit; also ninja windows64, ninja macos
 ninja server                   # the dedicated servers, build/server-<arch>/chupathingyce-server
 ninja browser                  # the browser build (configure.py --web-cc <emcc>)
@@ -98,9 +99,11 @@ to nothing.
 
 ```sh
 python -m pytest -q tools/harness tools/test_touch_menu.py   # the engine's functions in a fake world
+python -m pytest -q tools/stagekit/tests                    # scenarios on the real engine, no retail assets (Linux)
 python -m pytest -q tools/test_linux_port.py                # the build, the maps' checks (needs assets/maps)
 python -m pytest -q tools/test_profile.py tools/test_map_families.py tools/test_map_torrents.py tools/test_delta.py tools/test_bmp_files.py
 python -m pytest -q tools/test_mods.py                      # mods played over a map (needs assets/maps)
+python -m pytest -q tools/test_bots.py                      # the bots in local games (needs assets/maps)
 python tools/test_touch_layout.py                           # the Android touch layout (JDK 17+)
 python tools/test_light_storage.py
 python tools/test_death_timing.py
@@ -109,10 +112,14 @@ python -m pytest -q tools/test_mbedtls_threads.py         # Mbed TLS on several 
 python -m pytest -q tools/test_web_build.py                 # the web build's graph, sockets, menus
 node --test "port/web/tests/*.test.js"                      # the web page's importer and service worker
 node port/web/tests/webrtc_native.mjs chromium firefox      # the native builds' WebRTC with browsers (Playwright)
+python -m pytest -q tools/test_net_compare.py               # net_compare.py's judging of logs, its copies and their processes
+python tools/net_compare.py --a build/linux/halo --b <other build> --data <game data> --swap
+                                                            # two builds in one network game, in step (retail maps: local only)
 ```
 
 `tools/harness/README.md` explains how to add an asset-free test: the code
-under test is taken from the sources, not copied.
+under test is taken from the sources, not copied. `tools/stagekit/README.md`
+explains how to add a scenario: the real engine, with no retail assets.
 
 Running the game without a person at it:
 
@@ -216,12 +223,19 @@ otherwise.
 
 ### Third-party code and licences
 
-The repository is GPL-3.0-or-later since ChupathingyCE's 0.8.0 (this fork took
-it in on 2026-10-16; README.md, License); OpenCE's code stays CC0 in OpenCE's
-own repository. Vendored code goes in `port/third_party/<name>`,
-copied unchanged, with a README naming the upstream, the version or commit,
-the checksum and what uses it. GPL code (OpenSauce, Reclaimer) may be read
-as documentation of file formats, never copied.
+The repository is `AGPL-3.0-or-later` (`LICENSE`) since this fork took in
+OpenCE's change on 2026-10-20: ChupathingyCE's code (its base) stays
+GPL-3.0-or-later in its own right (`LICENSE.GPL-3.0`), the two combined as
+section 13 of each allows; the README's "License" section says what each part
+is under and when. Vendored code goes in `port/third_party/<name>`, copied
+unchanged, with a README naming the upstream, the version or commit, the
+licence, the checksum and what uses it. Its licence must let it be combined
+with the AGPL 3.0: MIT, BSD (without an advertising clause), ISC, zlib,
+Apache 2.0, MPL 2.0, LGPL or GPL 3.0 or later, public domain. GPL-2.0-only
+code and the 4-clause BSD licence cannot be. Code taken from another project
+keeps its notices and its licence, and says where it came from. GPL code
+(OpenSauce, Reclaimer) may be read as documentation of file formats, never
+copied.
 
 ### Commits and pull requests
 
@@ -260,5 +274,6 @@ as documentation of file formats, never copied.
 | [port/assets/menus/UNWIRED.md](port/assets/menus/UNWIRED.md) | Menu functions that do nothing yet |
 | [port/assets/fonts/README.md](port/assets/fonts/README.md) | The fonts and their licences |
 | [tools/harness/README.md](tools/harness/README.md) | Asset-free regression tests |
+| [tools/stagekit/README.md](tools/stagekit/README.md) | Scenarios staged and instrumented on the real engine, no retail assets |
 | `port/third_party/*/README.md` | Each vendored library |
 | [AUTHORS.md](AUTHORS.md) | Art credits |

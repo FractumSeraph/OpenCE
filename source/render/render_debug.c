@@ -174,6 +174,7 @@ symbols in this file:
 #include "objects/damage.h"
 #include "cutscene/recorded_animations.h"
 #endif
+#include "structure_culling.h" /* port: port/linux/game/structure_culling.c */
 
 /* ---------- constants */
 
@@ -538,6 +539,7 @@ void render_debug(
 	render_debug_camera();
 	render_debug_player();
 	render_debug_structure();
+	structure_culling_render_debug(); /* port: show what the culling camera rejected */
 	render_debug_bsp();
 	render_debug_input();
 	render_debug_structure_decals();

@@ -87,6 +87,7 @@ symbols in this file:
 #include "units/unit_definitions.h"
 #include "units/units.h"
 #include "bitmaps/bitmap_group.h"
+#include "network_chat.h" /* port: port/linux/game/network_chat.c */
 
 /* ---------- constants */
 
@@ -554,7 +555,8 @@ static void hud_update_unit_local_player(
 				/* port: an overshield's drain is not a hit
 				(hud_shield_drop_is_hit). The step is closed here, so one late
 				packet cannot leave the meter a little behind and keep the
-				flash going. */
+				flash going, and a hit's flash already fading goes on fading,
+				as when the shield holds still. */
 				if (!hud_shield_drop_is_hit(hud_state->last_shield_vitality, unit->object.shield_vitality))
 				{
 					hud_state->last_shield_vitality = unit->object.shield_vitality;
@@ -1143,6 +1145,8 @@ void hud_render_unit_interface(
 					struct hud_absolute_placement_definition absolute_placement;
 					short draw_flags = 0;
 					point2d corner;
+					/* port: its picture's left (NONE: none drawn) */
+					short motion_sensor_left = NONE;
 
 					absolute_placement.corner = _hud_anchor_bottom_left;
 					SET_FLAG(
@@ -1168,12 +1172,16 @@ void hud_render_unit_interface(
 
 					if (hud_definition->motion_sensor.background.interface_bitmap.index != NONE)
 					{
+						/* port: none, unless it is drawn (its bitmap can be missing) */
+						hud_draw_last_left = NONE;
 						hud_draw_static_element(
 							local_player_index,
 							&absolute_placement,
 							&hud_definition->motion_sensor.background,
 							draw_flags,
 							NONE);
+						/* port: where it is (the text chat goes above it) */
+						motion_sensor_left = hud_draw_last_left;
 					}
 					if (hud_definition->motion_sensor.foreground.interface_bitmap.index != NONE)
 					{
@@ -1197,6 +1205,14 @@ void hud_render_unit_interface(
 						local_player_index,
 						local_player_count() > 1,
 						&corner);
+					/* port: the text chat goes above it: the top of its circle, as
+					far above the blips' centre as the picture's left edge is left
+					of it (the picture is taller than the circle) */
+					if (motion_sensor_left != NONE)
+					{
+						network_chat_note_motion_sensor(local_player_index, motion_sensor_left,
+							(short)(corner.y - (corner.x - motion_sensor_left)));
+					}
 				}
 
 				{

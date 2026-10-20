@@ -253,7 +253,7 @@ build compiles); nothing sent over the network is changed.
 </p>
 
 <p align="center">
-<a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue" alt="License: GPL-3.0-or-later"></a>
+<a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0--or--later-blue" alt="License: AGPL-3.0-or-later"></a>
 <a href="https://github.com/ChupathingyCE/chupathingyce/releases/latest"><img src="https://img.shields.io/github/v/release/ChupathingyCE/chupathingyce?label=release" alt="Latest release"></a>
 <a href="https://github.com/ChupathingyCE/chupathingyce/releases/tag/nightly"><img src="https://img.shields.io/badge/nightly-daily%20build-orange" alt="Latest nightly"></a>
 <a href="https://github.com/ChupathingyCE/chupathingyce/actions/workflows/build.yml?query=branch%3Amain+event%3Apush"><img src="https://img.shields.io/github/actions/workflow/status/ChupathingyCE/chupathingyce/build.yml?branch=main&event=push&label=build" alt="Build status on main"></a>
@@ -775,39 +775,43 @@ If you contribute, the same applies to you: see [CONTRIBUTING](CONTRIBUTING.md#u
 
 ## License
 
-Chupathingy is free software: you can redistribute it and modify it under
-the terms of the GNU General Public License as published by the Free Software
-Foundation, either version 3 of the License or (at your option) any later
-version (`GPL-3.0-or-later`). It comes with no warranty. The full text is in
+This fork (Fractum Halo, FractumSeraph/OpenCE) is free software: you can
+redistribute it and modify it under the terms of the GNU Affero General
+Public License as published by the Free Software Foundation, either version
+3 of the License or (at your option) any later version
+(`AGPL-3.0-or-later`). It comes with no warranty. The full text is in
 [LICENSE](LICENSE).
 
-- **From 0.8.0.** The GPL applies from the commit that made the change
-  onward, and so from release 0.8.0. Releases up to and including 0.7.5d, and
-  the source at every commit before the change, were released under
-  [CC0 1.0](LICENSES/CC0-1.0.txt) and stay that way.
-- **What Chupathingy builds on.** The Halo CE decompilation
-  ([punpckhdq/halo](https://github.com/punpckhdq/halo) and
-  [bnunu/halo-1](https://github.com/bnunu/halo-1)) and OpenCE are released
-  under CC0 1.0, which lets anyone build on them under any terms. Their
-  repositories stay CC0; Chupathingy's code, including its changes to theirs,
-  is GPL from 0.8.0.
-- **This fork (Fractum Halo, FractumSeraph/OpenCE)** follows: it took in
-  Chupathingy 0.8.0 on 2026-10-16, and its code and builds are
-  GPL-3.0-or-later from that merge on. Its releases before it (up to
-  v0.7.5c-fs.00131 and the commits before the merge) were CC0 and stay so.
-  OpenCE's code, which it also merges, stays CC0 in OpenCE's repository.
-- **Delta.** Delta's code is GPL from 0.8.0 like the rest; earlier
-  versions of it stay CC0 for anyone already using them. The protocol
-  itself ([docs/delta.md](docs/delta.md)) is a description anyone may
-  implement, under any license, without using this code.
+- **Source code.** Its source is this repository,
+  <https://github.com/FractumSeraph/OpenCE>, and each release's source is its
+  tag. Whoever plays it over a network (the browser build on
+  halo.fractumseraph.net, a game this fork's server hosts) is offered it
+  there, as the AGPL's section 13 asks.
+- **What it is made of.** ChupathingyCE's code (its base) is under the GNU
+  General Public License, version 3 or later, from its 0.8.0
+  ([LICENSE.GPL-3.0](LICENSE.GPL-3.0)); OpenCE's is under the AGPL 3.0 or
+  later from 19 October 2026 (before that, CC0 1.0). The two licences let
+  their works be combined (section 13 of each): the files of each keep their
+  licence, and this fork as a whole, and its builds, are under the AGPL
+  3.0 or later from the merge of OpenCE's change (2026-10-20). Before that
+  merge the fork was GPL-3.0-or-later (from 2026-10-16), and before that CC0
+  1.0 (its releases up to v0.7.5c-fs.00131); each stays so.
+- **What they build on.** The Halo CE decompilation
+  ([punpckhdq/halo](https://github.com/punpckhdq/halo), under the AGPL 3.0
+  from 17 October 2026 and CC0 1.0 before, and
+  [bnunu/halo-1](https://github.com/bnunu/halo-1), CC0 1.0).
+- **Delta.** Delta's code is GPL from ChupathingyCE's 0.8.0; earlier versions
+  of it stay CC0 for anyone already using them. The protocol itself
+  ([docs/delta.md](docs/delta.md)) is a description anyone may implement,
+  under any license, without using this code.
 - **Third-party code, fonts and art** keep their own licenses, which are
   beside them (`port/third_party`, `port/assets/fonts`,
-  `port/linux/ui/fonts`, `port/assets/prompts`, `port/assets/hud`), and the release downloads
-  carry their notices.
-- **Halo itself is not covered.** The license covers the work of
-  Chupathingy's authors. It gives no rights in Halo, its maps or anything
-  else Microsoft owns.
-- **Source.** Each release's source is its tag in this repository.
+  `port/linux/ui/fonts`, `port/assets/prompts`, `port/assets/hud`,
+  `port/assets/text_filter`), and the release downloads and the web site's
+  `licenses.txt` carry their notices.
+- **Halo itself is not covered.** The license covers the work of the
+  authors. It gives no rights in Halo, its maps or anything else Microsoft
+  owns.
 
 ### Console SDK permission
 
@@ -1010,3 +1014,26 @@ the memory is full. See the settings in
 `python tools/ci_build.py linux profile` builds it as the GitHub workflow
 does; the workflow builds it only in a run started by hand with its
 `profile` box ticked.
+
+## Testing
+
+The tests are listed in [AGENTS.md](AGENTS.md) ("Testing"). Most run
+without the game data, in GitHub Actions too.
+
+One check needs the retail maps, so it runs on your own computer (or on a
+self-hosted runner), not in GitHub Actions: `tools/net_compare.py` plays
+two builds together in a network game on one computer and checks that they
+stay in step. Run it when a change can alter how a build calculates the
+game, as a change to the simulation, the compiler or the maths does,
+before it is merged. For example, to check a build with such a change
+against a build without it:
+
+```sh
+python tools/net_compare.py --a build/linux/halo --b <other checkout>/build/linux/halo \
+    --data <folder with maps/> --maps bloodgulch,beavercreek,hangemhigh --swap
+```
+
+Each game prints PASS or FAIL. A FAIL names the first player, tick and
+value that differ. Refer to "Comparing two builds" in
+[port/linux/NETCODE.md](port/linux/NETCODE.md).
+

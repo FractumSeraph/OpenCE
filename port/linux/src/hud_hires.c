@@ -9,10 +9,11 @@ port/linux/game/hud_hires_tags.c). Each texture is uploaded from its PNG when
 first drawn and kept: up to 84 of the HUD's, about 80 MB with their mip
 levels, though a game draws only some (the scopes' only when zoomed), and
 the titles of the menus shown, about 3 MB each (11 MB for the carnage
-report's, a whole panel). The HUD's PNGs in a map are decoded as it loads,
-on a thread of their own, so that the HUD's first frame only uploads them
-(decoding them there held that frame up); what is decoded and not drawn is
-let go when the map is unloaded.
+report's, a whole panel), and their button icons, about 0.3 MB each (5.3
+MB for the message icons' sheet). On the desktop builds a map's HUD PNGs
+are decoded as it loads, on a thread of their own, so that the HUD's first
+frame only uploads them (decoding them there held that frame up); what is
+decoded and not drawn is let go when the map is unloaded.
 They are drawn with linear filtering and their mip levels (d3d8_gl.c,
 configure_sampler), as they are larger than they appear.
 
@@ -29,12 +30,18 @@ zlib (port/third_party/zlib).
 
 #include "zlib_prefixed.h"
 
+/* (decoding a map's HUD ahead: the desktop builds'; not Android's or the
+web's, nor the dedicated server's, which draws nothing) */
+#if !defined(HALO_ANDROID) && !defined(HALO_WEB) && !defined(HALO_SERVER)
+#define HUD_HIRES_DECODE_AHEAD
 #include <pthread.h>
+#endif
 #include <stdlib.h>
 #include <string.h>
 
 /* the game's (port/linux/game/hud_hires_tags.c) */
 long hud_hires_asset_at(unsigned long address, long width, long height);
+long hud_hires_asset_stock_custom_edition(unsigned long address, long width, long height, long asset);
 
 /* Include every embedded HUD and button style, including stick frames. */
 #define MAXIMUM_TEXTURES 256
@@ -65,10 +72,12 @@ static struct
 	unsigned long width, height;
 } textures[MAXIMUM_TEXTURES];
 
+#ifdef HUD_HIRES_DECODE_AHEAD
 /* (the thread, detached, is waited for by its decode_running) */
 static pthread_mutex_t decode_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t decode_finished = PTHREAD_COND_INITIALIZER;
 static int decode_running, decode_stopping;
+#endif
 
 static unsigned char *png_decode(const unsigned char *data, unsigned long size, unsigned long *png_width,
 	unsigned long *png_height);
@@ -88,6 +97,13 @@ long hud_hires_asset_count(void)
 			"the rest are drawn as the map's own", (unsigned long)hud_hires_embedded_count, MAXIMUM_TEXTURES);
 	}
 	return MAXIMUM_TEXTURES;
+}
+
+/* whether the texture may stand for a Custom Edition map's stock bitmap of
+its name too (port/assets/hud/custom_edition.json) */
+int hud_hires_asset_custom_edition(long asset)
+{
+	return asset >= 0 && asset < hud_hires_asset_count() && hud_hires_embedded[asset].custom_edition;
 }
 
 char const *hud_hires_asset_tag(long asset)
@@ -176,6 +192,10 @@ long hud_hires_override_find(unsigned long address, unsigned long width, unsigne
 		return -1;
 	if (!(hud_hires_embedded[asset].title ? titles_enabled : hud_enabled))
 		return -1;
+	/* (a Custom Edition map's stock HUD bitmap, laid out as this texture's,
+	has its own pixels) */
+	if (hud_hires_asset_stock_custom_edition(address, (long)width, (long)height, asset))
+		return asset;
 #ifdef HALO_64BIT
 	/* (an Xbox address: the texture's pixels in the contiguous memory) */
 	if (crc32(0L, (const Bytef *)xbox_pointer(address), (uInt)level0_size) != hud_hires_embedded[asset].crc)
@@ -622,6 +642,7 @@ unsigned int hud_hires_override_texture(long asset, unsigned long *levels)
 		unsigned long width = 0, height = 0;
 		int decoded = 0;
 
+#ifdef HUD_HIRES_DECODE_AHEAD
 		/* (its PNG decoded as the map loaded, or being decoded: waited for) */
 		pthread_mutex_lock(&decode_lock);
 		while (textures[asset].decode_state == _decode_decoding)
@@ -636,6 +657,7 @@ unsigned int hud_hires_override_texture(long asset, unsigned long *levels)
 		}
 		textures[asset].decode_state = _decode_none;
 		pthread_mutex_unlock(&decode_lock);
+#endif
 		if (!decoded)
 			pixels = png_decode((const unsigned char *)embedded->png, embedded->png_size, &width, &height);
 		textures[asset].texture = png_pixels_texture(pixels, width, height, &textures[asset].levels);
@@ -652,6 +674,7 @@ unsigned int hud_hires_override_texture(long asset, unsigned long *levels)
 
 /* ---------- decoding ahead */
 
+#ifdef HUD_HIRES_DECODE_AHEAD
 static void *decode_thread_main(void *unused)
 {
 	long asset, count = hud_hires_asset_count();
@@ -691,9 +714,11 @@ static void *decode_thread_main(void *unused)
 	pthread_mutex_unlock(&decode_lock);
 	return NULL;
 }
+#endif
 
 void hud_hires_map_unloaded(void)
 {
+#ifdef HUD_HIRES_DECODE_AHEAD
 	long asset;
 
 	pthread_mutex_lock(&decode_lock);
@@ -707,22 +732,16 @@ void hud_hires_map_unloaded(void)
 		textures[asset].pixels = NULL;
 		textures[asset].decode_state = _decode_none;
 	}
+#endif
 }
 
 void hud_hires_map_loaded(const long *assets, long count)
 {
+#ifdef HUD_HIRES_DECODE_AHEAD
 	long index, queued = 0;
 	pthread_t thread;
 
 	hud_hires_map_unloaded();
-#if defined(HALO_SERVER) || defined(HALO_ANDROID)
-	/* (the dedicated server draws nothing; Android, whose memory is the
-	tightest, decodes each when first drawn: holding a map's decoded HUD
-	pictures takes about 60 MB more at once) */
-	(void)assets;
-	(void)count;
-	return;
-#endif
 	/* (none for a test's run that draws nothing, or with the high-res HUD
 	off: then each is decoded when first drawn, as titles are) */
 	if (!config_boolean("display.high_res_hud") || config_boolean("debug.null_renderer"))
@@ -752,4 +771,8 @@ void hud_hires_map_loaded(const long *assets, long count)
 		for (index = 0; index < MAXIMUM_TEXTURES; index++)
 			textures[index].decode_state = _decode_none;
 	}
+#else
+	(void)assets;
+	(void)count;
+#endif
 }

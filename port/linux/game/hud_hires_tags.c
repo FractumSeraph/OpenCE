@@ -39,6 +39,7 @@ int hud_hires_sprites_drawable(long asset, unsigned long address, unsigned long 
 #include "rasterizer/rasterizer.h"
 #include "text/draw_string.h"
 #include "hud_button_layout.h"
+#include "scenario/scenario_definitions.h"
 
 /* the platform layer's (port/linux/src) */
 void platform_log(char const *format, ...);
@@ -51,6 +52,12 @@ long hud_hires_asset_bitmap(long asset);
 long hud_hires_asset_fits(long asset, long width, long height);
 void hud_hires_map_loaded(const long *assets, long count);
 void hud_hires_map_unloaded(void);
+int hud_hires_asset_custom_edition(long asset);
+#ifdef HALO_CUSTOM_EDITION
+/* (ce_resources.c: the resource map a tag's pixels are read from, NULL for
+the map itself: a Custom Edition map's stock tags are its resource maps') */
+void *ce_resources_file_for_tag(long tag_index);
+#endif
 
 void hud_hires_tags_loaded(long scenario_index);
 void hud_hires_tags_unloaded(void);
@@ -71,6 +78,9 @@ static struct
 {
 	struct bitmap_data *bitmap;
 	long asset;
+	/* a Custom Edition map's stock bitmap of a layout the texture was made
+	for, whose pixels are its own: drawn without the pixels' check */
+	boolean stock_custom_edition;
 } hires_bitmaps[MAXIMUM_HIRES_BITMAPS];
 static long hires_bitmap_count = 0;
 
@@ -138,6 +148,20 @@ static void hud_hires_sprite_bitmaps_forget(
 	hud_buttons_forget();
 
 	return;
+}
+
+/* whether the loaded map's bitmap tag is a Custom Edition map's stock one:
+in this fork, one read from Custom Edition's resource maps (ce_resources.c),
+as OpenCE's custom_edition_cache_stock_tag has it */
+static boolean stock_custom_edition_tag(
+	long tag_index)
+{
+#ifdef HALO_CUSTOM_EDITION
+	return tag_index != NONE && ce_resources_file_for_tag(tag_index) != NULL;
+#else
+	(void)tag_index;
+	return FALSE;
+#endif
 }
 
 /* ---------- public code */
@@ -211,6 +235,8 @@ void hud_hires_tags_loaded(
 		{
 			hires_bitmaps[hires_bitmap_count].bitmap = bitmap;
 			hires_bitmaps[hires_bitmap_count].asset = asset;
+			hires_bitmaps[hires_bitmap_count].stock_custom_edition =
+				hud_hires_asset_custom_edition(asset) && stock_custom_edition_tag(group_index);
 			hires_bitmap_count++;
 		}
 	}
@@ -220,12 +246,15 @@ void hud_hires_tags_loaded(
 	menu's, which draws no HUD) */
 	if (scenario_definition_get(scenario_index)->type != _scenario_type_main_menu)
 	{
-		long assets[MAXIMUM_HIRES_BITMAPS];
+		long assets[MAXIMUM_HIRES_BITMAPS + MAXIMUM_HIRES_SPRITE_BITMAPS];
+		long count = 0;
 		long index;
 
 		for (index = 0; index < hires_bitmap_count; index++)
-			assets[index] = hires_bitmaps[index].asset;
-		hud_hires_map_loaded(assets, hires_bitmap_count);
+			assets[count++] = hires_bitmaps[index].asset;
+		for (index = 0; index < hires_sprite_bitmap_count; index++)
+			assets[count++] = hires_sprite_bitmaps[index].asset;
+		hud_hires_map_loaded(assets, count);
 	}
 
 	return;
@@ -307,6 +336,30 @@ struct bitmap_data const *hud_hires_sprite_bitmap(
 	}
 
 	return bitmap;
+}
+
+/* whether the bitmap at address that `asset` stands for is a Custom Edition
+map's stock one (its pixels are not those the texture was drawn from) */
+long hud_hires_asset_stock_custom_edition(
+	unsigned long address,
+	long width,
+	long height,
+	long asset)
+{
+	long index;
+
+	for (index = 0; index < hires_bitmap_count; index++)
+	{
+		struct bitmap_data *bitmap = hires_bitmaps[index].bitmap;
+
+		if (hires_bitmaps[index].asset == asset && bitmap->cache_block_index != NONE &&
+			(unsigned long)bitmap->base_address == address && bitmap->width == width && bitmap->height == height)
+		{
+			return hires_bitmaps[index].stock_custom_edition;
+		}
+	}
+
+	return FALSE;
 }
 
 long hud_hires_asset_at(

@@ -26,9 +26,21 @@ void render_interpolation_first_person(short local_player_index, struct real_mat
 	short node_count, struct render_camera const *camera);
 float render_interpolation_game_time_sec(long ticks);
 
+/* whether the map being loaded, by the name it was loaded by, is a
+downloaded one, whose scripts may call and set less: one map sharing
+downloaded, or one game.downloaded_maps names (port/linux/game/map_share.c) */
+int map_share_map_downloaded(char const *map_name);
+
+/* an IP address as the log may show it: a public one as a tag of the run's,
+never whole (port/linux/src/log_address.c, log_address.h) */
+const char *log_address(const unsigned char *bytes, int length, int port, char *text, int size);
+
 /* the port's menus' screen for one of ui.map's, by name, else the name
 (port/linux/game/menu_tags.c) */
 char const *pc_menus_screen(char const *name);
+/* debug.fixed_step: a game of this machine alone runs a tick a frame
+(port/linux/src/port_config.c; game_time.c, main.c) */
+int halo_fixed_step(void);
 /* the width of the screen the game draws, 480 lines tall: the device's or
 the display's shape, or 640 (port/linux/src/d3d8_gl.c) */
 long halo_screen_width(void);
@@ -39,6 +51,13 @@ long halo_screen_commit(void);
 /* the shadow maps' pixels for each of their 128 texels each way, a power of
 two (display.shadow_resolution) */
 long halo_shadow_map_scale(void);
+/* how many times a model's size in the 480-line screen's pixels to measure
+it at (display.model_detail, source/models/models.c): level nonzero, to
+choose its level of detail, otherwise whether it is drawn */
+float halo_model_detail_scale(int level);
+/* whether display.model_detail is "stock" (port/linux/src/d3d8_gl.c), for
+each permutation's level (port/linux/game/model_detail.c) */
+int halo_model_detail_stock(void);
 /* while TRUE, drawing shifts right to center 640-column layouts */
 void halo_screen_ui_offset(unsigned char centered);
 /* names a model lighting vertex program, whose draws can be lit for each
@@ -50,6 +69,9 @@ void halo_screen_anti_alias(short x0, short y0, short x1, short y1);
 /* the loading screen's picture, RGBA bytes with its top row first, over the
 whole back buffer (port/linux/src/d3d8_gl.c, port/linux/game/loading_screen.c) */
 void halo_draw_picture(const unsigned char *rgba, long width, long height);
+/* display.hdr's tone mapping of a window's 3D view, before its
+anti-aliasing (source/render/render.c) */
+void halo_screen_tone_map(short x0, short y0, short x1, short y1);
 /* the mouse in the menus (source/interface/ui_widget.c) */
 #include "halo_ui_pointer.h"
 /* a level not in the maps folder (source/cache/cache_files_windows.c): a

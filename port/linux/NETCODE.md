@@ -84,6 +84,13 @@ with ideas from VALORANT's netcode articles, keeping the 30 Hz tick:
   actor pool, `halo_port_capacity.h`, holds 1024). Riders a dropship has no
   seats for are kept, and placed beside its riders once they get out. Only
   the host runs the AI, so the clients see them as the host's other actors.
+
+  Each player chooses whether to play with friendly fire between players
+  (`network.coop_own_friendly_fire`, FRIENDLY FIRE in the pause menu): two
+  players hurt each other only if both do. A client's input tells the host
+  its choice. A player with no input for over 70 seconds (no button pressed
+  or let go, no stick or trigger held) is hurt by every player, whatever
+  either chose, until their next input.
 - **Host authoritative.** The host alone decides damage, deaths, spawns,
   pickups, scores and the game's objects; clients do not decide them but
   apply what the host sends.
@@ -122,13 +129,23 @@ with ideas from VALORANT's netcode articles, keeping the 30 Hz tick:
   than the player goes of their own (and up, what its tick added but a
   jump's), so a client that says it goes faster (a copy said to hover and
   fall, gaining the host's gravity each tick) gains nothing by it. A
-  teleporter, which moves the host's own copy too, starts afresh. On a
-  moving elevator the host takes only where a client's player is across,
+  teleporter, which moves the host's own copy too, starts afresh. Riding an
+  elevator (moving, or at rest with the player on its floor) the host takes
+  only where a client's player is across,
   not how high: the client's elevator follows the host's (co-op's device
   sync), so its player's height reaches the host a round trip behind the
   host's elevator, under its floor going up, where the host's copy would
   fall through it. Each machine's elevator carries its own copy up and
-  down, and they meet where it stops.
+  down, and they meet where it stops. Floor contact keeps that protection
+  through a stop or reversal; the remembered attachment alone after leaving
+  a stopped platform does not. A client echoing a prediction while still on
+  the same elevator keeps its local floor height, rather than applying the
+  difference between the platforms' phases to its current height, when that
+  difference is within 4 world units (the platform's travel over a round
+  trip); a greater one, jumps, leaving the platform and authoritative
+  teleports correct normally. Rider carry uses the platform's current
+  collision displacement, including phase corrections, rather than its
+  previous tick's displacement (network version 30).
 - **Shooter's hits.** A client reports what its own players hit; the host
   checks the report (the player's, a weapon they carry, fired from within
   its reach, the target where the host had it when the shooter saw it, no
@@ -241,8 +258,15 @@ host's `network.block_mouse_aim_assist` changes, which a client honors by
 turning the view's magnetism off for a player aiming with the mouse; a
 client is blocked until a host of 32 or later speaks, and a host never takes
 the message. A client's input entry says in its third byte (padding before)
-whether its player plays co-op without friendly fire; this host reads it and
-decides friendly fire by its own setting.
+whether its player plays co-op without friendly fire; the host keeps it for
+the player and gives it to co-op's friendly fire rule (network_coop.c).
+OpenCE's `network_aim_assist.c` reads the same message 90 on a client
+(network_distributed.c hands it on): one policy, sent once. OpenCE's text
+chat (`network_chat.c`) is distributed messages 87 to 89 (a line up, a line
+down, the host's chat settings), which a build without it drops as kinds
+it does not know; this fork's builds with ChupathingyCE's chat (`chat.c`,
+over Delta) type and show that one, and network_chat.c only takes and relays
+the lines that come.
 
 A host never checks a joining client's version: the client reads the
 host's from its advertisement and joins only a version it plays with. That
@@ -341,6 +365,62 @@ as it changes), for the scoreboard, whose right click frees the mouse to
 pick a player; the host's own scoreboard adds Kick and Ban. Builds without
 votes drop both kinds as unknown, so the network version is unchanged.
 
+The text chat (`network_chat.c`): a client sends its player's line to the
+host (`_distributed_message_chat_up`, reliably), which takes it only from
+the client's own stream and from one of that machine's players, at most 5
+lines at once and one each 1.5 seconds after (more are dropped; a machine
+gone from the game has its count let go, so one new to its slot starts
+afresh), its text cut to 63 characters of printable ASCII but `|` (which
+the game's text drawing takes for the start of a code; it becomes `?`, on
+the host and again on each client). The host alone sends the line on
+(`_distributed_message_chat_down`, reliably, with the sender's absolute
+index and its channel, the line's flags): to every client, a team's line
+only to the machines with a player of the sender's team (to every one in a
+game without teams), and a vehicle's line only to those with a player
+riding in the sender's vehicle (the outermost object each unit is a child
+of, so any map's vehicles), as the host has them; the sender's machine gets
+its own line whatever it is. The host shows it itself if one of its own
+players hears it or said it. A client shows only
+the host's lines, its own too, so every machine shows them in one order,
+and takes them (and the chat settings below) only over the host's
+connection's stream: a datagram from the host's address could be anyone's.
+Each local player's view shows the lines that player hears.
+The host's own `/mute <player> [minutes]` and `/unmute <player>` are
+commands, not lines: it keeps a mute by the player's name (in ASCII,
+matched in either case, as the host keeps names apart) and its minutes by
+its own clock, drops the lines of a muted player's machine
+when they come up, and sends that machine alone a notice of the minutes
+left; it tells every machine of each mute and unmute. A notice is a down
+line with `_chat_line_notice_bit` set, its text alone (no sender). A
+client's `/mute` is never sent, and the host takes the text of a line that
+came up as a line, never a command. The host's scoreboard Mute for everyone
+is the same mute (20 minutes), and the host relays none of a muted player's
+machine's voice either (`network_voice.c`'s `voice_host_relay`, by the
+names of the network game's players, which the lobby has too). A
+machine's own scoreboard mute stays its own: it plays none of that
+machine's voice and shows none of its players' lines, and tells no one.
+The host's chat settings (`network.text_chat`: on, links allowed, or off;
+always off while its game is listed in the server browser,
+`p2p_hosting_listed`) go to every client in
+`_distributed_message_chat_config` (one byte of flags), reliably, as they
+change and every 3 seconds. A client without them (from a host without the
+chat, or before they come) has the chat off, and so does a client in a
+public game it joined from the server browser, whatever its host sends (a
+changed host could turn the chat on): while the tunnel reaches the host of
+the listing it joined (`p2p_join_listing`, `p2p_joined_listed_host`; any
+other invite joined since forgets it), it takes no chat line or notice and
+sends none. A client refuses a line the
+settings refuse before sending it, and the host refuses it again whatever
+the client knew, telling its machine why: a changed build gets no further.
+Links are found in the line's text (`chat_text_has_link`): a scheme, `www.`,
+an address of four numbers, or a name and a common top-level domain, its
+dots also written `(dot)`, `[dot]`, `{dot}`, `(.)`, `[.]` or ` dot `, with
+spaces about them or not, or a dot with spaces both sides; a domain that is
+a word as well (`me`, `to`, `is`) counts only with a path, a port or another
+domain after it (`chat_link_domain`).
+Builds without the chat drop the three kinds as unknown, so the network
+version is unchanged.
+
 Voice chat (`network_voice.c`, the sound in `port/linux/src/voice_audio.c`)
 travels as distributed messages too, but in the lobby as well as in a game:
 `network_voice_handles_message` takes them before the netcode's checks that
@@ -364,6 +444,15 @@ host sends them none, and drop the kinds as unknown.
 A speed hack of less than a tenth is let be: the host's bounds on how far
 and how fast a client's player moves and fires hold it to the host's time
 anyway.
+
+The host's AIM ASSIST option in Player Options defaults to ALLOWED.
+BLOCK M+KB overrides optional mouse magnetism on every machine, including
+the host. Aiming with the controller or touch retains its existing behavior;
+the player's saved preference and the bullets' autoaim are unchanged.
+`network_aim_assist.c` sends the policy reliably on client ready and on
+change. Clients take it only from the host and default to blocked until it
+arrives. This adds distributed message 90; network version 32 requires
+matching builds so an older client cannot silently ignore the rule.
 
 ## Joining a game in progress
 
@@ -549,7 +638,16 @@ its name alone beside it, has its name given back as the map lists find it.
      and delete theirs to match. A client that has loaded asks for all the
      host's objects and is told when it has them; from then on it deletes
      any such object the host has not told it of, and nothing but the
-     host's word deletes the host's.
+     host's word deletes the host's. That word has deleted a CTF flag or
+     an oddball, which the game itself never deletes (two assertions,
+     in `objects.c` and `weapons.c`, stop a build that is not `--release`
+     there). Why the host deleted it is not known; the client follows
+     the host's word whatever the reason: it takes the flag or ball out
+     of its carrier's hands, and the goal its game type shows at it goes
+     with it. The two assertions are not made for anything a client
+     deletes in `distributed_client_delete`: the host's objects on its
+     word, one in the place of an object the host creates, and its own
+     the host has not told it of.
    - The objects placed when the map loads are placed alike everywhere:
      the host's word finds a client's already there. Past loading, a
      client's own objects (projectiles, effects: what only it sees) take
@@ -812,12 +910,25 @@ Unity's Netcode for Entities, lightyear, netfox and the Ares source):
   browsers' SCTP (dcsctp) can fall behind at it, or stop, on a path that
   loses datagrams. `port/web/tests/webrtc_native.mjs` checks the channel
   with a tenth of the datagrams lost each way.
+- **The latency meter** (`latency_meter.c`, `display.latency_meter`) shows
+  the same round trips, timed in milliseconds by when each machine sent the
+  tick they come back naming (the last 64 ticks' send times kept), with
+  nothing more sent: the host each client's, by the host tick its input
+  names; a client its own, by its tick the host's state of its player (or,
+  driving, its vehicle) says the host has it at. Each is the network both
+  ways plus each machine's wait for its next tick, so a LAN reads 15 to 35
+  ms. A client that has heard nothing from the host for two seconds shows
+  "Connection problem"; the host logs a client silent as long. With the
+  meter on, the scoreboard shows these where the machine has them (the
+  host every client's, a client its own players'), and the host's measure
+  in ticks, which every machine is sent, for the others.
 
 ## Testing
 
 `debug.network_test` (`port/linux/game/network_test.c`) hosts or joins a
 game without the menus (in a team game the joining player takes the other
-team), and `debug.test_input` plays controller 1 with a scripted bot (or,
+team; `local:<map>` plays a local split screen game instead, which the
+bots of `bots.count` join), and `debug.test_input` plays controller 1 with a scripted bot (or,
 `look:<seed>`, one that stands still, only turning and looking up and
 down); each machine logs every player's position, health and shields,
 where they aim and face, their animation state and how hard they move,
@@ -830,7 +941,18 @@ swap the bots' wandering does not reach (the scripted hits are not aimed: a
 host of this fork refuses them as silent aim unless its `network.fair_play`
 is `log`; `debug.network_test_aim` instead has each player aim at the next
 and fire their weapon, real shots the host must deal) (`debug.network_test_pickup_weapon`
-picks the weapon: the first whose tag name has it in it, as "sniper"), and `debug.network_test_score`
+picks the weapon: the first whose tag name has it in it, as "sniper"),
+`debug.network_test_chat` has each machine's player say a chat line to
+everyone, one to the team and one to the vehicle (the host seats the last
+two players in one first), then the host mutes the last player for a
+minute, each says a line, the host unmutes them and each says another,
+each says a line with a link (a client's sent past its own check, for the
+host to refuse), the host turns the text chat off (and on again) as each
+says one more, the host mutes the last player for everyone (as its
+scoreboard does) around a line each, and the last player's machine mutes
+the host's for itself (as a client's scoreboard does) before another,
+which every machine's `debug.txt` records as
+it shows them (the notices as `chat notice:`), and `debug.network_test_score`
 shortens the game, to test the next (`host:<map>:<variant>,<variant>...`
 plays the variants in turn, the next once a game is over, as the host's
 button on the scores does). `debug.network_test_public` lists the host's
@@ -850,7 +972,130 @@ started first), to test that nothing another machine sends can crash the
 game: a host and a client with a third of their datagrams damaged must play
 on, their logs noting what they refused.
 
+With `log`, `debug.network_test` hosts and joins nothing: it logs the game
+one machine plays (a `map_name` in `init.txt` plays one without the menus),
+as above. `debug.network_test_cues` has the host, or that machine, run
+console lines at their ticks, from the first tick every player is in.
+
 The host logs to `debug.txt` when a player on another machine presses the
 action button where the host has nothing for them to pick up, with where it
 has them and the nearest item: a client that sees a pickup the host does
 not.
+
+### Comparing two builds
+
+`tools/net_compare.py` checks that two builds play a network game in step:
+a build with a change to the simulation, the compiler or the maths against
+one without. It plays them together on the loopback, build A
+hosting and B joining (and, with `--swap`, the other way round), on each
+map given, each copy's player a seeded bot (`debug.test_input`
+`bot:<seed>`, `--events` adds `debug.network_test_shoot` and
+`debug.network_test_kill`), headless (`debug.null_renderer`, with no
+display; or with `--window` a hidden window, on the display the tool was
+started with, `DISPLAY` or `WAYLAND_DISPLAY`, or `--display`'s: a virtual
+one, Xvfb, rather than a desktop), and compares the two machines' logs:
+
+```sh
+python tools/net_compare.py --a build/linux/halo --b <other checkout>/build/linux/halo \
+    --data <folder holding maps/> --maps bloodgulch,beavercreek,hangemhigh --swap
+```
+
+It needs the retail maps, so it runs on a developer's machine or a
+self-hosted runner, not in the public CI; run it before merging a change to
+a build's compiler, maths or the simulation itself. A build
+is its executable: a build's (`build/linux/halo`) or a release's. Each copy
+gets its own folder (an executable, `config.toml` written in the copy's
+folder, a data root linking the maps, and saves) in `build/net_compare/`,
+removed when every game passes. It prints PASS, FAIL (with the first
+divergent player, tick and field) or ERROR (a copy that did not start, join or log) for each game and
+a line of figures; a copy's log and the end of its `debug.txt` are kept for
+each game. It exits 0 when every game passes, 1 when any fails, even if
+another was an error (a divergence is the finding; an error only a gap in
+it), else 2 when any was an error. Each copy runs in a process group of its
+own, which the tool ends however it ends: stopped with Ctrl-C, SIGTERM or
+SIGHUP, it stops the copies and exits 128 plus the signal's number, and
+killed outright, the kernel ends the copies (`PR_SET_PDEATHSIG`). `--compare <host log>
+<client log>` judges two logs already written, and
+`--a-wrapper`/`--b-wrapper` run a build under another program (a tracer, a
+debugger). Both builds
+must log the drift (below): one built before it is an error.
+
+The host decides and a client predicts its own player, so the comparison
+is not lockstep's bit for bit, but of what the netcode allows:
+
+- **Each second's state.** For every player, what the host logged and what
+  the client logged at the same tick (the machines' clocks agree: the
+  ticks match). Positions within 1 world unit: a remote player's word
+  comes a tick or so late, a client's prediction reaches the host as late,
+  and a player runs about 0.08 world units a tick, so identical builds are
+  0.04 apart on average and 0.24 at most, and a client puts its copy of a
+  remote player where the host has it past `REMOTE_BLEND_DISTANCE` (1
+  world unit); out for 2 seconds in a row fails. Aim within 15 degrees,
+  body and shield within 0.15, and alive or dead, riding, grenades,
+  weapons, score, kills, deaths and team the same: out for 3 seconds in a
+  row fails, as the host's word on damage, a death, a pickup or a score is
+  a round trip, or a death blow's wait, late, and a player thrown by a
+  blast aims as no input says for a second or two. Rounds within 3: out
+  for 6 seconds fails, as a client keeps its own player's ammunition
+  while it fires and takes the host's (a pickup's) only once it stops
+  (`network_objects.c`).
+- **Drift.** Those agree between builds that simulate differently too,
+  as the netcode corrects every copy toward the host's. What does not is
+  how the host moves a client's player: each tick the host moves it on
+  from where it took the client's last prediction, with the client's
+  input, and then hears the client's prediction of the same tick. Where
+  the host took the last a tick ago, it was of the client's tick before,
+  and the host has the input of the client's tick, both machines moved
+  the player one tick with the same input from much the same place, and
+  `distributed_take_prediction` (network_distributed.c) notes how far
+  apart the two moves were, and whether further than
+  `DIVERGENCE_APART_DISTANCE` (0.0001 world units, far above the last
+  bits' rounding). (The moves, not where they end: the host puts its copy
+  only halfway to a prediction a little off, so where it ends would be as
+  far off for ticks after anything that set them apart.) Identical builds
+  move it alike to the last bit but where the player touched something
+  the two machines have in slightly different places (the other player,
+  a grenade's blast, an item knocked about). A build that moves a player
+  otherwise is apart in most of the ticks the player moves. More than 60%
+  of the ticks apart fails.
+
+The per-second line each machine logs (`network_test_log_players`) is:
+
+```
+network test: tick <tick> player <index>: (<x> <y> <z>) h<body>/<shield>[ riding][ camo] g<grenades>/<grenades> w
+  a<aim yaw>/<aim pitch> f<facing yaw> l<look yaw>/<look pitch> as<aiming screen>/<looking screen> st<animation state>
+  thr<throttle>[ <weapon tag>:<rounds>...] s<score> k<kills> d<deaths> f<team kills> t<team> m<machine>
+  [player <index>: dead s<score> k<kills> d<deaths> f<team kills> t<team> m<machine>] ...
+  | items <on the ground> (+<created> -<deleted> !<failed> x<removed>) | <playing|game over> to <score to win>
+  | sent <n> received <n> corrected <n> | hits <n> dealt <n> rejected <n> replayed <n>
+  | local <player> camera (<x> <y> <z>) respawn <ticks> | drift <ticks> <apart> <mean> <largest>
+```
+
+(on one line; a riding player's position is the vehicle's, angles are in
+degrees, a weapon's tag is its tag index's low 16 bits in hexadecimal, and
+its rounds are those loaded and in reserve). `drift` is the host's: how
+many ticks of the second it compared a client's move of its player with
+its own (above), how many of them were apart, and the mean and largest
+distance apart (world units); a client's is 0. net_compare.py reads every
+field but the items, the hits and the camera, and compares the last game a
+log has.
+
+Calibration (on one 24-thread computer, with up to four games played at
+once, 60 seconds each, both ways round, on bloodgulch, beavercreek,
+hangemhigh, chillout, prisoner, ratrace, longest and carousel):
+
+| Builds | Games | Result | Ticks apart |
+| --- | --- | --- | --- |
+| The Linux build against itself | 64 | 63 pass (one copy crashed, an error) | 0-13%, up to 42% with the frames uneven |
+| The Linux build against itself, `--events` | 12 | 12 pass | 7-36% |
+| B's players 0.5% faster | 10 | 10 fail, at the first second compared | 77-88% |
+| B's players 2% faster | 6 | 6 fail, at the first second compared | 88-93% |
+| B's gravity 0.5% or 2% stronger | 14 | 14 pass | 25-38% |
+
+(B a build of the same sources with `movement_desired` or `global_gravity`
+scaled in `biped_update_physics`, a change made for the test.) A change to
+how players move on the ground is caught in the first second; one that
+changes only the ticks in the air, as gravity does, is within what
+identical builds show, and not caught. Positions agree to 0.04 world units
+on average, 0.24 at most, in every game, perturbed or not: the netcode
+corrects them.

@@ -248,9 +248,11 @@ def main() -> int:
                     *sorted((ROOT / "build/windows/third_party").glob(f"SDL3-*/lib/{sdl_arch}/SDL3.pdb"))]:
             shutil.copy2(pdb, symbols)
             print(f"{pdb.relative_to(ROOT)} -> {symbols.relative_to(ROOT)}", flush=True)
-    # Chupathingy's own license (GPL-3.0-or-later), which asks every copy to
-    # carry it
+    # the fork's licence, the AGPL (OpenCE's, which the whole is under), and
+    # ChupathingyCE's GPL, which its parts keep: each asks every copy to
+    # carry its text
     shutil.copy2(ROOT / "LICENSE", dist / "LICENSE.txt")
+    shutil.copy2(ROOT / "LICENSE.GPL-3.0", dist / "LICENSE.GPL-3.0.txt")
     # the game list's and the self-updater's TLS (port/third_party/mbedtls),
     # in every build (HALO_GAME_BROWSER), whose Apache license asks the same
     shutil.copy2(ROOT / "port/third_party/mbedtls/LICENSE", dist / "mbedtls-LICENSE.txt")

@@ -65,7 +65,8 @@ none has. wanted: probe it (only a host that answers pings, as the list
 says, should be asked about) */
 int p2p_probe_ping(const char *invite, int wanted);
 /* the last round trip to the machine with this identifier in milliseconds
-(the tunnel's own pings), if the tunnel has reached it; -1 if not */
+(the tunnel's own pings), if the tunnel reaches it; -1 if not, or not timed
+yet */
 int p2p_peer_ping(const unsigned char *identifier);
 
 /* a destination the game sends to or connects to (stream: a TCP socket;
@@ -132,6 +133,9 @@ in everyone's server browser: Create Game's PUBLIC; a private game is
 reached only by its invite. Going private makes a new invite, if the old one
 was listed */
 void p2p_set_hosting_public(int public);
+/* whether the game this machine hosts is listed in everyone's server
+browser (PUBLIC, and network.public_lobby): the text chat is off in one */
+int p2p_hosting_listed(void);
 /* the password of the game hosted for the internet (Server Setup's
 PASSWORD; NULL or empty: none): its listing lets only those who know it
 join from the server browser (its invite link still joins it). Setting or
@@ -188,6 +192,14 @@ struct p2p_listing
 	/* the network version it was listed under (0: not known) */
 	unsigned short version;
 };
+/* joins a public game the server browser found (p2p_join_invite with its
+invite), remembering its host: nonzero if it held an invite */
+int p2p_join_listing(const struct p2p_listing *listing);
+/* whether this machine is in the public game it joined from the server
+browser: the tunnel still reaches its host, and no other invite was joined
+since. Such a game has no text chat, whatever its host says
+(port/linux/game/network_chat.c) */
+int p2p_joined_listed_host(void);
 /* a copy of the public games found, each once (p2p_listing_older_copy), in
 the order shown (the most players first; then those not failed, the open
 ones, by name); returns their count */
@@ -201,6 +213,9 @@ way) are one game, kept at its newest version, and of copies of that, the
 last heard (heard_times: p2p_now's); two hosts' games of one version stay
 apart. The game list's rule too (its one_per_version_set) */
 int p2p_listing_older_copy(const struct p2p_listing *games, const unsigned long *heard_times, int count, int index);
+/* how many hosts list a game of a newer network version, which is not
+shown (an old build sees none of the games) */
+int p2p_lobby_newer_games(void);
 /* a game the browser could not join: kept, marked failed, for this run */
 void p2p_lobby_mark_failed(const unsigned char *identifier);
 /* a locked game's invite (into its invite), if the password is its own:
@@ -270,6 +285,9 @@ int p2p_reach_player(const unsigned char *key_hash);
 /* whether the tunnel reaches the machine with this identifier, and the
 virtual address (network byte order) the game reaches it at */
 int p2p_peer_reached(const unsigned char *identifier, unsigned long *address);
+/* this network's NAT gives each destination its own port and no router
+forwards the tunnel's: only games behind more lenient NATs can be reached */
+int p2p_nat_strict(void);
 
 /* BLAKE2b with a 32-byte digest (Monocypher's): a map's pieces
 (map_share.c) */

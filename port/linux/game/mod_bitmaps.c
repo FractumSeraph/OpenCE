@@ -154,9 +154,7 @@ enum
 {
 	_bitmap_group_type_sprites = 3,
 	NUMBER_OF_BITMAP_GROUP_TYPES = 5,
-
-	/* (hud_draw.c's) */
-	_bitmap_group_half_hud_scale_bit = 4,
+	/* (_bitmap_group_half_hud_scale_bit: bitmap_group.h's) */
 };
 
 /* the HUD's digits' tag (hud_draw.c): their bitmap first */

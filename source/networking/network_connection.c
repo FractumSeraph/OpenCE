@@ -215,6 +215,7 @@ symbols in this file:
 #ifdef HALO_64BIT
 #include "networking/network_game_globals.h"
 #endif
+#include "networking/network_messages.h" /* port: NETWORK_GAME_CLIENT_PORT */
 
 /* ---------- constants */
 
@@ -318,6 +319,10 @@ static boolean network_client_reliable_connection_read(
 	void *message,
 	word *buffer_size,
 	struct transport_address *source_address);
+/* port: (below) */
+static word network_connection_datagram_port(
+	struct network_connection *connection,
+	word well_known_port);
 static struct network_connection *network_connection_create_client_from_endpoint(
 	struct transport_endpoint *reliable_endpoint);
 static boolean network_connection_idle_client_reliable_endpoint(
@@ -1239,7 +1244,9 @@ struct network_connection *network_connection_new(
 
 			address.address_length = IPV4_ADDRESS_LENGTH;
 			address.address.long_words[0] = 0;
-			address.port = well_known_port;
+			/* port: a client's free port, if another game has the client
+			port (network_connection_datagram_port) */
+			address.port = network_connection_datagram_port(connection, well_known_port);
 			connection->well_known_port = well_known_port;
 			if (!network_connection_bind_datagram_endpoint(
 					connection->unreliable_endpoint,
@@ -1288,6 +1295,22 @@ struct network_connection *network_connection_new(
 	}
 
 	return connection;
+}
+
+/* port: a client binds any free port when another game on this computer
+already has the client port. SO_REUSEADDR would let both bind it, and
+Windows would deliver the host's datagrams to only one of them. */
+static word network_connection_datagram_port(
+	struct network_connection *connection,
+	word well_known_port)
+{
+	if (TEST_FLAG(connection->flags, _connection_create_clientside_client_bit) &&
+		transport_udp_port_taken(well_known_port))
+	{
+		network_event("the client port %d is another game's; listening on another", well_known_port);
+		return 0;
+	}
+	return well_known_port;
 }
 
 static boolean network_client_reliable_connection_read(
@@ -1530,9 +1553,10 @@ boolean network_connection_disconnect(
 
 		address.address_length = IPV4_ADDRESS_LENGTH;
 		address.address.ipv4_address = 0;
-		address.port = connection->well_known_port;
-
 		delete_transport_endpoint(connection->unreliable_endpoint);
+		/* port: (network_connection_datagram_port, once the old endpoint
+		let the port go) */
+		address.port = network_connection_datagram_port(connection, connection->well_known_port);
 		connection->unreliable_address_valid = FALSE;
 		connection->unreliable_endpoint = create_transport_endpoint(_transport_type_udp);
 		success = connection->unreliable_endpoint &&

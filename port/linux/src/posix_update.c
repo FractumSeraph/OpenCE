@@ -537,12 +537,6 @@ static int https_get(const char *url, const char *form, const char *agent, struc
 		{
 			length = strtoull(value, NULL, 10);
 			have_length = 1;
-			if (length > MAXIMUM_DOWNLOAD_SIZE)
-			{
-				snprintf(error, (size_t)error_size, "the download from %s is too large", host);
-				connection_free(&connection);
-				return 0;
-			}
 		}
 		else if (!strcasecmp(line, "Transfer-Encoding") && strcasestr(value, "chunked"))
 		{

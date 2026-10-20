@@ -1332,6 +1332,10 @@ static void set_local_player_controls_from_player_profile(
 
 	switch (controls->button_preset)
 	{
+		/* port: a preset this build does not know (a later build's) gets
+		the standard buttons, not none, which moved start and back and
+		stopped the game (input_abstraction_update_local_player_preferences) */
+		default:
 		case _button_preset_standard:
 			preferences.game_control_to_xbox_buttons[0] = _gamepad_analog_button_a;
 			preferences.game_control_to_xbox_buttons[1] = _gamepad_analog_button_black;
