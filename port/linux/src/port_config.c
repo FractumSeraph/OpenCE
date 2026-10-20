@@ -2725,8 +2725,8 @@ written here), and another is said once in the log */
 static const struct
 {
 	const char *name;
-	/* NULL ended; "" where empty is one */
-	const char *words[8];
+	/* NULL ended; "" where empty is one (display.shield_color's are 19) */
+	const char *words[24];
 	/* what the game does with another, for the log (NULL: what reads the
 	setting says it) */
 	const char *otherwise;

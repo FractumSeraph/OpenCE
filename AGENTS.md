@@ -99,7 +99,8 @@ to nothing.
 
 ```sh
 python -m pytest -q tools/harness tools/test_touch_menu.py   # the engine's functions in a fake world
-python -m pytest -q tools/stagekit/tests                    # scenarios on the real engine, no retail assets (Linux)
+python -m pytest -q tools/stagekit/tests                    # OpenCE's scenarios on the real engine; not in this fork's
+                                                            # CI: its maps need OpenCE's cache_file_formats (ce_*.c here)
 python -m pytest -q tools/test_linux_port.py                # the build, the maps' checks (needs assets/maps)
 python -m pytest -q tools/test_profile.py tools/test_map_families.py tools/test_map_torrents.py tools/test_delta.py tools/test_bmp_files.py
 python -m pytest -q tools/test_mods.py                      # mods played over a map (needs assets/maps)
