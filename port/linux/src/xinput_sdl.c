@@ -42,6 +42,7 @@ drive the controller.
 #include "port_config.h"
 #include "touch_input.h"
 #include "halo_keyboard.h"
+#include "../game/network_rules.h"
 
 #include <SDL3/SDL.h>
 #include <math.h>
@@ -56,6 +57,8 @@ drive the controller.
 
 /* main/console.c */
 extern unsigned char console_is_active(void);
+/* the host's policy on the mouse's aiming assist (network_distributed.c) */
+extern unsigned char network_aim_assist_blocked(void);
 /* port/linux/game/menu_functions.c: two or more players on this machine
 (co-op, or split screen in a network game) */
 extern unsigned char pc_menu_split_players(void);
@@ -96,9 +99,8 @@ the touch controls (their swipe, gyroscope or stick: halo_linux_mouse_aiming,
 halo_linux_touch_aiming) */
 static Uint64 mouse_aimed_ms = 0;
 static Uint64 stick_aimed_ms = 0;
-#if defined(HALO_ANDROID) || defined(HALO_WEB)
+/* (and when a touch screen last looked: Android) */
 static Uint64 touch_aimed_ms = 0;
-#endif
 
 /* the right stick's deflection that counts as aiming with it, clear of a
 worn stick's drift */
@@ -247,6 +249,17 @@ int halo_linux_mouse_aiming(short gamepad_index)
 	{
 		read_at = config_changes();
 		aim_assist = config_boolean("input.mouse_aim_assist");
+	}
+	/* the host's policy (network.block_mouse_aim_assist, network_distributed.c)
+	turns the magnetism off for whoever aims with the mouse, whatever their
+	own setting: the mouse aims unless the right stick (or a touch) did last,
+	and no stick aiming at all is the mouse's */
+	if (network_aim_assist_blocked())
+	{
+		pthread_mutex_lock(&mouse_lock);
+		aiming = network_rules_mouse_is_aim_device(mouse_aimed_ms, stick_aimed_ms, touch_aimed_ms);
+		pthread_mutex_unlock(&mouse_lock);
+		return aiming;
 	}
 	if (aim_assist)
 		return FALSE;

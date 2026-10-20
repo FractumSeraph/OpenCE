@@ -86,6 +86,9 @@ symbols in this file:
 #include "game/players.h"
 #include "interface/hud.h"
 #include "interface/hud_definitions.h"
+#ifdef HALO_CUSTOM_EDITION
+#include "interface/hud_draw.h" /* port: hud_bitmap_group_scale */
+#endif
 #include "interface/hud_messaging.h"
 #include "interface/hud_unit.h"
 #include "interface/hud_weapon.h"
@@ -958,7 +961,12 @@ static void hud_draw_friendly_indicator(
 				bitmap,
 				&position,
 				&clip,
+#ifdef HALO_CUSTOM_EDITION
+				/* port: at its bitmap's HUD scale */
+				hud_bitmap_group_scale(interface_get_tag_index(_interface_bitmap_multiplayer_hud)),
+#else
 				1.0f,
+#endif
 				0.0f,
 				1.0f);
 		}
@@ -1180,7 +1188,15 @@ static void hud_draw_player_name(
 			interface_get_tag_index(_interface_bitmap_multiplayer_hud), 0, 0);
 
 		if (bitmap)
+		{
+#ifdef HALO_CUSTOM_EDITION
+			/* (the triangle drawn at its bitmap's HUD scale) */
+			y -= (short)(bitmap->registration_point.y *
+				hud_bitmap_group_scale(interface_get_tag_index(_interface_bitmap_multiplayer_hud)));
+#else
 			y -= bitmap->registration_point.y;
+#endif
+		}
 	}
 	y -= 2;
 	font = font_definition_get(font_index);

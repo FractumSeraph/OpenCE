@@ -131,6 +131,7 @@ is fine). Settings in the environment override it.
 | `HALO_NET_BROADCAST` | (the local network's) | Comma-separated addresses system link announces games to, instead of the local network's broadcast. |
 | `HALO_NET_PROTOCOL` | `auto` | Delta Peer ([docs/delta.md](../../docs/delta.md)), ChupathingyCE's messages beside OpenCE's protocol, on UDP port 5160 beside the game's 5150: `auto` speaks it with the machines that do (the rest play plain OpenCE); `opence` turns it off; `delta` is `auto` for now. |
 | `HALO_NET_HOST_PLATFORM_LIMITS` | `true` | Keep the game to the players its Delta machines' platforms take (an original Xbox: 16, unless its player opted out); `false` ignores them, for testing. |
+| `HALO_NET_BLOCK_MOUSE_AIM_ASSIST` | `false` | The server's policy on aiming assist for the mouse and keyboard: `false` leaves each player's own setting (`input.mouse_aim_assist`); `true` turns the view's magnetism off for players aiming with the mouse, in every game of the server. Clients are told when they join and when it changes (network version 32). |
 | `SSL_CERT_FILE` | the system's | The certificates the server checks halo.milenko.org's against, when they are somewhere unusual. |
 
 Players' addresses are left out of `debug.txt` and the output, as in the

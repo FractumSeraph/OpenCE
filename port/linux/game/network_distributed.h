@@ -125,6 +125,11 @@ enum
 	_distributed_message_map_share_offer = 84,
 	_distributed_message_map_share_sources = 85,
 	_distributed_message_map_share_progress = 86,
+	/* the host's policy on aiming assist for the mouse and keyboard, reliably
+	to a client when it has loaded and when the host's setting changes
+	(network.block_mouse_aim_assist): 12 bytes, the header and a 16-bit
+	value (1: blocked) and 16 bits of 0. 90 as in OpenCE's network version 32. */
+	_distributed_message_aim_assist_policy = 90,
 
 	NUMBER_OF_DISTRIBUTED_MESSAGES
 };
@@ -302,6 +307,12 @@ word network_votekick_request_entry_size(void);
 /* (a client) the host's count */
 void network_votekick_handle_status(void const *entries);
 word network_votekick_status_entry_size(void);
+
+/* whether the host's policy blocks the mouse and keyboard's aiming assist
+(the view's magnetism) now: the host's setting on a host, the host's word on
+a client (blocked until it speaks, or always allowed by a host of a version
+that has no such policy), never in single player or the menus */
+boolean network_aim_assist_blocked(void);
 
 /* ---------- prototypes/NETWORK_ACTORS.C */
 

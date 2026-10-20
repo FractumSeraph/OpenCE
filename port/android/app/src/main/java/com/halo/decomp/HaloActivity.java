@@ -10,6 +10,8 @@ import android.os.Build;
 import android.os.Bundle;
 import android.view.Display;
 import android.view.View;
+import android.view.InputDevice;
+import android.view.KeyEvent;
 import android.view.ViewGroup;
 import android.view.WindowInsets;
 import android.view.WindowManager;
@@ -23,6 +25,7 @@ import java.nio.charset.StandardCharsets;
 import android.view.WindowInsetsController;
 
 import org.libsdl.app.SDLActivity;
+import org.libsdl.app.SDLControllerManager;
 
 /**
  * The game: SDL3's activity, running libmain.so (port/android/host), which
@@ -218,8 +221,31 @@ public class HaloActivity extends SDLActivity {
             .show();
     }
 
+    /**
+     * the system back key (the button, or the back gesture) to the game, as
+     * the key SDL names AC_BACK, which the menus take as B (xinput_sdl.c).
+     * SDL hears keys only through its surface's key listener, so only while
+     * the surface has the focus; when it did not (after the touch controls'
+     * panels or a dialog took it), the key went to the activity, whose back
+     * SDL traps (SDL_ANDROID_TRAP_BACK_BUTTON), and nothing happened. A
+     * controller's back button and a mouse's back button go on as before
+     * (SDL's joystick and its mouse handling).
+     */
     @Override
-    protected void onResume() {
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (event.getKeyCode() == KeyEvent.KEYCODE_BACK &&
+            !SDLControllerManager.isDeviceSDLJoystick(event.getDeviceId()) &&
+            (event.getSource() & InputDevice.SOURCE_MOUSE) != InputDevice.SOURCE_MOUSE) {
+            if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0)
+                SDLActivity.onNativeKeyDown(KeyEvent.KEYCODE_BACK);
+            else if (event.getAction() == KeyEvent.ACTION_UP)
+                SDLActivity.onNativeKeyUp(KeyEvent.KEYCODE_BACK);
+            return true;
+        }
+        return super.dispatchKeyEvent(event);
+    }
+
+    @Override protected void onResume() {
         super.onResume();
         hideSystemBars();
         if (touchControls != null && getWindow().getDecorView().hasWindowFocus())

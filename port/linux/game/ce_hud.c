@@ -11,13 +11,13 @@ know, which are put right when the map's tags load:
     bitmap is twice the size of the one its Xbox counterpart draws (the
     shield meter's, the ammunition meters'), with the same scale. The Xbox
     draws a bitmap at its size times the scale (hud_draw.c), so a flagged
-    placement's scale is halved and the flag cleared. A bitmap may ask the
-    same of every element that draws it, by its "half HUD scale" or "force
-    HUD high resolution scale" flag (Invader's bitmap.json), and is drawn so
-    too. A number keeps its flag: its placement's scale is not its digits',
-    and hud_draw_numbers draws the digits at half size for it (or for digits
-    whose bitmap has the half HUD scale). (The bitmaps' flags and the
-    numbers' are OpenCE's, by MrBruh, adapted from Chimera, by SnowyMouse.)
+    placement's scale is halved and the flag cleared. Two bitmap flags made
+    since do the same from the bitmap an element draws: Chimera's "force HUD
+    use high resolution scale" draws it as if its placement had the flag,
+    and MCC's "0.5 HUD scale" halves its scale again, after that. (What the
+    HUD globals draw with no placement of their own to scale, the digits and
+    the waypoints' arrows, is scaled by those flags as it is drawn:
+    hud_bitmap_group_scale, hud_draw.c.)
   - A HUD meter's bitmap: the meter shader (rasterizer_xbox_dynavobgeom.c)
     compares the texel's color with the meter's value (the order the meter
     fills in) and draws only where there is alpha (its shape). Halo PC keeps
@@ -127,15 +127,17 @@ enum
 	WEAPON_HUD_ELEMENT_OFFSET = 0x24,
 	WEAPON_HUD_CROSSHAIRS_SIZE = 0x68,
 	WEAPON_HUD_OVERLAYS_SIZE = 0x68,
+	WEAPON_HUD_BITMAP_OFFSET = 0x24,
 	WEAPON_HUD_ITEMS_OFFSET = 0x34,
 	WEAPON_HUD_CROSSHAIR_ITEM_SIZE = 0x6c,
 	WEAPON_HUD_OVERLAY_ITEM_SIZE = 0x88,
 
 	/* the grenade HUD interface: its background, its count's background
-	and numbers, and its overlays' items */
+	and numbers, and its overlays' bitmap and items */
 	GRENADE_HUD_BACKGROUND_OFFSET = 0x24,
 	GRENADE_HUD_COUNT_BACKGROUND_OFFSET = 0x8c,
 	GRENADE_HUD_COUNT_NUMBERS_OFFSET = 0xf4,
+	GRENADE_HUD_OVERLAY_BITMAP_OFFSET = 0x14c,
 	GRENADE_HUD_OVERLAY_ITEMS_OFFSET = 0x15c,
 
 	/* the HUD globals' messages' placement, their icons' bitmap and their
@@ -145,19 +147,17 @@ enum
 	HUD_GLOBALS_BUTTON_ICONS_OFFSET = 0xc4,
 	HUD_GLOBALS_BUTTON_ICON_SIZE = 0x10,
 
-	/* a weapon HUD crosshair's or overlay's bitmap, and the grenade HUD
-	overlays' */
-	WEAPON_HUD_ITEMS_BITMAP_OFFSET = 0x24,
-	GRENADE_HUD_OVERLAY_BITMAP_OFFSET = 0x14c,
 	/* (an element of none: a number, the blips, the messages) */
 	NO_ELEMENT_BITMAP = -1,
 
 	/* a bitmap group: its flags, Halo PC's among them, its header, sequences
 	(each a block of sprites) and bitmaps */
-	BITMAP_GROUP_FLAGS_OFFSET = 0x06,
-	BITMAP_GROUP_HALF_HUD_SCALE_FLAG = 1 << 4,
-	BITMAP_GROUP_FORCE_HUD_HIGH_RESOLUTION_SCALE_FLAG = 1 << 7,
 	BITMAP_GROUP_SIZE = 0x6c,
+	BITMAP_GROUP_FLAGS_OFFSET = 0x06,
+	/* (its flags after the tag set's four: MCC's "0.5 HUD scale" and
+	Chimera's "force HUD use high resolution scale") */
+	BITMAP_GROUP_HALF_HUD_SCALE_FLAG = FLAG(_bitmap_group_half_hud_scale_bit),
+	BITMAP_GROUP_FORCE_HIGH_RESOLUTION_SCALE_FLAG = FLAG(_bitmap_group_force_hud_high_resolution_scale_bit),
 	BITMAP_GROUP_SEQUENCES_OFFSET = 0x54,
 	BITMAP_GROUP_BITMAPS_OFFSET = 0x60,
 	BITMAP_SEQUENCE_SIZE = 0x40,
@@ -348,52 +348,68 @@ static byte *ce_hud_reference_tag(
 	return ce_hud_tag_cache_pointer(instance->base_address, size);
 }
 
-/* whether the bitmap a tag reference names has Halo PC's half HUD scale or
-force HUD high resolution scale flag, which halve the scale of every HUD
-element drawing it */
-static boolean ce_hud_bitmap_halves_scale(
-	byte const *reference)
-{
-	byte const *bitmap_group = ce_hud_reference_tag(reference, 'bitm', BITMAP_GROUP_SIZE);
-
-	return bitmap_group && (*(unsigned short const *)(bitmap_group + BITMAP_GROUP_FLAGS_OFFSET) &
-		(BITMAP_GROUP_HALF_HUD_SCALE_FLAG | BITMAP_GROUP_FORCE_HUD_HIGH_RESOLUTION_SCALE_FLAG)) != 0;
-}
-
 /* a placement with the high resolution scale, or of an element whose
 bitmap halves its scale: drawn at half its scale */
+
+/* the bitmap group a tag reference names in this map's tags, or NULL */
+static byte *ce_hud_bitmap_group(
+	byte const *reference)
+{
+	long tag_index = (long)ce_hud_read_long(reference + TAG_REFERENCE_INDEX_OFFSET);
+	struct ce_tag_instance *instance;
+
+	if (tag_index == -1 || (tag_index & 0xffff) >= ce_hud_tag_count)
+		return NULL;
+	instance = (struct ce_tag_instance *)((byte *)ce_hud_tag_instances + (tag_index & 0xffff) * CE_TAG_INSTANCE_SIZE);
+	if (instance->group_tag != 'bitm' || instance->tag_index != (unsigned long)tag_index || !instance->base_address)
+		return NULL;
+	return xbox_pointer(instance->base_address);
+}
+
+/* a placement, drawing the bitmap the reference `bitmap` names (NULL: none):
+with the high resolution scale, its own or forced by its bitmap, drawn at
+half its scale, and with its bitmap's 0.5 HUD scale at half that */
 static void ce_hud_placement(
 	byte *placement,
-	boolean bitmap_halves_scale)
+	byte const *bitmap)
 {
 	unsigned short *flags = (unsigned short *)(placement + PLACEMENT_SCALING_FLAGS_OFFSET);
+	byte const *bitmap_group = bitmap ? ce_hud_bitmap_group(bitmap) : NULL;
+	unsigned short bitmap_flags = bitmap_group ?
+		*(unsigned short const *)(bitmap_group + BITMAP_GROUP_FLAGS_OFFSET) : 0;
+	float scale = 1.0f;
 
-	if ((*flags & PLACEMENT_HIGH_RESOLUTION_SCALE_FLAG) || bitmap_halves_scale)
+	if ((*flags & PLACEMENT_HIGH_RESOLUTION_SCALE_FLAG) ||
+		(bitmap_flags & BITMAP_GROUP_FORCE_HIGH_RESOLUTION_SCALE_FLAG))
 	{
-		*(float *)(placement + PLACEMENT_SCALE_X_OFFSET) *= 0.5f;
-		*(float *)(placement + PLACEMENT_SCALE_Y_OFFSET) *= 0.5f;
+		scale *= 0.5f;
+	}
+	if (bitmap_flags & BITMAP_GROUP_HALF_HUD_SCALE_FLAG)
+		scale *= 0.5f;
+	if (scale != 1.0f)
+	{
+		*(float *)(placement + PLACEMENT_SCALE_X_OFFSET) *= scale;
+		*(float *)(placement + PLACEMENT_SCALE_Y_OFFSET) *= scale;
 		*flags &= (unsigned short)~PLACEMENT_HIGH_RESOLUTION_SCALE_FLAG;
 		ce_hud_placements_halved++;
 	}
 }
 
-/* a static or meter element's placement (its start), its bitmap at
-ELEMENT_BITMAP_OFFSET */
-static void ce_hud_element(
+/* a static or meter element's placement, drawing its own bitmap */
+static void ce_hud_element_placement(
 	byte *element)
 {
-	ce_hud_placement(element, ce_hud_bitmap_halves_scale(element + ELEMENT_BITMAP_OFFSET));
+	ce_hud_placement(element, element + ELEMENT_BITMAP_OFFSET);
 }
 
-/* the placement at `offset` in each element of a block: an element drawing
-the bitmap `bitmap_offset` bytes after its placement (NO_ELEMENT_BITMAP:
-none of its own), halved too if bitmap_halves_scale */
+/* the placement at `offset` in each element of a block: a static or meter
+element's (each drawing its own bitmap), or another's, drawing `bitmap` */
 static void ce_hud_block_placements(
 	byte *block,
 	unsigned long element_size,
 	unsigned long offset,
-	long bitmap_offset,
-	boolean bitmap_halves_scale)
+	boolean elements,
+	byte const *bitmap)
 {
 	long count = (long)ce_hud_read_long(block + TAG_BLOCK_COUNT_OFFSET);
 	unsigned long address = ce_hud_read_long(block + TAG_BLOCK_ADDRESS_OFFSET);
@@ -405,13 +421,15 @@ static void ce_hud_block_placements(
 	{
 		byte *placement = (byte *)xbox_pointer(address) + index * element_size + offset;
 
-		ce_hud_placement(placement, bitmap_halves_scale ||
-			(bitmap_offset != NO_ELEMENT_BITMAP && ce_hud_bitmap_halves_scale(placement + bitmap_offset)));
+		if (elements)
+			ce_hud_element_placement(placement);
+		else
+			ce_hud_placement(placement, bitmap);
 	}
 }
 
 /* the items of each crosshair or overlay of a weapon HUD's block of them,
-halved too where the crosshair's or overlay's bitmap halves their scale */
+each drawing its crosshair's or overlay's bitmap */
 static void ce_hud_items_placements(
 	byte *block,
 	unsigned long element_size,
@@ -427,8 +445,8 @@ static void ce_hud_items_placements(
 	{
 		byte *element = (byte *)xbox_pointer(address) + index * element_size;
 
-		ce_hud_block_placements(element + WEAPON_HUD_ITEMS_OFFSET, item_size, 0, NO_ELEMENT_BITMAP,
-			ce_hud_bitmap_halves_scale(element + WEAPON_HUD_ITEMS_BITMAP_OFFSET));
+		ce_hud_block_placements(element + WEAPON_HUD_ITEMS_OFFSET, item_size, 0, FALSE,
+			element + WEAPON_HUD_BITMAP_OFFSET);
 	}
 }
 
@@ -451,7 +469,7 @@ static void ce_hud_bitmap_scale_flags_clear(
 		if (bitmap_group)
 		{
 			*(unsigned short *)(bitmap_group + BITMAP_GROUP_FLAGS_OFFSET) &=
-				(unsigned short)~(BITMAP_GROUP_HALF_HUD_SCALE_FLAG | BITMAP_GROUP_FORCE_HUD_HIGH_RESOLUTION_SCALE_FLAG);
+				(unsigned short)~(BITMAP_GROUP_HALF_HUD_SCALE_FLAG | BITMAP_GROUP_FORCE_HIGH_RESOLUTION_SCALE_FLAG);
 		}
 	}
 }
@@ -501,19 +519,13 @@ static void ce_hud_digits_halve(
 static void ce_hud_meter_bitmap(
 	byte const *element)
 {
-	long tag_index = (long)ce_hud_read_long(element + ELEMENT_BITMAP_OFFSET + TAG_REFERENCE_INDEX_OFFSET);
-	struct ce_tag_instance *instance;
-	byte *bitmap_group;
+	byte *bitmap_group = ce_hud_bitmap_group(element + ELEMENT_BITMAP_OFFSET);
 	long count;
 	unsigned long address;
 	long index;
 
-	if (tag_index == -1 || (tag_index & 0xffff) >= ce_hud_tag_count)
+	if (!bitmap_group)
 		return;
-	instance = (struct ce_tag_instance *)((byte *)ce_hud_tag_instances + (tag_index & 0xffff) * CE_TAG_INSTANCE_SIZE);
-	if (instance->group_tag != 'bitm' || instance->tag_index != (unsigned long)tag_index)
-		return;
-	bitmap_group = xbox_pointer(instance->base_address);
 	count = (long)ce_hud_read_long(bitmap_group + BITMAP_GROUP_BITMAPS_OFFSET + TAG_BLOCK_COUNT_OFFSET);
 	address = ce_hud_read_long(bitmap_group + BITMAP_GROUP_BITMAPS_OFFSET + TAG_BLOCK_ADDRESS_OFFSET);
 	if (count <= 0 || !address)
@@ -562,7 +574,6 @@ static void ce_hud_unit_interface(
 		UNIT_HUD_HEALTH_METER_OFFSET,
 		UNIT_HUD_MOTION_SENSOR_BACKGROUND_OFFSET,
 		UNIT_HUD_MOTION_SENSOR_FOREGROUND_OFFSET,
-		UNIT_HUD_BLIP_PLACEMENT_OFFSET,
 	};
 	unsigned long index;
 
@@ -573,18 +584,14 @@ static void ce_hud_unit_interface(
 	ce_hud_block_meter_bitmaps(hud + UNIT_HUD_AUXILARY_METERS_OFFSET, AUXILARY_METER_SIZE,
 		AUXILARY_METER_METER_OFFSET);
 	for (index = 0; index < NUMBEROF(placements); index++)
-	{
-		if (placements[index] == UNIT_HUD_BLIP_PLACEMENT_OFFSET)
-			ce_hud_placement(hud + placements[index], FALSE);
-		else
-			ce_hud_element(hud + placements[index]);
-	}
-	ce_hud_block_placements(hud + UNIT_HUD_AUXILARY_OVERLAYS_OFFSET, AUXILARY_OVERLAY_SIZE, 0,
-		ELEMENT_BITMAP_OFFSET, FALSE);
+		ce_hud_element_placement(hud + placements[index]);
+	/* (the blips' placement draws no bitmap of its own) */
+	ce_hud_placement(hud + UNIT_HUD_BLIP_PLACEMENT_OFFSET, NULL);
+	ce_hud_block_placements(hud + UNIT_HUD_AUXILARY_OVERLAYS_OFFSET, AUXILARY_OVERLAY_SIZE, 0, TRUE, NULL);
 	ce_hud_block_placements(hud + UNIT_HUD_AUXILARY_METERS_OFFSET, AUXILARY_METER_SIZE,
-		AUXILARY_METER_BACKGROUND_OFFSET, ELEMENT_BITMAP_OFFSET, FALSE);
+		AUXILARY_METER_BACKGROUND_OFFSET, TRUE, NULL);
 	ce_hud_block_placements(hud + UNIT_HUD_AUXILARY_METERS_OFFSET, AUXILARY_METER_SIZE,
-		AUXILARY_METER_METER_OFFSET, ELEMENT_BITMAP_OFFSET, FALSE);
+		AUXILARY_METER_METER_OFFSET, TRUE, NULL);
 }
 
 /* (its numbers keep their flags, which hud_draw_numbers reads) */
@@ -593,9 +600,13 @@ static void ce_hud_weapon_interface(
 {
 	ce_hud_block_meter_bitmaps(hud + WEAPON_HUD_METERS_OFFSET, WEAPON_HUD_METER_SIZE, WEAPON_HUD_ELEMENT_OFFSET);
 	ce_hud_block_placements(hud + WEAPON_HUD_STATICS_OFFSET, WEAPON_HUD_STATIC_SIZE, WEAPON_HUD_ELEMENT_OFFSET,
-		ELEMENT_BITMAP_OFFSET, FALSE);
+		TRUE, NULL);
 	ce_hud_block_placements(hud + WEAPON_HUD_METERS_OFFSET, WEAPON_HUD_METER_SIZE, WEAPON_HUD_ELEMENT_OFFSET,
-		ELEMENT_BITMAP_OFFSET, FALSE);
+		TRUE, NULL);
+	/* (numbers draw a HUD number tag's digits, spaced in its pixels, not a
+	bitmap of their own) */
+	ce_hud_block_placements(hud + WEAPON_HUD_NUMBERS_OFFSET, WEAPON_HUD_NUMBER_SIZE, WEAPON_HUD_ELEMENT_OFFSET,
+		FALSE, NULL);
 	ce_hud_items_placements(hud + WEAPON_HUD_CROSSHAIRS_OFFSET, WEAPON_HUD_CROSSHAIRS_SIZE,
 		WEAPON_HUD_CROSSHAIR_ITEM_SIZE);
 	ce_hud_items_placements(hud + WEAPON_HUD_OVERLAYS_OFFSET, WEAPON_HUD_OVERLAYS_SIZE, WEAPON_HUD_OVERLAY_ITEM_SIZE);
@@ -605,10 +616,11 @@ static void ce_hud_weapon_interface(
 static void ce_hud_grenade_interface(
 	byte *hud)
 {
-	ce_hud_element(hud + GRENADE_HUD_BACKGROUND_OFFSET);
-	ce_hud_element(hud + GRENADE_HUD_COUNT_BACKGROUND_OFFSET);
-	ce_hud_block_placements(hud + GRENADE_HUD_OVERLAY_ITEMS_OFFSET, WEAPON_HUD_OVERLAY_ITEM_SIZE, 0,
-		NO_ELEMENT_BITMAP, ce_hud_bitmap_halves_scale(hud + GRENADE_HUD_OVERLAY_BITMAP_OFFSET));
+	ce_hud_element_placement(hud + GRENADE_HUD_BACKGROUND_OFFSET);
+	ce_hud_element_placement(hud + GRENADE_HUD_COUNT_BACKGROUND_OFFSET);
+	ce_hud_placement(hud + GRENADE_HUD_COUNT_NUMBERS_OFFSET, NULL);
+	ce_hud_block_placements(hud + GRENADE_HUD_OVERLAY_ITEMS_OFFSET, WEAPON_HUD_OVERLAY_ITEM_SIZE, 0, FALSE,
+		hud + GRENADE_HUD_OVERLAY_BITMAP_OFFSET);
 }
 
 /* ---------- the placements, walked (ce_hud.h: the mods')
@@ -678,7 +690,7 @@ static void ce_hud_walk_weapon_items(
 	{
 		byte *element = (byte *)xbox_pointer(address) + index * element_size;
 
-		ce_hud_walk_items(element + WEAPON_HUD_ITEMS_OFFSET, item_size, element + WEAPON_HUD_ITEMS_BITMAP_OFFSET, walk);
+		ce_hud_walk_items(element + WEAPON_HUD_ITEMS_OFFSET, item_size, element + WEAPON_HUD_BITMAP_OFFSET, walk);
 	}
 }
 
@@ -1144,9 +1156,11 @@ void ce_hud_tags_loaded(
 	ce_hud_meter_bitmap_count = 0;
 	/* (the button icons first: a message icons bitmap's bitmaps are moved,
 	and the meters' are listed by where they are) */
+	/* (and the room above it, where the moved blocks may be:
+	ce_resources_allocate) */
 	image.data = xbox_pointer(CE_IMAGE_TAG_CACHE_BASE);
 	image.base = CE_IMAGE_TAG_CACHE_BASE;
-	image.size = CE_IMAGE_TAG_CACHE_SIZE;
+	image.size = CE_IMAGE_TAG_CACHE_SIZE + CE_CONVERSION_ROOM;
 	ce_hud_button_icon_group_count = 0;
 	for (index = 0; index < tag_count; index++)
 	{
@@ -1183,7 +1197,9 @@ void ce_hud_tags_loaded(
 			ce_hud_grenade_interface(hud);
 			break;
 		case 'hudg':
-			ce_hud_placement(hud + HUD_GLOBALS_MESSAGING_PLACEMENT_OFFSET, FALSE);
+			/* (the messages' placement places their text as well as
+			their icons: only its own flag scales it) */
+			ce_hud_placement(hud + HUD_GLOBALS_MESSAGING_PLACEMENT_OFFSET, NULL);
 			break;
 		case 'soso':
 			/* (a map made around Halo PC's reading of its model shaders'
@@ -1196,7 +1212,7 @@ void ce_hud_tags_loaded(
 			break;
 		}
 	}
-	error(_error_silent, "Custom Edition maps: %ld HUD placements at half their scale, %ld meter bitmaps sampled in "
+	error(_error_silent, "Custom Edition maps: %ld HUD placements at half their scale or less, %ld meter bitmaps sampled in "
 		"Halo PC's channels", ce_hud_placements_halved, ce_hud_meter_bitmap_count);
 	if (model_shaders_inverted)
 	{

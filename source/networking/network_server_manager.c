@@ -826,6 +826,12 @@ a datagram is matched to without asking every connection for its address
 (network_game_server_get_client_machine_at_address) */
 static unsigned long network_game_server_client_machine_addresses[MAXIMUM_NETWORK_MACHINE_COUNT];
 
+/* port: the port the last datagram of each joined client machine came from
+(0: none yet), which the host answers its per-tick datagrams at: a second
+game on one computer has a port of its own. Kept only of a datagram from the
+machine's own address (network_game_server_note_datagram_port). */
+static word network_game_server_client_machine_datagram_ports[MAXIMUM_NETWORK_MACHINE_COUNT];
+
 /* port: the update number up to which a machine that has loaded (at the
 start, or joining the game in progress) gets the host's game update every
 tick; after that once a second (network_game_server_update_ticks) */
@@ -1369,6 +1375,7 @@ struct network_game_server *network_game_server_create(
 				server->client_machines[i].machine_index = NONE;
 				server->client_machines[i].flags = 0;
 				network_game_server_client_machine_addresses[i] = 0;
+				network_game_server_client_machine_datagram_ports[i] = 0;
 				network_game_invalidate_machine(&server->game, i);
 			}
 
@@ -2327,6 +2334,7 @@ boolean network_game_server_accept_client_machine_into_game(
 					}
 				}
 				network_game_server_client_machine_addresses[machine_index] = address.address.long_words[0];
+				network_game_server_client_machine_datagram_ports[machine_index] = 0;
 				network_game_server_client_machine_join_times[machine_index] = system_milliseconds();
 				/* (its time played for votes starts over) */
 				network_votekick_machine_joined(machine_index);
@@ -3712,29 +3720,62 @@ struct network_game_server_client_machine *network_game_server_get_client_machin
 	unsigned long ip_address)
 {
 	struct network_game_server_client_machine *client_machine = NULL;
+	long pass;
 	long i;
 
 	match_assert(NETWORK_SERVER_MANAGER_FILE, 0x74D, server && ip_address);
 
 	/* port: from the addresses the machines joined from (every datagram
-	asked each machine's connection for its address) */
-	for (i = 0; i < MAXIMUM_NETWORK_MACHINE_COUNT; i++)
+	asked each machine's connection for its address). A second game on the
+	host's own computer has the host's own machine's address: the machine
+	that is not the host's own comes first, then any. */
+	for (pass = 0; pass < 2 && !client_machine; pass++)
 	{
-		/* (a machine in the game: not a connection that has not joined) */
-		if (network_game_server_client_machine_addresses[i] == ip_address &&
-			network_game_server_client_machine_is_joined_to_game(server, &server->client_machines[i]))
+		for (i = 0; i < MAXIMUM_NETWORK_MACHINE_COUNT; i++)
 		{
-			match_assert(NETWORK_SERVER_MANAGER_FILE, 0x755,
-				server->client_machines[i].connection);
+			/* (a machine in the game: not a connection that has not joined) */
+			if (network_game_server_client_machine_addresses[i] == ip_address &&
+				network_game_server_client_machine_is_joined_to_game(server, &server->client_machines[i]) &&
+				(pass == 1 || !network_game_server_client_machine_is_local(server, &server->client_machines[i])))
+			{
+				match_assert(NETWORK_SERVER_MANAGER_FILE, 0x755,
+					server->client_machines[i].connection);
 
-			client_machine = &server->client_machines[i];
-			break;
+				client_machine = &server->client_machines[i];
+				break;
+			}
 		}
 	}
 
 	/* (none: a datagram from a machine not in the game, which is dropped
 	without a line in the log for each) */
 	return client_machine;
+}
+
+/* port: a datagram of the machine came from this port of its address (the
+lookup by address found it, so the address is its own) */
+void network_game_server_note_datagram_port(
+	struct network_game_server *server,
+	struct network_game_server_client_machine *client_machine,
+	word port)
+{
+	long index = (long)(client_machine - server->client_machines);
+
+	if (port && index >= 0 && index < MAXIMUM_NETWORK_MACHINE_COUNT)
+	{
+		network_game_server_client_machine_datagram_ports[index] = port;
+	}
+}
+
+/* ... and the port to answer it at (0: none known, the client port) */
+word network_game_server_get_datagram_port(
+	struct network_game_server *server,
+	struct network_game_server_client_machine *client_machine)
+{
+	long index = (long)(client_machine - server->client_machines);
+
+	return index >= 0 && index < MAXIMUM_NETWORK_MACHINE_COUNT ?
+		network_game_server_client_machine_datagram_ports[index] : 0;
 }
 
 boolean network_game_server_game_can_start(
@@ -3916,6 +3957,7 @@ boolean network_game_server_remove_client_machine_from_game(
 			server->client_machines[i].machine_index = NONE;
 			server->client_machines[i].flags = 0;
 			network_game_server_client_machine_addresses[i] = 0;
+			network_game_server_client_machine_datagram_ports[i] = 0;
 			success = TRUE;
 			break;
 		}

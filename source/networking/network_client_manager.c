@@ -827,8 +827,21 @@ static struct
 	byte reserved[0x1A];
 } network_game_client_advertised_versions[MAXIMUM_NETWORK_ADVERTISED_GAMES];
 
+/* the joined game's host's network version, as it advertised it (0xFFFF: not
+known, the host's own game); a client has the host's policies of the versions
+that have them (network_distributed.c's aim assist policy, version 32) */
+static unsigned int network_game_client_joined_version = 0xFFFF;
+
+unsigned int network_game_client_host_network_version(
+	void)
+{
+	return network_game_client_joined_version;
+}
+
 
 #ifdef HALO_GAME_BROWSER
+/* port/linux/src/delta_peer_game.c's */
+int delta_peer_advertised_host_wire(unsigned char const *reserved, int size);
 /* port: the joined game's advertisement's flags (HALO_PORT_ADVERTISED_FLAGS_OFFSET),
 for Delta Peer (network_game_client_delta_frame); 0 for the host's own game */
 static byte network_game_client_joined_flags;
@@ -2157,6 +2170,24 @@ boolean network_game_client_initiate_join_game(
 	client->join_in_progress = TRUE;
 	client->connect_process = 0;
 	client->connection_attempt_time = system_milliseconds();
+	{
+		long advertised_index = game - client->available_games;
+
+		network_game_client_joined_version = advertised_index >= 0 && advertised_index < MAXIMUM_NETWORK_ADVERTISED_GAMES ?
+			network_game_client_advertised_versions[advertised_index].version : 0xFFFF;
+#ifdef HALO_GAME_BROWSER
+		/* (a host of a wire before the policies of version 32 cannot speak
+		them, whatever number it announces) */
+		if (advertised_index >= 0 && advertised_index < MAXIMUM_NETWORK_ADVERTISED_GAMES)
+		{
+			int wire = delta_peer_advertised_host_wire(network_game_client_advertised_versions[advertised_index].reserved,
+				(int)sizeof(network_game_client_advertised_versions[advertised_index].reserved));
+
+			if (wire && wire < 32)
+				network_game_client_joined_version = 0xFFFF;
+		}
+#endif
+	}
 #if defined(HALO_GAME_BROWSER) || defined(HALO_BROWSER)
 	/* (an advertised game's flags; the host's own game, joined through
 	127.0.0.1, is no advertised one) */
@@ -3253,8 +3284,9 @@ int delta_peer_advertised_wire_matches(unsigned char const *reserved, int size, 
 version is one this machine plays with (HALO_PORT_NETWORK_VERSION_MINIMUM
 to HALO_PORT_NETWORK_VERSION_MAXIMUM), and it plays the distributed netcode (a host of this version built before the lockstep
 netcode was removed may play that). A host and client that both speak Delta
-go by their game wire instead (port/linux/include/delta.h): the same wire
-joins whatever OpenCE numbers they announce, another is refused. If not the
+go by their game wire instead (port/linux/include/delta.h): a wire in this
+machine's compatible range (or one whose range has this machine's) joins
+whatever OpenCE numbers they announce, another is refused. If not the
 player is told why (when tell), and nothing is joined. */
 boolean network_game_client_advertised_game_compatible(
 	struct network_game_client *client,

@@ -1,5 +1,7 @@
 # Delta: ChupathingyCE's network family
 
+See also [Delta: compatibility](delta-compatibility.md), the design for how builds play together.
+
 Status (October 13, 2026, for 0.7.4e): in progress. Delta List, Stats, Link
 and Control run under the names in the table below; the legacy number's
 table and its signed loader are built, and the cross-play gate that
@@ -647,6 +649,51 @@ What each side checks, since 0.7.5a:
   since it was set two past the number (30 for 28). The join logs
   "presumed additive", so a report from such a game says so.
 
+### Wire compatibility ranges
+
+Since 0.8.0a a wire is not an island. `DELTA_WIRE_COMPATIBILITY` in
+`delta.h` gives each wire the oldest wire it plays the game with, without a
+desync and without losing what the older wire has: a feature the older wire
+lacks is dropped or unused with it, and content it can't play ends the join
+cleanly. `chupa-32a` plays with `chupa-28a` and newer (OpenCE's 30 to 32 are
+additive: a machine of 29 drops message 90 and ignores the co-op input byte;
+31's keep-alive, stamp window and stream-only messages were already in 29);
+`chupa-29a` plays with `chupa-28a`. A row is written with its release and
+never changed: a build can't learn of a newer one, so a host also says its
+range in its advertisement.
+
+**The advertisement.** A Delta host still writes its major and a wire in the
+old slot (`DELTA_ADVERTISED_WIRE_OFFSET`), but the wire there is its *oldest
+compatible wire that a released client knows* (from
+`DELTA_WIRE_FIRST_ADVERTISED`, `chupa-29a`, the first wire advertised), so a
+released client, which compares the slot for an exact match, joins. After the
+slot, in six reserved bytes that were free (`DELTA_ADVERTISED_RANGE_OFFSET`,
+`DELTA_ADVERTISED_RANGE_SIZE`), come the range bytes:
+
+| Byte | Meaning |
+| --- | --- |
+| 0 | layout version, 1 |
+| 1, 2 | the host's own wire: its number and its letter (32, 'a') |
+| 3, 4 | its oldest compatible wire: number and letter (28, 'a') |
+| 5 | a check: 0xA5 xor the five bytes before |
+
+All zero when absent. OpenCE's machines, and released builds, leave and
+ignore them.
+
+**The client's decision** (`delta_compat_decide`): it joins when the host's
+own wire is in the client's range (the client's oldest to its own), or the
+client's wire is in the host's range; without valid range bytes, when the old
+slot's wire is the client's own (the rule since 0.7.5a). It refuses, naming
+both wires, only when neither holds. A host of another major, or one without
+the slot, is joined by its OpenCE number, as before.
+
+**The cost of one slot.** A released client that checks the slot exactly sees
+the host's oldest compatible wire, `chupa-29a` for a 0.8.0a host: 0.7.5
+players join it, and 0.8.0's (`chupa-32a`, an exact-match client, out for a
+few hours before 0.8.0a) see another wire until they update. 0.8.0a and later
+read the range bytes and join both. The 32 row's first OpenCE build is
+build-244.
+
 ### Following policy
 
 ChupathingyCE has its own code and roadmap. Since October 9, 2026 it takes no
@@ -701,7 +748,10 @@ breaking:
 	X(26, "build-184", additive) /* internet play's signalling, version 4 (WebRTC, for browsers; p2p_signal.c reads 3 and 4); game messages as 25 */ \
 	X(27, "build-189", additive) /* Custom Edition map sharing's messages (a machine of 26 drops them); game messages as 25 */ \
 	X(28, "build-201", additive) /* no message changed: a script's switch_bsp keeps a multiplayer game's first, the flashlight past the Xbox limits, a second weapon readied while firing (wire chupa-28a) */ \
-	X(29, "build-206", additive) /* a Custom Edition map by its own name, its hash's first 32 bits its version in the game record (a client of 29 also takes 28's hashed names and header checksums; wire chupa-29a) */
+	X(29, "build-206", additive) /* a Custom Edition map by its own name, its hash's first 32 bits its version in the game record (a client of 29 also takes 28's hashed names and header checksums; wire chupa-29a) */ \
+	X(30, "build-206", additive) /* elevator riders carried by the tick's own movement, a host takes only the across of a client's word on a unit riding an elevator (moving, or stood on at rest), a client discards the height of a correction on its elevator up to 4.0 */ \
+	X(31, "build-206", additive) /* the pregame keep-alive's fourth byte pair sent as zero and the packet table's field lists on their own messages, datagrams stamped more than 450 ticks from the sender's latest dropped, client_ready, client_identity and hit reports taken from a stream alone, a second game on one computer (its own port) */ \
+	X(32, "build-244", additive) /* the host's policy on aiming assist for the mouse and keyboard (message 90), a client's input saying whether its player plays co-op without friendly fire (wire chupa-32a) */
 ```
 
 `tools/test_delta.py` (in CI) checks `halo_port_limits.h` against it: hosts
@@ -743,6 +793,9 @@ Known history, from `port/linux/NETCODE.md` and OpenCE's commits:
 | 27 | build-189 | OpenCE's Custom Edition map sharing: new messages, which a machine of 26 drops (we don't share maps: a joining machine without the map is told which one it misses, as before). Signalling as 26, a token joined more than once | additive |
 | 28 | build-201 | no message, kind or struct changed: a multiplayer script's `switch_bsp` keeps the game's first BSP (a map with a copy of its place per sky no longer reloads), the flashlight and dynamic lights stay on past the Xbox's player and vehicle limits, and a second weapon picked up while firing is readied. A release (wire `chupa-28a`), so older builds' wire never gets a row for it: a host of 27 would reload such a map while its OpenCE clients of 28 kept it | additive |
 | 29 | build-206 | no message or struct changed, but two fields mean something else: a Custom Edition map's level name is its own (`custom_maps\hugeass`, not `custom_maps\hugeass_<8 hex digits>`), and the game record's map version is the first 32 bits of the map's whole-file hash, where 23 to 28 sent its header checksum. Our clients of 29 take both meanings, so they still join hosts of 28; our clients of 28 refuse a host of 29's Custom Edition map as another version (Xbox maps play). A release (wire `chupa-29a`), so older builds' wire never gets a row for it: a host of 28 sends the header checksum, which OpenCE's clients of 29 take for another version | additive |
+| 30 | | A rule every machine computes alike: the riders of an elevator are carried by its node's movement of the tick (sampled before the machine updates, applied once its node matrices are made), not the previous tick's, which went the wrong way on the tick an elevator reversed. A host takes only the across of a client's word on a unit riding an elevator, one that is moving or that the unit stands on at rest (a remembered elevator alone, after a jump, is not riding); a client discards the height of the host's correction while it stands on the elevator it recorded, up to 4.0 world units. No message changed: a machine of 29 carries riders a tick late, and its host's states correct them | additive |
+| 31 | | The pregame keep-alive is a 4-byte message whose last two bytes are 0 (they were the sender's stack), and the packet table lists begin game, graceful exit and keep-alive each with its own fields (the bytes of the others as before). A datagram stamped more than 450 ticks (15 seconds) from the latest taken from its sender is dropped; over a sender's stream any stamp is taken. client_ready, client_identity and hit reports are taken from a client's stream alone. A second game on one computer: a client takes any free port if the client port is in use, and the host answers a machine at the port its datagrams came from, finds a client by address preferring a machine that is not its own, and answers a game search from another port at that port. Message layouts as before | additive |
+| 32 | | The host's policy on aiming assist for the mouse and keyboard, a new message (90, 12 bytes, reliable: the header, 0 or 1 as a 16-bit value, 16 bits of 0), sent to a client when it has loaded and to every client when the setting (`network.block_mouse_aim_assist`) changes; a client honors it, and is blocked until a host of 32 or later speaks. A client's input entry says in byte 2 (padding before) whether its player plays co-op without friendly fire; our hosts read it and keep their own friendly fire setting. A release (wire `chupa-32a`), so older builds' wire never gets a row for it. A machine of 29 to 31 drops message 90 and ignores the byte. The rows' first builds are not recorded (the table keeps 29's) | additive |
 
 **In FractumSeraph's fork:** the same numbers, and its `p2p_signal.c` is
 OpenCE's with both versions read and written (`MESSAGE_VERSION_OLD`), so it
@@ -1295,7 +1348,7 @@ check it too):
 - **`serial`**: 1 to 4294967294 (0xFFFFFFFF says "takes no tables" on the wire); each table published gets a higher one.
   **`issued`**: when it was made (Unix seconds), for people; optional.
 - **Rows by wire, not by build.** Each build has a wire ID (`DELTA_WIRE` in
-  `delta.h`, `chupa-29a` today; `chupa-28a` was 0.7.4e's and 0.7.5's, `chupa-26a` was 0.7.2e's and 0.7.3e's, `chupa-24a` was 0.7.1e's, `chupa-23a` 0.7.1b's, `chupa-20a` 0.7.0b's): the revision of the game protocol it
+  `delta.h`, `chupa-32a` today; `chupa-29a` came before it; `chupa-28a` was 0.7.4e's and 0.7.5's, `chupa-26a` was 0.7.2e's and 0.7.3e's, `chupa-24a` was 0.7.1e's, `chupa-23a` 0.7.1b's, `chupa-20a` 0.7.0b's): the revision of the game protocol it
   actually speaks. A row says which OpenCE numbers that wire was proven to
   play with: the number a host announces, and the range of hosts' numbers a
   client joins (each 1 to 65535, `minimum <= announce <= maximum`). An old

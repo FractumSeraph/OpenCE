@@ -1130,6 +1130,12 @@ short set_endpoint_blocking(
 	return error;
 }
 
+void set_endpoint_exclusive(
+	struct transport_endpoint *ep)
+{
+	SET_FLAG(ep->flags, _transport_endpoint_exclusive_bit, TRUE);
+}
+
 short bind_endpoint(
 	struct transport_endpoint *ep,
 	struct transport_address *address)
@@ -1162,6 +1168,12 @@ short bind_endpoint(
 			if (ep->socket == INVALID_SOCKET)
 			{
 				error = _transport_error_unknown;
+			}
+			else if (TEST_FLAG(ep->flags, _transport_endpoint_exclusive_bit))
+			{
+				int option = FALSE;
+
+				setsockopt(ep->socket, SOL_SOCKET, SO_REUSEADDR, (char const *)&option, sizeof(option));
 			}
 		}
 	}

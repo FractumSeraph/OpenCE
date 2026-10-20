@@ -1661,6 +1661,23 @@ static void settings_help(struct widget_instance *list)
 		if (label != NONE)
 			index = label + 1;
 	}
+	/* (Button Layout set to Bumper Jumper: its own help, after the rows': the
+	last string, one for each row before it) */
+	if (index && row)
+	{
+		struct widget_instance *spinner = named(row, "button_preset_spinner", 0);
+
+		if (spinner && spinner->parameters.list.selected_index == _button_preset_bumper_jumper)
+		{
+			struct widget_instance *each;
+			short rows = 0;
+
+			for (each = list->child; each; each = each->next)
+				if (each->child && each->child->type == 1 && strncmp(each->name, "button", 6))
+					rows++;
+			index = (short)(rows + 1);
+		}
+	}
 	help->parameters.text_box.string_list_index = index;
 }
 
@@ -1837,11 +1854,16 @@ static void profile_gamepad_layout(struct widget_instance *picture)
 	short frame = picture->animation.current_frame_index;
 
 	if (frame == PROFILE_GAMEPAD_FRAME ||
-		(frame >= PROFILE_FIRST_LAYOUT_FRAME && frame < PROFILE_FIRST_LAYOUT_FRAME + NUMBER_OF_BUTTON_PRESETS))
+		(frame >= PROFILE_FIRST_LAYOUT_FRAME && frame < PROFILE_FIRST_LAYOUT_FRAME + _button_preset_bumper_jumper))
 	{
-		picture->animation.current_frame_index = (short)(PROFILE_FIRST_LAYOUT_FRAME +
-			(profile && profile->controller_settings.button_preset < NUMBER_OF_BUTTON_PRESETS ?
-				profile->controller_settings.button_preset : _button_preset_standard));
+		/* (the Xbox's map has a picture for its five layouts: Bumper Jumper's
+		is the plain gamepad's) */
+		if (profile && profile->controller_settings.button_preset == _button_preset_bumper_jumper)
+			picture->animation.current_frame_index = PROFILE_GAMEPAD_FRAME;
+		else
+			picture->animation.current_frame_index = (short)(PROFILE_FIRST_LAYOUT_FRAME +
+				(profile && profile->controller_settings.button_preset < _button_preset_bumper_jumper ?
+					profile->controller_settings.button_preset : _button_preset_standard));
 	}
 }
 
@@ -1857,9 +1879,12 @@ static void chupathingy_settings_picture(struct widget_instance *picture)
 
 	if (picture->animation.current_frame_index == PROFILE_GAMEPAD_FRAME)
 	{
-		picture->animation.current_frame_index = (short)(CHUPATHINGY_FIRST_LAYOUT_FRAME +
-			(profile && profile->controller_settings.button_preset < NUMBER_OF_BUTTON_PRESETS ?
-				profile->controller_settings.button_preset : _button_preset_standard));
+		if (profile && profile->controller_settings.button_preset == _button_preset_bumper_jumper)
+			picture->animation.current_frame_index = PROFILE_GAMEPAD_FRAME;
+		else
+			picture->animation.current_frame_index = (short)(CHUPATHINGY_FIRST_LAYOUT_FRAME +
+				(profile && profile->controller_settings.button_preset < _button_preset_bumper_jumper ?
+					profile->controller_settings.button_preset : _button_preset_standard));
 	}
 }
 
@@ -3906,7 +3931,8 @@ static void browser_games_read(void)
 			struct advertised_game *game = &games[index];
 
 			if (network_game_client_advertised_game_is_valid(game) && !advertised_in_progress(game) == (pass == 0) &&
-				game_from_peer(game) == (multiplayer.mode == _multiplayer_mode_direct_link))
+				game_from_peer(game) == (multiplayer.mode == _multiplayer_mode_direct_link) &&
+				(game_from_peer(game) || !browser_map_is_campaign(game->map_name)))
 			{
 				multiplayer.games[multiplayer.game_count++] = game;
 			}
@@ -4388,6 +4414,9 @@ static short lobby_browser_valid_games(struct p2p_listing *games, short count)
 		wchar_t name[P2P_LISTING_NAME_SIZE + 1];
 		short index;
 
+		/* (no co-op games in a server browser) */
+		if (browser_map_is_campaign(games[read].map))
+			continue;
 		text_to_wide(games[read].name, name, NUMBEROF(name));
 		if (!player_name_clean(name, NUMBEROF(name)))
 			continue;
@@ -4561,12 +4590,19 @@ static void lobby_browser_add_listed(void)
 {
 	/* (its gametypes as a listing names them) */
 	static char const *const gametypes[] = { "Game", "CTF", "Slayer", "Oddball", "King", "Race", "Bomb" };
-	short index;
+	short index, kept;
 
 	lobby_browser_listed.count = 0;
 	if (!p2p_native_online() || !config_boolean("network.public_lobby"))
 		return;
 	lobby_browser_listed.count = (short)browser_get_games(lobby_browser_listed.games, BROWSER_MAXIMUM_GAMES);
+	/* (no co-op games in a server browser) */
+	for (index = kept = 0; index < lobby_browser_listed.count; index++)
+	{
+		if (!browser_map_is_campaign(lobby_browser_listed.games[index].map))
+			lobby_browser_listed.games[kept++] = lobby_browser_listed.games[index];
+	}
+	lobby_browser_listed.count = kept;
 	for (index = 0; index < lobby_browser_listed.count; index++)
 	{
 		struct browser_game const *listed = &lobby_browser_listed.games[index];

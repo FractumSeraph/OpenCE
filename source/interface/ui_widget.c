@@ -1552,6 +1552,7 @@ short local_player_index_for_draw_string_and_hack_in_icons;
 /* port: draw_string_and_hack_in_icons draws a widget's text (the menus'
 keys for the buttons, not the game's: input_abstraction_port_icon_key) */
 static boolean draw_string_icons_for_menus = FALSE;
+short draw_string_and_hack_in_icons_end_x = 0;
 
 /* January defines this and never references it, as we do not */
 real const _one_over_255 = 1.0f / 255.0f;
@@ -2689,6 +2690,11 @@ static void widget_instance_give_focus_by_tag(
 	return;
 }
 
+/* a list watched for the player stepping it with left/right (the Xbox-style
+controls screen watches its layout spinner) */
+struct widget_instance *g_list_widget_watched = NULL;
+boolean g_list_widget_watched_stepped = FALSE;
+
 boolean widget_event_function_list_widget_goto_next_item(
 	struct widget_instance *widget,
 	struct event_record *event,
@@ -2703,6 +2709,8 @@ boolean widget_event_function_list_widget_goto_next_item(
 		"c:\\halo\\SOURCE\\interface\\ui_widget.c",
 		1230,
 		widget);
+	if (widget == g_list_widget_watched)
+		g_list_widget_watched_stepped = TRUE;
 	definition = ui_widget_definition_get(widget->definition_tag_index);
 	match_vassert(
 		"c:\\halo\\SOURCE\\interface\\ui_widget.c",
@@ -2855,6 +2863,8 @@ boolean widget_event_function_list_widget_goto_previous_item(
 		"c:\\halo\\SOURCE\\interface\\ui_widget.c",
 		1359,
 		widget);
+	if (widget == g_list_widget_watched)
+		g_list_widget_watched_stepped = TRUE;
 	definition = ui_widget_definition_get(widget->definition_tag_index);
 	match_vassert(
 		"c:\\halo\\SOURCE\\interface\\ui_widget.c",
@@ -4505,6 +4515,7 @@ void draw_string_and_hack_in_icons(
 	}
 	if (current)
 		render_state_text(bounds, &cursor_bounds, current);
+	draw_string_and_hack_in_icons_end_x = cursor_bounds.x0;
 	draw_string_set_indents(0, 0);
 
 	return;
@@ -6240,21 +6251,17 @@ static short ui_mouse_key_button(
 		{ "start_butn", _gamepad_binary_button_start },
 		{ "back_butn", _gamepad_binary_button_back },
 	};
-	struct ui_widget_definition const *definition = ui_widget_definition_get(widget->definition_tag_index);
-	/* the widget's own name, then its picture's: the Chupathingy menus'
-	prompts are chupathingy\prompts\a and so on, drawn with
-	chupathingy\prompts\a_butn (port/assets/menus/chupathingy/prompts.xml),
-	which a tap did not take, so that their settings pages had no way back
-	without a pad or keys */
-	char const *names[2];
-	long name_index;
+	long tag_indices[2];
+	long tag;
 
-	names[0] = tag_get_name(widget->definition_tag_index);
-	names[1] = definition && definition->background_bitmap.index != NONE ?
-		tag_get_name(definition->background_bitmap.index) : NULL;
-	for (name_index = 0; name_index < NUMBEROF(names); name_index++)
+	/* the widget's name (ui.map's prompts, "a_butn"), or its picture's (the
+	Chupathingy menus' prompts are "chupathingy\\prompts\\a", drawn from
+	"chupathingy\\prompts\\a_butn": chupathingy/prompts.xml) */
+	tag_indices[0] = widget->definition_tag_index;
+	tag_indices[1] = ui_widget_definition_get(widget->definition_tag_index)->background_bitmap.index;
+	for (tag = 0; tag < NUMBEROF(tag_indices); tag++)
 	{
-		char const *name = names[name_index];
+		char const *name = tag_indices[tag] != NONE ? tag_get_name(tag_indices[tag]) : NULL;
 		char const *leaf = name ? strrchr(name, '\\') : NULL;
 		long key_index;
 
