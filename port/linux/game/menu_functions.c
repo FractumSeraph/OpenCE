@@ -1660,6 +1660,10 @@ static boolean settings_accept(struct widget_instance *list, struct event_record
 	if (name && !strncmp(name, "pc\\chupathingy\\settings\\", strlen("pc\\chupathingy\\settings\\")) &&
 		strstr(name, "\\op_"))
 	{
+		/* (this page's changes kept first: its ACCEPT prompt is this A too,
+		and comes back to the category's row) */
+		settings_each(screen_of(list), setting_changed_save);
+		platform_display_apply();
 		ui_widget_port_dispatch_event(row, BUTTON_A, event_controller(list, event), widget_deleted);
 		return FALSE;
 	}
