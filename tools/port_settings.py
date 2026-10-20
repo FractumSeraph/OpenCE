@@ -720,6 +720,7 @@ def chupathingy_settings_pages() -> list:
     lines = ['<?xml version="1.0" encoding="UTF-8"?>',
              "<!-- The Chupathingy menus' settings pages, in the Xbox's look (tools/port_settings.py) -->",
              "<menus>"]
+    category_rows = []
     for folder in CHUPATHINGY_PAGES:
         base = f"{PE}/{folder}"
         if folder == "controls_setup":
@@ -736,8 +737,26 @@ def chupathingy_settings_pages() -> list:
         else:
             spec = SCREENS[folder]
             rows = [(f"{base}/op_{key}", platform, place) for key, platform, place in _setting_places(spec)]
+            # (this fork) the rows of its categories (Video Setup's Graphics and
+            # the rest), after its own, each opening the category's page here as
+            # the PC screens' open theirs. A on such a row opens it: the list
+            # takes A before its rows, so "port settings accept"
+            # (port/linux/game/menu_functions.c) hands it to the row
+            last = max((place for *_, place in rows), default=-1)
+            for index, (label, category_folder, _, *category_platform) in enumerate(spec.get("categories", ())):
+                key = category_folder.rsplit("/", 1)[-1]
+                row = f"{CHUPATHINGY}/{folder}/op_{key}"
+                platform = category_platform[0] if category_platform else None
+                target = f"{CHUPATHINGY}/{category_folder}_screen"
+                rows.append((row, platform, last + 1 + index))
+                category_rows += _widget(row, [("width", 512), ("height", 28), ("flags", "pass_unhandled_to_focused_child"),
+                                               ("bitmap", "bitmaps/option_bkds"), ("color", "#FF2896FF"),
+                                               ("platform", platform)],
+                                         [f'<on event="a" open="{target}"/>', f'<on event="start" open="{target}"/>',
+                                          '<on event="left_mouse" run="mouse emit accept event"/>',
+                                          f'<child widget="{base}/{key}_label"/>'])
             inputs = ["port settings help"]
-            handlers = ['<on event="a" run="port settings save" back="true"/>',
+            handlers = ['<on event="a" run="port settings accept" back="true"/>',
                         '<on event="y" run="port settings defaults"/>']
             prompts = (_xbox_prompt("y", 60, "defaults") + _xbox_prompt("b", 360, "cancel") +
                        _xbox_prompt("a", 490, "accept"))
@@ -755,7 +774,7 @@ def chupathingy_settings_pages() -> list:
                          [("type", "column_list"), ("width", 640), ("height", 480),
                           ("flags", "pass_unhandled_to_focused_child up_down_tabs_children"),
                           ("description", f"{base}/help")], children)
-    return lines + ["</menus>", ""]
+    return lines + category_rows + ["</menus>", ""]
 
 
 def replaced(folder: str) -> bool:

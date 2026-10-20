@@ -18,6 +18,7 @@ and the deterministic camera used for shooting keeps its original view.
 #include "physics/collisions.h"
 #include "render/render.h"
 #include "render/render_cameras.h"
+#include "render/render_cameras_internal.h" /* (render_camera_world_to_screen) */
 #include "tag_files/tag_groups.h"
 #include "units/unit_definitions.h"
 #include "units/units.h"

@@ -322,6 +322,14 @@ void platform_video_swap(void)
 {
 }
 
+/* (OpenCE's HDR output, d3d8_gl.c: no window, so none) */
+BOOL platform_video_hdr(float *sdr_white, float *headroom)
+{
+	*sdr_white = 1.0f;
+	*headroom = 1.0f;
+	return FALSE;
+}
+
 void platform_mouse_capture(BOOL capture)
 {
 	(void)capture;

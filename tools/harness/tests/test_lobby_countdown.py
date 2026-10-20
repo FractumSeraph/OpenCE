@@ -18,7 +18,9 @@ FUNCTIONS = (
     "countdown_timer_update", "countdown_timer_get_time_remaining", "countdown_timer_increment",
     "countdown_timer_decrement", "countdown_timer_set_time_remaining",
     "network_game_server_get_client_machine_count", "server_needs_more_teams",
-    "server_has_enough_machines", "server_players_on_one_machine", "server_ok_to_countdown",
+    "server_has_enough_machines", "server_players_on_one_machine",
+    # (this fork's: a player on each machine, and one with the map)
+    "server_has_a_player_on_each_machine", "server_has_a_player_with_the_map", "server_ok_to_countdown",
     "network_game_server_update_countdown",
 )
 CONSTANTS = (
@@ -37,10 +39,10 @@ NEGATIVE_CONTROLS = {
         ("else if ((short)player->machine_index != first_machine_index)", "else if (0)"),
         "server_players_on_one_machine", "two-machines-team-game-needs-both-teams",
     ),
-    "no-player-counts": (
-        ("return first_machine_index != NONE;", "return TRUE;"),
-        "server_players_on_one_machine", "empty-lobby-waits",
-    ),
+    # (no "no-player-counts" control, server_players_on_one_machine taking an
+    # empty lobby for one machine's: this fork's countdown also waits for a
+    # player who has the map, server_has_a_player_with_the_map, which an
+    # empty lobby has not, so empty-lobby-waits cannot see that fault alone)
     "joined-machines-counted": (
         (
             "return first_machine_index != NONE;",

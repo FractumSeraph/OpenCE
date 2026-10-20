@@ -59,6 +59,7 @@ and each bot's kills and deaths; debug.bot_trace logs each bot's state.
 */
 
 #include "cseries.h"
+#include "cseries/cseries_windows.h"
 #include "game/game.h"
 #include "game/game_engine.h"
 #include "game/players.h"
@@ -731,7 +732,7 @@ static void bots_add_roam_point(real_point3d const *point)
 static void bots_paths_release(void)
 {
 	if (bots_paths.walkable)
-		free(bots_paths.walkable);
+		system_free(bots_paths.walkable);
 	csmemset(&bots_paths, 0, sizeof(bots_paths));
 }
 
@@ -830,12 +831,13 @@ static boolean bots_paths_copy(void)
 	if (bots_paths.walkable)
 		return TRUE;
 	count = structure->pathfinding_surfaces.count;
-	bots_paths.walkable = (byte *)malloc((size_t)count);
+	/* (the game's heap, in the Xbox address space: the copy's block points at it) */
+	bots_paths.walkable = (byte *)system_malloc(count);
 	if (!bots_paths.walkable)
 		return FALSE;
-	csmemcpy(bots_paths.walkable, structure->pathfinding_surfaces.address, (size_t)count);
+	csmemcpy(bots_paths.walkable, XBOX_POINTER(void, structure->pathfinding_surfaces.address), (size_t)count);
 	bots_paths.structure = *structure;
-	bots_paths.structure.pathfinding_surfaces.address = bots_paths.walkable;
+	bots_paths.structure.pathfinding_surfaces.address = XBOX_ADDRESS(bots_paths.walkable);
 	bots_paths.source = structure;
 	return TRUE;
 }

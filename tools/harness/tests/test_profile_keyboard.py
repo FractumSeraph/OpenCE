@@ -30,6 +30,9 @@ def generated(fault=False):
     if fault == 'held-enter':
         # (closing the keyboard no longer holds back the Enter that closed it)
         code = mutated(code, 'text_typing_enter_blocked = TRUE;', 'text_typing_enter_blocked = FALSE;')
+        # (and the keys held over the keyboard's closing, OpenCE's guard of
+        # the same Enter, which alone would still hold it back)
+        code = mutated(code, '(text_typing ? 2 : 0)', '0')
     setter = function(vk, 'virtual_keyboard_set_active')
     if fault is True:
         setter = mutated(setter, 'platform_text_typing(active);', 'if (active) platform_text_typing(active);')

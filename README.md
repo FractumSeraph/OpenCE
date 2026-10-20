@@ -82,8 +82,11 @@ then [ChupathingyCE's](#chupathingyce), then [OpenCE's](#opence).
 Where the two projects do the same thing two ways, the fork keeps one
 working version; nothing sent over the network differs from theirs, so
 players of all three play together: this fork's builds speak network
-version 29, as OpenCE's and ChupathingyCE's newest do, and join hosts of
-versions 11 to 30, in either project's form (`docs/delta.md`).
+version 32, as OpenCE's and ChupathingyCE's newest do, and join hosts of
+versions 11 to 33, in either project's form (`docs/delta.md`). Both
+projects' text chats are one here: ChupathingyCE's is the one typed and
+shown, and OpenCE players' lines reach it and its lines reach them, on a
+host of either (`port/linux/game/chat.c`, "OpenCE's text chat, bridged").
 
 ## Download
 

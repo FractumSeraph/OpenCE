@@ -62,6 +62,7 @@ say a line from their own text box (xinput_sdl.c, platform_web_chat_say).
 #include "../src/delta_moderation.h"
 
 #include "chat.h"
+#include "network_chat.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -451,6 +452,10 @@ static void line_heard(struct delta_wire_chat_line const *line)
 
 /* ---------- the host's */
 
+/* (port, this fork: OpenCE's chat, bridged; below) */
+static short player_of_list_index(long list_index);
+static boolean bridge_routing_opence_line;
+
 /* every machine of the game that may hear a line, sent it; the host's own
 player shown it */
 static int route(struct delta_wire_chat_line const *line, short speaker_team, boolean teams)
@@ -489,6 +494,26 @@ static int route(struct delta_wire_chat_line const *line, short speaker_team, bo
 		else if (delta_peer_game_chat_line(machine, line))
 			sent++;
 	}
+	/* port (this fork): and to OpenCE's machines, in OpenCE's chat
+	(network_chat.c), unless the line is one of theirs */
+	if (!bridge_routing_opence_line)
+	{
+		char text[DELTA_WIRE_CHAT_TEXT_SIZE + 1];
+
+		snprintf(text, sizeof(text), "%.*s", line->length, line->text);
+		if (line->kind == _delta_chat_kind_server || line->kind == _delta_chat_kind_system)
+			network_chat_bridge_relay_notice(text);
+		else if (line->speaker_player != 255)
+		{
+			short player = player_of_list_index(line->speaker_player);
+
+			if (player != NONE)
+			{
+				network_chat_bridge_relay(player, line->scope == _delta_chat_scope_team ? _chat_channel_team :
+					_chat_channel_everyone, text);
+			}
+		}
+	}
 	return sent;
 }
 
@@ -520,6 +545,115 @@ static int host_line(int machine_index, int scope, char const *text, int length)
 	csmemcpy(line.text, text, line.length);
 	route(&line, player_team(game, player), teams);
 	return _delta_chat_refused_none;
+}
+
+/* ---------- OpenCE's text chat, bridged (port, this fork)
+
+OpenCE's builds have a text chat of their own (network_chat.c: the lines go
+to the host over the netcode, which sends them on). This machine types and
+shows this chat (Delta's) and carries OpenCE's lines in it, so that OpenCE's
+players and Chupathingy's read each other:
+- a host sends its own lines, and its Chupathingy machines', to OpenCE's
+  machines too (route: network_chat_bridge_relay), and an OpenCE machine's
+  line, which network_chat.c takes as OpenCE's host would (its rate, the
+  host's settings), to its Chupathingy machines (chat_bridge_host_route),
+  showing both here;
+- a client of a Chupathingy host leaves the host's OpenCE copies of its lines
+  (chat_bridge_host_speaks_delta), which it has from this chat;
+- a client of an OpenCE host says its lines in OpenCE's chat and shows the
+  host's here (say, may_talk, chat_bridge_heard).
+OpenCE's own keys are unbound by default (controls.chat, controls.team_chat)
+and its lines are drawn here, not by network_chat_draw. A vehicle's line of
+OpenCE's is a team's here. */
+
+/* a player's (the player table's absolute index) record; NULL */
+static struct player_datum *player_of_index(short player_index)
+{
+	struct data_iterator iterator;
+	struct player_datum *player;
+
+	if (player_index < 0 || !player_data)
+		return NULL;
+	data_iterator_new(&iterator, player_data);
+	while ((player = (struct player_datum *)data_iterator_next(&iterator)) != NULL)
+	{
+		if ((short)DATUM_INDEX_TO_ABSOLUTE_INDEX(iterator.datum_index) == player_index)
+			return player;
+	}
+	return NULL;
+}
+
+/* the player (the player table's absolute index) of a network player list
+index; NONE */
+static short player_of_list_index(long list_index)
+{
+	struct data_iterator iterator;
+	struct player_datum *player;
+
+	if (list_index < 0 || !player_data)
+		return NONE;
+	data_iterator_new(&iterator, player_data);
+	while ((player = (struct player_datum *)data_iterator_next(&iterator)) != NULL)
+	{
+		if (player->network_player_data.player_list_index == list_index)
+			return (short)DATUM_INDEX_TO_ABSOLUTE_INDEX(iterator.datum_index);
+	}
+	return NONE;
+}
+
+/* a line of OpenCE's chat as this one's; FALSE without its player */
+static boolean bridge_line(struct delta_wire_chat_line *line, short player_index, short channel, char const *text)
+{
+	struct player_datum *player = player_of_index(player_index);
+
+	if (!player)
+		return FALSE;
+	csmemset(line, 0, sizeof(*line));
+	line->kind = _delta_chat_kind_player;
+	line->scope = (unsigned char)(channel == _chat_channel_everyone ? _delta_chat_scope_all : _delta_chat_scope_team);
+	line->speaker_machine = (unsigned char)player->network_player_data.machine_index;
+	line->speaker_player = (unsigned char)player->network_player_data.player_list_index;
+	line->name_length = wide_to_utf8(player->name, NUMBEROF(player->name), line->name, (int)sizeof(line->name));
+	line->length = (int)MIN(strlen(text), (size_t)DELTA_WIRE_CHAT_TEXT_SIZE);
+	csmemcpy(line->text, text, line->length);
+	return TRUE;
+}
+
+void chat_bridge_heard(short player_index, short channel, char const *text)
+{
+	struct delta_wire_chat_line line;
+
+	if (bridge_line(&line, player_index, channel, text))
+		line_heard(&line);
+}
+
+void chat_bridge_notice(char const *text)
+{
+	note(text);
+}
+
+int chat_bridge_host_route(short player_index, short channel, char const *text)
+{
+	struct network_game *game = chat_game();
+	struct delta_wire_chat_line line;
+	struct player_datum *player = player_of_index(player_index);
+	int blocked;
+
+	if (!game || !player || !bridge_line(&line, player_index, channel, text))
+		return FALSE;
+	/* (as host_line decides a line of this chat's) */
+	blocked = chat.host_filtering && delta_chat_filter_check(&chat.host_filter, line.text, line.length, NULL, 0) > 0;
+	if (delta_chat_host_decide(chat.host_mode, line.scope, game_teams(game), FALSE, blocked))
+		return FALSE;
+	bridge_routing_opence_line = TRUE;
+	route(&line, player_team(game, player->network_player_data.player_list_index), game_teams(game));
+	bridge_routing_opence_line = FALSE;
+	return TRUE;
+}
+
+int chat_bridge_host_speaks_delta(void)
+{
+	return delta_peer_game_role() == 1 && delta_peer_game_chat_ready();
 }
 
 static int hook_say(void *context, int machine_index, int scope, char const *text, int length)
@@ -709,6 +843,16 @@ static void say(short scope, char const *text, int length)
 		return;
 	}
 	chat.sent_scope = scope;
+	/* port (this fork): a host without this chat but with OpenCE's: said in
+	OpenCE's, whose host sends it back to be shown (chat_bridge_heard) */
+	if (role != 2 && !chat_bridge_host_speaks_delta() && network_chat_bridge_available())
+	{
+		char line[DELTA_WIRE_CHAT_TEXT_SIZE + 1];
+
+		snprintf(line, sizeof(line), "%.*s", length, text);
+		network_chat_say(scope == _delta_chat_scope_team ? _chat_channel_team : _chat_channel_everyone, line);
+		return;
+	}
 	if (role == 2)
 	{
 		int reason = host_line(network_game_client_get_local_machine_index(), scope, text, length);
@@ -729,6 +873,10 @@ static boolean may_talk(short scope)
 
 	if (!config_boolean("chat.enabled"))
 		return FALSE;
+	/* port (this fork): an OpenCE host's chat (network_chat.c), when the host
+	has none of this one */
+	if (role != 2 && !chat_bridge_host_speaks_delta() && network_chat_bridge_available())
+		return TRUE;
 	if (role == 1 && !delta_peer_game_chat_ready())
 	{
 		if (!chat.said_no_host)

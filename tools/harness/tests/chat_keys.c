@@ -40,6 +40,9 @@ static BOOL chat_typing;
 static BOOL chat_escape_pressed;
 static boolean console_active;
 #define console_is_active() console_active
+/* (OpenCE's text chat, network_chat.c, types nothing where chat.c is built:
+its lines are bridged into this one) */
+static unsigned char network_chat_typing(void) { return 0; }
 
 /* the platform's queue of key events (sdl_platform.c) */
 static struct platform_keystroke queue[64];

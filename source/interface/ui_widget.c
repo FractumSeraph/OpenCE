@@ -701,6 +701,8 @@ boolean moderation_screen_active(void);
 void moderation_screen_update(boolean menu_open);
 void moderation_screen_process(void);
 void moderation_screen_render(void);
+/* (this fork) its prompts take the menus' pointer too */
+void moderation_screen_pointer(struct halo_ui_pointer const *pointer);
 /* the menus' pointer, while it is up (its own taps and clicks) */
 void browser_screen_pointer(struct halo_ui_pointer const *pointer);
 /* port: the question before joining a clipboard's invite
@@ -7198,11 +7200,14 @@ static void ui_widgets_process_mouse(
 		invite_prompt_pointer(&pointer);
 	else if (pointer_active && !keyboard_active && browser_screen_active())
 		browser_screen_pointer(&pointer);
+	/* port (this fork): the moderation screen's prompts (B: Back) */
+	else if (pointer_active && !keyboard_active && moderation_screen_active())
+		moderation_screen_pointer(&pointer);
 #endif
 	if (!pointer_active || keyboard_active
 #ifdef HALO_GAME_BROWSER
 		/* (nor over Online Games: a click left in the queue would pick a game) */
-		|| browser_screen_active() || invite_prompt_active()
+		|| browser_screen_active() || invite_prompt_active() || moderation_screen_active()
 #endif
 		/* port: (nor under a map's download screen, which hides the menus) */
 		|| download_screen_active()

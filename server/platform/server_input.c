@@ -154,6 +154,23 @@ void test_input_hold_fire(int hold)
 	(void)hold;
 }
 
+/* (OpenCE's text chat, network_chat.c, and network_test.c's menu steps: no
+pad and no touch controls here) */
+unsigned long halo_chat_pad_buttons(void)
+{
+	return 0;
+}
+
+int halo_chat_touch_layout(void)
+{
+	return 0;
+}
+
+void test_input_press(unsigned long buttons)
+{
+	(void)buttons;
+}
+
 /* ---------- XAPI */
 
 VOID WINAPI XInitDevices(DWORD preallocation_type_count, PXDEVICE_PREALLOC_TYPE preallocation_types)

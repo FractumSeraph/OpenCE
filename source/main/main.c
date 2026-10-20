@@ -3602,13 +3602,12 @@ static boolean main_loop_iteration(
 #if defined(HALO_GAME_BROWSER) || defined(HALO_BROWSER)
 			/* text chat (port/linux/game/chat.c; the browser's too) */
 			chat_update();
-#else
-			/* port: network games' text chat (port/linux/game/network_chat.c);
-			where chat.c is built, it is the chat typed and shown, on the same keys,
-			and network_chat.c only takes and relays the lines that come over the
-			network (network_distributed.c) */
-			network_chat_update();
 #endif
+			/* port: network games' text chat (port/linux/game/network_chat.c,
+			OpenCE's); where chat.c is built, chat.c's is the chat typed and
+			shown, and network_chat.c only carries OpenCE machines' lines to and
+			from it (chat.c, "OpenCE's text chat, bridged") */
+			network_chat_update();
 			/* changing teams during a game (port/linux/game/team_change.c) */
 			team_change_update();
 			profile_scope_enter(main_network_start_frame_section)

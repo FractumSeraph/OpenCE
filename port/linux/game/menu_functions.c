@@ -85,6 +85,7 @@ their handlers open opens.
 #include "saved games/player_profile.h"
 #include "saved games/saved_game_files.h"
 #include "tag_files/tag_groups.h"
+#include "tag_files/tag_files.h"
 #include "text/text_group.h"
 #include "text/unicode.h"
 
@@ -1640,6 +1641,30 @@ static boolean setting_changed_save(struct widget_instance *spinner, struct pc_m
 	}
 	platform_log("menus: %s = %s", setting->setting, setting->values[index]);
 	setting->loaded_index = index;
+	return TRUE;
+}
+
+/* "port settings accept" (this fork): the Chupathingy menus' settings pages'
+A (tools/port_settings.py's chupathingy_settings_pages), which their list
+takes before its rows. On a row that opens a page of its own (a category's,
+"chupathingy/settings/<page>/op_<category>": Video Setup's Graphics and the
+rest) the row's A opens that page, and FALSE keeps the handler from going back
+(as lobby_join_start does); on any other row the page is saved, as "port
+settings save", and the handler goes back */
+static boolean settings_accept(struct widget_instance *list, struct event_record *event, boolean *widget_deleted)
+{
+	struct widget_instance *row = list->focused_child;
+	char const *name = row ? tag_get_name(row->definition_tag_index) : NULL;
+
+	/* (the port's menus' tags are named "pc\\" and their name: menu_tags.c) */
+	if (name && !strncmp(name, "pc\\chupathingy\\settings\\", strlen("pc\\chupathingy\\settings\\")) &&
+		strstr(name, "\\op_"))
+	{
+		ui_widget_port_dispatch_event(row, BUTTON_A, event_controller(list, event), widget_deleted);
+		return FALSE;
+	}
+	settings_each(screen_of(list), setting_changed_save);
+	platform_display_apply();
 	return TRUE;
 }
 
@@ -7513,6 +7538,10 @@ boolean pc_menu_event_function_invoke(
 		{
 			settings_each(screen_of(widget), setting_changed_save);
 			platform_display_apply();
+		}
+		else if (!strcmp(name, "port settings accept"))
+		{
+			return settings_accept(widget, event, widget_deleted);
 		}
 		else if (!strcmp(name, "port settings defaults"))
 		{

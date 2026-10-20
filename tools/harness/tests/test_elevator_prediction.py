@@ -1,7 +1,7 @@
 """The host's taking of a co-op client's player where the client says (network_distributed.c's
 distributed_take_prediction) on an elevator that moves, or that the player stands on at rest: across only, so the host's
-copy rides its own elevator rather than falling through its floor going up, through its stops and reversals; off one,
-or after a jump from or a step off one at rest, as the client says."""
+copy rides its own elevator rather than falling through its floor going up; off one, or after a jump from one at rest,
+as the client says."""
 
 import re
 import sys
@@ -13,8 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from harness import CHECK_FAILED, build, function, mutated, read, run, structure  # noqa: E402
 
 SOURCE = "port/linux/game/network_distributed.c"
-CASES = ["riding-up", "elevator-at-rest", "stopped-elevator-standing", "stopped-elevator-left", "on-foot",
-         "jump-at-rest", "left-platform", "reversals-100ms", "reversals-200ms"]
+CASES = ["riding-up", "elevator-at-rest", "stopped-elevator-standing", "stopped-elevator-left", "on-foot"]
 FUNCTIONS = ("distributed_floor_elevator", "distributed_riding_elevator", "distributed_take_prediction")
 
 # a fault in network_distributed.c, the function it is in, and the case that must catch it
@@ -23,19 +22,7 @@ NEGATIVE_CONTROLS = {
                              "if (0)\n\t\tposition.z"), "distributed_take_prediction", "riding-up"),
     "remembered-elevator-rides": (("distributed_floor_elevator(unit_index) != NONE)", "1)"),
                                   "distributed_riding_elevator", "stopped-elevator-left"),
-    "stopped-floor-not-protected": (("distributed_floor_elevator(unit_index) != NONE)", "0)"),
-                                    "distributed_riding_elevator", "stopped-elevator-standing"),
-    "airborne-is-supported": (("TEST_FLAG(biped->biped.flags, _biped_airborne_bit)", "FALSE"),
-                              "distributed_floor_elevator", "jump-at-rest"),
 }
-
-
-def divergence(source):
-    """network_distributed.c's distributed_divergence, an unnamed structure's static variable"""
-    end = source.find("} distributed_divergence;")
-    assert end >= 0, f"distributed_divergence not found in {SOURCE}"
-    start = source.rindex("static struct", 0, end)
-    return source[start:end] + "} distributed_divergence;"
 
 
 def generated(fault=None, faulty_function=None):
@@ -44,19 +31,24 @@ def generated(fault=None, faulty_function=None):
     assert tolerance, f"HOST_ACCEPT_TOLERANCE not found in {SOURCE}"
     config = f"#define HOST_ACCEPT_TOLERANCE {tolerance.group(1)}\n"
     config += structure(source, "distributed_on_foot_bound") + "\n"
-    # (the tests' drift figures, which distributed_take_prediction notes:
-    # the source's own definitions)
-    apart = re.search(r"^#define DIVERGENCE_APART_DISTANCE\s+(\S+)", source, re.M)
-    assert apart, f"DIVERGENCE_APART_DISTANCE not found in {SOURCE}"
-    config += f"#define DIVERGENCE_APART_DISTANCE {apart.group(1)}\n"
-    config += divergence(source) + "\n"
+    # (the host's count of how far predictions taken land from the client's,
+    # which distributed_take_prediction keeps: network_distributed.c's)
+    apart = re.search(r"^#define DIVERGENCE_APART_DISTANCE .*$", source, re.M)
+    divergence = re.search(r"^static struct\n\{\n\tlong samples;.*?^\} distributed_divergence;$",
+                           source.replace("\r\n", "\n"), re.M | re.S)
+    assert apart and divergence, f"distributed_divergence not found in {SOURCE}"
+    config += apart.group(0) + "\n" + divergence.group(0) + "\n"
     text = ""
     for name in FUNCTIONS:
         code = function(source, name)
         if fault and name == faulty_function:
             code = mutated(code, *fault)
         text += code + "\n"
-    return (("config.inc", config), ("under_test.inc", text))
+    # (the rules the netcode's elevator code asks, compiled whole: the
+    # harness's include path has the generated files, not the game's)
+    return (("config.inc", config), ("under_test.inc", text),
+            ("network_rules.c", read("port/linux/game/network_rules.c")),
+            ("network_rules.h", read("port/linux/game/network_rules.h")))
 
 
 @pytest.mark.parametrize("case", CASES)

@@ -45,6 +45,8 @@ def generated(fault=None, faulty_function=None):
     checks_header = read("port/linux/game/ce_map_checks.h")
     config = enum_with(checks_header, "CE_IMAGE_TAG_CACHE_BASE") + "\n"
     config += structure(checks_header, "ce_tag_instance") + "\n"
+    # (the room above the tag cache for converted models: none here)
+    config += "#define CE_CONVERSION_ROOM 0UL\n"
     config += structure(checks_header, "ce_image") + "\n"
     config += enum_with(read("source/bitmaps/bitmap_group.h"), "_bitmap_group_half_hud_scale_bit") + "\n"
     config += enum_with(source, "PLACEMENT_SCALE_X_OFFSET") + "\n"

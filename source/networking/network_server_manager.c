@@ -3584,8 +3584,7 @@ boolean server_has_a_player_on_each_machine(
 }
 
 /**
- * @brief Whether enough machines joined to start: two, or one for a
- * splitscreen game or with debug.solo_game.
+ * @brief Whether enough machines joined to start: the host's own.
  * @param server the server whose game is asked about
  * @return TRUE if the game may start with the machines that joined
  */
@@ -3593,9 +3592,12 @@ boolean server_has_enough_machines(
 	struct network_game_server *server)
 {
 	boolean has_enough_machines;
-	long minimum_machine_count =
-		network_game_solo_game() ||
-		network_game_is_splitscreen_local() ? 1 : 2;
+	/* port: a system link or internet game starts with the host's machine
+	alone, and others join it in progress (OpenCE's 6b1d81c7, which an
+	earlier merge of this fork had lost to the Xbox's two, or one for a
+	split screen game or debug.solo_game; the players are counted by
+	server_ok_to_countdown) */
+	long minimum_machine_count = 1;
 	long machine_count = 0;
 	long client_machine_index;
 
@@ -4817,22 +4819,6 @@ void network_game_server_port_set_cooperative_player_collisions(
 	SET_FLAG(server->game.cooperative_flags, _network_game_cooperative_no_player_collisions_bit, !player_collisions);
 	if (server->state == _network_game_server_state_pregame && !network_game_server_send_game_data_pregame(server))
 		network_event("network_game_server_port_set_cooperative_player_collisions() failed to send updated game settings to clients");
-}
-
-/* port: a game a host runs afresh. A machine that asked to join as the last
-game ended, before the server switched to the pregame, is left waiting behind
-the one it holds (server->queued_player): the server refuses every later join
-with "network_game_add_player() failed" and sits in the lobby for good
-(network_test.c's host, which starts the next game by itself: the dedicated
-servers). */
-void network_game_server_port_clear_queued_players(
-	struct network_game_server *server)
-{
-	if (server)
-	{
-		server->queued_player_valid = FALSE;
-		server->waiting_player_count = 0;
-	}
 }
 
 /* port: a gametype's PC options: the menus' (player_ui_set_game_variant_options)

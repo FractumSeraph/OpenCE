@@ -209,6 +209,12 @@ static const struct config_setting config_settings[] =
 		"shield's own) or a multiplayer armor color: white, black, red, blue,\n"
 		"gray, yellow, green, pink, purple, cyan, cobalt, orange, teal, sage,\n"
 		"brown, tan, maroon or salmon." },
+	{ "display.overshield_effect", _config_boolean, "false", "HALO_OVERSHIELD_EFFECT", _environment_value, _platform_all,
+		"The overshield as this machine draws it: its flare rising up the body as\n"
+		"it charges (2 seconds, 3 from a shield that was down) and staying lit,\n"
+		"its energy slower, in its own color (the powerup's), on the first-person\n"
+		"arms too with viewmodel_shield; a hit on it plays what the projectile\n"
+		"plays on an Elite's shield. Only what is drawn and heard changes." },
 
 	{ "display.far_clip_distance", _config_real, "1024.0", "HALO_FAR_CLIP_DISTANCE", _environment_value, _platform_all,
 		"How far the world is drawn: 1024 as on the Xbox, up to 10000. Raise\n"
@@ -271,8 +277,6 @@ static const struct config_setting config_settings[] =
 		"with this port's fonts and redrawn pictures, not Halo PC's files. Read\n"
 		"when the game starts: restart it after a change." },
 #endif
-		"The menus: \"pc\" for the PC version's main menu (port/assets/menus,\n"
-		"and a menus folder here for your own), \"xbox\" for the Xbox's." },
 	{ "display.menu_language", _config_string, "\"maps\"", "HALO_MENU_LANGUAGE", _environment_value, _platform_all,
 		"The PC menus' language: \"maps\" for the language of the Custom Edition\n"
 		"whose loc.map is in custom_maps (as that edition shows them; English\n"
@@ -286,6 +290,13 @@ static const struct config_setting config_settings[] =
 	{ "display.player_name_scale", _config_real, "1.0", "HALO_PLAYER_NAME_SCALE", _environment_value, _platform_all,
 		"How large the players' names are drawn: 1.0 three quarters of the size of\n"
 		"the HUD's text, 0.25 to 4." },
+	{ "display.text_chat", _config_boolean, "true", "HALO_TEXT_CHAT", _environment_value, _platform_all,
+		"Show the text chat of network games: false hides its lines and keeps\n"
+		"its keys (and a controller's D-pad Up) from opening it, as for purists\n"
+		"and streamers." },
+	{ "display.chat_style", _config_string, "\"colors\"", "HALO_CHAT_STYLE", _environment_value, _platform_all,
+		"The text chat's colours: \"colors\" (names in their team's colour, the\n"
+		"text a pale blue) or \"white\" (all white, as Custom Edition)." },
 	{ "display.follow_camera", _config_string, "\"long_waits\"", "HALO_FOLLOW_CAMERA", _environment_value,
 		_platform_all,
 		"In multiplayer, when a dead player's camera follows a living player\n"
@@ -477,8 +488,6 @@ static const struct config_setting config_settings[] =
 		"The button prompts of the HUD and menus (\"Hold [E] to pick up\") show\n"
 		"the bound key, as Halo PC's did, while the keyboard or mouse was used\n"
 		"last; false always shows the controller's buttons." },
-	{ "network.block_mouse_aim_assist", _config_boolean, "false", "HALO_NET_BLOCK_MOUSE_AIM_ASSIST", _environment_value,
-		_platform_all, "Host: disable optional mouse magnetism for mouse/keyboard players. Controllers and touch keep their own assist." },
 	{ "input.mouse_aim_assist", _config_boolean, "false", "HALO_MOUSE_AIM_ASSIST", _environment_value, _platform_desktop,
 		"Magnetism while aiming with the mouse, as with a controller: the view\n"
 		"slowed and dragged along by a target. The last of the mouse and the\n"
@@ -667,13 +676,6 @@ static const struct config_setting config_settings[] =
 		"(each folder moved whole, never copied; one that cannot be moved stays\n"
 		"where it is); \"yes\": moved without asking; \"no\": left where they are.\n"
 		"Android moves them unless this is \"no\"." },
-	{ "display.text_chat", _config_boolean, "true", "HALO_TEXT_CHAT", _environment_value, _platform_all,
-		"Show the text chat of network games: false hides its lines and keeps\n"
-		"its keys (and a controller's D-pad Up) from opening it, as for purists\n"
-		"and streamers." },
-	{ "display.chat_style", _config_string, "\"colors\"", "HALO_CHAT_STYLE", _environment_value, _platform_all,
-		"The text chat's colours: \"colors\" (names in their team's colour, the\n"
-		"text a pale blue) or \"white\" (all white, as Custom Edition)." },
 	{ "game.custom_edition", _config_boolean, "true", "HALO_CUSTOM_EDITION", _environment_value, _platform_all,
 		"Play Halo PC maps (not those that need OpenSauce): Custom Edition's in\n"
 		"maps_ce (with Custom Edition's bitmaps.map, sounds.map and loc.map),\n"
@@ -689,12 +691,6 @@ static const struct config_setting config_settings[] =
 		"it asks once, \"Use the new settings\" or \"Keep mine\", and writes 1 here.\n"
 		"Keep mine writes your old values into this file. A new file has the new\n"
 		"defaults and is not asked. The dedicated server never asks." },
-		"Load and run Halo Custom Edition maps (not those that need OpenSauce):\n"
-		"put them and Custom Edition's bitmaps.map, sounds.map and loc.map in\n"
-		"the custom_maps folder beside the maps folder; the map lists show them\n"
-		"as CUSTOM SINGLEPLAYER and CUSTOM MULTIPLAYER. Their tags are checked\n"
-		"as the game's own maps' are before they run; false refuses them\n"
-		"(docs/custom_edition_caches.md)." },
 	{ "bots.count", _config_integer, "0", "HALO_BOTS", _environment_value, _platform_all,
 		"Computer players (bots) in a local (split screen) Slayer game: 0 to 15\n"
 		"join its lobby with the players, as far as the game has room. Not in\n"
@@ -705,12 +701,6 @@ static const struct config_setting config_settings[] =
 	{ "bots.teams", _config_string, "\"even\"", "HALO_BOT_TEAMS", _environment_value, _platform_all,
 		"In team games: \"even\" puts the bots on both teams, evening them with\n"
 		"the players; \"against\" puts them all on the team the players are not on." },
-	{ "display.overshield_effect", _config_boolean, "false", "HALO_OVERSHIELD_EFFECT", _environment_value, _platform_all,
-		"The overshield as this machine draws it: its flare rising up the body as\n"
-		"it charges (2 seconds, 3 from a shield that was down) and staying lit,\n"
-		"its energy slower, in its own color (the powerup's), on the first-person\n"
-		"arms too with viewmodel_shield; a hit on it plays what the projectile\n"
-		"plays on an Elite's shield. Only what is drawn and heard changes." },
 
 
 
@@ -946,6 +936,14 @@ static const struct config_setting config_settings[] =
 		"\"on\", \"shields_only\" or \"explosives_only\" (FRIENDLY FIRE in\n"
 		"co-op's Server Setup > Co-op Options writes its choice here). Their AI\n"
 		"allies they always can, as in the campaign." },
+	{ "network.block_mouse_aim_assist", _config_boolean, "false", "HALO_NET_BLOCK_MOUSE_AIM_ASSIST", _environment_value,
+		_platform_all,
+		"The host's policy on aiming assist for the mouse and keyboard in a\n"
+		"game it hosts: false, each player's own setting\n"
+		"(input.mouse_aim_assist) decides; true, the view's magnetism is off\n"
+		"for a player aiming with the mouse in the game, whatever their\n"
+		"setting. The players' own settings are never changed. The host's\n"
+		"clients are told when they join and when this changes." },
 	{ "network.coop_own_friendly_fire", _config_boolean, "true", "HALO_NET_COOP_OWN_FRIENDLY_FIRE",
 		_environment_value, _platform_all,
 		"Whether this machine's players hurt, and are hurt by, the other players\n"
@@ -2122,109 +2120,6 @@ static void config_report_unknown_keys(toml_datum_t table)
 				config_report_unknown_key(section.u.tab.value[key_index].lineno, name);
 		}
 	}
-#endif
-	/* the file saved with .txt after it, by an editor that adds it (and
-	Windows Explorer hides it) */
-	snprintf(other, sizeof(other), "%s.txt", path);
-	if (SDL_GetPathInfo(other, NULL))
-	{
-#ifdef _WIN32
-		platform_log("settings: %s is not read: Windows saved it as config.toml.txt; rename it to config.toml", other);
-#else
-		platform_log("settings: %s is not read; rename it to config.toml", other);
-#endif
-	}
-}
-#endif
-
-/* ---------- words */
-
-/* the settings that take one of a few words: one in any case is taken (as
-written here: "Windowed" is "windowed"), and another is said once in the
-log */
-static const struct
-{
-	const char *name;
-	/* NULL ended; "" where empty is one */
-	const char *words[24];
-	/* what the game does with another, for the log (NULL: not said) */
-	const char *otherwise;
-} config_words[] =
-{
-	{ "display.mode", { "", "fullscreen", "borderless", "windowed", NULL }, "display.fullscreen's" },
-	{ "display.resolution_scaling", { "native", "original", NULL }, NULL },
-	{ "display.anti_aliasing", { "off", "fxaa", "smaa", "ssaa2x", "msaa2x", "msaa4x", "msaa8x", NULL }, NULL },
-	{ "display.hud_button_style", { "classic", "gems", "menu_gems", NULL }, NULL },
-	{ "display.menus", { "pc", "xbox", NULL }, NULL },
-	{ "display.player_names", { "all", "allies", "enemies", "none", NULL }, NULL },
-	{ "display.scoreboard_team_layout", { "teams", "score", NULL }, NULL },
-	{ "display.chat_style", { "colors", "white", NULL }, NULL },
-	{ "display.shield_glow_intensity", { "default", "light_show", NULL }, NULL },
-	{ "display.shield_color", { "default", "white", "black", "red", "blue", "gray", "yellow", "green", "pink",
-		"purple", "cyan", "cobalt", "orange", "teal", "sage", "brown", "tan", "maroon", "salmon", NULL }, NULL },
-	{ "audio.resampler", { "sinc", "linear", NULL }, NULL },
-	{ "audio.voice_chat", { "push_to_talk", "open_mic", "off", NULL }, NULL },
-	{ "input.touch_controls", { "auto", "on", "off", NULL }, NULL },
-	{ "game.console_log", { "important", "all", "none", NULL }, NULL },
-	{ "game.language", { "", "ja", "de", "fr", "es", "it", NULL }, NULL },
-	{ "network.text_chat", { "on", "links", "off", NULL }, NULL },
-	{ "network.voice_mode", { "off", "team_proximity", "team_enemy_proximity", "team_global",
-		"team_global_enemy_proximity", NULL }, NULL },
-	{ "network.coop_friendly_fire", { "off", "on", "shields_only", "explosives_only", NULL }, NULL },
-	{ "network.coop_enemies_mode", { "none", "per_player", "multiplier", NULL }, NULL },
-	{ "streamer.slurs", { "off", "severe", "strong", "mild", NULL }, NULL },
-	{ "streamer.swearing", { "off", "severe", "strong", "mild", NULL }, NULL },
-	{ "streamer.insults", { "off", "severe", "strong", "mild", NULL }, NULL },
-	{ "crash_reports.upload", { "ask", "yes", "no", NULL }, NULL },
-};
-
-#define NUMBER_OF_CONFIG_WORDS (sizeof(config_words) / sizeof(config_words[0]))
-
-/* the word settings' values as their readers compare them (lowercase), and
-the log told of one that is none of its words */
-static void config_check_words(void)
-{
-	size_t word_index;
-
-	for (word_index = 0; word_index < NUMBER_OF_CONFIG_WORDS; word_index++)
-	{
-		long index = config_setting_index(config_words[word_index].name);
-		const char *const *words = config_words[word_index].words;
-		struct config_value *value;
-		char list[400] = "";
-		size_t word;
-
-		if (index < 0 || !(config_settings[index].platforms & CONFIG_PLATFORM))
-			continue;
-		value = &config_values[index];
-		for (word = 0; words[word] && !config_word_is(value->string, strlen(value->string), words[word]); word++)
-		{
-		}
-		if (words[word])
-		{
-			if (strcmp(value->string, words[word]))
-			{
-				free(value->string);
-				value->string = strdup(words[word]);
-			}
-			continue;
-		}
-		/* ("a", "b" or "c", and "or empty" for "") */
-		for (word = 0; words[word]; word++)
-		{
-			size_t length = strlen(list);
-
-			if (!words[word][0])
-				continue;
-			snprintf(list + length, sizeof(list) - length, "%s\"%s\"",
-				!length ? "" : !words[word + 1] && words[0][0] ? " or " : ", ", words[word]);
-		}
-		if (!words[0][0])
-			snprintf(list + strlen(list), sizeof(list) - strlen(list), " or empty");
-		platform_log("settings: %s = \"%s\" is not %s%s%s", config_words[word_index].name, value->string, list,
-			config_words[word_index].otherwise ? "; using " : "",
-			config_words[word_index].otherwise ? config_words[word_index].otherwise : "");
-	}
 }
 
 /* ---------- older files */
@@ -2279,8 +2174,849 @@ static int config_datum_is(toml_datum_t datum, enum config_type type, const char
 	struct config_value value = { 0, 0, 0.0, NULL };
 	size_t length = strlen(text);
 
+	switch (type)
+	{
+	case _config_boolean:
+		config_set_from_text(&value, type, text);
+		return datum.type == TOML_BOOLEAN && !datum.u.boolean == !value.boolean;
+	case _config_integer:
+		config_set_from_text(&value, type, text);
+		return datum.type == TOML_INT64 && datum.u.int64 == value.integer;
+	case _config_real:
+		config_set_from_text(&value, type, text);
+		return (datum.type == TOML_FP64 && datum.u.fp64 == value.real) ||
+			(datum.type == TOML_INT64 && (double)datum.u.int64 == value.real);
+	case _config_string:
+		/* (a TOML basic string without escapes) */
+		return datum.type == TOML_STRING && length >= 2 && strlen(datum.u.s) == length - 2 &&
+			!strncmp(datum.u.s, text + 1, length - 2);
+	}
+	return 0;
+}
+
+/* a setting's line the player changed but left commented out, "# key =
+value" with a value other than the default written there: it does nothing,
+which the log says (the file as the game writes it, every line at its
+default, says nothing). A setting given a value elsewhere in the file is
+left alone */
+static void config_report_commented(const char *text, toml_datum_t table)
+{
+	char section[64] = "";
+	const char *line;
+	int line_number = 1;
+
+	for (line = text; *line; line_number++)
+	{
+		const char *end = line + strcspn(line, "\n");
+		const char *next = *end ? end + 1 : end;
+		size_t index;
+
+		for (index = 0; !config_line_section(line, end, section, sizeof(section)) &&
+			index < NUMBER_OF_CONFIG_SETTINGS; index++)
+		{
+			const struct config_setting *setting = &config_settings[index];
+			const char *dot = strchr(setting->name, '.');
+			const char *value;
+			char *probe;
+			size_t probe_size;
+			toml_result_t parsed;
+			int same;
+
+			if (!(setting->platforms & CONFIG_PLATFORM) || !dot ||
+				strncmp(section, setting->name, (size_t)(dot - setting->name)) ||
+				section[dot - setting->name] != 0 || !config_line_commented_key(line, end, dot + 1))
+			{
+				continue;
+			}
+			if (toml_seek(table, setting->name).type != TOML_UNKNOWN || config_pending[index])
+				break;
+			/* (the value read as TOML: 1.0 is 1.00) */
+			value = (const char *)memchr(line, '=', (size_t)(end - line)) + 1;
+			probe_size = (size_t)(end - value) + 8;
+			probe = malloc(probe_size);
+			if (!probe)
+				break;
+			snprintf(probe, probe_size, "v = %.*s\n", (int)(end - value), value);
+			parsed = toml_parse(probe, (int)strlen(probe));
+			same = parsed.ok && config_datum_is(toml_seek(parsed.toptab, "v"), setting->type, setting->default_value);
+			toml_free(parsed);
+			free(probe);
+			if (!same)
+			{
+				platform_log("config.toml line %d: %s is commented out, so it does nothing; remove the '# ' to use it",
+					line_number, setting->name);
+			}
+			break;
+		}
+		line = next;
+	}
+}
+
+/* a file from before config_version (text, parsed as table) wrote every
+setting at the default of the version that wrote it, so that a default
+changed since never reached it: its lines holding this version's default
+are commented out at it, as a new file has them, and config_version
+written. Any other value stays, being the player's, even an older
+version's default (the player may have chosen it: display.menus = "gearbox"),
+which the log says. Returns the new text, or NULL if the file has its
+version */
+static char *config_update_layout(const char *text, toml_datum_t table)
+{
+	toml_datum_t version = toml_seek(table, "config_version");
+	int lines[NUMBER_OF_CONFIG_SETTINGS];
+	struct config_text out = { NULL, 0, 0 };
+	int line_number = 1, defaults = 0, version_written;
+	const char *line;
+	size_t index;
+
+	if (version.type == TOML_INT64 && version.u.int64 >= CONFIG_VERSION)
+		return NULL;
+	/* (an older version's line is changed where it is) */
+	version_written = version.type != TOML_UNKNOWN;
+	for (index = 0; index < NUMBER_OF_CONFIG_SETTINGS; index++)
+	{
+		const struct config_setting *setting = &config_settings[index];
+		toml_datum_t datum = toml_seek(table, setting->name);
+		size_t old;
+
+		lines[index] = 0;
+		if (datum.type == TOML_UNKNOWN)
+			continue;
+		if (config_datum_is(datum, setting->type, setting->default_value))
+		{
+			lines[index] = datum.lineno;
+			continue;
+		}
+		for (old = 0; old < NUMBER_OF_CONFIG_OLD_DEFAULTS; old++)
+		{
+			if (!strcmp(config_old_defaults[old].name, setting->name) &&
+				config_datum_is(datum, setting->type, config_old_defaults[old].default_value))
+			{
+				platform_log("settings: %s = %s is kept (an older version's default; this version's is %s, which "
+					"commenting the line out follows)", setting->name,
+					config_old_defaults[old].default_value, setting->default_value);
+			}
+		}
+	}
+	for (line = text; *line; line_number++)
+	{
+		const char *end = line + strcspn(line, "\n");
+		const char *next = *end ? end + 1 : end;
+		char section[64];
+		long setting_index = -1;
+
+		for (index = 0; index < NUMBER_OF_CONFIG_SETTINGS; index++)
+		{
+			/* (only the line "key = value" in the section: not a dotted key
+			or an inline table, which hold more) */
+			if (lines[index] == line_number &&
+				config_line_key(line, end, strchr(config_settings[index].name, '.') + 1))
+			{
+				setting_index = (long)index;
+			}
+		}
+		if (version.type != TOML_UNKNOWN && version.lineno == line_number &&
+			config_line_key(line, end, "config_version"))
+		{
+			config_append(&out, CONFIG_VERSION_LINE);
+		}
+		else if (setting_index >= 0)
+		{
+			const struct config_setting *setting = &config_settings[setting_index];
+			char buffer[256];
+
+			snprintf(buffer, sizeof(buffer), "# %s = %s\n", strchr(setting->name, '.') + 1, setting->default_value);
+			config_append(&out, buffer);
+			defaults++;
+		}
+		else
+		{
+			char *copy;
+
+			/* (the version goes before the first section, as TOML has it,
+			after the blank line that is there) */
+			if (!version_written && config_line_section(line, end, section, sizeof(section)))
+			{
+				config_append(&out, CONFIG_VERSION_LINES "\n");
+				version_written = 1;
+			}
+			copy = config_copy(line, (size_t)(next - line));
+			if (copy)
+				config_append(&out, copy);
+			free(copy);
+		}
+		line = next;
+	}
+	if (!version_written)
+	{
+		if (out.length && out.buffer[out.length - 1] != '\n')
+			config_append(&out, "\n");
+		config_append(&out, CONFIG_VERSION_TEXT);
+	}
+	platform_log("settings: config.toml updated (config_version %d): %d lines at this version's default commented "
+		"out, to follow it; every other value is kept", CONFIG_VERSION, defaults);
+	return out.buffer;
+}
+
+/* whether the value is the setting's default, or one an earlier version had */
+static int config_datum_is_a_default(toml_datum_t datum, const struct config_setting *setting)
+{
+	size_t old;
+
+	if (config_datum_is(datum, setting->type, setting->default_value))
+		return 1;
+	for (old = 0; old < NUMBER_OF_CONFIG_OLD_DEFAULTS; old++)
+	{
+		if (!strcmp(config_old_defaults[old].name, setting->name) &&
+			config_datum_is(datum, setting->type, config_old_defaults[old].default_value))
+		{
+			return 1;
+		}
+	}
+	return 0;
+}
+
+/* whether text has the setting commented out at a default in its section,
+"# key = ..." */
+static int config_text_has_commented_key(const char *text, const char *name)
+{
+	const char *dot = strchr(name, '.');
+	char section[64], current[64] = "";
+	const char *line;
+
+	snprintf(section, sizeof(section), "%.*s", (int)(dot - name), name);
+	for (line = text; *line;)
+	{
+		const char *end = line + strcspn(line, "\n");
+
+		if (!config_line_section(line, end, current, sizeof(current)) && !strcmp(current, section) &&
+			config_line_commented_key(line, end, dot + 1))
+		{
+			return 1;
+		}
+		line = *end ? end + 1 : end;
+	}
+	return 0;
+}
+
+/* whether the line (from its '#') is a setting commented out, "# key = ..." */
+static int config_line_is_commented_setting(const char *line)
+{
+	const char *start;
+
+	line++;
+	while (*line == ' ' || *line == '\t')
+		line++;
+	start = line;
+	while ((*line >= 'a' && *line <= 'z') || (*line >= '0' && *line <= '9') || *line == '_')
+		line++;
+	if (line == start)
+		return 0;
+	while (*line == ' ' || *line == '\t')
+		line++;
+	return *line == '=';
+}
+
+/* a version from before config_version, run on a file of this layout, sees
+the settings commented out at their default as missing, and adds each as a
+value at its own default (with its comment, after a blank line) at the end
+of its section: the file then holds the setting twice, "# key = default"
+from this layout and "key = value" from the older version, and the value
+pins the older version's default. Such a value that is a default, this
+version's or an older one, is taken out with its comment, so that the
+setting follows this version's default again; a value that is no default
+stays, being the player's. Returns the new text, or NULL if there was none */
+static char *config_drop_added_defaults(const char *text, toml_datum_t table)
+{
+	toml_datum_t version = toml_seek(table, "config_version");
+	int lines[NUMBER_OF_CONFIG_SETTINGS];
+	struct config_text out = { NULL, 0, 0 };
+	int line_number = 1, dropped = 0, any = 0;
+	const char *line;
+	size_t index;
+
+	if (version.type != TOML_INT64 || version.u.int64 < 2)
+		return NULL;
+	for (index = 0; index < NUMBER_OF_CONFIG_SETTINGS; index++)
+	{
+		const struct config_setting *setting = &config_settings[index];
+		toml_datum_t datum = toml_seek(table, setting->name);
+
+		lines[index] = 0;
+		if (datum.type != TOML_UNKNOWN && config_datum_is_a_default(datum, setting) &&
+			config_text_has_commented_key(text, setting->name))
+		{
+			lines[index] = datum.lineno;
+			any = 1;
+		}
+	}
+	if (!any)
+		return NULL;
+	for (line = text; *line; line_number++)
+	{
+		const char *end = line + strcspn(line, "\n");
+		const char *next = *end ? end + 1 : end;
+		int drop = 0;
+
+		for (index = 0; index < NUMBER_OF_CONFIG_SETTINGS && !drop; index++)
+		{
+			drop = lines[index] == line_number &&
+				config_line_key(line, end, strchr(config_settings[index].name, '.') + 1);
+		}
+		if (drop)
+		{
+			/* (its comment above it, and the blank line before that) */
+			while (out.length)
+			{
+				size_t start = out.length - 1;
+				const char *first;
+
+				while (start > 0 && out.buffer[start - 1] != '\n')
+					start--;
+				for (first = out.buffer + start; *first == ' ' || *first == '\t'; first++)
+				{
+				}
+				/* (not another setting's line, "# key = value") */
+				if (*first != '#' || config_line_is_commented_setting(first))
+					break;
+				out.length = start;
+				out.buffer[start] = 0;
+			}
+			if (out.length >= 2 && out.buffer[out.length - 1] == '\n' && out.buffer[out.length - 2] == '\n')
+				out.buffer[--out.length] = 0;
+			dropped++;
+		}
+		else
+		{
+			char *copy = config_copy(line, (size_t)(next - line));
+
+			if (copy)
+				config_append(&out, copy);
+			free(copy);
+		}
+		line = next;
+	}
+	platform_log("settings: config.toml held %d settings twice, commented out and as a default an older version "
+		"added; those values are taken out, to follow this version's defaults", dropped);
+	return out.buffer;
+}
+
+/* a default's text without its quotes, as config_write takes it */
+static void config_unquote(const char *text, char *out, size_t size)
+{
+	size_t length = strlen(text);
+
+	if (length >= 2 && text[0] == '"')
+	{
+		text++;
+		length -= 2;
+	}
+	if (length >= size)
+		length = size - 1;
+	memcpy(out, text, length);
+	out[length] = 0;
+}
+
+#ifndef HALO_SERVER
+/* whether the setting is commented out in text ("# key = ...") at the value
+(a default as written): 1 if so, 0 if at another, -1 if it is not there */
+static int config_commented_value_is(const char *text, const struct config_setting *setting, const char *value_text)
+{
+	const char *dot = strchr(setting->name, '.');
+	char section[64], current[64] = "";
+	const char *line;
+
+	snprintf(section, sizeof(section), "%.*s", (int)(dot - setting->name), setting->name);
+	for (line = text; *line;)
+	{
+		const char *end = line + strcspn(line, "\n");
+
+		if (!config_line_section(line, end, current, sizeof(current)) && !strcmp(current, section) &&
+			config_line_commented_key(line, end, dot + 1))
+		{
+			const char *value = (const char *)memchr(line, '=', (size_t)(end - line)) + 1;
+			size_t probe_size = (size_t)(end - value) + 8;
+			char *probe = malloc(probe_size);
+			toml_result_t parsed;
+			int same;
+
+			if (!probe)
+				return 0;
+			snprintf(probe, probe_size, "v = %.*s\n", (int)(end - value), value);
+			parsed = toml_parse(probe, (int)strlen(probe));
+			same = parsed.ok && config_datum_is(toml_seek(parsed.toptab, "v"), setting->type, value_text);
+			toml_free(parsed);
+			free(probe);
+			return same;
+		}
+		line = *end ? end + 1 : end;
+	}
+	return -1;
+}
+
+#endif
+
+/* An existing file (text, parsed as table) whose settings this version's
+defaults would change: those at an older default that follow the default (at
+the old one, commented out, or not there at all, the file being from before
+the setting), and those an older version wrote as a value beside the
+commented one (config_drop_added_defaults). They are listed in
+config_pending, to be asked about once (config_new_defaults_pending); the
+file is left as it is, and the settings keep their old values, until the
+player answers. A file that was answered (game.defaults_answered) has none.
+The dedicated server keeps its own defaults and is never asked. */
+static void config_find_new_defaults(const char *text, toml_datum_t table)
+{
+#ifndef HALO_SERVER
+	toml_datum_t version = toml_seek(table, "config_version");
+	toml_datum_t answered = toml_seek(table, "game.defaults_answered");
+	size_t old;
+
+	if (answered.type == TOML_INT64 && answered.u.int64 >= CONFIG_DEFAULTS_GENERATION)
+		return;
+	for (old = 0; old < NUMBER_OF_CONFIG_OLD_DEFAULTS; old++)
+	{
+		long index = config_old_defaults[old].change ? config_setting_index(config_old_defaults[old].name) : -1;
+		const struct config_setting *setting;
+		toml_datum_t datum;
+
+		if (index < 0)
+			continue;
+		setting = &config_settings[index];
+		if (!(setting->platforms & CONFIG_PLATFORM) || !strcmp(config_old_defaults[old].default_value, setting->default_value))
+			continue;
+		datum = toml_seek(table, setting->name);
+		if (datum.type != TOML_UNKNOWN)
+		{
+			if (version.type == TOML_INT64 && version.u.int64 >= 2 &&
+				config_datum_is(datum, setting->type, config_old_defaults[old].default_value) &&
+				config_text_has_commented_key(text, setting->name))
+			{
+				config_pending[index] = 2;
+			}
+		}
+		else if (config_commented_value_is(text, setting, config_old_defaults[old].default_value) != 0)
+		{
+			config_pending[index] = 1;
+		}
+		if (config_pending[index])
+			config_pending_old[index] = config_old_defaults[old].default_value;
+	}
+#else
+	(void)text;
+	(void)table;
+#endif
+}
+
+/* whether the line is blank */
+static int config_line_blank(const char *line, const char *end)
+{
+	while (line < end && (*line == ' ' || *line == '\t' || *line == '\r'))
+		line++;
+	return line == end;
+}
+
+/* whether the line is a comment */
+static int config_line_comment(const char *line, const char *end)
+{
+	while (line < end && (*line == ' ' || *line == '\t'))
+		line++;
+	return line < end && *line == '#';
+}
+
+/* a file that holds, for a setting whose old default is followed, that
+default as a value: the setting's lines are taken out of it (the value, and
+a copy commented out at that default with its help text of that day, each
+with the comment above it and one blank line), and config_add_missing then
+writes it again as this version has it, commented out at the current
+default, so that it follows. Returns the new text, or NULL if there was
+nothing to change */
+static char *config_follow_old_defaults(const char *text, toml_datum_t table)
+{
+	char *result = NULL;
+	size_t old;
+
+	for (old = 0; old < NUMBER_OF_CONFIG_OLD_DEFAULTS; old++)
+	{
+		const char *source = result ? result : text;
+		const struct config_setting *setting;
+		struct config_text out = { NULL, 0, 0 };
+		toml_datum_t datum;
+		const char *dot, *line;
+		const char **starts;
+		size_t count = 0, capacity = 0, line_index, found = 0;
+		unsigned char *drop;
+		char section[64], current[64] = "";
+		long index = config_old_defaults[old].follow ? config_setting_index(config_old_defaults[old].name) : -1;
+
+		if (index < 0)
+			continue;
+		setting = &config_settings[index];
+		datum = toml_seek(table, setting->name);
+		if (!config_datum_is(datum, setting->type, config_old_defaults[old].default_value) ||
+			config_datum_is(datum, setting->type, setting->default_value))
+			continue;
+		dot = strchr(setting->name, '.');
+		snprintf(section, sizeof(section), "%.*s", (int)(dot - setting->name), setting->name);
+		for (line = source; *line; line += strcspn(line, "\n") + (line[strcspn(line, "\n")] ? 1 : 0))
+			capacity++;
+		starts = malloc((capacity + 1) * sizeof(*starts));
+		drop = calloc(capacity + 1, 1);
+		if (!starts || !drop)
+		{
+			free(starts);
+			free(drop);
+			continue;
+		}
+		for (line = source; *line; line += strcspn(line, "\n") + (line[strcspn(line, "\n")] ? 1 : 0))
+			starts[count++] = line;
+		starts[count] = line;
+		for (line_index = 0; line_index < count; line_index++)
+		{
+			const char *start = starts[line_index];
+			const char *end = start + strcspn(start, "\n");
+
+			if (config_line_section(start, end, current, sizeof(current)))
+				continue;
+			if (!strcmp(current, section) &&
+				(config_line_key(start, end, dot + 1) || config_line_commented_key(start, end, dot + 1)))
+			{
+				size_t back = line_index;
+
+				drop[line_index] = 1;
+				found++;
+				while (back > 0 && config_line_comment(starts[back - 1], starts[back - 1] + strcspn(starts[back - 1], "\n")))
+					drop[--back] = 1;
+				if (back > 0 && config_line_blank(starts[back - 1], starts[back - 1] + strcspn(starts[back - 1], "\n")))
+					drop[back - 1] = 1;
+			}
+		}
+		if (found)
+		{
+			for (line_index = 0; line_index < count; line_index++)
+			{
+				if (!drop[line_index])
+				{
+					char *copy = config_copy(starts[line_index], (size_t)(starts[line_index + 1] - starts[line_index]));
+
+					if (copy)
+						config_append(&out, copy);
+					free(copy);
+				}
+			}
+			if (out.buffer)
+			{
+				free(result);
+				result = out.buffer;
+				platform_log("settings: %s = %s was an older version's default; it follows this version's (%s) now",
+					setting->name, config_old_defaults[old].default_value, setting->default_value);
+			}
+		}
+		free(starts);
+		free(drop);
+	}
+	return result;
+}
+
+/* ---------- words */
+
+/* the settings that take one of a few words: one in any case is taken (as
+written here), and another is said once in the log */
+static const struct
+{
+	const char *name;
+	/* NULL ended; "" where empty is one */
+	const char *words[8];
+	/* what the game does with another, for the log (NULL: what reads the
+	setting says it) */
+	const char *otherwise;
+} config_words[] =
+{
+	{ "display.mode", { "", "fullscreen", "borderless", "windowed", NULL }, "display.fullscreen's" },
+	{ "display.resolution_scaling", { "native", "original", NULL }, "\"native\"" },
+	{ "display.anti_aliasing", { "off", "fxaa", "smaa", "ssaa2x", "msaa2x", "msaa4x", "msaa8x", NULL }, NULL },
+	{ "display.menus", { "xbox", "gearbox", "pc", "chupathingy", NULL }, NULL },
+	{ "display.player_names", { "all", "allies", "allys", "enemies", "none", NULL }, "\"all\"" },
+	{ "display.scoreboard_team_layout", { "teams", "score", NULL }, "\"teams\"" },
+	{ "display.scoreboard_platforms", { "auto", "on", "off", NULL }, "\"auto\"" },
+	{ "display.follow_camera", { "long_waits", "always", "off", NULL }, "\"long_waits\"" },
+	{ "display.texture_decode", { "auto", "gpu", "cpu", NULL }, "\"auto\"" },
+	{ "audio.resampling", { "sinc", "linear", NULL }, "\"sinc\"" },
+	{ "input.touch_controls", { "on", "auto", "off", NULL }, "\"on\"" },
+	{ "game.console_log", { "important", "all", "none", NULL }, "\"important\"" },
+	{ "game.move_old_map_folders", { "ask", "yes", "no", NULL }, "\"ask\"" },
+	{ "network.protocol", { "auto", "opence", "delta", NULL }, NULL },
+	{ "network.map_downloads", { "ask", "always", "never", NULL }, "\"ask\"" },
+	{ "network.fair_play", { "refuse", "log", "off", NULL }, "\"refuse\"" },
+	{ "network.join_from_clipboard", { "ask", "always", "never", NULL }, "\"ask\"" },
+	{ "network.team_change", { "balanced", "allow", "off", NULL }, "\"balanced\"" },
+	{ "discord.presence", { "full", "minimal", "off", NULL }, "\"full\"" },
+	{ "network.platform_limits", { "on", "off", NULL }, "\"on\"" },
+	{ "network.coop_friendly_fire", { "off", "on", "shields_only", "explosives_only", NULL }, NULL },
+	{ "network.coop_enemies_mode", { "none", "per_player", "multiplier", NULL }, "\"none\"" },
+	{ "crash_reports.upload", { "ask", "yes", "no", NULL }, "\"yes\"" },
+	{ "display.hud_button_style", { "classic", "gems", "menu_gems", NULL }, NULL },
+	{ "display.chat_style", { "colors", "white", NULL }, NULL },
+	{ "display.shield_glow_intensity", { "default", "light_show", NULL }, NULL },
+	{ "display.shield_color", { "default", "white", "black", "red", "blue", "gray", "yellow", "green", "pink",
+		"purple", "cyan", "cobalt", "orange", "teal", "sage", "brown", "tan", "maroon", "salmon", NULL }, NULL },
+	{ "audio.resampler", { "sinc", "linear", NULL }, NULL },
+	{ "audio.voice_chat", { "push_to_talk", "open_mic", "off", NULL }, NULL },
+	{ "game.language", { "", "ja", "de", "fr", "es", "it", NULL }, NULL },
+	{ "network.text_chat", { "on", "links", "off", NULL }, NULL },
+	{ "network.voice_mode", { "off", "team_proximity", "team_enemy_proximity", "team_global",
+		"team_global_enemy_proximity", NULL }, NULL },
+	{ "streamer.slurs", { "off", "severe", "strong", "mild", NULL }, NULL },
+	{ "streamer.swearing", { "off", "severe", "strong", "mild", NULL }, NULL },
+	{ "streamer.insults", { "off", "severe", "strong", "mild", NULL }, NULL },
+};
+
+#define NUMBER_OF_CONFIG_WORDS (sizeof(config_words) / sizeof(config_words[0]))
+
+/* an older version's value of a word setting, read as the word that took
+its place (a setting that was true or false: the file's true and false are
+taken as these words' "true" and "false": config_set_from_file) */
+static const struct
+{
+	const char *name;
+	const char *old_word;
+	const char *word;
+} config_old_words[] =
+{
+	{ "network.join_from_clipboard", "true", "always" },
+	{ "network.join_from_clipboard", "false", "never" },
+};
+
+#define NUMBER_OF_CONFIG_OLD_WORDS (sizeof(config_old_words) / sizeof(config_old_words[0]))
+
+/* whether the setting once was true or false, which the file may still say */
+static int config_was_boolean(const char *name)
+{
+	size_t index;
+
+	for (index = 0; index < NUMBER_OF_CONFIG_OLD_WORDS; index++)
+	{
+		if (!strcmp(config_old_words[index].name, name))
+			return 1;
+	}
+	return 0;
+}
+
+/* the word settings' values as their readers compare them (lowercase:
+"Borderless" is "borderless"), and the log told of one that is none of
+its words */
+static void config_check_words(void)
+{
+	size_t word_index;
+
+	for (word_index = 0; word_index < NUMBER_OF_CONFIG_WORDS; word_index++)
+	{
+		long index = config_setting_index(config_words[word_index].name);
+		const char *const *words = config_words[word_index].words;
+		struct config_value *value;
+		char list[160] = "";
+		size_t word;
+
+		if (index < 0 || !(config_settings[index].platforms & CONFIG_PLATFORM))
+			continue;
+		value = &config_values[index];
+		for (word = 0; word < NUMBER_OF_CONFIG_OLD_WORDS; word++)
+		{
+			if (!strcmp(config_old_words[word].name, config_words[word_index].name) &&
+				!SDL_strncasecmp(value->string, config_old_words[word].old_word, strlen(config_old_words[word].old_word) + 1))
+			{
+				free(value->string);
+				value->string = strdup(config_old_words[word].word);
+				break;
+			}
+		}
+		for (word = 0; words[word] && SDL_strncasecmp(value->string, words[word], strlen(words[word]) + 1); word++)
+		{
+		}
+		if (words[word])
+		{
+			if (strcmp(value->string, words[word]))
+			{
+				free(value->string);
+				value->string = strdup(words[word]);
+			}
+			continue;
+		}
+		if (!config_words[word_index].otherwise)
+			continue;
+		/* ("a", "b" or "c", and "or empty" for "") */
+		for (word = 0; words[word]; word++)
+		{
+			size_t length = strlen(list);
+
+			if (!words[word][0])
+				continue;
+			snprintf(list + length, sizeof(list) - length, "%s\"%s\"",
+				!length ? "" : !words[word + 1] && words[0][0] ? " or " : ", ", words[word]);
+		}
+		if (!words[0][0])
+			snprintf(list + strlen(list), sizeof(list) - strlen(list), " or empty");
+		platform_log("settings: %s = \"%s\" is not %s; using %s", config_words[word_index].name, value->string, list,
+			config_words[word_index].otherwise);
+	}
+}
+
+/* the most lines of a file that cannot be read that are skipped to read
+the rest */
+#define CONFIG_MAXIMUM_SKIPPED_LINES 16
+
+/* the line a parse error is on ("(line 12) ..."), or 0 */
+static int config_error_line(const char *message)
+{
+	const char *at = strstr(message, "(line ");
+	int line = 0;
+
+	if (!at || sscanf(at, "(line %d)", &line) != 1)
+		return 0;
+	return line;
+}
+
+/* the line of text that cannot be read, said in the log with what likely
+makes it so, and emptied (its number kept for the lines after it): returns
+whether it was there */
+static int config_skip_line(char *text, int line_number, const char *message)
+{
+	char *line = text, *end, *value, *value_end;
+	const char *reason = strchr(message, ')');
+	char key[64] = "";
+	char hint[160] = "";
+	int number;
+
+	for (number = 1; number < line_number && *line; number++)
+		line += strcspn(line, "\n") + (line[strcspn(line, "\n")] ? 1 : 0);
+	if (number != line_number || !*line)
+		return 0;
+	end = line + strcspn(line, "\n");
+	reason = reason ? reason + 1 : message;
+	while (*reason == ' ')
+		reason++;
+	/* "key = value": the value as written, to the end of the line or a
+	comment */
+	value = memchr(line, '=', (size_t)(end - line));
+	if (value)
+	{
+		char *key_start = line, *key_end = value;
+
+		while (key_start < key_end && (*key_start == ' ' || *key_start == '\t'))
+			key_start++;
+		while (key_end > key_start && (key_end[-1] == ' ' || key_end[-1] == '\t'))
+			key_end--;
+		snprintf(key, sizeof(key), "%.*s", (int)(key_end - key_start), key_start);
+		value++;
+		while (value < end && (*value == ' ' || *value == '\t'))
+			value++;
+		value_end = value + strcspn(value, "#\n");
+		if (value_end > end)
+			value_end = end;
+		while (value_end > value && (value_end[-1] == ' ' || value_end[-1] == '\t' || value_end[-1] == '\r'))
+			value_end--;
+		if ((value_end - value == 4 && !SDL_strncasecmp(value, "true", 4)) ||
+			(value_end - value == 5 && !SDL_strncasecmp(value, "false", 5)))
+		{
+			snprintf(hint, sizeof(hint), ": true and false are lowercase, %s = %.*s", key, (int)(value_end - value),
+				value_end - value == 4 ? "true" : "false");
+		}
+		else if (value < value_end && isalpha((unsigned char)*value))
+		{
+			snprintf(hint, sizeof(hint), ": text needs quotes, %s = \"%.*s\"", key, (int)(value_end - value), value);
+		}
+	}
+	platform_log("config.toml line %d cannot be read (%s), so it is skipped%s", line_number, reason, hint);
+	memset(line, ' ', (size_t)(end - line));
+	return 1;
+}
+
+#ifndef HALO_ANDROID
+/* a config.toml the game never reads, likely edited in its place: said in
+the log, with the one it reads (path) */
+static void config_report_unread(const char *path)
+{
+	char other[1100];
+#ifdef __APPLE__
+	/* beside the application, or in it (the game's is in Application
+	Support) */
+	const char *base = SDL_GetBasePath();
+	const char *bundle = base ? strstr(base, ".app/Contents/") : NULL;
+
+	if (bundle)
+	{
+		const char *folder_end = bundle;
+
+		while (folder_end > base && folder_end[-1] != '/')
+			folder_end--;
+		snprintf(other, sizeof(other), "%sconfig.toml", base);
+		if (SDL_GetPathInfo(other, NULL))
+			platform_log("settings: %s is not read; the game's settings are %s", other, path);
+		snprintf(other, sizeof(other), "%.*sconfig.toml", (int)(folder_end - base), base);
+		if (SDL_GetPathInfo(other, NULL))
+			platform_log("settings: %s is not read; the game's settings are %s", other, path);
+	}
+#elif !defined(_WIN32)
+	/* in the folder the game was started from, when that is not the
+	executable's (the game's is beside the executable) */
+	char folder[1024];
+
+	if (getcwd(folder, sizeof(folder)))
+	{
+		snprintf(other, sizeof(other), "%s/config.toml", folder);
+		if (strcmp(other, path) && SDL_GetPathInfo(other, NULL))
+		{
+			SDL_PathInfo mine, theirs;
+
+			/* (the same file by another name is the one read) */
+			if (!SDL_GetPathInfo(path, &mine) || !SDL_GetPathInfo(other, &theirs) ||
+				mine.size != theirs.size || mine.modify_time != theirs.modify_time)
+			{
+				platform_log("settings: %s is not read; the game's settings are %s", other, path);
+			}
+		}
+	}
+#endif
+	/* the file saved with .txt after it, by an editor that adds it (and
+	Windows Explorer hides it) */
+	snprintf(other, sizeof(other), "%s.txt", path);
+	if (SDL_GetPathInfo(other, NULL))
+	{
+#ifdef _WIN32
+		platform_log("settings: %s is not read: Windows saved it as config.toml.txt; rename it to config.toml", other);
+#else
+		platform_log("settings: %s is not read; rename it to config.toml", other);
+#endif
+	}
+}
+#endif
+
+static void config_load(void)
+{
+	char path[1024];
+	size_t size = 0;
+	char *text;
+	size_t index;
+
+	for (index = 0; index < NUMBER_OF_CONFIG_SETTINGS; index++)
+	{
+		const char *default_value = config_settings[index].default_value;
+
+		if (config_settings[index].type == _config_string)
+		{
+			/* written as a TOML basic string without escapes */
+			size_t length = strlen(default_value);
+
+			config_values[index].string = length >= 2 ? config_copy(default_value + 1, length - 2) : strdup("");
+		}
+		else
+		{
+			config_set_from_text(&config_values[index], config_settings[index].type, default_value);
+		}
+	}
+
 	config_path(path, sizeof(path));
-#if !defined(HALO_ANDROID) && !defined(HALO_WEB)
+#ifndef HALO_ANDROID
 	config_report_unread(path);
 #endif
 	text = config_read_file(path, &size);

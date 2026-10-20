@@ -8,10 +8,16 @@ from harness import build,read,function,mutated,run,CHECK_FAILED
 def generated(fault=None):
     policy=re.sub(r'^#include "[^"\n]+"\n','',read('port/linux/game/network_aim_assist.c'),flags=re.M)
     input_source=read('port/linux/src/xinput_sdl.c')
-    inp='\n'.join(function(input_source,n) for n in ('mouse_is_aim_device','halo_linux_mouse_aiming'))
+    # (this fork: xinput_sdl.c asks network_distributed.c's copy of the host's
+    # policy, network_aim_assist_blocked, which the same message 90 sets as it
+    # sets network_aim_assist.c's; here it is network_aim_assist.c's, and the
+    # mouse's device test is network_rules.c's)
+    inp='#include <stdint.h>\n'+function(read('port/linux/game/network_rules.c'),'network_rules_mouse_is_aim_device')
+    inp+='\nstatic unsigned char network_aim_assist_blocked(void){return network_aim_assist_block_mouse();}\n'
+    inp+=function(input_source,'halo_linux_mouse_aiming')
     if fault=='authority': policy=mutated(policy,'machine_index != NONE ||','FALSE ||')
-    if fault=='override': inp=mutated(inp,'network_aim_assist_block_mouse() &&','FALSE &&')
-    if fault=='controller': inp=mutated(inp,'if (gamepad_index != 0) return FALSE;','if (FALSE) return FALSE;')
+    if fault=='override': inp=mutated(inp,'if (network_aim_assist_blocked())','if (FALSE)')
+    if fault=='controller': inp=mutated(inp,'if (gamepad_index != 0)\n\t\treturn FALSE;','if (FALSE)\n\t\treturn FALSE;')
     return (('policy.inc',policy),('input.inc',inp),('message_ids.inc',message_ids()))
 
 @pytest.mark.parametrize('case',['allowed','devices','scope','replication','admission','reset'])

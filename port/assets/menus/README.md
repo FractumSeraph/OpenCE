@@ -192,7 +192,10 @@ difficulty` are the port's, as the Xbox's take the Xbox's widgets. The
 settings screens': `port settings save` (OK) writes the settings changed
 (config.toml's, or `profile.<field>`: the profile being edited) and applies
 them, `port settings defaults` shows the defaults, `port settings help` the
-help of the row chosen; Controls Setup's `controls ...` bind the keyboard
+help of the row chosen, and `port settings accept` (the Chupathingy menus'
+settings pages' A, whose list takes A before its rows) opens the page of a
+category's row (Video Setup's Graphics, Audio Setup's Sound Processing...)
+or else saves as `port settings save` does; Controls Setup's `controls ...` bind the keyboard
 and mouse's controls (Enter takes the next key or button pressed; left and
 right choose which of two; Escape cancels, Delete clears); Change Color's
 `color picker ...` (the Xbox's names) set the profile's colour. The others

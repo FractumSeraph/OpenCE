@@ -27,6 +27,8 @@ struct network_game_server_client_machine
 {
 	void *connection;
 	boolean joined;
+	/* (the machine's number, its players' machine_index) */
+	long machine_index;
 };
 
 struct network_game_server
@@ -55,7 +57,7 @@ static int connection;
 static unsigned long system_milliseconds(void) { return 1000; }
 static boolean network_game_should_accept_remote_connections(void) { return TRUE; }
 static boolean network_game_is_splitscreen_local(void) { return FALSE; }
-static boolean network_player_is_valid(struct network_player *player) { return player->valid; }
+static boolean network_player_is_valid(struct network_player const *player) { return player->valid; }
 static boolean network_game_server_client_machine_is_joined_to_game(
 	struct network_game_server *s,
 	struct network_game_server_client_machine *machine)
@@ -63,6 +65,11 @@ static boolean network_game_server_client_machine_is_joined_to_game(
 	return machine->joined;
 }
 static void network_game_server_countdown_started(struct network_game_server *s) { }
+/* (this fork's countdown asks these too: debug.solo_game off, the log, and
+map sharing with every machine having the map) */
+static boolean network_game_solo_game(void) { return FALSE; }
+static void network_event(char const *format, ...) { (void)format; }
+static boolean map_share_machine_needs_map(long machine_index) { (void)machine_index; return FALSE; }
 
 #include "under_test.inc"
 
@@ -71,6 +78,7 @@ static void join_machine(
 {
 	server.client_machines[machine_index].connection = &connection;
 	server.client_machines[machine_index].joined = TRUE;
+	server.client_machines[machine_index].machine_index = machine_index;
 }
 
 /* machine 0 is the host's; no players yet */

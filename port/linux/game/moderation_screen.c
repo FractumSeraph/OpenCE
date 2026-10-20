@@ -35,6 +35,7 @@ when the player acts.
 #include "../src/browser.h"
 #include "../src/delta_moderation.h"
 #include "../src/ui_overlay.h"
+#include "halo_ui_pointer.h"
 /* this fork: watching a player (Watch) */
 #include "sightjack.h"
 
@@ -149,6 +150,11 @@ static struct
 	role here and where the role comes from, which it tells each player
 	when they sign in and when it changes */
 	char note[DELTA_WIRE_MODERATION_TEXT_SIZE + 1];
+	/* (port, this fork) the prompts drawn last frame, for the pointer: each
+	one's button and its left and right ends (all on the prompt row) */
+	short prompt_count;
+	short prompt_buttons[3];
+	float prompt_x0[3], prompt_x1[3];
 } moderation_screen;
 
 /* ---------- private code */
@@ -472,9 +478,50 @@ static float prompt(
 	float x,
 	float y)
 {
+	float left = x;
+
 	x += ui_overlay_button(button, 15.0f, x, y, 0xFFFFFFFF) + 3.0f;
 	x += ui_overlay_text(UI_FONT_BOLD, 12.0f, x, y + 1.5f, UI_ALIGN_LEFT, COLOR_PROMPT, words);
+	/* (port, this fork: noted for a tap or a click, moderation_screen_pointer) */
+	if (moderation_screen.prompt_count < (short)NUMBEROF(moderation_screen.prompt_buttons))
+	{
+		short index = moderation_screen.prompt_count++;
+
+		moderation_screen.prompt_buttons[index] = (short)(button == UI_BUTTON_A ? _gamepad_analog_button_a :
+			button == UI_BUTTON_B ? _gamepad_analog_button_b : _gamepad_binary_button_dpad_left);
+		moderation_screen.prompt_x0[index] = left;
+		moderation_screen.prompt_x1[index] = x;
+	}
 	return x + 18.0f;
+}
+
+/* the menus' pointer, while the screen is up (ui_widget.c), as the clipboard
+invite's question takes it: a tap or a click on a prompt presses its button,
+the right button is B */
+void moderation_screen_pointer(
+	struct halo_ui_pointer const *pointer)
+{
+	short index;
+
+	if (!moderation_screen.active)
+		return;
+	if (pointer->right_clicks)
+	{
+		press(_gamepad_analog_button_b);
+		return;
+	}
+	/* (the prompts' row, 392, with some room above and below for a finger) */
+	if (!pointer->left_clicks || pointer->click_y < 392 - 10 || pointer->click_y > 392 + 15 + 12)
+		return;
+	for (index = 0; index < moderation_screen.prompt_count; index++)
+	{
+		if (pointer->click_x >= moderation_screen.prompt_x0[index] - 6.0f &&
+			pointer->click_x < moderation_screen.prompt_x1[index] + 6.0f)
+		{
+			press(moderation_screen.prompt_buttons[index]);
+			return;
+		}
+	}
 }
 
 static char const *role_name(
@@ -571,6 +618,7 @@ void moderation_screen_render(
 	float x, y;
 	short row, first;
 
+	moderation_screen.prompt_count = 0;
 	if (!ui_overlay_available() || !moderation->available)
 		return;
 	render_banner();

@@ -43,7 +43,7 @@
 	</widget>
 	<widget name="chupathingy/settings/video_settings_list" type="column_list" width="640" height="480" flags="pass_unhandled_to_focused_child up_down_tabs_children" description="main_menu/settings_select/player_setup/player_profile_edit/video_settings/help">
 		<data input="port settings help"/>
-		<on event="a" run="port settings save" back="true"/>
+		<on event="a" run="port settings accept" back="true"/>
 		<on event="y" run="port settings defaults"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/video_settings/op_mode" x="54" y="73" platform="desktop"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/video_settings/op_resolution" x="54" y="103" platform="desktop"/>
@@ -52,6 +52,9 @@
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/video_settings/op_vsync" x="54" y="163"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/video_settings/op_max_fps" x="54" y="193" platform="desktop web"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/video_settings/op_interpolation" x="54" y="193" platform="android"/>
+		<child widget="chupathingy/settings/video_settings/op_graphics" x="54" y="223"/>
+		<child widget="chupathingy/settings/video_settings/op_fov_viewmodels" x="54" y="253"/>
+		<child widget="chupathingy/settings/video_settings/op_extra_effects" x="54" y="283"/>
 	</widget>
 	<widget name="chupathingy/settings/mouse_settings_screen" width="640" height="480" flags="pass_unhandled_to_focused_child pause_game" bitmap="bitmaps/gradient">
 		<on event="b" back="true"/>
@@ -67,7 +70,7 @@
 	</widget>
 	<widget name="chupathingy/settings/mouse_settings_list" type="column_list" width="640" height="480" flags="pass_unhandled_to_focused_child up_down_tabs_children" description="main_menu/settings_select/player_setup/player_profile_edit/mouse_settings/help">
 		<data input="port settings help"/>
-		<on event="a" run="port settings save" back="true"/>
+		<on event="a" run="port settings accept" back="true"/>
 		<on event="y" run="port settings defaults"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/mouse_settings/op_mouse_sensitivity" x="54" y="73"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/mouse_settings/op_mouse_vertical_sensitivity" x="54" y="103"/>
@@ -88,18 +91,17 @@
 	</widget>
 	<widget name="chupathingy/settings/audio_settings_list" type="column_list" width="640" height="480" flags="pass_unhandled_to_focused_child up_down_tabs_children" description="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/help">
 		<data input="port settings help"/>
-		<on event="a" run="port settings save" back="true"/>
+		<on event="a" run="port settings accept" back="true"/>
 		<on event="y" run="port settings defaults"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/op_output_device" x="54" y="73" platform="desktop"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/op_input_device" x="54" y="103" platform="desktop"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/op_volume" x="54" y="133"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/op_music_volume" x="54" y="163"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/op_effects_volume" x="54" y="193"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/sound_processing/op_reverb" x="54" y="223"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/sound_processing/op_resampler" x="54" y="253"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/op_enabled" x="54" y="283"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/op_voice_chat" x="54" y="313"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/op_voice_volume" x="54" y="343"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/op_enabled" x="54" y="223"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/op_voice_chat" x="54" y="253"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/op_voice_volume" x="54" y="283"/>
+		<child widget="chupathingy/settings/audio_settings/op_sound_processing" x="54" y="313"/>
 	</widget>
 	<widget name="chupathingy/settings/network_setup_screen" width="640" height="480" flags="pass_unhandled_to_focused_child pause_game" bitmap="bitmaps/gradient">
 		<on event="b" back="true"/>
@@ -115,21 +117,19 @@
 	</widget>
 	<widget name="chupathingy/settings/network_setup_list" type="column_list" width="640" height="480" flags="pass_unhandled_to_focused_child up_down_tabs_children" description="main_menu/settings_select/player_setup/player_profile_edit/network_setup/help">
 		<data input="port settings help"/>
-		<on event="a" run="port settings save" back="true"/>
+		<on event="a" run="port settings accept" back="true"/>
 		<on event="y" run="port settings defaults"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_online" x="54" y="73" platform="desktop android web"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_allow_upnp" x="54" y="95" platform="desktop android"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_join_from_clipboard" x="54" y="117" platform="desktop android"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_auto" x="54" y="139" platform="desktop android"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/multiplayer_hud/op_player_names" x="54" y="161"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/multiplayer_hud/op_player_name_scale" x="54" y="183"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/multiplayer_hud/op_scoreboard_team_layout" x="54" y="205"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/multiplayer_hud/op_scoreboard_background" x="54" y="227"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_map_downloads" x="54" y="249" platform="desktop android"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_presence" x="54" y="271" platform="desktop"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_show_server_name" x="54" y="293" platform="desktop"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_show_join" x="54" y="315" platform="desktop"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/streamer_mode/op_enabled" x="54" y="337"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_map_downloads" x="54" y="161" platform="desktop android"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_presence" x="54" y="183" platform="desktop"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_show_server_name" x="54" y="205" platform="desktop"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_show_join" x="54" y="227" platform="desktop"/>
+		<child widget="chupathingy/settings/network_setup/op_map_sharing" x="54" y="249" platform="desktop android"/>
+		<child widget="chupathingy/settings/network_setup/op_multiplayer_hud" x="54" y="271"/>
+		<child widget="chupathingy/settings/network_setup/op_streamer_mode" x="54" y="293"/>
 	</widget>
 	<widget name="chupathingy/settings/privacy_setup_screen" width="640" height="480" flags="pass_unhandled_to_focused_child pause_game" bitmap="bitmaps/gradient">
 		<on event="b" back="true"/>
@@ -145,7 +145,7 @@
 	</widget>
 	<widget name="chupathingy/settings/privacy_setup_list" type="column_list" width="640" height="480" flags="pass_unhandled_to_focused_child up_down_tabs_children" description="main_menu/settings_select/player_setup/player_profile_edit/privacy_setup/help">
 		<data input="port settings help"/>
-		<on event="a" run="port settings save" back="true"/>
+		<on event="a" run="port settings accept" back="true"/>
 		<on event="y" run="port settings defaults"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/privacy_setup/op_report_hosted_games" x="54" y="73"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/privacy_setup/op_report_events" x="54" y="103"/>
@@ -166,7 +166,7 @@
 	</widget>
 	<widget name="chupathingy/settings/gamepad_setup_list" type="column_list" width="640" height="480" flags="pass_unhandled_to_focused_child up_down_tabs_children" description="main_menu/settings_select/player_setup/player_profile_edit/gamepad_setup/help">
 		<data input="port settings help"/>
-		<on event="a" run="port settings save" back="true"/>
+		<on event="a" run="port settings accept" back="true"/>
 		<on event="y" run="port settings defaults"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/gamepad_setup/op_look_sensitivity" x="54" y="73"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/gamepad_setup/op_invert_look" x="54" y="103"/>
@@ -191,17 +191,40 @@
 	</widget>
 	<widget name="chupathingy/settings/video_settings/graphics_list" type="column_list" width="640" height="480" flags="pass_unhandled_to_focused_child up_down_tabs_children" description="main_menu/settings_select/player_setup/player_profile_edit/video_settings/graphics/help">
 		<data input="port settings help"/>
-		<on event="a" run="port settings save" back="true"/>
+		<on event="a" run="port settings accept" back="true"/>
 		<on event="y" run="port settings defaults"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/video_settings/graphics/op_high_res_hud" x="54" y="73"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/video_settings/graphics/op_hud_button_style" x="54" y="103"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/video_settings/graphics/op_high_res_text" x="54" y="133"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/video_settings/graphics/op_anti_aliasing" x="54" y="163" platform="desktop"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/video_settings/graphics/op_anti_aliasing_android" x="54" y="163" platform="android web"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/video_settings/graphics/op_shadow_resolution" x="54" y="193"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/video_settings/graphics/op_per_pixel_lighting" x="54" y="223"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/video_settings/graphics/op_shield_glow" x="54" y="253"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/video_settings/graphics/op_shield_glow_intensity" x="54" y="283"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/video_settings/graphics/op_anisotropic_filtering" x="54" y="193"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/video_settings/graphics/op_shadow_resolution" x="54" y="223"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/video_settings/graphics/op_per_pixel_lighting" x="54" y="253"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/video_settings/graphics/op_model_detail" x="54" y="283"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/video_settings/graphics/op_match_timer" x="54" y="313"/>
+	</widget>
+	<widget name="chupathingy/settings/video_settings/extra_effects_screen" width="640" height="480" flags="pass_unhandled_to_focused_child pause_game" bitmap="bitmaps/gradient">
+		<on event="b" back="true"/>
+		<on event="back" back="true"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/video_settings/extra_effects/header_profile_video_settings"/>
+		<child widget="chupathingy/settings/video_settings/extra_effects_list"/>
+		<child widget="chupathingy/prompts/y" x="60" y="414"/>
+		<child widget="chupathingy/prompts/defaults" x="82" y="414"/>
+		<child widget="chupathingy/prompts/b" x="360" y="414"/>
+		<child widget="chupathingy/prompts/cancel" x="382" y="414"/>
+		<child widget="chupathingy/prompts/a" x="490" y="414"/>
+		<child widget="chupathingy/prompts/accept" x="512" y="414"/>
+	</widget>
+	<widget name="chupathingy/settings/video_settings/extra_effects_list" type="column_list" width="640" height="480" flags="pass_unhandled_to_focused_child up_down_tabs_children" description="main_menu/settings_select/player_setup/player_profile_edit/video_settings/extra_effects/help">
+		<data input="port settings help"/>
+		<on event="a" run="port settings accept" back="true"/>
+		<on event="y" run="port settings defaults"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/video_settings/extra_effects/op_overshield_effect" x="54" y="73"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/video_settings/extra_effects/op_shield_glow" x="54" y="103"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/video_settings/extra_effects/op_shield_glow_intensity" x="54" y="133"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/video_settings/extra_effects/op_hdr" x="54" y="163"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/video_settings/extra_effects/op_hdr_output" x="54" y="193" platform="desktop"/>
 	</widget>
 	<widget name="chupathingy/settings/video_settings/fov_viewmodels_screen" width="640" height="480" flags="pass_unhandled_to_focused_child pause_game" bitmap="bitmaps/gradient">
 		<on event="b" back="true"/>
@@ -217,14 +240,34 @@
 	</widget>
 	<widget name="chupathingy/settings/video_settings/fov_viewmodels_list" type="column_list" width="640" height="480" flags="pass_unhandled_to_focused_child up_down_tabs_children" description="main_menu/settings_select/player_setup/player_profile_edit/video_settings/fov_viewmodels/help">
 		<data input="port settings help"/>
-		<on event="a" run="port settings save" back="true"/>
+		<on event="a" run="port settings accept" back="true"/>
 		<on event="y" run="port settings defaults"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/video_settings/fov_viewmodels/op_fov" x="54" y="73"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/video_settings/fov_viewmodels/op_viewmodel_fov" x="54" y="103"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/video_settings/fov_viewmodels/op_viewmodel_visible" x="54" y="133"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/video_settings/fov_viewmodels/op_viewmodel_shield" x="54" y="163"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/video_settings/fov_viewmodels/op_first_person_legs" x="54" y="193"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/video_settings/fov_viewmodels/op_shield_color" x="54" y="223"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/video_settings/fov_viewmodels/op_passenger_third_person" x="54" y="163"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/video_settings/fov_viewmodels/op_viewmodel_shield" x="54" y="193"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/video_settings/fov_viewmodels/op_first_person_legs" x="54" y="223"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/video_settings/fov_viewmodels/op_shield_color" x="54" y="253"/>
+	</widget>
+	<widget name="chupathingy/settings/audio_settings/sound_processing_screen" width="640" height="480" flags="pass_unhandled_to_focused_child pause_game" bitmap="bitmaps/gradient">
+		<on event="b" back="true"/>
+		<on event="back" back="true"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/sound_processing/header_profile_audio_settings"/>
+		<child widget="chupathingy/settings/audio_settings/sound_processing_list"/>
+		<child widget="chupathingy/prompts/y" x="60" y="414"/>
+		<child widget="chupathingy/prompts/defaults" x="82" y="414"/>
+		<child widget="chupathingy/prompts/b" x="360" y="414"/>
+		<child widget="chupathingy/prompts/cancel" x="382" y="414"/>
+		<child widget="chupathingy/prompts/a" x="490" y="414"/>
+		<child widget="chupathingy/prompts/accept" x="512" y="414"/>
+	</widget>
+	<widget name="chupathingy/settings/audio_settings/sound_processing_list" type="column_list" width="640" height="480" flags="pass_unhandled_to_focused_child up_down_tabs_children" description="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/sound_processing/help">
+		<data input="port settings help"/>
+		<on event="a" run="port settings accept" back="true"/>
+		<on event="y" run="port settings defaults"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/sound_processing/op_reverb" x="54" y="73"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/sound_processing/op_resampler" x="54" y="103"/>
 	</widget>
 	<widget name="chupathingy/settings/network_setup/map_sharing_screen" width="640" height="480" flags="pass_unhandled_to_focused_child pause_game" bitmap="bitmaps/gradient">
 		<on event="b" back="true"/>
@@ -240,10 +283,134 @@
 	</widget>
 	<widget name="chupathingy/settings/network_setup/map_sharing_list" type="column_list" width="640" height="480" flags="pass_unhandled_to_focused_child up_down_tabs_children" description="main_menu/settings_select/player_setup/player_profile_edit/network_setup/map_sharing/help">
 		<data input="port settings help"/>
-		<on event="a" run="port settings save" back="true"/>
+		<on event="a" run="port settings accept" back="true"/>
 		<on event="y" run="port settings defaults"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/map_sharing/op_map_download" x="54" y="73"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/map_sharing/op_map_seed" x="54" y="103"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/map_sharing/op_map_seed_upload" x="54" y="133"/>
+	</widget>
+	<widget name="chupathingy/settings/network_setup/multiplayer_hud_screen" width="640" height="480" flags="pass_unhandled_to_focused_child pause_game" bitmap="bitmaps/gradient">
+		<on event="b" back="true"/>
+		<on event="back" back="true"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/multiplayer_hud/header_profile_network_settings"/>
+		<child widget="chupathingy/settings/network_setup/multiplayer_hud_list"/>
+		<child widget="chupathingy/prompts/y" x="60" y="414"/>
+		<child widget="chupathingy/prompts/defaults" x="82" y="414"/>
+		<child widget="chupathingy/prompts/b" x="360" y="414"/>
+		<child widget="chupathingy/prompts/cancel" x="382" y="414"/>
+		<child widget="chupathingy/prompts/a" x="490" y="414"/>
+		<child widget="chupathingy/prompts/accept" x="512" y="414"/>
+	</widget>
+	<widget name="chupathingy/settings/network_setup/multiplayer_hud_list" type="column_list" width="640" height="480" flags="pass_unhandled_to_focused_child up_down_tabs_children" description="main_menu/settings_select/player_setup/player_profile_edit/network_setup/multiplayer_hud/help">
+		<data input="port settings help"/>
+		<on event="a" run="port settings accept" back="true"/>
+		<on event="y" run="port settings defaults"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/multiplayer_hud/op_player_names" x="54" y="73"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/multiplayer_hud/op_player_name_scale" x="54" y="103"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/multiplayer_hud/op_scoreboard_team_layout" x="54" y="133"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/multiplayer_hud/op_scoreboard_background" x="54" y="163"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/multiplayer_hud/op_text_chat" x="54" y="193"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/multiplayer_hud/op_chat_style" x="54" y="223"/>
+	</widget>
+	<widget name="chupathingy/settings/network_setup/streamer_mode_screen" width="640" height="480" flags="pass_unhandled_to_focused_child pause_game" bitmap="bitmaps/gradient">
+		<on event="b" back="true"/>
+		<on event="back" back="true"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/streamer_mode/header_profile_network_settings"/>
+		<child widget="chupathingy/settings/network_setup/streamer_mode_list"/>
+		<child widget="chupathingy/prompts/y" x="60" y="414"/>
+		<child widget="chupathingy/prompts/defaults" x="82" y="414"/>
+		<child widget="chupathingy/prompts/b" x="360" y="414"/>
+		<child widget="chupathingy/prompts/cancel" x="382" y="414"/>
+		<child widget="chupathingy/prompts/a" x="490" y="414"/>
+		<child widget="chupathingy/prompts/accept" x="512" y="414"/>
+	</widget>
+	<widget name="chupathingy/settings/network_setup/streamer_mode_list" type="column_list" width="640" height="480" flags="pass_unhandled_to_focused_child up_down_tabs_children" description="main_menu/settings_select/player_setup/player_profile_edit/network_setup/streamer_mode/help">
+		<data input="port settings help"/>
+		<on event="a" run="port settings accept" back="true"/>
+		<on event="y" run="port settings defaults"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/streamer_mode/op_enabled" x="54" y="73"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/streamer_mode/op_slurs" x="54" y="103"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/streamer_mode/op_swearing" x="54" y="133"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/streamer_mode/op_insults" x="54" y="163"/>
+	</widget>
+	<widget name="chupathingy/settings/network_setup/in_game_screen" width="640" height="480" flags="pass_unhandled_to_focused_child pause_game" bitmap="bitmaps/gradient">
+		<on event="b" back="true"/>
+		<on event="back" back="true"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/header_profile_network_settings"/>
+		<child widget="chupathingy/settings/network_setup/in_game_list"/>
+		<child widget="chupathingy/prompts/y" x="60" y="414"/>
+		<child widget="chupathingy/prompts/defaults" x="82" y="414"/>
+		<child widget="chupathingy/prompts/b" x="360" y="414"/>
+		<child widget="chupathingy/prompts/cancel" x="382" y="414"/>
+		<child widget="chupathingy/prompts/a" x="490" y="414"/>
+		<child widget="chupathingy/prompts/accept" x="512" y="414"/>
+	</widget>
+	<widget name="chupathingy/settings/network_setup/in_game_list" type="column_list" width="640" height="480" flags="pass_unhandled_to_focused_child up_down_tabs_children" description="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/help">
+		<data input="port settings help"/>
+		<on event="a" run="port settings accept" back="true"/>
+		<on event="y" run="port settings defaults"/>
+		<child widget="chupathingy/settings/network_setup/in_game/op_map_sharing" x="54" y="73" platform="desktop android"/>
+		<child widget="chupathingy/settings/network_setup/in_game/op_multiplayer_hud" x="54" y="103"/>
+		<child widget="chupathingy/settings/network_setup/in_game/op_streamer_mode" x="54" y="133"/>
+	</widget>
+	<widget name="chupathingy/settings/video_settings/op_graphics" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF">
+		<on event="a" open="chupathingy/settings/video_settings/graphics_screen"/>
+		<on event="start" open="chupathingy/settings/video_settings/graphics_screen"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/video_settings/graphics_label"/>
+	</widget>
+	<widget name="chupathingy/settings/video_settings/op_fov_viewmodels" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF">
+		<on event="a" open="chupathingy/settings/video_settings/fov_viewmodels_screen"/>
+		<on event="start" open="chupathingy/settings/video_settings/fov_viewmodels_screen"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/video_settings/fov_viewmodels_label"/>
+	</widget>
+	<widget name="chupathingy/settings/video_settings/op_extra_effects" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF">
+		<on event="a" open="chupathingy/settings/video_settings/extra_effects_screen"/>
+		<on event="start" open="chupathingy/settings/video_settings/extra_effects_screen"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/video_settings/extra_effects_label"/>
+	</widget>
+	<widget name="chupathingy/settings/audio_settings/op_sound_processing" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF">
+		<on event="a" open="chupathingy/settings/audio_settings/sound_processing_screen"/>
+		<on event="start" open="chupathingy/settings/audio_settings/sound_processing_screen"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/sound_processing_label"/>
+	</widget>
+	<widget name="chupathingy/settings/network_setup/op_map_sharing" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF" platform="desktop android">
+		<on event="a" open="chupathingy/settings/network_setup/map_sharing_screen"/>
+		<on event="start" open="chupathingy/settings/network_setup/map_sharing_screen"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/map_sharing_label"/>
+	</widget>
+	<widget name="chupathingy/settings/network_setup/op_multiplayer_hud" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF">
+		<on event="a" open="chupathingy/settings/network_setup/multiplayer_hud_screen"/>
+		<on event="start" open="chupathingy/settings/network_setup/multiplayer_hud_screen"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/multiplayer_hud_label"/>
+	</widget>
+	<widget name="chupathingy/settings/network_setup/op_streamer_mode" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF">
+		<on event="a" open="chupathingy/settings/network_setup/streamer_mode_screen"/>
+		<on event="start" open="chupathingy/settings/network_setup/streamer_mode_screen"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/streamer_mode_label"/>
+	</widget>
+	<widget name="chupathingy/settings/network_setup/in_game/op_map_sharing" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF" platform="desktop android">
+		<on event="a" open="chupathingy/settings/network_setup/map_sharing_screen"/>
+		<on event="start" open="chupathingy/settings/network_setup/map_sharing_screen"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/map_sharing_label"/>
+	</widget>
+	<widget name="chupathingy/settings/network_setup/in_game/op_multiplayer_hud" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF">
+		<on event="a" open="chupathingy/settings/network_setup/multiplayer_hud_screen"/>
+		<on event="start" open="chupathingy/settings/network_setup/multiplayer_hud_screen"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/multiplayer_hud_label"/>
+	</widget>
+	<widget name="chupathingy/settings/network_setup/in_game/op_streamer_mode" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF">
+		<on event="a" open="chupathingy/settings/network_setup/streamer_mode_screen"/>
+		<on event="start" open="chupathingy/settings/network_setup/streamer_mode_screen"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/streamer_mode_label"/>
 	</widget>
 </menus>

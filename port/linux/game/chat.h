@@ -43,4 +43,19 @@ char const *chat_host_welcome(void);
 moderator with a role here: its lines are marked as a moderator's */
 void chat_set_moderator_check(int (*check)(int machine_index));
 
+/* port (this fork): OpenCE's text chat (network_chat.c), carried in this one
+(chat.c, "OpenCE's text chat, bridged"). Players are the player table's
+absolute indices, channels network_chat.h's. */
+/* a line of OpenCE's chat this machine hears, shown here */
+void chat_bridge_heard(short player_index, short channel, char const *text);
+/* a notice of OpenCE's chat (its host's), shown here */
+void chat_bridge_notice(char const *text);
+/* (the host) a line network_chat.c took from an OpenCE machine: sent on to
+this chat's machines and shown here (not back to OpenCE's); FALSE where this
+chat's host settings refuse it (its filter, its mode), sent to none */
+int chat_bridge_host_route(short player_index, short channel, char const *text);
+/* whether this machine's host speaks this chat (Delta's): a client then
+leaves the OpenCE copies of the host's lines, which it has here already */
+int chat_bridge_host_speaks_delta(void);
+
 #endif

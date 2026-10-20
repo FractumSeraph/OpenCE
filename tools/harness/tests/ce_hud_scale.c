@@ -178,7 +178,7 @@ static void world(
 	*(unsigned short *)at(MODEL_SHADER + MODEL_SHADER_FLAGS_OFFSET) = 1 << 1;
 	*(unsigned short *)at(BITMAP_HALF + BITMAP_GROUP_FLAGS_OFFSET) = BITMAP_GROUP_HALF_HUD_SCALE_FLAG | 1;
 	*(unsigned short *)at(BITMAP_PLAIN + BITMAP_GROUP_FLAGS_OFFSET) = 1;
-	*(unsigned short *)at(BITMAP_FORCE + BITMAP_GROUP_FLAGS_OFFSET) = BITMAP_GROUP_FORCE_HUD_HIGH_RESOLUTION_SCALE_FLAG;
+	*(unsigned short *)at(BITMAP_FORCE + BITMAP_GROUP_FLAGS_OFFSET) = BITMAP_GROUP_FORCE_HIGH_RESOLUTION_SCALE_FLAG;
 
 	/* the weapon HUD: three statics (a bitmap that halves, one flagged,
 	one of neither), a flagged number, a crosshair whose bitmap halves its
@@ -196,12 +196,12 @@ static void world(
 	put_block(WEAPON_HUD + WEAPON_HUD_NUMBERS_OFFSET, 1, NUMBERS);
 	put_placement(NUMBERS + WEAPON_HUD_ELEMENT_OFFSET, TRUE);
 	put_block(WEAPON_HUD + WEAPON_HUD_CROSSHAIRS_OFFSET, 1, CROSSHAIRS);
-	put_reference(CROSSHAIRS + WEAPON_HUD_ITEMS_BITMAP_OFFSET, _tag_bitmap_force);
+	put_reference(CROSSHAIRS + WEAPON_HUD_BITMAP_OFFSET, _tag_bitmap_force);
 	put_block(CROSSHAIRS + WEAPON_HUD_ITEMS_OFFSET, 2, CROSSHAIR_ITEMS);
 	put_placement(CROSSHAIR_ITEMS, FALSE);
 	put_placement(CROSSHAIR_ITEMS + WEAPON_HUD_CROSSHAIR_ITEM_SIZE, FALSE);
 	put_block(WEAPON_HUD + WEAPON_HUD_OVERLAYS_OFFSET, 1, OVERLAYS);
-	put_reference(OVERLAYS + WEAPON_HUD_ITEMS_BITMAP_OFFSET, _tag_bitmap_plain);
+	put_reference(OVERLAYS + WEAPON_HUD_BITMAP_OFFSET, _tag_bitmap_plain);
 	put_block(OVERLAYS + WEAPON_HUD_ITEMS_OFFSET, 2, OVERLAY_ITEMS);
 	put_placement(OVERLAY_ITEMS, TRUE);
 	put_placement(OVERLAY_ITEMS + WEAPON_HUD_OVERLAY_ITEM_SIZE, FALSE);
