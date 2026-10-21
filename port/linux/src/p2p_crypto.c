@@ -14,8 +14,11 @@ tunnel's packets are sealed with keys only its two machines have.
 */
 
 #include "posix.h"
-#include "platform.h"
 #include "p2p_internal.h"
+
+/* (platform.h's, declared here as p2p_webrtc.c does: the web build's tests
+compile this file without the game's headers) */
+void platform_log(const char *format, ...);
 
 #include "monocypher.h"
 #include "monocypher-ed25519.h"

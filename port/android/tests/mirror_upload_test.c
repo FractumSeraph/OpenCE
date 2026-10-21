@@ -18,6 +18,11 @@ typedef unsigned GLuint, GLenum;
 #define PLATFORM_CONTIGUOUS_SIZE (2 * SEGMENT_SIZE)
 static unsigned char cpu[PLATFORM_CONTIGUOUS_SIZE];
 #define PLATFORM_CONTIGUOUS_BASE ((unsigned long)cpu)
+/* (this fork's renderer sizes its mirror by the most the window can be,
+ChupathingyCE's movable window, and reads guest addresses through
+xbox_pointer: here, the window and the pointers themselves) */
+#define PLATFORM_CONTIGUOUS_MAXIMUM PLATFORM_CONTIGUOUS_SIZE
+#define xbox_pointer(address) ((void *)(uintptr_t)(address))
 #define CHECK(x) do { if (!(x)) { fprintf(stderr, "line %d: %s\n", __LINE__, #x); exit(1); } } while (0)
 static struct { unsigned long frame, buffer_ring; } device;
 static struct { unsigned long mirrored_bytes; } stats;
