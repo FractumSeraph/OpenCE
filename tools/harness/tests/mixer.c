@@ -62,6 +62,18 @@ static void voice_audio_mix(float *output, unsigned long frames)
 	(void)frames;
 }
 
+/* (the audio probe's recording, which no case starts: the log, and its
+files' paths as they are) */
+static void platform_log(const char *format, ...)
+{
+	(void)format;
+}
+
+static void platform_translate_path(const char *xbox_path, char *host_path, unsigned long host_path_size)
+{
+	snprintf(host_path, host_path_size, "%s", xbox_path);
+}
+
 #include "under_test.inc"
 
 #define PI 3.14159265358979323846

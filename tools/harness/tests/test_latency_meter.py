@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from harness import CHECK_FAILED, build, constant, function, mutated, read, run  # noqa: E402
+from harness import CHECK_FAILED, build, constant, function, mutated, port_limits, read, run  # noqa: E402
 
 CASES = ["colors", "since-tick", "since-tick-bounds", "smoothing", "connection-problem", "machine-silent"]
 METER = ("latency_meter_color",)
@@ -46,7 +46,7 @@ def generated(fault=None, faulty_function=None):
     for name in ("TICK_SENT_TIMES", "MAXIMUM_PING_MILLISECONDS", "CONNECTION_PROBLEM_MILLISECONDS"):
         config += f"#define {name} {constant(netcode, name)}\n"
     config += "#define HALO_PORT_MAXIMUM_NETWORK_MACHINES %d\n" % constant(
-        read("port/linux/include/halo_port_limits.h"), "HALO_PORT_MAXIMUM_NETWORK_MACHINES")
+        port_limits(), "HALO_PORT_MAXIMUM_NETWORK_MACHINES")
     text = ""
     for source, names in ((meter, METER), (netcode, NETCODE)):
         for name in names:

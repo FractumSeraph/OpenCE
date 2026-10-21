@@ -1,5 +1,6 @@
 """The real button settings of player_ui.c: every layout keeps start and back and gives each control a button of its
-own, Bumper Jumper is the Master Chief Collection's, and a layout this build does not know is the standard one."""
+own, Bumper Jumper is the Master Chief Collection's, Custom is the standard one with config.toml's entries swapped in
+(controller_layout.c), and a layout this build does not know is the standard one."""
 
 import sys
 from pathlib import Path
@@ -9,13 +10,14 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from harness import CHECK_FAILED, build, enum_with, function, mutated, read, run, structure  # noqa: E402
 
-CASES = ["every-preset", "bumper-jumper", "unknown-preset"]
+CASES = ["every-preset", "bumper-jumper", "unknown-preset", "custom-preset"]
 
 # a fault in player_ui.c and the cases that must catch it
 NEGATIVE_CONTROLS = {
     "jump-on-black": (("[0] = _gamepad_analog_button_white;", "[0] = _gamepad_analog_button_black;"),
                       ["every-preset", "bumper-jumper"]),
     "no-default": (("\t\tdefault:\n", ""), ["unknown-preset"]),
+    "custom-not-read": (('config_string("controls.controller_layout")', "NULL"), ["custom-preset"]),
 }
 
 
@@ -33,7 +35,10 @@ def generated(fault=None):
     code = function(read("source/interface/player_ui.c"), "set_local_player_controls_from_player_profile")
     if fault:
         code = mutated(code, *NEGATIVE_CONTROLS[fault][0])
-    return (("config.inc", config), ("under_test.inc", code + "\n"))
+    # (the Custom layout's code, ChupathingyCE's, whole: it has no game types)
+    return (("config.inc", config), ("under_test.inc", code + "\n"),
+            ("controller_layout.h", read("port/linux/src/controller_layout.h")),
+            ("controller_layout.inc", read("port/linux/src/controller_layout.c")))
 
 
 @pytest.mark.parametrize("case", CASES)

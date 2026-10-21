@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from harness import build, read, run, function, inline, constant, structure, mutated, CHECK_FAILED
+from harness import build, read, run, function, inline, constant, structure, mutated, port_limits, CHECK_FAILED
 
 
 def generated(fault=None):
@@ -18,7 +18,7 @@ def generated(fault=None):
          inline(read('source/objects/reference_lists.h'), 'reference_list_add')),
         ('players.inc', function(read('source/hs/hs_library_external.c'), 'hs_players')),
         ('followers.inc', '#define HALO_PORT_MAXIMUM_NETWORK_PLAYERS ' +
-         str(constant(read('port/linux/include/halo_port_limits.h'), 'HALO_PORT_MAXIMUM_NETWORK_PLAYERS')) +
+         str(constant(port_limits(), 'HALO_PORT_MAXIMUM_NETWORK_PLAYERS')) +
          '\n#define NAMED_PLAYERS ' + str(constant(port, 'NAMED_PLAYERS')) + '\n' + followers),
         ('actions.inc', '\n'.join(function(port, name) for name in [
             'coop_scripts_teleport_followers', 'coop_scripts_suspend_followers',

@@ -557,6 +557,11 @@ def test_config_has_each_section_once(tmp_path):
     # (beside the stubs, which it then includes instead of the platform layer's)
     for name in ("port_config.c", "port_config.h"):
         shutil.copy(root / "port/linux/src" / name, stubs / name)
+    # (the limits it includes, and theirs, as tools/test_port_config.py copies
+    # them: port/linux/include's stdio.h and the like are the game's)
+    for name in ("halo_port_limits.h", "halo_port_capacity.h", "halo_port_features.h", "halo_console_memory.h",
+                 "halo_console_features.h"):
+        shutil.copy(root / "port/linux/include" / name, stubs / name)
     (tmp_path / "main.c").write_text(CONFIG_PROGRAM)
     program = tmp_path / "config_program"
     subprocess.run([compiler, "-DHALO_ANDROID=1", "-DHALO_ARM64_GUEST=1", f"-I{stubs}",

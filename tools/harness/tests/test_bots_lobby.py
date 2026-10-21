@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from harness import CHECK_FAILED, build, constant, enum_with, function, mutated, read, run, structure  # noqa: E402
+from harness import CHECK_FAILED, build, constant, enum_with, function, mutated, port_limits, read, run, structure  # noqa: E402
 
 CASES = ["fills", "room", "fewer", "even", "against", "follows-players", "never-network", "slayer-only",
          "not-once-started", "no-player-no-bots", "names-and-machines"]
@@ -36,7 +36,7 @@ def generated(fault=None):
     manager = read("source/networking/network_game_manager.c")
     bots_header = read("port/linux/game/bots.h")
     bots = read("port/linux/game/bots.c")
-    limits = read("port/linux/include/halo_port_limits.h")
+    limits = port_limits()
     config = ""
     for name in ("HALO_PORT_MAXIMUM_NETWORK_MACHINES", "HALO_PORT_MAXIMUM_NETWORK_PLAYERS"):
         config += f"#define {name} {constant(limits, name)}\n"

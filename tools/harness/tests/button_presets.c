@@ -41,6 +41,19 @@ static void input_abstraction_update_local_player_preferences(
 	applied = *preferences;
 }
 
+/* the Custom layout (ChupathingyCE's Controls screen): controller_layout.c,
+the real one, at the end of this file; config.toml's
+controls.controller_layout is the case's (none: the default layout) */
+#include "controller_layout.h"
+
+static char const *custom_layout;
+
+static char const *config_string(
+	char const *name)
+{
+	return !strcmp(name, "controls.controller_layout") ? custom_layout : NULL;
+}
+
 #include "under_test.inc"
 
 /* the Master Chief Collection's Bumper Jumper for Halo: Combat Evolved; the
@@ -138,6 +151,30 @@ int main(
 			sizeof(standard.game_control_to_xbox_buttons)), "an unknown preset is not the standard one");
 		return 0;
 	}
+	/* the player's own: the standard layout with its entries swapped in */
+	CASE("custom-preset")
+	{
+		struct game_input_preferences standard;
+
+		apply(_button_preset_standard);
+		standard = applied;
+		apply(_button_preset_custom);
+		playable(_button_preset_custom);
+		CHECK(!memcmp(applied.game_control_to_xbox_buttons, standard.game_control_to_xbox_buttons,
+			sizeof(standard.game_control_to_xbox_buttons)), "a custom preset without a layout is not the standard one");
+		custom_layout = "jump=LB, melee=RB, start=A";
+		apply(_button_preset_custom);
+		playable(_button_preset_custom);
+		CHECK(applied.game_control_to_xbox_buttons[_game_control_jump] == _gamepad_analog_button_white &&
+			applied.game_control_to_xbox_buttons[_game_control_melee] == _gamepad_analog_button_black,
+			"the custom layout put jump on %d and melee on %d",
+			applied.game_control_to_xbox_buttons[_game_control_jump],
+			applied.game_control_to_xbox_buttons[_game_control_melee]);
+		return 0;
+	}
 	fprintf(stderr, "unknown case: %s\n", case_name);
 	return 2;
 }
+
+/* (last: its button macros, A, B, X and so on, would rename this file's) */
+#include "controller_layout.inc"

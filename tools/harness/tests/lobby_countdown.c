@@ -4,7 +4,9 @@ LOBBY_COUNTDOWN.C (test)
 The real pregame countdown of source/networking/network_server_manager.c:
 whether the lobby's START NOW (the "faster" request,
 _network_game_server_countdown_event_player_joined) starts the countdown,
-for a host alone, a host with split screen players, and machines together.
+for a host alone or with split screen players (with
+game.start_with_one_player, ChupathingyCE's; without it the host waits for
+a second machine), a split screen game, and machines together.
 test_lobby_countdown.py takes the constants, enums and timer structures
 (config.inc) and the code (under_test.inc).
 */
@@ -54,9 +56,15 @@ struct network_game_server
 static struct network_game_server server;
 static int connection;
 
+/* game.start_with_one_player (or debug.solo_game), which a case turns on:
+without it a system link or internet game needs two machines; a split
+screen game (one that takes no remote connections) needs one */
+static boolean start_with_one_player;
+static boolean splitscreen_local;
+
 static unsigned long system_milliseconds(void) { return 1000; }
-static boolean network_game_should_accept_remote_connections(void) { return TRUE; }
-static boolean network_game_is_splitscreen_local(void) { return FALSE; }
+static boolean network_game_should_accept_remote_connections(void) { return !splitscreen_local; }
+static boolean network_game_is_splitscreen_local(void) { return splitscreen_local; }
 static boolean network_player_is_valid(struct network_player const *player) { return player->valid; }
 static boolean network_game_server_client_machine_is_joined_to_game(
 	struct network_game_server *s,
@@ -65,9 +73,9 @@ static boolean network_game_server_client_machine_is_joined_to_game(
 	return machine->joined;
 }
 static void network_game_server_countdown_started(struct network_game_server *s) { }
-/* (this fork's countdown asks these too: debug.solo_game off, the log, and
-map sharing with every machine having the map) */
-static boolean network_game_solo_game(void) { return FALSE; }
+/* (the countdown asks these too: the setting, the log, and map sharing with
+every machine having the map) */
+static boolean network_game_solo_game(void) { return start_with_one_player; }
 static void network_event(char const *format, ...) { (void)format; }
 static boolean map_share_machine_needs_map(long machine_index) { (void)machine_index; return FALSE; }
 
@@ -81,7 +89,8 @@ static void join_machine(
 	server.client_machines[machine_index].machine_index = machine_index;
 }
 
-/* machine 0 is the host's; no players yet */
+/* machine 0 is the host's; no players yet. The minimum players are the
+setting's, as network_game_server_setup_game_from_playlist sets them */
 static void lobby(
 	short machines)
 {
@@ -89,7 +98,7 @@ static void lobby(
 
 	memset(&server, 0, sizeof(server));
 	server.state = _network_game_server_state_pregame;
-	server.game.minimum_players = 2;
+	server.game.minimum_players = start_with_one_player ? 1 : 2;
 	for (index = 0; index < machines; index++)
 		join_machine(index);
 }
@@ -115,8 +124,10 @@ int main(int argc, char **argv)
 {
 	char const *case_name = argc > 1 ? argv[1] : "";
 
+	/* a system link host's split screen players, with game.start_with_one_player */
 	CASE("split-screen-start-now")
 	{
+		start_with_one_player = TRUE;
 		lobby(1);
 		add_player(0, 0);
 		add_player(0, 1);
@@ -126,12 +137,37 @@ int main(int argc, char **argv)
 			"%ld ms to go, not a system link game's countdown", server.countdown_state.timer.time_remaining);
 		return 0;
 	}
+	/* a split screen game (no remote connections) needs no setting */
+	CASE("split-screen-game-start-now")
+	{
+		splitscreen_local = TRUE;
+		lobby(1);
+		add_player(0, 0);
+		add_player(0, 1);
+		start_now();
+		CHECK(server.countdown_state.active, "a split screen game's two players never start the countdown");
+		CHECK(server.countdown_state.timer.time_remaining == NETWORK_GAME_SPLITSCREEN_COUNTDOWN_TIME,
+			"%ld ms to go, not a split screen game's countdown", server.countdown_state.timer.time_remaining);
+		return 0;
+	}
 	CASE("alone-start-now")
 	{
+		start_with_one_player = TRUE;
 		lobby(1);
 		add_player(0, 0);
 		start_now();
-		CHECK(server.countdown_state.active, "the host alone no longer starts the countdown");
+		CHECK(server.countdown_state.active, "the host alone no longer starts the countdown with game.start_with_one_player");
+		return 0;
+	}
+	/* without game.start_with_one_player a system link or internet game
+	waits for a second machine (ChupathingyCE's default) */
+	CASE("alone-waits")
+	{
+		lobby(1);
+		add_player(0, 0);
+		CHECK(!server_ok_to_countdown(&server), "the host alone may count down without game.start_with_one_player");
+		start_now();
+		CHECK(!server.countdown_state.active, "the host alone started the countdown without game.start_with_one_player");
 		return 0;
 	}
 	CASE("empty-lobby-waits")
@@ -165,17 +201,32 @@ int main(int argc, char **argv)
 	/* server_ok_to_countdown is checked each tick, and a failure stops the countdown */
 	CASE("playerless-machine-keeps-countdown")
 	{
+		start_with_one_player = TRUE;
 		lobby(1);
 		add_player(0, 0);
 		start_now();
-		CHECK(server.countdown_state.active, "the host alone no longer starts the countdown");
+		CHECK(server.countdown_state.active, "the host alone no longer starts the countdown with game.start_with_one_player");
 		join_machine(1);
 		CHECK(server_ok_to_countdown(&server), "a machine joining without a player stops the countdown");
 		return 0;
 	}
-	/* intended: one machine skips the team rule, as a lone host does */
+	/* without the setting: the second machine, joined without a player yet
+	(one downloading the map, say), counts for the machines, and the host's
+	player for the players */
+	CASE("playerless-machine-starts-countdown")
+	{
+		lobby(2);
+		add_player(0, 0);
+		CHECK(server_ok_to_countdown(&server), "a machine joined without a player holds the countdown");
+		start_now();
+		CHECK(server.countdown_state.active, "the host's player and a machine without one never start the countdown");
+		return 0;
+	}
+	/* intended: one machine skips the team rule, as a lone host does (a split
+	screen game: with game.start_with_one_player there is no team rule) */
 	CASE("split-screen-team-game-one-team")
 	{
+		splitscreen_local = TRUE;
 		lobby(1);
 		server.game.variant.universal_variant.teams = TRUE;
 		add_player(0, 0);

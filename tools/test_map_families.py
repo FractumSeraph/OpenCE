@@ -184,6 +184,12 @@ int map_archive_stock_name(const char *name)
 {
 	return 0;
 }
+/* (map_archive.c's: a hashed name's base, any other name as it is) */
+void map_archive_display_name(const char *name, char *display, int size)
+{
+	if (size > 0 && !map_archive_hashed_name(name, display, size, NULL))
+		snprintf(display, (size_t)size, "%s", name ? name : "");
+}
 void platform_log(char const *format, ...)
 {
 }

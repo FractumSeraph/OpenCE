@@ -16,15 +16,33 @@ def read(relative):
     return (ROOT / relative).read_text(encoding="latin-1")
 
 
+def _defined_only(line, defined, names):
+    """An #if of nothing but defined() of names (with !, && and ||): whether it is taken; None for any other #if."""
+    expression = re.sub(r"/\*.*?\*/|//.*", "", line.split("if", 1)[1]).strip()
+    tested = re.findall(r"defined\s*\(?\s*(\w+)", expression)
+    if not tested or any(name not in names for name in tested):
+        return None
+    words = re.sub(r"defined\s*\(\s*(\w+)\s*\)|defined\s+(\w+)",
+                   lambda match: " True " if (match.group(1) or match.group(2)) in defined else " False ", expression)
+    if not re.fullmatch(r"(\s|True|False|\(|\)|!|&&|\|\|)*", words):
+        return None
+    return eval(words.replace("&&", " and ").replace("||", " or ").replace("!", " not "))
+
+
 def configured(source, defined=(), names=("HALO_64BIT",)):
-    """The source as a build compiles it with the macros in defined and without the rest of names: their #ifdef and
-    #ifndef resolved (the harness builds the 32-bit game, without HALO_64BIT), every other conditional kept."""
+    """The source as a build compiles it with the macros in defined and without the rest of names: their #ifdef,
+    #ifndef and #if of only defined() resolved (the harness builds the 32-bit game, without HALO_64BIT), every other
+    conditional kept."""
     lines, stack = [], []  # each open conditional: None if kept, else whether its branch is taken
     for line in source.splitlines(keepends=True):
         directive = re.match(r"\s*#\s*(ifdef|ifndef|if|elif|else|endif)\b\s*(\w*)", line)
         kind, name = directive.groups() if directive else (None, None)
         if kind in ("ifdef", "ifndef") and name in names:
             stack.append((name in defined) == (kind == "ifdef"))
+            continue
+        taken = _defined_only(line, defined, names) if kind == "if" else None
+        if taken is not None:
+            stack.append(taken)
             continue
         if kind in ("else", "elif", "endif") and stack and stack[-1] is not None:
             if kind == "elif":
@@ -91,6 +109,14 @@ def constant(source, name):
     if re.fullmatch(r"0x[0-9A-Fa-f]+|\d+", value):
         return int(value, 0)
     return constant(source + read("port/linux/include/halo_port_capacity.h"), value)
+
+
+def port_limits():
+    """halo_port_limits.h as the desktop builds read it, which the harness tests: without a console's limits
+    (HALO_CONSOLE_PLAYERS, HALO_CONSOLE_LIMITS), whose numbers come first in the file, where constant() would find
+    them."""
+    return configured(read("port/linux/include/halo_port_limits.h"),
+                      names=("HALO_CONSOLE_PLAYERS", "HALO_CONSOLE_LIMITS"))
 
 
 def mutated(text, before, after):

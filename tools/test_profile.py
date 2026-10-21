@@ -65,6 +65,8 @@ def test_linux_build_compiles_with_the_profile_define(monkeypatch):
 # ---------- the recording's C units (tools/profile_check.c)
 
 PROFILE_SOURCES = ["port/linux/src/profile_trace.c", "port/linux/src/profile_json.c"]
+# (named profile_*.c too, but the player's Delta Profile, not profiling)
+DELTA_PROFILE_SOURCES = {"port/linux/game/profile_names.c", "port/linux/game/profile_screen.c"}
 
 
 def check_compiler():
@@ -530,9 +532,11 @@ def test_normal_build_preprocesses_as_before(tmp_path):
 def test_new_files_are_empty_in_a_normal_build():
     flag_sets = preprocess_flags()
     # (found, not listed: a new profile_*.c that forgets its #ifdef shows up here)
+    # (Delta Profile's files, ChupathingyCE's, are not the profiler's: browser builds only)
     paths = sorted(str(path.relative_to(ROOT)).replace("\\", "/")
                    for directory in ("port/linux/src", "port/linux/game")
-                   for path in (ROOT / directory).glob("profile_*.c"))
+                   for path in (ROOT / directory).glob("profile_*.c")
+                   if str(path.relative_to(ROOT)).replace("\\", "/") not in DELTA_PROFILE_SOURCES)
     assert set(paths) == {*PROFILE_SOURCES, "port/linux/game/profile_console.c"}, paths
     for path in paths:
         flags = flags_for(path, flag_sets)

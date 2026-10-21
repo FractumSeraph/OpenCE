@@ -1,5 +1,6 @@
-"""The real pregame countdown of network_server_manager.c: the lobby's START NOW starts it for a host alone, a host with
-split screen players and machines together, and a machine joining without a player does not stop it."""
+"""The real pregame countdown of network_server_manager.c: the lobby's START NOW starts it for a host alone or with split
+screen players when game.start_with_one_player is on (without it the host waits for a second machine), a split screen
+game and machines together, and a machine joining without a player does not stop it."""
 
 import sys
 from pathlib import Path
@@ -7,12 +8,12 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from harness import CHECK_FAILED, build, constant, enum_with, function, mutated, read, run, structure  # noqa: E402
+from harness import CHECK_FAILED, build, constant, enum_with, function, mutated, port_limits, read, run, structure  # noqa: E402
 
 CASES = [
-    "split-screen-start-now", "alone-start-now", "empty-lobby-waits", "two-machines-start-now",
-    "two-machines-team-game-needs-both-teams", "playerless-machine-keeps-countdown",
-    "split-screen-team-game-one-team",
+    "split-screen-start-now", "split-screen-game-start-now", "alone-start-now", "alone-waits", "empty-lobby-waits",
+    "two-machines-start-now", "two-machines-team-game-needs-both-teams", "playerless-machine-keeps-countdown",
+    "playerless-machine-starts-countdown", "split-screen-team-game-one-team",
 ]
 FUNCTIONS = (
     "countdown_timer_update", "countdown_timer_get_time_remaining", "countdown_timer_increment",
@@ -31,9 +32,11 @@ CONSTANTS = (
 
 # a fault in network_server_manager.c, the function it is in, and the case that must catch it
 NEGATIVE_CONTROLS = {
+    # (a split screen game's team rule: split-screen-start-now has game.start_with_one_player on, with which a game
+    # needs neither more players nor more teams, so it cannot see this fault)
     "one-player-only": (
         ("else if ((short)player->machine_index != first_machine_index)", "else"),
-        "server_players_on_one_machine", "split-screen-start-now",
+        "server_players_on_one_machine", "split-screen-team-game-one-team",
     ),
     "machines-ignored": (
         ("else if ((short)player->machine_index != first_machine_index)", "else if (0)"),
@@ -43,12 +46,17 @@ NEGATIVE_CONTROLS = {
     # empty lobby for one machine's: this fork's countdown also waits for a
     # player who has the map, server_has_a_player_with_the_map, which an
     # empty lobby has not, so empty-lobby-waits cannot see that fault alone)
+    "one-machine-enough": (
+        ("? 1 : 2;", "? 1 : 1;"),
+        "server_has_enough_machines", "alone-waits",
+    ),
+    # (without the setting: playerless-machine-keeps-countdown has it on, and its one player is then enough)
     "joined-machines-counted": (
         (
             "return first_machine_index != NONE;",
             "return first_machine_index != NONE && network_game_server_get_client_machine_count(server) == 1;",
         ),
-        "server_players_on_one_machine", "playerless-machine-keeps-countdown",
+        "server_players_on_one_machine", "playerless-machine-starts-countdown",
     ),
 }
 
@@ -56,7 +64,7 @@ NEGATIVE_CONTROLS = {
 def generated(fault=None, faulty_function=None):
     source = read("source/networking/network_server_manager.c")
     # (the machine and player counts are halo_port_limits.h's, which constant() does not follow into)
-    with_limits = source + read("port/linux/include/halo_port_limits.h")
+    with_limits = source + port_limits()
     config = ""
     for name in CONSTANTS:
         config += f"#define {name} {constant(with_limits, name)}\n"

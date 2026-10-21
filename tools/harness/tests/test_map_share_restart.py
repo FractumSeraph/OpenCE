@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from harness import CHECK_FAILED, build, constant, enum_with, function, mutated, read, run, structure  # noqa: E402
+from harness import CHECK_FAILED, build, constant, enum_with, function, mutated, port_limits, read, run, structure  # noqa: E402
 
 CASES = ["restart-forgets", "have-of-another-size", "choose-within", "refuse-within", "finish-playable",
          "finish-unplayable", "finish-refused"]
@@ -46,7 +46,7 @@ def generated(fault=None, faulty_function=None):
     config += "#define P2P_PLAYER_KEY_HASH_SIZE %d\n" % constant(read("port/linux/src/p2p.h"),
                                                                  "P2P_PLAYER_KEY_HASH_SIZE")
     config += "#define HALO_PORT_MAXIMUM_NETWORK_MACHINES %d\n" % constant(
-        read("port/linux/include/halo_port_limits.h"), "HALO_PORT_MAXIMUM_NETWORK_MACHINES")
+        port_limits(), "HALO_PORT_MAXIMUM_NETWORK_MACHINES")
     config += enum_with(header, "MAP_SHARE_HASH_BYTES") + "\n"
     for member in ("OFFER_TIMEOUT", "_have_none", "_download_none", "_file_awaiting_hashes",
                    "_connection_connecting"):
