@@ -185,6 +185,13 @@ int halo_chat_touch_layout(void)
 	return 0;
 }
 
+int halo_chat_taps(float *x, float *y)
+{
+	(void)x;
+	(void)y;
+	return 0;
+}
+
 void test_input_press(unsigned long buttons)
 {
 	(void)buttons;
