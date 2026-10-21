@@ -261,12 +261,11 @@ the message. A client's input entry says in its third byte (padding before)
 whether its player plays co-op without friendly fire; the host keeps it for
 the player and gives it to co-op's friendly fire rule (network_coop.c).
 OpenCE's `network_aim_assist.c` reads the same message 90 on a client
-(network_distributed.c hands it on): one policy, sent once. OpenCE's text
-chat (`network_chat.c`) is distributed messages 87 to 89 (a line up, a line
-down, the host's chat settings), which a build without it drops as kinds
-it does not know; this fork's builds with ChupathingyCE's chat (`chat.c`,
-over Delta) type and show that one, and network_chat.c only takes and relays
-the lines that come.
+(network_distributed.c hands it on): one policy, sent once. Messages 87 to
+89 are OpenCE's text chat (`network_chat.c`: a line up, a line down, the
+host's chat settings), which Delta chat bridges (`docs/delta.md`, Chat): a
+build without them drops them as unknown, so they take no version of their
+own.
 
 A host never checks a joining client's version: the client reads the
 host's from its advertisement and joins only a version it plays with. That

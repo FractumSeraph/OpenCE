@@ -89,6 +89,10 @@ debug.network_test_cue_players has a unit (tools/stagekit's scenarios).
 Called from the main loop every frame (main.c).
 */
 
+/* port: none of this in a console's build (halo_port_features.h) but
+network_test_update, which does nothing there */
+#ifndef HALO_CONSOLE_NO_NETWORK_TEST
+
 #include "cseries.h"
 #include "main/main.h"
 #include "bink/bink_playback.h"
@@ -2336,3 +2340,24 @@ double network_test_game_seconds(
 {
 	return game_time_initialized() && game_in_progress() ? (double)game_time_get() / TICKS_PER_SECOND : -1.0;
 }
+
+#else
+
+#include "cseries.h"
+
+/* (the main loop's call, answered with nothing) */
+void network_test_update(
+	boolean main_menu_loaded,
+	real seconds)
+{
+	return;
+}
+
+/* (the scripted player's clock: no game here) */
+double network_test_game_seconds(
+	void)
+{
+	return -1.0;
+}
+
+#endif /* HALO_CONSOLE_NO_NETWORK_TEST */

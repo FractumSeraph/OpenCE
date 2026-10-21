@@ -55,15 +55,4 @@ in the lobby too; at most 12 characters, ended or not) is muted for everyone:
 their machine's voice goes no further */
 boolean network_chat_host_name_muted(wchar_t const *name);
 
-/* port (this fork): carried in chat.c's chat ("OpenCE's text chat, bridged"),
-where it is built (HALO_GAME_BROWSER, HALO_BROWSER) */
-/* (the host) a line of chat.c's sent on to the machines that hear it in this
-chat, not shown here (chat.c shows it) */
-void network_chat_bridge_relay(short player_index, short channel, char const *text);
-/* (the host) a server's line of chat.c's sent on as a notice */
-void network_chat_bridge_relay_notice(char const *text);
-/* (a client) whether this chat can carry a line now: its host sent its
-settings, and they have the chat on */
-boolean network_chat_bridge_available(void);
-
 #endif // __NETWORK_CHAT_H

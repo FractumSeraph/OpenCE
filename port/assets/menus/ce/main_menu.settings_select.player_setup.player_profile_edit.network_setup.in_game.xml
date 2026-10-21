@@ -2,8 +2,8 @@
 <!-- The port's settings screen, in the PC version's style (tools/port_settings.py) -->
 <menus>
 	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/in_game_network_settings_screen" width="640" height="480" flags="pass_unhandled_to_focused_child pause_game" bitmap="bitmaps/gradient">
-		<on event="b" back="true"/>
-		<on event="back" back="true"/>
+		<on event="b" run="port settings back"/>
+		<on event="back" run="port settings back"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/header_profile_network_settings"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/options_menu"/>
 	</widget>
@@ -13,11 +13,34 @@
 	</widget>
 	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/options_menu" type="column_list" width="640" height="480" flags="pass_unhandled_to_focused_child up_down_tabs_children" description="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/help">
 		<data input="port settings help"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_map_sharing" x="54" y="73" platform="desktop android"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_multiplayer_hud" x="54" y="103" platform="desktop android"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_multiplayer_hud" x="54" y="73" platform="web"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_streamer_mode" x="54" y="133" platform="desktop android"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_streamer_mode" x="54" y="103" platform="web"/>
+		<on event="created" run="port settings views init"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/view_main" x="54" y="73"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_link_chat" x="54" y="73"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_link_multiplayer_hud" x="54" y="103"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_link_map_sharing" x="54" y="133" platform="desktop android"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_link_streamer" x="54" y="163" platform="desktop android"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_link_streamer" x="54" y="133" platform="web"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/view_chat" x="54" y="73"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_enabled" x="54" y="73"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_show" x="54" y="103"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_filter" x="54" y="133"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_streamer_mode" x="54" y="163"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_text_chat" x="54" y="193"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_chat_style" x="54" y="223"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/view_multiplayer_hud" x="54" y="73"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_player_names" x="54" y="73"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_player_name_scale" x="54" y="103"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_scoreboard_team_layout" x="54" y="133"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_scoreboard_background" x="54" y="163"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/view_map_sharing" x="54" y="73"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_map_download" x="54" y="73"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_map_seed" x="54" y="103"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_map_seed_upload" x="54" y="133"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/view_streamer" x="54" y="73"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_streamer_enabled" x="54" y="73"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_slurs" x="54" y="103"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_swearing" x="54" y="133"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_insults" x="54" y="163"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/button_bar" y="414"/>
 	</widget>
 	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/button_bar" type="column_list" width="640" height="28" flags="pass_unhandled_to_focused_child left_right_tabs_items">
@@ -25,29 +48,200 @@
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/button_ok" x="380" y="1"/>
 		<child widget="common_button_cancel" x="510" y="1"/>
 	</widget>
-	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_map_sharing" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF" platform="desktop android">
-		<on event="a" open="main_menu/settings_select/player_setup/player_profile_edit/network_setup/map_sharing/map_sharing_settings_screen"/>
-		<on event="start" open="main_menu/settings_select/player_setup/player_profile_edit/network_setup/map_sharing/map_sharing_settings_screen"/>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/view_main" width="1" height="1">
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_link_chat" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF">
+		<on event="a" run="port settings view"/>
+		<on event="start" run="port settings view"/>
 		<on event="left_mouse" run="mouse emit accept event"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/map_sharing_label"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/link_chat_label"/>
 	</widget>
-	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/map_sharing_label" type="text" controller="1" width="512" height="22" string_list="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/labels" string_index="0" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="4">
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/link_chat_label" type="text" controller="1" width="300" height="22" string_list="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/labels" string_index="0" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="4">
 	</widget>
-	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_multiplayer_hud" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF">
-		<on event="a" open="main_menu/settings_select/player_setup/player_profile_edit/network_setup/multiplayer_hud/multiplayer_hud_settings_screen"/>
-		<on event="start" open="main_menu/settings_select/player_setup/player_profile_edit/network_setup/multiplayer_hud/multiplayer_hud_settings_screen"/>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_link_multiplayer_hud" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF">
+		<on event="a" run="port settings view"/>
+		<on event="start" run="port settings view"/>
 		<on event="left_mouse" run="mouse emit accept event"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/multiplayer_hud_label"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/link_multiplayer_hud_label"/>
 	</widget>
-	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/multiplayer_hud_label" type="text" controller="1" width="512" height="22" string_list="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/labels" string_index="1" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="4">
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/link_multiplayer_hud_label" type="text" controller="1" width="300" height="22" string_list="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/labels" string_index="1" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="4">
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_link_map_sharing" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF" platform="desktop android">
+		<on event="a" run="port settings view"/>
+		<on event="start" run="port settings view"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/link_map_sharing_label"/>
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/link_map_sharing_label" type="text" controller="1" width="300" height="22" string_list="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/labels" string_index="2" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="4">
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_link_streamer" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF">
+		<on event="a" run="port settings view"/>
+		<on event="start" run="port settings view"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/link_streamer_label"/>
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/link_streamer_label" type="text" controller="1" width="300" height="22" string_list="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/labels" string_index="3" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="4">
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/view_chat" width="1" height="1">
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_enabled" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF">
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/enabled_label"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/enabled_spinner" x="320" y="1"/>
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/enabled_label" type="text" controller="1" width="300" height="22" string_list="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/labels" string_index="4" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="4">
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/enabled_spinner" type="spinner" left="3" top="2" width="147" height="20" flags="pass_unhandled_to_focused_child left_right_tabs_items" strings="ON|OFF" setting="chat.enabled" values="true|false" font="ui\large_ui" color="#FF2896FF" align="center" text_y="1" header_bitmap="bitmaps/arrow_sm_left" footer_bitmap="bitmaps/arrow_sm_right" header_bounds="7 -6 19 0" footer_bounds="7 150 19 156">
+		<on event="created" run="port setting load"/>
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_show" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF">
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/show_label"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/show_spinner" x="320" y="1"/>
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/show_label" type="text" controller="1" width="300" height="22" string_list="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/labels" string_index="5" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="4">
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/show_spinner" type="spinner" left="3" top="2" width="147" height="20" flags="pass_unhandled_to_focused_child left_right_tabs_items" strings="ALL|TEAM|OFF" setting="chat.show" values="all|team|off" font="ui\large_ui" color="#FF2896FF" align="center" text_y="1" header_bitmap="bitmaps/arrow_sm_left" footer_bitmap="bitmaps/arrow_sm_right" header_bounds="7 -6 19 0" footer_bounds="7 150 19 156">
+		<on event="created" run="port setting load"/>
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_filter" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF">
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/filter_label"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/filter_spinner" x="320" y="1"/>
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/filter_label" type="text" controller="1" width="300" height="22" string_list="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/labels" string_index="6" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="4">
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/filter_spinner" type="spinner" left="3" top="2" width="147" height="20" flags="pass_unhandled_to_focused_child left_right_tabs_items" strings="MASK|HIDE|SHOW" setting="chat.filter" values="mask|hide|show" font="ui\large_ui" color="#FF2896FF" align="center" text_y="1" header_bitmap="bitmaps/arrow_sm_left" footer_bitmap="bitmaps/arrow_sm_right" header_bounds="7 -6 19 0" footer_bounds="7 150 19 156">
+		<on event="created" run="port setting load"/>
 	</widget>
 	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_streamer_mode" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF">
-		<on event="a" open="main_menu/settings_select/player_setup/player_profile_edit/network_setup/streamer_mode/streamer_mode_settings_screen"/>
-		<on event="start" open="main_menu/settings_select/player_setup/player_profile_edit/network_setup/streamer_mode/streamer_mode_settings_screen"/>
-		<on event="left_mouse" run="mouse emit accept event"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/streamer_mode_label"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/streamer_mode_spinner" x="320" y="1"/>
 	</widget>
-	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/streamer_mode_label" type="text" controller="1" width="512" height="22" string_list="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/labels" string_index="2" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="4">
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/streamer_mode_label" type="text" controller="1" width="300" height="22" string_list="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/labels" string_index="7" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="4">
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/streamer_mode_spinner" type="spinner" left="3" top="2" width="147" height="20" flags="pass_unhandled_to_focused_child left_right_tabs_items" strings="ON|OFF" setting="chat.streamer_mode" values="true|false" font="ui\large_ui" color="#FF2896FF" align="center" text_y="1" header_bitmap="bitmaps/arrow_sm_left" footer_bitmap="bitmaps/arrow_sm_right" header_bounds="7 -6 19 0" footer_bounds="7 150 19 156">
+		<on event="created" run="port setting load"/>
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_text_chat" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF">
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/text_chat_label"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/text_chat_spinner" x="320" y="1"/>
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/text_chat_label" type="text" controller="1" width="300" height="22" string_list="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/labels" string_index="8" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="4">
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/text_chat_spinner" type="spinner" left="3" top="2" width="147" height="20" flags="pass_unhandled_to_focused_child left_right_tabs_items" strings="SHOW|HIDE" setting="display.text_chat" values="true|false" font="ui\large_ui" color="#FF2896FF" align="center" text_y="1" header_bitmap="bitmaps/arrow_sm_left" footer_bitmap="bitmaps/arrow_sm_right" header_bounds="7 -6 19 0" footer_bounds="7 150 19 156">
+		<on event="created" run="port setting load"/>
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_chat_style" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF">
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/chat_style_label"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/chat_style_spinner" x="320" y="1"/>
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/chat_style_label" type="text" controller="1" width="300" height="22" string_list="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/labels" string_index="9" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="4">
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/chat_style_spinner" type="spinner" left="3" top="2" width="147" height="20" flags="pass_unhandled_to_focused_child left_right_tabs_items" strings="COLORS|WHITE" setting="display.chat_style" values="colors|white" font="ui\large_ui" color="#FF2896FF" align="center" text_y="1" header_bitmap="bitmaps/arrow_sm_left" footer_bitmap="bitmaps/arrow_sm_right" header_bounds="7 -6 19 0" footer_bounds="7 150 19 156">
+		<on event="created" run="port setting load"/>
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/view_multiplayer_hud" width="1" height="1">
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_player_names" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF">
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/player_names_label"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/player_names_spinner" x="320" y="1"/>
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/player_names_label" type="text" controller="1" width="300" height="22" string_list="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/labels" string_index="10" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="4">
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/player_names_spinner" type="spinner" left="3" top="2" width="147" height="20" flags="pass_unhandled_to_focused_child left_right_tabs_items" strings="ALL|ALLIES|ENEMIES|NONE" setting="display.player_names" values="all|allies|enemies|none" font="ui\large_ui" color="#FF2896FF" align="center" text_y="1" header_bitmap="bitmaps/arrow_sm_left" footer_bitmap="bitmaps/arrow_sm_right" header_bounds="7 -6 19 0" footer_bounds="7 150 19 156">
+		<on event="created" run="port setting load"/>
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_player_name_scale" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF">
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/player_name_scale_label"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/player_name_scale_spinner" x="320" y="1"/>
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/player_name_scale_label" type="text" controller="1" width="300" height="22" string_list="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/labels" string_index="11" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="4">
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/player_name_scale_spinner" type="spinner" left="3" top="2" width="147" height="20" flags="pass_unhandled_to_focused_child left_right_tabs_items" strings="0.5x|0.75x|1x|1.25x|1.5x|2x" setting="display.player_name_scale" values="0.5|0.75|1|1.25|1.5|2" font="ui\large_ui" color="#FF2896FF" align="center" text_y="1" header_bitmap="bitmaps/arrow_sm_left" footer_bitmap="bitmaps/arrow_sm_right" header_bounds="7 -6 19 0" footer_bounds="7 150 19 156">
+		<on event="created" run="port setting load"/>
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_scoreboard_team_layout" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF">
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/scoreboard_team_layout_label"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/scoreboard_team_layout_spinner" x="320" y="1"/>
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/scoreboard_team_layout_label" type="text" controller="1" width="300" height="22" string_list="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/labels" string_index="12" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="4">
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/scoreboard_team_layout_spinner" type="spinner" left="3" top="2" width="147" height="20" flags="pass_unhandled_to_focused_child left_right_tabs_items" strings="TEAMS|BY SCORE" setting="display.scoreboard_team_layout" values="teams|score" font="ui\large_ui" color="#FF2896FF" align="center" text_y="1" header_bitmap="bitmaps/arrow_sm_left" footer_bitmap="bitmaps/arrow_sm_right" header_bounds="7 -6 19 0" footer_bounds="7 150 19 156">
+		<on event="created" run="port setting load"/>
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_scoreboard_background" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF">
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/scoreboard_background_label"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/scoreboard_background_spinner" x="320" y="1"/>
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/scoreboard_background_label" type="text" controller="1" width="300" height="22" string_list="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/labels" string_index="13" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="4">
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/scoreboard_background_spinner" type="spinner" left="3" top="2" width="147" height="20" flags="pass_unhandled_to_focused_child left_right_tabs_items" strings="ON|OFF" setting="display.scoreboard_background" values="true|false" font="ui\large_ui" color="#FF2896FF" align="center" text_y="1" header_bitmap="bitmaps/arrow_sm_left" footer_bitmap="bitmaps/arrow_sm_right" header_bounds="7 -6 19 0" footer_bounds="7 150 19 156">
+		<on event="created" run="port setting load"/>
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/view_map_sharing" width="1" height="1">
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_map_download" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF">
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/map_download_label"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/map_download_spinner" x="320" y="1"/>
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/map_download_label" type="text" controller="1" width="300" height="22" string_list="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/labels" string_index="14" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="4">
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/map_download_spinner" type="spinner" left="3" top="2" width="147" height="20" flags="pass_unhandled_to_focused_child left_right_tabs_items" strings="ON|OFF" setting="network.map_download" values="true|false" font="ui\large_ui" color="#FF2896FF" align="center" text_y="1" header_bitmap="bitmaps/arrow_sm_left" footer_bitmap="bitmaps/arrow_sm_right" header_bounds="7 -6 19 0" footer_bounds="7 150 19 156">
+		<on event="created" run="port setting load"/>
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_map_seed" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF">
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/map_seed_label"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/map_seed_spinner" x="320" y="1"/>
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/map_seed_label" type="text" controller="1" width="300" height="22" string_list="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/labels" string_index="15" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="4">
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/map_seed_spinner" type="spinner" left="3" top="2" width="147" height="20" flags="pass_unhandled_to_focused_child left_right_tabs_items" strings="ON|OFF" setting="network.map_seed" values="true|false" font="ui\large_ui" color="#FF2896FF" align="center" text_y="1" header_bitmap="bitmaps/arrow_sm_left" footer_bitmap="bitmaps/arrow_sm_right" header_bounds="7 -6 19 0" footer_bounds="7 150 19 156">
+		<on event="created" run="port setting load"/>
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_map_seed_upload" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF">
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/map_seed_upload_label"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/map_seed_upload_spinner" x="320" y="1"/>
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/map_seed_upload_label" type="text" controller="1" width="300" height="22" string_list="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/labels" string_index="16" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="4">
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/map_seed_upload_spinner" type="spinner" left="3" top="2" width="147" height="20" flags="pass_unhandled_to_focused_child left_right_tabs_items" strings="64 KB/S|128 KB/S|256 KB/S|512 KB/S|1 MB/S|2 MB/S|4 MB/S|8 MB/S|10 MB/S" setting="network.map_seed_upload" values="64|128|256|512|1024|2048|4096|8192|10240" font="ui\large_ui" color="#FF2896FF" align="center" text_y="1" header_bitmap="bitmaps/arrow_sm_left" footer_bitmap="bitmaps/arrow_sm_right" header_bounds="7 -6 19 0" footer_bounds="7 150 19 156">
+		<on event="created" run="port setting load"/>
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/view_streamer" width="1" height="1">
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_streamer_enabled" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF">
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/streamer_enabled_label"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/streamer_enabled_spinner" x="320" y="1"/>
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/streamer_enabled_label" type="text" controller="1" width="300" height="22" string_list="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/labels" string_index="17" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="4">
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/streamer_enabled_spinner" type="spinner" left="3" top="2" width="147" height="20" flags="pass_unhandled_to_focused_child left_right_tabs_items" strings="ON|OFF" setting="streamer.enabled" values="true|false" font="ui\large_ui" color="#FF2896FF" align="center" text_y="1" header_bitmap="bitmaps/arrow_sm_left" footer_bitmap="bitmaps/arrow_sm_right" header_bounds="7 -6 19 0" footer_bounds="7 150 19 156">
+		<on event="created" run="port setting load"/>
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_slurs" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF">
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/slurs_label"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/slurs_spinner" x="286" y="1"/>
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/slurs_label" type="text" controller="1" width="300" height="22" string_list="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/labels" string_index="18" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="4">
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/slurs_spinner" type="spinner" top="2" width="206" height="20" flags="pass_unhandled_to_focused_child left_right_tabs_items" strings="OFF|SEVERE|STRONG AND WORSE|MILD AND WORSE" setting="streamer.slurs" values="off|severe|strong|mild" font="ui\large_ui" color="#FF2896FF" align="center" text_y="4" header_bitmap="bitmaps/arrow_sm_left" footer_bitmap="bitmaps/arrow_sm_right" header_bounds="7 -13 19 -7" footer_bounds="7 208 19 214">
+		<on event="created" run="port setting load"/>
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_swearing" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF">
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/swearing_label"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/swearing_spinner" x="286" y="1"/>
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/swearing_label" type="text" controller="1" width="300" height="22" string_list="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/labels" string_index="19" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="4">
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/swearing_spinner" type="spinner" top="2" width="206" height="20" flags="pass_unhandled_to_focused_child left_right_tabs_items" strings="OFF|SEVERE|STRONG AND WORSE|MILD AND WORSE" setting="streamer.swearing" values="off|severe|strong|mild" font="ui\large_ui" color="#FF2896FF" align="center" text_y="4" header_bitmap="bitmaps/arrow_sm_left" footer_bitmap="bitmaps/arrow_sm_right" header_bounds="7 -13 19 -7" footer_bounds="7 208 19 214">
+		<on event="created" run="port setting load"/>
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_insults" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF">
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/insults_label"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/insults_spinner" x="286" y="1"/>
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/insults_label" type="text" controller="1" width="300" height="22" string_list="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/labels" string_index="20" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="4">
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/insults_spinner" type="spinner" top="2" width="206" height="20" flags="pass_unhandled_to_focused_child left_right_tabs_items" strings="OFF|SEVERE|STRONG AND WORSE|MILD AND WORSE" setting="streamer.insults" values="off|severe|strong|mild" font="ui\large_ui" color="#FF2896FF" align="center" text_y="4" header_bitmap="bitmaps/arrow_sm_left" footer_bitmap="bitmaps/arrow_sm_right" header_bounds="7 -13 19 -7" footer_bounds="7 208 19 214">
+		<on event="created" run="port setting load"/>
 	</widget>
 	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/button_defaults" type="text" width="128" height="24" bitmap="bitmaps/text_button_background" string_list="strings/common_button_captions" string_index="3" font="ui\small_ui" color="#FFFFFFFF" align="center" text_y="2">
 		<on event="a" run="port settings defaults"/>
@@ -60,14 +254,50 @@
 		<on event="left_mouse" run="mouse emit accept event"/>
 	</widget>
 	<strings name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/labels">
-		<string text="MAP SHARING:"/>
-		<string text="MULTIPLAYER HUD:"/>
+		<string text="CHAT"/>
+		<string text="MULTIPLAYER HUD"/>
+		<string text="MAP SHARING"/>
+		<string text="STREAMER MODE"/>
+		<string text="CHAT:"/>
+		<string text="SHOW CHAT:"/>
+		<string text="WORD FILTER:"/>
 		<string text="STREAMER MODE:"/>
+		<string text="OPENCE CHAT:"/>
+		<string text="OPENCE CHAT COLORS:"/>
+		<string text="PLAYER NAMES:"/>
+		<string text="PLAYER NAME SIZE:"/>
+		<string text="SCOREBOARD LAYOUT:"/>
+		<string text="SCOREBOARD PANEL:"/>
+		<string text="DOWNLOAD MAPS:"/>
+		<string text="HELP SEND MAPS:"/>
+		<string text="UPLOAD LIMIT:"/>
+		<string text="HIDE WORDS:"/>
+		<string text="CENSOR SLURS:"/>
+		<string text="CENSOR SWEARING:"/>
+		<string text="CENSOR INSULTS:"/>
 	</strings>
 	<strings name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/help_strings">
 		<string text=""/>
+		<string text="Text chat and the word filter."/>
+		<string text="Players' names above their heads, and the\nscoreboard."/>
 		<string text="Downloading Custom Edition maps you do not have,\nand helping send them to other players."/>
-		<string text="Players' names above their heads, the\nscoreboard, and the text chat."/>
+		<string text="Hide offensive words in names and text from\nother players, maps and mods."/>
+		<string text="Text chat with other players."/>
+		<string text="Choose whose chat lines show."/>
+		<string text="Mask, hide or show blocked words."/>
+		<string text="Show players in chat by team, not by name."/>
+		<string text="The text chat of a game an OpenCE machine hosts:\nshow it, or hide it and its keys."/>
+		<string text="Its names in their team's color, or all white, as\nCustom Edition."/>
+		<string text="Choose whose names show above players."/>
+		<string text="Adjust the size of player names."/>
+		<string text="Show team games by team, or all players by score."/>
+		<string text="Draw a panel behind the scoreboard."/>
+		<string text="Joining a game on a Custom Edition map you do not\nhave: download it from the players (if shared)."/>
+		<string text="In another's game, send its map to players who\njoin without it, as a torrent's peers do."/>
+		<string text="The most you send of maps to other players, so\nthat the game keeps the rest of your upload."/>
 		<string text="Hide offensive words in names and text from\nother players, maps and mods, as stars."/>
+		<string text="Slurs about race, sexuality, gender and\ndisability."/>
+		<string text="Swearing and sexual words (STRONG AND WORSE\nleaves the mildest showing)."/>
+		<string text="Name-calling and insults that are not slurs."/>
 	</strings>
 </menus>

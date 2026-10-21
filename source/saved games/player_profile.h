@@ -40,6 +40,9 @@ enum
 	/* port: the Master Chief Collection's Bumper Jumper (jump on the left
 	shoulder, melee on the right), which the Xbox game did not have */
 	_button_preset_bumper_jumper,
+	/* port: the player's own, from the Controls screen (config.toml's
+	controls.controller_layout); a build without it reads it as Default */
+	_button_preset_custom,
 	NUMBER_OF_BUTTON_PRESETS
 };
 

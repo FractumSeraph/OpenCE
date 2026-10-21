@@ -16,7 +16,7 @@ then [ChupathingyCE's](#chupathingyce), then [OpenCE's](#opence).
   installs as an app. Play online with other browsers and with the
   Windows, Mac, Linux and Android builds, from the game's own menus (Create
   Game, the Server Browser) or with an invite link; voice chat; ChupathingyCE's
-  stats on [halo.milenko.org](https://halo.milenko.org). The site's Custom
+  stats on [stats.chupathingy.org](https://stats.chupathingy.org). The site's Custom
   Edition maps download the first time they are played and stay in the
   browser.
 - **Every Custom Edition map, downloaded when a game needs it.** All 5,829
@@ -33,7 +33,7 @@ then [ChupathingyCE's](#chupathingyce), then [OpenCE's](#opence).
   so that no one watching can help a player. Anyone watches them at
   [halo.fractumseraph.net/assets/replay](https://halo.fractumseraph.net/assets/replay/),
   live or once the game is over, through any player's eyes, behind them or
-  freely, each game linked to its stats on halo.milenko.org.
+  freely, each game linked to its stats on stats.chupathingy.org.
 - **Tools against cheaters.** A host checks each hit and move for shots
   through walls, off aim, teleports and flying, and refuses or logs them
   (`network.fair_play`; `sv_suspects` on a dedicated server); records every
@@ -84,9 +84,9 @@ working version; nothing sent over the network differs from theirs, so
 players of all three play together: this fork's builds speak network
 version 32, as OpenCE's and ChupathingyCE's newest do, and join hosts of
 versions 11 to 33, in either project's form (`docs/delta.md`). Both
-projects' text chats are one here: ChupathingyCE's is the one typed and
-shown, and OpenCE players' lines reach it and its lines reach them, on a
-host of either (`port/linux/game/chat.c`, "OpenCE's text chat, bridged").
+projects' text chats are one, by ChupathingyCE's own bridge: its chat is
+the one typed and shown, and OpenCE players' lines reach it and its lines
+reach them, on a host of either (`docs/delta.md`, Chat).
 
 ## Download
 
@@ -305,7 +305,7 @@ rough edges, and please report them.
 - Cross-play with players on other builds of the same network version, both ways
 - Dedicated servers anyone can run: a playlist of games, around the clock, on Linux x86, x64 or arm64
 
-**Stats, on [halo.milenko.org](https://halo.milenko.org)**
+**Stats, on [stats.chupathingy.org](https://stats.chupathingy.org)**
 - A carnage report for every finished game, with medals
 - Service records and leaderboards, with confirmed players (your games count toward you, whatever name you use)
 - Accounts, made on the site or from the game, with an encrypted backup of your player identity
@@ -390,14 +390,14 @@ and quits.
 
 | You want to | Do this |
 | --- | --- |
-| Join a game | **Multiplayer → Online Games**, pick a game, press **A**. Or press **Join** on [halo.milenko.org](https://halo.milenko.org). |
-| Host a game | **Multiplayer → Online Games → Y (Create Game)**, or host from System Link as usual. Your game is listed online by itself, on halo.milenko.org and in OpenCE's in-game Server Browser (`public_lobby`/`host_public` under `[network]` in `config.toml` turn that off). |
+| Join a game | **Multiplayer → Online Games**, pick a game, press **A**. Or press **Join** on [stats.chupathingy.org](https://stats.chupathingy.org). |
+| Host a game | **Multiplayer → Online Games → Y (Create Game)**, or host from System Link as usual. Your game is listed online by itself, on stats.chupathingy.org and in OpenCE's in-game Server Browser (`public_lobby`/`host_public` under `[network]` in `config.toml` turn that off). |
 | Invite a friend | When you host, the game copies an invite link (`halo://join/…`). Send it; opening it joins your game. |
-| See your stats | Your service record is on [halo.milenko.org](https://halo.milenko.org), found by your name. Games you join count even when the host doesn't run Chupathingy: when an online game you joined ends, the game sends halo.milenko.org the scoreboard as your game saw it (your own line in full; everyone else's name, team, place, score, kills and deaths) with your player ID. Your copy also confirms your line in the host's report, which puts the game on your profile. To turn both off for games you join, set `report_joined_games = false` under `[network]` in `config.toml`. |
-| Stop sharing your hosted games' stats | Set `report_events = false` under `[network]` in `config.toml`. It's on by default: the games you host send their Delta Stats (kills with positions, accuracy, medals, objectives) to halo.milenko.org for its match pages and heatmaps. Never anyone's address or hardware ID; OpenCE players are only their name, team and that game's score, kills and deaths. This stops Delta Stats only: a listed game's carnage report is still sent. To keep your hosted games listed but send neither, set `report_hosted_games = false`; `list_hosted_games = false` stops the listing too. All of these are also on the Privacy screen in Settings (Gearbox menus). |
-| Make an account | On [halo.milenko.org/profile](https://halo.milenko.org/profile), or press **Start** in Online Games to make one for the player you already are. |
-| Link the game without a browser (Steam Deck, Game Mode) | In Online Games, press **RB** (or **C** on the keyboard) for Link Profile. On your phone or computer, go to [halo.milenko.org/connect](https://halo.milenko.org/connect), enter the code the game shows (or scan its QR code), then press **A** in the game to confirm. |
-| Use the PC menus | Set `menus = "pc"` under `[display]` in `config.toml`. **Multiplayer → Join Game → Server Browser** lists the public games of every compatible build and the games of halo.milenko.org, each once. |
+| See your stats | Your service record is on [stats.chupathingy.org](https://stats.chupathingy.org), found by your name. Games you join count even when the host doesn't run Chupathingy: when an online game you joined ends, the game sends stats.chupathingy.org the scoreboard as your game saw it (your own line in full; everyone else's name, team, place, score, kills and deaths) with your player ID. Your copy also confirms your line in the host's report, which puts the game on your profile. To turn both off for games you join, set `report_joined_games = false` under `[network]` in `config.toml`. |
+| Stop sharing your hosted games' stats | Set `report_events = false` under `[network]` in `config.toml`. It's on by default: the games you host send their Delta Stats (kills with positions, accuracy, medals, objectives) to stats.chupathingy.org for its match pages and heatmaps. Never anyone's address or hardware ID; OpenCE players are only their name, team and that game's score, kills and deaths. This stops Delta Stats only: a listed game's carnage report is still sent. To keep your hosted games listed but send neither, set `report_hosted_games = false`; `list_hosted_games = false` stops the listing too. All of these are also on the Privacy screen in Settings (Gearbox menus). |
+| Make an account | On [stats.chupathingy.org/profile](https://stats.chupathingy.org/profile), or press **Start** in Online Games to make one for the player you already are. |
+| Link the game without a browser (Steam Deck, Game Mode) | In Online Games, press **RB** (or **C** on the keyboard) for Link Profile. On your phone or computer, go to [stats.chupathingy.org/connect](https://stats.chupathingy.org/connect), enter the code the game shows (or scan its QR code), then press **A** in the game to confirm. |
+| Use the PC menus | Set `menus = "pc"` under `[display]` in `config.toml`. **Multiplayer → Join Game → Server Browser** lists the public games of every compatible build and the games of stats.chupathingy.org, each once. |
 | List a game from a build that can't list itself | Sign in on the site, open **Host a Game**, and paste your invite link. |
 
 Everything here plays with OpenCE players on a matching network version: they
@@ -407,8 +407,8 @@ one player reported counts only on that player's own record. Their hosts can
 still list them on the site (Host a Game).
 
 <p align="center">
-<img src="docs/screenshots/site-games.jpg" width="49%" alt="halo.milenko.org: games and recent games">
-<img src="docs/screenshots/site-medals.jpg" width="49%" alt="halo.milenko.org: medals">
+<img src="docs/screenshots/site-games.jpg" width="49%" alt="stats.chupathingy.org: games and recent games">
+<img src="docs/screenshots/site-medals.jpg" width="49%" alt="stats.chupathingy.org: medals">
 </p>
 
 ## Features
@@ -421,7 +421,7 @@ still list them on the site (Host a Game).
 - Cross-play with OpenCE players on a matching network version, both ways
 - Dedicated servers anyone can run: a playlist of games, around the clock, on Linux x86, x64 or arm64
 
-**Stats, on [halo.milenko.org](https://halo.milenko.org)**
+**Stats, on [stats.chupathingy.org](https://stats.chupathingy.org)**
 - A carnage report for every finished game, with medals
 - Service records and leaderboards, with confirmed players (your games count toward you, whatever name you use)
 - Accounts, made on the site or from the game, with an encrypted backup of your player identity
@@ -680,9 +680,9 @@ A few people look for most:
 | `game.unlock_all_levels` | `true` gives new profiles every campaign level. By default a new profile starts at The Pillar of Autumn, as on the Xbox. Profiles made by earlier versions had every level open; `profile_reset_campaign` in the console starts one over. |
 | `audio.volume`, `audio.music_volume`, `audio.effects_volume` | Volumes, from 0.0 to 1.0. |
 | `input.mouse_sensitivity`, `input.invert_mouse` | Mouse aim. |
-| `input.keyboard_prompts` | `true` (the default) shows the bound key in the HUD's and menus' button prompts after you use the keyboard or mouse, as Halo PC did; `false` always shows the controller's buttons. |
+| `input.keyboard_prompts` | Button prompts follow the device you used last: keys after the keyboard or mouse, as Halo PC did, and buttons after a controller. This setting is no longer in the menus; `false` keeps the controller's buttons everywhere. |
 | `controls.*` | Every key: `controls.jump = "Space"`, or two at once, such as `"F, Mouse 4"`. |
-| `network.browser_url` | The game list Online Games shows (halo.milenko.org). |
+| `network.browser_url` | The game list Online Games shows (stats.chupathingy.org). |
 | `network.host_public` | Whether games you host are listed for everyone (true) or only joinable by invite (false). |
 | `update.auto` | Whether the game updates itself. |
 | `paths.data`, `paths.saves` | Where the maps and the saves are, if not the usual place. |
@@ -696,7 +696,7 @@ overrides the file.
 ## Run a server
 
 The Chupathingy Dedicated Server hosts a playlist of games around the clock,
-with no player of its own, and lists them on halo.milenko.org and in the
+with no player of its own, and lists them on stats.chupathingy.org and in the
 Server Browser. It is its own download for Linux on x86, x64 and arm64
 (Oracle Cloud's free tier and Raspberry Pis included): one file, no libraries
 to install, and no port forwarding. See [server/README.md](server/README.md).
@@ -715,7 +715,7 @@ to install, and no port forwarding. See [server/README.md](server/README.md).
   release plays with.
 - **Delta** is Chupathingy's network family ([docs/delta.md](docs/delta.md)):
   the game list, stats, profile links and dedicated server admin tools on
-  [halo.milenko.org](https://halo.milenko.org), and a channel between
+  [stats.chupathingy.org](https://stats.chupathingy.org), and a channel between
   Chupathingy machines for features of our own (how builds play together:
   [docs/delta-compatibility.md](docs/delta-compatibility.md)). Games with OpenCE players
   use the shared game protocol, so everyone plays together.
@@ -750,7 +750,9 @@ Useful `configure.py` options:
 | `--pgo=off`, `--lto=off` | Faster builds, without profile-guided or link-time optimisation. |
 | `--profile` | A profiling build, which records where the game spends its time. See ["Profiling builds"](#profiling-builds-opence) below. |
 
-
+The console ports (original Xbox, Xbox 360, Switch) are built from their own
+repositories, with this one as a submodule: "Console ports" in
+[docs/building.md](docs/building.md#console-ports).
 
 The version being made is in `VERSION`. In this fork, every push to `main`
 that builds on every platform is a release, `v<VERSION>-fs.<run>`, made by
@@ -838,6 +840,13 @@ The permission only lifts the GPL's own objection. It grants no rights in
 Microsoft's libraries, whose own terms still apply, and you may remove it
 from your copies (section 7). Chupathingy's and Warthog's own published
 builds are made only with free tools and libraries.
+
+## Support
+
+Chupathingy is free and always will be. Support through
+[Ko-fi](https://ko-fi.com/milenko) goes to running the site and the servers. If
+there's a specific developer or port you'd like to support, ask them: they may
+not be part of our community.
 
 ## Credits
 

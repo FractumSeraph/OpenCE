@@ -122,6 +122,10 @@ void system_exit(
 #ifdef HALO_BROWSER
 	fprintf(stderr, "halo-web fatal exit %ld: %s\n", code, error_get());
 #endif
+#ifdef HALO_CONSOLE_LOG_BUFFER
+	/* (the lines debug.txt has not been given yet: errors.c) */
+	error_log_flush();
+#endif
 	halt_and_catch_fire();
 	return;
 }
@@ -335,6 +339,9 @@ long generic_exception_filter(
 	{
 		error(_error_silent, "unknown exception %08lX", exception_code);
 	}
+#ifdef HALO_CONSOLE_LOG_BUFFER
+	error_log_flush();
+#endif
 
 	return EXCEPTION_EXECUTE_HANDLER;
 }

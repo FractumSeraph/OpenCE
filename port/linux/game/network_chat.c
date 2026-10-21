@@ -56,6 +56,14 @@ the minutes are up (or the host unmutes it) and is told for how long; every
 machine is told of each mute and unmute, a line of the host's alone in the
 chat (_chat_line_notice_bit). A client's /mute is not sent: only the host
 mutes.
+
+port (this fork): where ChupathingyCE's text chat is built (HALO_PORT_CHAT:
+port/linux/game/chat.c, every build of this fork's), that one is typed and
+shown, and it speaks these three messages itself to and from OpenCE's
+machines (its bridge, src/delta_chat_bridge.h): network_distributed.c gives
+them to it, and the main loop runs it instead of this one. Here only the
+scoreboard's mute (game_engine.c) and its voice (network_voice.c) remain in
+use there.
 */
 
 #include "cseries.h"
@@ -82,13 +90,6 @@ mutes.
 #include "network_chat.h"
 #include "text_filter.h"
 #include "halo_keyboard.h"
-#if defined(HALO_GAME_BROWSER) || defined(HALO_BROWSER)
-/* port (this fork): this chat carried in ChupathingyCE's (chat.c, "OpenCE's
-text chat, bridged"), which types and shows the lines: here they are only
-taken from and sent to OpenCE's machines */
-#include "chat.h"
-#define CHAT_BRIDGED
-#endif
 
 #include <stdio.h>
 
@@ -1102,12 +1103,6 @@ static void chat_add_line(
 	and its lines, here alone) */
 	if (!player || network_voice_machine_muted(player->network_player_data.machine_index))
 		return;
-#ifdef CHAT_BRIDGED
-	(void)line;
-	(void)name;
-	chat_bridge_heard(player_index, channel, text);
-	return;
-#endif
 	line = chat_new_line(text);
 	csmemcpy(line->name, player->name, chat_player_name_length(player) * sizeof(line->name[0]));
 	line->color = game_engine_has_teams() && player->team_index == 0 ? _chat_color_red : _chat_color_blue;
@@ -1123,15 +1118,7 @@ static void chat_add_line(
 static void chat_add_notice(
 	char const *text)
 {
-	struct chat_line *line;
-
-#ifdef CHAT_BRIDGED
-	(void)line;
-	error(_error_log, "chat notice: %s", text);
-	chat_bridge_notice(text);
-	return;
-#endif
-	line = chat_new_line(text);
+	struct chat_line *line = chat_new_line(text);
 
 	line->color = _chat_color_notice;
 	line->channel = _chat_channel_everyone;
@@ -1221,12 +1208,6 @@ static void chat_send_to_clients(
 		distributed_send_to_machine_reliably(machine_indices[index], message, type, 1, size);
 }
 
-#ifdef CHAT_BRIDGED
-/* (the host) a line of chat.c's being sent on (network_chat_bridge_relay):
-not shown here, nor given back to it */
-static boolean chat_bridge_relaying;
-#endif
-
 /* (the host) a player's line, sent on to every machine that hears it (and
 the sender's) and shown here if a player of this machine's hears it or said
 it */
@@ -1246,12 +1227,6 @@ static void chat_host_send(
 
 	if (!sender || sender->quit_out_of_game)
 		return;
-#ifdef CHAT_BRIDGED
-	/* (an OpenCE machine's line: chat.c's machines sent it, and it shown
-	here, unless chat.c's host settings refuse it, when it goes to none) */
-	if (!chat_bridge_relaying && !chat_bridge_host_route(player_index, channel, text))
-		return;
-#endif
 	sender_vehicle = chat_player_vehicle(sender);
 	chat_message_new(&message, player_index, chat_channel_flags(channel), text);
 	for (index = 0; index < count; index++)
@@ -1275,10 +1250,6 @@ static void chat_host_send(
 				(word)sizeof(message));
 		}
 	}
-#ifdef CHAT_BRIDGED
-	(void)local_player_index;
-	return;
-#endif
 	for (local_player_index = local_player_get_next(NONE); local_player_index != NONE;
 		local_player_index = local_player_get_next(local_player_index))
 	{
@@ -1515,11 +1486,6 @@ void network_chat_handle_down(
 	notices too: its chat is off, whatever the host says) */
 	if (game_connection() != _game_connection_network_client || !from_stream || chat_joined_listed())
 		return;
-#ifdef CHAT_BRIDGED
-	/* (the copies, for OpenCE's machines, of the lines it has from chat.c) */
-	if (chat_bridge_host_speaks_delta())
-		return;
-#endif
 	csmemcpy(&line, entries, sizeof(line));
 	if (!chat_text_clean(text, line.text, CHAT_TEXT_SIZE))
 		return;
@@ -1812,17 +1778,6 @@ void network_chat_update(
 			chat_host_update_rates();
 		}
 	}
-#ifdef CHAT_BRIDGED
-	/* (typed in chat.c's chat, on its keys) */
-	(void)pad_pressed;
-	(void)now;
-	(void)key;
-	(void)held;
-	(void)pressed;
-	chat_input_end();
-	chat_actions_held = 0;
-	return;
-#endif
 	if (!chat_network_game() || !game_in_progress() || chat_speaker() == NONE || !chat_shown() || chat_hidden())
 	{
 		chat_input_end();
@@ -1915,47 +1870,6 @@ void network_chat_update(
 		}
 	}
 }
-
-#ifdef CHAT_BRIDGED
-void network_chat_bridge_relay(
-	short player_index,
-	short channel,
-	char const *text)
-{
-	char clean[CHAT_TEXT_SIZE];
-
-	if (!chat_host() || !chat_network_game() || !game_in_progress() ||
-		!TEST_FLAG(chat_host_config_flags(), _chat_config_allowed_bit) || !chat_text_clean(clean, text, CHAT_TEXT_SIZE))
-	{
-		return;
-	}
-	chat_bridge_relaying = TRUE;
-	chat_host_send(player_index, channel, clean);
-	chat_bridge_relaying = FALSE;
-}
-
-void network_chat_bridge_relay_notice(
-	char const *text)
-{
-	struct chat_message message;
-	char clean[CHAT_TEXT_SIZE];
-
-	if (!chat_host() || !chat_network_game() || !game_in_progress() ||
-		!TEST_FLAG(chat_host_config_flags(), _chat_config_allowed_bit) || !chat_text_clean(clean, text, CHAT_TEXT_SIZE))
-	{
-		return;
-	}
-	chat_message_new(&message, NONE, (byte)FLAG(_chat_line_notice_bit), clean);
-	chat_send_to_clients(&message, _distributed_message_chat_down, (word)sizeof(message));
-}
-
-boolean network_chat_bridge_available(
-	void)
-{
-	return chat_network_game() && game_in_progress() && !chat_host() &&
-		TEST_FLAG(chat_config_flags(), _chat_config_allowed_bit);
-}
-#endif
 
 boolean network_chat_typing(
 	void)

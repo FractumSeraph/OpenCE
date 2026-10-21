@@ -14,6 +14,25 @@ header included in hcex build.
 structure bsps against (cache_files.c) */
 #define TAG_CACHE_SIZE 0x1600000
 
+/* port: the sound cache's size (the Xbox's 4 MB); a platform may define its
+own, and the cache's pages follow it (xbox_sound_cache.c). A console that
+answers for its memory class (halo_console_memory.h) has it at run time:
+the Xbox's 4 MB, more on a console above its baseline */
+#ifdef HALO_CONSOLE_MEMORY_CLASS
+unsigned long physical_memory_get_sound_cache_size(void);
+
+#define SOUND_CACHE_SIZE physical_memory_get_sound_cache_size()
+#endif
+#ifndef SOUND_CACHE_SIZE
+#ifdef HALO_PORT_SOUND_CACHE_SIZE
+/* (this fork: the native and browser builds' larger cache,
+halo_port_capacity.h) */
+#define SOUND_CACHE_SIZE HALO_PORT_SOUND_CACHE_SIZE
+#else
+#define SOUND_CACHE_SIZE 0x400000
+#endif
+#endif
+
 /* ---------- macros */
 
 /* ---------- structures */

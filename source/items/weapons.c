@@ -936,7 +936,14 @@ void weapon_delete(
 	object_delete_initial_recursive) */
 	if (game_engine_running() && !CACHE_FILE_TAGS_ARE_CE() && !network_objects_client_deleting())
 	{
+#if defined(HALO_CONSOLE) || defined(HALO_XBOX_CONSOLE)
+		/* port: on the consoles a warning in debug.txt, and the game goes on:
+		a modded host's game that deleted the oddball stopped an Xbox here.
+		Nothing follows that the check protects */
+		match_warn("c:\\halo\\SOURCE\\items\\weapons.c", 234, !weapon_is_flag(weapon_index));
+#else
 		match_assert("c:\\halo\\SOURCE\\items\\weapons.c", 234, !weapon_is_flag(weapon_index));
+#endif
 	}
 
 	return;

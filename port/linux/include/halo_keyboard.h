@@ -59,8 +59,8 @@ game and in the menus alike */
 int halo_push_to_talk_held(void);
 
 /* the game's button prompts show the keyboard's keys, not the
-controller's buttons (input.keyboard_prompts, the keyboard or mouse used
-last), and the key of an action as the menus name it ("E", "Space", "Mouse
+controller's buttons (the keyboard or mouse used last, unless
+input.keyboard_prompts is false: platform_prompt_scheme), and the key of an action as the menus name it ("E", "Space", "Mouse
 Left"): 0 for one with none (xinput_sdl.c) */
 int halo_keyboard_prompts(void);
 int halo_keyboard_action_shown(int action, char *shown, unsigned long size);

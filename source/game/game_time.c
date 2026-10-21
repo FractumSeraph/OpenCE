@@ -78,6 +78,7 @@ symbols in this file:
 #include "scenario/scenario.h" /* port: game_time_menu_scene */
 #include "scenario/scenario_definitions.h"
 #include "profile_sections.h" /* port: port/linux/include/profile_sections.h */
+#include "halo_perf_log.h" /* port: console.perf_log */
 /* port/linux/game/network_distributed.c's */
 void network_distributed_tick(void);
 
@@ -507,7 +508,10 @@ void game_time_update(
 
 					for (update_index = 0; update_index < server_updates; update_index++)
 					{
+						HALO_PERF_BEGIN(_halo_perf_tick);
 						game_tick();
+						HALO_PERF_END(_halo_perf_tick);
+						HALO_PERF_COUNT(_halo_perf_ticks, 1);
 						profile_scope(game_time_render_interpolation_tick_section, render_interpolation_tick();)
 						game_time_globals->server_time++;
 						game_time_globals->local_time++;

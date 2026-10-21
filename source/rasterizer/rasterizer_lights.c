@@ -101,7 +101,9 @@ symbols in this file:
 #include "main/main.h"
 #include <xtl.h>
 #include "rasterizer/xbox/rasterizer_xbox.h"
+#ifndef HALO_XBOX_CONSOLE
 #include "main/main.h"
+#endif
 #include "view_fov.h" /* port: port/linux/game/view_fov.c */
 
 /* ---------- constants */
@@ -680,6 +682,7 @@ void rasterizer_lights_begin_for_new_frame(
 			{
 				byte previous_visibility= *occlusion_test_result;
 
+#ifndef HALO_XBOX_CONSOLE
 				/* The native builds draw several frames per tick
 				(port/linux/game/render_interpolation.c): move a quarter of the
 				way up and half of the way down per 30 Hz tick, not per frame,
@@ -705,6 +708,16 @@ void rasterizer_lights_begin_for_new_frame(
 
 					*occlusion_test_result= (byte)(previous_visibility - PIN(step, 1, difference));
 				}
+#else
+				if (latest_visibility>previous_visibility)
+				{
+					*occlusion_test_result= (byte)((3*previous_visibility + latest_visibility)/4);
+				}
+				else if (latest_visibility<previous_visibility)
+				{
+					*occlusion_test_result= (byte)((previous_visibility + latest_visibility)/2);
+				}
+#endif
 			}
 		}
 

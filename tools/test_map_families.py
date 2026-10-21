@@ -25,9 +25,12 @@ typedef unsigned char boolean;
 #define FALSE 0
 #define NUMBEROF(a) (sizeof(a) / sizeof((a)[0]))
 """
+# (the file calls' stand-ins are each test's own: STUB_WINDOWS_FILES and
+# STUB_WINDOWS_REAL below, which take the place of ChupathingyCE's macros)
 STUB_WINDOWS = """
 #define _stricmp strcasecmp
 #define _strnicmp strncasecmp
+char const *config_string(char const *name);
 """
 HARNESS = r"""
 #include <stdio.h>
@@ -35,10 +38,7 @@ HARNESS = r"""
 #include "cseries.h" /* (first, as the game's sources include it: the header uses its types) */
 #include "halo_map_families.h"
 /* (the settings, port_config.c: game.downloaded_maps names none) */
-const char *config_string(const char *name)
-{
-	return "";
-}
+char const *config_string(char const *name) { (void)name; return ""; }
 int main(int argc, char **argv)
 {
 	char out[256];
@@ -46,7 +46,12 @@ int main(int argc, char **argv)
 	for (index = 2; index < argc; index++)
 	{
 		short family;
-		if (!strcmp(argv[1], "wire"))
+		if (!strcmp(argv[1], "listed"))
+		{
+			family = map_family_parse_listed(argv[index], out, sizeof(out));
+			printf("%d %s\n", family, out);
+		}
+		else if (!strcmp(argv[1], "wire"))
 		{
 			map_family_wire_name(argv[index], out, sizeof(out));
 			printf("%s\n", out);
@@ -172,6 +177,12 @@ unsigned int map_archive_header_checksum(const unsigned char *header)
 int map_archive_version_matches(unsigned int version, unsigned int checksum, unsigned int hash_version)
 {
 	return !version || version == checksum || (hash_version && version == hash_version);
+}
+/* (map_archive.c's Halo PC maps and data files: none here, so that no
+Custom Edition name falls back to a Halo PC file) */
+int map_archive_stock_name(const char *name)
+{
+	return 0;
 }
 void platform_log(char const *format, ...)
 {
@@ -462,3 +473,13 @@ def test_campaign_map_by_name(family_folders):
     assert family_folders("campaign", "missing@ce") == ["result 0"]
     assert family_folders("campaign", "a50") == ["result 0"]
     assert family_folders("campaign", "a50_custom@ce", enabled=False) == ["result 0"]
+
+
+def test_listed_games_by_bare_name(families):
+    # (OpenCE's hosts announce every map by its file name alone: the Xbox's
+    # maps stay the Xbox's, any other is a Halo PC map, as custom_maps\<name>
+    # is in the game's protocol)
+    assert families("listed", "bloodgulch", "deathisland", "Icefields", "hugeass", "a30",
+                    "levels\\test\\hangemhigh\\hangemhigh", "deathisland@ce", "x@md", "bloodgulch@pc", "") == [
+        "0 bloodgulch", "1 deathisland", "1 Icefields", "1 hugeass", "0 a30",
+        "0 hangemhigh", "1 deathisland", "2 x", "3 bloodgulch", "0 "]

@@ -189,7 +189,7 @@ assert.match(shell,
 assert.match(worker,
   /audio_running[\s\S]*?audio_suspended[\s\S]*?audio_blocked[\s\S]*?audioMaximumGapMs/,
   'the Worker must accept audio state and underrun telemetry');
-assert.match(terminal, /terminal_render_enable \|\| terminal_globals\.input_state/,
+assert.match(terminal, /terminal_render_enable >= 2 && terminal_globals\.input_state/,
   'backquote console output must be visible while its input is active');
 assert.match(webPlatform, /platform_web_map_load_progress/);
 assert.match(webPlatform, /platform_web_map_load_index/);

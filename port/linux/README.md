@@ -321,16 +321,30 @@ and the dedicated server have no crash reports.
 
 The keyboard and the mouse are a control scheme of their own for the player
 of controller 1: each action has up to two keys or mouse buttons, which
-Settings > Controls Setup (or `[controls]` in `config.toml`) changes. The
+Settings > Controls > Keyboard (or `[controls]` in `config.toml`) changes. The
 game adds the input of the first gamepad to controller 1. The other
 gamepads operate controllers 2 to 4. With two or more players on this
 computer (co-op, or split screen in a network game) and only one gamepad,
 that gamepad is controller 2 (player 2) and the keyboard and mouse stay
 controller 1. The gamepad changes controller only when none of its buttons
-is held. The profile's button layout (Settings > Gamepads) is the
-gamepads' only. Besides the Xbox's five, it has the Master Chief
+is held. The profile's button layout (Settings > Controls, DEVICE: GAMEPAD)
+is the gamepads' only. Besides the Xbox's five, it has the Master Chief
 Collection's Bumper Jumper: jump on the left bumper, melee on the right,
 switching grenades on A, action and reload on B and the flashlight on X.
+
+Controls Setup (Settings > Controls, or the pause menu's CONTROLS) has
+every device's controls in one list: DEVICE chooses KEYBOARD/MOUSE or
+GAMEPAD (the device used last when it opens), and SHOW chooses the keys'
+groups or the mouse's settings, or the controller's settings or buttons.
+The controller's BUTTONS
+sets each action's button on the controller, named as that controller
+names it (RB, R1, Black...): A on an action, then the button wanted; the
+action that had it takes the old one, and A confirms. That makes the
+profile's button layout Custom, kept in `controls.controller_layout`. A
+build without Custom reads it as the default layout. The HUD's and the
+menus' button prompts follow the layout. With the Xbox menus, the pause
+menu's CONTROLS shows the same two screens (the controller's and the
+keyboard's), drawn in the Xbox menus' look.
 
 | Action | Keys and buttons (default) |
 | --- | --- |
@@ -475,9 +489,8 @@ there.
 In a single-player campaign, the pause menu has SETTINGS too, before REVERT
 TO SAVED, in the same box: a list with room for it centres its rows, and
 one without keeps its size, its rows closer. It opens the same settings,
-while the game stays paused, with only Controls, Gamepads, Mouse, Audio and
-Video Setup; Gamepads' OK saves the profile at once. In co-op the settings
-have Network Setup too, with its in-game pages as in a multiplayer game.
+while the game stays paused. In co-op, ONLINE opens its in-game lists, as
+in a multiplayer game.
 
 In an online co-op game, the pause menu also has FRIENDLY FIRE ON or
 FRIENDLY FIRE OFF, after SETTINGS, in a box drawn taller for it: whether this
@@ -543,7 +556,7 @@ all of the others, and the log names the line and the likely fix. If you
 change the value of a line but do not remove its `# `, the line does
 nothing, and the log names it. Words such as `"borderless"` can be in any
 case; a word that a setting does not know is in the log, with what the game
-uses in its place. The Settings menu (Video, Mouse, Audio, Network and Controls Setup)
+uses in its place. The Settings menu (Controls, Display, Audio and Online)
 changes the useful settings, writes them into the file (only their lines
 change: the line of a setting at its default loses its `#`) and applies
 them at once, but `audio.enabled`, and `display.menus` from the next main
@@ -610,6 +623,7 @@ the setting for one start of the game. It has priority over the file.
 | `display.high_res_font_large` | `""` | `HALO_HIGH_RES_FONT_LARGE` | As `display.high_res_font`, for the large text only (the font tags with the role `large` in `fonts.json`: `ui\large_ui`, `ui\interstate`; Online Games' large menu text). Empty: `display.high_res_font`. |
 | `display.shadow_resolution` | `256` (the server: `128`) | `HALO_SHADOW_RESOLUTION` | The size of the maps that the shadows of the objects are drawn in, in pixels each way: `128`, `256`, `512` or `1024` (other values go down to one of these). The game draws the shadow of each object into a map of 128x128 pixels, blurs it and projects it onto the ground. On a large screen, the edges of these shadows show steps that move when the object moves. A larger map makes the edges smooth; the blur is made wider to match, so the shadows are as soft as on the Xbox. Each doubling adds two passes of the blur. `128`: as on the Xbox. |
 | `display.menus` | `"chupathingy"` (`"pc"`, Gearbox's, in the browser build) | `HALO_MENUS` | `"chupathingy"` (the default): the Xbox's menus with Halo PC's PROFILES, SETTINGS and QUIT, the settings pages, and Online Games, in the Xbox's look. `"xbox"`: the Xbox's menus, as close to the console as can be, with Online Games. `"gearbox"` (or the older `"pc"`): Gearbox's Halo PC menus. The Halo PC screens are built from the files in `port/assets/menus` and a `menus` folder next to `config.toml`. A file that sets `"xbox"` (the default before 0.8.0) keeps it. The browser build defaults to `"pc"`: its online play (the page's rooms, the native gateway) is in Gearbox's Create Game and Server Browser. Refer to "Menus". |
+| `display.full_model_detail` | `false` | `HALO_FULL_MODEL_DETAIL` | `true`: every model (characters, vehicles, weapons, scenery) is drawn with its most detailed geometry at any distance, instead of the simpler versions the game uses for models far away. Drawing only: the game itself is unchanged. `false`: as on the Xbox. |
 | `display.version_watermark` | `false` | `HALO_VERSION_WATERMARK` | `true`: the build's version ("0.7.5a (5c1a363)"), which the main menu shows small and faint in the bottom right corner, is shown there while playing too: handy for screenshots and bug reports. |
 | `display.menu_language` | `"maps"` | `HALO_MENU_LANGUAGE` | The PC menus' language. `"maps"`: the language of the Custom Edition whose `loc.map` is in `custom_maps` (English without one). `"english"`: English. The port's own lines are English. |
 | `display.player_names` | `"all"` | `HALO_PLAYER_NAMES` | In multiplayer, whose names are drawn above their heads: `"all"`, `"allies"`, `"enemies"` or `"none"`. An ally's name is drawn above the triangle the game shows over teammates. An enemy's name shows only within the motion sensor's reach, while the enemy is in sight and not camouflaged, so it never shows where an enemy hides. The gametype's motion tracker setting also applies: no names if it shows no players, only allies' if it shows only friends. |
@@ -618,14 +632,17 @@ the setting for one start of the game. It has priority over the file.
 | `display.follow_camera_after` | `5.0` | `HALO_FOLLOW_CAMERA_AFTER` | For `display.follow_camera`'s `"long_waits"`: how many seconds of the wait to respawn must be left once the death camera is done for the camera to follow someone. |
 | `display.powerup_timers` | `false` | `HALO_POWERUP_TIMERS` | `true`: a small line of the HUD's text near the top of the view shows the seconds left on the player's active camouflage, overshield and full spectrum vision while one is on ("CAMO 12   OVERSHIELD 41"). The overshield's time is what is left of it above full: it counts down only in multiplayer, where it drains, so in campaign it shows none. Split screen: each player's own. `false`: none, as the original game. |
 | `display.loading_screen_min_seconds` | `0.0` | `HALO_LOADING_SCREEN_MIN_SECONDS` | Keep the original loading screen (the picture with the glow that crosses it) up for at least this many seconds, up to 30, when a level loads, as loading from the Xbox's disc did; the port's loads are usually over before it shows. Also when the level is already loaded (a restart). Only in a game no other machine is in (campaign, split screen): a game on the network (system link, online, network co-op) loads as fast as it can, so that no machine waits on another. Never for the main menu. `0`: no wait. |
-| `display.text_chat` | `true` | `HALO_TEXT_CHAT` | Show the text chat of network games (Settings > Network Setup > Multiplayer HUD > TEXT CHAT). `false` hides its lines, and its keys and a controller's D-pad Up open nothing. Refer to "Text chat". |
-| `display.chat_style` | `"colors"` | `HALO_CHAT_STYLE` | The text chat's colours (Settings > Network Setup > Multiplayer HUD > CHAT TEXT): `"colors"`, the player's name in their team's colour and the text a pale blue; `"white"`, all of it white, as Custom Edition. |
+| `display.text_chat` | `true` | `HALO_TEXT_CHAT` | Show the text chat of network games (Settings > Online > CHAT > OPENCE CHAT). `false` hides its lines, and its keys and a controller's D-pad Up open nothing. Refer to "Text chat". |
+| `display.chat_style` | `"colors"` | `HALO_CHAT_STYLE` | The text chat's colours (Settings > Online > CHAT > OPENCE CHAT COLORS): `"colors"`, the player's name in their team's colour and the text a pale blue; `"white"`, all of it white, as Custom Edition. |
 | `display.scoreboard_team_layout` | `"teams"` | `HALO_SCOREBOARD_TEAM_LAYOUT` | How the multiplayer scoreboard (hold BACK, or tab) lists a team game's players. `"teams"`: a column for each team, red on the left and blue on the right. `"score"`: all the players in order of score. With more players than fit, the mouse wheel and Page Up / Page Down scroll the scoreboard. |
 | `display.scoreboard_background` | `true` | `HALO_SCOREBOARD_BACKGROUND` | `true`: the multiplayer scoreboard (hold BACK, or tab) has a panel behind its text, for clearer text. |
 | `display.scoreboard_platforms` | `"auto"` | `HALO_SCOREBOARD_PLATFORMS` | A small logo of each player's platform (Windows, macOS, Linux, Android, Steam Deck, Xbox and so on) before their name on a network game's scoreboard, for players whose client sends it over Delta Peer; other players (OpenCE, retail) get no logo. `"auto"`: shown with the Chupathingy menus only, since the Xbox and Gearbox menus stay close to the originals. `"on"`: with any menus. `"off"`: never. |
+| `display.delta_profile` | `true` | `HALO_DELTA_PROFILE` | Delta Profile in the game: the DELTA row of Profiles (the Chupathingy menus) and button of Select Profile (the Gearbox menus), the "Delta:" line on a Halo profile, and Online Games' Start. `false` hides them all, and Start opens the profile's web page as before. Link Profile (RB in Online Games) stays. Refer to `docs/delta.md`, Delta Profile in the game. |
+| `display.profile_names` | `true` | `HALO_PROFILE_NAMES` | On the scoreboard, the postgame report and the lobby, players who share their Delta profile (`network.share_profile`) show by the profile's name, in games on Delta. `false`: every player by their game name. OpenCE players, and what OpenCE players see, are unchanged. |
 | `display.show_quit_players` | `true` | `HALO_SHOW_QUIT_PLAYERS` | `true`: players who quit stay on the multiplayer scoreboard (hold BACK, or tab) and the score in the corner, as in the original game. `false`: they are left off, and the players still in the game are ranked among themselves, as OpenCE does. Only what this machine draws changes. |
 | `display.scoreboard_background_color` | `"16, 16, 16, 150"` | `HALO_SCOREBOARD_BACKGROUND_COLOR` | The colour of the scoreboard's panel: `"red, green, blue, alpha"`, each from `0` to `255`. Alpha `0` is see-through, `255` is solid. |
 | `display.pause_change_teams` | `true` | `HALO_PAUSE_CHANGE_TEAMS` | In a team game, the pause menu's CHANGE TEAMS (Halo PC's, in every menu set): it asks the host to put you on the other team, and the chat says what came of it. Needs a Chupathingy host (docs/delta.md, Team changes). `false` hides it. |
+| `display.pause_controls` | `true` | `HALO_PAUSE_CONTROLS` | The pause menu's CONTROLS, in every menu set: the controller's buttons and the keyboard's keys (Controls above). `false` hides it. |
 | `display.server_messages` | `true` | `HALO_SERVER_MESSAGES` | `true`: a warning or notice from a Delta server is drawn as a banner over the game; `false` hides the banner. The message is written to `debug.txt` either way. Kicks and bans are not affected. |
 | `display.server_message_text_color` | `""` | `HALO_SERVER_MESSAGE_TEXT_COLOR` | The banner's text colour, `"#RRGGBB"` or `"#RRGGBBAA"`. Empty, or a value that does not parse (logged once): the default, light for a notice and amber for a warning. Applies to both kinds. |
 | `display.server_message_border_color` | `""` | `HALO_SERVER_MESSAGE_BORDER_COLOR` | The banner's outline colour, `"#RRGGBB"` or `"#RRGGBBAA"`. Empty, or a value that does not parse: the default, blue for a notice and amber for a warning. Applies to both kinds. |
@@ -665,9 +682,10 @@ the setting for one start of the game. It has priority over the file.
 | `input.mouse_vertical_sensitivity` | `0.0` | `HALO_MOUSE_VERTICAL_SENSITIVITY` | The multiplier for the vertical mouse aim. `0`: the same as `input.mouse_sensitivity`. |
 | `input.playstation_kernel_driver` | `false` | `HALO_PLAYSTATION_KERNEL_DRIVER` | Linux: `true` drives a PlayStation controller (DualSense, DualShock 4) through the kernel's driver of it (`hid-playstation` since Linux 5.12, `hid-sony`): its buttons, sticks, triggers and rumble, with no setup, but not its lightbar. `false`: SDL's own driver, which needs access to the controller's `/dev/hidraw` device, as Steam's udev rules give it (`steam-devices`, or Steam installed). Read at start-up. |
 | `input.invert_mouse` | `false` | `HALO_MOUSE_INVERT=1` sets `true` | `true`: the vertical mouse aim is inverted. |
-| `input.keyboard_prompts` | `true` | `HALO_KEYBOARD_PROMPTS` | `true`: while the keyboard or mouse was used last (or no controller is connected), the button prompts show keys, as Halo PC's did: the HUD's messages name the bound key in brackets ("Hold [E] to pick up"), "Hold BACK for score" names the scoreboard key, and the menus' button pictures ("A = SELECT") become key caps of the keys that press them (Enter, Backspace, Tab, E). A controller's button press switches them back. `false`: always the controller's buttons. Desktop only. |
+| `input.keyboard_prompts` | `true` | `HALO_KEYBOARD_PROMPTS` | Not in the menus: every button prompt follows the device used last. While the keyboard or mouse was used last (or, on the desktop, no controller is connected), the prompts show keys, as Halo PC's did: the HUD's messages name the bound key in brackets ("Hold [E] to pick up"), "Hold BACK for score" names the scoreboard key, and the menus' button pictures ("A = SELECT") become key caps of the keys that press them (Enter, Backspace, Tab, E). A controller's button press switches them back. `false` keeps the controller's buttons everywhere, whatever was used last. |
 | `input.mouse_aim_assist` | `false` | `HALO_MOUSE_AIM_ASSIST` | `true`: the magnetism of the controller also operates for the mouse. `false`: when the mouse moved after the right stick, the view is not slowed or dragged by a target. The autoaim of the bullets operates in both cases. |
 | `controls.<action>` | (the table in "Controls") | `HALO_KEY_<ACTION>` | The keys and mouse buttons of an action, up to two, separated by a comma: `move_forward`, `move_backward`, `strafe_left`, `strafe_right`, `jump`, `crouch`, `fire`, `throw_grenade`, `melee`, `reload`, `zoom`, `switch_weapon`, `switch_grenade`, `action`, `flashlight`, `scoreboard`, `pause`, `screenshot` (F10; not on Android or in the browser), `push_to_talk`. Keys by their names (`"W"`, `"Space"`, `"Left Ctrl"`, `"F1"`), and `"Mouse Left"`, `"Mouse Right"`, `"Mouse Middle"`, `"Mouse 4"`, `"Mouse 5"`, `"Wheel"` (either way), `"Wheel Up"`, `"Wheel Down"`. In the browser build, `crouch` is `"C"` alone. |
+| `controls.controller_layout` | `""` | `HALO_CONTROLLER_LAYOUT` | The controller's Custom button layout, which Controller Buttons writes: `"action=button"` for each action, separated by commas (`jump`, `switch_grenade`, `action`, `switch_weapon`, `melee`, `flashlight`, `throw_grenade`, `fire`, `crouch`, `zoom`; `A`, `B`, `X`, `Y`, `LB`, `RB`, `LT`, `RT`, `LS`, `RS`, LB and RB being the Duke's White and Black). An action left out keeps its default button; no button is ever on two actions. Used by profiles whose button layout is Custom. Empty: the default layout. |
 | `game.downloaded_maps` | `""` | `HALO_DOWNLOADED_MAPS` | Maps also played as downloaded maps (a map the game downloads is marked so by itself): their names as the game names them (`bloodgulch`, `hugeass@ce`), separated by commas, or `"*"` for all the maps. The scripts of a downloaded map cannot change the settings of the player or the games of other players. `debug.txt` names what the game refused. |
 | `game.bomb_spawns` | `""` | `HALO_BOMB_SPAWNS` | Where a Bomb or Grifball game you host puts the bomb on a map: `"<map> <x> <y> [<z>]"` (the map as a playlist names it: `bloodgulch`, `timberland@ce`), entries separated by commas. The bomb rests on the first ground under the point (from a little over its height, when given). A map not named has the game's own spot: Blood Gulch's halfway between its teleporters' exits, any other map's halfway between the goals. Only the host's setting counts. |
 | `game.bomb_open_pitch_speed` | `0` | `HALO_BOMB_OPEN_PITCH_SPEED` | Everyone's speed in a Grifball: Open Pitch game you host, in percent (50 to 200; the carrier's 115% on top stops at 200). `0`: the game type's own, 175. |
@@ -681,6 +699,7 @@ the setting for one start of the game. It has priority over the file.
 | `bots.count` | `0` | `HALO_BOTS` | Computer players (bots) in a local (split screen) Slayer game: `0` to `15` join its lobby with the players, as far as the game has room. Not in system link or internet games. `0`: none, as in the stock game. Refer to "Bots". |
 | `bots.skill` | `"normal"` | `HALO_BOT_SKILL` | How well the bots play: `"easy"`, `"normal"`, `"heroic"` or `"legendary"`: how soon they react, how far and how wide they see, how large their aim error is and how fast it settles, how fast they turn. |
 | `bots.teams` | `"even"` | `HALO_BOT_TEAMS` | In a team game: `"even"` puts the bots on both teams, evening them with the players; `"against"` puts them all on the team the players are not on. |
+| `game.start_with_one_player` | `false` | `HALO_START_WITH_ONE_PLAYER` | A system link, internet or split screen game you host can start with you alone: press START GAME in the lobby. Others can join it in progress. `false` waits for a second machine (split screen: a second player), as on the Xbox. Network Setup's Start With One Player sets it. |
 | `paths.data` | `""` | `HALO_DATA_ROOT` | The data root. Refer to "Start the game". |
 | `paths.saves` | `""` | `HALO_SAVE_ROOT` | The save root. Refer to "Files and folders". |
 | `paths.custom_edition` | `""` | `HALO_CUSTOM_EDITION_ROOT` | Desktop builds. A folder of Custom Edition maps, or a Halo Custom Edition install (then its `maps` folder), looked in last for Custom Edition maps and their `bitmaps.map`, `sounds.map` and `loc.map`: after `maps_ce`, `maps/ce` and `custom_maps`. The game names it the Xbox drive `h:\`. Empty: none. OpenCE's setting. |
@@ -692,7 +711,7 @@ the setting for one start of the game. It has priority over the file.
 | `network.address` | `""` | `HALO_NET_ADDRESS` | The IPv4 address of this machine for system link. Refer to "Play on one computer". |
 | `network.broadcast` | `""` | `HALO_NET_BROADCAST` | IPv4 addresses, with commas between them, that get the broadcasts of the game. Empty: 255.255.255.255. |
 | `network.online` | `true` | `HALO_NET_ONLINE` | `true`: internet play. `false`: system link on the local network only. The browser build plays online through its page (WebRTC and the native gateway) either way; internet play's own machinery (its UDP tunnel, the brokers, the pings) never runs there (`p2p_native_online`, `port/linux/src/p2p.c`). |
-| `network.join_from_clipboard` | `"ask"` | `HALO_NET_JOIN_FROM_CLIPBOARD` | An invite link on the clipboard when the game comes to the front: `"ask"` asks over the menus whether to join its game (with its name and map when the game list knows them; No is kept for that invite), `"always"` joins it, `"never"` leaves it. `true` and `false`, from older versions, mean `"always"` and `"never"`. Network Settings in the Gearbox menus. |
+| `network.join_from_clipboard` | `"never"` | `HALO_NET_JOIN_FROM_CLIPBOARD` | An invite link on the clipboard when the game comes to the front: `"ask"` asks over the menus whether to join its game (with its name and map when the game list knows them; No is kept for that invite), `"always"` joins it, `"never"` leaves it. `true` and `false`, from older versions, mean `"always"` and `"never"`. Network Settings in the Gearbox menus. |
 | `network.fair_play` | `"refuse"` | `HALO_NET_FAIR_PLAY` | When you host: check players' shots for cheats. `"refuse"` refuses a bullet's hit on a player through a solid wall, or far from where its shooter aimed (silent aim), and logs those, near misses of the checks, fast snaps of the aim and aim held on enemies behind walls (wallhacks) in `fairplay.txt` beside `bans.txt`; `"log"` only logs; `"off"` checks nothing. Refer to `server/docs/admin.md`, "Fair play checks". |
 | `network.record_games` | `false` | `HALO_NET_RECORD_GAMES` | When you host: record every game to `recordings\` in the data folder (each player's position, aim, health, weapon and pose every tick, the world's vehicles, items and projectiles, their names, addresses and hardware ids, the fair play checks' verdicts, the kills and the game's events, scores and chat, the map's walls and file), compressed, about 15 to 25 MB an hour, to watch again at https://halo.fractumseraph.net/assets/replay/. Refer to `server/docs/admin.md`, "Recordings". |
 | `network.recordings_megabytes` | `2048` | `HALO_NET_RECORDINGS_MEGABYTES` | How many megabytes of recordings to keep: the oldest go first; 0 keeps them all. |
@@ -708,6 +727,7 @@ the setting for one start of the game. It has priority over the file.
 | `network.chat` | `"on"` | `HALO_NET_CHAT` | Text chat in the games this copy hosts: `"on"`, `"team"` (team lines alone) or `"off"`. |
 | `network.team_change` | `"balanced"` | `HALO_NET_TEAM_CHANGE` | In the team games this copy hosts, whether players may change teams during the game: `"balanced"` (only while neither team ends up more than `network.team_change_margin` players bigger), `"allow"` or `"off"`. A player changes at most every 10 seconds and never leaves a team empty; they respawn on the new team with no death or penalty counted. |
 | `network.team_change_margin` | `1` | `HALO_NET_TEAM_CHANGE_MARGIN` | With `"balanced"`, the most players one team may have over the other after a change (0 to 16). |
+| `network.chat_legacy` | `true` | `HALO_NET_CHAT_LEGACY` | In the games this copy hosts, OpenCE players chat too, over their own text chat, which the host bridges to Delta chat (`docs/delta.md`, Chat): they see every line and theirs reach everyone, under the same rules. Follows `network.chat` (off there is off for them too). `false`: OpenCE players get no chat here. |
 | `network.chat_filter` | `true` | `HALO_NET_CHAT_FILTER` | In the games this copy hosts, a line with a blocked word (the blocked names list's) is not passed on, and its sender is told. Nobody is kicked. |
 | `network.share_profile` | `false` | `HALO_NET_SHARE_PROFILE` | `true`: the other ChupathingyCE players of a game see this copy's player ID (its game list profile), over Delta. |
 | `network.platform_limits` | `"on"` | `HALO_NET_PLATFORM_LIMITS` | `"on"`: Delta hosts keep a game to the players this platform takes (an original Xbox: 16). `"off"`: this machine joins games of any size. |
@@ -741,8 +761,8 @@ the setting for one start of the game. It has priority over the file.
 | `network.brokers_file` | `"brokers.txt"` | `HALO_NET_BROKERS_FILE` | The file of the public MQTT brokers that let the machines of an invite find each other, and that carry the listings of the server browser: next to `config.toml`, unless a full path. One `host:port` on each line, up to 5; `#` starts a comment. |
 | `network.stun_servers` | Google and Cloudflare | `HALO_NET_STUN` | The public STUN servers (`host:port`, with commas between them) that give the internet address of a machine. |
 | `network.legacy_table` | `""` | `HALO_LEGACY_TABLE` | For testing, and for admins: a legacy table file, not signed, next to `config.toml` unless a full path. Its row for the wire of the build sets the OpenCE network versions that the game announces and joins, in place of the signed tables. The log shows a warning at start. Refer to `docs/delta.md`. Empty: none. |
-| `network.browser_url` | `"https://halo.milenko.org"` | `HALO_NET_BROWSER` | The game list server: hosted games are listed there, System Link shows its games, and the reports below go there. Empty: none. |
-| `network.list_hosted_games` | `true` | `HALO_NET_LIST_GAMES` | `true`: the system link games this machine hosts are listed on `network.browser_url` (halo.milenko.org), where anyone can find and join them. Only public games without a password are listed. `false`: they are kept to invites and the local network, and no carnage report of them is sent. |
+| `network.browser_url` | `"https://stats.chupathingy.org"` | `HALO_NET_BROWSER` | The game list server: hosted games are listed there, System Link shows its games, and the reports below go there. Empty: none. |
+| `network.list_hosted_games` | `true` | `HALO_NET_LIST_GAMES` | `true`: the system link games this machine hosts are listed on `network.browser_url` (stats.chupathingy.org), where anyone can find and join them. Only public games without a password are listed. `false`: they are kept to invites and the local network, and no carnage report of them is sent. |
 | `network.report_hosted_games` | `true` | `HALO_NET_REPORT_HOSTED` | The stats of the games this machine hosts: a listed game's carnage report, its Delta Stats (`network.report_events`) and the host's own players' claims of their lines. `false`: none of them are sent, and the game stays listed (`network.list_hosted_games`). On the Privacy screen (Gearbox menus). |
 | `network.report_joined_games` | `true` | `HALO_NET_REPORT_GAMES` | When an internet game this machine joined ends, the game sends `network.browser_url` its scores as this machine saw them, with this copy's player ID, and confirms this machine's players' lines in the host's report of the game (`POST /v1/claim`), which puts the game on their profiles. `false`: neither, for games this machine joins. Games it hosts are still reported and confirmed. |
 | `network.report_events` | `true` | `HALO_NET_REPORT_EVENTS` | Delta Stats: the games this machine hosts are recorded (kills with weapons and positions, accuracy, medals, objectives, vehicles, pickups) and sent to `network.browser_url` when each ends. Players are their names, never a hardware ID or an address; an OpenCE player is only their name, team and that game's score, place, kills and deaths. `false`: no events are recorded or sent. The carnage report of a hosted game is separate: it is sent while the game is listed (`network.list_hosted_games`). Refer to `docs/delta.md`. |
@@ -788,7 +808,7 @@ the setting for one start of the game. It has priority over the file.
 | `debug.network_test_cues`, `debug.network_test_cue_players` | none, `1` | `HALO_NETWORK_TEST_CUES`, `HALO_NETWORK_TEST_CUE_PLAYERS` | Console lines a test runs at their seconds, from the first tick that many players are in (`"<second> <line>\|..."`; not on the web). |
 | `debug.bot_trace` | `0` | `HALO_BOT_TRACE` | Every this many seconds, each bot's state is written to the log: where it is and where it goes, its path, its target and its weapon. `0`: never. |
 | `debug.touch_targets` | `false` | `HALO_TOUCH_TARGETS` | Outlines the tap targets of the menus (item green, value blue, list slot yellow, legend button red, the band beside the slots of a list orange, keys of the on-screen keyboard white), marks where the last finger went down and the last tap landed for 3 seconds, and logs each tap with the target that it hit (for a value, also where it splits into previous and next): to judge the accuracy of touch. |
-| `debug.solo_game` | `false` | `HALO_SOLO_GAME` | A system link or split screen game can start with one player, alone on this machine: to test multiplayer maps without a second machine. |
+| `debug.solo_game` | `false` | `HALO_SOLO_GAME` | The older name of `game.start_with_one_player`: `true` turns it on too. |
 | `debug.log_addresses` | `false` | `HALO_LOG_ADDRESSES=1` sets `true` | `true`: other machines' internet addresses are written whole in `debug.txt` and the console, for debugging your own network. `false`: a public address is written as a tag (`addr#3f2a9c`) that matches up only within one run; local network addresses are always whole. Do not post a `debug.txt` written with this on. |
 | `debug.network_latency`, `debug.network_loss`, `debug.network_corrupt`, `debug.network_corrupt_stream`, `debug.network_corrupt_after` | `0` | `HALO_NETWORK_LATENCY`, `HALO_NETWORK_LOSS`, `HALO_NETWORK_CORRUPT`, `HALO_NETWORK_CORRUPT_STREAM`, `HALO_NETWORK_CORRUPT_AFTER` | The game holds all the data that it receives for this number of milliseconds, ignores this percentage of the datagrams, and damages this percentage of the datagrams it receives, and this percentage of its reads of streams, at random (bytes changed, cut short, stretched or replaced), from this many seconds after the start. Use the first two to test the netcode as on the internet, and the others to test that nothing another machine sends can crash the game (a damaged stream is closed, so a little goes a long way; a host's messages to its own client are damaged too, so start damaging once the game has started). |
 | `debug.voice_test` | `false` | `HALO_VOICE_TEST` | Automatic tests of voice chat: a tone replaces the microphone, and each voice that the game hears is written to the log once each second. |
@@ -901,8 +921,8 @@ half a second.
 
 ## Field of view
 
-Video Setup's FOV AND VIEWMODELS screen sets the field of view of the
-first-person view (`display.fov`) and of the weapon and hands
+Display's FIELD OF VIEW and VIEWMODEL FOV rows (and its VIEWMODELS list)
+set the field of view of the first-person view (`display.fov`) and of the weapon and hands
 (`display.viewmodel_fov`), from 80 to 150 degrees in steps of 5, and can
 hide the weapon (`display.viewmodel_visible`). DEFAULT, the setting's `0`,
 keeps the stock view. `config.toml` takes any angle from 20 to 150.
@@ -1102,8 +1122,8 @@ The lines show above the motion sensor, in a column a little over half the
 screen wide: a long line wraps onto the next rows, and the line you type
 shows its end when it is wider. The player's name is in the colour of
 their team (blue in a game without teams), the text in a pale blue, and the
-host's notices in a pale gold; WHITE in CHAT TEXT in Settings > Network
-Setup > Multiplayer HUD (`display.chat_style`) draws them all white, as
+host's notices in a pale gold; WHITE in OPENCE CHAT COLORS in Settings >
+Online > CHAT (`display.chat_style`) draws them all white, as
 Custom Edition does. A line to the
 team says "(team)" after the name, one to the vehicle "(vehicle)". The
 lines go after ten seconds; while you type, the last six rows show. Where
@@ -1125,7 +1145,7 @@ The host sends each line on: a player of an older build does not see the
 lines and cannot send them. The host takes 5 lines at once from a machine,
 then one each 1.5 seconds; a machine that joins starts afresh.
 
-TEXT CHAT in Settings > Network Setup > Multiplayer HUD (`display.text_chat`)
+OPENCE CHAT in Settings > Online > CHAT (`display.text_chat`)
 can HIDE the chat entirely, for purists and streamers: no lines show, and
 its keys open nothing.
 
@@ -1298,7 +1318,7 @@ ChupathingyCE's own parts of the server browser:
   in the Server Browser of OpenCE and ChupathingyCE. The dedicated server
   (`server/`) is public unless `HALO_DEDICATED_PUBLIC=false`.
 - Builds with the game list (`configure.py --game-browser`) also show the
-  games of `network.browser_url` (halo.milenko.org). While the Server
+  games of `network.browser_url` (stats.chupathingy.org). While the Server
   Browser is open, the game reads the list with an HTTPS GET of
   `/v1/games.txt` (at most every 5 seconds), and shows the games of its
   network version, not its own. A game that is also listed on the brokers
@@ -1541,7 +1561,7 @@ activity sent (without the invite).
 
 Builds with the game list (`configure.py --game-browser`) have Online Games
 in the Multiplayer menu: the games on `network.browser_url`
-(halo.milenko.org). The screen looks like the Xbox's menus, drawn by the
+(stats.chupathingy.org). The screen looks like the Xbox's menus, drawn by the
 game itself in the menus' fonts (`port/assets/fonts`). Each game's map has a
 tag for its family: XBX (the Xbox's maps), HCE (Custom Edition), HMD
 (HaloMD) and GBX (Halo PC retail). A lock marks a game with a password, as
@@ -1621,7 +1641,7 @@ network game agree on. Refer to [docs/mods.md](../../docs/mods.md).
 
 ## Streamer mode
 
-Streamer mode (Settings > Network Setup > Streamer Mode, `streamer.enabled`)
+Streamer mode (Settings > Online > STREAMER MODE > HIDE WORDS, `streamer.enabled`)
 hides offensive words as stars wherever the game draws text that other
 people or files wrote: the text chat's lines, players' names over their
 heads, in the chat, in the kill feed, on
@@ -1844,6 +1864,7 @@ Other changes:
 | `render/render.c` | The 3D view of each window is tone mapped (`display.hdr`) and antialiased (`display.anti_aliasing`) before the HUD is drawn. |
 | `render/render.c` | `render_initialize` reads the structure culling tests from `display.structure_culling`. |
 | `models/models.c` | A model's size, which chooses its level of detail and whether it is drawn, is scaled as `display.model_detail` says (`halo_model_detail_scale`, `src/d3d8_gl.c`), and each permutation draws the level `game/model_detail.c` chooses from the model's (stock: the model's). |
+| `models/models.c` | With `display.full_model_detail`, models are drawn with their most detailed geometry at any distance. |
 | `interface/hud.c` | In multiplayer, players' names are drawn above their heads (`display.player_names`, `display.player_name_scale`). |
 | `interface/hud.c` | The seconds left on a player's powerups (`display.powerup_timers`, `game/powerup_timers.c`). |
 | `interface/progress_bar.c` | The loading screen is made by the CPU (`game/loading_screen.c`) and put over the back buffer (`src/d3d8_gl.c`): the Xbox drew it from its front buffer, through a texture made from that buffer's address, with no vertex shader, which the port's Direct3D does not have. |

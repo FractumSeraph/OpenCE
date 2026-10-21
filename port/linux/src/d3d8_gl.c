@@ -24,6 +24,7 @@ Conventions carried over from the Xbox:
 #include "xgpu.h"
 #include "sdl_platform.h"
 #include "halo_ui_pointer.h"
+#include "ui_point.h"
 #include "port_config.h"
 
 #include <math.h>
@@ -59,6 +60,7 @@ and entry points used below that ES lacks */
 #ifndef GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT
 #define GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT 0x84ff
 #endif
+#define GL_MAX_TEXTURE_MAX_ANISOTROPY GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT
 #ifndef GL_TEXTURE_BORDER_COLOR
 #define GL_TEXTURE_BORDER_COLOR 0x1004
 #endif
@@ -334,6 +336,16 @@ float halo_model_detail_scale(int level)
 	display_scale = screen_scale[1] / screen_supersampling;
 	return display_scale > 1.0f ? display_scale : 1.0f;
 }
+
+#ifdef HALO_CONSOLE_MAP_LOAD_HOOKS
+/* a map has finished loading (scenario_load): a console's renderer gives
+its shaders priority (the first, the Switch's deko3d renderer:
+port/switch/guest/d3d8_dk.c); nothing to do here */
+void d3d8_gl_map_loaded(const char *name)
+{
+	(void)name;
+}
+#endif
 
 /* how many pixels the screen's targets draw to the Xbox's one, the larger
 of the two ways (the screen effects' convolutions: rasterizer_xbox_screen_effect.c) */
@@ -2319,42 +2331,54 @@ int d3d8_gl_ready(void)
 
 /* ---------- the menus' pointer */
 
-/* a point in the window, as SDL reports it, in the menus' coordinates: the
-inverse of the letterboxed display blit at presentation, the screen's
-width and the menus' centering (halo_screen_ui_offset); or, not centered,
-the screen's (the game's drawing: the scoreboard's); x and y are -1 if
+/* the view the menus' points are mapped through (ui_point.c); FALSE if
 there is no back buffer or window yet */
-static void ui_point_from_window_on(float window_x, float window_y, int centered, short *x, short *y)
+static BOOL ui_point_view_get(struct ui_point_view *view)
 {
 	struct render_target_entry *back_buffer = render_target_get(&device.back_buffer);
-	int window_width, window_height, pixel_width, pixel_height, width, height, left, top;
-	float screen_x, screen_y;
 
-	*x = *y = -1;
 	if (!back_buffer)
-		return;
-	platform_video_window_size(&window_width, &window_height);
-	platform_video_drawable_size(&pixel_width, &pixel_height);
-	if (window_width <= 0 || window_height <= 0)
-		return;
-	width = pixel_width;
-	height = (int)((long)pixel_width * back_buffer->target.gl_height / back_buffer->target.gl_width);
-	if (height > pixel_height)
-	{
-		height = pixel_height;
-		width = (int)((long)pixel_height * back_buffer->target.gl_width / back_buffer->target.gl_height);
-	}
-	left = (pixel_width - width) / 2;
-	top = (pixel_height - height) / 2;
-	screen_x = (window_x * pixel_width / window_width - left) * (float)back_buffer->target.width / (float)width;
-	screen_y = (window_y * pixel_height / window_height - top) * (float)back_buffer->target.height / (float)height;
-	*x = (short)floorf(screen_x - (centered ? (float)(halo_screen_width() - 640) / 2.0f : 0.0f));
-	*y = (short)floorf(screen_y);
+		return FALSE;
+	platform_video_window_size(&view->window_width, &view->window_height);
+	platform_video_drawable_size(&view->pixel_width, &view->pixel_height);
+	view->target_width = (int)back_buffer->target.width;
+	view->target_height = (int)back_buffer->target.height;
+	view->gl_width = (int)back_buffer->target.gl_width;
+	view->gl_height = (int)back_buffer->target.gl_height;
+	view->screen_width = halo_screen_width();
+	return TRUE;
 }
 
-static void ui_point_from_window(float window_x, float window_y, short *x, short *y)
+/* a point in the window, as SDL reports it, in the menus' coordinates; or,
+not centered, the screen's (the game's drawing: the scoreboard's), the
+menus' centering left out (the screen taken as the menus' 640 columns); x
+and y are -1 if there is no back buffer or window yet */
+static void ui_point_from_window_on(float window_x, float window_y, int centered, short *x, short *y)
+{
+	struct ui_point_view view;
+
+	*x = *y = -1;
+	if (ui_point_view_get(&view))
+	{
+		if (!centered)
+			view.screen_width = 640;
+		ui_point_from_window(&view, window_x, window_y, x, y);
+	}
+}
+
+/* a point in the window in the menus' coordinates */
+static void ui_point_from_window_now(float window_x, float window_y, short *x, short *y)
 {
 	ui_point_from_window_on(window_x, window_y, TRUE, x, y);
+}
+
+/* where in the window a point of the menus is, for debug.test_input's
+clicks; FALSE if there is no back buffer or window yet */
+BOOL halo_ui_point_to_window(short x, short y, float *window_x, float *window_y)
+{
+	struct ui_point_view view;
+
+	return ui_point_view_get(&view) && ui_point_to_window(&view, x, y, window_x, window_y);
 }
 
 /* a network game's scoreboard picking players with the mouse (OpenCE's:
@@ -2396,15 +2420,15 @@ int halo_ui_pointer_update(int menus_active, struct halo_ui_pointer *pointer)
 	if (!menus_active || !device.gl_ready || !platform_ui_pointer_read(&state))
 		return 0;
 	memset(pointer, 0, sizeof(*pointer));
-	ui_point_from_window(state.x, state.y, &pointer->x, &pointer->y);
-	ui_point_from_window(state.click_x, state.click_y, &pointer->click_x, &pointer->click_y);
+	ui_point_from_window_now(state.x, state.y, &pointer->x, &pointer->y);
+	ui_point_from_window_now(state.click_x, state.click_y, &pointer->click_x, &pointer->click_y);
 	pointer->moved = state.moved != FALSE;
 	pointer->left_clicks = (unsigned char)(state.left_clicks < 255 ? state.left_clicks : 255);
 	pointer->right_clicks = (unsigned char)(state.right_clicks < 255 ? state.right_clicks : 255);
 	pointer->wheel_steps = (signed char)(state.wheel_steps < -8 ? -8 : state.wheel_steps > 8 ? 8 : state.wheel_steps);
 	pointer->touch = state.touch != FALSE;
 	pointer->downs = (unsigned char)(state.downs < 255 ? state.downs : 255);
-	ui_point_from_window(state.down_x, state.down_y, &pointer->down_x, &pointer->down_y);
+	ui_point_from_window_now(state.down_x, state.down_y, &pointer->down_x, &pointer->down_y);
 	return 1;
 }
 
@@ -4956,9 +4980,9 @@ every write; after a few such rewrites a page counts as volatile for a
 while, and draws that use it stream their data as before. */
 
 #define MIRROR_SEGMENT_SIZE 0x400000UL
-#define MIRROR_SEGMENT_COUNT (PLATFORM_CONTIGUOUS_SIZE / MIRROR_SEGMENT_SIZE)
+#define MIRROR_SEGMENT_COUNT (PLATFORM_CONTIGUOUS_MAXIMUM / MIRROR_SEGMENT_SIZE)
 #define MIRROR_PAGE_SIZE 0x1000UL
-#define MIRROR_PAGE_COUNT (PLATFORM_CONTIGUOUS_SIZE / MIRROR_PAGE_SIZE)
+#define MIRROR_PAGE_COUNT (PLATFORM_CONTIGUOUS_MAXIMUM / MIRROR_PAGE_SIZE)
 /* rewrites no more than this many frames apart ... */
 #define MIRROR_REWRITE_FRAMES 2
 /* ... this many times in a row make a page volatile ... */
@@ -5954,7 +5978,7 @@ static void setup_streams(unsigned long first, unsigned long count)
 			continue;
 		placed[stream] = TRUE;
 		stream_buffers[stream] = 0;
-		base = (unsigned long)XBOX_ADDRESS(PLATFORM_PHYSICAL_TO_VIRTUAL(device.streams[stream].data)) + first * stride;
+		base = PLATFORM_WINDOW_ADDRESS(PLATFORM_PHYSICAL_TO_VIRTUAL(device.streams[stream].data)) + first * stride;
 #ifdef HALO_GLES
 		if (!stream_has_colors(declaration, stream))
 #endif
@@ -6357,7 +6381,7 @@ void WINAPI D3DDevice_DrawIndexedVertices(D3DPRIMITIVETYPE primitive_type, UINT 
 #ifdef HALO_GLES
 		xgpu_capabilities.base_vertex &&
 #endif
-		mirror_range((unsigned long)XBOX_ADDRESS(index_data), vertex_count * sizeof(WORD), &index_buffer, &index_offset, &generation);
+		mirror_range(PLATFORM_WINDOW_ADDRESS(index_data), vertex_count * sizeof(WORD), &index_buffer, &index_offset, &generation);
 #ifdef HALO_WEB
 	if (!mirrored && primitive_type != D3DPT_QUADLIST &&
 		index_cache_get(index_data, vertex_count, &minimum, &maximum, &index_offset))
@@ -7377,6 +7401,14 @@ void halo_draw_picture(const unsigned char *rgba, long width, long height)
 	gl_check_errors("picture");
 }
 
+/* debug.test_input's shot: the window as shown at the next present */
+static BOOL test_screenshot_requested;
+
+void halo_test_screenshot(void)
+{
+	test_screenshot_requested = TRUE;
+}
+
 void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destination_rectangle,
 	void *unused, void *unused2)
 {
@@ -7474,9 +7506,14 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 		glClear(GL_COLOR_BUFFER_BIT);
 		glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 #endif
-		/* (the window as shown, before it is swapped away) */
-		if (screenshot_every > 0 && screenshot_window && device.frame % (unsigned long)screenshot_every == 0)
+		/* (the window as shown, before it is swapped away; and the one
+		debug.test_input's shot asks for) */
+		if ((screenshot_every > 0 && screenshot_window && device.frame % (unsigned long)screenshot_every == 0) ||
+			test_screenshot_requested)
+		{
+			test_screenshot_requested = FALSE;
 			write_window_screenshot(window_width, window_height);
+		}
 		platform_video_swap();
 		xgpu_gl_state_invalidate();
 		memory_watch_begin_frame();

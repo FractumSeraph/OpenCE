@@ -80,6 +80,11 @@ int platform_input_scheme(void)
 	return 0;
 }
 
+int platform_prompt_scheme(void)
+{
+	return 0;
+}
+
 void platform_text_typing(int typing)
 {
 	(void)typing;
@@ -99,6 +104,20 @@ void platform_text_field(int typing, int password)
 {
 	(void)typing;
 	(void)password;
+}
+
+/* (no gamepad of a player's: the menus' screens never open here) */
+int platform_gamepad_count(void)
+{
+	return 0;
+}
+
+int platform_gamepad_describe(int index, char *name, size_t size)
+{
+	(void)index;
+	if (size)
+		name[0] = 0;
+	return -1;
 }
 
 int halo_input_from_name(const char *name)
