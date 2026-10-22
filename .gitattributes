@@ -10,3 +10,5 @@ server/deploy/halo-backup-receive text eol=lf
 server/deploy/halo-alerts text eol=lf
 server/deploy/halo-recordings-offload text eol=lf
 server/deploy/halo-recordings-receive text eol=lf
+# (the servers' deploy scripts run on Linux: LF, whatever the checkout)
+server/deploy/* text eol=lf
