@@ -33,7 +33,8 @@ then [ChupathingyCE's](#chupathingyce), then [OpenCE's](#opence).
   so that no one watching can help a player. Anyone watches them at
   [halo.fractumseraph.net/assets/replay](https://halo.fractumseraph.net/assets/replay/),
   live or once the game is over, through any player's eyes, behind them or
-  freely: the busiest games first, with a picture of each map; a results
+  freely: the games listed with a picture of each map, newest or busiest
+  first; a results
   card at the end to save or share; heatmaps and kill lines, everyone's or
   one player's; frame stepping; each game and player linked to their stats
   on stats.chupathingy.org.

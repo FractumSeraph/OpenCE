@@ -11,8 +11,8 @@
   view saved as a video. The file is opened here, in the browser: nothing
   is sent anywhere. three.js from jsDelivr draws it. The front page lists
   the servers' games from each folder's index.json (server/deploy/
-  halo-replays-index writes it, with a thumbnail of each map), the busiest
-  first; a game ends with a results card that can be saved as a picture.
+  halo-replays-index writes it, with a thumbnail of each map), the newest
+  first or the busiest; a game ends with a results card that can be saved as a picture.
 -->
 <html lang="en">
 <head>
@@ -157,7 +157,7 @@ smaller) */
   <div id="drop">
     <h1>Halo Replay Viewer</h1>
     <p>Watch a game a server recorded, live or again: through any player's eyes, behind them, or from
-      anywhere. Pick a game below (the busiest first), or open a recording (<code>recordings\*.hrec</code>: an admin's
+      anywhere. Pick a game below (the newest first; or the busiest), or open a recording (<code>recordings\*.hrec</code>: an admin's
       shows the hits the fair play checks refused or doubted). A file you open stays on this computer.</p>
     <div id="games" style="display:none"></div>
     <label class="button">Open a recording<input id="file" type="file" accept=".hrec" hidden></label>
@@ -2523,7 +2523,7 @@ async function listGames() {
     const base = folder(server.live || server.public);
     const kept = folder(server.replays);
     const section = document.createElement("section");
-    section.innerHTML = `<h2><span class="name"></span><span class="order">Order <select><option value="busiest">busiest first</option><option value="newest">newest first</option></select></span></h2><p class="live-line"></p><div class="cards"></div><div class="more"></div>`;
+    section.innerHTML = `<h2><span class="name"></span><span class="order">Order <select><option value="newest">newest first</option><option value="busiest">busiest first</option></select></span></h2><p class="live-line"></p><div class="cards"></div><div class="more"></div>`;
     section.querySelector(".name").textContent = server.name;
     box.append(section);
     if (base) fetch(new URL("live.json", base), { cache: "no-store" }).then(r => r.ok ? r.json() : null).then(status => {
