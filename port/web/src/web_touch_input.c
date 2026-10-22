@@ -71,3 +71,9 @@ const char *updater_version(void)
 {
 	return "web";
 }
+
+/* (a page is never under gamescope: every question can be shown) */
+int updater_gamescope(void)
+{
+	return 0;
+}
