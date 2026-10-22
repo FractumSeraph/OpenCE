@@ -107,6 +107,7 @@ symbols in this file:
 #include "units/units.h"
 #include "map_share.h" /* port: port/linux/game/map_share.c */
 #include "latency_meter.h" /* port: port/linux/game/latency_meter.c */
+#include "halo_perf_log.h" /* port: console.perf_log */
 
 /* ---------- constants */
 
@@ -728,7 +729,9 @@ void interface_draw_screen(
 				}
 			}
 
+			HALO_PERF_RENDER_PART(_halo_perf_render_screen_effect);
 			rasterizer_screen_effect(&parameters);
+			HALO_PERF_RENDER_PART(_halo_perf_render_hud);
 		}
 		else
 		{

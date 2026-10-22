@@ -9133,7 +9133,6 @@ static void host_update(struct widget_instance *list)
 			host_value_set(named(row, "value", 0), value);
 		else if ((page == _host_page_setup && shown == _host_row_name) ||
 #ifdef HALO_GAME_BROWSER
-			/* (this fork: the browser build has no game type files) */
 			(page != _host_page_setup && shown == SERVER_GAMETYPE_NAME) ||
 #endif
 			shown == _host_row_password)

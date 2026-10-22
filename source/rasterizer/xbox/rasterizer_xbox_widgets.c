@@ -86,6 +86,7 @@ symbols in this file:
 #include "rasterizer/rasterizer.h"
 #include "rasterizer/rasterizer_transparent_geometry.h"
 #include "rasterizer/rasterizer_console_vars.h"
+#include "halo_perf_log.h" /* port: console.perf_log */
 
 /* ---------- constants */
 
@@ -273,6 +274,7 @@ long _rasterizer_widget_get_occlusion_test_result(
 			&timestamp);
 		if (result == D3DERR_TESTINCOMPLETE)
 		{
+			HALO_PERF_BEGIN(_halo_perf_occlusion_wait);
 			rasterizer_spin_begin(_rasterizer_profile_screen_effect);
 			do
 			{
@@ -284,6 +286,7 @@ long _rasterizer_widget_get_occlusion_test_result(
 			}
 			while (result == D3DERR_TESTINCOMPLETE);
 			rasterizer_spin_end();
+			HALO_PERF_END(_halo_perf_occlusion_wait);
 		}
 
 		if (result >= 0)

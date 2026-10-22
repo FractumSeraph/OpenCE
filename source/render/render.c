@@ -442,7 +442,7 @@ static void render_window(
 		rasterizer_transparent_geometry_stop();
 		HALO_PERF_RENDER_PART(_halo_perf_render_world);
 		structure_render_fog_screen();
-		HALO_PERF_RENDER_PART(_halo_perf_render_effects);
+		HALO_PERF_RENDER_PART(_halo_perf_render_lens_flares);
 		rasterizer_lens_flares_draw();
 		HALO_PERF_RENDER_PART(_halo_perf_render_world);
 		/* port: the 3D view tone mapped (display.hdr) and antialiased
@@ -479,7 +479,7 @@ static void render_window(
 	editor_render();
 	rasterizer_debug_draw();
 	rasterizer_window_end();
-	HALO_PERF_RENDER_PART(NONE);
+	HALO_PERF_RENDER_PART(_halo_perf_render_setup);
 	profile_render_window_end();
 
 	return;
@@ -499,6 +499,7 @@ static void render_player_frame(
 	camera = &window->render_camera;
 	has_mirror = FALSE;
 
+	HALO_PERF_RENDER_PART(_halo_perf_render_setup);
 	structure_visibility_find_camera(camera);
 	render.fog.runtime_flags = 0;
 	scenario_get_atmospheric_fog(
@@ -687,6 +688,7 @@ void render_frame(
 	render.frame_index++;
 	render.time_delta_since_tick_sec = time_delta_since_tick_sec;
 	memset(&parameters, 0, sizeof(parameters));
+	HALO_PERF_RENDER_PART(_halo_perf_render_begin);
 #ifndef HALO_XBOX_CONSOLE
 	/* continuous between ticks (render_interpolation.c) */
 	parameters.game_time_sec = render_interpolation_game_time_sec(game_time_get());
@@ -726,8 +728,11 @@ void render_frame(
 			window_type = 1;
 		}
 
+		HALO_PERF_RENDER_PART(_halo_perf_render_end);
 		render_nonplayer_frame(window, window_type);
 	}
+
+	HALO_PERF_RENDER_PART(_halo_perf_render_end);
 
 #ifndef HALO_XBOX_CONSOLE
 	halo_screen_ui_offset(TRUE);
@@ -738,6 +743,7 @@ void render_frame(
 #endif
 	rasterizer_windows_end();
 	rasterizer_frame_end();
+	HALO_PERF_RENDER_PART(NONE);
 
 	return;
 }
