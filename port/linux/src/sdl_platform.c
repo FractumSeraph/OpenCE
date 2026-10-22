@@ -16,6 +16,9 @@ and the debug keyboard that the game's console reads.
 #include <emscripten/emscripten.h>
 #endif
 #include "gl.h"
+#ifdef HALO_BGFX
+#include "xgpu.h"
+#endif
 #include "port_config.h"
 #include "p2p.h"
 #include "posix.h"
@@ -1938,6 +1941,11 @@ BOOL platform_video_initialize(unsigned long width, unsigned long height)
 	platform_video_tried = TRUE;
 	if (!platform_sdl_initialize())
 		return FALSE;
+#ifdef HALO_BGFX
+	/* the bgfx test backend draws instead (d3d8_bgfx.inl): a window without
+	an OpenGL context, whose Metal layer bgfx draws into */
+	xgpu_bgfx = strcmp(config_string("display.renderer"), "bgfx") == 0;
+#endif
 #ifndef HALO_ANDROID
 #ifdef HALO_WEB
 	/* (a browser's canvas has 8 bits a channel) */
@@ -2031,7 +2039,12 @@ BOOL platform_video_initialize(unsigned long width, unsigned long height)
 	(void)height;
 	platform_window_size_setting(&platform_window_width, &platform_window_height);
 	platform_window = SDL_CreateWindow(title, (int)platform_window_width, (int)platform_window_height,
-		SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY |
+#ifdef HALO_BGFX
+		(xgpu_bgfx ? SDL_WINDOW_METAL : SDL_WINDOW_OPENGL) |
+#else
+		SDL_WINDOW_OPENGL |
+#endif
+		SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY |
 		(config_boolean("debug.hidden_window") ? SDL_WINDOW_HIDDEN : 0) |
 		(platform_fullscreen_setting() ? SDL_WINDOW_FULLSCREEN : 0));
 #endif
@@ -2070,6 +2083,15 @@ BOOL platform_video_initialize(unsigned long width, unsigned long height)
 #endif
 #ifdef HALO_WINDOWS
 	win32_window_borderless_apply(platform_window);
+#endif
+#ifdef HALO_BGFX
+	if (xgpu_bgfx)
+	{
+		platform_event_thread = SDL_GetCurrentThreadID();
+		platform_log("renderer: bgfx");
+		platform_mouse_capture(TRUE);
+		return TRUE;
+	}
 #endif
 	platform_gl_context = SDL_GL_CreateContext(platform_window);
 #ifdef HALO_GLES
@@ -2341,6 +2363,10 @@ void platform_video_swap(void)
 	win32_window_borderless_apply(platform_window);
 #endif
 
+#ifdef HALO_BGFX
+	/* (the device presents: d3d8_bgfx.inl; this paces the frames) */
+	if (!xgpu_bgfx)
+#endif
 	SDL_GL_SwapWindow(platform_window);
 #endif
 	/* (a frame the graphics driver held for seconds: the game froze, and
@@ -2368,6 +2394,13 @@ void platform_video_swap(void)
 #endif
 }
 
+#ifdef HALO_BGFX
+SDL_Window *platform_sdl_window(void)
+{
+	return platform_window;
+}
+
+#endif
 #if !defined(HALO_ANDROID) && !defined(HALO_WEB)
 /* when SDL_SetWindowRelativeMouseMode has no XInput2 (32-bit libSDL3 on X11
 without 32-bit libXi.so.6), the mouse is held with a hidden cursor, a window

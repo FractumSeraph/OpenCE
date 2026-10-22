@@ -97,6 +97,15 @@ parser.add_argument(
     "does; never a build to ship",
 )
 parser.add_argument(
+    "--renderer",
+    choices=["gl", "bgfx"],
+    default="gl",
+    help="macOS: what draws the game. gl (the default) is OpenGL (port/linux/src/d3d8_gl.c); bgfx also builds "
+    "the bgfx test backend (Metal; port/linux/src/d3d8_bgfx.inl), chosen at run time with display.renderer = "
+    "\"bgfx\" or HALO_RENDERER=bgfx. It fetches bgfx, bx and bimg at pinned commits into build/macos/third_party "
+    "and links Homebrew's shaderc and SPIRV-Cross",
+)
+parser.add_argument(
     "--lto",
     choices=["full", "thin", "off"],
     default="full",
@@ -199,6 +208,7 @@ sln = SimpleNamespace(
     console_limits=args.console_limits,
     window_rebase=args.window_rebase,
     port_lto=args.lto,
+    renderer=args.renderer,
     port_portable=args.portable,
     port_pgo=args.pgo,
     port_pgo_profile=args.pgo_profile,

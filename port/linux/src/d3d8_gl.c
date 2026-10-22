@@ -45,6 +45,22 @@ extern void console_printf(unsigned char clear, const char *format, ...);
 #include "ui_overlay.h"
 #endif
 
+#ifdef HALO_BGFX
+/* the bgfx test backend in place of OpenGL (display.renderer = "bgfx";
+d3d8_bgfx.inl, at the end of this file, which shares the device's state) */
+static BOOL bg_initialize(void);
+static BOOL bg_active(void);
+static void bg_draw_vertices(D3DPRIMITIVETYPE type, unsigned long start, unsigned long count);
+static void bg_draw_indexed(D3DPRIMITIVETYPE type, unsigned long count, const WORD *indices);
+static void bg_draw_immediate(D3DPRIMITIVETYPE type, unsigned long count);
+static void bg_clear(DWORD count, const D3DRECT *rectangles, DWORD flags, D3DCOLOR color, float z, DWORD stencil);
+static void bg_present(void);
+static void bg_frame_account(char *text, size_t size);
+static void bg_visibility_begin(void);
+static void bg_visibility_end(DWORD index);
+static UINT bg_visibility_result(DWORD index);
+#endif
+
 void d3d8_surface_initialize(D3DSurface *surface, D3DFORMAT format, unsigned long width, unsigned long height);
 void d3d8_surface_resize(D3DSurface *surface, D3DFORMAT format, unsigned long width, unsigned long height);
 
@@ -470,6 +486,10 @@ struct vertex_shader_object
 	/* shader[] and lit_shader[] tried already (bits 0 and 1, and 2 and 3 lit):
 	one that failed (0) is not compiled again at each draw */
 	unsigned char shaders_tried;
+#ifdef HALO_BGFX
+	/* as shader[], the bgfx backend's (d3d8_bgfx.inl) */
+	void *bg_shader[2];
+#endif
 #if !defined(HALO_GLES) && !defined(__APPLE__)
 	/* the vertex array its draws last used, and the streams they had
 	(setup_streams: the layout follows from the two) */
@@ -825,6 +845,25 @@ static struct
 	/* (draws counted when this frame began) */
 	unsigned long frame_first_draw;
 } stats;
+/* debug.gpu_stats's frame work timing (D3DDevice_Present) */
+static double stats_frame_start, stats_busy_total, stats_busy_worst;
+/* debug.gpu_stats's account of a slow frame (D3DDevice_Present): the
+renderer's shader compiles and texture uploads in it */
+static struct
+{
+	unsigned long compiles;
+	double compile_seconds, texture_seconds;
+} stats_frame;
+/* a frame slower than this is logged with its account */
+#define STATS_SLOW_FRAME_SECONDS 0.020
+
+static double stats_seconds(void)
+{
+	struct timespec now;
+
+	clock_gettime(CLOCK_MONOTONIC, &now);
+	return (double)now.tv_sec + (double)now.tv_nsec / 1e9;
+}
 
 void xgpu_statistics_texture_upload(unsigned long bytes)
 {
@@ -1397,10 +1436,13 @@ GLuint xgpu_compile_shader(GLenum type, const char *source, const char *what)
 {
 	GLuint shader = glCreateShader(type);
 	GLint status = 0;
+	double start = stats_seconds();
 
 	glShaderSource(shader, 1, &source, NULL);
 	glCompileShader(shader);
 	glGetShaderiv(shader, GL_COMPILE_STATUS, &status);
+	stats_frame.compiles++;
+	stats_frame.compile_seconds += stats_seconds() - start;
 	if (!status)
 	{
 		char log[4096];
@@ -1429,11 +1471,13 @@ GLuint xgpu_link_program(GLuint vertex_shader, GLuint fragment_shader, const cha
 {
 	GLuint program = glCreateProgram();
 	GLint status = 0;
+	double start = stats_seconds();
 
 	glAttachShader(program, vertex_shader);
 	glAttachShader(program, fragment_shader);
 	glLinkProgram(program);
 	glGetProgramiv(program, GL_LINK_STATUS, &status);
+	stats_frame.compile_seconds += stats_seconds() - start;
 	if (!status)
 	{
 		char log[4096];
@@ -2331,7 +2375,14 @@ HRESULT WINAPI Direct3D_CreateDevice(UINT adapter, D3DDEVTYPE device_type, void 
 			!browser_headless() &&
 #endif
 			platform_video_initialize(width, height))
+		{
+#ifdef HALO_BGFX
+			if (xgpu_bgfx)
+				bg_initialize();
+			else
+#endif
 			gl_initialize();
+		}
 		else
 			platform_log("Direct3D: running without a window (nothing is displayed)");
 		device.created = TRUE;
@@ -2751,6 +2802,13 @@ static BOOL visibility_readback_gl_ok(const char *phase)
 
 void WINAPI D3DDevice_BeginVisibilityTest(void)
 {
+#ifdef HALO_BGFX
+	if (bg_active())
+	{
+		bg_visibility_begin();
+		return;
+	}
+#endif
 	if (!device.gl_ready || device.visibility_test_active)
 		return;
 	/* the test's slot is given only when it ends */
@@ -2801,6 +2859,13 @@ HRESULT WINAPI D3DDevice_EndVisibilityTest(DWORD index)
 	GLuint scratch;
 #endif
 
+#ifdef HALO_BGFX
+	if (bg_active())
+	{
+		bg_visibility_end(index);
+		return S_OK;
+	}
+#endif
 	if (!device.gl_ready || !device.visibility_test_active)
 		return S_OK;
 	device.visibility_test_active = FALSE;
@@ -2867,6 +2932,14 @@ HRESULT WINAPI D3DDevice_GetVisibilityTestResult(DWORD index, UINT *result, ULON
 
 	if (time_stamp)
 		*time_stamp = 0;
+#ifdef HALO_BGFX
+	if (bg_active())
+	{
+		if (result)
+			*result = bg_visibility_result(index);
+		return S_OK;
+	}
+#endif
 	index %= VISIBILITY_TEST_SLOTS;
 	if (!device.gl_ready || !device.query_pending[index])
 	{
@@ -6196,6 +6269,13 @@ void WINAPI D3DDevice_SetIndices(D3DIndexBuffer *index_data, UINT base_vertex_in
 
 void WINAPI D3DDevice_DrawVertices(D3DPRIMITIVETYPE primitive_type, UINT start_vertex, UINT vertex_count)
 {
+#ifdef HALO_BGFX
+	if (bg_active())
+	{
+		bg_draw_vertices(primitive_type, start_vertex, vertex_count);
+		return;
+	}
+#endif
 	if (!vertex_count)
 		return;
 	if (!prepare_draw(FALSE))
@@ -6406,6 +6486,13 @@ void WINAPI D3DDevice_DrawIndexedVertices(D3DPRIMITIVETYPE primitive_type, UINT 
 	GLuint index_buffer = 0;
 	BOOL mirrored;
 
+#ifdef HALO_BGFX
+	if (bg_active())
+	{
+		bg_draw_indexed(primitive_type, vertex_count, index_data);
+		return;
+	}
+#endif
 	if (!vertex_count || !index_data)
 		return;
 	if (!prepare_draw(FALSE))
@@ -6525,6 +6612,13 @@ void WINAPI D3DDevice_End(void)
 	unsigned long register_count = 0, vertex_size, vertex, slot;
 
 	device.immediate_active = FALSE;
+#ifdef HALO_BGFX
+	if (bg_active())
+	{
+		bg_draw_immediate(type, count);
+		return;
+	}
+#endif
 	if (!count)
 		return;
 	if (!prepare_draw(TRUE))
@@ -6792,6 +6886,13 @@ void WINAPI D3DDevice_Clear(DWORD count, CONST D3DRECT *rectangles, DWORD flags,
 	BOOL has_depth = FALSE;
 	DWORD index;
 
+#ifdef HALO_BGFX
+	if (bg_active())
+	{
+		bg_clear(count, rectangles, flags, color, z, stencil);
+		return;
+	}
+#endif
 	if (!device.gl_ready || !bind_targets(&has_depth))
 		return;
 	if (trace_frame())
@@ -7597,6 +7698,10 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 		device.index_offset = INDEX_BUFFER_SIZE;
 #endif
 	}
+#ifdef HALO_BGFX
+	if (bg_active())
+		bg_present();
+#endif
 	device.frame++;
 	#ifdef HALO_BROWSER
 	web_stream_cache_expire();
@@ -7621,8 +7726,37 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 			stats.most_draws = stats.draws - stats.frame_first_draw;
 		stats.frame_first_draw = stats.draws;
 	}
+	if (debug_settings.statistics)
+	{
+		/* a frame's work: from the end of the last frame's wait to this one
+		drawn, without the 60 Hz pacing below */
+		double busy = stats_seconds() - stats_frame_start;
+
+		if (stats_frame_start > 0.0)
+		{
+			stats_busy_total += busy;
+			if (busy > stats_busy_worst)
+				stats_busy_worst = busy;
+			char account[256] = "";
+
+#ifdef HALO_BGFX
+			if (bg_active())
+				bg_frame_account(account, sizeof(account));
+#endif
+			if (busy > STATS_SLOW_FRAME_SECONDS)
+			{
+				platform_log("slow frame %lu: %.1f ms; %lu shaders compiled in %.1f ms, textures %.1f ms%s", device.frame,
+					busy * 1000.0, stats_frame.compiles, stats_frame.compile_seconds * 1000.0,
+					stats_frame.texture_seconds * 1000.0, account);
+			}
+		}
+		memset(&stats_frame, 0, sizeof(stats_frame));
+	}
 	if (debug_settings.statistics && device.frame % 60 == 0)
 	{
+		platform_log("frame %lu: work %.2f ms a frame, worst %.2f ms", device.frame, stats_busy_total * 1000.0 / 60.0,
+			stats_busy_worst * 1000.0);
+		stats_busy_total = stats_busy_worst = 0.0;
 		platform_log("frame %lu: %lu draws, %lu immediate, %lu clears, %lu target changes; skipped %lu no program, %lu no target, %lu link; "
 			"%lu KB mirrored, %lu KB streamed; in 60 frames, %lu textures uploaded (%lu KB), at most %lu draws "
 			"and %lu ms in a frame",
@@ -7649,9 +7783,15 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 		pending_flips++;
 	}
 	pthread_mutex_unlock(&vertical_blank_lock);
+	if (debug_settings.statistics)
+		stats_frame_start = stats_seconds();
 }
 
 HRESULT WINAPI D3DDevice_PersistDisplay(void)
 {
 	return S_OK;
 }
+
+#ifdef HALO_BGFX
+#include "d3d8_bgfx.inl"
+#endif
