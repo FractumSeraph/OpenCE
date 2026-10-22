@@ -53,6 +53,8 @@ SMAA_FILES = (("SMAA.hlsl", "xgpu_smaa_shader"), ("area_tex.zlib", "xgpu_smaa_ar
 # (tools/android_icon.py makes it; tools/app_icon.py makes OpenCE's,
 # opence-icon-256.png)
 WINDOW_ICON = Path("port/assets/icon/chupathingyce-icon-256.png")
+# the pointer the menus show in place of the system's (port/linux/src/sdl_platform.c)
+MENU_CURSOR = Path("port/assets/cursor/menu_cursor.png")
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 # the overlay's fonts (the game browser's; posix_ui_font.c), in its order
 UI_FONTS = Path("port/linux/ui/fonts")
@@ -121,7 +123,8 @@ def hud_asset_inputs() -> List[Path]:
     return [*inputs, *(folder / f"{asset['name']}.png" for folder, asset, _ in textures()),
             *(FONT_ASSETS / name for name in font_files()), *(MENU_ASSETS / name for name in menu_files()),
             *(SMAA_ASSETS / name for name, _ in smaa_files()),
-            *([WINDOW_ICON] if (ROOT / WINDOW_ICON).is_file() else [])]
+            *([WINDOW_ICON] if (ROOT / WINDOW_ICON).is_file() else []),
+            *([MENU_CURSOR] if (ROOT / MENU_CURSOR).is_file() else [])]
 
 
 def hud_configure_inputs() -> List[Path]:
@@ -402,6 +405,13 @@ def main() -> None:
     lines.extend(words(data) if data else ["\t0,"])
     lines.append("};")
     lines.append(f"const unsigned long platform_window_icon_size = {len(data)};")
+    # the menus' pointer, a PNG (of size 0 where the checkout has none)
+    data = (ROOT / MENU_CURSOR).read_bytes() if (ROOT / MENU_CURSOR).is_file() else b""
+    lines.append("")
+    lines.append("const unsigned int platform_menu_cursor[] = {")
+    lines.extend(words(data) if data else ["\t0,"])
+    lines.append("};")
+    lines.append(f"const unsigned long platform_menu_cursor_size = {len(data)};")
     lines.append("")
     lines.append("#endif")
     write(Path(sys.argv[1]), lines)
