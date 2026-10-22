@@ -58,9 +58,12 @@ SCREENS = {
         "help_top": 368,
         # (rows in the place of the row before them: Window Size in
         # Resolution's, port/linux/game/menu_functions.c showing the one the
-        # display mode chosen uses; Android's Smooth Motion in Frame Rate's,
-        # and its anti-aliasing in the desktop's)
+        # display mode chosen uses; Android's anti-aliasing in the desktop's)
         "same_place": ["display.window_size", "display.interpolation", "anti_aliasing_android"],
+        # (rows written but placed on no page: Smooth Motion, which Frame
+        # Rate sets on every platform, kept so the rows after it keep their
+        # strings)
+        "unplaced": ["display.interpolation"],
         "rows": [
             ("DISPLAY MODE:", "display.mode",
              [("FULLSCREEN", "fullscreen"), ("BORDERLESS", "borderless"), ("WINDOWED", "windowed")],
@@ -79,14 +82,13 @@ SCREENS = {
             ("V-SYNC:", "display.vsync", ON_OFF,
              "Sync frames to the display.", None),
             # (port/linux/game/menu_functions.c: 30 also turns display.interpolation
-            # off, the others on; Android, with no frame rate cap, has Smooth
-            # Motion in its place. Instant Aim, display.direct_camera, is in
-            # config.toml alone)
+            # off, the others on, on every platform. Instant Aim,
+            # display.direct_camera, is in config.toml alone)
             ("FRAME RATE:", "display.max_fps",
              [("30 (XBOX)", "30"), ("AUTO", "0"), ("60", "60"), ("120", "120"), ("144", "144"),
               ("165", "165"), ("240", "240"), ("NONE", "-1")],
-             "The frame rate limit. Auto is twice the display's\nrefresh rate.",
-             "desktop web"),
+             "30 draws the game's own frames; the others blend\nbetween them. Auto: twice the display's rate.",
+             None),
             ("SMOOTH MOTION:", "display.interpolation", ON_OFF,
              "Draw a frame for every display refresh.", "android"),
             ("ANTI-ALIASING:", "display.anti_aliasing",
@@ -540,12 +542,19 @@ def _layout(spec: dict) -> list:
     before it on the platforms that row is for"""
     entries, labels, helps = [], [], []
     same = spec.get("same_place", ())
+    # (rows written but placed on no page: their strings keep their places)
+    unplaced = spec.get("unplaced", ())
 
     def add(rows: list) -> dict:
         places = {name: -1 for name in PLATFORMS}
         previous = set()
         for row in rows:
             key = _row_key(row)
+            if row[1] in unplaced:
+                entries.append(("unplaced", row, key, [], len(labels)))
+                labels.append(row[0])
+                helps.append(row[3])
+                continue
             members = row[4].split() if row[4] else list(PLATFORMS)
             shares = row[1] in same or key in same
             for name in members:
@@ -636,6 +645,10 @@ def _setting_rows(base: str, spec: dict) -> tuple:
                          for platform in view_entry[4:]]
             rows += [(f"{base}/op_{key}", platform, place) for platform, place in places]
             extra += _link_row(base, key, label_index, platforms[0] if platforms else None)
+        elif entry[0] == "unplaced":
+            # (written, so that its strings stay, but placed on no page)
+            _, row, key, _, label_index = entry
+            extra += _setting_row(base, row, key, label_index)
         else:
             _, row, key, places, label_index = entry
             rows += [(f"{base}/op_{key}", platform, place) for platform, place in places]
