@@ -134,7 +134,8 @@ def test_the_memory_layout_agrees_with_the_sources():
     platform = (ROOT / "port/linux/src/platform.h").read_text()
     base = int(re.search(r"#define PLATFORM_CONTIGUOUS_BASE (0x[0-9A-Fa-f]+)", platform).group(1), 16)
     # (the native 64-bit Android build, HALO_64BIT, has none: ChupathingyCE 0.7.5a)
-    sizes = re.search(r"#if \(?defined\(HALO_ARM64_GUEST\) \|\| defined\(HALO_WEB\)\)?(?: && !defined\(HALO_64BIT\))?.*?#define PLATFORM_CONTIGUOUS_SIZE "
+    # (and the Xbox 360's window, HALO_WINDOW_TRANSLATED, in the same branch: an outer parenthesis)
+    sizes = re.search(r"#if \(?\(?defined\(HALO_ARM64_GUEST\) \|\| defined\(HALO_WEB\)\)?(?: && !defined\(HALO_64BIT\))?.*?#define PLATFORM_CONTIGUOUS_SIZE "
                       r"(0x[0-9A-Fa-f]+)", platform, re.S)
     assert sizes, "platform.h gives the web build the 128 MB window"
     assert web_build.WEB_MEMORY_BYTES == base + int(sizes.group(1), 16)
