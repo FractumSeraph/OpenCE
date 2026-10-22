@@ -9,7 +9,7 @@
 	<key>CFBundleExecutable</key>
 	<string>halo</string>
 	<key>CFBundleIconFile</key>
-	<string>AppIcon</string>
+	<string>FractumHalo</string>
 	<key>CFBundleIdentifier</key>
 	<string>io.github.chupathingyce</string>
 	<key>CFBundleInfoDictionaryVersion</key>

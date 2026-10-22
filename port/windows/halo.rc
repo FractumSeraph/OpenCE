@@ -1,5 +1,6 @@
-// The Windows executable's resources: its icon (halo.ico, made by
-// tools/windows_icon.py from port/art/icon.svg) and its version information,
+// The Windows executable's resources: its icon (this fork's, fractum-halo.ico,
+// made by tools/fractum_icon.py; ChupathingyCE's is halo.ico, from
+// tools/windows_icon.py) and its version information,
 // which Explorer shows in the file's properties (this fork's name: Fractum Halo). halo_version.h is written by
 // tools/windows_build.py with the build's version (tools/version.py).
 
@@ -12,7 +13,7 @@
 #define VFT2_UNKNOWN 0x00000000L
 
 // (the first icon is the executable's in Explorer and the taskbar)
-1 ICON "halo.ico"
+1 ICON "fractum-halo.ico"
 
 VS_VERSION_INFO VERSIONINFO
 FILEVERSION HALO_RC_VERSION_NUMBERS

@@ -3,7 +3,8 @@
 
 The bundle holds the executable, port/macos/Info.plist (the name, the icon,
 the version, and the halo:// and Discord URL schemes internet play invites
-arrive by) and port/macos/AppIcon.icns, and is registered with Launch
+arrive by) and the icon (this fork's port/macos/FractumHalo.icns, tools/fractum_icon.py;
+ChupathingyCE's is AppIcon.icns), and is registered with Launch
 Services so that those links open it.
 
 With --self-contained (configure.py --portable: an application to give to
@@ -116,7 +117,7 @@ def main() -> None:
     info["CFBundleVersion"] = args.version
     with open(contents / "Info.plist", "wb") as destination:
         plistlib.dump(info, destination)
-    shutil.copy2(PORT_DIR / "AppIcon.icns", contents / "Resources" / "AppIcon.icns")
+    shutil.copy2(PORT_DIR / "FractumHalo.icns", contents / "Resources" / "FractumHalo.icns")
     executable = contents / "MacOS" / "halo"
     staged = executable.with_name("halo.new")
     shutil.copy2(args.executable, staged)

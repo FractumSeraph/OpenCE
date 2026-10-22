@@ -180,13 +180,13 @@ public class LauncherActivity extends Activity {
             ShortcutInfo importShortcut = new ShortcutInfo.Builder(this, "import-maps")
                 .setShortLabel("Import maps")
                 .setLongLabel("Import Halo PC maps")
-                .setIcon(Icon.createWithResource(this, R.mipmap.ic_launcher))
+                .setIcon(Icon.createWithResource(this, R.mipmap.ic_fractum))
                 .setIntent(intent)
                 .build();
             ShortcutInfo campaignShortcut = new ShortcutInfo.Builder(this, "download-campaign")
                 .setShortLabel("Campaign maps")
                 .setLongLabel("Download campaign maps")
-                .setIcon(Icon.createWithResource(this, R.mipmap.ic_launcher))
+                .setIcon(Icon.createWithResource(this, R.mipmap.ic_fractum))
                 .setIntent(new Intent(this, LauncherActivity.class).setAction(ACTION_DOWNLOAD_CAMPAIGN))
                 .build();
             shortcuts.setDynamicShortcuts(java.util.Arrays.asList(importShortcut, campaignShortcut));

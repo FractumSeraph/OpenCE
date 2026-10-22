@@ -49,10 +49,11 @@ MENU_LIST = MENU_ASSETS / "menus.json"
 SMAA_ASSETS = Path("port/third_party/smaa")
 SMAA_FILES = (("SMAA.hlsl", "xgpu_smaa_shader"), ("area_tex.zlib", "xgpu_smaa_area_texture"),
               ("search_tex.zlib", "xgpu_smaa_search_texture"))
-# the desktop windows' icon (port/linux/src/sdl_platform.c): ChupathingyCE's
-# (tools/android_icon.py makes it; tools/app_icon.py makes OpenCE's,
+# the desktop windows' icon (port/linux/src/sdl_platform.c): this fork's,
+# Fractum Halo's (tools/fractum_icon.py makes it; tools/android_icon.py makes
+# ChupathingyCE's, chupathingyce-icon-256.png, tools/app_icon.py OpenCE's,
 # opence-icon-256.png)
-WINDOW_ICON = Path("port/assets/icon/chupathingyce-icon-256.png")
+WINDOW_ICON = Path("port/assets/icon/fractum-halo-256.png")
 # the pointer the menus show in place of the system's (port/linux/src/sdl_platform.c)
 MENU_CURSOR = Path("port/assets/cursor/menu_cursor.png")
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"

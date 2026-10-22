@@ -2,6 +2,10 @@
 
 ## Art
 
+- **Fractum Halo's icon** (this fork's: the Android app's launcher icon,
+  `halo.exe`'s, the desktop windows', the macOS application's and the web
+  page's): a ring and its moon on a starfield, from FractumSeraph
+  (`port/assets/icon/fractum-halo.png`, `tools/fractum_icon.py`).
 - **ChupathingyCE's icon** (the Android app's launcher icon, `halo.exe`'s
   icon, the desktop windows' icon and the macOS application's): the helmet
   in red, with tusks (`port/art/icon.svg`), after MrBruh's Android icon.

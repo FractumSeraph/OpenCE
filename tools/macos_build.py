@@ -284,6 +284,6 @@ def generate_macos_build(n: Writer, sln: Any) -> None:
         description="MACOS BUNDLE $out",
     )
     n.build(outputs=bundle / "Contents" / "MacOS" / "halo", rule="macos_bundle", inputs=output,
-            implicit=[PORT_DIR / "bundle.py", PORT_DIR / "Info.plist", PORT_DIR / "AppIcon.icns"])
+            implicit=[PORT_DIR / "bundle.py", PORT_DIR / "Info.plist", PORT_DIR / "FractumHalo.icns"])
     n.build(outputs="macos", rule="phony", inputs=[output, bundle / "Contents" / "MacOS" / "halo"])
     n.newline()
