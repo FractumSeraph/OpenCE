@@ -319,6 +319,15 @@ https://halo.fractumseraph.net/replays/ with its listing in JSON
 servers' own limits there are small (`HALO_NET_RECORD_PUBLIC_MEGABYTES=300`,
 `HALO_NET_RECORDINGS_MEGABYTES=1024`).
 
+The viewer's front page lists each server's games from `index.json` in its
+folder: `halo-replays-index` (`server/deploy`; on the seedbox as
+`~/bin/halo-replays-index`, from cron every five minutes) reads each new
+recording once and writes the game's map, type, date, length, how many
+played and how many at once, the kills and its report's link, and in
+`~/halo-replays/thumbs/<map>.svg` a picture of each map's floors from above
+for the cards. Without an `index.json` the page falls back to the folder's
+listing, by file name. Python 3.5 and the standard library are enough.
+
 ### Why there is no `sv_password`
 
 A join password needs the player's game to send one. A join request in the

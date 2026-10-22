@@ -1,0 +1,361 @@
+#!/usr/bin/env python3
+"""The replay viewer's index of the public recordings (this fork: on the
+seedbox as ~/bin/halo-replays-index, from cron every five minutes):
+
+    halo-replays-index [<root>]
+
+<root> is where halo-recordings-receive keeps the servers' public copies
+(~/halo-replays by default): a folder for each server, holding its games'
+<name>.hrec (network.record_public) and their carnage reports' links,
+<name>.json. This writes, in each server's folder, index.json: a summary of
+each game (its map, game type, date, length, how many played and how many
+at once, the kills, the report's link), newest first, which the viewer's
+front page (port/web/assets/replay/index.html, listGames) shows in place of
+the bare file names; and in <root>/thumbs, one <map>.svg for each map seen:
+its floors from above, as the viewer's minimap draws them, for the front
+page's pictures. A recording is read once (the index keeps its size and
+time; one that changed is read again); a game whose file is gone leaves the
+index. Nothing here is private: the public copies hold no addresses,
+hardware ids or verdicts (port/linux/game/network_recording.c).
+
+The recording's format is network_recording.c's: "HREC", a version, then
+blocks ('R' as they are, 'G' gzip, 'B' zlib) of records (a type byte and a
+size, then the record). Only the game, walls, player, frame and kill records
+are read. Python 3.5 (the seedbox's), the standard library alone.
+"""
+
+import gzip
+import json
+import os
+import re
+import struct
+import sys
+import tempfile
+import time
+import zlib
+
+ROOT = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.expanduser("~"), "halo-replays")
+INDEX = "index.json"
+THUMBS = "thumbs"
+# (the thumbnails' side in SVG units, and the margin around the play area)
+THUMB_SIDE = 440
+MARGIN_SHARE = 0.12
+# (the floors' shades of height, and the least area a floor is drawn at)
+THUMB_SHADES = 10
+THUMB_MINIMUM_AREA = 1.5
+
+
+def log(text):
+    print(time.strftime("%Y-%m-%dT%H:%M:%S ") + text, flush=True)
+
+
+def records(path):
+    """each record of a recording as (type, bytes); nothing of a file that is
+    not one"""
+    with open(path, "rb") as file:
+        data = file.read()
+    if data[:4] != b"HREC":
+        return
+    at = 8
+    while at + 9 <= len(data):
+        kind = data[at]
+        size = struct.unpack_from("<I", data, at + 5)[0]
+        if kind not in (0x52, 0x42, 0x47) or at + 9 + size > len(data):
+            break
+        block = data[at + 9:at + 9 + size]
+        try:
+            if kind == 0x42:
+                block = zlib.decompress(block)
+            elif kind == 0x47:
+                block = gzip.decompress(block)
+        except (zlib.error, OSError, EOFError):
+            break
+        p = 0
+        while p + 5 <= len(block):
+            rtype = block[p]
+            rsize = struct.unpack_from("<I", block, p + 1)[0]
+            if p + 5 + rsize > len(block):
+                break
+            yield rtype, block[p + 5:p + 5 + rsize]
+            p += 5 + rsize
+        at += 9 + size
+
+
+def text_at(body, at):
+    """a record's counted string, and where the next field begins"""
+    n = body[at]
+    return body[at + 1:at + 1 + n].decode("utf-8", "replace"), at + 1 + n
+
+
+def map_name(name):
+    """a map as players name it: no folders, no @ce/@md/@pc"""
+    return re.sub(r"@(ce|md|pc)$", "", name.split("\\")[-1])
+
+
+def map_key(name):
+    return re.sub(r"[^A-Za-z0-9_-]+", "_", map_name(name)).lower() or "map"
+
+
+def summarize(path, name):
+    """a game's summary, with its walls for the thumbnail (vertices,
+    polygons, the positions played at); None for a file that is no recording"""
+    game = None
+    players = {}
+    names = set()
+    most = 0
+    first = None
+    last = None
+    kills = 0
+    vertices = None
+    polygons = []
+    positions = []
+    rate = 30
+    for rtype, body in records(path):
+        if rtype == 1 and len(body) >= 6:
+            stamp, rate = struct.unpack_from("<IH", body, 0)
+            server, at = text_at(body, 6)
+            map_, at = text_at(body, at)
+            game_type, at = text_at(body, at)
+            game = {"time": stamp, "server": server, "map": map_, "type": game_type}
+            rate = rate or 30
+        elif rtype == 2 and len(body) >= 4:
+            count = struct.unpack_from("<I", body, 0)[0]
+            if count * 12 > len(body) - 4:
+                continue
+            vertices = struct.unpack_from("<%df" % (count * 3), body, 4)
+            at = 4 + count * 12
+            if at + 4 > len(body):
+                continue
+            polygon_count = struct.unpack_from("<I", body, at)[0]
+            at += 4
+            for _ in range(polygon_count):
+                if at + 2 > len(body):
+                    break
+                flags, n = body[at], body[at + 1]
+                at += 2
+                if at + 4 * n > len(body):
+                    break
+                corners = struct.unpack_from("<%dI" % n, body, at)
+                at += 4 * n
+                polygons.append((flags, corners))
+        elif rtype == 3 and len(body) >= 7:
+            slot = body[4]
+            player_name, _ = text_at(body, 6)
+            players[slot] = player_name
+            if player_name:
+                names.add(player_name)
+        elif rtype == 4 and len(body) >= 5:
+            tick, count = struct.unpack_from("<IB", body, 0)
+            if first is None:
+                first = tick
+            last = tick
+            if count > most:
+                most = count
+            # (where the players are, once a second: the thumbnail's bounds)
+            if tick % rate == 0:
+                for i in range(count):
+                    at = 5 + 26 * i
+                    if at + 14 <= len(body):
+                        positions.append(struct.unpack_from("<ff", body, at + 2))
+        elif rtype == 7:
+            kills += 1
+    if game is None or first is None:
+        return None
+    report = None
+    sidecar = path[:-5] + ".json"
+    if os.path.isfile(sidecar):
+        try:
+            with open(sidecar, encoding="utf-8") as file:
+                link = json.load(file).get("report")
+            if isinstance(link, str) and link.startswith("https://"):
+                report = link
+        except (OSError, ValueError):
+            pass
+    status = os.stat(path)
+    summary = {
+        "name": name,
+        "size": status.st_size,
+        "mtime": int(status.st_mtime),
+        "map": map_name(game["map"]),
+        "thumb": map_key(game["map"]) + ".svg",
+        "type": game["type"],
+        "server": game["server"],
+        "time": game["time"],
+        "seconds": int(round((last - first) / rate)),
+        "players": len(names) or len(players),
+        "most": most,
+        "kills": kills,
+        "report": report,
+    }
+    return summary, (vertices, polygons, positions)
+
+
+def write_thumb(path, walls):
+    """the map's floors from above as an SVG (the viewer's minimap)"""
+    vertices, polygons, positions = walls
+    if not vertices or not polygons:
+        return False
+    xs = [p[0] for p in positions]
+    ys = [p[1] for p in positions]
+    if xs and (max(xs) - min(xs) > 5 or max(ys) - min(ys) > 5):
+        x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
+    else:
+        x0, x1 = min(vertices[0::3]), max(vertices[0::3])
+        y0, y1 = min(vertices[1::3]), max(vertices[1::3])
+    margin = max(x1 - x0, y1 - y0) * MARGIN_SHARE + 4
+    x0 -= margin
+    y0 -= margin
+    x1 += margin
+    y1 += margin
+    size = max(x1 - x0, y1 - y0) or 1
+    x0 -= (size - (x1 - x0)) / 2
+    y0 -= (size - (y1 - y0)) / 2
+    zs = vertices[2::3]
+    z0, z1 = min(zs), max(zs)
+    span = (z1 - z0) or 1
+    inner = THUMB_SIDE - 20
+    # (the floors grouped by their height, in THUMB_SHADES steps, one path
+    # each: a map has thousands of floor polygons, and the page shows many
+    # maps; polygons smaller than a pixel or two are left out)
+    paths = [[] for _ in range(THUMB_SHADES)]
+    for flags, corners in polygons:
+        if flags & 2 or len(corners) < 3:
+            continue
+        try:
+            a = [vertices[corners[0] * 3 + i] for i in range(3)]
+            b = [vertices[corners[1] * 3 + i] for i in range(3)]
+            c = [vertices[corners[2] * 3 + i] for i in range(3)]
+        except IndexError:
+            continue
+        ax, ay, az = b[0] - a[0], b[1] - a[1], b[2] - a[2]
+        bx, by, bz = c[0] - a[0], c[1] - a[1], c[2] - a[2]
+        nx, ny, nz = ay * bz - az * by, az * bx - ax * bz, ax * by - ay * bx
+        n = (nx * nx + ny * ny + nz * nz) ** 0.5 or 1
+        if abs(nz / n) < 0.6:
+            continue
+        points = []
+        for index in corners:
+            if index * 3 + 2 >= len(vertices):
+                break
+            px = (vertices[index * 3] - x0) / size * inner + 10
+            py = THUMB_SIDE - 10 - (vertices[index * 3 + 1] - y0) / size * inner
+            points.append((px, py))
+        if len(points) < 3:
+            continue
+        # (the polygon's area in the thumbnail, by the shoelace formula)
+        area = 0
+        for i in range(len(points)):
+            j = (i + 1) % len(points)
+            area += points[i][0] * points[j][1] - points[j][0] * points[i][1]
+        if abs(area) < 2 * THUMB_MINIMUM_AREA:
+            continue
+        shade = min(THUMB_SHADES - 1, int((a[2] - z0) / span * THUMB_SHADES))
+        paths[shade].append("M" + "L".join("%d %d" % (round(px), round(py)) for px, py in points) + "Z")
+    lines = ['<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 %d %d">' % (THUMB_SIDE, THUMB_SIDE),
+             '<rect width="100%%" height="100%%" fill="#0b1410"/>']
+    for shade, parts in enumerate(paths):
+        if not parts:
+            continue
+        height = (shade + 0.5) / THUMB_SHADES
+        lines.append('<path d="%s" fill="rgb(%d,%d,%d)" fill-opacity=".85"/>' % (
+            "".join(parts), int(90 + height * 120), int(110 + height * 110), int(100 + height * 100)))
+    lines.append("</svg>")
+    folder = os.path.dirname(path)
+    os.makedirs(folder, exist_ok=True)
+    handle, temporary = tempfile.mkstemp(dir=folder, prefix=".thumb-")
+    with os.fdopen(handle, "w", encoding="utf-8") as file:
+        file.write("\n".join(lines) + "\n")
+    os.chmod(temporary, 0o644)
+    os.replace(temporary, path)
+    return True
+
+
+def write_json(path, value):
+    folder = os.path.dirname(path)
+    handle, temporary = tempfile.mkstemp(dir=folder, prefix=".index-")
+    with os.fdopen(handle, "w", encoding="utf-8") as file:
+        json.dump(value, file, separators=(",", ":"))
+    os.chmod(temporary, 0o644)
+    os.replace(temporary, path)
+
+
+def index_server(folder):
+    """a server's index brought up to date; how many games were read"""
+    index_path = os.path.join(folder, INDEX)
+    known = {}
+    try:
+        with open(index_path, encoding="utf-8") as file:
+            for game in json.load(file).get("games", []):
+                known[game["name"]] = game
+    except (OSError, ValueError, KeyError, TypeError):
+        known = {}
+    games = {}
+    read = 0
+    thumbs = os.path.join(ROOT, THUMBS)
+    for name in sorted(os.listdir(folder)):
+        if not name.endswith(".hrec") or name.startswith("."):
+            continue
+        path = os.path.join(folder, name)
+        try:
+            status = os.stat(path)
+        except OSError:
+            continue
+        old = known.get(name)
+        # (a report that came after the game was read: the sidecar alone)
+        # (a game read before, its file as it was and its map's thumbnail
+        # still there: kept as it is)
+        if old and old.get("size") == status.st_size and old.get("mtime") == int(status.st_mtime) and                 (not old.get("thumb") or os.path.isfile(os.path.join(thumbs, old["thumb"]))):
+            if not old.get("report"):
+                sidecar = path[:-5] + ".json"
+                if os.path.isfile(sidecar):
+                    try:
+                        with open(sidecar, encoding="utf-8") as file:
+                            link = json.load(file).get("report")
+                        if isinstance(link, str) and link.startswith("https://"):
+                            old["report"] = link
+                    except (OSError, ValueError):
+                        pass
+            games[name] = old
+            continue
+        try:
+            result = summarize(path, name)
+        except Exception as error:  # (a damaged file: left out, said)
+            log("%s/%s: not read: %s" % (os.path.basename(folder), name, error))
+            continue
+        if result is None:
+            continue
+        summary, walls = result
+        read += 1
+        thumb = os.path.join(thumbs, summary["thumb"])
+        if not os.path.isfile(thumb):
+            try:
+                if not write_thumb(thumb, walls):
+                    summary["thumb"] = None
+            except Exception as error:
+                log("%s: no thumbnail: %s" % (summary["map"], error))
+                summary["thumb"] = None
+        games[name] = summary
+    listing = sorted(games.values(), key=lambda game: game["name"], reverse=True)
+    output = {"generated": int(time.time()), "server": os.path.basename(folder), "games": listing}
+    if read or set(known) != set(games) or not os.path.isfile(index_path):
+        write_json(index_path, output)
+    return read
+
+
+def main():
+    if not os.path.isdir(ROOT):
+        log("no %s" % ROOT)
+        return 1
+    total = 0
+    for name in sorted(os.listdir(ROOT)):
+        folder = os.path.join(ROOT, name)
+        if name == THUMBS or name.startswith(".") or not os.path.isdir(folder):
+            continue
+        total += index_server(folder)
+    if total:
+        log("%d game(s) read" % total)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -9,7 +9,10 @@
   ones red, through a wall or far off aim orange) and the kills on a
   timeline, players behind walls shown through them on request, and the
   view saved as a video. The file is opened here, in the browser: nothing
-  is sent anywhere. three.js from jsDelivr draws it.
+  is sent anywhere. three.js from jsDelivr draws it. The front page lists
+  the servers' games from each folder's index.json (server/deploy/
+  halo-replays-index writes it, with a thumbnail of each map), the busiest
+  first; a game ends with a results card that can be saved as a picture.
 -->
 <html lang="en">
 <head>
@@ -69,12 +72,37 @@ button.on{background:rgba(127,211,164,.35);border-color:var(--accent)}
 #recording{color:var(--bad);font-weight:700;display:none}
 #live{display:none;font-size:12px;font-weight:700;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:2px 7px}
 #live.on{color:#fff;background:var(--bad);border-color:var(--bad)}
-#games{display:flex;flex-wrap:wrap;gap:18px;justify-content:center;max-width:56rem;text-align:left}
-#games section{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px 16px;min-width:15rem}
-#games h2{margin:0 0 6px;font-size:16px}
+#drop.list{justify-content:flex-start;overflow:auto}
+#games{display:flex;flex-direction:column;gap:18px;width:min(64rem,100%);text-align:left}
+#games section{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px 16px}
+#games h2{margin:0 0 6px;font-size:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+#games h2 .order{margin-left:auto;font-size:12px;color:var(--muted);font-weight:400;display:flex;gap:6px;align-items:center}
+#games h2 select{padding:2px 6px;font-size:12px}
 #games ol{margin:8px 0 0;padding-left:1.2rem;font-size:13px;line-height:1.6}
 #games a{color:var(--accent)}
 #games .button{color:var(--bg)}
+#games .live-line{margin:0 0 4px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(14rem,1fr));gap:10px;margin-top:8px}
+.card{display:grid;grid-template-columns:72px 1fr;gap:10px;align-items:center;padding:6px;border:1px solid var(--line);
+  border-radius:8px;color:inherit;text-decoration:none;background:rgba(255,255,255,.03)}
+.card:hover{border-color:var(--accent);background:rgba(127,211,164,.08)}
+.card img{width:72px;height:72px;border-radius:6px;background:#0b1410;object-fit:cover}
+.card b{display:block;font-size:14px;color:var(--text)}
+.card .meta{font-size:12px;color:var(--muted);line-height:1.4}
+.card .big{color:var(--accent);font-weight:600}
+#games .more{margin-top:8px;font-size:12px}
+#results{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.45);z-index:3}
+#results .box{background:rgba(8,14,12,.96);border:1px solid var(--line);border-radius:10px;padding:14px 18px;min-width:20rem;
+  max-width:min(36rem,92%);max-height:92%;overflow:auto}
+#results h3{margin:0 0 8px;font-size:16px}
+#results .body{font-size:13px;line-height:1.6}
+#results .body b{color:var(--accent)}
+#results table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums;margin:6px 0}
+#results td{padding:2px 6px;border-top:1px solid var(--line)}
+#results td+td{text-align:right}
+#results .buttons{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+.player .meta a,#scoreboard a{color:inherit;text-decoration:none;border-bottom:1px dotted var(--muted)}
+.player .meta a:hover,#scoreboard a:hover{color:var(--accent)}
 #overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 #view #minimap{position:absolute;right:10px;top:10px;left:auto;width:min(180px,26vmin);height:min(180px,26vmin);border:1px solid var(--line);border-radius:8px;
   background:rgba(5,10,8,.6);display:none}
@@ -129,7 +157,7 @@ smaller) */
   <div id="drop">
     <h1>Halo Replay Viewer</h1>
     <p>Watch a game a server recorded, live or again: through any player's eyes, behind them, or from
-      anywhere. Pick a game below, or open a recording (<code>recordings\*.hrec</code>: an admin's
+      anywhere. Pick a game below (the busiest first), or open a recording (<code>recordings\*.hrec</code>: an admin's
       shows the hits the fair play checks refused or doubted). A file you open stays on this computer.</p>
     <div id="games" style="display:none"></div>
     <label class="button">Open a recording<input id="file" type="file" accept=".hrec" hidden></label>
@@ -139,15 +167,24 @@ smaller) */
   <canvas id="overlay"></canvas>
   <canvas id="minimap" width="220" height="220" title="The map from above"></canvas>
   <div id="scoreboard"></div>
+  <div id="results"><div class="box"><h3></h3><div class="body"></div>
+    <canvas id="results-image" width="1200" height="630" hidden></canvas>
+    <div class="buttons"><button id="results-save" title="The card as a picture (PNG)">Save image</button>
+      <button id="results-share" title="Share the card, or the link to this game">Share</button>
+      <button id="results-close">Close</button></div></div></div>
 </div>
 <div id="bar">
   <div id="track"><div id="marks"></div><input id="scrub" type="range" min="0" max="0" value="0" step="1"></div>
   <div id="controls">
     <button id="play" title="Play or pause (Space)">Play</button>
     <button id="back" title="Back 5 seconds (Left)">-5s</button>
-    <button id="fwd" title="Forward 5 seconds (Right)">+5s</button>
-    <select id="speed" title="Speed (slow motion below 1)"><option>0.1</option><option>0.25</option><option>0.5</option><option selected>1</option><option>2</option><option>4</option></select>
+    <button id="fwd" title="Forward 5 seconds (Right; a second with Shift)">+5s</button>
+    <button id="step-back" title="One frame back (,)">&lsaquo;</button>
+    <button id="step-fwd" title="One frame on (.)">&rsaquo;</button>
+    <select id="speed" title="Speed (slow motion below 1)"><option>0.1</option><option>0.25</option><option>0.5</option><option selected>1</option><option>2</option><option>4</option><option>8</option></select>
     <span id="time">0:00.0</span>
+    <button id="prev-player" title="The player before ([)">&#9664;</button>
+    <button id="next-player" title="The next player (])">&#9654;</button>
     <span class="spacer"></span>
     <button id="cam-first" class="on" title="Through the player's eyes (1)">Eyes</button>
     <button id="cam-third" title="Behind the player (2)">Behind</button>
@@ -156,9 +193,10 @@ smaller) */
     <button id="lines" class="on" title="Everyone's aim (A)">Aim lines</button>
     <button id="hudbutton" class="on" title="The player's HUD: health, shields, ammo, motion tracker (H)">HUD</button>
     <button id="scores" title="The scoreboard (Tab)">Scores</button>
-    <button id="heat" title="Where players died (red) and killed (green) all game (M)">Heatmap</button>
+    <button id="heat" title="Where players died (red) and killed (green), with a line from each killer to their victim: everyone's, then the selected player's (M)">Heatmap</button>
     <button id="killcam" title="The selected player's last death, through their killer's eyes (K)">Kill cam</button>
-    <button id="link" title="Copy a link to this moment">Copy link</button>
+    <button id="results" title="The game's results (R)">Results</button>
+    <button id="link" title="Share a link to this moment">Copy link</button>
     <button id="realmap" class="on" title="The map as the game draws it (textures, lighting), or its walls (G)" style="display:none">Real map</button>
     <button id="record" title="Save the view as a video">Record video</button>
     <span id="recording">REC</span>
@@ -982,7 +1020,10 @@ function poseAt(slot, t) {
 /* ---------- deaths: a marker where each player fell, for a few seconds; the
 heatmap: every death (red) and kill (green) of the game at once */
 
-let deathMarks = [], heatOn = false, heatMesh = null;
+// (heatMode: 0 off, 1 everyone's, 2 the selected player's; heatLines: a
+// line from each killer to their victim, in the killer's colour)
+let deathMarks = [], heatMode = 0, heatMesh = null, heatLines = null;
+const heatOn = () => heatMode > 0;
 const deathGeometry = new THREE.BoxGeometry(0.7, 0.08, 0.04);
 
 function drawDeaths(t) {
@@ -1010,22 +1051,56 @@ function drawDeaths(t) {
 
 function buildHeat() {
   if (heatMesh) { scene.remove(heatMesh); heatMesh.geometry.dispose(); heatMesh.material.dispose(); heatMesh.dispose(); heatMesh = null; }
-  const spots = [];
+  if (heatLines) { scene.remove(heatLines); heatLines.geometry.dispose(); heatLines.material.dispose(); heatLines = null; }
+  if (!heatMode) return;
+  const own = heatMode === 2 && selected != null;
+  const spots = [], lines = [], lineColors = [], c = new THREE.Color();
   for (const k of rec.killList || []) {
+    if (own && k.killer !== selected && k.victim !== selected) continue;
     if (k.victimPos) spots.push([k.victimPos, 0xff3b2f]);
-    if (k.killerPos && !k.world && k.killer !== k.victim) spots.push([k.killerPos, 0x4cd964]);
+    if (k.killerPos && !k.world && k.killer !== k.victim) {
+      spots.push([k.killerPos, 0x4cd964]);
+      if (k.victimPos) {
+        c.setHex(colorOf(k.killer));
+        lines.push(k.killerPos[0], k.killerPos[1], k.killerPos[2] + 0.6, k.victimPos[0], k.victimPos[1], k.victimPos[2] + 0.6);
+        lineColors.push(c.r, c.g, c.b, c.r, c.g, c.b);
+      }
+    }
   }
   if (!spots.length) return;
   heatMesh = new THREE.InstancedMesh(new THREE.CircleGeometry(0.9, 18),
     new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.35, depthWrite: false }), spots.length);
-  const m = new THREE.Matrix4(), c = new THREE.Color();
+  const m = new THREE.Matrix4();
   spots.forEach(([p, color], i) => {
     m.makeTranslation(p[0], p[1], p[2] + 0.03);
     heatMesh.setMatrixAt(i, m);
     heatMesh.setColorAt(i, c.setHex(color));
   });
-  heatMesh.visible = heatOn;
   scene.add(heatMesh);
+  if (lines.length) {
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(lines, 3));
+    geometry.setAttribute("color", new THREE.Float32BufferAttribute(lineColors, 3));
+    // (everyone's lines faint, so that the busy spots show as density; one
+    // player's clear)
+    heatLines = new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true,
+      opacity: own ? 0.75 : 0.22, depthWrite: false }));
+    scene.add(heatLines);
+  }
+}
+
+// (the heatmap's button says whose it shows)
+function heatLabel() {
+  const button = document.getElementById("heat");
+  button.classList.toggle("on", heatMode > 0);
+  button.textContent = heatMode === 2 && selected != null ? `Heatmap: ${playerAt(selected, tick).name}` :
+    heatMode === 1 ? "Heatmap: all" : "Heatmap";
+}
+function cycleHeat() {
+  heatMode = (heatMode + 1) % 3;
+  if (heatMode === 2 && selected == null) heatMode = 0;
+  buildHeat();
+  heatLabel();
 }
 
 /* ---------- the HUD over the view (the selected player's): shields and
@@ -1243,7 +1318,8 @@ function renderScoreboard() {
     "<tr><th>Player</th><th>Kills</th><th>Deaths</th><th>Assists</th><th>K/D</th></tr>";
   for (const r of rows) {
     const color = "#" + colorOf(r.slot).toString(16).padStart(6, "0");
-    html += `<tr><td style="color:${color}">${escapeHtml(playerAt(r.slot, tick).name)}</td><td>${r.kills}</td><td>${r.deaths}</td>` +
+    const name = playerAt(r.slot, tick).name;
+    html += `<tr><td style="color:${color}"><a href="${escapeHtml(statsLink(name))}" target="_blank" rel="noopener" title="Service record">${escapeHtml(name)}</a></td><td>${r.kills}</td><td>${r.deaths}</td>` +
       `<td>${r.assists}</td><td>${(r.kills / Math.max(1, r.deaths)).toFixed(2)}</td></tr>`;
   }
   box.innerHTML = html + "</table>";
@@ -1662,6 +1738,15 @@ function select(slot) {
   renderPlayers();
   renderEvents();
   renderStats();
+  if (heatMode === 2) { buildHeat(); heatLabel(); }
+}
+
+// (the players in slot order, the one after or before the selected)
+function stepPlayer(forward) {
+  const slots = [...rec.players.keys()].sort((a, b) => a - b);
+  if (!slots.length) return;
+  const at = Math.max(0, slots.indexOf(selected));
+  select(slots[(at + (forward ? 1 : slots.length - 1)) % slots.length]);
 }
 
 function setCamera(mode) {
@@ -1674,6 +1759,14 @@ function suspicion(slot) {
   const hits = rec.hits.filter(h => h.shooter === slot);
   return { refused: hits.filter(h => h.verdict & HIT.REFUSED).length + rec.moves.filter(m => m.player === slot).length,
     doubted: hits.filter(h => !(h.verdict & HIT.REFUSED) && h.verdict & (HIT.WALL | HIT.OFF_AIM)).length, all: hits.length };
+}
+
+// (a player's page on the community site: the game's report's site, else
+// ChupathingyCE's; the site answers for any name)
+function statsLink(name) {
+  let origin = "https://stats.chupathingy.org";
+  try { if (rec.report) origin = new URL(rec.report).origin; } catch (error) { /* (a report that is no link) */ }
+  return `${origin}/players/${encodeURIComponent(name)}`;
 }
 
 function renderPlayers() {
@@ -1689,6 +1782,13 @@ function renderPlayers() {
     row.querySelector(".flag").textContent = s.refused ? `${s.refused} refused` : s.doubted ? `${s.doubted} doubted` : "";
     if (!s.refused && s.doubted) row.querySelector(".flag").style.color = "var(--warn)";
     row.querySelector(".meta").textContent = `${s.all} hits${publicCopy ? "" : " checked"}` + (p.ip ? ` · ${p.ip}` : "") + (p.hwid ? ` · id ${p.hwid}` : "");
+    {
+      const a = document.createElement("a");
+      a.href = statsLink(p.name); a.target = "_blank"; a.rel = "noopener"; a.textContent = "record";
+      a.title = "This player's service record on the community site";
+      a.onclick = e => e.stopPropagation();
+      row.querySelector(".meta").append(" · ", a);
+    }
     row.onclick = () => select(slot);
     box.append(row);
   }
@@ -1861,6 +1961,13 @@ scrub.oninput = () => { endKillcam(); seek(Number(scrub.value)); };
 document.getElementById("play").onclick = () => { if (tick >= rec.last) seek(rec.first); setPlaying(!playing); };
 document.getElementById("back").onclick = () => { endKillcam(); seek(tick - 5 * rec.game.rate); };
 document.getElementById("fwd").onclick = () => { endKillcam(); seek(tick + 5 * rec.game.rate); };
+// (a frame at a time, paused: the tick before or after)
+function step(ticks) { endKillcam(); setPlaying(false); seek(Math.round(tick) + ticks); }
+document.getElementById("step-back").onclick = () => step(-1);
+document.getElementById("step-fwd").onclick = () => step(1);
+document.getElementById("prev-player").onclick = () => stepPlayer(false);
+document.getElementById("next-player").onclick = () => stepPlayer(true);
+document.getElementById("results").onclick = () => toggleResults();
 document.getElementById("speed").onchange = e => { endKillcam(); speed = Number(e.target.value); };
 document.getElementById("cam-first").onclick = () => setCamera("first");
 document.getElementById("cam-third").onclick = () => setCamera("third");
@@ -1871,30 +1978,57 @@ for (const id of ["f-refused", "f-suspicious", "f-ok", "f-kills", "f-moves", "f-
   "f-pickups", "f-chat"]) document.getElementById(id).onchange = renderEvents;
 document.getElementById("hudbutton").onclick = e => { hudOn = !hudOn; e.target.classList.toggle("on", hudOn); };
 document.getElementById("scores").onclick = e => { scoresOn = !scoresOn; e.target.classList.toggle("on", scoresOn); scoresDrawnAt = -1e9; renderScoreboard(); };
-document.getElementById("heat").onclick = e => { heatOn = !heatOn; e.target.classList.toggle("on", heatOn); if (heatMesh) heatMesh.visible = heatOn; };
+document.getElementById("heat").onclick = cycleHeat;
 document.getElementById("killcam").onclick = () => startKillcam();
 document.getElementById("realmap").onclick = () => { realMapOn = !realMapOn; applyRealMap(); };
-document.getElementById("link").onclick = async () => {
-  // (this moment: the recording's address, the time from its start and the player)
+// (a link to this moment: the recording's address, the time from its start
+// and the player; null for a recording opened from this computer, which has
+// none. A game watched live: its own file, which stays once the game is
+// over; the live folder will be showing another game by then)
+function momentUrl(withMoment = true) {
   const query = new URLSearchParams(location.search);
   query.delete("t"); query.delete("p");
-  // (a game watched live: its own file, which stays once the game is over;
-  // the live folder will be showing another game by then)
   if (query.get("live") && live.file) { query.delete("live"); query.set("file", live.file); }
-  if (!query.get("file")) { alert("A recording opened from this computer has no link: open it from a server's list."); return; }
-  const seconds = Math.max(0, Math.round((tick - rec.first) / rec.game.rate));
-  query.set("t", `${Math.floor(seconds / 60)}m${seconds % 60}s`);
-  if (selected != null) query.set("p", playerAt(selected, tick).name);
-  const url = `${location.origin}${location.pathname}?${query}`;
-  try { await navigator.clipboard.writeText(url); document.getElementById("link").textContent = "Copied"; }
-  catch (error) { prompt("The link to this moment:", url); }
-  setTimeout(() => { document.getElementById("link").textContent = "Copy link"; }, 1500);
+  if (!query.get("file")) return null;
+  if (withMoment) {
+    const seconds = Math.max(0, Math.round((tick - rec.first) / rec.game.rate));
+    query.set("t", `${Math.floor(seconds / 60)}m${seconds % 60}s`);
+    if (selected != null) query.set("p", playerAt(selected, tick).name);
+  }
+  return `${location.origin}${location.pathname}?${query}`;
+}
+
+// (shared with the phone's share sheet where there is one, else copied)
+const canShare = typeof navigator.share === "function";
+document.getElementById("link").textContent = canShare ? "Share" : "Copy link";
+async function shareText(url, text, files) {
+  const button = document.getElementById("link");
+  if (canShare) {
+    try {
+      const data = { title: document.title, text, url };
+      if (files && navigator.canShare && navigator.canShare({ files })) { data.files = files; delete data.url; }
+      await navigator.share(data);
+      return;
+    } catch (error) { if (error.name === "AbortError") return; }
+  }
+  try { await navigator.clipboard.writeText(url); button.textContent = "Copied"; }
+  catch (error) { prompt("The link:", url); }
+  setTimeout(() => { button.textContent = canShare ? "Share" : "Copy link"; }, 1500);
+}
+document.getElementById("link").onclick = () => {
+  const url = momentUrl();
+  if (!url) { alert("A recording opened from this computer has no link: open it from a server's list."); return; }
+  const who = selected != null ? `${playerAt(selected, tick).name} ` : "";
+  shareText(url, `${who}at ${fmt(tick)} on ${mapName(rec.game.map)}`);
 };
 addEventListener("keydown", e => {
   if (!rec || e.target.tagName === "INPUT" && e.target.type !== "range" && e.target.type !== "checkbox") return;
   if (e.key === " ") { e.preventDefault(); document.getElementById("play").click(); }
-  else if (e.key === "ArrowLeft") { endKillcam(); seek(tick - 5 * rec.game.rate); }
-  else if (e.key === "ArrowRight") { endKillcam(); seek(tick + 5 * rec.game.rate); }
+  else if (e.key === "ArrowLeft") { endKillcam(); seek(tick - (e.shiftKey ? 1 : 5) * rec.game.rate); }
+  else if (e.key === "ArrowRight") { endKillcam(); seek(tick + (e.shiftKey ? 1 : 5) * rec.game.rate); }
+  else if (e.key === ",") step(-1);
+  else if (e.key === ".") step(1);
+  else if (e.key === "r" || e.key === "R") toggleResults();
   else if (e.key === "1") setCamera("first");
   else if (e.key === "2") setCamera("third");
   else if (e.key === "3") setCamera("free");
@@ -1905,13 +2039,164 @@ addEventListener("keydown", e => {
   else if (e.key === "k" || e.key === "K") document.getElementById("killcam").click();
   else if (e.key === "g" || e.key === "G") document.getElementById("realmap").click();
   else if (e.key === "Tab") { e.preventDefault(); document.getElementById("scores").click(); }
-  else if (e.key === "[" || e.key === "]") {
-    const slots = [...rec.players.keys()].sort((a, b) => a - b);
-    if (!slots.length) return;
-    const at = Math.max(0, slots.indexOf(selected));
-    select(slots[(at + (e.key === "]" ? 1 : slots.length - 1)) % slots.length]);
-  }
+  else if (e.key === "[" || e.key === "]") stepPlayer(e.key === "]");
+  else if (e.key === "Escape" && resultsShown) toggleResults(false);
 });
+
+/* ---------- the results card (R, and as the game ends): the winner, the
+top three, the longest spree, the most used weapon; saved as a picture */
+
+let resultsShown = false, resultsOffered = false;
+
+// (each player's final tally: the last score record's, else counted from
+// the kills; their longest spree and most used weapon from the kills)
+function finalStandings() {
+  const list = rec.killList || [];
+  const score = scoreAt(rec.last);
+  const rows = score ? score.players.map(s => ({ slot: s.slot, kills: s.kills, deaths: s.deaths, assists: s.assists })) :
+    [...rec.players.keys()].map(slot => ({ slot, kills: list.filter(k => k.killer === slot && !k.world && k.victim !== slot).length,
+      deaths: list.filter(k => k.victim === slot).length, assists: 0 }));
+  for (const r of rows) {
+    r.name = playerAt(r.slot, rec.last).name;
+    r.team = playerAt(r.slot, rec.last).team;
+    let spree = 0, best = 0;
+    const weapons = new Map();
+    for (const k of list) {
+      if (k.killer === r.slot && !k.world && k.victim !== r.slot) {
+        best = Math.max(best, ++spree);
+        const w = k.weapon !== 0xFFFF ? tagName(k.weapon) : DAMAGE[k.damage] || "";
+        if (w) weapons.set(w, (weapons.get(w) || 0) + 1);
+      }
+      if (k.victim === r.slot) spree = 0;
+    }
+    r.spree = best;
+    r.weapon = [...weapons].sort((a, b) => b[1] - a[1])[0] || null;
+  }
+  rows.sort((a, b) => b.kills - a.kills || a.deaths - b.deaths || a.slot - b.slot);
+  return { rows, score };
+}
+
+function resultsText() {
+  const { rows, score } = finalStandings();
+  const map = mapName(rec.game.map), type = rec.game.type || "";
+  const date = rec.game.time ? new Date(rec.game.time * 1000).toLocaleDateString() : "";
+  const lines = [];
+  let winner = "";
+  if (teams && score) winner = score.red === score.blue ? `A draw, ${score.red} each` :
+    `${score.red > score.blue ? "Red" : "Blue"} team wins, ${Math.max(score.red, score.blue)} to ${Math.min(score.red, score.blue)}`;
+  else if (rows.length) winner = `${rows[0].name} wins with ${rows[0].kills} kill${rows[0].kills === 1 ? "" : "s"}`;
+  const longest = rows.slice().sort((a, b) => b.spree - a.spree)[0];
+  const weapons = new Map();
+  for (const k of rec.killList || []) {
+    const w = !k.world && k.killer !== k.victim ? (k.weapon !== 0xFFFF ? tagName(k.weapon) : DAMAGE[k.damage] || "") : "";
+    if (w) weapons.set(w, (weapons.get(w) || 0) + 1);
+  }
+  const favourite = [...weapons].sort((a, b) => b[1] - a[1])[0];
+  const facts = [];
+  if (longest && longest.spree >= 3) facts.push(`Longest spree: ${longest.name}, ${longest.spree} in a row`);
+  if (favourite) facts.push(`Most kills with: ${favourite[0]} (${favourite[1]})`);
+  const headshots = (rec.killList || []).filter(k => k.headshot).length;
+  if (headshots) facts.push(`Headshots: ${headshots}`);
+  return { map, type, date, winner, rows, facts, length: fmt(rec.last), players: rows.length, kills: (rec.killList || []).length };
+}
+
+function renderResults() {
+  const box = document.getElementById("results");
+  const r = resultsText();
+  box.querySelector("h3").textContent = `${r.map}${r.type ? " · " + r.type : ""}${rec.game.server ? " · " + rec.game.server : ""}`;
+  let html = `<div><b>${escapeHtml(r.winner)}</b></div>` +
+    `<div style="color:var(--muted)">${escapeHtml(r.date)}${r.date ? " · " : ""}${r.length} · ${r.players} players · ${r.kills} kills</div><table>`;
+  for (const row of r.rows.slice(0, 8)) {
+    const color = "#" + colorOf(row.slot).toString(16).padStart(6, "0");
+    html += `<tr><td style="color:${color}">${escapeHtml(row.name)}</td><td>${row.kills}</td><td>${row.deaths}</td>` +
+      `<td>${(row.kills / Math.max(1, row.deaths)).toFixed(2)}</td></tr>`;
+  }
+  html += "</table>" + r.facts.map(f => `<div>${escapeHtml(f)}</div>`).join("");
+  box.querySelector(".body").innerHTML = html;
+}
+
+// (the card as a 1200x630 picture: the map's floors behind, the standings on it)
+function drawResultsImage() {
+  const canvas = document.getElementById("results-image");
+  const g = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+  const r = resultsText();
+  g.fillStyle = "#0b1410";
+  g.fillRect(0, 0, W, H);
+  if (minimapBase) {
+    g.save();
+    g.globalAlpha = 0.55;
+    g.drawImage(minimapBase, W - H - 40, 0, H, H);
+    g.restore();
+    const fade = g.createLinearGradient(W - H - 40, 0, W - 40, 0);
+    fade.addColorStop(0, "#0b1410"); fade.addColorStop(0.45, "rgba(11,20,16,0)");
+    g.fillStyle = fade;
+    g.fillRect(W - H - 40, 0, H, H);
+  }
+  const font = "ui-sans-serif, -apple-system, 'Segoe UI', sans-serif";
+  g.fillStyle = "#e9f3ee";
+  g.font = `700 44px ${font}`;
+  g.fillText(r.map, 48, 78);
+  g.fillStyle = "#9fb7ab";
+  g.font = `400 24px ${font}`;
+  g.fillText([r.type, rec.game.server, r.date].filter(Boolean).join("  ·  "), 48, 114);
+  g.fillStyle = "#7fd3a4";
+  g.font = `700 32px ${font}`;
+  g.fillText(r.winner, 48, 172);
+  g.font = `400 26px ${font}`;
+  let y = 228;
+  for (const row of r.rows.slice(0, 6)) {
+    g.fillStyle = "#" + colorOf(row.slot).toString(16).padStart(6, "0");
+    g.fillRect(48, y - 18, 10, 22);
+    g.fillStyle = "#e9f3ee";
+    g.fillText(row.name.length > 22 ? row.name.slice(0, 21) + "…" : row.name, 70, y);
+    g.fillStyle = "#9fb7ab";
+    g.textAlign = "right";
+    g.fillText(`${row.kills} / ${row.deaths}`, 620, y);
+    g.textAlign = "left";
+    y += 38;
+  }
+  g.fillStyle = "#9fb7ab";
+  g.font = `400 22px ${font}`;
+  y = Math.max(y + 12, 470);
+  for (const fact of r.facts.slice(0, 3)) { g.fillText(fact, 48, y); y += 32; }
+  g.font = `400 20px ${font}`;
+  g.fillStyle = "#6f8a7c";
+  g.fillText(`${r.length} · ${r.players} players · ${r.kills} kills · ${location.host}${location.pathname}`, 48, H - 28);
+  return canvas;
+}
+
+function toggleResults(on = !resultsShown) {
+  if (!rec) return;
+  resultsShown = on;
+  const box = document.getElementById("results");
+  box.style.display = on ? "flex" : "none";
+  if (on) { renderResults(); setPlaying(false); }
+}
+document.getElementById("results-close").onclick = () => toggleResults(false);
+async function resultsBlob() {
+  const canvas = drawResultsImage();
+  return new Promise(resolve => canvas.toBlob(resolve, "image/png"));
+}
+document.getElementById("results-save").onclick = async () => {
+  const blob = await resultsBlob();
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `${mapName(rec.game.map).replace(/[^A-Za-z0-9_-]+/g, "_")}_results.png`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+};
+document.getElementById("results-share").onclick = async () => {
+  const url = momentUrl(false);
+  const r = resultsText();
+  const text = `${r.map}${r.type ? " · " + r.type : ""}: ${r.winner}`;
+  let files = null;
+  if (canShare) {
+    try { files = [new File([await resultsBlob()], "results.png", { type: "image/png" })]; } catch (error) { files = null; }
+  }
+  if (!url && !files) { alert("A recording opened from this computer has no link: save the picture instead."); return; }
+  shareText(url || "", text, files);
+};
 
 /* ---------- saving the view as a video */
 
@@ -2009,6 +2294,8 @@ function show(r) {
   figures = new Map();
   clearObjects();
   endKillcam();
+  resultsOffered = false;
+  toggleResults(false);
   digest(rec);
   publicCopy = looksPublic(rec);
   document.getElementById("fairplay-filters").style.display = publicCopy ? "none" : "";
@@ -2021,6 +2308,7 @@ function show(r) {
   buildWalls();
   buildMinimap();
   buildHeat();
+  heatLabel();
   // (played as soon as it is here: once the map is read, or failed to be,
   // so that the loading screen hides none of it; a link to a moment and a
   // live game start themselves)
@@ -2053,8 +2341,9 @@ function applyMoment() {
     if (slot != null) select(slot);
   }
   if (t) {
-    const m = /^(?:(\d+)m)?(\d+(?:\.\d+)?)s?$/.exec(t.trim());
-    if (m) { seek(rec.first + ((Number(m[1] || 0) * 60) + Number(m[2])) * rec.game.rate); setPlaying(true); }
+    // (1m30s, 90, 90s, or 3m alone)
+    const m = /^(?:(\d+)m)?(\d+(?:\.\d+)?)?s?$/.exec(t.trim());
+    if (m && (m[1] || m[2])) { seek(rec.first + ((Number(m[1] || 0) * 60) + Number(m[2] || 0)) * rec.game.rate); setPlaying(true); }
   }
 }
 
@@ -2226,6 +2515,7 @@ async function listGames() {
   } catch (error) { return; }
   if (!Array.isArray(servers) || !servers.length) return;
   box.style.display = "";
+  document.getElementById("drop").classList.add("list");
   for (const server of servers) {
     // (live: the folder of the game being played; replays: where finished
     // ones are kept, if elsewhere; public: both in one folder)
@@ -2233,8 +2523,8 @@ async function listGames() {
     const base = folder(server.live || server.public);
     const kept = folder(server.replays);
     const section = document.createElement("section");
-    section.innerHTML = `<h2></h2><p class="live-line"></p><ol></ol>`;
-    section.querySelector("h2").textContent = server.name;
+    section.innerHTML = `<h2><span class="name"></span><span class="order">Order <select><option value="busiest">busiest first</option><option value="newest">newest first</option></select></span></h2><p class="live-line"></p><div class="cards"></div><div class="more"></div>`;
+    section.querySelector(".name").textContent = server.name;
     box.append(section);
     if (base) fetch(new URL("live.json", base), { cache: "no-store" }).then(r => r.ok ? r.json() : null).then(status => {
       const p = section.querySelector(".live-line");
@@ -2246,29 +2536,81 @@ async function listGames() {
         p.append(a);
       } else p.textContent = "No game right now.";
     }).catch(() => {});
-    // (each folder's listing in JSON, as its web server gives it: Caddy's
+    // (each folder's games: its index.json, halo-replays-index's summary of
+    // each (the map, how many played, the kills, a thumbnail); without one,
+    // the folder's listing in JSON, as its web server gives it: Caddy's
     // file_server browse, nginx's autoindex_format json; a game in both once)
+    const indexed = address => fetch(new URL("index.json", address), { cache: "no-store" })
+      .then(r => r.ok ? r.json() : null).then(index => index && Array.isArray(index.games) ? index.games.map(g => ({ ...g,
+        url: new URL(g.name, address).href, thumbUrl: g.thumb ? new URL("../thumbs/" + g.thumb, address).href : null })) : null)
+      .catch(() => null);
     const listing = address => fetch(address, { headers: { Accept: "application/json" }, cache: "no-store" })
       .then(r => r.ok ? r.json() : []).then(files => (Array.isArray(files) ? files : [])
         .filter(f => f && /\.hrec$/.test(f.name)).map(f => ({ name: f.name, url: new URL(f.name, address).href })))
       .catch(() => []);
-    Promise.all([kept ? listing(kept) : [], base ? listing(base) : []]).then(([older, newer]) => {
-      const list = section.querySelector("ol");
+    const games = async address => (await indexed(address)) || (await listing(address));
+    Promise.all([kept ? games(kept) : [], base ? games(base) : []]).then(([older, newer]) => {
       const byName = new Map();
       for (const f of [...older, ...newer]) byName.set(f.name, f);
-      const games = [...byName.values()].sort((a, b) => b.name.localeCompare(a.name)).slice(0, 20);
-      for (const f of games) {
-        const m = /^(\d{4}-\d\d-\d\d)_(\d\d)-(\d\d)-\d\d_(.+)\.hrec$/.exec(f.name);
-        const li = document.createElement("li");
-        const a = document.createElement("a");
-        a.href = `?file=${encodeURIComponent(f.url)}`;
-        a.textContent = m ? `${m[4].replace(/-(ce|md|pc)$/, "")} · ${m[1]} ${m[2]}:${m[3]}` : f.name;
-        li.append(a);
-        list.append(li);
-      }
-      if (!games.length) list.outerHTML = "<p>No games recorded yet.</p>";
+      const all = [...byName.values()];
+      const cards = section.querySelector(".cards"), more = section.querySelector(".more");
+      const order = section.querySelector("select");
+      let shown = 12;
+      // (a game of one player, or under a minute, is hardly one: at the end
+      // of the list whichever the order)
+      const weight = g => (g.most || 1) > 1 && (g.seconds == null || g.seconds >= 60) ? 1 : 0;
+      const render = () => {
+        const list = all.slice().sort(order.value === "newest" ? (a, b) => b.name.localeCompare(a.name) :
+          (a, b) => weight(b) - weight(a) || (b.most || 0) - (a.most || 0) || (b.players || 0) - (a.players || 0) ||
+            (b.kills || 0) - (a.kills || 0) || b.name.localeCompare(a.name));
+        cards.innerHTML = "";
+        for (const g of list.slice(0, shown)) cards.append(gameCard(g));
+        more.innerHTML = "";
+        if (list.length > shown) {
+          const a = document.createElement("a");
+          a.href = "#"; a.textContent = `Show ${Math.min(24, list.length - shown)} more of ${list.length}`;
+          a.onclick = e => { e.preventDefault(); shown += 24; render(); };
+          more.append(a);
+        }
+        if (!list.length) cards.innerHTML = "<p>No games recorded yet.</p>";
+      };
+      order.onchange = render;
+      render();
     });
   }
+}
+
+// (a game's card: its map's thumbnail, the map, the game type, when, and
+// how it went; from the file's name alone where there is no index)
+function gameCard(g) {
+  const m = /^(\d{4}-\d\d-\d\d)_(\d\d)-(\d\d)-\d\d_(.+)\.hrec$/.exec(g.name);
+  const a = document.createElement("a");
+  a.className = "card";
+  a.href = `?file=${encodeURIComponent(g.url)}`;
+  const img = document.createElement("img");
+  img.alt = "";
+  img.loading = "lazy";
+  if (g.thumbUrl) img.src = g.thumbUrl; else img.style.visibility = "hidden";
+  const text = document.createElement("div");
+  const title = document.createElement("b");
+  title.textContent = g.map || (m ? m[4].replace(/-(ce|md|pc)$/, "") : g.name);
+  const meta = document.createElement("div");
+  meta.className = "meta";
+  const when = g.time ? new Date(g.time * 1000) : m ? new Date(`${m[1]}T${m[2]}:${m[3]}:00Z`) : null;
+  const day = when ? (Date.now() - when < 864e5 * 6 ? when.toLocaleDateString(undefined, { weekday: "long" }) :
+    when.toLocaleDateString()) + " " + when.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }) : "";
+  meta.append([g.type, day].filter(Boolean).join(" · "));
+  if (g.most != null) {
+    const big = document.createElement("span");
+    big.className = "big";
+    big.textContent = `${g.most} at once`;
+    const length = g.seconds != null ? ` · ${Math.round(g.seconds / 60)} min` : "";
+    meta.append(document.createElement("br"), big,
+      ` · ${g.players} player${g.players === 1 ? "" : "s"}${g.kills ? ` · ${g.kills} kills` : ""}${length}`);
+  }
+  text.append(title, meta);
+  a.append(img, text);
+  return a;
 }
 
 document.getElementById("file").onchange = e => { if (e.target.files[0]) open(e.target.files[0]); };
@@ -2301,8 +2643,12 @@ function frame(now) {
   last = now;
   if (rec && playing) {
     seek(tick + dt * rec.game.rate * speed);
-    // (watched live: at the end of what has come, it waits for more)
-    if (tick >= rec.last && !(live.base && live.status && live.status.live)) setPlaying(false);
+    // (watched live: at the end of what has come, it waits for more; a game
+    // played to its end shows its results, once)
+    if (tick >= rec.last && !(live.base && live.status && live.status.live)) {
+      setPlaying(false);
+      if (!resultsOffered && !live.base && rec.end != null) { resultsOffered = true; toggleResults(true); }
+    }
   }
   draw();
   requestAnimationFrame(frame);

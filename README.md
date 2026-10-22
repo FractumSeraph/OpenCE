@@ -33,7 +33,10 @@ then [ChupathingyCE's](#chupathingyce), then [OpenCE's](#opence).
   so that no one watching can help a player. Anyone watches them at
   [halo.fractumseraph.net/assets/replay](https://halo.fractumseraph.net/assets/replay/),
   live or once the game is over, through any player's eyes, behind them or
-  freely, each game linked to its stats on stats.chupathingy.org.
+  freely: the busiest games first, with a picture of each map; a results
+  card at the end to save or share; heatmaps and kill lines, everyone's or
+  one player's; frame stepping; each game and player linked to their stats
+  on stats.chupathingy.org.
 - **Tools against cheaters.** A host checks each hit and move for shots
   through walls, off aim, teleports and flying, and refuses or logs them
   (`network.fair_play`; `sv_suspects` on a dedicated server); records every
