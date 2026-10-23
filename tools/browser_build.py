@@ -54,9 +54,12 @@ WEB_SDL_FLAG = f"--use-port={WEB_SDL_PORT}"
 # assumptions shared by the other ports.
 WEB_ABI_FLAGS = [
     "-DHALO_BROWSER=1",
-    # (ChupathingyCE's Custom Edition maps, as every native build has them:
-    # linux_build.py's CUSTOM_EDITION_DEFINES)
+    # (ChupathingyCE's Custom Edition maps, as every native build has them,
+    # and the port's own menus' map list with the map packs' Xbox maps
+    # (port/linux/game/ui_map_list.c, map_packs.c): linux_build.py's
+    # CUSTOM_EDITION_DEFINES)
     "-DHALO_CUSTOM_EDITION",
+    "-DHALO_MAP_LIST",
     # (OpenCE's three parts of what HALO_ANDROID meant, all of which the
     # browser build is: the 32-bit guest's code paths, the OpenGL ES
     # renderer (WebGL 2), and the app's; ChupathingyCE's code still says

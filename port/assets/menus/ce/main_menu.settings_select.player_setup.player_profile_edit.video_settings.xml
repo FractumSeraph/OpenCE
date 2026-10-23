@@ -541,7 +541,7 @@
 		<string text="The size of the window."/>
 		<string text="Native draws at full resolution. Original draws at\n640x480 and scales it up."/>
 		<string text="Sync frames to the display."/>
-		<string text="30 draws the game's own frames; the others blend\nbetween them. Auto: twice the display's rate."/>
+		<string text="The frame rate limit; 30 is the Xbox's. Auto is twice\nthe display's refresh rate."/>
 		<string text="Draw a frame for every display refresh."/>
 		<string text="Smooth jagged edges."/>
 		<string text="Smooth jagged edges."/>

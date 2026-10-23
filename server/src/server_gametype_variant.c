@@ -135,7 +135,6 @@ void server_gametype_variant_apply(
 		case SERVER_GAMETYPE_ODDBALL_BALLS: engine->oddball.ball_spawn_count = value; break;
 		case SERVER_GAMETYPE_RACE_TYPE: engine->race.race_type = value; break;
 		case SERVER_GAMETYPE_RACE_TEAM_SCORING: engine->race.team_scoring = value; break;
-		/* (this fork: Bomb, Grifball and Open Pitch) */
 		case SERVER_GAMETYPE_BOMB_ARM_TIME: engine->bomb.arm_time = value; break;
 		case SERVER_GAMETYPE_BOMB_RESET_TIME: engine->bomb.reset_time = value; break;
 		case SERVER_GAMETYPE_BOMB_ROUND_TIME: engine->bomb.round_time = value; break;
@@ -236,7 +235,6 @@ long server_gametype_variant_value(
 	case SERVER_GAMETYPE_ODDBALL_BALLS: return engine->oddball.ball_spawn_count;
 	case SERVER_GAMETYPE_RACE_TYPE: return engine->race.race_type;
 	case SERVER_GAMETYPE_RACE_TEAM_SCORING: return engine->race.team_scoring;
-	/* (this fork: Bomb, Grifball and Open Pitch) */
 	case SERVER_GAMETYPE_BOMB_ARM_TIME: return engine->bomb.arm_time;
 	case SERVER_GAMETYPE_BOMB_RESET_TIME: return engine->bomb.reset_time;
 	case SERVER_GAMETYPE_BOMB_ROUND_TIME: return engine->bomb.round_time;

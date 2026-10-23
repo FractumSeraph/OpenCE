@@ -87,7 +87,7 @@ SCREENS = {
             ("FRAME RATE:", "display.max_fps",
              [("30 (XBOX)", "30"), ("AUTO", "0"), ("60", "60"), ("120", "120"), ("144", "144"),
               ("165", "165"), ("240", "240"), ("NONE", "-1")],
-             "30 draws the game's own frames; the others blend\nbetween them. Auto: twice the display's rate.",
+             "The frame rate limit; 30 is the Xbox's. Auto is twice\nthe display's refresh rate.",
              None),
             ("SMOOTH MOTION:", "display.interpolation", ON_OFF,
              "Draw a frame for every display refresh.", "android"),
@@ -198,7 +198,10 @@ SCREENS = {
     "audio_settings": {
         "screen": "audio_settings_screen",
         "header": ("header_profile_audio_settings", f"{PE}/audio_settings/header_profile_audio_settings"),
-        "spacing": 30,
+        # (the desktop's eleven rows and the VOICE CHAT link: closer together,
+        # the help lower, as Display's)
+        "spacing": 24,
+        "help_top": 368,
         "rows": [
             ("MASTER VOLUME:", "audio.volume", VOLUMES, "Adjust the overall volume.", None),
             ("MUSIC VOLUME:", "audio.music_volume", VOLUMES, "Adjust the music volume.", None),
@@ -211,8 +214,15 @@ SCREENS = {
              "Where the game's sound and the voices play.", "desktop"),
             ("INPUT DEVICE:", "audio.input_device", [("SYSTEM DEFAULT", "default")],
              "The microphone voice chat listens to.", "desktop"),
+            # (read when the game starts: dsound_sdl.c)
+            ("SPEAKERS:", "audio.channels", [("AUTO", "auto"), ("STEREO", "stereo"), ("5.1", "5.1"), ("7.1", "7.1")],
+             "Stereo or surround. Takes effect on restart.", "desktop"),
+            ("HEADPHONE 3D:", "audio.hrtf", [("OFF", "off"), ("ON", "on"), ("AUTO", "auto")],
+             "3D sound for headphones. Auto: on with headphones.", None),
             ("REVERB:", "audio.reverb", ON_OFF,
              "Room echo, and muffled sound behind walls.", None),
+            ("DOPPLER:", "audio.doppler", ON_OFF,
+             "Pitch shift of moving sounds, as on the Xbox.", None),
             # (port/linux/src/dsound_sdl.c)
             ("RESAMPLER:", "audio.resampler", [("SINC", "sinc"), ("LINEAR", "linear")],
              "How sounds are converted to the output's rate:\nsinc is clean; linear is brighter, with aliasing.",
@@ -236,11 +246,11 @@ SCREENS = {
     "network_setup": {
         "screen": "network_settings_screen",
         "header": ("header_profile_network_settings", f"{PE}/network_setup/header_profile_network_settings"),
-        # (ten rows: closer together, the help lower)
+        # (eleven rows: closer together, the help lower)
         "spacing": 24,
         "help_top": 368,
-        # (the router, the map downloads, the clipboard and the updates, which
-        # the web build has not)
+        # (the router, the map downloads, the clipboard, invite links and the
+        # updates, which the web build has not)
         "rows": [
             ("INTERNET PLAY:", "network.online", ON_OFF,
              "Host and join games over the internet.", "desktop android web"),
@@ -251,6 +261,8 @@ SCREENS = {
             ("JOIN FROM CLIPBOARD:", "network.join_from_clipboard",
              [("ASK", "ask"), ("ALWAYS", "always"), ("NEVER", "never")],
              "Join a game from an invite link on the clipboard.", "desktop android"),
+            ("COPY INVITE LINK:", "network.copy_to_clipboard", ON_OFF,
+             "Copy your game's invite link when you host.", "desktop android"),
             ("CHECK FOR UPDATES:", "update.auto", ON_OFF,
              "Check for a new version at startup.", "desktop android"),
             ("START WITH ONE PLAYER:", "game.start_with_one_player", ON_OFF,

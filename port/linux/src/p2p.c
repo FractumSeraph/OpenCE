@@ -9,7 +9,8 @@ link games as if they were on one LAN, without a server of this project's.
   other key can be found to have; the first 6 are the machine's identifier,
   which its XNADDR also carries) and a random 16-byte token. A machine
   makes one when its game starts hosting (the game listens for
-  connections), logs it and puts it on the clipboard. Only a public game's
+  connections), logs it, and puts it on the clipboard when
+  network.copy_to_clipboard says so (sdl_platform.c). Only a public game's
   is published (the server browser: p2p_lobby.c; and its Join game button
   on Discord: p2p_discord.c): without an invite there is no way to find or
   join a private game.
@@ -70,6 +71,7 @@ only look up and create stand-ins.
 #ifdef HALO_PROFILE
 #include "profile_trace.h"
 #endif
+#include "thread_stop.h"
 
 #include <stddef.h>
 #include <stdio.h>
@@ -569,14 +571,23 @@ static int hex_value(char digit)
 	return -1;
 }
 
+/* (host and network byte order: the same on a big-endian machine) */
 static unsigned long network_long(unsigned long value)
 {
+#ifdef HALO_BIG_ENDIAN
+	return value;
+#else
 	return __builtin_bswap32(value);
+#endif
 }
 
 static unsigned short network_short(unsigned short value)
 {
+#ifdef HALO_BIG_ENDIAN
+	return value;
+#else
 	return (unsigned short)(value << 8 | value >> 8);
+#endif
 }
 
 static void put_short(unsigned char *bytes, unsigned short value)
@@ -3347,9 +3358,10 @@ static void update_hosting(void)
 		{
 			char shown[128];
 
-			/* (whole on the clipboard and in the menus) */
+			/* (whole in the menus, and on the clipboard with
+			network.copy_to_clipboard) */
 			platform_log("Internet play: hosting. Invite players with this link (it only works while this "
-				"copy of the game runs; it is on the clipboard): %s",
+				"copy of the game runs): %s",
 				p2p_invite_log_text(p2p.invite, shown, sizeof(shown)));
 		}
 		if (!p2p.invite_copied)
@@ -3632,7 +3644,6 @@ static void update_upnp(void)
 {
 	static int allowed = -1;
 	int ask;
-	pthread_t thread;
 
 	if (allowed < 0)
 		allowed = config_boolean("network.allow_upnp") ? 1 : 0;
@@ -3655,13 +3666,12 @@ static void update_upnp(void)
 		p2p.upnp_release_registered = 1;
 		atexit(upnp_release);
 	}
-	if (pthread_create(&thread, NULL, upnp_thread, NULL) != 0)
+	if (thread_stop_create("internet play UPnP", upnp_thread, NULL) != 0)
 	{
 		p2p.upnp_working = 0;
 		p2p.upnp_time = p2p_now();
 		return;
 	}
-	pthread_detach(thread);
 }
 
 const char *p2p_take_clipboard_text(void)
@@ -4113,7 +4123,9 @@ static void *p2p_thread(void *unused)
 	/* (here: it may wait for a program) */
 	p2p_register_url_scheme("halo", "Halo: Combat Evolved invite");
 #endif
-	for (;;)
+	/* (until the game's end asks the platform layer's threads to stop,
+	thread_stop.h: a pass at most LOOP_INTERVAL * 5 away) */
+	while (!thread_stop_requested())
 	{
 		int read_count = 0, write_count = 0, error_count = 0;
 		int asked_read_count, asked_write_count;
@@ -4335,13 +4347,13 @@ static void *p2p_thread(void *unused)
 		profile_trace_end(p2p_profile_names.pass);
 #endif
 	}
+	pthread_mutex_unlock(&p2p_lock);
 	return NULL;
 }
 
 void p2p_initialize(unsigned long local_address)
 {
 	char invite[256];
-	pthread_t thread;
 	long tunnel_port = config_integer("network.tunnel_port");
 	int index;
 
@@ -4391,13 +4403,12 @@ void p2p_initialize(unsigned long local_address)
 		p2p.handoff_socket = open_socket(SOCK_DGRAM, network_long(0x7F000001), network_short(HANDOFF_PORT), NULL);
 #endif
 	stun_setup();
-	if (pthread_create(&thread, NULL, p2p_thread, NULL) != 0)
+	if (thread_stop_create("internet play", p2p_thread, NULL) != 0)
 	{
 		close_socket(&p2p.tunnel_socket);
 		close_socket(&p2p.handoff_socket);
 		return;
 	}
-	pthread_detach(thread);
 	p2p.running = 1;
 	if (pending_startup_invite[0])
 	{

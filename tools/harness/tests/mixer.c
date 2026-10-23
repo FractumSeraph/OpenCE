@@ -74,6 +74,11 @@ static void platform_translate_path(const char *xbox_path, char *host_path, unsi
 	snprintf(host_path, host_path_size, "%s", xbox_path);
 }
 
+/* (the binaural rendering's responses, tools/embed_assets.py: none here, so
+audio.hrtf stays off and 3D voices are panned) */
+const unsigned int dsound_hrtf_data[1] = { 0 };
+const unsigned long dsound_hrtf_data_size = 0;
+
 #include "under_test.inc"
 
 #define PI 3.14159265358979323846

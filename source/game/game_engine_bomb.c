@@ -89,10 +89,6 @@ enum
 	BOMB_ROUND_ANNOUNCEMENT_TICKS = 2 * TICKS_PER_SECOND,
 	/* the round's last seconds, counted aloud */
 	BOMB_ROUND_WARNING_TICKS = 5 * TICKS_PER_SECOND,
-	/* the most weapons a court gives (bomb_courts) */
-	MAXIMUM_BOMB_COURT_WEAPONS = 2,
-	/* the most out of bounds volumes a court names (bomb_courts) */
-	MAXIMUM_BOMB_COURT_OUT_OF_BOUNDS = 2,
 };
 
 /* how near the carrier stands to the goal's marker to arm it (CTF's) */
@@ -141,6 +137,10 @@ enum
 	BOMB_BLAST_PAUSE_TICKS = 5 * TICKS_PER_SECOND / 2,
 	/* the globals' grenades the blast is drawn with */
 	MAXIMUM_BOMB_BLAST_EFFECTS = 2,
+	/* the most weapons a court gives (bomb_courts) */
+	MAXIMUM_BOMB_COURT_WEAPONS = 2,
+	/* the most out of bounds volumes a court names (bomb_courts) */
+	MAXIMUM_BOMB_COURT_OUT_OF_BOUNDS = 2,
 };
 
 /* the shipped multiplayer sounds Bomb borrows (game_engine_multiplayer_sounds.c):
@@ -982,23 +982,24 @@ boolean game_engine_bomb_melee_only(
 void game_engine_bomb_give_sword(
 	long unit_index)
 {
-	long definitions[MAXIMUM_BOMB_COURT_WEAPONS];
-	boolean added;
-	short index;
+	struct object_placement_data placement_data;
+	long weapon_index;
+	long definition_index = bomb_globals.sword_definition_index != NONE ? bomb_globals.sword_definition_index :
+		bomb_globals.fist_definition_index;
 
-	/* (a patched map's weapons, the first in hand, in place of the map's
-	sword: the last first, then each before it into the unit's hands) */
+	/* (a client has the host's: network_objects.c) */
+	if (!game_engine_bomb_melee_only() || unit_index == NONE || network_game_distributed_client())
+		return;
+	/* (this fork: a patched map's weapons, the first in hand, in place of
+	the map's sword: the last first, then each before it into the unit's
+	hands; tools/map_patch.py) */
 	if (bomb_patch_weapon(0) != NONE)
 	{
+		boolean added = FALSE;
 		long which;
 
-		added = FALSE;
-		if (!game_engine_bomb_melee_only() || unit_index == NONE || network_game_distributed_client())
-			return;
 		for (which = MAXIMUM_BOMB_PATCH_WEAPONS - 1; which >= 0; which--)
 		{
-			struct object_placement_data placement_data;
-			long weapon_index;
 			long patch_index = bomb_patch_weapon(which);
 
 			if (patch_index == NONE)
@@ -1015,56 +1016,50 @@ void game_engine_bomb_give_sword(
 		}
 		return;
 	}
-
-	/* (a client has the host's: network_objects.c) */
-	if (!game_engine_bomb_melee_only() || unit_index == NONE || network_game_distributed_client())
-		return;
-	/* (a court's own weapons, or the map's sword, or where it has none the
-	unseen fists) */
-	for (index = 0; index < MAXIMUM_BOMB_COURT_WEAPONS; index++)
-		definitions[index] = bomb_globals.court ? bomb_globals.court_weapons[index] : NONE;
-	for (index = 0; index < MAXIMUM_BOMB_COURT_WEAPONS && definitions[index] == NONE; index++)
-		;
-	if (index == MAXIMUM_BOMB_COURT_WEAPONS)
+	/* (a court's own weapons: the last first, in place of the loadout's;
+	each one after it into the unit's hands, so that the first ends there) */
+	if (bomb_globals.court)
 	{
-		definitions[0] = bomb_globals.sword_definition_index != NONE ? bomb_globals.sword_definition_index :
-			bomb_globals.fist_definition_index;
-	}
-	/* (the last first, in place of the loadout's; each one after it into
-	the unit's hands, so that the first ends there) */
-	added = FALSE;
-	bomb_globals.giving_fists = TRUE;
-	for (index = MAXIMUM_BOMB_COURT_WEAPONS - 1; index >= 0; index--)
-	{
-		struct object_placement_data placement_data;
-		long weapon_index;
+		boolean added = FALSE;
+		short index;
 
-		if (definitions[index] == NONE)
-			continue;
-		object_placement_data_new(&placement_data, definitions[index], NONE);
-		weapon_index = object_new(&placement_data);
-		if (weapon_index == NONE)
-			continue;
-		/* (the fists hold no rounds) */
-		if (definitions[index] == bomb_globals.fist_definition_index)
+		for (index = MAXIMUM_BOMB_COURT_WEAPONS - 1; index >= 0; index--)
 		{
-			struct weapon_datum *weapon = weapon_get(weapon_index);
-			short magazine;
-
-			for (magazine = 0; magazine < (short)NUMBEROF(weapon->weapon.magazines); magazine++)
+			if (bomb_globals.court_weapons[index] == NONE)
+				continue;
+			object_placement_data_new(&placement_data, bomb_globals.court_weapons[index], NONE);
+			weapon_index = object_new(&placement_data);
+			if (weapon_index != NONE && unit_add_weapon_to_inventory(unit_index, weapon_index,
+				added ? _unit_add_weapon_starting : _unit_add_weapon_replace))
 			{
-				weapon->weapon.magazines[magazine].rounds_total = 0;
-				weapon->weapon.magazines[magazine].rounds_loaded = 0;
+				added = TRUE;
 			}
+			else if (weapon_index != NONE)
+				object_delete(weapon_index);
 		}
-		if (unit_add_weapon_to_inventory(unit_index, weapon_index,
-			added ? _unit_add_weapon_starting : _unit_add_weapon_replace))
-		{
-			added = TRUE;
-		}
-		else
-			object_delete(weapon_index);
+		return;
 	}
+	if (definition_index == NONE)
+		return;
+	object_placement_data_new(&placement_data, definition_index, NONE);
+	weapon_index = object_new(&placement_data);
+	if (weapon_index == NONE)
+		return;
+	/* (the fists hold no rounds) */
+	if (definition_index == bomb_globals.fist_definition_index)
+	{
+		struct weapon_datum *weapon = weapon_get(weapon_index);
+		short magazine;
+
+		for (magazine = 0; magazine < (short)NUMBEROF(weapon->weapon.magazines); magazine++)
+		{
+			weapon->weapon.magazines[magazine].rounds_total = 0;
+			weapon->weapon.magazines[magazine].rounds_loaded = 0;
+		}
+	}
+	bomb_globals.giving_fists = TRUE;
+	if (!unit_add_weapon_to_inventory(unit_index, weapon_index, 2))
+		object_delete(weapon_index);
 	bomb_globals.giving_fists = FALSE;
 }
 
@@ -1587,6 +1582,9 @@ static boolean bomb_engine_initialize_for_new_map(void)
 		bomb_globals.fist_definition_index = NONE;
 	}
 	bomb_find_court();
+	/* (a court gives its own weapons: no fists) */
+	if (bomb_globals.court)
+		bomb_globals.fist_definition_index = NONE;
 
 	for (team_index = 0; team_index < NUMBER_OF_BOMB_TEAMS; team_index++)
 	{
@@ -1609,6 +1607,10 @@ static boolean bomb_engine_initialize_for_new_map(void)
 	}
 
 	bomb_find_spawn();
+	bomb_log("goals red (%.2f %.2f %.2f) blue (%.2f %.2f %.2f), the bomb's spawn (%.2f %.2f %.2f)",
+		bomb_globals.goals[0].x, bomb_globals.goals[0].y, bomb_globals.goals[0].z, bomb_globals.goals[1].x,
+		bomb_globals.goals[1].y, bomb_globals.goals[1].z, bomb_globals.spawn.x, bomb_globals.spawn.y,
+		bomb_globals.spawn.z);
 
 	/* (the goals' outlines, drawn as the hill is) */
 	render_dynamic_quad_initialize();
@@ -2907,3 +2909,17 @@ long game_engine_bomb_round(
 }
 
 #endif /* HALO_GAME_BROWSER */
+
+#if defined(HALO_BIG_ENDIAN) && defined(HALO_GAME_BROWSER)
+/* port: (game_engine.h) the state in the wire's byte order, either way */
+void game_engine_bomb_network_state_byte_swap(
+	byte *buffer,
+	long size)
+{
+	struct bomb_network_state *state = (struct bomb_network_state *)buffer;
+
+	if (size != (long)sizeof(*state))
+		return;
+	GAME_ENGINE_NETWORK_STATE_SWAP(state, weapon_index, arm_ticks, sizeof(long));
+}
+#endif

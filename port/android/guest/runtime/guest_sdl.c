@@ -311,6 +311,14 @@ const char *SDL_GetAudioDeviceName(SDL_AudioDeviceID device)
 	return NULL;
 }
 
+/* (no names, as above: audio.hrtf = "auto" cannot tell headphones here, and
+leaves the rendering off; "on" turns it on) */
+SDL_AudioDeviceID SDL_GetAudioStreamDevice(SDL_AudioStream *stream)
+{
+	(void)stream;
+	return 0;
+}
+
 SDL_AudioStream *SDL_OpenAudioDeviceStream(SDL_AudioDeviceID device, const SDL_AudioSpec *spec,
 	SDL_AudioStreamCallback callback, void *userdata)
 {

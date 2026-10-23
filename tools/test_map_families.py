@@ -1,13 +1,14 @@
 """Checks the names the map families give a map in the game's protocol
 (port/linux/game/map_families.c, halo_map_families.h): a Halo PC map's
 <file>@ce as OpenCE's build-145 names a Custom Edition map, custom_maps\\<file>,
-HaloMD's and Halo PC retail's as names no OpenCE client has, and each read
-back as this port names it; and where a Halo PC map's file is looked for,
-with paths.custom_edition's folder (h:\\) last and none with
-game.custom_edition off; and the campaign maps (a solo scenario's) listed
-apart from the multiplayer ones, from folders of the test's own. The family
-code is compiled alone with the build machine's C compiler, with stand-ins
-for the game's headers."""
+HaloMD's, Halo PC retail's and a map pack's (<file>@<pack>,
+maps_<pack>\\<file>.<pack>) as names no OpenCE client has, and each read
+back as this port names it; the file an Xbox-format map is read from; and
+where a Halo PC map's file is looked for, with paths.custom_edition's folder
+(h:\\) last and none with game.custom_edition off; and the campaign maps (a
+solo scenario's) listed apart from the multiplayer ones, from folders of the
+test's own. The family code is compiled alone with the build machine's C
+compiler, with stand-ins for the game's headers."""
 import os
 import shutil
 import subprocess
@@ -39,6 +40,7 @@ HARNESS = r"""
 #include "halo_map_families.h"
 /* (the settings, port_config.c: game.downloaded_maps names none) */
 char const *config_string(char const *name) { (void)name; return ""; }
+char const *cache_files_map_directory(void) { return "d:\\maps\\"; }
 int main(int argc, char **argv)
 {
 	char out[256];
@@ -50,6 +52,14 @@ int main(int argc, char **argv)
 		{
 			family = map_family_parse_listed(argv[index], out, sizeof(out));
 			printf("%d %s\n", family, out);
+		}
+		else if (!strcmp(argv[1], "path"))
+		{
+			char pack[16];
+			int ok = map_family_xbox_path(argv[index], out, sizeof(out));
+			family = map_family_parse(argv[index], NULL, 0);
+			map_family_pack_id(argv[index], pack, sizeof(pack));
+			printf("%d %d %s %s\n", family, ok, out, pack[0] ? pack : "-");
 		}
 		else if (!strcmp(argv[1], "wire"))
 		{
@@ -489,3 +499,31 @@ def test_listed_games_by_bare_name(families):
                     "levels\\test\\hangemhigh\\hangemhigh", "deathisland@ce", "x@md", "bloodgulch@pc", "") == [
         "0 bloodgulch", "1 deathisland", "1 Icefields", "1 hugeass", "0 a30",
         "0 hangemhigh", "1 deathisland", "2 x", "3 bloodgulch", "0 "]
+
+
+def test_pack_names(families):
+    # (a map pack's map: <file>@<pack>, its pack 1 to 8 letters and digits,
+    # in its own folder; the other families' suffixes and the Xbox's language
+    # folders are no pack's)
+    assert families("path", "bloodgulch@cex", "Bloodgulch@CEX", "bloodgulch@xyz", "bloodgulch", "ui",
+                    "levels\\test\\bloodgulch\\bloodgulch", "x@md", "x@de", "x@toolongname", "@cex", "a@b@cex") == [
+        "4 1 d:\\maps_cex\\bloodgulch.map cex", "4 1 d:\\maps_cex\\Bloodgulch.map cex",
+        "4 1 d:\\maps_xyz\\bloodgulch.map xyz", "0 1 d:\\maps\\bloodgulch.map -", "0 1 d:\\maps\\ui.map -",
+        "0 1 d:\\maps\\levels\\test\\bloodgulch\\bloodgulch.map -", "2 1 d:\\maps\\x@md.map -",
+        "0 1 d:\\maps\\x@de.map -", "0 1 d:\\maps\\x@toolongname.map -", "0 1 d:\\maps\\@cex.map -",
+        "4 1 d:\\maps_cex\\a@b.map cex"]
+
+
+def test_pack_wire_names(families):
+    # (never the retail name: a build before packs reads maps_cex\\<file>.cex
+    # as a map it doesn't have)
+    assert families("wire", "bloodgulch@cex", "putput@xyz") == ["maps_cex\\bloodgulch.cex", "maps_xyz\\putput.xyz"]
+    assert families("read", "maps_cex\\bloodgulch.cex", "MAPS_CEX\\Wizard.CEX", "maps_xyz\\putput.xyz",
+                    "maps_cex\\bloodgulch.xyz", "maps_cex\\bloodgulch", "maps_de\\x.de", "maps_cex\\a\\b.cex",
+                    "maps_cex\\.cex") == [
+        "4 bloodgulch@cex", "4 Wizard@cex", "4 putput@xyz", "0 maps_cex\\bloodgulch.xyz", "0 maps_cex\\bloodgulch",
+        "0 maps_de\\x.de", "0 maps_cex\\a\\b.cex", "0 maps_cex\\.cex"]
+
+
+def test_pack_listed(families):
+    assert families("listed", "bloodgulch@cex", "longest@xyz") == ["4 bloodgulch", "4 longest"]

@@ -120,7 +120,7 @@ enum
 {
 	_hud_dont_scale_offset_bit = 0,
 	/* port: Halo PC's, which the Xbox's tags never set */
-	_hud_use_high_resolution_scale_bit = 2,
+	_hud_port_high_resolution_scale_bit = 2,
 };
 
 /* hud number and meter definitions (no shared header declares these yet;
@@ -2144,6 +2144,8 @@ void hud_draw_numbers(
 				scale = hud_globals_get_scale(
 					TEST_FLAG(draw_flags, _hud_draw_in_multiplayer_bit));
 			}
+			if (TEST_FLAG(numbers->placement.multiplayer_scaling_flags, _hud_port_high_resolution_scale_bit))
+				scale *= 0.5f;
 #ifdef HALO_CUSTOM_EDITION
 			/* port: the digits' bitmap drawn at its HUD scale, their spacing
 			(the HUD number's widths, in pixels of the screen) at the HUD's */

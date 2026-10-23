@@ -125,9 +125,9 @@ this fork's site (https://halo.fractumseraph.net/assets/maps/: the
 multiplayer maps alone, about 0.5 GB with Halo Custom Edition's shared maps,
 or everything with the campaign's, about 2 GB; `MapsDownloader.java`),
 or extracts it from an Xbox disc image (`.xiso` or `.iso`) of any version of
-the game, with the Bink movies (`bink/`) that the folder lacks (not played
-on this build yet). The app keeps the data in
-`/sdcard/Android/data/net.fractumseraph.halo/files`.
+the game, with the Bink movies (`bink/`) that the folder lacks, which the
+game plays (a download has none: the movies are skipped). The app keeps the
+data in `/sdcard/Android/data/net.fractumseraph.halo/files`.
 
 To download the data: start the app and push **Download multiplayer maps**
 or **Download everything**. The game starts when the download is done; a
@@ -327,16 +327,17 @@ These settings are only for Android:
 
 ## Internet play
 
-Internet play operates as on Linux, but without Discord. When the game
-hosts a system link game, it puts the invite link on the clipboard and
-shows a notice.
+Internet play operates as on Linux, but without Discord. With
+`network.copy_to_clipboard` set to `true`, when the game hosts a system link
+game, it puts the invite link on the clipboard and shows a notice.
 
 To join a game, do one of these steps:
 
 - Open the link. The app is the handler of `halo://join/...` links. If the
   game does not operate, the app starts it. The app writes the link to
   `files/join_link.txt`, and the game reads it.
-- Copy the link and go to the game.
+- Copy the link and select PASTE LINK in Join Game's Direct Link (or set
+  `network.join_from_clipboard` to `"ask"` and go to the game).
 
 On the local network:
 
@@ -709,8 +710,10 @@ it does not substitute for device gameplay validation.
 
 ## Limits
 
-- Bink video is not available on this build. The game skips the movies.
-  The app still copies the disc's `bink/` movies with `maps/`.
+- Bink video is decoded with FFmpeg behind the Bink calls the game makes
+  (`port/linux/src/bink_ffmpeg.c`, as on Linux and macOS), built for the
+  guest (`tools/android_ffmpeg.py`) and for the 64-bit app
+  (`tools/ffmpeg_build.py`). A missing or unreadable movie is skipped.
 - The Xbox memory is the 128 MB of a development kit, not the 512 MB of the
   computer builds. Thus the texture cache is 44 MB, not 128 MB
   (`port/linux/include/halo_port_capacity.h`). This is sufficient for the

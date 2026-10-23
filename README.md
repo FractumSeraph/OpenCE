@@ -275,8 +275,9 @@ decompilation. It runs natively on Windows, Mac (Apple silicon and Intel),
 Linux (including Steam Deck) and Android, with no emulator, and it is built for stability and
 community play: the original Xbox campaign and multiplayer maps, Halo PC and
 Custom Edition maps, online games with the community's servers, and releases
-you can count on. Xbox and Xbox 360 versions are built separately, by
-[Warthog](https://github.com/ChupathingyCE/warthog) (source only, for now).
+you can count on. The console versions (original Xbox, Xbox 360, Wii U and
+Switch) live in repositories of their own, with this one as their base: see
+[Console ports](docs/building.md#console-ports) for where each one stands.
 
 **To play:** [download](#download) the build for your system, start it, and
 point it at your own copy of the game ([first start](#you-need-your-own-copy-of-halo)).
@@ -441,6 +442,11 @@ still list them on the site (Host a Game).
 - LAN parties the old way: System Link on your own network and split screen need no internet and no account
 - High-res HUD and text, and widescreen menus
 - Controller prompts for Xbox, PlayStation and Nintendo pads, and the keyboard
+- Grifball and Bomb games, with a court to play them on
+- Online co-op: host the campaign on the Internet for friends ([how](#online-co-op))
+- Surround sound (5.1 and 7.1), Doppler shifts and sound cones as on the Xbox, and an optional headphone 3D mode, all set on one Audio Setup screen
+- The intro, attract and cutscene movies, on every desktop build and Android
+- Community Xbox map packs, such as Halo CE+, beside the retail maps ([Xbox map packs](#xbox-map-packs))
 - Text chat in games with other Chupathingy players, and a follow camera while you wait to respawn
 - Updates itself on Windows, Linux and Android: it checks for new releases when it starts, asks first, and only trusts the files a signed list of update files names (on Mac it opens the download)
 
@@ -457,14 +463,14 @@ still list them on the site (Host a Game).
 | Server Browser in the PC menus | Yes | Yes | Yes | Yes |
 | Halo PC CD and CE installer import at first start | Yes | Yes | Yes | Not yet |
 | Discord presence and Join | Yes | Yes | Yes | No |
-| Choice of audio output | Yes | Yes | Yes | No (the system's) |
+| Choice of audio output, surround and Audio Setup | Yes | Yes | Yes | No (the system's) |
 | Crash reports | Yes | Yes | Yes | Not yet |
-| Intro and cutscene movies | Not in release builds | Not in release builds | Not in release builds | Not in release builds |
+| Intro, attract and cutscene movies (Bink, with FFmpeg) | Yes | Yes | Yes | Yes |
 
 Some defaults differ by platform: anti-aliasing is MSAA 2x on 64-bit
 computers and off on 32-bit ones and Android, and the Mac starts in a window
-instead of fullscreen. Release builds don't play the intro, attract or
-cutscene movies on any platform yet. On a Steam Deck in Game Mode, the game
+instead of fullscreen. The movies are the ones on your disc's `bink` folder,
+which the first-start import copies; a movie that is missing is skipped. On a Steam Deck in Game Mode, the game
 shows no system dialogs (they can crash there): the main menu's version line
 says when a new version is out, and you update from Desktop Mode.
 
@@ -475,6 +481,20 @@ says when a new version is out, and you update from Desktop Mode.
 - **Testing** builds are hand-rolled builds of a branch, published as pre-releases named "(test builds)". The current one is the [Grifball test](https://chupathingy.org/grifball).
 - **Linux AppImage** is on the test builds for now.
 - **What's coming** is the [0.8.0 milestone](https://github.com/ChupathingyCE/chupathingyce/milestone/5) and its unreleased [release notes](docs/release-notes/0.8.0.md).
+
+## Online co-op
+
+The campaign can be hosted for friends over the Internet:
+
+1. Multiplayer > **CREATE GAME** > **INTERNET**.
+2. On the map list, switch the chooser in the top row from MULTIPLAYER to
+   **SINGLEPLAYER**, then pick a level and a difficulty.
+3. Continue to **Server Setup** (friendly fire, extra enemies, player
+   collisions and listing are set there) and start the game.
+
+Friends join it like any other game. The CO-OP CAMPAIGN entry of the
+Multiplayer menu is the Xbox's split screen co-op on one computer, not an
+online game. The original Xbox can't host or join online co-op.
 
 ## Halo PC maps
 
@@ -491,7 +511,7 @@ dedicated server. Each kind has a folder of its own beside the game's
 
 Where the game's `maps` folder is:
 
-| Platform | The folder holding `maps`, `maps_ce`, `maps_md` and `maps_pc` |
+| Platform | The folder holding `maps`, `maps_ce`, `maps_md`, `maps_pc` and the map packs' `maps_<pack>` |
 | --- | --- |
 | Mac | `~/Library/Application Support/ChupathingyCE/` |
 | Linux | next to the `halo` executable |
@@ -659,6 +679,40 @@ and the widescreen view is the game's own, but the maps made for gameplay
 plug-ins (3rd Person, Rocket Surfing, Spartan) play without them, as plain
 Halo.
 
+## Xbox map packs
+
+Chupathingy also plays community packs of Xbox maps, such as Halo CE+ X
+(Original Xbox) by VKMT, on every build, the original Xbox's too. Such a pack
+is a set of Xbox-format maps, usually saved under the Xbox's own maps' file
+names (CE+'s Abyss is its `bloodgulch.map`), so each pack gets a folder of
+its own beside `maps`, named for the pack, and its maps never replace or get
+confused with the retail ones:
+
+| Folder | Pack | Played online as |
+| --- | --- | --- |
+| `maps_cex` (also `maps_ceplus`, `maps_ce+`) | Halo CE+ | `<name>@cex` (`bloodgulch@cex`) |
+| `maps_<name>` | any other pack | `<file>@<name>` |
+
+To install a pack, copy the contents of the pack's `maps` folder, its
+`maplist.txt` included, into its folder: for Halo CE+, into `maps_cex`. Leave
+your retail maps in `maps`. Chupathingy doesn't host or ship pack files: get
+the pack from its release page. A pack isn't its folder's name: a map the
+library knows is its pack's in any `maps_*` folder, so players whose folders
+are called differently still play together.
+
+The pack's maps appear in the multiplayer map lists after the others, marked
+with the pack's tag ([CE+]) and named by the library of known packs
+(`port/assets/maps`), by the pack's `maplist.txt`, or by their file names.
+Online they show as "Abyss" with a CE+ badge, and a player joins only with
+the same version of the pack's map: one without it is told which pack and
+folder it needs ("This game uses Halo CE+'s Abyss (bloodgulch.map in
+maps_cex)"). OpenCE and older Chupathingy builds can't join these games.
+
+The pack's own `ui.map` isn't used: the game's menus stay the game's. To play
+with the pack's own menus instead, set `game.pack_menus = "cex"` in
+`config.toml` and restart. A pack folder needs a name of 1 to 8 letters and
+digits, other than `ce`, `md`, `pc`, `de`, `fr`, `es` and `it`.
+
 ## Settings (config.toml)
 
 Most of what you can change lives in the game's menus, but everything the
@@ -700,10 +754,15 @@ A few people look for most:
 | `display.player_names` | Names over players' heads: `"all"`, `"allies"`, `"enemies"` or `"none"`. |
 | `game.unlock_all_levels` | `true` gives new profiles every campaign level. By default a new profile starts at The Pillar of Autumn, as on the Xbox. Profiles made by earlier versions had every level open; `profile_reset_campaign` in the console starts one over. |
 | `audio.volume`, `audio.music_volume`, `audio.effects_volume` | Volumes, from 0.0 to 1.0. |
+| `audio.output_device`, `audio.input_device` | Where the sound and the voices play, and the microphone voice chat listens to, by name (Settings > Audio lists them); `"default"` follows the system's. This fork's names for ChupathingyCE's `audio.device`. |
+| `audio.channels` | `"auto"` follows your output (5.1 on a 6-channel device, 7.1 on 8, else stereo); `"stereo"`, `"5.1"` or `"7.1"` set it. Desktop only; read at start. |
+| `audio.hrtf` | Headphone 3D sound: `"off"` (the default), `"on"`, or `"auto"` (on when the output's name says headphones). Stereo output only. |
+| `audio.doppler` | Moving sounds shift in pitch as on the Xbox (on by default). |
 | `input.mouse_sensitivity`, `input.invert_mouse` | Mouse aim. |
 | `input.keyboard_prompts` | Button prompts follow the device you used last: keys after the keyboard or mouse, as Halo PC did, and buttons after a controller. This setting is no longer in the menus; `false` keeps the controller's buttons everywhere. |
 | `controls.*` | Every key: `controls.jump = "Space"`, or two at once, such as `"F, Mouse 4"`. |
 | `network.browser_url` | The game list Online Games shows (stats.chupathingy.org). |
+| `network.copy_to_clipboard` | `false` (the default) leaves the clipboard alone; `true` puts the invite link of a game you host on it. The link is also in the log and under INVITE LINK in the Gearbox menus' Server Settings. |
 | `network.host_public` | Whether games you host are listed for everyone (true) or only joinable by invite (false). |
 | `update.auto` | Whether the game updates itself. |
 | `paths.data`, `paths.saves` | Where the maps and the saves are, if not the usual place. |
@@ -771,7 +830,7 @@ Useful `configure.py` options:
 | `--pgo=off`, `--lto=off` | Faster builds, without profile-guided or link-time optimisation. |
 | `--profile` | A profiling build, which records where the game spends its time. See ["Profiling builds"](#profiling-builds-opence) below. |
 
-The console ports (original Xbox, Xbox 360, Switch) are built from their own
+The console ports (original Xbox, Xbox 360, Switch, Wii U) are built from their own
 repositories, with this one as a submodule: "Console ports" in
 [docs/building.md](docs/building.md#console-ports).
 
@@ -833,8 +892,8 @@ Public License as published by the Free Software Foundation, either version
 - **Third-party code, fonts and art** keep their own licenses, which are
   beside them (`port/third_party`, `port/assets/fonts`,
   `port/linux/ui/fonts`, `port/assets/prompts`, `port/assets/hud`,
-  `port/assets/text_filter`), and the release downloads and the web site's
-  `licenses.txt` carry their notices.
+  `port/assets/text_filter`, `port/assets/hrtf`), and the release downloads
+  and the web site's `licenses.txt` carry their notices.
 - **Halo itself is not covered.** The license covers the work of the
   authors. It gives no rights in Halo, its maps or anything else Microsoft
   owns.
@@ -891,6 +950,10 @@ not be part of our community.
   domain), plus our own Xbox 360 ring and Wii U GamePad; the names and logos
   are their owners' trademarks, used only to identify platforms.
 - Controller button icons by snapchipper, CC0 (`port/assets/prompts`).
+- Headphone 3D sound (`audio.hrtf`): head-related impulse responses from the
+  [SADIE II database](https://www.york.ac.uk/sadie-project/database.html)
+  (KEMAR, subject D2), University of York, Apache License 2.0
+  (`port/assets/hrtf`).
 - High-res HUD art on the Xbox maps: Aerocatia's and Jessie's HUD art from
   [Halo PC Restored](https://github.com/Aerocatia/halopc-restored) (release
   r220), used with Aerocatia's permission on the condition that both are
@@ -899,6 +962,9 @@ not be part of our community.
   "force HUD use high resolution scale" flags): ugoboom, tested with
   Aerocatia's [halopc-restored](https://github.com/Aerocatia/halopc-restored)
   resource maps.
+- Grifball courts: Bomb plays on SlappyThePirate's "Grifball Beta" court
+  (`grifball.map`), which is open to use with credit; the map is not
+  included.
 - HaloMD map names: from [MacGamingMods](https://macgamingmods.com)' public
   HaloMD mod list, so the menus can show each map's own name.
 - Missing Custom Edition maps: downloaded from the community map
@@ -953,6 +1019,8 @@ with their authors credited in each commit.
   first.
 - Sabriel and ugoboom: the Halo PC map reports and regression lists behind
   most of the Custom Edition fixes.
+- Sabriel, roundzabout and Mega: Grifball playtesting and the bugs and
+  tweaks it turned up.
 - MrBruh (build-145's Custom
   Edition loader, from DamnationCE's work by
   [xshxdex98](https://github.com/xshxdex98)): maps that need OpenSauce refused

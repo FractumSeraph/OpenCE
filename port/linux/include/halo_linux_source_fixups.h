@@ -75,6 +75,17 @@ void halo_draw_picture(const unsigned char *rgba, long width, long height);
 /* display.hdr's tone mapping of a window's 3D view, before its
 anti-aliasing (source/render/render.c) */
 void halo_screen_tone_map(short x0, short y0, short x1, short y1);
+#ifdef HALO_SWITCH_CONSOLE
+/* whether the zoom's blur is drawn on a small copy of the screen and blended
+over it once (source/rasterizer/xbox/rasterizer_xbox_screen_effect.c), and
+that blend's shader on or off for the draws that follow: the Switch's
+renderer (port/switch/guest/d3d8_dk.c; debug.original_zoom) */
+unsigned char halo_screen_fast_warp(void);
+void halo_screen_warp_blend(unsigned char on);
+/* whether a blur screen effect is drawn on small targets (the same file;
+debug.original_blur) */
+unsigned char halo_screen_fast_blur(void);
+#endif
 /* the mouse in the menus (source/interface/ui_widget.c) */
 #include "halo_ui_pointer.h"
 /* a level not in the maps folder (source/cache/cache_files_windows.c): a

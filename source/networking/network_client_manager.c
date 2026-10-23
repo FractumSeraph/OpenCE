@@ -3653,6 +3653,7 @@ boolean network_game_client_split_teams(
 	}
 	return success;
 }
+
 #if defined(HALO_GAME_BROWSER) || defined(HALO_CONSOLE_ONLINE_GAMES)
 /* the game list's game whose invite this machine joined (the Online Games
 screen, port/linux/game/browser_screen.c): joined once its host's game is
@@ -3873,7 +3874,7 @@ static void network_game_client_delta_frame(
 		csmemset(&reliable, 0, sizeof(reliable));
 		csmemset(&unreliable, 0, sizeof(unreliable));
 		network_connection_get_address(client->connection, &reliable, &unreliable);
-		host = (delta_u32)SWAP4(reliable.address.ipv4_address);
+		host = (delta_u32)NETWORK_SWAP4(reliable.address.ipv4_address);
 	}
 	for (index = 0; index < DELTA_PEER_MAXIMUM_PLAYERS; index++)
 	{

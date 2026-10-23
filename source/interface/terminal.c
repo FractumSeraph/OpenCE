@@ -117,16 +117,9 @@ static long terminal_new_line(void);
 
 /* ---------- globals */
 
-/* 0 = hidden, 1 = always drawn (default), 2 = drawn only while the console is open */
-#ifdef HALO_BROWSER
-/* port: browser diagnostics live behind the shell's Logs button. Drawing the
-terminal only while the backquote console is open keeps it off the menus (and
-hundreds of glyph quads for routine platform notices off the frame) and the
-console's command output still readable */
+/* 0 = hidden, 1 = always drawn, 2 = drawn only while the console is open (the
+default: the console's output stays off the game until it is opened) */
 short terminal_render_enable = 2;
-#else
-short terminal_render_enable = 1;
-#endif
 
 /* name from the 2003 PC demo PDB and the HCEX PDB (terminal file static const short[3]); January's 6 bytes
  * are identical to the demo's and it has no public for it (static) */

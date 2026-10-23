@@ -681,7 +681,7 @@ struct widget_instance;
 #ifdef HALO_64BIT
 #include "interface/ui_widget_instance.h"
 #endif
-#ifdef HALO_CUSTOM_EDITION
+#ifdef HALO_MAP_LIST
 #include "halo_ui_map_list.h"
 #endif
 /* port: a map's download screen over the menus (port/linux/game/download_screen.c) */
@@ -2243,6 +2243,38 @@ void ui_set_next_level(
 	return;
 }
 
+/* port: whether a screen of code is up over the widgets (Online Games, the
+clipboard invite's question, moderation's screen, Controls, Delta Profile),
+which takes the input as the menus do */
+static boolean ui_widget_screens_of_code_active(
+	void)
+{
+#ifdef HALO_GAME_BROWSER
+	boolean active = invite_prompt_active() || browser_screen_active() || moderation_screen_active();
+
+#ifndef HALO_CONSOLE_NO_CONTROLS
+	active = active || controls_screen_active();
+#endif
+#ifndef HALO_CONSOLE_NO_DELTA_PROFILE
+	active = active || profile_screen_active();
+#endif
+
+	return active;
+#else
+	return FALSE;
+#endif
+}
+
+/* port: whether a menu, the virtual keyboard or a screen of code over them
+takes the controllers' and the keyboard's input: the chat's keys and its
+quick lines' d-pad wait meanwhile (port/linux/game/chat.c), as the pause
+menu's and Game Setup's rows are moved through with them */
+boolean ui_widgets_take_input(
+	void)
+{
+	return ui_widgets_active() || virtual_keyboard_active() || ui_widget_screens_of_code_active();
+}
+
 boolean ui_widgets_active(
 	void)
 {
@@ -2267,12 +2299,27 @@ boolean ui_widgets_active(
 	return result;
 }
 
+/* port: whether the Chupathingy menus are up (port/linux/game/menu_tags.c) */
+boolean pc_menus_chupathingy(
+	void);
+
 boolean main_menu_screen_is_active(
 	void)
 {
 	if (we_are_at_the_main_menu == TRUE &&
 		widget_globals.active_widgets[0] &&
 		strcmp(widget_globals.active_widgets[0]->name, "the_main_menu") == 0)
+	{
+		return TRUE;
+	}
+	/* port: the Chupathingy menus' main menu (chupathingy/main_menu.xml) is
+	named for its file, "main_menu", so attract mode, which starts only on
+	the main menu, never found it */
+	if (we_are_at_the_main_menu == TRUE &&
+		widget_globals.active_widgets[0] &&
+		pc_menus_chupathingy() &&
+		pc_menu_tag(widget_globals.active_widgets[0]->definition_tag_index) &&
+		strcmp(widget_globals.active_widgets[0]->name, "main_menu") == 0)
 	{
 		return TRUE;
 	}
@@ -5680,7 +5727,7 @@ static void widget_instance_render_text_box(
 			string_list_index = definition->string_list_index;
 		else
 			string_list_index = widget->parameters.text_box.string_list_index;
-#ifdef HALO_CUSTOM_EDITION
+#ifdef HALO_MAP_LIST
 		/* port: a string of the menus' map list's own, past ui.map's */
 		string = (wchar_t *)ui_map_list_text(string_list_index);
 		if (!string)
@@ -7491,13 +7538,7 @@ static void ui_widgets_process_mouse(
 	closes it (BACK) is not also a click on the menu behind, which drew no
 	targets under it and would have taken the click as its A (ONLINE GAMES,
 	opening it again) */
-	overlay_active = invite_prompt_active() || browser_screen_active() || moderation_screen_active();
-#ifndef HALO_CONSOLE_NO_CONTROLS
-	overlay_active = overlay_active || controls_screen_active();
-#endif
-#ifndef HALO_CONSOLE_NO_DELTA_PROFILE
-	overlay_active = overlay_active || profile_screen_active();
-#endif
+	overlay_active = ui_widget_screens_of_code_active();
 	if (pointer_active && !keyboard_active && invite_prompt_active())
 		invite_prompt_pointer(&pointer);
 #ifndef HALO_CONSOLE_NO_DELTA_PROFILE
@@ -7744,7 +7785,7 @@ static void widget_instance_render_recursive(
 #ifndef HALO_XBOX_CONSOLE
 	ui_mouse_note_target(widget, definition, offset);
 #endif
-#ifdef HALO_CUSTOM_EDITION
+#ifdef HALO_MAP_LIST
 	/* port: a picture of the menus' map list's own, past ui.map's */
 	bitmap = ui_map_list_picture(widget->animation.current_frame_index);
 	if (!bitmap)

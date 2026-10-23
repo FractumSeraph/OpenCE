@@ -186,6 +186,17 @@ if not is_windows():
         "folder with `Include` and `Lib`, each with a versioned folder (default: WindowsSdkDir)",
     )
 
+parser.add_argument(
+    "--without-ffmpeg",
+    dest="with_ffmpeg",
+    action="store_false",
+    help="leave the movies' FFmpeg out (the Bink decoder behind the SDK's entry points: LGPL, "
+         "static, built for each target): the stubs build and the game skips the movies",
+)
+# (the default since every desktop build plays the movies; kept for the
+# scripts that still ask for it)
+parser.add_argument("--with-ffmpeg", dest="with_ffmpeg", action="store_true", help=argparse.SUPPRESS)
+parser.set_defaults(with_ffmpeg=True)
 add_console_arguments(parser)
 for port in console_ports:
     if hasattr(port.module, "add_arguments"):
@@ -215,6 +226,7 @@ sln = SimpleNamespace(
     android_ndk=args.android_ndk,
     android_guest_cc=args.android_guest_cc,
     web_emcc=args.web_emcc,
+    with_ffmpeg=args.with_ffmpeg,
     console_no_debug_asserts=args.console_no_debug_asserts,
     console_debug_tools=args.console_debug_tools,
     console_players=args.console_players,

@@ -7,7 +7,7 @@ halo_port_limits.h, which every build's prefix header reads). The shared
 code tests these, never a console's name; a console turns a capability on
 by defining it here from its own build's define (the Switch's
 HALO_SWITCH_CONSOLE, the original Xbox's HALO_XBOX_CONSOLE, the Xbox 360's
-HALO_XBOX360_CONSOLE), or on its
+HALO_XBOX360_CONSOLE, the Wii U's HALO_WIIU_CONSOLE), or on its
 compile lines (HALO_CONSOLE_PLAYERS, HALO_CONSOLE_DELTA,
 HALO_CONSOLE_MEMORY_CLASS, the HALO_CONSOLE_NO_* of a port's prefix header:
 docs/building.md, "Console ports").
@@ -50,12 +50,36 @@ HALO_CONSOLE_LOG_BUFFER
 	the first waits, and at once for an exception, an exit or a crash
 	(error_log_flush and error_log_update, source/cseries/errors.c;
 	console.log_flush)
+HALO_CONSOLE_WINDOW_MAXIMUM
+	a console that puts the Xbox's memory window where it finds room
+	(HALO_WINDOW_REBASE, source/cseries/xbox_address.h) and tells the
+	platform layer its size before any constructor runs
+	(platform_contiguous_base and platform_contiguous_size): the window is
+	from a development kit's 128 MB up to this many bytes
+	(port/linux/src/platform.h), and the texture cache half of it
+	(halo_port_capacity.h)
+HALO_CONSOLE_NO_THREAD_LOCAL
+	a console whose executables have no thread-local storage (the Wii U's
+	RPX: its loader takes no TLS relocations): the platform layer's
+	per-thread variables are in blocks the port keeps for each thread
+	(platform_thread_local, port/linux/src/platform.h), and a release
+	build's skipped-assert flag is shared, as on the original Xbox
+	(source/cseries/cseries.h)
+HALO_CONSOLE_WIDE_TIME_T
+	a 32-bit console whose C library's time_t is 64 bits (newlib's): the
+	error log's time() is given a time_t (source/cseries/errors.c)
+HALO_CONSOLE_LOG_ECHO
+	debug.txt's lines also in the platform's log (platform_log), for a
+	console that shows its log on the screen while it has no other way to
+	say why it stopped (source/cseries/errors.c)
 HALO_CONSOLE_ONLINE_GAMES
 	the Multiplayer menu's ONLINE GAMES on a build without the desktop's
 	game browser (HALO_GAME_BROWSER): the console's own screen of the game
 	list (browser_screen_* and the invite join, defined by the port), with
 	the menu's fonts (ui_widget_online_games_font, source/interface/
-	ui_widget.c)
+	ui_widget.c; the original Xbox's port/xbox/game/xbox_browser_screen.c,
+	the Xbox 360's port/xbox360/game/x360_browser_screen.c, the Wii U's
+	port/wiiu/game/wiiu_browser_screen.c)
 HALO_CONSOLE_DEBUG_CHANNEL
 	a console without a standard error: the platform layer's log lines and
 	OutputDebugStringA go to its debug channel (console_debug_print,
@@ -75,11 +99,24 @@ HALO_CONSOLE_XBOX_RENDER_SIZES
 	the Xbox's texture cache and the Xbox's structure surfaces and dynamic
 	triangles in a frame (halo_port_capacity.h), on a console whose build
 	otherwise has the desktop's
+HALO_CONSOLE_WAIT_POLL
+	a console whose system must be served by the thread that runs the game
+	(the Wii U's HOME button): console_wait_poll, defined by the port, is
+	called by every wait that thread makes in the platform layer and the
+	game's cache files, and console_trace puts a line in the port's log for
+	the steps of a cache file's making (cache_files_windows.c)
 HALO_CONSOLE_BRINGUP_LOG
 	a console's developer tools (HALO_CONSOLE_DEBUG_TOOLS) for its
 	bring-up: the main loop's stages in its profile log
 	(console_profile_stage: cseries/frame_profile.h), the loop's pulse
 	(console_main_loop_tick) and the structure bsp switches in the log
+HALO_CONSOLE_OVERSIZED_MAPS
+	a console that copies maps to the Xbox's fixed-size cache files: a map
+	larger than its type's (a map pack's multiplayer maps, past retail's
+	47 MB) is copied to a campaign map's instead, and a map whose tags do
+	not fit the tag cache says so (source/cache/cache_files_windows.c,
+	cache_files.c). The retail maps fit their own and are cached as before.
+	The desktop builds with map packs (HALO_MAP_LIST) have it too
 
 A big-endian console (HALO_BIG_ENDIAN, its prefix header) reads the maps,
 which are the Xbox's, little-endian, through port/console/game's byte swap
@@ -101,9 +138,28 @@ compile lines: source/cseries/xbox_address.h).
 #define HALO_CONSOLE_LOG_THROTTLE 1
 #endif
 
+#ifdef HALO_WIIU_CONSOLE
+#define HALO_CONSOLE_NO_WRITE_WATCH 1
+#define HALO_CONSOLE_LOG_THROTTLE 1
+#define HALO_CONSOLE_WINDOW_MAXIMUM 0x10000000UL
+#define HALO_CONSOLE_NO_THREAD_LOCAL 1
+#define HALO_CONSOLE_WIDE_TIME_T 1
+#define HALO_CONSOLE_LOG_ECHO 1
+#define HALO_CONSOLE_ONLINE_GAMES 1
+#define HALO_CONSOLE_WAIT_POLL 1
+#define HALO_CONSOLE_GL_LAYER 1
+#endif
+
 #ifdef HALO_XBOX_CONSOLE
 #define HALO_CONSOLE_LOG_BUFFER 1
 #define HALO_CONSOLE_ONLINE_GAMES 1
+#define HALO_CONSOLE_OVERSIZED_MAPS 1
+#endif
+
+/* (the desktop builds copy maps to the Xbox's cache files too: a map pack's
+larger maps take a campaign map's there as well) */
+#if defined(HALO_MAP_LIST) && !defined(HALO_CONSOLE_PLAYERS) && !defined(HALO_CONSOLE_OVERSIZED_MAPS)
+#define HALO_CONSOLE_OVERSIZED_MAPS 1
 #endif
 
 #ifdef HALO_XBOX360_CONSOLE
@@ -112,9 +168,16 @@ compile lines: source/cseries/xbox_address.h).
 #define HALO_CONSOLE_HALT_TO_LAUNCHER 1
 #define HALO_CONSOLE_GL_LAYER 1
 #define HALO_CONSOLE_XBOX_RENDER_SIZES 1
+#define HALO_CONSOLE_ONLINE_GAMES 1
 #ifdef HALO_CONSOLE_DEBUG_TOOLS
 #define HALO_CONSOLE_BRINGUP_LOG 1
 #endif
+#endif
+
+#ifdef HALO_CONSOLE_WAIT_POLL
+/* (defined by the port) */
+void console_wait_poll(void);
+void console_trace(const char *format, ...);
 #endif
 
 #endif
