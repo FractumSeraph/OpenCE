@@ -41,9 +41,10 @@ here at start-up (port/switch/host/host_memory.c). */
 keeps its heaps low in the address space and fills it upwards */
 #define HALO_GUEST_IMAGE_BASE 0x88000000u
 /* the room the host reserves for the image there (port/android/host/host_memory.c):
-80 MB (64 until the image reached 66 MB, fs.00142); guest.ld fails a link
-past it */
-#define HALO_GUEST_IMAGE_RESERVE 0x05000000u
+96 MB (64 until the image reached 66 MB, fs.00142; 80 until ChupathingyCE
+0.8.0d's movie decoder, FFmpeg, took it past that); guest.ld fails a link
+past it. Address space alone: nothing else is placed above the image */
+#define HALO_GUEST_IMAGE_RESERVE 0x06000000u
 #endif
 
 /* the Xbox contiguous memory window (port/linux/src/platform.h). The game
