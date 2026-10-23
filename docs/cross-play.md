@@ -49,7 +49,7 @@ One declaration (`network_game_manager.h:45-68`), checked against
 | `players` | 0x59A | 0x2316 |
 | `random_seed` | 0x79C | 0x3318 |
 | PC options | 0x7A4 | 0x3320 |
-| size | 0x7C4 (1,988) | 0x3340 (13,120) |
+| size | 0x7C4 (1,988) | 0x3350 (13,136) |
 
 It goes in 0xE00-byte pieces (`message_server_game_settings_update`):
 four from a PC, one from the console. A client refuses any piece whose
@@ -174,7 +174,7 @@ translation layer, valid only where no peer computes anything different.
    console's Xbox object capacity. A console in a game means 16 players at
    most. The console must not evict its own objects for a forced create;
    it collects them first, then refuses.
-3. **Hosting.** A console host widens its record to the PCs' 13,120 bytes
+3. **Hosting.** A console host widens its record to the PCs' 13,136 bytes
    and sends it in their four pieces, and allocates host objects below
    2,048 (its own limit), which every PC can take.
 
@@ -196,7 +196,7 @@ and leaving cleanly what doesn't fold:
   objects and effects on the desktop's game state), a test build only.
 - **The settings record.** `port/linux/game/network_game_layout.c` (moved
   from `port/xbox/src`, built into every build, called only with the
-  console's limits). The client takes the PCs' 13,120-byte record in its
+  console's limits). The client takes the PCs' 13,136-byte record in its
   four pieces and folds it into its own
   (`network_client_message_handler.c`). A record with a machine or player
   in a slot past 16, or an entry naming one, is not taken: the console

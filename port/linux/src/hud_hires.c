@@ -106,6 +106,40 @@ int hud_hires_asset_custom_edition(long asset)
 	return asset >= 0 && asset < hud_hires_asset_count() && hud_hires_embedded[asset].custom_edition;
 }
 
+int hud_hires_asset_ce_only(long asset)
+{
+	return asset >= 0 && asset < hud_hires_asset_count() && hud_hires_embedded[asset].ce_only;
+}
+
+long hud_hires_ce_stock_find(char const *tag, long bitmap)
+{
+	unsigned int index;
+	for (index = 0; index < hud_hires_ce_stock_count; index++)
+		if (hud_hires_ce_stock[index].bitmap == bitmap && !strcmp(tag, hud_hires_ce_stock[index].tag))
+			return (long)index;
+	return -1;
+}
+
+long hud_hires_ce_stock_count_get(void) { return hud_hires_ce_stock_count; }
+char const *hud_hires_ce_stock_tag(long index) { return hud_hires_ce_stock[index].tag; }
+long hud_hires_ce_stock_bitmap(long index) { return hud_hires_ce_stock[index].bitmap; }
+
+int hud_hires_ce_stock_matches(long index, unsigned long address, long width, long height,
+	unsigned long size)
+{
+	const struct hud_hires_ce_stock *stock;
+	if (index < 0 || (unsigned long)index >= hud_hires_ce_stock_count || !address)
+		return 0;
+	stock = &hud_hires_ce_stock[index];
+	return width == stock->width && height == stock->height && size == stock->size &&
+#ifdef HALO_64BIT
+		/* (port, this fork: an Xbox address) */
+		crc32(0L, (const Bytef *)xbox_pointer(address), (uInt)size) == stock->crc;
+#else
+		crc32(0L, (const Bytef *)address, (uInt)size) == stock->crc;
+#endif
+}
+
 char const *hud_hires_asset_tag(long asset)
 {
 	return hud_hires_embedded[asset].tag;
@@ -195,7 +229,23 @@ long hud_hires_override_find(unsigned long address, unsigned long width, unsigne
 	/* (a Custom Edition map's stock HUD bitmap, laid out as this texture's,
 	has its own pixels) */
 	if (hud_hires_asset_stock_custom_edition(address, (long)width, (long)height, asset))
-		return asset;
+	{
+		const struct hud_hires_embedded *embedded = &hud_hires_embedded[asset];
+
+		/* Resource maps can be modified too. Match the stock pixels after
+		the CE loader has put them in hardware order, not just their name.
+		(port, this fork: an Xbox address on the 64-bit builds. The
+		signatures are of OpenCE's loader's pixels, swizzled; ChupathingyCE's
+		keeps Halo PC's layout, D3DCOMMON_PORT_PC_LAYOUT, and draws no
+		high-res HUD on a Custom Edition map: cache_files.c) */
+		return width == embedded->ce_width && height == embedded->ce_height &&
+			level0_size == embedded->ce_size &&
+#ifdef HALO_64BIT
+			crc32(0L, (const Bytef *)xbox_pointer(address), (uInt)level0_size) == embedded->ce_crc ? asset : -1;
+#else
+			crc32(0L, (const Bytef *)address, (uInt)level0_size) == embedded->ce_crc ? asset : -1;
+#endif
+	}
 #ifdef HALO_64BIT
 	/* (an Xbox address: the texture's pixels in the contiguous memory) */
 	if (crc32(0L, (const Bytef *)xbox_pointer(address), (uInt)level0_size) != hud_hires_embedded[asset].crc)
@@ -329,12 +379,13 @@ static void upscale_weights(float t, float *weights)
 	weights[3] = -0.5f * square + 0.5f * cube;
 }
 
-unsigned char *hud_hires_upscale_pixels(const unsigned char *bgra, unsigned long width, unsigned long height)
+static unsigned char *upscale_pixels(const unsigned char *bgra, unsigned long width, unsigned long height,
+	unsigned long maximum)
 {
 	unsigned char *out;
 	unsigned long x, y, channel;
 
-	if (!bgra || !width || !height || width > 256 || height > 256)
+	if (!bgra || !width || !height || width > maximum || height > maximum)
 		return NULL;
 	out = malloc(width * height * 16 * 4);
 	if (!out)
@@ -380,6 +431,11 @@ unsigned char *hud_hires_upscale_pixels(const unsigned char *bgra, unsigned long
 		}
 	}
 	return out;
+}
+
+unsigned char *hud_hires_upscale_pixels(const unsigned char *bgra, unsigned long width, unsigned long height)
+{
+	return upscale_pixels(bgra, width, height, 256);
 }
 
 static unsigned char *png_decode(const unsigned char *data, unsigned long size,
@@ -433,7 +489,8 @@ static void upscale_outline(unsigned char *pixels, const unsigned char *bgra,
 unsigned int hud_hires_upscale_texture(const unsigned char *bgra, unsigned long width,
 	unsigned long height, long kind, unsigned long *levels)
 {
-	unsigned char *pixels = hud_hires_upscale_pixels(bgra, width, height);
+	unsigned char *pixels = kind == 4 ? upscale_pixels(bgra, width, height, 512) :
+		hud_hires_upscale_pixels(bgra, width, height);
 	unsigned long largest;
 	GLuint texture;
 

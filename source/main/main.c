@@ -381,6 +381,7 @@ symbols in this file:
 #include "networking/network_server_manager.h" /* port: a co-op game's level won */
 #include "network_coop.h" /* port: port/linux/game/network_coop.c */
 #include "network_chat.h" /* port: port/linux/game/network_chat.c */
+#include "network_shield_effects.h" /* port: port/linux/game/network_shield_effects.c */
 #include "map_share.h" /* port: port/linux/game/map_share.c */
 #include "profile_sections.h" /* port: port/linux/include/profile_sections.h */
 #ifdef HALO_PROFILE
@@ -3776,6 +3777,8 @@ static boolean main_loop_iteration(
 			/* port: (the host's mouse aim assist policy is sent by
 			network_distributed.c, which hands it to OpenCE's network_aim_assist.c
 			on a client: its network_aim_assist_update would send it twice) */
+			/* port: the host's shield effects, for every machine (port/linux/game/network_shield_effects.c) */
+			network_shield_effects_update();
 			/* port: map sharing, in the lobby and in game (port/linux/game/map_share.c) */
 			map_share_update();
 			/* changing teams during a game (port/linux/game/team_change.c) */

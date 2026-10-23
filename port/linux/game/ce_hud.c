@@ -29,7 +29,12 @@ know, which are put right when the map's tags load:
     alpha. Every bitmap a unit or weapon HUD interface draws as a meter is
     listed (ce_hud_bitmap_is_meter), and the texture cache has the renderer
     sample its channels from where Halo PC keeps them (xbox_texture_cache.c,
-    D3DCOMMON_PORT_PC_METER; xbox_textures.c, a texture swizzle).
+    D3DCOMMON_PORT_PC_METER; xbox_textures.c, a texture swizzle). A meter
+    bitmap whose group a static element draws too (artwork as it is: a
+    custom HUD's shared sheet) keeps its channels, and only its meter's draw
+    samples them so (ce_hud_bitmap_is_mixed_meter: hud_draw.c,
+    halo_custom_edition_hud_meter; OpenCE's 384d9ba5, its "mixed-use"
+    sheets).
 
 Some maps were made around how Halo PC drew their HUD, where Chimera (by
 SnowyMouse) draws them otherwise; Chimera lists them by name and tag data
@@ -38,7 +43,9 @@ generated from Chimera's map_hacks_config.json). Those this build follows
 are its HUD's: digits drawn at the Xbox's size, not twice it (their metrics
 halved and their bitmap given the half HUD scale), bitmaps whose half HUD
 scale flags were set by mistake (cleared), overlays' blend functions in Halo
-PC's order and overlays not drawn at all (hud_draw.c); and one of its model
+PC's order and overlays not drawn at all (hud_draw.c), meters not tinted by
+their opacity (Gearbox's meters) and warnings placed from a 640x480 screen's
+corners (the old widescreen fix: hud_weapon.c), OpenCE's; and one of its model
 shaders': a model shader's "detail after reflection" flag, which Halo PC
 read the other way round (Gearbox's), is flipped for the maps made around
 that (invert_detail_after_reflection, as OpenCE's cache_file_formats.c
@@ -214,8 +221,10 @@ enum
 	BITMAP_ALLOCATED_FLAG = 1 << 6,
 	BITMAP_TYPE_2D = 0,
 
-	/* the most meter bitmaps listed (Blood Gulch has 2) */
+	/* the most meter bitmaps listed (Blood Gulch has 2), and of the bitmap
+	groups static elements draw */
 	MAXIMUM_CE_HUD_METER_BITMAPS = 64,
+	MAXIMUM_CE_HUD_STATIC_GROUPS = 256,
 
 	/* (for the checks: a tag block's and a placement's sizes, and the most
 	elements of a HUD block checked, more than any would hold) */
@@ -246,6 +255,9 @@ enum
 	_ce_behaviour_gearbox_shader_environment_types,
 	/* HUD multitexture overlays are not drawn (hud_draw.c) */
 	_ce_behaviour_block_multitexture_overlays,
+	/* (not Chimera's: OpenCE's, for Bigass Open v1.1, whose weapon sheet's
+	meters have the fill order in color and the shape in alpha, the Xbox's) */
+	_ce_behaviour_xbox_ammo_meter_channels,
 
 	NUMBER_OF_CE_BEHAVIOURS
 };
@@ -264,6 +276,9 @@ static struct ce_hud_behaviour_map
 } const ce_hud_behaviour_maps[] =
 {
 #include "custom_edition_behaviours.inc"
+	/* Locally verified HUD data; not part of Chimera's generated list.
+	(OpenCE's: its meters' sheet, ce_hud_meter_bitmap) */
+	{ "bigass_open_v1.1", 0xD2BC19F7, BEHAVIOUR(hud_number_scale) | BEHAVIOUR(xbox_ammo_meter_channels) },
 };
 
 #undef BEHAVIOUR
@@ -276,7 +291,19 @@ static long ce_hud_placements_halved;
 /* the bitmaps (bitmap_data) drawn as meters, whose channels are Halo PC's
 meter channels: the shape in the color, the fill order in alpha */
 static void const *ce_hud_meter_bitmaps[MAXIMUM_CE_HUD_METER_BITMAPS];
+/* (and the bitmap group each is of) */
+static void const *ce_hud_meter_groups[MAXIMUM_CE_HUD_METER_BITMAPS];
 static long ce_hud_meter_bitmap_count;
+/* the meter bitmaps whose groups static elements draw too: their channels
+kept as they are, sampled as a meter's for a meter's draw alone
+(ce_hud_bitmap_is_mixed_meter) */
+static void const *ce_hud_mixed_meter_bitmaps[MAXIMUM_CE_HUD_METER_BITMAPS];
+static long ce_hud_mixed_meter_bitmap_count;
+/* the bitmap groups static elements draw (while the tags load) */
+static void const *ce_hud_static_groups[MAXIMUM_CE_HUD_STATIC_GROUPS];
+static long ce_hud_static_group_count;
+/* the tags being loaded, for their names (ce_hud_tags_loaded) */
+static struct ce_image const *ce_hud_image;
 
 /* the Xbox's button icons (ui.map's), read once: its HUD globals' button
 icons, and its message icons bitmap's sequences (each with its first sprite
@@ -530,6 +557,17 @@ static void ce_hud_meter_bitmap(
 
 	if (!bitmap_group)
 		return;
+	/* (Bigass Open v1.1's shared weapon sheet has the Xbox's meter channels:
+	OpenCE's 384d9ba5) */
+	if ((ce_hud_behaviours & BEHAVIOUR_FLAG(_ce_behaviour_xbox_ammo_meter_channels)) && ce_hud_image)
+	{
+		long tag_index = (long)ce_hud_read_long(element + ELEMENT_BITMAP_OFFSET + TAG_REFERENCE_INDEX_OFFSET);
+		struct ce_tag_instance const *instance = (struct ce_tag_instance const *)((byte const *)ce_hud_tag_instances +
+			(tag_index & 0xffff) * CE_TAG_INSTANCE_SIZE);
+
+		if (!strcmp(ce_image_tag_name(ce_hud_image, instance), "bourrin\\hud\\v3\\bitmaps\\all icons wips"))
+			return;
+	}
 	count = (long)ce_hud_read_long(bitmap_group + BITMAP_GROUP_BITMAPS_OFFSET + TAG_BLOCK_COUNT_OFFSET);
 	address = ce_hud_read_long(bitmap_group + BITMAP_GROUP_BITMAPS_OFFSET + TAG_BLOCK_ADDRESS_OFFSET);
 	if (count <= 0 || !address)
@@ -546,7 +584,73 @@ static void ce_hud_meter_bitmap(
 				MAXIMUM_CE_HUD_METER_BITMAPS);
 			return;
 		}
+		ce_hud_meter_groups[ce_hud_meter_bitmap_count] = bitmap_group;
 		ce_hud_meter_bitmaps[ce_hud_meter_bitmap_count++] = bitmap;
+	}
+}
+
+/* the bitmap group a static element draws as it is (OpenCE's
+static_bitmaps_mark), listed once */
+static void ce_hud_static_bitmap(
+	byte const *element)
+{
+	byte *bitmap_group = ce_hud_bitmap_group(element + ELEMENT_BITMAP_OFFSET);
+	long index;
+
+	if (!bitmap_group)
+		return;
+	for (index = 0; index < ce_hud_static_group_count; index++)
+	{
+		if (ce_hud_static_groups[index] == bitmap_group)
+			return;
+	}
+	if (ce_hud_static_group_count < MAXIMUM_CE_HUD_STATIC_GROUPS)
+		ce_hud_static_groups[ce_hud_static_group_count++] = bitmap_group;
+}
+
+/* the static elements of a block, at `offset` in each element */
+static void ce_hud_block_static_bitmaps(
+	byte *block,
+	unsigned long element_size,
+	unsigned long offset)
+{
+	long count = (long)ce_hud_read_long(block + TAG_BLOCK_COUNT_OFFSET);
+	unsigned long address = ce_hud_read_long(block + TAG_BLOCK_ADDRESS_OFFSET);
+	long index;
+
+	if (count <= 0 || !address)
+		return;
+	for (index = 0; index < count; index++)
+		ce_hud_static_bitmap((byte *)xbox_pointer(address) + index * element_size + offset);
+}
+
+/* the meter bitmaps whose groups static elements draw too, taken off the
+meters' list (their textures keep their channels: the artwork's are right)
+onto the mixed meters' (their meters' draws sample them as a meter's) */
+static void ce_hud_mixed_meters_find(
+	void)
+{
+	long index = 0;
+
+	ce_hud_mixed_meter_bitmap_count = 0;
+	while (index < ce_hud_meter_bitmap_count)
+	{
+		long group;
+
+		for (group = 0; group < ce_hud_static_group_count; group++)
+		{
+			if (ce_hud_static_groups[group] == ce_hud_meter_groups[index])
+				break;
+		}
+		if (group == ce_hud_static_group_count)
+		{
+			index++;
+			continue;
+		}
+		ce_hud_mixed_meter_bitmaps[ce_hud_mixed_meter_bitmap_count++] = ce_hud_meter_bitmaps[index];
+		ce_hud_meter_bitmap_count--;
+		ce_hud_meter_bitmaps[index] = ce_hud_meter_bitmaps[ce_hud_meter_bitmap_count];
+		ce_hud_meter_groups[index] = ce_hud_meter_groups[ce_hud_meter_bitmap_count];
 	}
 }
 
@@ -587,6 +691,15 @@ static void ce_hud_unit_interface(
 	ce_hud_meter_bitmap(hud + UNIT_HUD_HEALTH_METER_OFFSET);
 	ce_hud_block_meter_bitmaps(hud + UNIT_HUD_AUXILARY_METERS_OFFSET, AUXILARY_METER_SIZE,
 		AUXILARY_METER_METER_OFFSET);
+	/* (and what its static elements draw as it is) */
+	ce_hud_static_bitmap(hud + UNIT_HUD_BACKGROUND_OFFSET);
+	ce_hud_static_bitmap(hud + UNIT_HUD_SHIELD_BACKGROUND_OFFSET);
+	ce_hud_static_bitmap(hud + UNIT_HUD_HEALTH_BACKGROUND_OFFSET);
+	ce_hud_static_bitmap(hud + UNIT_HUD_MOTION_SENSOR_BACKGROUND_OFFSET);
+	ce_hud_static_bitmap(hud + UNIT_HUD_MOTION_SENSOR_FOREGROUND_OFFSET);
+	ce_hud_block_static_bitmaps(hud + UNIT_HUD_AUXILARY_OVERLAYS_OFFSET, AUXILARY_OVERLAY_SIZE, 0);
+	ce_hud_block_static_bitmaps(hud + UNIT_HUD_AUXILARY_METERS_OFFSET, AUXILARY_METER_SIZE,
+		AUXILARY_METER_BACKGROUND_OFFSET);
 	for (index = 0; index < NUMBEROF(placements); index++)
 		ce_hud_element_placement(hud + placements[index]);
 	/* (the blips' placement draws no bitmap of its own) */
@@ -603,6 +716,7 @@ static void ce_hud_weapon_interface(
 	byte *hud)
 {
 	ce_hud_block_meter_bitmaps(hud + WEAPON_HUD_METERS_OFFSET, WEAPON_HUD_METER_SIZE, WEAPON_HUD_ELEMENT_OFFSET);
+	ce_hud_block_static_bitmaps(hud + WEAPON_HUD_STATICS_OFFSET, WEAPON_HUD_STATIC_SIZE, WEAPON_HUD_ELEMENT_OFFSET);
 	ce_hud_block_placements(hud + WEAPON_HUD_STATICS_OFFSET, WEAPON_HUD_STATIC_SIZE, WEAPON_HUD_ELEMENT_OFFSET,
 		TRUE, NULL);
 	ce_hud_block_placements(hud + WEAPON_HUD_METERS_OFFSET, WEAPON_HUD_METER_SIZE, WEAPON_HUD_ELEMENT_OFFSET,
@@ -1155,6 +1269,8 @@ void ce_hud_tags_loaded(
 	ce_hud_tag_count = tag_count;
 	ce_hud_placements_halved = 0;
 	ce_hud_meter_bitmap_count = 0;
+	ce_hud_mixed_meter_bitmap_count = 0;
+	ce_hud_static_group_count = 0;
 	/* (the button icons first: a message icons bitmap's bitmaps are moved,
 	and the meters' are listed by where they are) */
 	/* (and the room above it, where the moved blocks may be:
@@ -1177,6 +1293,7 @@ void ce_hud_tags_loaded(
 		ce_hud_bitmap_scale_flags_clear();
 	if (ce_hud_behaviours & BEHAVIOUR_FLAG(_ce_behaviour_hud_number_scale))
 		ce_hud_digits_halve();
+	ce_hud_image = &image;
 	for (index = 0; index < tag_count; index++)
 	{
 		struct ce_tag_instance *instance = (struct ce_tag_instance *)((byte *)tag_instances +
@@ -1213,8 +1330,11 @@ void ce_hud_tags_loaded(
 			break;
 		}
 	}
+	ce_hud_image = NULL;
+	ce_hud_mixed_meters_find();
 	error(_error_silent, "Custom Edition maps: %ld HUD placements at half their scale or less, %ld meter bitmaps sampled in "
-		"Halo PC's channels", ce_hud_placements_halved, ce_hud_meter_bitmap_count);
+		"Halo PC's channels (%ld more as their meters draw them, drawn as artwork too)", ce_hud_placements_halved,
+		ce_hud_meter_bitmap_count, ce_hud_mixed_meter_bitmap_count);
 	if (model_shaders_inverted)
 	{
 		error(_error_silent, "Custom Edition maps: %ld model shaders' detail after reflection flipped, as Halo PC read "
@@ -1230,6 +1350,8 @@ void ce_hud_tags_unloaded(
 	void)
 {
 	ce_hud_meter_bitmap_count = 0;
+	ce_hud_mixed_meter_bitmap_count = 0;
+	ce_hud_static_group_count = 0;
 	ce_hud_behaviours = 0;
 }
 
@@ -1258,14 +1380,18 @@ void ce_hud_map_identity(
 			ce_hud_behaviours = ce_hud_behaviour_maps[index].behaviours;
 			error(_error_silent, "Custom Edition map %s: Halo PC's HUD followed where it relies on it (%08lx: "
 				"digits %s, bitmaps' HUD scale %s, overlays' blend functions %s, overlays %s, model shaders' detail "
-				"after reflection %s)", lower,
+				"after reflection %s, meters' tint %s, warnings placed %s, ammunition meters' channels %s)", lower,
 				(unsigned long)ce_hud_behaviours,
 				ce_hud_behaviours & BEHAVIOUR_FLAG(_ce_behaviour_hud_number_scale) ? "halved" : "kept",
 				ce_hud_behaviours & BEHAVIOUR_FLAG(_ce_behaviour_disable_bitmap_hud_scale_flags) ? "cleared" : "kept",
 				ce_hud_behaviours & BEHAVIOUR_FLAG(_ce_behaviour_gearbox_multitexture_blend_modes) ? "Halo PC's" :
 					"the Xbox's",
 				ce_hud_behaviours & BEHAVIOUR_FLAG(_ce_behaviour_block_multitexture_overlays) ? "not drawn" : "drawn",
-				ce_hud_behaviours & BEHAVIOUR_FLAG(_ce_behaviour_invert_detail_after_reflection) ? "flipped" : "kept");
+				ce_hud_behaviours & BEHAVIOUR_FLAG(_ce_behaviour_invert_detail_after_reflection) ? "flipped" : "kept",
+				ce_hud_behaviours & BEHAVIOUR_FLAG(_ce_behaviour_gearbox_meters) ? "opacity's alone" : "the Xbox's",
+				ce_hud_behaviours & BEHAVIOUR_FLAG(_ce_behaviour_old_widescreen_fix) ? "from 640x480's corners" :
+					"the Xbox's",
+				ce_hud_behaviours & BEHAVIOUR_FLAG(_ce_behaviour_xbox_ammo_meter_channels) ? "the Xbox's" : "Halo PC's");
 			return;
 		}
 	}
@@ -1283,6 +1409,54 @@ boolean ce_hud_overlays_blocked(
 	void)
 {
 	return (ce_hud_behaviours & BEHAVIOUR_FLAG(_ce_behaviour_block_multitexture_overlays)) != 0;
+}
+
+/* whether the Custom Edition map loaded draws its meters as Halo PC's
+(Gearbox's) shading did, the color not tinted by the meter's opacity
+(hud_draw.c; OpenCE's 384d9ba5); FALSE for any other map */
+boolean ce_hud_gearbox_meters(
+	void)
+{
+	return (ce_hud_behaviours & BEHAVIOUR_FLAG(_ce_behaviour_gearbox_meters)) != 0;
+}
+
+/* whether a crosshair of state `state` is a Custom Edition map's warning,
+not an aiming reticle: kept where the HUD puts it, not scaled with
+display.fov (hud_weapon.c; OpenCE's 384d9ba5, custom_edition_hud.h) */
+boolean ce_hud_warning(
+	short state)
+{
+	extern boolean cache_file_tags_are_ce(void);
+
+	return cache_file_tags_are_ce() && ((state >= 3 && state <= 15) || state == 18);
+}
+
+/* a Custom Edition warning's offset (`x`, `y`) in a `width` by `height`
+screen: on the maps made for the old widescreen fix (Chimera's list), placed
+beside the corner panels from a 640x480 screen's center with Halo PC's
+8-pixel margins (Chimera's hud_bitmap_scale.hpp), so moved out as the
+corner panels are; centered warnings stay centered (OpenCE's 384d9ba5) */
+void ce_hud_warning_offset(
+	short state,
+	short width,
+	short height,
+	short *x,
+	short *y)
+{
+	long extra;
+
+	if (!ce_hud_warning(state) || !(ce_hud_behaviours & BEHAVIOUR_FLAG(_ce_behaviour_old_widescreen_fix)))
+		return;
+	extra = (width - 624) / 2;
+	if (*x > 0)
+		*x = (short)PIN(*x + extra, SHORT_MIN, SHORT_MAX);
+	else if (*x < 0)
+		*x = (short)PIN(*x - extra, SHORT_MIN, SHORT_MAX);
+	extra = (height - 464) / 2;
+	if (*y > 0)
+		*y = (short)PIN(*y + extra, SHORT_MIN, SHORT_MAX);
+	else if (*y < 0)
+		*y = (short)PIN(*y - extra, SHORT_MIN, SHORT_MAX);
 }
 
 /* the blocks of a weapon HUD interface's crosshairs or overlays, and their
@@ -1387,6 +1561,23 @@ boolean ce_hud_bitmap_is_meter(
 	for (index = 0; index < ce_hud_meter_bitmap_count; index++)
 	{
 		if (ce_hud_meter_bitmaps[index] == bitmap)
+			return TRUE;
+	}
+	return FALSE;
+}
+
+/* whether a bitmap (bitmap_data) of the map loaded is a Custom Edition
+meter's whose group its HUD draws as artwork too: its channels Halo PC's,
+kept, and sampled as a meter's by its meters' draws alone (hud_draw.c,
+halo_custom_edition_hud_meter) */
+boolean ce_hud_bitmap_is_mixed_meter(
+	void const *bitmap)
+{
+	long index;
+
+	for (index = 0; index < ce_hud_mixed_meter_bitmap_count; index++)
+	{
+		if (ce_hud_mixed_meter_bitmaps[index] == bitmap)
 			return TRUE;
 	}
 	return FALSE;

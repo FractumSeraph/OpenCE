@@ -84,6 +84,7 @@ symbols in this file:
 #include "saved games/saved_game_files.h"
 #include "tag_files/files.h"
 #include "game/game_engine_playlist.h"
+#include "game_modes.h" /* port: port/linux/game/game_modes.c */
 #include "text/text_group.h"
 #include "tag_files/tag_groups.h"
 #ifdef HALO_GAME_BROWSER
@@ -103,7 +104,9 @@ enum
 	which do not pass. */
 	PLAYLIST_PROFILE_OPTIONS_OFFSET = 0x100,
 	PLAYLIST_PROFILE_OPTIONS_MAGIC = 0x4F565047, /* 'GPVO' little-endian */
-	PLAYLIST_PROFILE_OPTIONS_VERSION = 1,
+	/* port: version 2 adds OpenCE's gametypes' options (game_engine.h's
+	struct game_variant_options from mode on); version 1's are read too */
+	PLAYLIST_PROFILE_OPTIONS_VERSION = 2,
 	MAXIMUM_GAME_VARIANT_NAME_LENGTH = 12,
 	NUMBER_OF_DEFAULT_PLAYLIST_PROFILES = 26,
 };
@@ -141,6 +144,10 @@ typedef char verify_playlist_profile_first_time_offset[
 typedef char verify_playlist_profile_data_size[
 	sizeof(struct playlist_profile_data) == 0x69 ? 1 : -1];
 #endif
+
+/* port: OpenCE's gametypes follow the Xbox's (game_modes.h) */
+typedef char verify_game_modes_first_default_playlist_profile[
+	GAME_MODES_FIRST_DEFAULT_PLAYLIST_PROFILE == NUMBER_OF_DEFAULT_PLAYLIST_PROFILES ? 1 : -1];
 
 struct playlist_profile_write_request
 {
@@ -240,8 +247,8 @@ static struct playlist_profile_data playlist_profile_default_data =
 };
 
 #ifdef HALO_GAME_BROWSER
-/* port: the port's own built-in gametypes, after the map's 26 (their names
-are the port's: the map's string list has none) */
+/* port: the port's own built-in gametypes, after the map's 26 and OpenCE's
+(game_modes.c; their names are the port's: the map's string list has none) */
 static struct
 {
 	struct game_variant *(*build)(struct game_variant *variant);
@@ -257,18 +264,30 @@ static struct
 #else
 #define NUMBER_OF_PORT_DEFAULT_PLAYLIST_PROFILES 0
 #endif
+/* port: the default gametypes: the Xbox's 26, OpenCE's (game_modes.c), then
+the port's own */
+#define FIRST_PORT_DEFAULT_PLAYLIST_PROFILE (NUMBER_OF_DEFAULT_PLAYLIST_PROFILES + game_modes_gametype_count())
 
-/* port: a default gametype's name: the map's string list's, else the
-port's own (NULL for none) */
+/* port: whether a default gametype is one of OpenCE's */
+static boolean playlist_profile_default_is_game_mode(
+	long profile_index)
+{
+	return profile_index >= NUMBER_OF_DEFAULT_PLAYLIST_PROFILES && profile_index < FIRST_PORT_DEFAULT_PLAYLIST_PROFILE;
+}
+
+/* port: a default gametype's name: the map's string list's, else OpenCE's
+or the port's own (NULL for none) */
 wchar_t const *playlist_profile_default_name(
 	short profile_index,
 	long string_list_index)
 {
+	if (playlist_profile_default_is_game_mode(profile_index))
+		return game_modes_gametype_name((short)(profile_index - NUMBER_OF_DEFAULT_PLAYLIST_PROFILES));
 #ifdef HALO_GAME_BROWSER
-	if (profile_index >= NUMBER_OF_DEFAULT_PLAYLIST_PROFILES &&
-		profile_index < NUMBER_OF_DEFAULT_PLAYLIST_PROFILES + NUMBER_OF_PORT_DEFAULT_PLAYLIST_PROFILES)
+	if (profile_index >= FIRST_PORT_DEFAULT_PLAYLIST_PROFILE &&
+		profile_index < FIRST_PORT_DEFAULT_PLAYLIST_PROFILE + NUMBER_OF_PORT_DEFAULT_PLAYLIST_PROFILES)
 	{
-		return playlist_profile_port_defaults[profile_index - NUMBER_OF_DEFAULT_PLAYLIST_PROFILES].name;
+		return playlist_profile_port_defaults[profile_index - FIRST_PORT_DEFAULT_PLAYLIST_PROFILE].name;
 	}
 #endif
 	if (profile_index < 0 || profile_index >= NUMBER_OF_DEFAULT_PLAYLIST_PROFILES || string_list_index == NONE)
@@ -638,43 +657,60 @@ static void playlist_profile_create_default_profiles_on_disk(
 	{
 		long profile_index;
 
+		/* port: then OpenCE's gametypes (game_modes.c), with their options,
+		and the port's own */
 		for (profile_index = 0;
-			profile_index < NUMBER_OF_DEFAULT_PLAYLIST_PROFILES + NUMBER_OF_PORT_DEFAULT_PLAYLIST_PROFILES;
+			profile_index < FIRST_PORT_DEFAULT_PLAYLIST_PROFILE + NUMBER_OF_PORT_DEFAULT_PLAYLIST_PROFILES;
 			profile_index++)
 		{
 			wchar_t const *display_name;
 			boolean file_written = FALSE;
+			struct game_variant_options options;
 
-#ifdef HALO_GAME_BROWSER
-			if (profile_index >= NUMBER_OF_DEFAULT_PLAYLIST_PROFILES)
+			if (profile_index < NUMBER_OF_DEFAULT_PLAYLIST_PROFILES)
 			{
-				variant = *playlist_profile_port_defaults[profile_index - NUMBER_OF_DEFAULT_PLAYLIST_PROFILES].build(
+				variant = *playlist_profile_default_data.default_variant_building_functions[
+					profile_index](&temporary);
+			}
+			else if (playlist_profile_default_is_game_mode(profile_index))
+			{
+				game_modes_gametype((short)(profile_index - NUMBER_OF_DEFAULT_PLAYLIST_PROFILES), &variant,
+					&options);
+			}
+#ifdef HALO_GAME_BROWSER
+			else
+			{
+				variant = *playlist_profile_port_defaults[profile_index - FIRST_PORT_DEFAULT_PLAYLIST_PROFILE].build(
 					&temporary);
 			}
-			else
 #endif
-			variant = *playlist_profile_default_data.default_variant_building_functions[
-				profile_index](&temporary);
 
 			display_name = playlist_profile_default_name((short)profile_index, string_list_index);
 
 			/* port: cleared, so the bytes past the checksum are the same
-			every start (they were stack leftovers) */
+			every start (they were stack leftovers; the options' place, unless
+			written below) */
 			csmemset(block, 0, sizeof(block));
 			csmemcpy(
 				block,
 				&variant,
 				sizeof(struct game_variant));
-			ustrncpy(
-				(wchar_t *)block,
-				display_name,
-				MAXIMUM_GAME_VARIANT_NAME_LENGTH - 1);
+			/* port: (OpenCE's have their own short names: game_modes.c) */
+			if (!playlist_profile_default_is_game_mode(profile_index))
+			{
+				ustrncpy(
+					(wchar_t *)block,
+					display_name,
+					MAXIMUM_GAME_VARIANT_NAME_LENGTH - 1);
+			}
 			((struct game_variant *)block)->human_readable_game_description[MAXIMUM_GAME_VARIANT_NAME_LENGTH - 1] = 0;
 			((struct game_variant *)block)->flags |= (short)(profile_index << 8);
 			saved_game_file_generate_checksum(
 				block,
 				PLAYLIST_PROFILE_CHECKSUM_DATA_SIZE,
 				(XCALCSIG_SIGNATURE *)(block + PLAYLIST_PROFILE_CHECKSUM_DATA_SIZE));
+			if (playlist_profile_default_is_game_mode(profile_index))
+				playlist_profile_options_to_block(block, &options);
 
 			_snprintf(path, MAXIMUM_FILENAME_LENGTH, "z:\\saved\\playlists\\default_playlist\\%02d\\blam.lst", profile_index);
 			path[MAXIMUM_FILENAME_LENGTH] = 0;
@@ -1010,15 +1046,20 @@ static boolean playlist_profile_options_from_block(
 	XCALCSIG_SIGNATURE checksum;
 
 	csmemcpy(&header, data, sizeof(header));
-	if (header.magic != PLAYLIST_PROFILE_OPTIONS_MAGIC || header.version != PLAYLIST_PROFILE_OPTIONS_VERSION ||
-		header.size != sizeof(*options))
+	if (header.magic != PLAYLIST_PROFILE_OPTIONS_MAGIC ||
+		(!(header.version == PLAYLIST_PROFILE_OPTIONS_VERSION && header.size == sizeof(*options)) &&
+		!(header.version == 1 && header.size == GAME_VARIANT_OPTIONS_V1_SIZE)))
 	{
 		return FALSE;
 	}
+	size = sizeof(header) + header.size;
 	saved_game_file_generate_checksum((byte *)data, size, &checksum);
 	if (csmemcmp(&checksum, data + size, sizeof(checksum)))
 		return FALSE;
-	csmemcpy(options, data + sizeof(header), sizeof(*options));
+	/* (version 1's: none of OpenCE's gametypes, their options the defaults) */
+	game_modes_options_default(options);
+	csmemcpy(options, data + sizeof(header), header.size);
+	game_modes_options_sanitize(options);
 	options->friendly_fire = (short)PIN(options->friendly_fire, 0, NUMBER_OF_FRIENDLY_FIRE_MODES - 1);
 	options->radar_players = (byte)PIN(options->radar_players, 0, NUMBER_OF_RADAR_PLAYERS - 1);
 	options->loadout = (byte)PIN(options->loadout, 0, NUMBER_OF_LOADOUTS - 1);

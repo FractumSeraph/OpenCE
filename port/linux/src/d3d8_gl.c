@@ -27,6 +27,8 @@ Conventions carried over from the Xbox:
 #include "ui_point.h"
 #include "port_config.h"
 #include "thread_stop.h"
+/* (HALO_ANDROID_CE_TEXTURES: OpenCE's Android Custom Edition textures) */
+#include "../game/android_ce_texture_cache.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -2066,10 +2068,13 @@ static void gl_initialize(void)
 				(strcmp(decode, "gpu") && renderer && strstr(renderer, "Adreno")))
 				xgpu_capabilities.s3tc = FALSE;
 		}
-		platform_log("OpenGL ES %d.%d: copy image %d, border clamp %d, anisotropy %d, S3TC %d, sample counting %d, "
-			"base vertex %d (%s), half float targets %d",
+		/* (where DXT is not the GPU's, DXT1 is given as ASTC 4x4 where it has
+		that: xbox_textures.c, display.dxt1_astc; OpenCE's) */
+		xgpu_capabilities.astc = host_gl_has_extension("GL_KHR_texture_compression_astc_ldr");
+		platform_log("OpenGL ES %d.%d: copy image %d, border clamp %d, anisotropy %d, S3TC %d, ASTC %d, "
+			"sample counting %d, base vertex %d (%s), half float targets %d",
 			(int)major, (int)minor, xgpu_capabilities.copy_image, xgpu_capabilities.border_clamp,
-			xgpu_capabilities.anisotropy, xgpu_capabilities.s3tc, xgpu_capabilities.atomic_counters,
+			xgpu_capabilities.anisotropy, xgpu_capabilities.s3tc, xgpu_capabilities.astc, xgpu_capabilities.atomic_counters,
 			xgpu_capabilities.base_vertex, base_vertex_source, xgpu_capabilities.color_buffer_half_float);
 	}
 #else
@@ -3094,6 +3099,18 @@ void WINAPI D3DDevice_SetTexture(DWORD stage, D3DBaseTexture *texture)
 	if (stage < D3DTSS_MAXSTAGES)
 		device.textures[stage] = texture;
 }
+
+#ifdef HALO_ANDROID_CE_TEXTURES
+/* Remove CE headers before their owner frees or reuses them. */
+void android_ce_texture_unbind(const void *resource)
+{
+	unsigned long stage;
+	for (stage = 0; stage < D3DTSS_MAXSTAGES; stage++)
+		if ((const void *)device.textures[stage] == resource)
+			device.textures[stage] = NULL;
+	xgpu_gl_state_invalidate();
+}
+#endif
 
 void WINAPI D3DDevice_SetPalette(DWORD stage, D3DPalette *palette)
 {
@@ -4265,6 +4282,7 @@ static void bind_textures(struct nv2a_pixel_shader_key *key, float texture_scale
 			{
 				key->coverage_alpha = description.hires_coverage != FALSE;
 				key->point_threshold = description.hires_point_threshold != FALSE;
+				key->ce_meter_channels = description.ce_meter_channels != FALSE;
 			}
 			key->sampler_type[stage] = gl_target == GL_TEXTURE_CUBE_MAP ? _xgpu_sampler_cube :
 				gl_target == GL_TEXTURE_3D ? _xgpu_sampler_3d : _xgpu_sampler_2d;
@@ -4653,6 +4671,12 @@ static struct program_entry *prepare_draw(BOOL immediate)
 				skip++;
 		}
 	}
+#if defined(HALO_ANDROID) && !defined(HALO_BROWSER)
+	/* Refresh GL shadow state before binding this draw, without reloading pixels.
+	(port, this fork: the Android app's, as OpenCE's; not the browser build's,
+	which says HALO_ANDROID too, and whose WebGL state the shadows keep) */
+	xgpu_gl_state_invalidate();
+#endif
 #ifdef HALO_BROWSER
 	/* (the browser: the targets before the textures, for bind_textures'
 	feedback snapshot of the bound target; it has no multisampling, whose

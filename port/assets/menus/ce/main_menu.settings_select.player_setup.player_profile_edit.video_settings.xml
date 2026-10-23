@@ -562,9 +562,9 @@
 		<string text="The energy shield's flare on your first-person\narms too, as on your body."/>
 		<string text="Your legs in first person, seen looking down,\nmoving as you run. Your body as others see it."/>
 		<string text="Your shield's flare in an armor color, whatever\nyour armor. Only you see it. Default: its own."/>
-		<string text="The overshield rises up the body as it charges\nand stays lit, in its own color. Off: stock."/>
-		<string text="Shields light their surroundings as they flare,\nin the shield's own color."/>
-		<string text="Light Show: the shield glow three times as far,\nat full from a third of the flare."/>
+		<string text="The overshield rises up the body and stays lit,\nin its own color. Online: the host's choice."/>
+		<string text="Shields light their surroundings as they flare.\nOnline: the host's choice."/>
+		<string text="Light Show: three times as far, at full from a\nthird of the flare. Online: the host's choice."/>
 		<string text="Keep the light of explosions, plasma and the sun\npast white, and roll it off instead of clipping."/>
 		<string text="With HDR, on an HDR display, show that light\nbrighter than white. From the next start."/>
 		<string text="Takes effect on restart."/>

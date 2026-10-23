@@ -1045,6 +1045,19 @@ static boolean network_game_client_handle_message_server_machine_rejected(
 	return result;
 }
 
+/* port (this fork): a host's record of an older network version made this
+version's (port/linux/game/network_game_layout.c, whose layout and version
+numbers are checked against this build's below) */
+int network_game_layout_from_version(unsigned char *record, unsigned long received, unsigned long size,
+	unsigned int host_version);
+typedef char network_game_layout_from_version_assert[
+	HALO_PORT_GAME_MODES_NETWORK_VERSION == 35 && HALO_PORT_ALLY_FRIENDLY_FIRE_NETWORK_VERSION == 33 &&
+	HALO_PORT_LEGACY_OPTIONS_SHORTFALL == 0x2C - GAME_VARIANT_OPTIONS_V1_SIZE &&
+	HALO_PORT_NETWORK_GAME_LOCAL_DATA_OFFSET - HALO_PORT_NETWORK_GAME_VARIANT_OPTIONS_OFFSET == 0x2C &&
+	sizeof(struct game_variant_options) == 0x2C &&
+	offsetof(struct network_game, cooperative_flags) == 0x10C &&
+	HALO_PORT_NETWORK_GAME_SIZE - HALO_PORT_NETWORK_GAME_VARIANT_OPTIONS_OFFSET == 0x3A - 0xA ? 1 : -1];
+
 /* the game settings record as its pieces arrive; it is applied once the last
 piece is in */
 #ifdef HALO_PORT_CONSOLE_LIMITS
@@ -1068,8 +1081,8 @@ typedef char network_game_layout_header_assert[
 	offsetof(struct network_game, machines) == 0x114 ? 1 : -1];
 typedef char network_game_layout_size_assert[
 	sizeof(struct network_game) == 0x114 + MAXIMUM_NETWORK_MACHINE_COUNT * 0x44 + 2 +
-		MAXIMUM_NUMBER_OF_PLAYERS * 0x20 + 0x2A ? 1 : -1];
-typedef char network_game_layout_wire_assert[HALO_PORT_WIRE_NETWORK_GAME_SIZE == 13120 ? 1 : -1];
+		MAXIMUM_NUMBER_OF_PLAYERS * 0x20 + 0x3A ? 1 : -1];
+typedef char network_game_layout_wire_assert[HALO_PORT_WIRE_NETWORK_GAME_SIZE == 13136 ? 1 : -1];
 static boolean network_game_client_settings_told_clamped = FALSE;
 #else
 static struct network_game network_game_client_settings_staging;
@@ -1083,9 +1096,13 @@ static boolean network_game_client_receive_game_settings_piece(
 {
 	boolean result = TRUE;
 
-	if (piece->total_size != sizeof(network_game_client_settings_staging) ||
+	/* port (this fork): a host before network version 35 sends its record 16
+	bytes shorter (the PC options' first 0x1C bytes), widened once whole
+	(network_game_layout_from_version) */
+	if ((piece->total_size != sizeof(network_game_client_settings_staging) &&
+			piece->total_size != sizeof(network_game_client_settings_staging) - HALO_PORT_LEGACY_OPTIONS_SHORTFALL) ||
 		piece->length > sizeof(piece->data) ||
-		piece->offset + piece->length > sizeof(network_game_client_settings_staging))
+		piece->offset + piece->length > piece->total_size)
 	{
 		network_event("got a message_server_game_settings_update piece for a different game layout");
 		network_game_client_settings_staging_size = 0;
@@ -1113,6 +1130,15 @@ static boolean network_game_client_receive_game_settings_piece(
 			if (network_game_client_settings_staging_size == piece->total_size)
 			{
 				network_game_client_settings_staging_size = 0;
+				/* port (this fork): an older host's, this version's (by its size
+				and the host's version: network_client_manager.c) */
+				if (network_game_layout_from_version((unsigned char *)&network_game_client_settings_staging,
+					piece->total_size, sizeof(network_game_client_settings_staging),
+					network_game_client_host_announced_version()) != 0)
+				{
+					network_event("got a game settings record of a size no network version has");
+					return FALSE;
+				}
 #ifdef HALO_PORT_CONSOLE_LIMITS
 				{
 					int clamped;

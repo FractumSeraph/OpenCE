@@ -9,7 +9,10 @@ halved by their own flag (their digits by their bitmap: hud_bitmap_group_scale),
 halved and the bitmaps' flags cleared on the maps that rely on it, a model
 shader's detail after reflection flipped on those that rely on that, and
 what a map relies on found by its name and tag data checksum
-(custom_edition_behaviours.inc). test_ce_hud_scale.py takes the constants,
+(custom_edition_behaviours.inc); and the meters' bitmaps sampled in Halo PC's
+channels, but for those whose group a static element draws too (mixed: their
+meters' draws sample them so) and Bigass Open v1.1's sheet of the Xbox's
+channels (OpenCE's 384d9ba5). test_ce_hud_scale.py takes the constants,
 the tag instance's structure and the behaviours (config.inc) and the code
 (under_test.inc).
 */
@@ -38,6 +41,10 @@ enum
 	BITMAP_PLAIN = 0x1100,
 	BITMAP_DIGITS = 0x1200,
 	BITMAP_FORCE = 0x1300,
+	BITMAP_METER = 0x1400,
+	BITMAP_WIPS = 0x1500,
+	/* (where a group's one bitmap is) */
+	GROUP_BITMAP = 0x80,
 	WEAPON_HUD = 0x2000,
 	GRENADE_HUD = 0x3000,
 	GLOBALS = 0x4000,
@@ -56,6 +63,8 @@ enum
 	_tag_globals,
 	_tag_digits,
 	_tag_model_shader,
+	_tag_bitmap_meter,
+	_tag_bitmap_wips,
 	NUMBER_OF_FAKE_TAGS
 };
 
@@ -65,6 +74,14 @@ static byte fake_tags[FAKE_TAGS_SIZE];
 #define xbox_pointer(address) ((void *)(fake_tags + ((unsigned long)(address) - CE_IMAGE_TAG_CACHE_BASE)))
 
 #include "under_test.inc"
+
+/* the tags' names: Bigass Open v1.1's ammunition sheet's, else none */
+static char const *test_tag_name(
+	void const *instance)
+{
+	return instance == fake_tags + INSTANCES + _tag_bitmap_wips * CE_TAG_INSTANCE_SIZE ?
+		"bourrin\\hud\\v3\\bitmaps\\all icons wips" : "<unnamed>";
+}
 
 static byte *at(
 	unsigned long offset)
@@ -155,6 +172,7 @@ enum
 	CROSSHAIR_ITEMS = WEAPON_HUD + 0x600,
 	OVERLAYS = WEAPON_HUD + 0x800,
 	OVERLAY_ITEMS = WEAPON_HUD + 0x900,
+	METERS = WEAPON_HUD + 0xb00,
 	GRENADE_ITEMS = GRENADE_HUD + 0x400,
 	INTERFACE_BITMAPS = GLOBALS + 0x200,
 };
@@ -174,6 +192,12 @@ static void world(
 	put_instance(_tag_globals, 'matg', GLOBALS);
 	put_instance(_tag_digits, 'hud#', DIGITS);
 	put_instance(_tag_model_shader, 'soso', MODEL_SHADER);
+	put_instance(_tag_bitmap_meter, 'bitm', BITMAP_METER);
+	put_instance(_tag_bitmap_wips, 'bitm', BITMAP_WIPS);
+	/* (a bitmap each for the meters: the plain one a static draws too) */
+	put_block(BITMAP_PLAIN + BITMAP_GROUP_BITMAPS_OFFSET, 1, BITMAP_PLAIN + GROUP_BITMAP);
+	put_block(BITMAP_METER + BITMAP_GROUP_BITMAPS_OFFSET, 1, BITMAP_METER + GROUP_BITMAP);
+	put_block(BITMAP_WIPS + BITMAP_GROUP_BITMAPS_OFFSET, 1, BITMAP_WIPS + GROUP_BITMAP);
 	/* (a model shader two-sided, its detail after reflection not set) */
 	*(unsigned short *)at(MODEL_SHADER + MODEL_SHADER_FLAGS_OFFSET) = 1 << 1;
 	*(unsigned short *)at(BITMAP_HALF + BITMAP_GROUP_FLAGS_OFFSET) = BITMAP_GROUP_HALF_HUD_SCALE_FLAG | 1;
@@ -192,7 +216,13 @@ static void world(
 		put_reference(placement + ELEMENT_BITMAP_OFFSET, element == 0 ? _tag_bitmap_half :
 			element == 1 ? _tag_bitmap_plain : NONE);
 	}
-	put_block(WEAPON_HUD + WEAPON_HUD_METERS_OFFSET, 0, 0);
+	/* three meters: of the plain bitmap (a static's too), of one of its own,
+	of Bigass Open's sheet */
+	put_block(WEAPON_HUD + WEAPON_HUD_METERS_OFFSET, 3, METERS);
+	put_reference(METERS + WEAPON_HUD_ELEMENT_OFFSET + ELEMENT_BITMAP_OFFSET, _tag_bitmap_plain);
+	put_reference(METERS + WEAPON_HUD_METER_SIZE + WEAPON_HUD_ELEMENT_OFFSET + ELEMENT_BITMAP_OFFSET, _tag_bitmap_meter);
+	put_reference(METERS + 2 * WEAPON_HUD_METER_SIZE + WEAPON_HUD_ELEMENT_OFFSET + ELEMENT_BITMAP_OFFSET,
+		_tag_bitmap_wips);
 	put_block(WEAPON_HUD + WEAPON_HUD_NUMBERS_OFFSET, 1, NUMBERS);
 	put_placement(NUMBERS + WEAPON_HUD_ELEMENT_OFFSET, TRUE);
 	put_block(WEAPON_HUD + WEAPON_HUD_CROSSHAIRS_OFFSET, 1, CROSSHAIRS);
@@ -355,6 +385,40 @@ int main(int argc, char **argv)
 		load("zanzibar", 0xCD2FC615);
 		ce_hud_tags_unloaded();
 		CHECK(!ce_hud_overlays_blocked(), "after the map is unloaded");
+		load("bigass", 0x9420C88A);
+		CHECK(ce_hud_gearbox_meters(), "bigass: Gearbox's meters");
+		load("some map", 0x12345678);
+		CHECK(!ce_hud_gearbox_meters(), "another map: Gearbox's meters");
+		return 0;
+	}
+	/* a meter bitmap whose group a static draws too: not a Halo PC meter's
+	texture, a mixed one (its meters' draws sample it so); one of a group of
+	its own a meter's; none of either once the map is unloaded */
+	CASE("mixed-meters")
+	{
+		load("some map", 0x12345678);
+		CHECK(!ce_hud_bitmap_is_meter(at(BITMAP_PLAIN + GROUP_BITMAP)) &&
+			ce_hud_bitmap_is_mixed_meter(at(BITMAP_PLAIN + GROUP_BITMAP)), "the plain bitmap: %d, %d",
+			ce_hud_bitmap_is_meter(at(BITMAP_PLAIN + GROUP_BITMAP)),
+			ce_hud_bitmap_is_mixed_meter(at(BITMAP_PLAIN + GROUP_BITMAP)));
+		CHECK(ce_hud_bitmap_is_meter(at(BITMAP_METER + GROUP_BITMAP)) &&
+			!ce_hud_bitmap_is_mixed_meter(at(BITMAP_METER + GROUP_BITMAP)), "the meter's own bitmap");
+		CHECK(ce_hud_bitmap_is_meter(at(BITMAP_WIPS + GROUP_BITMAP)), "the sheet on another map");
+		ce_hud_tags_unloaded();
+		CHECK(!ce_hud_bitmap_is_mixed_meter(at(BITMAP_PLAIN + GROUP_BITMAP)) &&
+			!ce_hud_bitmap_is_meter(at(BITMAP_METER + GROUP_BITMAP)), "after the map is unloaded");
+		return 0;
+	}
+	/* xbox_ammo_meter_channels (bigass_open_v1.1, by name and checksum): its
+	sheet keeps its channels, the other meters as on any map */
+	CASE("xbox-ammo-meters")
+	{
+		load("bigass_open_v1.1", 0xD2BC19F7);
+		CHECK(!ce_hud_bitmap_is_meter(at(BITMAP_WIPS + GROUP_BITMAP)) &&
+			!ce_hud_bitmap_is_mixed_meter(at(BITMAP_WIPS + GROUP_BITMAP)), "Bigass Open's sheet");
+		CHECK(ce_hud_bitmap_is_meter(at(BITMAP_METER + GROUP_BITMAP)), "another meter");
+		load("bigass_open_v1.1", 0xD2BC19F8);
+		CHECK(ce_hud_bitmap_is_meter(at(BITMAP_WIPS + GROUP_BITMAP)), "another checksum");
 		return 0;
 	}
 

@@ -110,6 +110,14 @@ short network_game_client_get_machine_index(
 /* port: the joined game's host's network version (0xFFFF: not known) */
 unsigned int network_game_client_host_network_version(
 	void);
+/* port: the joined game's host's network version as it announced it,
+whatever its Delta wire (0xFFFF: not known), and whether the host is known
+to be of a version before this one (what a client converts of an older
+host's) */
+unsigned int network_game_client_host_announced_version(
+	void);
+boolean network_game_client_host_before(
+	unsigned int version);
 boolean network_game_client_advertised_game_is_valid(
 	struct network_advertised_game *advertised_game);
 struct network_advertised_game *network_game_client_get_available_games(

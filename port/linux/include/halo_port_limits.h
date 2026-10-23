@@ -85,14 +85,20 @@ machines, 16 players) are 0x226 and 0x434. */
 #define HALO_PORT_NETWORK_GAME_PLAYERS_END \
 	(HALO_PORT_NETWORK_GAME_PLAYERS_OFFSET + HALO_PORT_MAXIMUM_NETWORK_PLAYERS * HALO_PORT_NETWORK_PLAYER_SIZE)
 #define HALO_PORT_NETWORK_GAME_RANDOM_SEED_OFFSET (HALO_PORT_NETWORK_GAME_PLAYERS_END + 2)
-/* (then the gametype's PC options, struct game_variant_options: 0x1C bytes) */
+/* (then the gametype's PC options, struct game_variant_options: 0x2C bytes) */
 #define HALO_PORT_NETWORK_GAME_VARIANT_OPTIONS_OFFSET (HALO_PORT_NETWORK_GAME_PLAYERS_END + 0xA)
-#define HALO_PORT_NETWORK_GAME_LOCAL_DATA_OFFSET (HALO_PORT_NETWORK_GAME_PLAYERS_END + 0x26)
-#define HALO_PORT_NETWORK_GAME_SIZE (HALO_PORT_NETWORK_GAME_PLAYERS_END + 0x2A)
-/* ... at the network's slots (13,120 bytes) */
+#define HALO_PORT_NETWORK_GAME_LOCAL_DATA_OFFSET (HALO_PORT_NETWORK_GAME_PLAYERS_END + 0x36)
+#define HALO_PORT_NETWORK_GAME_SIZE (HALO_PORT_NETWORK_GAME_PLAYERS_END + 0x3A)
+/* ... at the network's slots (13,136 bytes) */
 #define HALO_PORT_WIRE_NETWORK_GAME_SIZE (HALO_PORT_NETWORK_GAME_MACHINES_OFFSET + \
 	HALO_PORT_WIRE_NETWORK_MACHINES * HALO_PORT_NETWORK_MACHINE_SIZE + 2 + \
-	HALO_PORT_WIRE_NETWORK_PLAYERS * HALO_PORT_NETWORK_PLAYER_SIZE + 0x2A)
+	HALO_PORT_WIRE_NETWORK_PLAYERS * HALO_PORT_NETWORK_PLAYER_SIZE + 0x3A)
+/* ... and a host's of network versions 11 to 34, whose PC options were their
+first 0x1C bytes (game_engine.h's GAME_VARIANT_OPTIONS_V1_SIZE): its record
+is 16 bytes shorter (13,120 at the network's slots), which a client of such a
+host widens to this one as it arrives (network_game_layout_from_version,
+network_client_message_handler.c) */
+#define HALO_PORT_LEGACY_OPTIONS_SHORTFALL 0x10
 
 /* ---------- system link protocol
 
@@ -109,7 +115,7 @@ is newer (network_client_manager.c). A host advertises it, with its netcode,
 in its game's advertisement's reserved bytes (network_server_message_handler.c),
 which hosts built before there was a version send as zeros: version 0.
 Raise it with any change to what the machines send each other. */
-#define HALO_PORT_NETWORK_VERSION 32
+#define HALO_PORT_NETWORK_VERSION 36
 /* ... the versions whose hosts a client joins: its own, and those that differ
 from it only in what the other machines leave out (a message a machine of
 the other version does not know it drops). Which are which is delta.h's
@@ -121,12 +127,23 @@ here, which the command repository reads). A host
 never checks a client's version: the client does (network_client_manager.c),
 so the range is the client's. */
 #define HALO_PORT_NETWORK_VERSION_MINIMUM 11
-#define HALO_PORT_NETWORK_VERSION_MAXIMUM 33
+#define HALO_PORT_NETWORK_VERSION_MAXIMUM 37
 /* ... the numbers in use (port/linux/src/delta.c): the three above, until a
 legacy table (docs/delta.md) widens them; code asks these, not the numbers */
 int delta_legacy_announce(void);
 int delta_legacy_minimum(void);
 int delta_legacy_maximum(void);
+/* ... what a client converts of an older host's (keyed on network_game_client_
+host_network_version, network_client_manager.c; a host not known is taken
+for this build's): before 33, no ALLY FRIENDLY FIRE bit in the game settings'
+cooperative_flags (on, as the campaign has it); before 34, the scenery and
+devices whose shield alone damage breaks are not static targets
+(network_damage.c); before 35, the game settings record's shorter PC options
+(no OpenCE gametype); before 36, no shield effects message (the stock ones) */
+#define HALO_PORT_ALLY_FRIENDLY_FIRE_NETWORK_VERSION 33
+#define HALO_PORT_SHIELD_TARGETS_NETWORK_VERSION 34
+#define HALO_PORT_GAME_MODES_NETWORK_VERSION 35
+#define HALO_PORT_SHIELD_EFFECTS_NETWORK_VERSION 36
 /* ... the advertisement's reserved bytes: the version (a little-endian word),
 then flags */
 #define HALO_PORT_ADVERTISED_VERSION_OFFSET 0
@@ -146,7 +163,7 @@ header included; the per-tick update of 128 players is 3,857 */
 update of 128 players decodes to 0x1010 bytes */
 #define HALO_PORT_NETWORK_PACKET_SIZE 0x1100
 
-/* the game settings record (HALO_PORT_NETWORK_GAME_SIZE, 13,120 bytes at 128
+/* the game settings record (HALO_PORT_NETWORK_GAME_SIZE, 13,136 bytes at 128
 machines and players) does not fit one message; it is sent in pieces of
 this many bytes (4 pieces), each 3,594 bytes on the wire */
 #define HALO_PORT_NETWORK_GAME_SETTINGS_FRAGMENT_SIZE 0xE00

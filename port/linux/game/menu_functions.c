@@ -96,6 +96,7 @@ their handlers open opens.
 #include "text/unicode.h"
 
 #include "halo_menus.h"
+#include "game_modes.h"
 /* (internet play's server browser: the platform layer's) */
 #include "../src/p2p.h"
 #include "../src/controller_layout.h"
@@ -3852,6 +3853,7 @@ boolean ui_widget_port_unjoin_player(struct widget_instance *widget, struct even
 void network_game_server_port_set_settings(wchar_t const *name, long maximum_players);
 void network_game_server_port_set_cooperative_friendly_fire(short friendly_fire);
 void network_game_server_port_set_cooperative_player_collisions(boolean player_collisions);
+void network_game_server_port_set_cooperative_ally_friendly_fire(boolean ally_friendly_fire);
 void *global_network_game_client_get(void);
 void *global_network_game_server_get(void);
 boolean network_game_is_splitscreen_local(void);
@@ -3866,6 +3868,7 @@ short network_game_client_get_seconds_to_game_start(void *client);
 boolean network_player_is_valid(struct network_player *player);
 boolean playlist_profile_get(long index, struct game_variant *variant);
 boolean playlist_profile_get_display_name(long index, wchar_t *name);
+boolean playlist_profile_get_options(long index, struct game_variant_options *options);
 boolean input_get_key(struct key_stroke *key);
 boolean game_engine_running(void);
 void game_engine_end_game(void);
@@ -3928,7 +3931,7 @@ static struct
 	/* Create Game's gametype list */
 	long gametypes[MAXIMUM_GAMETYPES];
 	short gametype_count;
-	/* (those of the bank the list's spinner shows: STANDARD, CUSTOM) */
+	/* (those of the bank the list's spinner shows: STANDARD, OPENCE, CUSTOM) */
 	short bank[MAXIMUM_GAMETYPES], bank_count, bank_shown;
 	short gametype_first, gametype_chosen;
 	/* the server settings */
@@ -4324,8 +4327,33 @@ static void gametype_setup_end(void);
 static boolean gametype_setup_apply(void);
 static void gametype_setup_type(wchar_t *text);
 
-/* ---- the gametype list: its spinner's bank (STANDARD: the built-in ones,
-CUSTOM: those saved) in its first row, then the bank's gametypes */
+/* ---- the gametype list: its spinner's bank (STANDARD: the Xbox's built-in
+ones, OPENCE: OpenCE's built-in ones, game_modes.c, CUSTOM: those saved) in
+its first row, then the bank's gametypes */
+
+enum
+{
+	GAMETYPE_BANK_STANDARD = 0,
+	GAMETYPE_BANK_OPENCE,
+	GAMETYPE_BANK_CUSTOM,
+	NUMBER_OF_GAMETYPE_BANKS
+};
+
+/* a gametype's bank */
+static short gametype_bank(long profile_index)
+{
+	struct game_variant variant;
+	struct game_variant_options options;
+
+	if (!((unsigned long)profile_index & PLAYLIST_READ_ONLY_BIT))
+		return GAMETYPE_BANK_CUSTOM;
+	if (playlist_profile_get(profile_index, &variant) && playlist_profile_get_options(profile_index, &options) &&
+		game_modes_variant_is_opence(&variant, &options))
+	{
+		return GAMETYPE_BANK_OPENCE;
+	}
+	return GAMETYPE_BANK_STANDARD;
+}
 
 static void gametype_bank_read(short bank)
 {
@@ -4335,13 +4363,45 @@ static void gametype_bank_read(short bank)
 	multiplayer.bank_count = 0;
 	for (index = 0; index < multiplayer.gametype_count; index++)
 	{
-		boolean standard = ((unsigned long)multiplayer.gametypes[index] & PLAYLIST_READ_ONLY_BIT) != 0;
-
-		if (standard == (bank == 0))
+		if (gametype_bank(multiplayer.gametypes[index]) == bank)
 			multiplayer.bank[multiplayer.bank_count++] = index;
 	}
 	multiplayer.gametype_first = 0;
 	multiplayer.gametype_chosen = 0;
+}
+
+/* a gametype's kind and rules, for the description beside a list: its game
+engine's name (or its OpenCE gametype's), teams, and what wins */
+static void gametype_rules_text(long profile_index, wchar_t *text, short size)
+{
+	struct game_variant variant;
+	struct game_variant_options options;
+	wchar_t const *kind;
+
+	text[0] = 0;
+	if (!playlist_profile_get(profile_index, &variant))
+		return;
+	if (!playlist_profile_get_options(profile_index, &options))
+		game_variant_options_default(&variant, &options);
+	kind = game_modes_variant_kind_name(&variant, &options);
+	switch (game_modes_variant_mode(&variant, &options))
+	{
+	case _game_mode_infection:
+		if (options.time_limit > 0)
+			usnprintf(text, size - 1, L"%s\r\nTeams\r\nRound time: %d min", kind, options.time_limit);
+		else
+			usnprintf(text, size - 1, L"%s\r\nTeams\r\nUntil no human is left", kind);
+		break;
+	case _game_mode_gun_game:
+		usnprintf(text, size - 1, L"%s\r\nFree for all\r\nA kill with each weapon", kind);
+		break;
+	default:
+		usnprintf(text, size - 1, L"%s\r\n%s\r\nScore to win: %ld",
+			kind ? kind : ENGINE_NAME(variant.game_engine_index),
+			variant.universal_variant.teams ? L"Teams" : L"Free for all", variant.universal_variant.score_to_win);
+		break;
+	}
+	text[size - 1] = 0;
 }
 
 /* "mp profiles list initialize": on the gametype used last */
@@ -4351,8 +4411,7 @@ static boolean gametype_list_initialize(struct widget_instance *list)
 	short last, index;
 
 	multiplayer.gametype_count = ui_widget_port_gametypes(multiplayer.gametypes, MAXIMUM_GAMETYPES, &last);
-	gametype_bank_read(multiplayer.gametype_count && !((unsigned long)multiplayer.gametypes[last] &
-		PLAYLIST_READ_ONLY_BIT) ? 1 : 0);
+	gametype_bank_read(multiplayer.gametype_count ? gametype_bank(multiplayer.gametypes[last]) : GAMETYPE_BANK_STANDARD);
 	for (index = 0; index < multiplayer.bank_count; index++)
 	{
 		if (multiplayer.bank[index] == last)
@@ -4398,7 +4457,7 @@ static void gametype_list_update(struct widget_instance *list)
 	short row_index = 0, focused = NONE, count;
 
 	if (spinner && spinner->parameters.list.selected_index != multiplayer.bank_shown)
-		gametype_bank_read(spinner->parameters.list.selected_index);
+		gametype_bank_read((short)PIN(spinner->parameters.list.selected_index, 0, NUMBER_OF_GAMETYPE_BANKS - 1));
 	count = (short)MIN(multiplayer.bank_count, GAMETYPE_ROWS);
 	/* (the rows after the spinner's: scrolled as list_scroll does) */
 	for (row = list->child; row; row = row->next, row_index++)
@@ -4454,9 +4513,8 @@ static void gametype_list_update(struct widget_instance *list)
 			if ((widget = named(description, "gametype_right_pic", 0)) != NULL)
 				widget->animation.current_frame_index = (short)(engine == game_engine_bomb ? game_engine_oddball :
 					engine <= 5 ? engine : 0);
-			usnprintf(text, NUMBEROF(text) - 1, L"%s\r\n%s\r\nScore to win: %ld", engine_names[engine],
-				variant.universal_variant.teams ? L"Teams" : L"Free for all", variant.universal_variant.score_to_win);
-			text[NUMBEROF(text) - 1] = 0;
+			gametype_rules_text(multiplayer.gametypes[multiplayer.bank[multiplayer.gametype_chosen]], text,
+				NUMBEROF(text));
 			text_set(named(description, "gametype_right_data", 0), text);
 		}
 	}
@@ -4798,8 +4856,8 @@ static boolean server_start(void)
 	if (hosting_cooperative())
 	{
 		/* (as CO-OP OPTIONS left them: network.coop_friendly_fire, in
-		cooperative_friendly_fire_modes' order, and
-		network.coop_player_collisions) */
+		cooperative_friendly_fire_modes' order, network.coop_player_collisions
+		and network.coop_ally_friendly_fire) */
 		static char const *const friendly_fire_names[] = { "off", "on", "shields_only", "explosives_only" };
 		char const *friendly_fire = config_string("network.coop_friendly_fire");
 		short index;
@@ -4814,6 +4872,7 @@ static boolean server_start(void)
 		multiplayer.cooperative_no_player_collisions = !config_boolean("network.coop_player_collisions");
 		network_game_server_port_set_cooperative_friendly_fire(multiplayer.cooperative_friendly_fire);
 		network_game_server_port_set_cooperative_player_collisions(!multiplayer.cooperative_no_player_collisions);
+		network_game_server_port_set_cooperative_ally_friendly_fire(config_boolean("network.coop_ally_friendly_fire"));
 	}
 	else if (!gametype_setup_apply())
 		return campaign_fail();
@@ -7286,11 +7345,14 @@ static void lobby_update(struct widget_instance *list)
 		short seconds = network_game_client_get_seconds_to_game_start(client);
 		char link[TEXT_FIELD_LENGTH];
 		wchar_t gametype[NUMBEROF(game->variant.human_readable_game_description) + 1];
+		/* (an OpenCE gametype's kind: game_modes.c) */
+		wchar_t const *kind = game_modes_variant_kind_name(&game->variant, &game->variant_options);
 
 		ustrncpy(gametype, game->variant.human_readable_game_description, NUMBEROF(gametype) - 1);
 		gametype[NUMBEROF(gametype) - 1] = 0;
 		usnprintf(text, NUMBEROF(text) - 1, L"%s\r\n%s\r\n%d of %d players\r\n\r\n%s", gametype,
-			ENGINE_NAME(game->variant.game_engine_index), lobby_player_count, game->maximum_players,
+			kind ? kind : ENGINE_NAME(game->variant.game_engine_index), lobby_player_count,
+			game->maximum_players,
 			seconds > 0 ? L"Starting in:" :
 				game->machine_count < 2 && !network_game_solo_game() ? L"Waiting for players" : L"");
 		text[NUMBEROF(text) - 1] = 0;
@@ -7536,6 +7598,20 @@ struct gametype_option
 
 static struct gametype_option const gametype_options[] =
 {
+	/* OPENCE OPTIONS (OpenCE's gametypes: game_modes.c) */
+	{ "oce_mode_spinner", _option_option_byte, OPTIONS_FIELD(mode), 0, 4,
+		{ _game_mode_none, _game_mode_swat, _game_mode_infection, _game_mode_gun_game } },
+	{ "oce_hardcore_spinner", _option_option_byte, OPTIONS_FIELD(hardcore), 0, 2, { FALSE, TRUE } },
+	{ "inf_zombies_spinner", _option_option_byte, OPTIONS_FIELD(infection_initial_zombies), 0, 6, { 1, 2, 3, 4, 8, 16 } },
+	{ "inf_speed_spinner", _option_option_byte, OPTIONS_FIELD(infection_zombie_speed), 0, 6,
+		{ 100, 110, 125, 150, 175, 200 } },
+	{ "inf_damage_spinner", _option_option_byte, OPTIONS_FIELD(infection_skull_damage), 0, 4, { 100, 150, 200, 250 } },
+	{ "inf_respawn_spinner", _option_option_byte, OPTIONS_FIELD(infection_respawn_time), 0, 6, { 1, 3, 5, 10, 15, 30 } },
+	{ "inf_countdown_spinner", _option_option_byte, OPTIONS_FIELD(infection_countdown), 0, 5, { 0, 5, 10, 15, 30 } },
+	{ "inf_shields_spinner", _option_option_byte, OPTIONS_FIELD(infection_zombie_shields), 0, 2, { FALSE, TRUE } },
+	{ "gg_order_spinner", _option_option_byte, OPTIONS_FIELD(gun_game_order), 0, 3,
+		{ _gun_game_order_strongest_first, _gun_game_order_weakest_first, _gun_game_order_random } },
+	{ "gg_melee_spinner", _option_option_byte, OPTIONS_FIELD(gun_game_melee_demotes), 0, 2, { FALSE, TRUE } },
 	/* player options */
 	{ "number_of_lives_spinner", _option_long, VARIANT_FIELD(universal_variant.lives), 0, 4, { 0, 1, 3, 5 } },
 	{ "maximum_health_spinner", _option_health, 0, 0, 6, { 5, 10, 15, 20, 30, 40 } },
@@ -7633,6 +7709,9 @@ static struct gametype_option const gametype_options[] =
 	/* (and the text chat: port/linux/game/network_chat.c) */
 	{ "text_chat_spinner", _option_setting, 0, 0, 3, { 0 }, "network.text_chat", { "on", "links", "off" } },
 	{ "aim_assist_spinner", _option_setting, 0, 0, 2, { 0 }, "network.block_mouse_aim_assist", { "false", "true" } },
+	/* (the shield effects every machine draws: network_shield_effects.c) */
+	{ "shield_effects_spinner", _option_setting, 0, 0, 6, { 0 }, "network.shield_effects",
+		{ "stock", "glow", "light_show", "overshield", "glow_overshield", "light_show_overshield" } },
 	/* co-op's options (Server Setup's CO-OP OPTIONS: tools/port_settings.py's
 	COOP_SETUP_SCREENS; coop_enemies.c) */
 	{ "coop_friendly_fire_spinner", _option_setting, 0, 0, 4, { 0 }, "network.coop_friendly_fire",
@@ -7648,6 +7727,8 @@ static struct gametype_option const gametype_options[] =
 	{ "coop_enemies_multiplier_spinner", _option_setting, 0, 0, 5, { 0 }, "network.coop_enemies_multiplier",
 		{ "2", "4", "8", "16", "32" } },
 	{ "coop_player_collisions_spinner", _option_setting, 0, 0, 2, { 0 }, "network.coop_player_collisions",
+		{ "true", "false" } },
+	{ "coop_ally_friendly_fire_spinner", _option_setting, 0, 0, 2, { 0 }, "network.coop_ally_friendly_fire",
 		{ "true", "false" } },
 	/* map sharing's (Server Setup's MAP SHARING: tools/port_settings.py's
 	MAP_SHARE_SETUP; map_share.c) */
@@ -8004,6 +8085,15 @@ static boolean gametype_options_save(struct widget_instance *widget)
 	if (named(list, "op_team", 0))
 		vehicles_keep(list);
 	gametype_options_each(list, TRUE);
+	/* (OPENCE OPTIONS: Infection is played on teams, Gun Game free for all:
+	game_modes_variant_mode) */
+	if (named(list, "oce_mode_spinner", 0) && edit_variant()->game_engine_index == game_engine_slayer)
+	{
+		if (edit_options()->mode == _game_mode_infection)
+			edit_variant()->universal_variant.teams = TRUE;
+		else if (edit_options()->mode == _game_mode_gun_game)
+			edit_variant()->universal_variant.teams = FALSE;
+	}
 	return TRUE;
 }
 
@@ -8039,14 +8129,16 @@ static boolean gametype_setup_apply(void)
 static void gametype_setup_type(wchar_t *text)
 {
 	wchar_t name[NUMBEROF(gametype_edit.setup_variant.human_readable_game_description) + 1];
+	wchar_t const *kind;
 
 	text[0] = 0;
 	if (!gametype_edit.setup)
 		return;
 	ustrncpy(name, gametype_edit.setup_variant.human_readable_game_description, NUMBEROF(name) - 1);
 	name[NUMBEROF(name) - 1] = 0;
+	kind = game_modes_variant_kind_name(&gametype_edit.setup_variant, &gametype_edit.setup_options);
 	usnprintf(text, ROW_TEXT_LENGTH - 1, L"%s (%s%s)", name,
-		ENGINE_NAME(gametype_edit.setup_variant.game_engine_index),
+		kind ? kind : ENGINE_NAME(gametype_edit.setup_variant.game_engine_index),
 		gametype_edit.setup_variant.universal_variant.teams ? L", TEAMS" : L"");
 	text[ROW_TEXT_LENGTH - 1] = 0;
 }
@@ -8122,13 +8214,32 @@ static void gametype_edit_list_update(struct widget_instance *list)
 			if ((widget = named(description, "gametype_right_pic", 0)) != NULL)
 				widget->animation.current_frame_index = (short)(engine == game_engine_bomb ? game_engine_oddball :
 					engine <= 5 ? engine : 0);
-			usnprintf(text, NUMBEROF(text) - 1, L"%s\r\n%s\r\nScore to win: %ld", engine_names[engine],
-				variant.universal_variant.teams ? L"Teams" : L"Free for all", variant.universal_variant.score_to_win);
-			text[NUMBEROF(text) - 1] = 0;
+			gametype_rules_text(profile_index, text, NUMBEROF(text));
 			text_set(named(description, "gametype_right_data", 0), text);
 		}
 	}
 	profile_name_show(description);
+}
+
+/* "port playlist edit desc" (after the PC version's "playlist settings menu
+update desc"): the gametype editor's OPENCE OPTIONS, its eighth row, has its
+own words (the list's ninth) over GAME OPTIONS' picture, and the buttons
+after it SAVE CHANGES' */
+#define PLAYLIST_EDIT_OPENCE_ROW 7
+#define PLAYLIST_EDIT_OPENCE_WORDS 8
+#define PLAYLIST_EDIT_GAME_OPTIONS_PICTURE 1
+
+static void playlist_edit_description(struct widget_instance *list)
+{
+	struct widget_instance *description = list->parameters.list.extended_description;
+	short index = list->focused_child ? ui_widget_port_list_index(list) : NONE;
+
+	if (!description || !description->child || !description->child->next || index < PLAYLIST_EDIT_OPENCE_ROW)
+		return;
+	description->child->parameters.text_box.string_list_index =
+		index == PLAYLIST_EDIT_OPENCE_ROW ? PLAYLIST_EDIT_OPENCE_WORDS : (short)(index - 1);
+	description->child->next->animation.current_frame_index =
+		index == PLAYLIST_EDIT_OPENCE_ROW ? PLAYLIST_EDIT_GAME_OPTIONS_PICTURE : (short)(index - 1);
 }
 
 /* "mp profile begin editing" (the list's custom activation: OK, a row's A) */
@@ -8196,6 +8307,27 @@ static void gametype_option_help(struct widget_instance *list)
 		visible_set(named(list, "op_weapon_set", 0), !custom);
 		visible_set(named(list, "op_primary_weapon", 0), custom);
 		visible_set(named(list, "op_secondary_weapon", 0), custom);
+	}
+	/* (OPENCE OPTIONS: the mode's own rows, Infection's or Gun Game's, below
+	MODE and HARDCORE) */
+	if (named(list, "oce_mode_spinner", 0))
+	{
+		short mode = named(list, "oce_mode_spinner", 0)->parameters.list.selected_index;
+		short place = 73 + 2 * 30;
+
+		for (row = list->child; row; row = row->next)
+		{
+			boolean infection = !strncmp(row->name, "op_inf_", 7);
+
+			if (!infection && strncmp(row->name, "op_gg_", 6))
+				continue;
+			row->visible = infection ? mode == _game_mode_infection : mode == _game_mode_gun_game;
+			if (row->visible)
+			{
+				row->vertical_offset = place;
+				place += 30;
+			}
+		}
 	}
 	/* (TEXT CHAT held at OFF while the game is listed: text_chat_locked) */
 	if (named(list, TEXT_CHAT_SPINNER, 0) && p2p_hosting_listed())
@@ -8323,7 +8455,8 @@ name, its most players, its listing and password (Server Setup's, shared
 with it), the internet play port, the game type (left and right choose
 another, Y or A edits it), and the host's rules of config.toml
 (network.team_change and its margin, network.chat_filter,
-network.block_mouse_aim_assist), written as START GAME (A) opens the lobby.
+network.block_mouse_aim_assist, network.shield_effects), written as START
+GAME (A) opens the lobby.
 The host's rules are a nested list, as the settings screens' are: HOST
 RULES opens it, and B goes back out of it. B leaves them as they were.
 
@@ -8352,6 +8485,15 @@ gametype's choice did) */
 /* the internet play ports offered (0: the game picks one), and the one set */
 static long const host_ports[] = { 0, 2302, 2303, 2304, 2305, 2306, 2307, 2308, 2309, 2310 };
 static char const *const host_team_changes[] = { "balanced", "allow", "off" };
+/* network.shield_effects' words (network_shield_effects.c), and their names */
+static char const *const host_shield_effects[] =
+{
+	"stock", "glow", "light_show", "overshield", "glow_overshield", "light_show_overshield"
+};
+static wchar_t const *const host_shield_effect_names[NUMBEROF(host_shield_effects)] =
+{
+	L"STOCK", L"GLOW", L"LIGHT SHOW", L"OVERSHIELD", L"GLOW+OVERSHIELD", L"SHOW+OVERSHIELD"
+};
 
 enum
 {
@@ -8365,7 +8507,8 @@ enum
 	_host_row_team_change_margin,
 	_host_row_chat_filter,
 	_host_row_aim_assist,
-	/* (the row that opens the host's rules, the four above) */
+	_host_row_shield_effects,
+	/* (the row that opens the host's rules, the five above) */
 	_host_row_rules,
 	_host_row_start,
 	NUMBER_OF_HOST_ROWS
@@ -8374,7 +8517,8 @@ enum
 static wchar_t const *const host_row_labels[NUMBER_OF_HOST_ROWS] =
 {
 	L"GAME NAME:", L"MAX PLAYERS:", L"PUBLIC LOBBY:", L"PASSWORD:", L"PORT:", L"GAME TYPE:", L"TEAM SWITCHING:",
-	L"TEAM SWITCH MARGIN:", L"CHAT FILTER:", L"MOUSE AIM ASSIST:", L"HOST RULES", L"START GAME",
+	L"TEAM SWITCH MARGIN:", L"CHAT FILTER:", L"MOUSE AIM ASSIST:", L"SHIELD EFFECTS:", L"HOST RULES",
+	L"START GAME",
 };
 
 /* the editor's pages, by their screens' names */
@@ -8403,6 +8547,7 @@ static struct
 	short team_change_margin;
 	boolean chat_filter;
 	boolean block_aim_assist;
+	short shield_effects;
 	long port;
 	/* the rows shown, in their places */
 	short rows[64];
@@ -8422,7 +8567,7 @@ static struct
 	struct game_variant base_variant;
 	struct game_variant_options base_options;
 #endif
-} host_setup = { NULL, 0, 1, TRUE, FALSE, 0, { 0 }, 0, 0, 0, { 0 }, 0 };
+} host_setup = { NULL, 0, 1, TRUE, FALSE, 0, 0, { 0 }, 0, 0, 0, { 0 }, 0 };
 
 long config_integer(char const *name);
 
@@ -8484,6 +8629,15 @@ static void host_setup_read(void)
 	host_setup.team_change_margin = (short)PIN(config_integer("network.team_change_margin"), 0, 16);
 	host_setup.chat_filter = config_boolean("network.chat_filter") != 0;
 	host_setup.block_aim_assist = config_boolean("network.block_mouse_aim_assist") != 0;
+	host_setup.shield_effects = 0;
+	if (config_text("network.shield_effects", text, sizeof(text)))
+	{
+		for (index = 0; index < NUMBEROF(host_shield_effects); index++)
+		{
+			if (!strcmp(text, host_shield_effects[index]))
+				host_setup.shield_effects = index;
+		}
+	}
 	host_setup.port = PIN(config_integer("network.tunnel_port"), 0, 65535);
 }
 
@@ -8496,7 +8650,7 @@ static boolean host_listing_shown(void)
 /* whether a row is one of the host's rules (HOST RULES' nested list) */
 static boolean host_rules_row(short row)
 {
-	return row >= _host_row_team_change && row <= _host_row_aim_assist;
+	return row >= _host_row_team_change && row <= _host_row_shield_effects;
 }
 
 static void host_setup_rows(void)
@@ -8579,6 +8733,10 @@ static boolean host_setup_value(short row, wchar_t *text)
 	case _host_row_aim_assist:
 		ustrncpy(text, host_setup.block_aim_assist ? L"BLOCKED" : L"ALLOWED", ROW_TEXT_LENGTH - 1);
 		return TRUE;
+	case _host_row_shield_effects:
+		ustrncpy(text, host_shield_effect_names[PIN(host_setup.shield_effects, 0,
+			(short)NUMBEROF(host_shield_effects) - 1)], ROW_TEXT_LENGTH - 1);
+		return TRUE;
 	case _host_row_name:
 		wide_to_text(multiplayer.game_name, ascii, sizeof(ascii));
 		for (index = 0; ascii[index] && index < ROW_TEXT_LENGTH - 1; index++)
@@ -8617,8 +8775,11 @@ static wchar_t const *host_setup_help(short row)
 	case _host_row_aim_assist:
 		return host_setup.block_aim_assist ? L"Aim assist is off for mouse players." :
 			L"Each player's own aim assist setting decides.";
+	case _host_row_shield_effects:
+		return host_setup.shield_effects ? L"The shield effects every player sees, whatever their own." :
+			L"Everyone sees the stock game's shields.";
 	case _host_row_rules:
-		return L"Team switching, the chat filter and mouse aim assist.";
+		return L"Team switching, the chat filter, mouse aim assist and shield effects.";
 	case _host_row_start:
 		return L"Open the lobby.";
 	}
@@ -8672,6 +8833,9 @@ static boolean host_setup_change(short row, short direction)
 	case _host_row_aim_assist:
 		host_setup.block_aim_assist = !host_setup.block_aim_assist;
 		return TRUE;
+	case _host_row_shield_effects:
+		host_setup.shield_effects = host_step(host_setup.shield_effects, NUMBEROF(host_shield_effects), direction);
+		return TRUE;
 	}
 	return FALSE;
 }
@@ -8704,6 +8868,8 @@ static boolean host_setup_start(struct widget_instance *widget, boolean *widget_
 	host_write("network.team_change_margin", text);
 	host_write("network.chat_filter", host_setup.chat_filter ? "true" : "false");
 	host_write("network.block_mouse_aim_assist", host_setup.block_aim_assist ? "true" : "false");
+	host_write("network.shield_effects",
+		host_shield_effects[PIN(host_setup.shield_effects, 0, (short)NUMBEROF(host_shield_effects) - 1)]);
 	snprintf(text, sizeof(text), "%ld", host_setup.port);
 	host_write("network.tunnel_port", text);
 	ui_play_audio_feedback_sound(SOUND_FORWARD);
@@ -8730,6 +8896,15 @@ static void host_setup_defaults(void)
 	host_setup.chat_filter = !config_default("network.chat_filter", text, sizeof(text)) || !strcmp(text, "true");
 	host_setup.block_aim_assist = config_default("network.block_mouse_aim_assist", text, sizeof(text)) &&
 		!strcmp(text, "true");
+	host_setup.shield_effects = 0;
+	if (config_default("network.shield_effects", text, sizeof(text)))
+	{
+		for (index = 0; index < NUMBEROF(host_shield_effects); index++)
+		{
+			if (strstr(text, host_shield_effects[index]))
+				host_setup.shield_effects = index;
+		}
+	}
 	host_setup.port = config_default("network.tunnel_port", text, sizeof(text)) ? atol(text) : 0;
 	multiplayer.maximum_players_index = HOST_DEFAULT_MAXIMUM_PLAYERS_INDEX;
 	multiplayer.game_private = !config_boolean("network.host_public");
@@ -10550,4 +10725,6 @@ void pc_menu_game_data_function_invoke(
 		coop_friendly_fire_text(widget);
 	else if (!strcmp(name, "port host update"))
 		host_update(widget);
+	else if (!strcmp(name, "port playlist edit desc"))
+		playlist_edit_description(widget);
 }

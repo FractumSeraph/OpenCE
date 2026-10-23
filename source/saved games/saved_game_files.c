@@ -322,6 +322,7 @@ symbols in this file:
 #include "saved games/playlist_profile.h"
 #include "interface/player_ui.h"
 #include "text/text_group.h"
+#include "game_modes.h" /* port: port/linux/game/game_modes.c */
 #include "tag_files/tag_groups.h"
 /* the saved game file checksum is an XDK content signature, and enumerated
    saved game metadata is created/deleted through the XDK save game API. */
@@ -2258,7 +2259,8 @@ static short enumerate_default_playlist_profiles(
 	{
 		while (profile_index < number_of_profiles)
 		{
-			/* port: and the port's own built-ins' (playlist_profile.c) */
+			/* port: past the Xbox's, OpenCE's gametypes (game_modes.c) and the
+			port's own built-ins' (playlist_profile.c) */
 			wchar_t const *display_name = playlist_profile_default_name(profile_index, string_list_index);
 
 			_snprintf(path, MAXIMUM_FILENAME_LENGTH, "z:\\saved\\playlists\\default_playlist\\%02d\\blam.lst", profile_index);

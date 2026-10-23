@@ -272,6 +272,49 @@ host's chat settings), which Delta chat bridges (`docs/delta.md`, Chat): a
 build without them drops them as unknown, so they take no version of their
 own.
 
+Version 33 sends with the game's settings whether co-op's players hurt their
+AI allies (Server Setup's ALLY FRIENDLY FIRE, bit 1 of the record's
+`cooperative_flags`: the host then deals the players' hits of them no
+damage); version 34 takes clients' hits on, and sends the host's damage to,
+the map's scenery and devices whose shield is all damage can break (Rat
+Race's energy shields, a Custom Edition map's tripmines), which version 17
+left out as having no body to destroy, and has every machine run those
+shields' stun and recharge itself; and the host deals what such an object
+deals itself (its shield or body breaking: a tripmine a client's player
+threw going off under the host's vehicle), which a client no longer reports
+and the host took from no one. One made in the game, a tripmine, is at an
+index of its own on each machine: the host takes a client's hit on its copy
+as one on the host's nearest where the client had it, and a client the
+host's damage to one as damage to its own copy nearest the damage. Version
+35 sends with the game's settings the options of OpenCE's gametypes (SWAT,
+Infection, Gun Game and Hardcore: `port/linux/game/game_modes.c`), which make
+the gametype's PC options 0x2C bytes where they were 0x1C, and the game
+settings record 16 bytes longer (13,136 bytes at the network's slots); and in
+an Infection game the host sends its round in the game type's state (`struct
+distributed_infection_state`: each player's role and score, the round's
+phase and winner) in place of Slayer's, which each client checks whole
+before taking it; and version 36 sends the host's shield effects (distributed
+message 91, `network_shield_effects.c`: the shield glow, its Light Show reach
+and the overshield effect, Server Setup's SHIELD EFFECTS), which every client
+draws in place of its player's own, so that an OpenCE build that would draw
+its own cannot join.
+
+This fork's hosts send 36's (OpenCE's clients of 36 join them), and its
+clients still join hosts of 11 to 35, converting what differs by the host's
+version (`network_game_client_host_network_version`, from its advertisement;
+a host joined without one, by an invitation, is taken for 36's but for the
+record's size): a host before 35 sends the shorter game settings record,
+whose pieces' total size says so, and the client widens it as it arrives
+(`network_game_layout_from_version`, `network_client_message_handler.c`:
+the old 0x1C bytes of PC options kept, OpenCE's options zeroed, so no OpenCE
+gametype); a host before 33 has no ALLY FRIENDLY FIRE bit (cleared: on, as
+the campaign has it); a client of a host before 34 keeps that version's
+static targets, the scenery and devices damage can destroy alone
+(`network_damage.c`'s `static_target`), so it neither reports hits on
+shield-only scenery nor expects the host's damage to it, runs no shields of
+its own and reports its hits on a tripmine as before; and a host before 36
+sends no message 91, so its clients draw the stock shield effects.
+
 A host never checks a joining client's version: the client reads the
 host's from its advertisement and joins only a version it plays with. That
 is its own, or one of a range (HALO_PORT_NETWORK_VERSION_MINIMUM to

@@ -40,6 +40,20 @@ int hud_hires_sprites_drawable(long asset, unsigned long address, unsigned long 
 #include "text/draw_string.h"
 #include "hud_button_layout.h"
 #include "scenario/scenario_definitions.h"
+#include "cache/texture_cache.h"
+/* (HALO_ANDROID_CE_TEXTURES: the 32-bit Android guest's Custom Edition
+textures, android_ce_texture_cache.c) */
+#include "android_ce_texture_cache.h"
+
+static boolean hud_hires_bitmap_resident(struct bitmap_data const *bitmap)
+{
+#ifdef HALO_ANDROID_CE_TEXTURES
+	/* CE heap pixels have no Xbox LRU block. Query without touching their age. */
+	if (android_ce_texture_resident(bitmap))
+		return TRUE;
+#endif
+	return bitmap->cache_block_index != NONE;
+}
 
 /* the platform layer's (port/linux/src) */
 void platform_log(char const *format, ...);
@@ -50,6 +64,16 @@ long hud_hires_asset_count(void);
 char const *hud_hires_asset_tag(long asset);
 long hud_hires_asset_bitmap(long asset);
 long hud_hires_asset_fits(long asset, long width, long height);
+int hud_hires_asset_ce_only(long asset);
+long hud_hires_ce_stock_count_get(void);
+long hud_hires_ce_stock_find(char const *tag, long bitmap);
+char const *hud_hires_ce_stock_tag(long index);
+long hud_hires_ce_stock_bitmap(long index);
+int hud_hires_ce_stock_matches(long index, unsigned long address, long width, long height, unsigned long size);
+/* (cache_files.c: whether a Custom Edition map's tags are loaded, as
+OpenCE's custom_edition_cache_tags_loaded) */
+boolean cache_file_tags_are_ce(void);
+
 void hud_hires_map_loaded(const long *assets, long count);
 void hud_hires_map_unloaded(void);
 int hud_hires_asset_custom_edition(long asset);
@@ -78,8 +102,8 @@ static struct
 {
 	struct bitmap_data *bitmap;
 	long asset;
-	/* a Custom Edition map's stock bitmap of a layout the texture was made
-	for, whose pixels are its own: drawn without the pixels' check */
+	/* A compatible CE resource sheet: checked against CE's pixel signature
+	in the platform layer, rather than the Xbox signature. */
 	boolean stock_custom_edition;
 } hires_bitmaps[MAXIMUM_HIRES_BITMAPS];
 static long hires_bitmap_count = 0;
@@ -87,6 +111,8 @@ static long hires_bitmap_count = 0;
 /* Sheets without redraws: retain their original lettering and sprite layout. */
 static struct { struct bitmap_data *bitmap; long kind; } upscale_bitmaps[16];
 static long upscale_bitmap_count;
+static struct { struct bitmap_data *bitmap; long signature; } ce_stock_bitmaps[128];
+static long ce_stock_bitmap_count;
 
 /* the bitmaps some of whose sprites have a texture, with their placeholder,
 and whether the texture can be drawn for the pixels at checked_address
@@ -176,6 +202,25 @@ void hud_hires_tags_loaded(
 	hires_bitmap_count = 0;
 	hud_hires_sprite_bitmaps_forget();
 	upscale_bitmap_count = 0;
+	ce_stock_bitmap_count = 0;
+	/* (port, this fork: a Custom Edition map's tags, ChupathingyCE's loader's;
+	none of its HUD is drawn in high resolution, cache_files.c, so these
+	gates stand as OpenCE's for when it is) */
+	if (cache_file_tags_are_ce())
+	{
+		long index;
+		for (index = 0; index < hud_hires_ce_stock_count_get() && ce_stock_bitmap_count < NUMBEROF(ce_stock_bitmaps); index++)
+		{
+			long group = tag_loaded(BITMAP_GROUP_TAG, hud_hires_ce_stock_tag(index));
+			struct bitmap_data *bitmap = group == NONE ? NULL :
+				bitmap_group_try_and_get_bitmap(group, (short)hud_hires_ce_stock_bitmap(index));
+			if (bitmap && stock_custom_edition_tag(group))
+			{
+				ce_stock_bitmaps[ce_stock_bitmap_count].bitmap = bitmap;
+				ce_stock_bitmaps[ce_stock_bitmap_count++].signature = index;
+			}
+		}
+	}
 	{
 		static struct { char const *tag; short first, last; } const sheets[] = {
 			{ "ui\\hud\\bitmaps\\combined\\hud_unit_backgrounds", 8, 12 },
@@ -190,7 +235,8 @@ void hud_hires_tags_loaded(
 		{
 			long group = tag_loaded(BITMAP_GROUP_TAG, sheets[sheet].tag);
 
-			if (group == NONE)
+			/* CE's custom sheets must not enter the Xbox-only upscaler. */
+			if (group == NONE || cache_file_tags_are_ce())
 				continue;
 			for (index = sheets[sheet].first; index <= sheets[sheet].last; index++)
 			{
@@ -210,6 +256,14 @@ void hud_hires_tags_loaded(
 		long group_index = tag_loaded(BITMAP_GROUP_TAG, hud_hires_asset_tag(asset));
 		struct bitmap_data *bitmap = group_index == NONE ? NULL :
 			bitmap_group_try_and_get_bitmap(group_index, (short)hud_hires_asset_bitmap(asset));
+
+		/* Only the verified compatible resource sheets have CE redraws.
+		Embedded custom art keeps its own pixels, even under a stock name. */
+		if (cache_file_tags_are_ce() &&
+			(!hud_hires_asset_custom_edition(asset) || !stock_custom_edition_tag(group_index)))
+			continue;
+		if (!cache_file_tags_are_ce() && hud_hires_asset_ce_only(asset))
+			continue;
 
 		if (!bitmap)
 		{
@@ -265,6 +319,7 @@ void hud_hires_tags_unloaded(
 {
 	hires_bitmap_count = 0;
 	upscale_bitmap_count = 0;
+	ce_stock_bitmap_count = 0;
 	hud_hires_sprite_bitmaps_forget();
 	hud_hires_map_unloaded();
 
@@ -289,7 +344,7 @@ struct bitmap_data const *hud_hires_sprite_bitmap(
 			continue;
 		}
 		/* (checked on its pixels in the texture cache, once they are loaded) */
-		if (sprite_bitmap->cache_block_index == NONE || !sprite_bitmap->base_address)
+		if (!hud_hires_bitmap_resident(sprite_bitmap) || !sprite_bitmap->base_address)
 			break;
 		if (hires_sprite_bitmaps[index].checked_address != sprite_bitmap->base_address ||
 			hires_sprite_bitmaps[index].checked_at != config_changes())
@@ -352,7 +407,7 @@ long hud_hires_asset_stock_custom_edition(
 	{
 		struct bitmap_data *bitmap = hires_bitmaps[index].bitmap;
 
-		if (hires_bitmaps[index].asset == asset && bitmap->cache_block_index != NONE &&
+		if (hires_bitmaps[index].asset == asset && hud_hires_bitmap_resident(bitmap) &&
 			(unsigned long)bitmap->base_address == address && bitmap->width == width && bitmap->height == height)
 		{
 			return hires_bitmaps[index].stock_custom_edition;
@@ -373,7 +428,7 @@ long hud_hires_asset_at(
 	{
 		struct bitmap_data *bitmap = hires_bitmaps[index].bitmap;
 
-		if (bitmap->cache_block_index != NONE &&
+		if (hud_hires_bitmap_resident(bitmap) &&
 			(unsigned long)bitmap->base_address == address &&
 			bitmap->width == width &&
 			bitmap->height == height)
@@ -389,11 +444,21 @@ long hud_hires_upscale_at(unsigned long address, long width, long height)
 {
 	long index;
 
+	for (index = 0; index < ce_stock_bitmap_count; index++)
+	{
+		struct bitmap_data const *bitmap = ce_stock_bitmaps[index].bitmap;
+		if (hud_hires_bitmap_resident(bitmap) && (unsigned long)bitmap->base_address == address &&
+			bitmap->width == width && bitmap->height == height &&
+			hud_hires_ce_stock_matches(ce_stock_bitmaps[index].signature, address, width, height,
+				(unsigned long)bitmap_mipmap_get_pixel_data_size(bitmap, 0)))
+			return 4;
+	}
+
 	for (index = 0; index < upscale_bitmap_count; index++)
 	{
 		struct bitmap_data const *bitmap = upscale_bitmaps[index].bitmap;
 
-		if (bitmap->cache_block_index != NONE && (unsigned long)bitmap->base_address == address &&
+		if (hud_hires_bitmap_resident(bitmap) && (unsigned long)bitmap->base_address == address &&
 			bitmap->width == width && bitmap->height == height)
 			return upscale_bitmaps[index].kind;
 	}
@@ -402,7 +467,12 @@ long hud_hires_upscale_at(unsigned long address, long width, long height)
 
 /* Match the controller entry itself: weapon icons may reuse its sequence.
  * Draw the existing Xbox menu faces with straight alpha, independently of
- * the messaging sheet and its tint. Disabling the HUD keeps the map's art. */
+ * the messaging sheet and its tint. Disabling the HUD keeps the map's art.
+ * (port, this fork: a Custom Edition map's button icons are the Xbox's,
+ * which ChupathingyCE adds to its HUD from ui.map, ce_hud.c; OpenCE's
+ * stock-entry check and its controller faces read from a Custom Edition
+ * resource map with the high-res HUD off, custom_edition_hud_buttons.h, are
+ * left out for them) */
 boolean hud_hires_button_draw(struct icon_hud_element_definition const *icon,
 	rectangle2d *cursor, pixel32 color)
 {

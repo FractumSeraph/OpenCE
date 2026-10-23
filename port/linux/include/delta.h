@@ -211,7 +211,7 @@ legacy table (port/linux/src/delta.c; docs/delta.md, "The legacy table as
 config") has a row of OpenCE numbers for each wire, which CI adds to only
 after a cross-play test of that wire; a build reads its own wire's row alone.
 Give each release that changes what the machines send a new one. */
-#define DELTA_WIRE "chupa-32a"
+#define DELTA_WIRE "chupa-36a"
 
 /* Wire compatibility ranges: the oldest wire each one plays the game with,
 without a desync and without losing what the older wire has (a feature the
@@ -226,7 +226,17 @@ as released clients compare it for an exact match (delta_compat.h). */
 #define DELTA_WIRE_FIRST_ADVERTISED "chupa-29a"
 #define DELTA_WIRE_COMPATIBILITY(X) \
 	X("chupa-29a", "chupa-28a") /* maps by their own names: 29 also takes 28's hashed names and checksums */ \
-	X("chupa-32a", "chupa-28a") /* 30 to 32 are additive; a host of 32 plays with 28 to 31 (docs/delta.md) */
+	X("chupa-32a", "chupa-28a") /* 30 to 32 are additive; a host of 32 plays with 28 to 31 (docs/delta.md) */ \
+	X("chupa-36a", "chupa-28a") /* port (this fork): a client of 36 joins hosts of 28 to 35, reading their game settings as they send them (network_game_layout.c) */
+
+/* port (this fork): the oldest client wire a HOST of each wire takes, where
+that is newer than its row above: a wire may join older hosts, converting
+what they send, while its own hosts send what older clients cannot read
+(OpenCE's 35 lengthens the game settings record). A host advertises the
+newer of the two as its oldest, so such a client sees the game as newer and
+does not try it. */
+#define DELTA_WIRE_HOST_OLDEST(X) \
+	X("chupa-36a", "chupa-36a") /* the 35 game settings record: a 32a client fails on it mid-join */
 
 /* how many OpenCE numbers past the one announced (the newest this build, or
 the signed table, has proven) are presumed additive: a client joins their
@@ -273,7 +283,11 @@ command repository's watch adds a row when it follows OpenCE's raise
 	X(29, "build-206", additive) /* a Custom Edition map by its own name, its hash's first 32 bits its version in the game record (a client of 29 also takes 28's hashed names and header checksums; wire chupa-29a) */ \
 	X(30, "build-206", additive) /* elevator riders carried by the tick's own movement, a host takes only the across of a client's word on a unit riding an elevator (moving, or stood on at rest), a client discards the height of a correction on its elevator up to 4.0 */ \
 	X(31, "build-206", additive) /* the pregame keep-alive's fourth byte pair sent as zero and the packet table's field lists on their own messages, datagrams stamped more than 450 ticks from the sender's latest dropped, client_ready, client_identity and hit reports taken from a stream alone, a second game on one computer (its own port) */ \
-	X(32, "build-244", additive) /* the host's policy on aiming assist for the mouse and keyboard (message 90), a client's input saying whether its player plays co-op without friendly fire (wire chupa-32a) */
+	X(32, "build-244", additive) /* the host's policy on aiming assist for the mouse and keyboard (message 90), a client's input saying whether its player plays co-op without friendly fire (wire chupa-32a) */ \
+	X(33, "build-266", additive) /* co-op's ALLY FRIENDLY FIRE, bit 1 of the game settings' cooperative_flags (a client of an older host clears it: on) */ \
+	X(34, "build-266", additive) /* scenery and devices whose shield alone damage breaks shared, a static target's own damage the host's (a client of an older host keeps 33's static targets: network_damage.c) */ \
+	X(35, "build-266", additive) /* OpenCE's gametypes: the PC options 0x2C bytes, the game settings record 16 longer (a client widens an older host's: network_game_layout_from_version), Infection's game type state */ \
+	X(36, "build-266", additive) /* the host's shield effects (message 91; a client of an older host draws the stock ones) */
 
 /* ---------- the legacy table (port/linux/src/delta.c)
 

@@ -44,6 +44,13 @@ char const *pc_menus_screen(char const *name);
 /* debug.fixed_step: a game of this machine alone runs a tick a frame
 (port/linux/src/port_config.c; game_time.c, main.c) */
 int halo_fixed_step(void);
+/* a Custom Edition map's HUD meter drawn from a bitmap its HUD draws as
+artwork too, whose channels are kept as they are (not a Halo PC meter's
+swizzle: port/linux/game/ce_hud.c): set for that draw alone, which then
+samples the fill order from alpha and the shape from red (hud_draw.c;
+port/linux/src/xbox_textures.c, nv2a_psh.c). OpenCE's, for ChupathingyCE's
+Custom Edition loader */
+void halo_custom_edition_hud_meter(int active);
 /* the width of the screen the game draws, 480 lines tall: the device's or
 the display's shape, or 640 (port/linux/src/d3d8_gl.c) */
 long halo_screen_width(void);

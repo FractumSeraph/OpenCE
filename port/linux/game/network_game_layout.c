@@ -33,6 +33,30 @@ static int valid_slots(int count)
 	return count > 0 && count <= NETWORK_GAME_LAYOUT_PC_SLOTS;
 }
 
+int network_game_layout_from_version(unsigned char *record, unsigned long received, unsigned long size,
+	unsigned int host_version)
+{
+	if (size < NETWORK_GAME_LAYOUT_MACHINES_OFFSET + NETWORK_GAME_LAYOUT_TAIL_SIZE)
+		return NETWORK_GAME_LAYOUT_BAD_SIZE;
+	if (received == size - (NETWORK_GAME_LAYOUT_TAIL_SIZE - NETWORK_GAME_LAYOUT_LEGACY_TAIL_SIZE))
+	{
+		unsigned char *options = record + size - NETWORK_GAME_LAYOUT_TAIL_SIZE + NETWORK_GAME_LAYOUT_TAIL_OPTIONS;
+
+		/* (the local data after the whole options, then OpenCE's zeroed) */
+		memmove(options + NETWORK_GAME_LAYOUT_OPTIONS_SIZE, options + NETWORK_GAME_LAYOUT_LEGACY_OPTIONS_SIZE,
+			NETWORK_GAME_LAYOUT_TAIL_SIZE - NETWORK_GAME_LAYOUT_TAIL_OPTIONS - NETWORK_GAME_LAYOUT_OPTIONS_SIZE);
+		memset(options + NETWORK_GAME_LAYOUT_LEGACY_OPTIONS_SIZE, 0,
+			NETWORK_GAME_LAYOUT_OPTIONS_SIZE - NETWORK_GAME_LAYOUT_LEGACY_OPTIONS_SIZE);
+	}
+	else if (received != size)
+	{
+		return NETWORK_GAME_LAYOUT_BAD_SIZE;
+	}
+	if (host_version != 0xFFFF && host_version < NETWORK_GAME_LAYOUT_ALLY_FRIENDLY_FIRE_VERSION)
+		record[NETWORK_GAME_LAYOUT_COOPERATIVE_FLAGS_OFFSET] &= (unsigned char)~NETWORK_GAME_LAYOUT_NO_ALLY_FRIENDLY_FIRE_FLAG;
+	return NETWORK_GAME_LAYOUT_OK;
+}
+
 unsigned long network_game_layout_size(int machines, int players)
 {
 	return NETWORK_GAME_LAYOUT_MACHINES_OFFSET + (unsigned long)machines * NETWORK_GAME_LAYOUT_MACHINE_SIZE + 2 +

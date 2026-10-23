@@ -21,6 +21,9 @@ struct xgpu_capabilities
 	BOOL border_clamp;
 	BOOL anisotropy;
 	BOOL s3tc;
+	/* KHR_texture_compression_astc_ldr: DXT1 as ASTC where there is no S3TC
+	(display.dxt1_astc) */
+	BOOL astc;
 	/* ES 3.2, or the EXT/OES_draw_elements_base_vertex extension: glDrawElementsBaseVertex */
 	BOOL base_vertex;
 	/* ES 3.1 with fragment atomic counters: exact visibility test counts */
@@ -166,6 +169,11 @@ struct nv2a_pixel_shader_key
 	/* Discrete meter thresholds in texture 0's red are read at level zero,
 	without filtering. Coverage/brightness still use the filtered lookup. */
 	unsigned char point_threshold;
+	/* a Custom Edition HUD meter drawn from a bitmap also drawn as artwork,
+	whose channels are as Halo PC keeps them: texture 0 sampled as a Halo PC
+	meter's swizzle does (alpha as the color, red as alpha; OpenCE's,
+	halo_custom_edition_hud_meter) */
+	unsigned char ce_meter_channels;
 	/* the source's blend factor, applied here instead (1 the blend color, 2
 	one less it, 3 its alpha, 4 one less that; 0 none): WebGL refuses a
 	blend of a constant color factor with a constant alpha one, as the
@@ -220,6 +228,7 @@ struct xgpu_texture_description
 	BOOL hires;         /* a high-res HUD texture drawn in the texture's place (hud_hires.h) */
 	BOOL hires_coverage; /* ... whose green is its coverage (a meter's) */
 	BOOL hires_point_threshold; /* ... whose red holds discrete segment data */
+	BOOL ce_meter_channels; /* a mixed-use CE meter's draw (halo_custom_edition_hud_meter) */
 };
 
 void xgpu_texture_describe(DWORD format_word, DWORD size_word, struct xgpu_texture_description *description);

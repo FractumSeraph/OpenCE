@@ -708,7 +708,12 @@ lacks is dropped or unused with it, and content it can't play ends the join
 cleanly. `chupa-32a` plays with `chupa-28a` and newer (OpenCE's 30 to 32 are
 additive: a machine of 29 drops message 90 and ignores the co-op input byte;
 31's keep-alive, stamp window and stream-only messages were already in 29);
-`chupa-29a` plays with `chupa-28a`. A row is written with its release and
+`chupa-29a` plays with `chupa-28a`. (Port, this fork: `chupa-36a`, OpenCE's
+35 and 36, joins hosts of `chupa-28a` on, widening an older host's shorter
+game settings record (`network_game_layout.c`); its own hosts send 35's
+longer record, which a `chupa-32a` client cannot read, so
+`DELTA_WIRE_HOST_OLDEST` makes them advertise `chupa-36a` as their oldest:
+such a client sees the game as newer and does not try it.) A row is written with its release and
 never changed: a build can't learn of a newer one, so a host also says its
 range in its advertisement.
 

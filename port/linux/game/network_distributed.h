@@ -141,6 +141,9 @@ enum
 	(whose network_aim_assist.c reads the same message: network_distributed.c
 	hands it on) */
 	_distributed_message_aim_assist_policy = 90,
+	/* the host's shield effects (network_shield_effects.c), to every client,
+	reliably, when it is ready and when they change */
+	_distributed_message_shield_effects = 91,
 
 	NUMBER_OF_DISTRIBUTED_MESSAGES
 };

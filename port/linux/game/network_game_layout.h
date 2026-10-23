@@ -3,8 +3,9 @@ NETWORK_GAME_LAYOUT.H
 
 The game settings record (struct network_game, source/networking/
 network_game_manager.h) between the PC builds' layout (128 machines, 128
-players: 13,120 bytes) and the console's (16 and 16: 1,920 bytes), byte for
-byte (docs/cross-play.md). The record is slot-indexed: machines[i] is the
+players: 13,136 bytes since network version 35, 13,120 before) and the
+console's (16 and 16: 1,936 bytes, 1,920 before), byte for byte
+(docs/cross-play.md). The record is slot-indexed: machines[i] is the
 machine in slot i (its machine_index, i, or NONE), players[i] the player in
 slot i (player_list_index i, or NONE). Folding to fewer slots is exact only
 while every used slot, and every index a used entry names, fits; else it
@@ -31,8 +32,17 @@ game_engine_slayer.c).
 #define NETWORK_GAME_LAYOUT_MACHINES_OFFSET 0x114
 #define NETWORK_GAME_LAYOUT_MACHINE_SIZE 0x44
 #define NETWORK_GAME_LAYOUT_PLAYER_SIZE 0x20
-#define NETWORK_GAME_LAYOUT_TAIL_SIZE 0x2A
+#define NETWORK_GAME_LAYOUT_TAIL_SIZE 0x3A
+/* (in the tail, after the players: the gametype's PC options, 0x2C bytes
+since network version 35 (OpenCE's gametypes: game_engine.h's struct
+game_variant_options), then the local data) */
+#define NETWORK_GAME_LAYOUT_TAIL_OPTIONS 0xA
+#define NETWORK_GAME_LAYOUT_OPTIONS_SIZE 0x2C
+/* ... a host's before 35: the options' first 0x1C bytes, a shorter tail */
+#define NETWORK_GAME_LAYOUT_LEGACY_OPTIONS_SIZE 0x1C
+#define NETWORK_GAME_LAYOUT_LEGACY_TAIL_SIZE 0x2A
 /* (in the header) */
+#define NETWORK_GAME_LAYOUT_COOPERATIVE_FLAGS_OFFSET 0x10C
 #define NETWORK_GAME_LAYOUT_MAXIMUM_PLAYERS_OFFSET 0x10E
 #define NETWORK_GAME_LAYOUT_MACHINE_COUNT_OFFSET 0x112
 /* (in a machine and a player) */
@@ -66,6 +76,28 @@ int network_game_layout_convert(const unsigned char *from, int from_machines, in
 	unsigned char *to, int to_machines, int to_players, int *clamped);
 
 const char *network_game_layout_error_string(int error);
+
+/* ---------- an older host's record
+
+(network versions as halo_port_limits.h's HALO_PORT_*_NETWORK_VERSION) */
+#define NETWORK_GAME_LAYOUT_ALLY_FRIENDLY_FIRE_VERSION 33
+#define NETWORK_GAME_LAYOUT_GAME_MODES_VERSION 35
+/* co-op's ALLY FRIENDLY FIRE: OFF (cooperative_flags' bit 1, network version
+33's: network_game_manager.h's _network_game_cooperative_no_ally_friendly_fire_bit) */
+#define NETWORK_GAME_LAYOUT_NO_ALLY_FRIENDLY_FIRE_FLAG 0x02
+
+/* the record a host sent made this version's, in place: record is a buffer
+of size bytes (this version's record at the host's slots) whose first
+received bytes are what the host sent, host_version the host's network
+version (0xFFFF: not known). A record 16 bytes short is a host's before 35
+(by its size, whatever the host announced): its PC options' first 0x1C
+bytes are kept, OpenCE's options after them zeroed (no OpenCE gametype;
+game_modes_options_sanitize gives their defaults), and its local data moved
+after them. A host before 33 has no ALLY FRIENDLY FIRE bit (on, as the
+campaign has it). NETWORK_GAME_LAYOUT_OK, or _BAD_SIZE for a size of
+neither layout, the record left as it was. */
+int network_game_layout_from_version(unsigned char *record, unsigned long received, unsigned long size,
+	unsigned int host_version);
 
 /* ---------- the game types' states */
 

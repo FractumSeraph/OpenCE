@@ -191,6 +191,24 @@ static void test_matrix(void)
 	h33wide[25] = (unsigned char)(0xA5 ^ 1 ^ 33 ^ 'a' ^ 29 ^ 'a');
 	memcpy(h33wide + DELTA_ADVERTISED_WIRE_OFFSET + 1, "chupa-29a\0\0\0\0\0\0\0", 16);
 
+	/* port: a 36a host takes 36a clients alone; a 36a client joins 28a to 36a hosts */
+	{
+		unsigned char h36[RESERVED];
+		struct delta_wire_id wire, oldest;
+
+		host(h36, "chupa-36a");
+		CHECK(!strcmp((const char *)h36 + DELTA_ADVERTISED_WIRE_OFFSET + 1, "chupa-36a"));
+		CHECK(delta_compat_read_range(h36, RESERVED, &wire, &oldest) && wire.number == 36 && oldest.number == 36);
+		CHECK(delta_compat_oldest("chupa-36a", &oldest) && oldest.number == 28);
+		CHECK(decide(h36, "chupa-36a") == 1);
+		CHECK(decide(h36, "chupa-32a") == 0);
+		CHECK(decide(h36, "chupa-29a") == 0);
+		CHECK(decide(h32, "chupa-36a") == 1);
+		CHECK(decide(h29, "chupa-36a") == 1);
+		CHECK(decide(h29old, "chupa-36a") == 1);
+		CHECK(decide(h28, "chupa-36a") == 1);
+	}
+
 	/* a 32a client */
 	CHECK(decide(h32, "chupa-32a") == 1);
 	CHECK(decide(h29, "chupa-32a") == 1);
