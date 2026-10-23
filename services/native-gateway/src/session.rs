@@ -280,7 +280,7 @@ fn brokers() -> Vec<(String, u16)> {
             let (host, port) = entry.rsplit_once(':').unwrap_or((entry.as_str(), "1883"));
             Some((host.to_string(), port.parse().ok()?))
         })
-        .take(5)
+        .take(6)
         .collect()
 }
 
