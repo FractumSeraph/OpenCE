@@ -31,9 +31,8 @@ NEGATIVE_CONTROLS = {
     "digits-rounded-down": (("(value + 1) / 2", "value / 2"), "ce_hud_digits_halve", "digits-halved"),
     "any-checksum": (("ce_hud_behaviour_maps[index].tags_checksum == tags_checksum &&", ""),
                      "ce_hud_map_identity", "behaviours"),
-    "numbers-kept": (("ce_hud_block_placements(hud + WEAPON_HUD_NUMBERS_OFFSET, WEAPON_HUD_NUMBER_SIZE, "
-                      "WEAPON_HUD_ELEMENT_OFFSET,\n\t\tFALSE, NULL);", ""), "ce_hud_weapon_interface",
-                     "numbers-halved"),
+    # (no "numbers-kept" control since ChupathingyCE 0.8.0d: ce_hud leaves a
+    # number's placement alone, hud_draw_numbers halving its digits)
     "shaders-by-another-behaviour": (("BEHAVIOUR_FLAG(_ce_behaviour_invert_detail_after_reflection))\n",
                                       "BEHAVIOUR_FLAG(_ce_behaviour_hud_number_scale))\n"),
                                      "ce_hud_tags_loaded", "detail-after-reflection"),

@@ -260,16 +260,16 @@ int main(int argc, char **argv)
 			scale_of(GRENADE_HUD + GRENADE_HUD_COUNT_BACKGROUND_OFFSET));
 		return 0;
 	}
-	/* a number's placement halved by its own flag, as any other's
-	(ChupathingyCE's: its digits are scaled by their bitmap as they are drawn,
-	hud_bitmap_group_scale) */
+	/* a number's placement keeps its flag and its scale (ChupathingyCE 0.8.0d:
+	a number's digits are drawn at the HUD's scale, not its placement's, so
+	hud_draw_numbers draws a flagged number's digits at half size instead) */
 	CASE("numbers-halved")
 	{
 		load("some map", 0x12345678);
-		CHECK(!flagged(NUMBERS + WEAPON_HUD_ELEMENT_OFFSET) && scale_of(NUMBERS + WEAPON_HUD_ELEMENT_OFFSET) == 0.5f,
+		CHECK(flagged(NUMBERS + WEAPON_HUD_ELEMENT_OFFSET) && scale_of(NUMBERS + WEAPON_HUD_ELEMENT_OFFSET) == 1.0f,
 			"a weapon's number: %g", scale_of(NUMBERS + WEAPON_HUD_ELEMENT_OFFSET));
-		CHECK(!flagged(GRENADE_HUD + GRENADE_HUD_COUNT_NUMBERS_OFFSET) &&
-			scale_of(GRENADE_HUD + GRENADE_HUD_COUNT_NUMBERS_OFFSET) == 0.5f, "the grenade count: %g",
+		CHECK(flagged(GRENADE_HUD + GRENADE_HUD_COUNT_NUMBERS_OFFSET) &&
+			scale_of(GRENADE_HUD + GRENADE_HUD_COUNT_NUMBERS_OFFSET) == 1.0f, "the grenade count: %g",
 			scale_of(GRENADE_HUD + GRENADE_HUD_COUNT_NUMBERS_OFFSET));
 		return 0;
 	}
