@@ -78,6 +78,18 @@ a type a reader does not know it skips:
               the speaker's name, text
  16 map:      family (1: halo_map_families.h's), file (its name, without
               .map), hash (32: SHA-256, map_share.h's; zeros if unknown)
+ 17 marks:    the map's netgame flags, once: count (2), then each one's kind
+              (1: scenario_definitions.h's, a CTF flag's stand 0, a CTF
+              vehicle 1, an oddball's ball spawn 2, a race track's point 3,
+              a race vehicle 4, a vegas bank 5, a teleporter's entrance 6
+              and exit 7, a hill's corner 8), number (2: its team, or which
+              hill, race point or teleporter it is), position (3 floats),
+              facing (a float, radians)
+ 18 hill:     King of the Hill's hill: tick (4), state (1: game_engine_king.h's
+              king_hill_state, no one on it 0, one player 1, red 2, blue 3,
+              contested 4), holder (1: free for all, the player on it; 255
+              none), corner count (1), the corners (3 floats each); at the
+              start, when it moves or changes hands, and every 5 seconds
 
 A block goes to the file every 10 seconds, or sooner when 192 kilobytes of
 records have come: a host that stops loses no more than that.
@@ -90,7 +102,7 @@ distance (zeros), and no move records, nor events of a moderator's action
 or an anti-cheat's flag, nor team chat; the format is the same, so any
 reader opens both.
 A block that shows the game being played (any record but the game's, its
-map's, its walls and its tags) is held back network.record_public_delay seconds before
+map's, its walls, its marks and its tags) is held back network.record_public_delay seconds before
 it is written, so that no one watching can tell its players where the
 others are; the rest of the game is written when it ends.
 recordings\public\live.json says which copy is being written: {"live":
@@ -114,6 +126,7 @@ game's carnage report, <name>.json beside the copy gives its address:
 #include "objects/objects.h"
 #include "physics/collision_bsp_definitions.h"
 #include "scenario/scenario.h"
+#include "scenario/scenario_definitions.h"
 #include "tag_files/tag_files.h"
 #include "units/units.h"
 #include "network_distributed.h"
@@ -133,6 +146,8 @@ struct network_game *network_game_server_get_game(struct network_game_server *se
 int config_boolean(const char *name);
 long config_integer(const char *name);
 void p2p_hardware_id_sanitize(char *destination, int size, const char *source);
+/* game_engine_king.c's: the hill as it stands */
+long game_engine_king_hill(real_point3d *points, long *state, long *controller);
 /* (event_log.h's: a gzip member, the C library's malloc; freed by
 event_log_free, as this unit's free is the game's allocator's) */
 unsigned char *event_gzip(unsigned char const *data, size_t length, size_t *compressed_length);
@@ -161,6 +176,8 @@ enum
 	_record_score,
 	_record_chat,
 	_record_map,
+	_record_marks,
+	_record_hill,
 };
 
 /* event_log.h's EVENT_LOG_* the public copy leaves out: a moderator's
@@ -193,6 +210,11 @@ enum
 	RECORDING_OBJECT_BYTES = 4 + 1 + 2 + 12 + 6 + 6 + 1,
 	RECORDING_POSE_BYTES = 1 + 2 + 6 + 1 + 1 + 1 + 2 + 2 + 2 + 1 + 1 + 1 + 2 + 2 + 2 + 1,
 	RECORDING_SCORE_TICKS = TICKS_PER_SECOND,
+	/* the hill, at least this often, and its corners at most */
+	RECORDING_HILL_TICKS = 5 * TICKS_PER_SECOND,
+	RECORDING_HILL_POINTS = 12,
+	/* the map's netgame flags, at most */
+	RECORDING_MAXIMUM_MARKS = 1024,
 	/* the walls' vertices and polygons, at most */
 	RECORDING_MAXIMUM_WALL_BYTES = 8 * 1024 * 1024,
 	/* the files a folder is pruned of, at most at once */
@@ -237,6 +259,13 @@ static struct
 	long objects_time;
 	long whole_objects_time;
 	long score_time;
+	/* the hill (King of the Hill) last written: when, its state, its
+	holder's slot (255 none), its corner count and first corner */
+	long hill_time;
+	long hill_state;
+	long hill_holder;
+	long hill_point_count;
+	real_point3d hill_first;
 	/* the player each slot had when last told (DATUM_INDEX_NEW), NONE, and
 	their team then (a team change tells them again) */
 	long players[MAXIMUM_TRACKED_PLAYERS];
@@ -351,7 +380,7 @@ static unsigned long public_records(
 			break;
 		read += 5 + size;
 		if (type != _record_game && type != _record_walls && type != _record_tag && type != _record_player &&
-			type != _record_map)
+			type != _record_map && type != _record_marks)
 		{
 			*live = TRUE;
 		}
@@ -847,6 +876,88 @@ static void recording_map(
 	csmemcpy(at, hash, MAP_SHARE_HASH_BYTES);
 }
 
+/* the map's netgame flags: where the flags stand, the ball spawns, the
+hills' corners, the race's points and the teleporters (scenario's) */
+static void recording_marks(
+	void)
+{
+	struct scenario *scenario = global_scenario_get();
+	long count;
+	long index;
+	byte *at;
+
+	if (!scenario)
+		return;
+	count = PIN(scenario->netgame_flags.count, 0, RECORDING_MAXIMUM_MARKS);
+	if (!count)
+		return;
+	at = recording_begin(_record_marks, 2 + 19 * (unsigned long)count);
+	if (!at)
+		return;
+	at = put_u16(at, (unsigned long)count);
+	for (index = 0; index < count; index++)
+	{
+		struct scenario_netgame_flag *flag =
+			TAG_BLOCK_GET_ELEMENT(&scenario->netgame_flags, index, struct scenario_netgame_flag);
+
+		at = put_u8(at, (unsigned long)(flag->type & 0xFF));
+		at = put_u16(at, (unsigned long)(unsigned short)flag->team_index);
+		at = put_real(at, flag->position.x);
+		at = put_real(at, flag->position.y);
+		at = put_real(at, flag->position.z);
+		at = put_real(at, flag->facing);
+	}
+}
+
+/* King of the Hill's hill, when it moved, changed hands or was last written
+RECORDING_HILL_TICKS ago */
+static void recording_hill(
+	void)
+{
+	struct game_variant *variant = game_engine_get_variant();
+	real_point3d points[RECORDING_HILL_POINTS];
+	long state = 0;
+	long controller = NONE;
+	long holder;
+	long count;
+	long now = game_time_get();
+	long index;
+	byte *at;
+
+	if (!variant || variant->game_engine_index != game_engine_king)
+		return;
+	count = game_engine_king_hill(points, &state, &controller);
+	holder = controller != NONE ? DATUM_INDEX_TO_ABSOLUTE_INDEX(controller) : 255;
+	if (holder < 0 || holder > 254)
+		holder = 255;
+	if (recording.hill_time != NONE && now - recording.hill_time < RECORDING_HILL_TICKS &&
+		state == recording.hill_state && holder == recording.hill_holder && count == recording.hill_point_count &&
+		(!count || (points[0].x == recording.hill_first.x && points[0].y == recording.hill_first.y &&
+		points[0].z == recording.hill_first.z)))
+	{
+		return;
+	}
+	recording.hill_time = now;
+	recording.hill_state = state;
+	recording.hill_holder = holder;
+	recording.hill_point_count = count;
+	if (count)
+		recording.hill_first = points[0];
+	at = recording_begin(_record_hill, 4 + 1 + 1 + 1 + 12 * (unsigned long)count);
+	if (!at)
+		return;
+	at = put_u32(at, (unsigned long)now);
+	at = put_u8(at, (unsigned long)(state & 0xFF));
+	at = put_u8(at, (unsigned long)holder);
+	at = put_u8(at, (unsigned long)count);
+	for (index = 0; index < count; index++)
+	{
+		at = put_real(at, points[index].x);
+		at = put_real(at, points[index].y);
+		at = put_real(at, points[index].z);
+	}
+}
+
 /* a unit vector as 3 shorts (times 32767) */
 static void vector_quantize(
 	real_vector3d const *vector,
@@ -1156,6 +1267,7 @@ static void recording_start(
 	recording.objects_time = NONE;
 	recording.whole_objects_time = NONE;
 	recording.score_time = NONE;
+	recording.hill_time = NONE;
 	if (network_game)
 	{
 		snprintf(map, sizeof(map), "%s", network_game->map.name);
@@ -1256,6 +1368,7 @@ static void recording_start(
 	}
 	recording_map(map);
 	recording_walls();
+	recording_marks();
 }
 
 /* the recording ended: its end written, the file closed */
@@ -1467,6 +1580,7 @@ void network_recording_host_tick(
 			recording.score_time = now;
 			recording_score();
 		}
+		recording_hill();
 	}
 	if (recording.length >= RECORDING_BLOCK_BYTES || game_time_get() - recording.flushed_time >= RECORDING_BLOCK_TICKS)
 		recording_flush();

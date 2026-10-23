@@ -143,7 +143,7 @@ WantedBy=multi-user.target
 
 ### Updates on their own, and backups
 
-FractumSeraph's two servers (FractumFFA and FractumSlayer, one program in
+FractumSeraph's two servers (FractumFFA and FractumKing, one program in
 `/opt/halo-dedicated/bin`) keep themselves up to date and backed up with
 these, in `server/deploy`, which another host can adapt (names and paths are
 at the top of each):

@@ -73,8 +73,9 @@ then [ChupathingyCE's](#chupathingyce), then [OpenCE's](#opence).
   shield's flare on your arms, and native builds that play with OpenCE's
   browser build over WebRTC.
 - **Servers of its own.** Two dedicated servers, **FractumFFA** (free for
-  all Slayer on small Custom Edition maps) and **FractumSlayer** (Team
-  Slayer), which update themselves when empty and can be watched live; an
+  all Slayer on small Custom Edition maps) and **FractumKing** (free for
+  all King of the Hill, the hill moving; FractumSlayer's Team Slayer until
+  2026-10-23), which update themselves when empty and can be watched live; an
   internet-play broker (`halovps.fractumseraph.net:1883`, the first of the
   five in every build's list), the maps' BitTorrent tracker, the browser
   lobby and the gateway that lets a browser join native games.

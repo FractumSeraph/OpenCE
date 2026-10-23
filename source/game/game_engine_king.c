@@ -1149,6 +1149,23 @@ long game_engine_king_write_network_state(
 	return sizeof(king_globals);
 }
 
+/* port: the hill as it stands, for the host's recordings
+(network_recording.c): its corners (12 at most, into points), its state
+(king_hill_state) and, free for all, the player holding it (a player datum
+index; NONE when no one or a team does); the corner count */
+long game_engine_king_hill(
+	real_point3d *points,
+	long *state,
+	long *controller)
+{
+	long count = PIN(king_globals.hill_point_count, 0, (long)NUMBEROF(king_globals.hill_points));
+
+	csmemcpy(points, king_globals.hill_points, sizeof(real_point3d) * count);
+	*state = king_globals.hill_state;
+	*controller = king_globals.hill_state == king_hill_controlled ? king_globals.hill_previous_controller : NONE;
+	return count;
+}
+
 /* a client: the sounds of a team's score passing from previous_score to
 score (the host's as king_engine_player_update plays them each tick) */
 static void king_client_score_sounds(

@@ -3,7 +3,7 @@
 # installed as /usr/local/sbin/halo-alerts, run by halo-alerts.service):
 #
 #   - a suspect: the fair play checks' "fair play: suspect" log line
-#     (port/linux/game/network_fairplay.c) on FractumFFA or FractumSlayer,
+#     (port/linux/game/network_fairplay.c) on FractumFFA or FractumKing,
 #     with the player's name, why, and the game's recording (network.record_games):
 #     links to watch the game live in the replay viewer (30 seconds behind)
 #     and, once the game is over, to its public recording at the moment the
@@ -34,7 +34,7 @@ import urllib.request
 
 WEBHOOK_FILE = "/etc/halo-alerts/webhook"
 NAME = "Halo servers"
-PANELS = {"FractumFFA": "https://halovps.fractumseraph.net:8443/", "FractumSlayer": "https://halovps.fractumseraph.net:8444/"}
+PANELS = {"FractumFFA": "https://halovps.fractumseraph.net:8443/", "FractumKing": "https://halovps.fractumseraph.net:8444/"}
 # the replay viewer, and each server's public recordings: the live game's
 # folder (Caddy, here) and where finished ones are kept (the seedbox's,
 # halo-recordings-offload)
@@ -50,7 +50,7 @@ REPLAY_LEAD_SECONDS = 30
 # the game servers: their units, names on the game list, and data folders
 SERVERS = {
     "halo-dedicated": ("FractumFFA", "/opt/halo-dedicated/data"),
-    "halo-fractumslayer": ("FractumSlayer", "/opt/halo-fractumslayer/data"),
+    "halo-fractumslayer": ("FractumKing", "/opt/halo-fractumslayer/data"),
 }
 # what must be running, and what must not have failed (oneshots run by timers)
 RUNNING = ["halo-dedicated", "halo-fractumslayer", "halo", "caddy", "opentracker", "mosquitto"]

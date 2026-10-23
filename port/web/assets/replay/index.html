@@ -277,6 +277,8 @@ function newRecording() {
     // (version 2: the world's objects by datum index, the poses, events,
     // scores, chat lines and the map's file)
     objects: new Map(), poses: [], events: [], scores: [], chats: [], map: null,
+    // (the map's netgame flags, and King of the Hill's hill as it stood)
+    marks: [], hills: [],
   };
 }
 
@@ -406,6 +408,21 @@ function addChunks(r, chunks) {
           const family = u8(), file = text();
           const hash = [...chunk.subarray(q, q + 32)].map(b => b.toString(16).padStart(2, "0")).join("");
           r.map = { family, file, hash: /^0+$/.test(hash) ? "" : hash };
+          break;
+        }
+        case 17: {
+          const count = u16(), marks = [];
+          for (let i = 0; i < count && q + 19 <= end; i++) {
+            marks.push({ kind: u8(), number: u16(), x: f32(), y: f32(), z: f32(), facing: f32() });
+          }
+          r.marks = marks;
+          break;
+        }
+        case 18: {
+          const h = { tick: u32(), state: u8(), holder: u8(), points: [] };
+          const n = u8();
+          for (let i = 0; i < n && q + 12 <= end; i++) h.points.push([f32(), f32(), f32()]);
+          r.hills.push(h);
           break;
         }
       }
@@ -672,6 +689,174 @@ function clearObjects() {
   objectMeshes.clear();
 }
 
+/* ---------- the objectives: where the flags stand, the balls spawn, the
+hills, the race's points and the teleporters (record 17, the map's netgame
+flags), and the hill as it stood (record 18); only the game's own, as its
+game type, its hill records and its objective events tell */
+
+const MARK = { FLAG: 0, BALL: 2, RACE: 3, TELEPORT_FROM: 6, TELEPORT_TO: 7, HILL: 8 };
+const HILL_STATE = { NONE: 0, PLAYER: 1, RED: 2, BLUE: 3, CONTESTED: 4 };
+let marksGroup = null, marksBuiltFor = null, hillMesh = null, hillShown = null;
+
+function objectiveKinds(r) {
+  const type = (r.game.type || "").toLowerCase(), kinds = new Set();
+  for (const e of r.events) {
+    if (e.type !== EVENT.OBJECTIVE) continue;
+    const v = e.values[0];
+    kinds.add(v <= 2 || v >= 8 ? "flag" : v <= 4 ? "ball" : v <= 6 ? "hill" : "race");
+  }
+  if (r.hills.length || /king|hill/.test(type)) kinds.add("hill");
+  if (/ctf|flag|bomb|grif|assault/.test(type)) kinds.add("flag");
+  if (/oddball|ball|juggernaut|tag/.test(type)) kinds.add("ball");
+  if (/race|rally|lap/.test(type)) kinds.add("race");
+  return kinds;
+}
+
+// (points round their middle, in order: a hill's corners as the game draws them)
+function hullOrder(points) {
+  const cx = points.reduce((a, p) => a + p[0], 0) / points.length, cy = points.reduce((a, p) => a + p[1], 0) / points.length;
+  return [...points].sort((a, b) => Math.atan2(a[1] - cy, a[0] - cx) - Math.atan2(b[1] - cy, b[0] - cx));
+}
+
+// (a hill's floor, outline and a low see-through fence round it)
+function hillGeometry(points, height) {
+  const ring = hullOrder(points), cx = ring.reduce((a, p) => a + p[0], 0) / ring.length,
+    cy = ring.reduce((a, p) => a + p[1], 0) / ring.length, cz = ring.reduce((a, p) => a + p[2], 0) / ring.length;
+  const floor = [], fence = [], outline = [];
+  for (let i = 0; i < ring.length; i++) {
+    const a = ring[i], b = ring[(i + 1) % ring.length];
+    floor.push(cx, cy, cz + 0.04, a[0], a[1], a[2] + 0.04, b[0], b[1], b[2] + 0.04);
+    fence.push(a[0], a[1], a[2], b[0], b[1], b[2], b[0], b[1], b[2] + height,
+      a[0], a[1], a[2], b[0], b[1], b[2] + height, a[0], a[1], a[2] + height);
+    outline.push(a[0], a[1], a[2] + 0.05, b[0], b[1], b[2] + 0.05);
+  }
+  const make = values => { const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(values, 3)); return g; };
+  return { floor: make(floor), fence: make(fence), outline: make(outline), center: [cx, cy, cz] };
+}
+
+function markLabel(text, color, z) {
+  const label = makeLabel(text, color);
+  label.position.z = z;
+  label.scale.multiplyScalar(0.8);
+  return label;
+}
+
+function buildMarks() {
+  if (marksGroup) {
+    scene.remove(marksGroup);
+    marksGroup.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } });
+  }
+  marksGroup = new THREE.Group();
+  marksBuiltFor = rec.marks;
+  scene.add(marksGroup);
+  const kinds = objectiveKinds(rec);
+  const at = (m, object) => { object.position.set(m.x, m.y, m.z); marksGroup.add(object); return object; };
+  const ring = (radius, color, opacity) => {
+    const mesh = new THREE.Mesh(new THREE.TorusGeometry(radius, 0.05, 6, 28),
+      new THREE.MeshBasicMaterial({ color, transparent: opacity < 1, opacity }));
+    mesh.position.z = 0.05;
+    return mesh;
+  };
+  for (const m of rec.marks) {
+    if (m.kind === MARK.FLAG && kinds.has("flag")) {
+      const color = TEAM_COLORS[m.number & 1], g = new THREE.Group();
+      g.add(ring(0.7, color, 0.9));
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 2, 6), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.5 }));
+      pole.rotation.x = Math.PI / 2;
+      pole.position.z = 1;
+      g.add(pole, markLabel(m.number & 1 ? "Blue base" : "Red base", color, 2.3));
+      at(m, g);
+    } else if (m.kind === MARK.BALL && kinds.has("ball")) {
+      at(m, ring(0.35, 0xffe066, 0.55));
+    } else if (m.kind === MARK.RACE && kinds.has("race")) {
+      const g = new THREE.Group();
+      g.add(ring(0.8, 0x7fd67f, 0.8), markLabel(String(m.number + 1), 0x7fd67f, 1.2));
+      at(m, g);
+    } else if (m.kind === MARK.TELEPORT_FROM || m.kind === MARK.TELEPORT_TO) {
+      at(m, ring(0.45, 0xc77dff, m.kind === MARK.TELEPORT_FROM ? 0.75 : 0.35));
+    }
+  }
+  // (the hills: as they stood where the recording has them, else each one the
+  // map has, dimly)
+  if (kinds.has("hill") && !rec.hills.length) {
+    const hills = new Map();
+    for (const m of rec.marks) if (m.kind === MARK.HILL) {
+      if (!hills.has(m.number)) hills.set(m.number, []);
+      hills.get(m.number).push([m.x, m.y, m.z]);
+    }
+    for (const points of hills.values()) {
+      if (points.length < 3) continue;
+      const g = hillGeometry(points, 0.6);
+      marksGroup.add(new THREE.LineSegments(g.outline, new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 })));
+      g.floor.dispose(); g.fence.dispose();
+    }
+  }
+  if (hillMesh) { scene.remove(hillMesh.group); hillMesh.group.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } }); }
+  hillMesh = null;
+  hillShown = null;
+}
+
+// (the hill record standing at the tick, or null)
+function hillAt(t) {
+  const hills = rec.hills;
+  if (!hills.length || hills[0].tick > t) return null;
+  let lo = 0, hi = hills.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (hills[mid].tick <= t) lo = mid; else hi = mid - 1;
+  }
+  return hills[lo];
+}
+
+function hillColor(h) {
+  if (!h) return 0xffffff;
+  if (h.state === HILL_STATE.PLAYER && h.holder !== 255) return colorOf(h.holder);
+  if (h.state === HILL_STATE.RED) return TEAM_COLORS[0];
+  if (h.state === HILL_STATE.BLUE) return TEAM_COLORS[1];
+  if (h.state === HILL_STATE.CONTESTED) return 0xffa040;
+  return 0xffffff;
+}
+
+function hillText(h) {
+  if (h.state === HILL_STATE.PLAYER && h.holder !== 255) return `Hill: ${playerAt(h.holder, tick).name}`;
+  if (h.state === HILL_STATE.RED) return "Hill: Red";
+  if (h.state === HILL_STATE.BLUE) return "Hill: Blue";
+  if (h.state === HILL_STATE.CONTESTED) return "Hill: contested";
+  return "Hill: no one";
+}
+
+function drawHill(t) {
+  const h = hillAt(t);
+  const key = h && h.points.length >= 3 ? `${h.points.map(p => p.join(",")).join(";")}|${h.state}|${h.holder}` : "";
+  if (key !== hillShown) {
+    hillShown = key;
+    if (hillMesh) { scene.remove(hillMesh.group); hillMesh.group.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } }); }
+    hillMesh = null;
+    if (key) {
+      const color = hillColor(h), g = hillGeometry(h.points, 1.2), group = new THREE.Group();
+      const floor = new THREE.Mesh(g.floor, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.35, side: THREE.DoubleSide,
+        depthWrite: false, depthTest: false }));
+      floor.renderOrder = 3;
+      const fence = new THREE.Mesh(g.fence, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.18, side: THREE.DoubleSide, depthWrite: false }));
+      // (its outline seen through the walls, as the labels are: a hill indoors is found from anywhere)
+      const outline = new THREE.LineSegments(g.outline, new THREE.LineBasicMaterial({ color, depthTest: false, transparent: true, opacity: 0.9 }));
+      outline.renderOrder = 3;
+      const label = makeLabel(hillText(h), color);
+      label.position.set(g.center[0], g.center[1], g.center[2] + 2);
+      label.scale.multiplyScalar(1.4);
+      group.add(floor, fence, outline, label);
+      scene.add(group);
+      hillMesh = { group, floor, fence };
+    }
+  }
+  // (contested: it flashes)
+  if (hillMesh && h && h.state === HILL_STATE.CONTESTED) {
+    const on = Math.floor(t / 8) % 2 === 0;
+    hillMesh.floor.material.opacity = on ? 0.4 : 0.12;
+    hillMesh.fence.material.opacity = on ? 0.25 : 0.08;
+  }
+}
+
 /* ---------- the scene (Halo's world units, z up) */
 
 const view = document.getElementById("view");
@@ -778,9 +963,69 @@ function makeFigure(slot) {
   const aimGeometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(1, 0, 0)]);
   const aim = new THREE.Line(aimGeometry, new THREE.LineBasicMaterial({ color: colorOf(slot), transparent: true, opacity: 0.85 }));
   const label = makeLabel(playerAt(slot, tick).name, colorOf(slot));
-  group.add(body, head, aim, label);
+  // (what they hold: its name under theirs, and the weapon itself, the real
+  // map's model or a dark stand-in, held where they aim)
+  const holder = new THREE.Group();
+  const stick = new THREE.Mesh(heldGeometry, heldMaterial);
+  stick.position.x = 0.25;
+  holder.add(stick);
+  group.add(body, head, aim, label, holder);
   scene.add(group);
-  return { group, body, head, aim, label, material, slot };
+  return { group, body, head, aim, label, material, slot, holder, stick, weaponLabel: null, weaponText: null, weaponModel: null, weaponTag: null };
+}
+const heldGeometry = new THREE.BoxGeometry(0.55, 0.07, 0.1), heldMaterial = new THREE.MeshLambertMaterial({ color: 0x2b3236 });
+
+// (a weapon's tag as players know it: "assault rifle" -> "Assault Rifle")
+function weaponTitle(id) {
+  const leaf = weaponName(id);
+  return leaf ? leaf.replace(/_/g, " ").replace(/\b[a-z]/g, c => c.toUpperCase()) : "";
+}
+function carrying(id) {
+  const name = (rec.tags.get(id) || "").toLowerCase();
+  return /flag/.test(name) ? "flag" : /ball|skull/.test(name) ? "ball" : /bomb/.test(name) ? "bomb" : "";
+}
+
+function drawWeapon(figure, s, own) {
+  const vehicle = s.flags & 16 ? weaponTitle(s.vehicle) : "";
+  const text = weaponTitle(s.weapon) + (vehicle ? ` · ${vehicle}` : "");
+  if (text !== figure.weaponText) {
+    figure.weaponText = text;
+    if (figure.weaponLabel) {
+      figure.group.remove(figure.weaponLabel);
+      figure.weaponLabel.material.map.dispose();
+      figure.weaponLabel.material.dispose();
+      figure.weaponLabel = null;
+    }
+    if (text) {
+      const objective = carrying(s.weapon);
+      figure.weaponLabel = makeLabel(objective ? `\u2605 ${text}` : text, objective === "ball" ? 0xffe066 : objective ? 0xffffff : 0xb8c2c8);
+      figure.weaponLabel.scale.multiplyScalar(0.75);
+      figure.group.add(figure.weaponLabel);
+    }
+  }
+  if (figure.weaponLabel) {
+    figure.weaponLabel.position.set(0, 0, Math.max(0.3, s.eye + 0.08) + 0.08);
+    figure.weaponLabel.visible = !own;
+  }
+  // (the weapon's own model where the real map is drawn)
+  if (realMap && s.weapon !== figure.weaponTag) {
+    figure.weaponTag = s.weapon;
+    if (figure.weaponModel) { figure.holder.remove(figure.weaponModel); figure.weaponModel = null; }
+    const asked = s.weapon !== 0xFFFF ? objectModel(rec.tags.get(s.weapon)) : null;
+    const want = s.weapon, map = realMap;
+    if (asked) asked.then(parts => {
+      if (!parts || realMap !== map || figure.weaponTag !== want) return;
+      figure.weaponModel = modelGroup(parts);
+      figure.holder.add(figure.weaponModel);
+    });
+  }
+  const real = !!(figure.weaponModel && realMapOn);
+  if (figure.weaponModel) figure.weaponModel.visible = real;
+  figure.stick.visible = !real;
+  // (in the hands: at the chest, along the aim; none in a seat that hides it)
+  figure.holder.visible = !own && s.weapon !== 0xFFFF;
+  figure.holder.position.set(Math.cos(s.yaw) * 0.12, Math.sin(s.yaw) * 0.12, s.eye - 0.22);
+  figure.holder.rotation.set(0, -s.pitch, s.yaw, "ZYX");
 }
 
 function makeLabel(text, color) {
@@ -902,7 +1147,10 @@ function draw() {
     // (a muzzle flash while the trigger is down, every other tick)
     figure.flash.visible = !!(s.flags & 2) && Math.floor(tick) % 2 === 0;
     figure.flash.position.set(dirAim.x * 0.7, dirAim.y * 0.7, s.eye - 0.12 + dirAim.z * 0.7);
+    drawWeapon(figure, s, own);
   }
+  if (rec.marks !== marksBuiltFor) buildMarks();
+  drawHill(tick);
   drawObjects(tick);
   drawDeaths(tick);
   // (the hits of the last second: where they went from the shooter's eyes)
@@ -1216,7 +1464,8 @@ function drawOverlay(states) {
   }
 }
 
-/* ---------- the minimap: the floors from above, the players on them */
+/* ---------- the minimap: the floors from above, the players on them, the
+hill, the bases, the flag and the ball, and who carries them */
 
 const minimap = document.getElementById("minimap");
 const mg = minimap.getContext("2d");
@@ -1276,15 +1525,44 @@ function drawMinimap(states) {
   const map = (x, y) => [((x - x0) / size) * (W - 10) + 5, H - 5 - ((y - y0) / size) * (H - 10)];
   mg.clearRect(0, 0, W, H);
   mg.drawImage(minimapBase, 0, 0, W, H);
+  const hex = color => "#" + color.toString(16).padStart(6, "0");
+  // (the hill, in its holder's colour)
+  const h = hillAt(tick);
+  if (h && h.points.length >= 3) {
+    mg.fillStyle = hex(hillColor(h)) + "73"; mg.strokeStyle = hex(hillColor(h)); mg.lineWidth = 1.5;
+    mg.beginPath();
+    hullOrder(h.points).forEach((p, k) => { const [px, py] = map(p[0], p[1]); k ? mg.lineTo(px, py) : mg.moveTo(px, py); });
+    mg.closePath(); mg.fill(); mg.stroke();
+  }
+  // (the bases, where the game has flags)
+  if (rec.marks.length && objectiveKinds(rec).has("flag")) {
+    for (const m of rec.marks) {
+      if (m.kind !== MARK.FLAG) continue;
+      const [px, py] = map(m.x, m.y);
+      mg.strokeStyle = hex(TEAM_COLORS[m.number & 1]); mg.lineWidth = 2;
+      mg.strokeRect(px - 5, py - 5, 10, 10);
+    }
+  }
   for (const track of tracksAt(tick)) {
-    if (track.type !== 1 || !spanAt(track, tick)) continue;
+    if (!spanAt(track, tick)) continue;
+    const look = track.type === 1 ? null : track.type === 2 || track.type === 3 ? objectLook(track) : undefined;
+    if (look === undefined || look && !/flag|ball/i.test(look.label || "")) continue;
     const i = sampleIndex(track.samples, tick);
     if (i < 0) continue;
     const [px, py] = map(track.samples[i].x, track.samples[i].y);
-    mg.fillStyle = "#cfd8b0"; mg.fillRect(px - 3, py - 3, 6, 6);
+    if (!look) { mg.fillStyle = "#cfd8b0"; mg.fillRect(px - 3, py - 3, 6, 6); continue; }
+    // (the flag or the ball lying about: a diamond)
+    mg.fillStyle = look.label === "Ball" ? "#ffe066" : "#ffffff";
+    mg.beginPath(); mg.moveTo(px, py - 5); mg.lineTo(px + 5, py); mg.lineTo(px, py + 5); mg.lineTo(px - 5, py); mg.closePath(); mg.fill();
   }
   for (const [slot, s] of states) {
     const [px, py] = map(s.x, s.y);
+    // (whoever carries the flag, the ball or the bomb: ringed)
+    const objective = carrying(s.weapon);
+    if (objective) {
+      mg.strokeStyle = objective === "ball" ? "#ffe066" : "#ffffff"; mg.lineWidth = 2;
+      mg.beginPath(); mg.arc(px, py, 8, 0, Math.PI * 2); mg.stroke();
+    }
     mg.fillStyle = "#" + colorOf(slot).toString(16).padStart(6, "0");
     mg.beginPath(); mg.arc(px, py, slot === selected ? 5 : 3.5, 0, Math.PI * 2); mg.fill();
     if (slot === selected) {
@@ -2286,6 +2564,9 @@ function show(r) {
   // (the last recording's players let go: their meshes, labels, skins)
   for (const figure of figures.values()) {
     scene.remove(figure.group);
+    // (the shared parts kept: the weapon's model and its stand-in)
+    if (figure.weaponModel) figure.holder.remove(figure.weaponModel);
+    figure.holder.remove(figure.stick);
     figure.group.traverse(o => {
       if (o.geometry) o.geometry.dispose();
       if (o.material) { if (o.material.map && o.isSprite) o.material.map.dispose(); o.material.dispose(); }

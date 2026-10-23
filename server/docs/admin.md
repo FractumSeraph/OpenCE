@@ -195,7 +195,11 @@ projectiles and grenades, doors and elevators; each bullet's hit on a player
 with the fair play checks' verdict, each kill, the game's events as Delta
 Stats records them (kills with their weapon and damage, medals, objectives,
 pickups, rides, spawns; with `HALO_NET_REPORT_EVENTS`), the scores every
-second, the chat, and the map's file and hash. Blocks are compressed (gzip):
+second, the chat, the map's file and hash, its objectives (where the flags
+stand, the ball spawns, the hills, the race's points, the teleporters) and,
+in King of the Hill, where the hill is and who holds it. The replay viewer
+shows the objectives, the flag and the ball, who carries them, and what
+each player holds. Blocks are compressed (gzip):
 a full game is about 15 to 25 MB an hour; once
 the folder holds more than `HALO_NET_RECORDINGS_MEGABYTES`
 (`network.recordings_megabytes`, 2048 by default; 0 keeps everything) the
