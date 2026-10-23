@@ -74,8 +74,8 @@ const DEFAULT_CONFIG = {
   // listed on internet play's brokers (the game's port/assets/network/brokers.txt)
   publicGames: {
     enabled: true,
-    brokers: ["halovps.fractumseraph.net:1883", "opence.milenko.org:1883", "broker.emqx.io:1883", "broker.hivemq.com:1883",
-      "test.mosquitto.org:1883"],
+    brokers: ["halovps.fractumseraph.net:1883", "opence.milenko.org:1883", "mqtt.chupathingy.org:1883", "broker.emqx.io:1883",
+      "broker.hivemq.com:1883", "test.mosquitto.org:1883"],
   },
   // Delta, ChupathingyCE's game list (delta-list.mjs): the page's requests to
   // it go through this server, which has no CORS to work around. Empty url

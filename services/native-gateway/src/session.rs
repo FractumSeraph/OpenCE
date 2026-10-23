@@ -258,12 +258,13 @@ async fn mqtt(
 
 /* The MQTT brokers of internet play, as the native build's brokers.txt
 (port/assets/network/brokers.txt): NATIVE_BROKERS (comma-separated host:port,
-at most 5) overrides them. A host answers a joiner only through the broker its
+at most 6) overrides them. A host answers a joiner only through the broker its
 request came through, so these must overlap the hosts' own lists. */
 fn brokers() -> Vec<(String, u16)> {
-    const DEFAULT: [&str; 5] = [
+    const DEFAULT: [&str; 6] = [
         "halovps.fractumseraph.net:1883",
         "opence.milenko.org:1883",
+        "mqtt.chupathingy.org:1883",
         "broker.emqx.io:1883",
         "broker.hivemq.com:1883",
         "test.mosquitto.org:1883",

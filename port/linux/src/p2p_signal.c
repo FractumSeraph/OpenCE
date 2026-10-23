@@ -80,7 +80,7 @@ answered it in a while.
 
 enum
 {
-	MAXIMUM_BROKERS = 5,
+	MAXIMUM_BROKERS = 6,
 	/* the joiners a host made sessions for, so a repeated request gets the
 	same session: as many as it takes */
 	MAXIMUM_JOINERS = P2P_MAXIMUM_PEERS + 1,
@@ -1873,7 +1873,7 @@ beside its config.toml: the dedicated server's container, a macOS
 application (its config.toml in Application Support), a build run from its
 build folder or from somewhere the builds did not put it. Keep it the same as
 that file (test_linux_port.py checks) */
-#define DEFAULT_BROKERS "halovps.fractumseraph.net:1883,opence.milenko.org:1883,broker.emqx.io:1883,broker.hivemq.com:1883,test.mosquitto.org:1883"
+#define DEFAULT_BROKERS "halovps.fractumseraph.net:1883,opence.milenko.org:1883,mqtt.chupathingy.org:1883,broker.emqx.io:1883,broker.hivemq.com:1883,test.mosquitto.org:1883"
 
 /* the brokers in network.brokers_file (beside config.toml, unless a full
 path: port/assets/network/brokers.txt, which the builds put there), one on
