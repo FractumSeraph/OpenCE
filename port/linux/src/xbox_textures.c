@@ -32,8 +32,9 @@ memory_watch.c detects that by write-protecting the pages.
 #include "../game/android_ce_texture_cache.h"
 /* (DXT1 as ASTC 4x4, display.dxt1_astc: the Android app's, not the browser
 build's, whose WebGL is asked for no KHR ASTC extension and which puts the
-channels in order on the CPU, WebGL 2 having no texture swizzle) */
-#if defined(HALO_ANDROID) && !defined(HALO_BROWSER)
+channels in order on the CPU, WebGL 2 having no texture swizzle; and an
+ES build's alone: the 64-bit Android build draws without HALO_GLES) */
+#if defined(HALO_ANDROID) && defined(HALO_GLES) && !defined(HALO_BROWSER)
 #define XGPU_DXT1_ASTC 1
 #endif
 
