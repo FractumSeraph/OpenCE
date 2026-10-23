@@ -26,9 +26,10 @@ SECTIONS
 	. = ALIGN(0x1000);
 	__guest_image_end = .;
 	/* the room the host reserves for the image (HALO_GUEST_IMAGE_RESERVE,
-	halo_android_abi.h): an image past it builds, then fails to load on
-	every device ("cannot load the game image") */
-	ASSERT(__guest_image_end <= 0x88000000 + 0x05000000,
+	halo_android_abi.h, whose value this must repeat: a linker script reads
+	no header): an image past it builds, then fails to load on every device
+	("cannot load the game image") */
+	ASSERT(__guest_image_end <= 0x88000000 + 0x06000000,
 		"the guest image is larger than HALO_GUEST_IMAGE_RESERVE (halo_android_abi.h)")
 	/DISCARD/ : { *(.comment) *(.note.*) *(.guest_fini) *(.eh_frame) }
 }
