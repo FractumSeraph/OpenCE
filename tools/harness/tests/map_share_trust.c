@@ -117,6 +117,13 @@ static char const *tag_name_strip_path(char const *name)
 
 #define config_boolean(name) 1
 #define custom_edition_level_name(level_name) (!strncmp(level_name, "custom_maps\\", 12))
+/* (port, this fork: the approved map list, map_torrents.h: every map is on
+it here, test_map_approval.py tests the list itself) */
+#define map_torrents_approved_hash(file_name, hash) 1
+#define map_torrents_approved(file_name, version) 1
+#define map_torrents_unapproved_text(text, size, file_name, hash, version) ((void)0)
+#define csprintf sprintf
+#define map_share_name_base_length(name) ((short)strlen(name))
 /* (port, this fork: the protocol's level name of the game's map, which this
 fork's game names <name>@ce: the same here) */
 #define game_level_name(game) ((game)->map.name)
