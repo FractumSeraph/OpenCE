@@ -13,7 +13,10 @@ signals:
 	- a voice out of earshot, which is not resampled, moves on as one heard
 	  does, and is heard the same once it comes into earshot;
 	- mono voices heard as stereo ones with both channels the same are;
-	- audio.resampler = "linear": each frame between the two around it.
+	- audio.resampler = "linear": each frame between the two around it;
+	- the game's thread waiting for the lock (mixer_lock_wanted): let in
+	  between voices, the lock let go, each voice still mixed once.
+Mixes are MIX_CHUNK_FRAMES at most, as the output's are (CHUNK).
 "render" writes voices at each rate and a scene's whole mix as raw floats
 (test_mixer.py compares the resampler adding four taps at a time with it
 adding tap by tap), "metrics" prints the figures and "bench" times a game's
@@ -79,10 +82,18 @@ audio.hrtf stays off and 3D voices are panned) */
 const unsigned int dsound_hrtf_data[1] = { 0 };
 const unsigned long dsound_hrtf_data_size = 0;
 
+/* the mixer letting the game's thread in between its voices (mix, when
+mixer_lock_wanted says the game waits for its lock): its sched_yield, where
+"lock-wanted" looks at the mix half done */
+static void mixer_yielded(void);
+#define sched_yield() mixer_yielded()
+
 #include "under_test.inc"
 
 #define PI 3.14159265358979323846
-#define CHUNK 512 /* frames a mix, as SDL asks on Linux */
+/* frames a mix: the most mix takes at once (its buffers' size), as the
+output's callback splits what SDL asks (512 frames on Linux) */
+#define CHUNK MIX_CHUNK_FRAMES
 
 /* ---------- voices */
 
@@ -111,6 +122,32 @@ static void voice_delete(struct sdl_stream *stream)
 {
 	free(stream->packets[0].samples);
 	free(stream);
+}
+
+/* "lock-wanted": the voices of streams in their order, each one's cursor
+before the mix, and the mixer's yields to the game */
+#define YIELD_VOICES 4
+static struct sdl_stream *yield_voices[YIELD_VOICES];
+static unsigned long yield_cursors[YIELD_VOICES], yields;
+
+static void mixer_yielded(void)
+{
+	unsigned long index;
+	BOOL reached = FALSE;
+
+	yields++;
+	/* (the game takes the lock, as mixer_lock_take would) */
+	CHECK(pthread_mutex_trylock(&mixer_lock) == 0, "the mixer yields to the game with its lock held");
+	/* the voices before mix_cursor mixed, it and those after it not yet */
+	for (index = 0; index < YIELD_VOICES; index++)
+	{
+		reached |= yield_voices[index] == mix_cursor;
+		CHECK((yield_voices[index]->cursor != yield_cursors[index]) == !reached,
+			"yield %lu: voice %lu, %s mix_cursor, is %s", yields, index, reached ? "at or after" : "before",
+			reached ? "already mixed" : "not mixed");
+	}
+	CHECK(reached, "yield %lu: mix_cursor is no voice", yields);
+	pthread_mutex_unlock(&mixer_lock);
 }
 
 /* frames of the voice mixed alone, CHUNK at a time: the left channel, or
@@ -713,6 +750,59 @@ int main(int argc, char **argv)
 		}
 		free(signal);
 		free(impulse);
+		return 0;
+	}
+	/* with the game's thread waiting for the lock (mixer_lock_wanted), the
+	mixer lets it in between its voices, the lock let go and each voice
+	mixed once all the same: as the same voices mixed alone */
+	CASE("lock-wanted")
+	{
+		static float mixed[CHUNK * 2], scratch[CHUNK * 2], send[CHUNK];
+		double *signal = noise(60000);
+		short *samples = malloc(30000 * 2 * sizeof(short));
+		double *exact = malloc(60000 * sizeof(double));
+		struct sdl_stream *alone[YIELD_VOICES];
+		unsigned long round;
+
+		quantize(signal, samples, exact, 60000);
+		for (index = 0; index < YIELD_VOICES; index++)
+		{
+			alone[index] = voice_new(samples, 30000, 1, rates[index][0], rates[index][1]);
+			yield_voices[index] = voice_new(samples, 30000, 1, rates[index][0], rates[index][1]);
+		}
+		/* (streams: yield_voices in their order) */
+		for (index = YIELD_VOICES; index-- > 0;)
+		{
+			yield_voices[index]->next = streams;
+			streams = yield_voices[index];
+		}
+		/* (the first mix with no one waiting) */
+		for (round = 0; round < 3; round++)
+		{
+			for (index = 0; index < YIELD_VOICES; index++)
+				yield_cursors[index] = yield_voices[index]->cursor;
+			mixer_lock_wanted = round ? 1 : 0;
+			yields = 0;
+			mix(mixed, CHUNK);
+			CHECK(yields == (round ? YIELD_VOICES - 1 : 0), "mix %lu: %lu yields to the game, not %d", round, yields,
+				round ? YIELD_VOICES - 1 : 0);
+			CHECK(!mix_cursor, "mix %lu: mix_cursor left at a voice", round);
+			CHECK(pthread_mutex_trylock(&mixer_lock) == 0, "mix %lu: the lock still held after the mix", round);
+			pthread_mutex_unlock(&mixer_lock);
+			for (index = 0; index < YIELD_VOICES; index++)
+			{
+				memset(scratch, 0, sizeof(scratch));
+				memset(send, 0, sizeof(send));
+				mix_voice(alone[index], scratch, send, CHUNK);
+				CHECK(yield_voices[index]->cursor == alone[index]->cursor &&
+					yield_voices[index]->center == alone[index]->center &&
+					yield_voices[index]->phase == alone[index]->phase,
+					"mix %lu: voice %lu at %lu (%lu + %f), mixed alone at %lu (%lu + %f)", round, index,
+					yield_voices[index]->cursor, yield_voices[index]->center, yield_voices[index]->phase,
+					alone[index]->cursor, alone[index]->center, alone[index]->phase);
+			}
+		}
+		mixer_lock_wanted = 0;
 		return 0;
 	}
 	/* noise, mono and stereo, at each rate through the mixer: the output as

@@ -6,8 +6,18 @@ static struct sdl_stream *streams=&stream;
 static struct dsound_globals dsound_globals;
 static int refills,unlocks,events,resets,lock_depth;
 static unsigned long status[8],completed[8];
+/* The mixer's lock: lock_busy while the mixer mixes, when trylock fails and
+a lock waits it out (waits; unwanted: one not said in mixer_lock_wanted,
+which the mixer would not let in between its voices). */
+static int lock_busy,waits,unwanted;
+static int mixer_lock_wanted;
+static void lock_wait(void) {
+ if(lock_busy) { waits++; if(__atomic_load_n(&mixer_lock_wanted,__ATOMIC_RELAXED)<=0) unwanted++; }
+ lock_depth++;
+}
 #define mixer_lock 0
-#define pthread_mutex_lock(...) ((void)lock_depth++)
+#define pthread_mutex_lock(...) lock_wait()
+#define pthread_mutex_trylock(...) (lock_busy?16/*EBUSY*/:(lock_depth++,0))
 #define pthread_mutex_unlock(...) ((void)lock_depth--)
 #define channel_get(i) (&dsound_globals.channels[i])
 #define sound_cache_sound_hardware_unlock(...) ((void)unlocks++)
@@ -45,6 +55,7 @@ static void reset(int count,int finished,int wrapped) {
   p->packet.pContext=(void *)(long)(i+1);
  }
  refills=unlocks=events=resets=lock_depth=0;
+ lock_busy=waits=unwanted=0;
 }
 int main(int argc,char **argv) {
  CHECK(argc==2,"case name"); const char *case_name=argv[1];
@@ -55,6 +66,30 @@ int main(int argc,char **argv) {
   streams_complete_finished();
   CHECK(status[0]==XMEDIAPACKET_STATUS_SUCCESS && completed[0]==512,"ordinary completion succeeds");
   CHECK(refills==1 && unlocks==1 && stream.packet_count==3,"ordinary completion refills");
+  CHECK(!waits && !lock_depth && !mixer_lock_wanted,"the free lock is taken at once");
+  stream_flush(&stream.object); return 0;
+ }
+ /* The mixer mixing: the game's thread does not wait for its lock but tells
+ the finished packets a frame later; a fifth frame in a row waits. */
+ CASE("mixer-busy") {
+  lock_busy=1;
+  for(int frame=1;frame<5;frame++) {
+   streams_complete_finished();
+   CHECK(status[0]==XMEDIAPACKET_STATUS_PENDING && !refills && !unlocks && stream.packet_count==3,
+    "frame %d: the busy lock is not waited for, the finished packet told later",frame);
+   CHECK(!waits && !lock_depth && !mixer_lock_wanted,"frame %d: nothing taken",frame);
+  }
+  streams_complete_finished();
+  CHECK(status[0]==XMEDIAPACKET_STATUS_SUCCESS && completed[0]==512,"a fifth frame in a row waits and completes");
+  CHECK(refills==1 && unlocks==1 && stream.packet_count==3,"the waited completion refills");
+  CHECK(waits>=1 && !unwanted,"the wait is said in mixer_lock_wanted, so the mixer lets it in");
+  CHECK(!lock_depth && !mixer_lock_wanted,"lock and mixer_lock_wanted balanced");
+  stream.packets[stream.packet_head].finished=TRUE;
+  streams_complete_finished();
+  CHECK(status[1]==XMEDIAPACKET_STATUS_PENDING && refills==1,"once told, the missed frames start over");
+  lock_busy=0;
+  streams_complete_finished();
+  CHECK(status[1]==XMEDIAPACKET_STATUS_SUCCESS && refills==2 && !lock_depth,"the free lock: told at once");
   stream_flush(&stream.object); return 0;
  }
  CASE("paused") { dsound_globals.paused=TRUE; }

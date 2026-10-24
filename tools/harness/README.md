@@ -15,8 +15,8 @@ tools/harness`).
 - `tests/<name>.c`: the fake world, only what the code reads, with what it calls stubbed as macros that name only the
   arguments they use; then `#include "under_test.inc"` and a `main` that runs the case named on its command line,
   checked with `CHECK`.
-- `tests/test_<name>.py`: takes the code, enums and constants from the sources (`function`, `inline`, `enum_with`,
-  `constant`) rather than copying them, so the test checks what the game builds; `build` compiles it (warnings are
+- `tests/test_<name>.py`: takes the code, enums and constants from the sources (`function`, `inline`, `macro`,
+  `enum_with`, `constant`) rather than copying them, so the test checks what the game builds; `build` compiles it (warnings are
   errors) and each case is a pytest test.
 - Negative controls: the code with a deliberate fault (`mutated`) must fail a named case's `CHECK`. A test that cannot
   fail proves nothing.

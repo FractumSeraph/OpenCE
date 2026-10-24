@@ -79,6 +79,19 @@ def inline(source, name):
     return function(source, name).replace("__inline", "static", 1)
 
 
+def macro(source, name):
+    """A #define's whole definition, its continued lines included (as a function-like macro the code calls)."""
+    match = re.search(r"^[ \t]*#[ \t]*define[ \t]+" + re.escape(name) + r"\b", source, re.M)
+    if not match:
+        raise LookupError(f"macro not found in the sources: {name}")
+    lines = []
+    for line in source[match.start():].splitlines():
+        lines.append(line)
+        if not line.rstrip().endswith("\\"):
+            break
+    return "\n".join(lines) + "\n"
+
+
 def enum_with(source, member):
     """The whole enum that declares a member."""
     at = source.index(member)
