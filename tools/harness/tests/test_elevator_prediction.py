@@ -47,8 +47,11 @@ def generated(fault=None, faulty_function=None):
     # (the rules the netcode's elevator code asks, compiled whole: the
     # harness's include path has the generated files, not the game's)
     return (("config.inc", config), ("under_test.inc", text),
-            ("network_rules.c", read("port/linux/game/network_rules.c")),
-            ("network_rules.h", read("port/linux/game/network_rules.h")))
+            ("network_rules.c", read("port/linux/game/network_rules.c").replace('#include "../include/delta.h"',
+                                                                                 '#include "delta.h"')),
+            ("network_rules.h", read("port/linux/game/network_rules.h")),
+            # (ChupathingyCE 0.8.0h's network_rules.c reads delta.h's layouts)
+            ("delta.h", read("port/linux/include/delta.h")))
 
 
 @pytest.mark.parametrize("case", CASES)

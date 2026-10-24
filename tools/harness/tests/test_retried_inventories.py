@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from harness import CHECK_FAILED, build, constant, enum_with, function, mutated, read, run, structure
+from harness import port_limits, CHECK_FAILED, build, constant, enum_with, function, mutated, read, run, structure
 
 CASES = ['unit-late', 'weapon-late', 'newest', 'full', 'forget', 'expiry']
 CONTROLS = [
@@ -38,7 +38,8 @@ def declaration(source, first, last):
 def generated(fault=None):
     network = read('port/linux/game/network_objects.c')
     units = read('source/units/units.h')
-    limits = read('port/linux/game/network_distributed.h') + read('port/linux/include/halo_port_limits.h')
+    # (port: the limits header as the desktop builds read it, not a console's)
+    limits = read('port/linux/game/network_distributed.h') + port_limits()
     config = '\n'.join([
         '#define TICKS_PER_SECOND %d' % constant(read('source/cseries/cseries.h'), 'TICKS_PER_SECOND'),
         '#define MAXIMUM_OBJECTS_PER_MAP %d' % constant(read('source/objects/objects.h'), 'MAXIMUM_OBJECTS_PER_MAP'),
