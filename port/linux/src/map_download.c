@@ -579,6 +579,27 @@ int map_download_start(const char *name, unsigned int version)
 
 	if (!map_archive_name_valid(name))
 		return 0;
+	/* port (this fork): a map not on the approved map list (the maps'
+	torrent index, map_torrents.h) comes from nowhere: the download fails at
+	once, saying what it is and whom to ask (a hashed name by its base) */
+	if (!map_archive_hashed_name(name, base, (int)sizeof(base), &prefix))
+		snprintf(base, sizeof(base), "%s", name);
+	if (!map_torrents_approved(base, version))
+	{
+		pthread_mutex_lock(&map_download.lock);
+		if (map_download.running)
+		{
+			pthread_mutex_unlock(&map_download.lock);
+			return 0;
+		}
+		memset(&map_download.progress, 0, sizeof(map_download.progress));
+		snprintf(map_download.progress.name, sizeof(map_download.progress.name), "%s", name);
+		map_torrents_unapproved_text(map_download.progress.message, (int)sizeof(map_download.progress.message), base,
+			NULL, version);
+		map_download.progress.state = MAP_DOWNLOAD_FAILED;
+		pthread_mutex_unlock(&map_download.lock);
+		return 1;
+	}
 	/* (port (this fork): Halo PC's own maps are downloaded too, which
 	ChupathingyCE leaves to the player's install: map_download_possible) */
 	if (map_archive_stock_name(name))

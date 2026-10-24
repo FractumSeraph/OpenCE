@@ -78,6 +78,7 @@ the right button is B.
 #include "../src/browser_ping.h"
 #include "../src/map_art.h"
 #include "../src/map_download.h"
+#include "../src/map_torrents.h"
 #include "../src/ui_overlay.h"
 #include "halo_ui_map_list.h"
 #include "halo_ui_pointer.h"
@@ -543,10 +544,45 @@ static void offer_stock(
 
 /* the map offered (asked about, or downloaded without asking, as
 network.map_downloads says) */
+/* port (this fork): the approved map list, the maps' torrent index
+(port/linux/src/map_torrents.h; plain types, as the game's units take them) */
+int map_torrents_approved(char const *file_name, unsigned int version);
+void map_torrents_unapproved_text(char *text, int size, char const *file_name, unsigned char const *hash,
+	unsigned int version);
+
+/* port (this fork): a map not on the approved map list is not offered: the
+player is told its name and the host's hash of it (its first 32 bits, all a
+game's advertisement has) and whom to ask. TRUE if so */
+static boolean map_unapproved_told(
+	char const *file,
+	unsigned long version)
+{
+	static wchar_t message[256];
+	char text[256];
+	long index;
+
+	if (map_torrents_approved(file, (unsigned int)version))
+		return FALSE;
+	map_torrents_unapproved_text(text, (int)sizeof(text), file, NULL, (unsigned int)version);
+	/* (the dialog's words shorter than the log's: it has room for few) */
+	snprintf(text, sizeof(text), "%.31s.map is not an approved map (hash %08lX). Contact " MAP_APPROVAL_CONTACT
+		" to get it approved.", file, version);
+	for (index = 0; text[index] && index < NUMBEROF(message) - 1; index++)
+		message[index] = (wchar_t)(unsigned char)text[index];
+	message[index] = 0;
+	browser_screen.offer = _offer_none;
+	browser_screen.connecting = FALSE;
+	browser_screen.rejoin_pending = FALSE;
+	display_error_text_deferred(message, NONE);
+	return TRUE;
+}
+
 static void offer_map(
 	char const *file,
 	unsigned long version)
 {
+	if (map_unapproved_told(file, version))
+		return;
 	csstrncpy(browser_screen.offer_file, file, sizeof(browser_screen.offer_file) - 1);
 	browser_screen.offer_file[sizeof(browser_screen.offer_file) - 1] = 0;
 	map_archive_display_name(browser_screen.offer_file, browser_screen.offer_display,

@@ -158,6 +158,45 @@ the archives' (`map_torrents.c`) and no archive takes it for its own
 before. `python tools/map_torrents.py check` checks an index against its
 torrent files. `tools/test_map_torrents.py` tests the tool.
 
+## The approved map list (this fork)
+
+The index is also the fork's approved map list
+(`map_torrents_approved*`, `port/linux/src/map_torrents.h`). Each line has a
+`share:<64 hex digits>` column after the BLAKE2b-256: the map sharing hash
+(BLAKE2b-256 of `OpenCE map 1`, the file's size as 4 bytes little-endian and
+the BLAKE2b-256 of each 256 KB piece: `port/linux/game/map_share_files.c`),
+which is what a host offers a joining player. A client takes a host's map
+only when that hash is in the index (the resource maps by their names), and
+the map repositories' download (`map_download.c`) only a map whose name and
+host's version (its header checksum, or the map sharing hash's or the
+whole-file BLAKE2b's first 32 bits) are; a fork host offers no other. Anything
+else is refused before a byte comes, and the player is told the file name
+and the hash (the whole hash from a host's offer; the host's version, its
+first 8 digits, in Online Games) and to contact `MAP_APPROVAL_CONTACT`
+(@FractumSeraph). The tracker takes only the index's info hashes
+(`/etc/opentracker/whitelist.txt`), so the three agree.
+
+`tools/map_share_hash.c` prints the map sharing hash of map files (built
+with Monocypher: `cc -O2 -o map_share_hash tools/map_share_hash.c
+port/third_party/monocypher/monocypher.c`), for a machine whose Python has
+no BLAKE2 (the seed box's 3.5); `python tools/map_torrents.py share --hashes
+<its output>` notes them in the index, `share --maps <folder>` hashes the
+files itself.
+
+### Approving a map
+
+1. Get the file (the player who asked can send it) and check its hash against
+   the one the player was told: `map_share_hash <file>`.
+2. Add it to the index: `python tools/map_torrents.py make --maps <a folder
+   with it> --torrents <the torrents folder>`, which writes its torrent and its
+   line, every column included.
+3. Put the map on the web seed (`halomaps.fractumseraph.net/maps/`) and its
+   torrent in `torrents/`, add its info hash to the tracker's
+   `/etc/opentracker/whitelist.txt` (then `systemctl reload opentracker`), and
+   seed it.
+4. Commit the index: players' games know the map once they run a build with
+   it (the dedicated servers' too, by their updates).
+
 ## Seeding the archive
 
 Anyone can seed: put the maps in a folder, add the `.torrent` files to

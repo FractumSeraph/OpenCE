@@ -144,8 +144,9 @@ def test_blake2b_notes_each_maps_hash(tmp_path):
     # the archive source stays a source, after the hash
     assert entries[("alpha.map", 0x11111111)].sources == ["halomaps:1234"]
     line = next(line for line in index.read_text(encoding="utf-8").splitlines() if line.startswith("alpha.map"))
-    assert line.split("\t")[5:] == [f"blake2b:{hashlib.blake2b(alpha, digest_size=32).hexdigest()}",
-                                    "halomaps:1234"]
+    assert line.split("\t")[5] == f"blake2b:{hashlib.blake2b(alpha, digest_size=32).hexdigest()}"
+    # (port: the map sharing hash after it, the approved map list's)
+    assert line.split("\t")[6].startswith("share:") and line.split("\t")[7:] == ["halomaps:1234"]
     # what b2sum printed, of the folder's files somewhere else
     beta_hash = hashlib.blake2b(beta, digest_size=32).hexdigest()
     hashes = tmp_path / "maps.b2"
@@ -221,8 +222,8 @@ def test_sources_notes_the_archives_zips_that_hold_each_map(tmp_path):
     # the line the game reads: the sources after the info hash and the
     # BLAKE2b-256
     line = next(line for line in index.read_text(encoding="utf-8").splitlines() if line.startswith("alpha.map"))
-    assert line.split("\t")[5].startswith("blake2b:")
-    assert line.split("\t")[6:] == ["halonet:alpha pack.zip", "halomaps:1234"]
+    assert line.split("\t")[5].startswith("blake2b:") and line.split("\t")[6].startswith("share:")
+    assert line.split("\t")[7:] == ["halonet:alpha pack.zip", "halomaps:1234"]
     # an archive not given keeps its columns; a rerun gives the same
     result = run("sources", "--halomaps", str(halomaps), "--index", str(index))
     assert result.returncode == 0, result.stdout + result.stderr
@@ -243,3 +244,40 @@ def test_the_committed_index_names_the_archives_zips():
 def test_the_committed_index_has_each_maps_blake2b():
     entries = map_torrents.read_index(map_torrents.DEFAULT_INDEX)
     assert [entry.file_name for entry in entries.values() if not entry.blake2b] == []
+
+
+def test_share_notes_each_maps_sharing_hash(tmp_path):
+    """port (this fork): the map sharing hash (the approved map list's
+    share:<hash> column) is what the game hashes a map to
+    (port/linux/game/map_share_files.c): BLAKE2b-256 of the label, the size
+    and each 256 KB piece's BLAKE2b-256. An index without it has it added from
+    what tools/map_share_hash.c printed; make notes it too."""
+    data = bytes(range(256)) * 2500  # (640,000 bytes: two whole pieces and a part)
+    pieces = b"".join(hashlib.blake2b(data[offset:offset + 0x40000], digest_size=32).digest()
+                      for offset in range(0, len(data), 0x40000))
+    expected = hashlib.blake2b(b"OpenCE map 1" + len(data).to_bytes(4, "little") + pieces, digest_size=32).hexdigest()
+    path = tmp_path / "gamma.map"
+    path.write_bytes(data)
+    assert map_torrents.share_hash_of(path) == expected
+    assert map_torrents.hash_file(path, 0x80000)[2] == expected
+    # (an entry without it, as the index had before)
+    index = tmp_path / "index.txt"
+    entry = map_torrents.Entry("gamma.map", 0, len(data), 0x40000, "a" * 40, ["halomaps:7"])
+    map_torrents.write_index(index, {entry.key: entry})
+    hashes = tmp_path / "hashes.txt"
+    hashes.write_text(f"{expected}\t{len(data)}\t/somewhere/gamma.map\nerror\t0\t/somewhere/broken.map\n",
+                      encoding="utf-8")
+    result = run("share", "--hashes", str(hashes), "--index", str(index))
+    assert result.returncode == 0, result.stdout + result.stderr
+    noted = map_torrents.read_index(index)[("gamma.map", 0)]
+    assert noted.share == expected and noted.sources == ["halomaps:7"]
+    line = next(line for line in index.read_text(encoding="utf-8").splitlines() if line.startswith("gamma.map"))
+    assert line.split("\t")[5:] == [f"share:{expected}", "halomaps:7"]
+    # (a bad column is refused)
+    index.write_text(index.read_text(encoding="utf-8").replace(f"share:{expected}", "share:xyz"), encoding="utf-8")
+    try:
+        map_torrents.read_index(index)
+        assert False, "a bad share column was read"
+    except SystemExit:
+        pass
+

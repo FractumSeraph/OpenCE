@@ -67,6 +67,13 @@ what it says it has grows.
 #include "map_share.h"
 #include "../src/p2p.h"
 
+/* port (this fork): the approved map list, the maps' torrent index
+(port/linux/src/map_torrents.h; plain types, as the game's units take them) */
+int map_torrents_approved_hash(char const *file_name, unsigned char const *hash);
+int map_torrents_approved(char const *file_name, unsigned int version);
+void map_torrents_unapproved_text(char *text, int size, char const *file_name, unsigned char const *hash,
+	unsigned int version);
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1689,6 +1696,21 @@ static void download_offered(
 				"Join again when it is there.");
 			return;
 		}
+		/* port (this fork): one not on the approved map list (the index's)
+		is downloaded from nowhere: the player is told what it is and whom to
+		ask (map_torrents.h) */
+		{
+			char base_file[LEVEL_NAME_BYTES];
+			char text[400];
+
+			csprintf(base_file, "%.*s", (int)map_share_name_base_length(name), name);
+			if (!map_torrents_approved(base_file, (unsigned int)download->version))
+			{
+				map_torrents_unapproved_text(text, (int)sizeof(text), base_file, NULL, (unsigned int)download->version);
+				download_fail(text);
+				return;
+			}
+		}
 		download_fail(offer->result == _offer_off ? "The host does not share its maps." :
 			"The host cannot share this map.");
 		return;
@@ -1753,6 +1775,24 @@ static void download_offered(
 			return;
 		}
 		download->total_bytes += file->size;
+	}
+	/* port (this fork): the map offered must be on the approved map list
+	(the maps' torrent index's share:<hash>), else nothing is downloaded and
+	the player is told its name and hash and whom to ask (map_torrents.h) */
+	for (index = 0; index < download->file_count; index++)
+	{
+		struct download_file *file = &download->files[index];
+
+		if (file->kind == _map_share_file_map && !map_torrents_approved_hash(NULL, file->hash))
+		{
+			char base_file[LEVEL_NAME_BYTES];
+			char text[400];
+
+			csprintf(base_file, "%.*s", (int)map_share_name_base_length(name), name);
+			map_torrents_unapproved_text(text, (int)sizeof(text), base_file, file->hash, 0);
+			download_fail(text);
+			return;
+		}
 	}
 	/* (the hashes come first: no piece can be checked without them) */
 	for (index = 0; index < download->file_count; index++)
@@ -3434,6 +3474,15 @@ static void host_update(
 				{
 					error(_error_silent, "map sharing: %s is not the game's version of its map (%08lx): not shared",
 						file->path, game ? (unsigned long)game->map.version : 0UL);
+					failed = TRUE;
+				}
+				/* port (this fork): nor one not on the approved map list (the
+				maps' torrent index: map_torrents.h) */
+				else if (machine->file_kinds[file_index] == _map_share_file_map &&
+					!map_torrents_approved_hash(NULL, file->hash))
+				{
+					error(_error_silent, "map sharing: %s is not on the approved map list (the maps' torrent index): "
+						"not shared", file->path);
 					failed = TRUE;
 				}
 			}

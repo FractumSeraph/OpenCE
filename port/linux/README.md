@@ -1436,6 +1436,17 @@ those names back; this fork did neither.)
   with. A download that stops leaves a `.part` file there; the next download
   of that map continues from it.
 
+**Only approved maps are downloaded (this fork).** The maps' torrent index
+(`map_torrents.txt`, `maps.torrent_index`) is the approved map list: a map
+comes from a host or its players only when its map sharing hash is one of the
+index's (its `share:` column), and from the map repositories only when its
+name and the host's version are there; BitTorrent and the archives fetch only
+the index's maps anyway. A host does not offer a map that is not on it. A
+player who would get one is told the map's file name and hash, and to contact
+@FractumSeraph to have it approved (`docs/map_torrents.md`, "Approving a
+map"). The browser version reads every map from the site, whose maps are the
+index's.
+
 Over the internet, the players of a game connect only to the host. To send
 each other a map, a player answers the other players of the game (who have
 its invite) as the host does, and a player who downloads connects to them in

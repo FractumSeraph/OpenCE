@@ -44,6 +44,22 @@ only the entries that lack one. --hashes takes them from what
 only of a file that is the entry's), for a machine whose Python has no
 BLAKE2. "make" notes it of every file it hashes.
 
+    python tools/map_torrents.py share --maps <folder> [--maps <folder>...]
+        [--resource-maps <folder>] [--hashes <file>] [--index <file>]
+
+notes, on each map's line, its map sharing hash (a column "share:<64 hex
+digits>" after the BLAKE2b-256): BLAKE2b-256 of "OpenCE map 1", the file's
+size (4 bytes, little-endian) and the BLAKE2b-256 of each 256 KB piece, what
+a host offers a joining player (port/linux/game/map_share_files.c). The
+index is this fork's approved map list: a player downloads a map from a
+host only when its hash is here, and from the map repositories only when its
+name and version are (port/linux/src/map_torrents.h). --hashes takes them
+from what tools/map_share_hash.c printed ("<hash> TAB <size> TAB <path>"),
+by file name and size, for a machine whose Python has no BLAKE2. "make"
+notes it of every file it hashes. To approve a map: "make" with a folder
+holding it (it is added to the index with all its columns), then put it on
+the map site and its info hash in the tracker's whitelist (docs/map_torrents.md).
+
     python tools/map_torrents.py sources [--halonet <folder>] [--halomaps <folder>]
         [--index <file>]
 
@@ -230,10 +246,14 @@ def piece_length_for(size):
 
 
 def hash_file(path, piece_length):
-    """The SHA-1 of each piece of the file, concatenated, and the BLAKE2b-256
-    of the whole file, in one reading."""
+    """The SHA-1 of each piece of the file, concatenated, the BLAKE2b-256 of
+    the whole file and its map sharing hash (share_hash_of), in one reading.
+    (A torrent's piece length is a power of two of 256 KB or more: whole
+    pieces of map sharing's.)"""
     pieces = []
     whole = hashlib.blake2b(digest_size=32)
+    share = hashlib.blake2b(digest_size=32)
+    share.update(SHARE_LABEL + Path(path).stat().st_size.to_bytes(4, "little"))
     with open(path, "rb") as f:
         while True:
             piece = f.read(piece_length)
@@ -241,7 +261,23 @@ def hash_file(path, piece_length):
                 break
             pieces.append(hashlib.sha1(piece).digest())
             whole.update(piece)
-    return b"".join(pieces), whole.hexdigest()
+            for offset in range(0, len(piece), SHARE_PIECE_BYTES):
+                share.update(hashlib.blake2b(piece[offset:offset + SHARE_PIECE_BYTES], digest_size=32).digest())
+    return b"".join(pieces), whole.hexdigest(), share.hexdigest()
+
+
+def share_hash_of(path):
+    """The map sharing hash of a file (port/linux/game/map_share_files.c,
+    tools/map_share_hash.c)."""
+    share = hashlib.blake2b(digest_size=32)
+    share.update(SHARE_LABEL + Path(path).stat().st_size.to_bytes(4, "little"))
+    with open(path, "rb") as f:
+        while True:
+            piece = f.read(SHARE_PIECE_BYTES)
+            if not piece:
+                break
+            share.update(hashlib.blake2b(piece, digest_size=32).digest())
+    return share.hexdigest()
 
 
 def blake2b_of(path):
@@ -282,12 +318,18 @@ SOURCE_PATTERN = re.compile(r"^(halonet|halomaps):[^\t\r\n]+$")
 # its archives (map_archives.c, archive_source) take for none of theirs
 BLAKE2B_KEY = "blake2b:"
 BLAKE2B_PATTERN = re.compile(r"^blake2b:[0-9a-f]{64}$")
+# port (this fork): the map sharing hash, a column after it (which old builds'
+# archives take for none of theirs either): the approved map list's
+SHARE_KEY = "share:"
+SHARE_PATTERN = re.compile(r"^share:[0-9a-f]{64}$")
+SHARE_LABEL = b"OpenCE map 1"
+SHARE_PIECE_BYTES = 0x40000
 
 
 class Entry:
-    __slots__ = ("file_name", "checksum", "size", "piece_length", "info_hash", "sources", "blake2b")
+    __slots__ = ("file_name", "checksum", "size", "piece_length", "info_hash", "sources", "blake2b", "share")
 
-    def __init__(self, file_name, checksum, size, piece_length, info_hash, sources=(), blake2b=None):
+    def __init__(self, file_name, checksum, size, piece_length, info_hash, sources=(), blake2b=None, share=None):
         self.file_name = file_name
         self.checksum = checksum
         self.size = size
@@ -295,6 +337,7 @@ class Entry:
         self.info_hash = info_hash
         self.sources = list(sources)
         self.blake2b = blake2b
+        self.share = share
 
     @property
     def key(self):
@@ -302,7 +345,8 @@ class Entry:
 
     def line(self):
         return "\t".join([self.file_name, f"{self.checksum:08X}", str(self.size), str(self.piece_length),
-                          self.info_hash, *([BLAKE2B_KEY + self.blake2b] if self.blake2b else []), *self.sources])
+                          self.info_hash, *([BLAKE2B_KEY + self.blake2b] if self.blake2b else []),
+                          *([SHARE_KEY + self.share] if self.share else []), *self.sources])
 
 
 def read_index(path):
@@ -323,10 +367,15 @@ def read_index(path):
             hashes = [field.lower() for field in fields[5:] if field.lower().startswith(BLAKE2B_KEY)]
             if len(hashes) > 1 or any(not BLAKE2B_PATTERN.match(field) for field in hashes):
                 raise SystemExit(f"{path}:{number}: a bad BLAKE2b-256")
+            shares = [field.lower() for field in fields[5:] if field.lower().startswith(SHARE_KEY)]
+            if len(shares) > 1 or any(not SHARE_PATTERN.match(field) for field in shares):
+                raise SystemExit(f"{path}:{number}: a bad map sharing hash")
             try:
                 entry = Entry(fields[0], int(fields[1], 16), int(fields[2]), int(fields[3]), fields[4].lower(),
-                              [field for field in fields[5:] if not field.lower().startswith(BLAKE2B_KEY)],
-                              hashes[0][len(BLAKE2B_KEY):] if hashes else None)
+                              [field for field in fields[5:]
+                               if not field.lower().startswith(BLAKE2B_KEY) and not field.lower().startswith(SHARE_KEY)],
+                              hashes[0][len(BLAKE2B_KEY):] if hashes else None,
+                              shares[0][len(SHARE_KEY):] if shares else None)
             except ValueError as error:
                 raise SystemExit(f"{path}:{number}: {error}")
             if any(not SOURCE_PATTERN.match(source) for source in entry.sources):
@@ -344,8 +393,10 @@ def write_index(path, entries):
         "# The Custom Edition maps (tools/map_torrents.py): each line a map,",
         "# tab-separated: file name, header checksum (the map version a host sends; 0 for",
         "# the resource maps, matched by name alone), size in bytes, piece length, info hash,",
-        "# the BLAKE2b-256 of the whole file (blake2b:<hash>), then the map archives' zips",
-        "# that hold it (halonet:<zip>, halomaps:<file id>).",
+        "# the BLAKE2b-256 of the whole file (blake2b:<hash>), the map sharing hash",
+        "# (share:<hash>, tools/map_share_hash.c), then the map archives' zips that hold it",
+        "# (halonet:<zip>, halomaps:<file id>). This fork's approved map list: no map",
+        "# missing here is downloaded from a host or the map repositories (map_torrents.h).",
         "# A map's single-file torrent has info = {length, name, piece length, pieces}: a",
         "# download is checked against its info hash (port/linux/src/map_archives.c).",
     ]
@@ -388,7 +439,7 @@ def make_one(arguments):
             checksum = identity["checksum"]
             size = identity["size"]
         piece_length = piece_length_for(size)
-        pieces, blake2b = hash_file(path, piece_length)
+        pieces, blake2b, share = hash_file(path, piece_length)
         info = info_dictionary(path.name, size, piece_length, pieces)
         return {
             "file_name": path.name,
@@ -397,6 +448,7 @@ def make_one(arguments):
             "piece_length": piece_length,
             "info_hash": info_hash(info),
             "blake2b": blake2b,
+            "share": share,
             "pieces": pieces.hex(),
         }
     except (MapError, OSError) as error:
@@ -424,17 +476,17 @@ def make(args):
                 continue
             key = str(path.resolve())
             remembered = cache.get(key)
-            # (a file remembered from before the BLAKE2b-256 was noted is
-            # hashed again)
+            # (a file remembered from before the BLAKE2b-256 or the map
+            # sharing hash was noted is hashed again)
             if remembered and remembered.get("stamp") == file_stamp(path) and \
-                    ("error" in remembered or "blake2b" in remembered["result"]):
+                    ("error" in remembered or ("blake2b" in remembered["result"] and "share" in remembered["result"])):
                 # (a file as it was: its entry, or why it was left out)
                 if "error" in remembered:
                     remembered_left_out.append((path, remembered["error"]))
                 else:
                     result = remembered["result"]
                     entry = Entry(result["file_name"], result["checksum"], result["size"], result["piece_length"],
-                                  result["info_hash"], blake2b=result["blake2b"])
+                                  result["info_hash"], blake2b=result["blake2b"], share=result.get("share"))
                     if entry.key not in entries:
                         entries[entry.key] = entry
                     note_blake2b(entries[entry.key], entry)
@@ -456,7 +508,7 @@ def make(args):
                 left_out.append((path, result["error"]))
             else:
                 entry = Entry(result["file_name"], result["checksum"], result["size"], result["piece_length"],
-                              result["info_hash"], blake2b=result["blake2b"])
+                              result["info_hash"], blake2b=result["blake2b"], share=result.get("share"))
                 duplicate = entry.key in entries
                 if not duplicate:
                     entries[entry.key] = entry
@@ -493,6 +545,73 @@ def note_blake2b(entry, hashed):
     entry's file (the same torrent: the same bytes)."""
     if hashed.blake2b and not entry.blake2b and hashed.info_hash == entry.info_hash and hashed.size == entry.size:
         entry.blake2b = hashed.blake2b
+    if hashed.share and not entry.share and hashed.info_hash == entry.info_hash and hashed.size == entry.size:
+        entry.share = hashed.share
+
+
+# ---------- the map sharing hash of each map (the approved map list)
+
+def read_share_hashes(path):
+    """What tools/map_share_hash.c printed: {(file name, size): hash}."""
+    hashes = {}
+    with open(path, "r", encoding="utf-8", errors="surrogateescape") as f:
+        for number, line in enumerate(f, 1):
+            line = line.rstrip("\r\n")
+            if not line:
+                continue
+            fields = line.split("\t", 2)
+            if len(fields) != 3 or fields[0] == "error":
+                continue
+            if not re.fullmatch(r"[0-9a-fA-F]{64}", fields[0]) or not fields[1].isdigit():
+                raise SystemExit(f"{path}:{number}: not a line of tools/map_share_hash.c")
+            hashes[(fields[2].replace("\\", "/").rsplit("/", 1)[-1], int(fields[1]))] = fields[0].lower()
+    return hashes
+
+
+def share(args):
+    index_path = Path(args.index)
+    entries = read_index(index_path)
+    files = {}
+    for resource, folders in ((False, args.maps), (True, [args.resource_maps] if args.resource_maps else [])):
+        for path in map_files(folders):
+            if resource == (path.name.lower() in RESOURCE_MAP_NAMES):
+                files.setdefault(path.name.lower(), []).append(path)
+    if not files and not args.hashes:
+        raise SystemExit("give --maps or --hashes")
+    given = read_share_hashes(args.hashes) if args.hashes else None
+    noted = 0
+    differ = 0
+    for entry in sorted(entries.values(), key=lambda e: (e.file_name.lower(), e.checksum)):
+        if entry.share and given is None:
+            continue
+        path = None
+        for candidate in files.get(entry.file_name.lower(), []):
+            try:
+                if candidate.stat().st_size == entry.size and \
+                        (not entry.checksum or identify(candidate)["checksum"] == entry.checksum):
+                    path = candidate
+                    break
+            except (MapError, OSError):
+                continue
+        if given is not None:
+            digest = given.get((entry.file_name, entry.size))
+            if not digest or (files and not path):
+                continue
+        elif path:
+            digest = share_hash_of(path)
+        else:
+            continue
+        if entry.share:
+            if entry.share != digest:
+                print(f"{entry.file_name}: another map sharing hash than the index's {entry.share} (the index's kept)")
+                differ += 1
+            continue
+        entry.share = digest
+        noted += 1
+    write_index(index_path, entries)
+    have = sum(1 for entry in entries.values() if entry.share)
+    print(f"{noted} map sharing hashes noted; {have} of {len(entries)} maps have one; {differ} differ")
+    return 1 if differ else 0
 
 
 # ---------- the BLAKE2b-256 of each map
@@ -714,6 +833,15 @@ def main():
                                 help="what b2sum -l 256 printed of the maps, taken instead of hashing them")
     blake2b_parser.add_argument("--index", metavar="FILE", default=str(DEFAULT_INDEX))
     blake2b_parser.set_defaults(run=blake2b)
+    share_parser = commands.add_parser("share", help="note each map file's map sharing hash (the approved map list)")
+    share_parser.add_argument("--maps", action="append", default=[], metavar="FOLDER",
+                              help="a folder of Custom Edition maps (may be given several times)")
+    share_parser.add_argument("--resource-maps", metavar="FOLDER",
+                              help="a folder with Custom Edition's bitmaps.map, sounds.map and loc.map")
+    share_parser.add_argument("--hashes", metavar="FILE",
+                              help="what tools/map_share_hash.c printed of the maps, taken instead of hashing them")
+    share_parser.add_argument("--index", metavar="FILE", default=str(DEFAULT_INDEX))
+    share_parser.set_defaults(run=share)
     args = parser.parse_args()
     sys.exit(args.run(args) or 0)
 

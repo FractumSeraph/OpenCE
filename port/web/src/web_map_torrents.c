@@ -128,3 +128,28 @@ void map_torrents_playing(const char *level_name, unsigned long version, int hos
 	(void)version;
 	(void)hosting;
 }
+
+/* port (this fork): the approved map list (map_torrents.h). The browser
+shares no maps with other players and reads every map from the site, whose
+maps are the index's: every map is approved here */
+int map_torrents_approved_hash(const char *file_name, const unsigned char *hash)
+{
+	(void)file_name;
+	(void)hash;
+	return 1;
+}
+
+int map_torrents_approved(const char *file_name, unsigned int version)
+{
+	(void)file_name;
+	(void)version;
+	return 1;
+}
+
+void map_torrents_unapproved_text(char *text, int size, const char *file_name, const unsigned char *hash,
+	unsigned int version)
+{
+	(void)hash;
+	(void)version;
+	snprintf(text, (size_t)size, "%s is not on the approved map list.", file_name ? file_name : "");
+}

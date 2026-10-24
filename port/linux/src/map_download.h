@@ -44,8 +44,9 @@ struct map_download_progress
 	unsigned int total;
 	/* the map's file name */
 	char name[32];
-	/* why it failed */
-	char message[160];
+	/* why it failed (port (this fork): a map not on the approved map list's
+	name, hash and whom to ask, map_torrents.h) */
+	char message[400];
 	/* port (this fork): while it comes over BitTorrent or from the map
 	archives (map_torrents.c), what that says (received and total are then
 	thousandths of it); else empty */

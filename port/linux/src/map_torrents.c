@@ -90,6 +90,13 @@ struct index_entry
 	"halomaps:<file id>"; map_archives.h), "" for none; the file's
 	BLAKE2b-256 column (blake2b:<hash>) is kept with them, no archive's */
 	unsigned long sources;
+	/* port: the map sharing hash (the share:<hash> column, which is
+	map_share_hash.c's) and the whole-file BLAKE2b's first 32 bits, when the
+	index has them: the approved map list (map_torrents_approved) */
+	unsigned char share[32];
+	int has_share;
+	unsigned int blake2b_prefix;
+	int has_blake2b;
 };
 
 static struct
@@ -130,6 +137,42 @@ static void index_path(char *path, int size)
 	}
 	config_folder(path, (unsigned long)size);
 	snprintf(path + strlen(path), (size_t)size - strlen(path), "%s", name);
+}
+
+/* a column's 64 hex digits after its key ("share:", "blake2b:") in the
+sources, as 32 bytes: 1 if there */
+static int column_hash(const char *sources, const char *key, unsigned char *hash)
+{
+	size_t key_length = strlen(key);
+	const char *at = sources;
+
+	while (at && *at)
+	{
+		if (!strncmp(at, key, key_length))
+		{
+			const char *digits = at + key_length;
+			int index;
+
+			for (index = 0; index < 64; index++)
+			{
+				char c = digits[index];
+
+				if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')))
+					return 0;
+			}
+			for (index = 0; index < 32; index++)
+			{
+				char pair[3] = { digits[index * 2], digits[index * 2 + 1], 0 };
+
+				hash[index] = (unsigned char)strtoul(pair, NULL, 16);
+			}
+			return 1;
+		}
+		at = strchr(at, '\t');
+		if (at)
+			at++;
+	}
+	return 0;
 }
 
 /* reads the index once: each line a map's file name, header checksum,
@@ -236,6 +279,14 @@ static void index_load(void)
 		{
 			torrent_maps_index.names[torrent_maps_index.names_size++] = 0;
 		}
+		{
+			unsigned char whole[32];
+
+			entry->has_share = column_hash(torrent_maps_index.names + entry->sources, "share:", entry->share);
+			entry->has_blake2b = column_hash(torrent_maps_index.names + entry->sources, "blake2b:", whole);
+			entry->blake2b_prefix = entry->has_blake2b ? (unsigned int)whole[0] << 24 | (unsigned int)whole[1] << 16 |
+				(unsigned int)whole[2] << 8 | (unsigned int)whole[3] : 0;
+		}
 		if (!name_length || !entry->size || !entry->piece_length)
 		{
 			platform_log("map torrents: %s line %d has a bad size or piece length (left out)",
@@ -265,6 +316,95 @@ static const struct index_entry *index_find(const char *file_name, unsigned long
 		}
 	}
 	return NULL;
+}
+
+/* ---------- the approved map list (port) */
+
+/* the name's own file name: its folders gone, ".map" ended with */
+static void approval_file_name(const char *name, char *file, int size)
+{
+	const char *base = name ? name : "";
+	const char *slash;
+
+	while ((slash = strpbrk(base, "\\/")) != NULL)
+		base = slash + 1;
+	snprintf(file, (size_t)size, "%s", base);
+	if (strlen(file) < 4 || !same_name(file + strlen(file) - 4, MAP_FILE_EXTENSION))
+		snprintf(file + strlen(file), (size_t)size - strlen(file), "%s", MAP_FILE_EXTENSION);
+}
+
+int map_torrents_approved_hash(const char *file_name, const unsigned char *hash)
+{
+	char file[NAME_SIZE];
+	int which;
+
+	index_load();
+	if (file_name)
+	{
+		approval_file_name(file_name, file, sizeof(file));
+		for (which = 0; which < torrent_maps_index.count; which++)
+		{
+			const struct index_entry *entry = &torrent_maps_index.entries[which];
+
+			if (!entry->checksum && same_name(torrent_maps_index.names + entry->name, file))
+				return 1;
+		}
+	}
+	for (which = 0; hash && which < torrent_maps_index.count; which++)
+	{
+		const struct index_entry *entry = &torrent_maps_index.entries[which];
+
+		if (entry->has_share && !memcmp(entry->share, hash, sizeof(entry->share)))
+			return 1;
+	}
+	return 0;
+}
+
+int map_torrents_approved(const char *file_name, unsigned int version)
+{
+	char file[NAME_SIZE];
+	int which;
+
+	index_load();
+	approval_file_name(file_name, file, sizeof(file));
+	for (which = 0; which < torrent_maps_index.count; which++)
+	{
+		const struct index_entry *entry = &torrent_maps_index.entries[which];
+		unsigned int share_prefix = entry->has_share ? (unsigned int)entry->share[0] << 24 |
+			(unsigned int)entry->share[1] << 16 | (unsigned int)entry->share[2] << 8 | (unsigned int)entry->share[3] : 0;
+
+		if (!same_name(torrent_maps_index.names + entry->name, file))
+			continue;
+		if (!version || !entry->checksum || entry->checksum == version || (entry->has_share && share_prefix == version) ||
+			(entry->has_blake2b && entry->blake2b_prefix == version))
+		{
+			return 1;
+		}
+	}
+	return 0;
+}
+
+void map_torrents_unapproved_text(char *text, int size, const char *file_name, const unsigned char *hash,
+	unsigned int version)
+{
+	char file[NAME_SIZE];
+	char digits[65];
+	int index;
+
+	approval_file_name(file_name, file, sizeof(file));
+	if (hash)
+	{
+		for (index = 0; index < 32; index++)
+			snprintf(digits + index * 2, 3, "%02x", hash[index]);
+	}
+	else
+	{
+		snprintf(digits, sizeof(digits), "%08x (the host's map version)", version);
+	}
+	snprintf(text, (size_t)size, "%s is not on the approved map list, so it was not downloaded.\r\n\r\n"
+		"Hash: %s\r\n\r\nTo get it approved, contact " MAP_APPROVAL_CONTACT " with the file name and hash.",
+		file, digits);
+	platform_log("map approval: %s (%s) is not in the maps' torrent index: not downloaded", file, digits);
 }
 
 /* ---------- the client */
