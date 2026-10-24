@@ -150,20 +150,24 @@ void network_damage_player_effect(long player_index, struct damage_data const *d
 void network_damage_aftermath(long object_index, struct damage_data const *damage, unsigned long being_damaged_flags,
 	real shield_damage, real body_damage, real body_damage_multiplier, short body_part, short node_index,
 	short region_index, short material_index, long victim_player_index);
-boolean network_damage_static_target(long object_index);
 
 /* set while a distributed client carries out a kill it does not decide (an
 act of god: the host's word, network_distributed.c, or the world's) */
 static boolean distributed_damage_authorized;
 
+/* port/linux/game/network_damage.c's: whether a client runs the object's
+shields itself (a static target's, from network version 34) */
+boolean network_damage_client_runs_shields(long object_index);
+
 /* whether this machine runs the object's shields (their stun, recharge and
 overcharge): not a client of the distributed netcode, which has the host's
 (damage_set_network_state), but for the map's scenery and devices that
 damage can break, whose damage every machine deals as the host did and of
-which the host sends no state (network_damage.c's static targets: a
-scenery's shield, broken, came back on no client) */
+which the host sends no state (network_damage.c's static targets, of a host
+of network version 34 or later: a scenery's shield, broken, came back on no
+client) */
 #define objects_update_shields(object_index) \
-	(!network_game_distributed_client() || network_damage_static_target(object_index))
+	(!network_game_distributed_client() || network_damage_client_runs_shields(object_index))
 
 /* ---------- constants */
 

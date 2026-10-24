@@ -200,9 +200,7 @@ symbols in this file:
 #include "networking/network_client_manager.h"
 #include "networking/network_client_message_handler.h"
 #include "networking/network_game_manager.h"
-#ifdef HALO_PORT_CONSOLE_LIMITS
 #include "networking/network_game_protocol.h"
-#endif
 #include "networking/network_messages.h"
 
 /* port/linux/game/network_distributed.c's */
@@ -1089,6 +1087,32 @@ static struct network_game network_game_client_settings_staging;
 #endif
 static long network_game_client_settings_staging_size = 0;
 
+/* port: OpenCE's network versions 35 on (port/linux/game/network_rules.c):
+the gametype's options grow from 0x1C to 0x2C bytes (OpenCE's SWAT,
+Infection, Gun Game and Hardcore), and the record with them. A client takes
+the record's size from the host's advertised version, or, for a host not
+known (joined by an invitation), the size its pieces say. This build's own
+record is 35's layout (this fork plays those game types): a record of 35's
+is taken as it is, and an older host's widened into it
+(network_game_layout_from_version), OpenCE's options zeroed, which
+game_modes_options_sanitize makes their defaults when the game begins. */
+int network_rules_settings_size_taken(unsigned version, unsigned total_size);
+
+enum
+{
+	/* (network_rules.h's NETWORK_RULES_SETTINGS_SIZE, _EXTENDED_SIZE and
+	_EXTENDED_OPTIONS_VERSION) */
+	NETWORK_GAME_CLIENT_SETTINGS_SIZE = 13120,
+	NETWORK_GAME_CLIENT_SETTINGS_EXTENDED_SIZE = 13120 + 16,
+	NETWORK_GAME_CLIENT_EXTENDED_OPTIONS_VERSION = 35,
+};
+
+typedef char network_game_client_settings_size_assert[
+	HALO_PORT_WIRE_NETWORK_GAME_SIZE == NETWORK_GAME_CLIENT_SETTINGS_EXTENDED_SIZE &&
+	sizeof(network_game_client_settings_staging) == NETWORK_GAME_CLIENT_SETTINGS_EXTENDED_SIZE &&
+	NETWORK_GAME_CLIENT_SETTINGS_EXTENDED_SIZE - NETWORK_GAME_CLIENT_SETTINGS_SIZE == HALO_PORT_LEGACY_OPTIONS_SHORTFALL &&
+	NETWORK_GAME_CLIENT_EXTENDED_OPTIONS_VERSION == HALO_PORT_GAME_MODES_NETWORK_VERSION ? 1 : -1];
+
 static boolean network_game_client_receive_game_settings_piece(
 	struct network_game_client *client,
 	struct message_server_game_settings_update const *piece,
@@ -1096,11 +1120,10 @@ static boolean network_game_client_receive_game_settings_piece(
 {
 	boolean result = TRUE;
 
-	/* port (this fork): a host before network version 35 sends its record 16
-	bytes shorter (the PC options' first 0x1C bytes), widened once whole
-	(network_game_layout_from_version) */
-	if ((piece->total_size != sizeof(network_game_client_settings_staging) &&
-			piece->total_size != sizeof(network_game_client_settings_staging) - HALO_PORT_LEGACY_OPTIONS_SHORTFALL) ||
+	/* port: the record's size by the host's version (13,120 bytes to 34,
+	13,136 from 35), either for a host not known; an older one is widened
+	once whole (network_game_layout_from_version) */
+	if (!network_rules_settings_size_taken(network_game_client_host_network_version(), piece->total_size) ||
 		piece->length > sizeof(piece->data) ||
 		piece->offset + piece->length > piece->total_size)
 	{
@@ -1130,11 +1153,15 @@ static boolean network_game_client_receive_game_settings_piece(
 			if (network_game_client_settings_staging_size == piece->total_size)
 			{
 				network_game_client_settings_staging_size = 0;
+				/* port: a host not known that sends the record of 35's layout
+				is taken for one of 35 on (network_rules_of_version) */
+				if (piece->total_size == NETWORK_GAME_CLIENT_SETTINGS_EXTENDED_SIZE)
+					network_game_client_note_host_network_version(NETWORK_GAME_CLIENT_EXTENDED_OPTIONS_VERSION);
 				/* port (this fork): an older host's, this version's (by its size
 				and the host's version: network_client_manager.c) */
 				if (network_game_layout_from_version((unsigned char *)&network_game_client_settings_staging,
 					piece->total_size, sizeof(network_game_client_settings_staging),
-					network_game_client_host_announced_version()) != 0)
+					network_game_client_host_network_version()) != 0)
 				{
 					network_event("got a game settings record of a size no network version has");
 					return FALSE;

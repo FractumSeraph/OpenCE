@@ -175,8 +175,11 @@ translation layer, valid only where no peer computes anything different.
    most. The console must not evict its own objects for a forced create;
    it collects them first, then refuses.
 3. **Hosting.** A console host widens its record to the PCs' 13,136 bytes
-   and sends it in their four pieces, and allocates host objects below
-   2,048 (its own limit), which every PC can take.
+   and sends it in their four pieces (to a machine before network version
+   35, ChupathingyCE 0.8.0e's, the 13,120-byte record narrowed from it, as
+   every host of this fork does: `network_server_message_handler.c`), and
+   allocates host objects below 2,048 (its own limit), which every PC can
+   take.
 
 ## What is built
 
@@ -197,7 +200,8 @@ and leaving cleanly what doesn't fold:
 - **The settings record.** `port/linux/game/network_game_layout.c` (moved
   from `port/xbox/src`, built into every build, called only with the
   console's limits). The client takes the PCs' 13,136-byte record in its
-  four pieces and folds it into its own
+  four pieces (a host's before network version 35, 13,120 bytes, widened
+  to it first: `network_game_layout_from_version`) and folds it into its own
   (`network_client_message_handler.c`). A record with a machine or player
   in a slot past 16, or an entry naming one, is not taken: the console
   leaves the game as a full one (`_rejection_code_game_is_full`, "the game

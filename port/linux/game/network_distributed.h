@@ -142,7 +142,10 @@ enum
 	hands it on) */
 	_distributed_message_aim_assist_policy = 90,
 	/* the host's shield effects (network_shield_effects.c), to every client,
-	reliably, when it is ready and when they change */
+	reliably, when it is ready and when they change: 12 bytes, the header and
+	a 16-bit value (0 stock to 5) and 16 bits of 0. 91 as in OpenCE's network
+	version 36; a host before it sends none, and its clients draw the stock
+	ones */
 	_distributed_message_shield_effects = 91,
 
 	NUMBER_OF_DISTRIBUTED_MESSAGES
@@ -344,6 +347,11 @@ word network_votekick_status_entry_size(void);
 a client (blocked until it speaks, or always allowed by a host of a version
 that has no such policy), never in single player or the menus */
 boolean network_aim_assist_blocked(void);
+/* whether the game is played by the rules of the network version or a
+later one: a client by its host's advertised version (one not known plays
+by the older rules, until its game settings record shows it is of 35 or
+later), a host by the number it announces (delta_legacy_announce) */
+boolean network_rules_of_version(unsigned int version);
 
 /* ---------- prototypes/NETWORK_CHAT.C */
 

@@ -23,7 +23,7 @@ static real object_get_maximum_shield_vitality(long object_index,boolean ignore_
  (void)ignore_difficulty;return objects[object_index].shield;
 }
 struct damage_data { long owner_object_index; };
-/* where each object is, and its size (static_target_near) */
+/* where each object is, and its size (static_target_nearest) */
 static real_point3d origins[] = { { 0, 0, 0 }, { 10, 0, 0 }, { 10.5f, 0, 0 }, { 13, 0, 0 }, { 10.1f, 0, 0 } };
 struct object_datum { struct { real bounding_sphere_radius; } object; };
 static struct object_datum datums[5] = { { { 0.2f } }, { { 0.2f } }, { { 0.2f } }, { { 0.2f } }, { { 0.5f } } };
@@ -39,17 +39,17 @@ static void *object_iterator_next(struct object_iterator *iterator)
  while(iterator->next<5){long index=iterator->next++;if(objects[index].mask&iterator->mask){iterator->index=index;return &datums[index];}}
  return NULL;
 }
-/* the machine's connection and the joined host's network version
-(static_target_shields_shared: a client of a host before 34 keeps that
-version's rule) */
+/* the machine's connection, the joined host's advertised network version and
+the number this machine announces as a host (network_rules_of_version: a
+client of a host before 34 keeps that version's rule, as does one of a host
+not known; a host goes by its own number) */
 enum { _game_connection_local, _game_connection_network_client, _game_connection_network_server };
 static short connection = _game_connection_network_server;
 static unsigned int host_version = 0xFFFF;
+static int announce = 36;
 static short game_connection(void) { return connection; }
-static boolean network_game_client_host_before(unsigned int version)
-{
- return host_version != 0xFFFF && host_version < version;
-}
+static unsigned int network_game_client_host_network_version(void) { return host_version; }
+static int delta_legacy_announce(void) { return announce; }
 #include "under_test.inc"
 int main(int argc,char **argv)
 {
@@ -73,11 +73,11 @@ int main(int argc,char **argv)
  } else CASE("near") {
   /* another machine's copy of a tripmine (object 1, a shield) where this machine has it, and not too far */
   real_point3d at={10.3f,0,0},away={11.6f,0,0},nothing={30,0,0};
-  CHECK(static_target_near(&at,1.0f)==1,"the nearest static target, %ld",static_target_near(&at,1.0f));
-  CHECK(static_target_near(&away,1.0f)==NONE,"no unit, nothing damage cannot break, none farther");
-  CHECK(static_target_near(&nothing,1.0f)==NONE,"none within reach");
-  CHECK(static_target_near(&at,0.0f)==NONE,"its size and the reach only");
-  { real_point3d between={12,0,0}; CHECK(static_target_near(&between,2.0f)==3,"the nearer of two, %ld",static_target_near(&between,2.0f)); }
+  CHECK(static_target_nearest(&at,1.0f)==1,"the nearest static target, %ld",static_target_nearest(&at,1.0f));
+  CHECK(static_target_nearest(&away,1.0f)==NONE,"no unit, nothing damage cannot break, none farther");
+  CHECK(static_target_nearest(&nothing,1.0f)==NONE,"none within reach");
+  CHECK(static_target_nearest(&at,0.0f)==NONE,"its size and the reach only");
+  { real_point3d between={12,0,0}; CHECK(static_target_nearest(&between,2.0f)==3,"the nearer of two, %ld",static_target_nearest(&between,2.0f)); }
  } else CASE("older_host") {
   /* a client of a host before network version 34: the scenery and devices with a body alone, and no damage of
   their own (the client reports its player's tripmine's as before) */
@@ -90,20 +90,43 @@ int main(int argc,char **argv)
   CHECK(!static_target(3),"no shield-only device for a host of 33");
   CHECK(!static_target_damage(&tripmine),"no tripmine's own damage for a host of 33");
   CHECK(!static_target_damage(&light),"no static target's own damage for a host of 33");
-  CHECK(static_target_near(&at,1.0f)==NONE,"no shield-only copy to match for a host of 33");
+  CHECK(static_target_nearest(&at,1.0f)==NONE,"no shield-only copy to match for a host of 33");
   host_version=11;
   CHECK(!static_target(1),"no shield-only scenery for a host of 11");
-  /* a host of 34 and later, and one not known (an invitation's), as this build's */
+  /* ChupathingyCE's hosts announce 32 */
+  host_version=32;
+  CHECK(!static_target(1)&&!static_target_damage(&tripmine),"a host of 32");
+  /* a host of 34 and later */
   host_version=34;
   CHECK(static_target(1)&&static_target_damage(&tripmine),"a host of 34");
   host_version=36;
   CHECK(static_target(3),"a host of 36");
+  /* one not known (an invitation's) plays by the older rules, until its record shows 35
+  (network_game_client_note_host_network_version) */
   host_version=0xFFFF;
-  CHECK(static_target(1),"a host not known");
-  /* the host itself, whatever it last joined */
+  CHECK(!static_target(1),"a host not known");
+  host_version=35;
+  CHECK(static_target(1),"a host shown to be of 35");
+  /* the host itself, whatever it last joined: by the number it announces */
   connection=_game_connection_network_server;
   host_version=33;
   CHECK(static_target(1)&&static_target_damage(&tripmine),"a host's own rule");
+  announce=32;
+  CHECK(!static_target(1)&&!static_target_damage(&tripmine),"a host announcing 32 (a local legacy table)");
+  connection=_game_connection_local;
+  announce=36;
+  CHECK(static_target(1),"a game of this machine's own");
+ } else CASE("shields") {
+  /* a client runs a static target's shields itself from 34 on (the host sends none), nothing else's */
+  connection=_game_connection_network_client;
+  host_version=36;
+  CHECK(network_damage_client_runs_shields(1),"a shield-only scenery's, for a host of 36");
+  CHECK(network_damage_client_runs_shields(0),"a destructible scenery's, for a host of 36");
+  CHECK(!network_damage_client_runs_shields(4),"never a unit's");
+  host_version=33;
+  CHECK(!network_damage_client_runs_shields(0),"none for a host of 33, whose host sends them");
+  host_version=0xFFFF;
+  CHECK(!network_damage_client_runs_shields(1),"none for a host not known");
  } else return 2;
  return 0;
 }

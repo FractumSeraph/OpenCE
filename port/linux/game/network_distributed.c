@@ -3664,6 +3664,22 @@ boolean network_aim_assist_blocked(
 		distributed_aim_assist_setting(), distributed_aim_assist_blocked_by_host);
 }
 
+boolean network_rules_of_version(
+	unsigned int version)
+{
+	unsigned int host;
+
+	/* (a host, or a game of this machine's own: by the number it announces,
+	the built-in one or a legacy table's, which its OpenCE machines are of) */
+	if (game_connection() != _game_connection_network_client)
+		return (unsigned int)delta_legacy_announce() >= version;
+	host = network_game_client_host_network_version();
+	return host != NETWORK_RULES_VERSION_UNKNOWN && host >= version;
+}
+
+/* (the host's shield effects, message 91 of network version 36, are
+network_shield_effects.c's: this build draws them) */
+
 /* (the host) the setting to one client machine, or to every client (NONE) */
 static void distributed_send_aim_assist(
 	long machine_index)
@@ -5433,8 +5449,9 @@ void network_distributed_handle_message(
 	}
 	case _distributed_message_shield_effects:
 		/* the host's shield effects (network version 36): the host's alone,
-		over its stream, whole (network_shield_effects.c checks it); a host
-		of an older version sends none, and its clients draw the stock ones */
+		over its stream, whole (network_shield_effects.c checks it: the size,
+		one entry, effects 0 to 5, the word after them 0); a host of an older
+		version sends none, and its clients draw the stock ones */
 		network_shield_effects_handle_message(machine_index, message, size);
 		break;
 	case _distributed_message_pickups:

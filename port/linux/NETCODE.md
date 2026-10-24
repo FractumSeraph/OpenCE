@@ -299,21 +299,69 @@ and the overshield effect, Server Setup's SHIELD EFFECTS), which every client
 draws in place of its player's own, so that an OpenCE build that would draw
 its own cannot join.
 
-This fork's hosts send 36's (OpenCE's clients of 36 join them), and its
-clients still join hosts of 11 to 35, converting what differs by the host's
-version (`network_game_client_host_network_version`, from its advertisement;
-a host joined without one, by an invitation, is taken for 36's but for the
-record's size): a host before 35 sends the shorter game settings record,
-whose pieces' total size says so, and the client widens it as it arrives
-(`network_game_layout_from_version`, `network_client_message_handler.c`:
-the old 0x1C bytes of PC options kept, OpenCE's options zeroed, so no OpenCE
-gametype); a host before 33 has no ALLY FRIENDLY FIRE bit (cleared: on, as
-the campaign has it); a client of a host before 34 keeps that version's
-static targets, the scenery and devices damage can destroy alone
-(`network_damage.c`'s `static_target`), so it neither reports hits on
-shield-only scenery nor expects the host's damage to it, runs no shields of
-its own and reports its hits on a tripmine as before; and a host before 36
-sends no message 91, so its clients draw the stock shield effects.
+A client plays 33 to 36 by its host's version (`network_rules_of_version`,
+by the version the host advertised, `network_game_client_host_network_version`;
+a host joined without one, by an invitation, plays by the older rules until
+its game settings record shows it is of 35 or later). A client of a host
+before 33 clears the ALLY FRIENDLY FIRE bit (on, as the campaign has it). A
+client of a host before 34 keeps that version's static targets, the scenery
+and devices damage can destroy alone (`network_damage.c`'s `static_target`),
+so it neither reports hits on shield-only scenery nor expects the host's
+damage to it, runs no shields of its own and reports its hits on a tripmine
+as before; from 34 it runs static targets' shields itself, reports no damage
+whose owner object is a static target, and applies a host's event naming an
+index that is no object on it (the host's copy of one made during play) to
+its nearest static target to the damage's origin, within its bounding sphere
+and 2.0 world units (and an area effect's cutoff radius). The game settings
+record's size is taken by the host's version (13,120 bytes to 34, 13,136 from
+35; either from a host not known): this build's own record is 35's layout
+(this fork plays OpenCE's game types), so a record of 35's is taken as it
+is, and an older host's is widened as it arrives
+(`network_game_layout_from_version`, `network_client_message_handler.c`: the
+old 0x1C bytes of PC options kept, OpenCE's options zeroed, so no OpenCE
+game type). A host before 36 sends no message 91, so its clients draw the
+stock shield effects. (ChupathingyCE's own builds play the same rules by the
+host's version, but keep the older record: they fold a record of 35's and
+leave a game of one of OpenCE's game types, telling the player which.)
+
+A host plays by the number it announces (`delta_legacy_announce()`: the
+built-in one, 36 in this fork, or a legacy table's, which only raises it
+but for a local one), which is the number of every OpenCE machine in its
+game, as they join only their own; ChupathingyCE's hosts announce 32. From
+34 a host takes scenery and devices that are a shield alone as static
+targets (their hits reported, their damage sent to every machine), finds
+the nearest of its own static targets (within its bounding sphere and 1.0
+more) for a client's hit report on an index that names none of its units,
+weapons, equipment or static targets (a tripmine each machine made at an
+index of its own), and deals a static target's own damage (a tripmine's
+going off) itself for the machines whose players no longer report it:
+OpenCE's of 34 on, and Delta machines that take 35's record from it; an
+older build's report is still taken (ChupathingyCE 0.8.0e's), so it is
+never dealt twice (`network_game_server_machine_reports_static_damage`).
+From 35 the game settings record is 16 bytes longer (13,136: the gametype's
+options 0x2C bytes), and a machine takes only the size of its version. An
+OpenCE machine takes the announced number's; a Delta machine the record of
+the older of its HELLO's number (the newest it plays, `DELTA_LEGACY_NEWEST`;
+ChupathingyCE's builds before 0.8.0f said 32 there) and the host's. This
+build's own record being 35's layout, a machine of 35 on (an OpenCE machine
+of 36, ChupathingyCE 0.8.0f, this fork's) is sent it whole, OpenCE's game
+types' options with it, and an older one (ChupathingyCE 0.8.0e) the older
+record narrowed from it (`network_rules_settings_legacy_copy`), those
+options left out. A machine of the older record cannot play a game of one
+of OpenCE's game types (a mode or Hardcore: its state and rules are not the
+plain game type's): it is sent no record of one, but dropped
+(`network_game_server_refuse_game_type`, the rejection's code "version too
+old"), the host told who and why, as a machine without Bomb is from a Bomb
+game; it may join again for another game. The host's own machine takes the
+whole record. A Delta host that announces 35 or later holds a joining
+machine's record until its HELLO comes, or the handshake's 4 seconds are
+over (an OpenCE machine); the size is then that machine's while it is
+connected; the game does not start while a machine waits for its record (or
+to be dropped), and a machine joining it in progress is started once its
+record has gone. Under 35 every other machine gets the older record at once.
+This fork's host sends co-op's second bit as its Server Setup's ALLY
+FRIENDLY FIRE (ChupathingyCE's send 0), and message 91, its SHIELD EFFECTS
+(`network_shield_effects.c`), which a client before 36 drops.
 
 A host never checks a joining client's version: the client reads the
 host's from its advertisement and joins only a version it plays with. That

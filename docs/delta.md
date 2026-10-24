@@ -682,6 +682,24 @@ What each side checks, since 0.7.5a:
   its join request doesn't say its number. So an OpenCE client of a newer
   number sees our games only once we announce that number (a signed table
   or a release, below).
+- **One number a host, so one OpenCE generation a game.** Since that
+  number is the only thing an OpenCE client goes by, a host can't hold
+  OpenCE players of two numbers in one game, and from 35 they couldn't
+  play together anyway (35's game settings record is 16 bytes longer, and
+  a machine refuses a record of the other size). Delta players join every
+  host whatever it announces: a host goes by each Delta machine's HELLO,
+  whose legacy number says the newest version that build plays
+  (`DELTA_LEGACY_NEWEST`), and sends it the record of the older of that and
+  its own; an OpenCE machine gets the announced number's. A host that
+  announces 35 or later holds a joining machine's record until its HELLO or
+  the handshake's 4 seconds have passed, as only then is it known which
+  (NETCODE.md, "Versions"). To serve OpenCE players of an older number
+  and a newer one at once, run two hosts, one announcing each: a local
+  table (`network.legacy_table`, below) sets a server's number. (Port,
+  this fork: its hosts announce 36, and its own record is 35's layout, sent
+  whole to a machine of 35 on, OpenCE's game types' options with it, and
+  narrowed to the older record for an older one, ChupathingyCE 0.8.0e's,
+  which is turned away from a game of one of OpenCE's game types.)
 - **The next number is presumed additive.** Our client joins hosts of the
   next OpenCE number (`DELTA_LEGACY_PRESUMED`, 1, past the one announced)
   from the day OpenCE raises it, before anything is followed. The built-in
@@ -708,12 +726,12 @@ lacks is dropped or unused with it, and content it can't play ends the join
 cleanly. `chupa-32a` plays with `chupa-28a` and newer (OpenCE's 30 to 32 are
 additive: a machine of 29 drops message 90 and ignores the co-op input byte;
 31's keep-alive, stamp window and stream-only messages were already in 29);
-`chupa-29a` plays with `chupa-28a`. (Port, this fork: `chupa-36a`, OpenCE's
-35 and 36, joins hosts of `chupa-28a` on, widening an older host's shorter
-game settings record (`network_game_layout.c`); its own hosts send 35's
-longer record, which a `chupa-32a` client cannot read, so
-`DELTA_WIRE_HOST_OLDEST` makes them advertise `chupa-36a` as their oldest:
-such a client sees the game as newer and does not try it.) A row is written with its release and
+`chupa-29a` plays with `chupa-28a`. (Port, this fork: its wire is
+`chupa-32a` too, though it plays and announces 36: OpenCE's 33 to 36 are
+played by the number a host announces and each machine's HELLO, not by the
+wire, so ChupathingyCE's clients of `chupa-32a` join its hosts, each sent
+the game settings record of its own version: "One number a host", above.)
+A row is written with its release and
 never changed: a build can't learn of a newer one, so a host also says its
 range in its advertisement.
 
@@ -806,12 +824,22 @@ breaking:
 	X(29, "build-206", additive) /* a Custom Edition map by its own name, its hash's first 32 bits its version in the game record (a client of 29 also takes 28's hashed names and header checksums; wire chupa-29a) */ \
 	X(30, "build-206", additive) /* elevator riders carried by the tick's own movement, a host takes only the across of a client's word on a unit riding an elevator (moving, or stood on at rest), a client discards the height of a correction on its elevator up to 4.0 */ \
 	X(31, "build-206", additive) /* the pregame keep-alive's fourth byte pair sent as zero and the packet table's field lists on their own messages, datagrams stamped more than 450 ticks from the sender's latest dropped, client_ready, client_identity and hit reports taken from a stream alone, a second game on one computer (its own port) */ \
-	X(32, "build-244", additive) /* the host's policy on aiming assist for the mouse and keyboard (message 90), a client's input saying whether its player plays co-op without friendly fire (wire chupa-32a) */
+	X(32, "build-244", additive) /* the host's policy on aiming assist for the mouse and keyboard (message 90), a client's input saying whether its player plays co-op without friendly fire (wire chupa-32a) */ \
+	X(33, "build-266", additive) /* co-op's second switch in the settings' co-op byte (bit 1: the players' hits spare their AI allies, ALLY FRIENDLY FIRE), the host's to act on; a client of an older host clears it (port: this fork's network_game_layout_from_version); in no release of OpenCE's, its testing builds alone */ \
+	X(34, "build-266", additive) /* no message changed: scenery and devices that are a shield alone are static targets too, every machine runs static targets' shields, a client reports no damage a static target deals (the host deals it), a static target's copy made during play found by the nearest; in no release */ \
+	X(35, "build-266", additive) /* OpenCE's own game types (SWAT, Infection, Gun Game, Hardcore): the gametype's options 0x2C bytes, the settings record 16 bytes longer, which a machine of 34 cannot read, and Infection's game type state; this build reads both, by the host's number (port: this fork plays them, widening an older host's record, and its hosts send a machine before 35 the older record, but no game of one of them); in no release */ \
+	X(36, "build-266", additive) /* the host's shield effects, a new message (91) a machine of 35 drops (port: this fork draws them, network_shield_effects.c) */
 ```
 
 `tools/test_delta.py` (in CI) checks `halo_port_limits.h` against it: hosts
-announce the newest version, and clients join back to the newest breaking
-one. The numbers stay literal in `halo_port_limits.h`, which the command
+announce a version of the table, clients join back to the newest breaking
+one and up to the newest and the next (`DELTA_LEGACY_PRESUMED`). Hosts may
+announce an older version than the newest row: a client plays a newer
+host's rules by the version it advertises (`network_rules_of_version`)
+before our hosts take them on, as with 33 to 36, which clients play and
+hosts don't announce yet (port: this fork's hosts announce 36). A change our client reads both sides of (35's
+longer settings record, picked by the host's version) is `additive` here,
+though a machine of the older version can't read it; its row says so. The numbers stay literal in `halo_port_limits.h`, which the command
 repository's tools read.
 
 Planned next, from it:
@@ -851,6 +879,10 @@ Known history, from `port/linux/NETCODE.md` and OpenCE's commits:
 | 30 | | A rule every machine computes alike: the riders of an elevator are carried by its node's movement of the tick (sampled before the machine updates, applied once its node matrices are made), not the previous tick's, which went the wrong way on the tick an elevator reversed. A host takes only the across of a client's word on a unit riding an elevator, one that is moving or that the unit stands on at rest (a remembered elevator alone, after a jump, is not riding); a client discards the height of the host's correction while it stands on the elevator it recorded, up to 4.0 world units. No message changed: a machine of 29 carries riders a tick late, and its host's states correct them | additive |
 | 31 | | The pregame keep-alive is a 4-byte message whose last two bytes are 0 (they were the sender's stack), and the packet table lists begin game, graceful exit and keep-alive each with its own fields (the bytes of the others as before). A datagram stamped more than 450 ticks (15 seconds) from the latest taken from its sender is dropped; over a sender's stream any stamp is taken. client_ready, client_identity and hit reports are taken from a client's stream alone. A second game on one computer: a client takes any free port if the client port is in use, and the host answers a machine at the port its datagrams came from, finds a client by address preferring a machine that is not its own, and answers a game search from another port at that port. Message layouts as before | additive |
 | 32 | | The host's policy on aiming assist for the mouse and keyboard, a new message (90, 12 bytes, reliable: the header, 0 or 1 as a 16-bit value, 16 bits of 0), sent to a client when it has loaded and to every client when the setting (`network.block_mouse_aim_assist`) changes; a client honors it, and is blocked until a host of 32 or later speaks. A client's input entry says in byte 2 (padding before) whether its player plays co-op without friendly fire; our hosts read it and keep their own friendly fire setting. A release (wire `chupa-32a`), so older builds' wire never gets a row for it. A machine of 29 to 31 drops message 90 and ignores the byte. The rows' first builds are not recorded (the table keeps 29's) | additive |
+| 33 | | Co-op's second switch: bit 1 of the settings' co-op byte (the byte bit 0 of which is 19's player collisions) says the players' hits do their AI allies no harm (OpenCE's Server Setup's ALLY FRIENDLY FIRE: OFF). Only a host acts on it; a client takes it as it is. In no release of OpenCE's (testing builds alone) | additive |
+| 34 | | No message changed, but which objects are static targets and what a client does with them did: scenery and devices that are a shield alone (Rat Race's energy shields, Bigass's tripmines) are static targets too, which a client reports its hits on and applies the host's events to; every machine runs static targets' shields (stun and recharge), as no host sends them; a client reports no damage whose owner object is a static target (the host deals it); and an event naming an index that is no object on the client (the host's own copy of one made during play, a tripmine) goes to the client's nearest static target within its bounding sphere and 2.0 world units of the damage's origin (and an area effect's cutoff radius). OpenCE raised the number with the first of these alone, so a host of 34 may have any of them. In no release | additive |
+| 35 | | OpenCE's own game types, SWAT, Infection, Gun Game and Hardcore: the gametype's PC options grow from 0x1C to 0x2C bytes (a mode, a hardcore flag, Infection's and Gun Game's options, 6 reserved), and the settings record with them, to 13,136 bytes at the network's slots. A machine of 34 can't read it (its pieces' total size is another), so it is breaking for OpenCE's; our clients take the size by the host's version, and leave a game of a game type they don't play, saying which (port, this fork: it plays them, its record 35's layout; it widens an older host's, and its hosts send a machine before 35 the older record and turn it away from a game of one of them). In no release | additive |
+| 36 | build-266 | The host's shield effects, a new message (91, 12 bytes, reliable: the header, 0 to 5 as a 16-bit value, 16 bits of 0), sent to a client when it has loaded and once each game; a machine of 35 drops it. Our clients take it and draw stock, the only look they have (port, this fork: drawn as the host says, `network_shield_effects.c`, and sent by its hosts) | additive |
 
 **In FractumSeraph's fork:** the same numbers, and its `p2p_signal.c` is
 OpenCE's with both versions read and written (`MESSAGE_VERSION_OLD`), so it

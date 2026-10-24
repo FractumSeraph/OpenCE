@@ -555,6 +555,19 @@ static int identifier_failed(const unsigned char *identifier)
 	return 0;
 }
 
+/* whether a version is one this build joins; out-of-window listings are
+kept, for the browser to mark, but never ahead of joinable ones */
+static int version_joinable(int version)
+{
+	return version >= delta_legacy_minimum() && version <= delta_legacy_maximum();
+}
+
+/* a queued payload's version (its listing format's: bytes 3 and 4) */
+static int queued_joinable(const unsigned char *payload, int size)
+{
+	return size >= MINIMUM_LISTING_SIZE && version_joinable(payload[3] << 8 | payload[4]);
+}
+
 void p2p_lobby_slot_heard(const char *hash_text, const unsigned char *payload, int size, int retained)
 {
 	unsigned char key_hash[P2P_KEY_HASH_SIZE];
@@ -594,7 +607,18 @@ void p2p_lobby_slot_heard(const char *hash_text, const unsigned char *payload, i
 			return;
 	}
 	if (lobby.queue_count == MAXIMUM_QUEUED)
-		return;
+	{
+		/* (full: a joinable listing takes the place of one that is not) */
+		if (!queued_joinable(payload, size))
+			return;
+		for (index = lobby.queue_count - 1; index >= 0 && queued_joinable(lobby.queue[index].payload, lobby.queue[index].size);
+			index--)
+			;
+		if (index < 0)
+			return;
+		memmove(lobby.queue + index, lobby.queue + index + 1, sizeof(*lobby.queue) * (size_t)(lobby.queue_count - index - 1));
+		lobby.queue_count--;
+	}
 	queued = &lobby.queue[lobby.queue_count++];
 	memcpy(queued->key_hash, key_hash, P2P_KEY_HASH_SIZE);
 	memcpy(queued->payload, payload, (size_t)size);
@@ -637,16 +661,36 @@ static void listing_take(const struct queued *queued, const struct listing *list
 			;
 		if (index == MAXIMUM_GAMES)
 		{
-			int oldest = 0;
+			int oldest = -1;
+			int joinable = version_joinable(listing->version);
 
-			for (index = 1; index < MAXIMUM_GAMES; index++)
+			/* (of those gone longest, one this build cannot join first; such a
+			listing never takes a joinable one's room) */
+			for (index = 0; index < MAXIMUM_GAMES; index++)
 			{
-				if ((long)(lobby.games[index].heard_time - lobby.games[oldest].heard_time) < 0)
+				int theirs = version_joinable(lobby.games[index].listing.version);
+
+				if (oldest < 0)
+				{
+					if (!theirs || joinable)
+						oldest = index;
+					continue;
+				}
+				if (version_joinable(lobby.games[oldest].listing.version) != theirs)
+				{
+					if (!theirs)
+						oldest = index;
+				}
+				else if ((long)(lobby.games[index].heard_time - lobby.games[oldest].heard_time) < 0)
 					oldest = index;
 			}
+			if (oldest < 0)
+				return;
 			index = oldest;
 		}
 		game = &lobby.games[index];
+		if (!version_joinable(listing->version))
+			platform_log("Internet play: a listing of network version %d is kept, to be marked (not joinable)", listing->version);
 		memset(game, 0, sizeof(*game));
 		memcpy(game->key_hash, queued->key_hash, P2P_KEY_HASH_SIZE);
 		game->ping = -1;
@@ -754,24 +798,30 @@ static void update_browsing(void)
 	/* the queue, within the budget (one at least) */
 	while (lobby.queue_count && (p2p_now() == start || !elapsed(start, VERIFY_BUDGET)))
 	{
-		struct queued queued = lobby.queue[0];
+		struct queued queued;
 		struct listing listing;
 		unsigned char key_hash[P2P_KEY_HASH_SIZE];
-		int good;
+		int good, first = 0;
 
-		memmove(lobby.queue, lobby.queue + 1, sizeof(*lobby.queue) * (size_t)(--lobby.queue_count));
+		/* (the joinable ones first) */
+		while (first < lobby.queue_count && !queued_joinable(lobby.queue[first].payload, lobby.queue[first].size))
+			first++;
+		if (first == lobby.queue_count)
+			first = 0;
+		queued = lobby.queue[first];
+		memmove(lobby.queue + first, lobby.queue + first + 1, sizeof(*lobby.queue) * (size_t)(--lobby.queue_count - first));
 		/* (a newer version's game, past every version this build reads, is
-		counted, not shown: its host's key hash only, unverified, so it is no
-		more than a count) */
+		counted too, for the empty list's words: its host's key hash only,
+		unverified, so it is no more than a count; port (this fork)) */
 		if (lobby.browsing && listing_read(queued.payload, queued.size, &listing) &&
 			listing.version > HALO_PORT_NETWORK_VERSION && listing.version > delta_legacy_maximum() &&
 			!(listing.flags & _listing_closed))
 		{
 			newer_heard(queued.key_hash);
-			continue;
 		}
-		if (!listing_read(queued.payload, queued.size, &listing) || listing.version < delta_legacy_minimum() ||
-			listing.version > delta_legacy_maximum() ||
+		/* (a listing of a version this build cannot join is kept too, for the
+		browser to mark: checked as any) */
+		if (!listing_read(queued.payload, queued.size, &listing) ||
 			!signing_key_hash(listing.key, key_hash) || memcmp(key_hash, queued.key_hash, P2P_KEY_HASH_SIZE))
 		{
 			continue;
@@ -990,6 +1040,8 @@ static int listing_order(const void *first, const void *second)
 {
 	const struct p2p_listing *a = first, *b = second;
 
+	if (version_joinable(a->version) != version_joinable(b->version))
+		return version_joinable(b->version) - version_joinable(a->version);
 	if (a->player_count != b->player_count)
 		return b->player_count - a->player_count;
 	if (a->failed != b->failed)
@@ -1004,24 +1056,31 @@ int p2p_lobby_games(struct p2p_listing *games, int maximum_count)
 	unsigned long heard_times[MAXIMUM_GAMES];
 	unsigned char copies[MAXIMUM_GAMES];
 	int count = 0, kept = 0;
-	int index;
+	int index, pass;
 
 	pthread_mutex_lock(&p2p_lock);
-	for (index = 0; index < MAXIMUM_GAMES && count < maximum_count; index++)
+	/* (the games this build joins first: a full list does not leave them out
+	for others) */
+	for (pass = 0; pass < 2; pass++)
 	{
-		if (!lobby.games[index].used)
-			continue;
-		games[count] = lobby.games[index].listing;
-		games[count].failed = (unsigned char)identifier_failed(games[count].identifier);
-		heard_times[count] = lobby.games[index].heard_time;
-		games[count].ping = (short)lobby.games[index].ping;
-		count++;
+		for (index = 0; index < MAXIMUM_GAMES && count < maximum_count; index++)
+		{
+			if (!lobby.games[index].used || version_joinable(lobby.games[index].listing.version) != (pass == 0))
+				continue;
+			games[count] = lobby.games[index].listing;
+			games[count].failed = (unsigned char)identifier_failed(games[count].identifier);
+			heard_times[count] = lobby.games[index].heard_time;
+			/* (port (this fork): its host's ping, once probed) */
+			games[count].ping = (short)lobby.games[index].ping;
+			count++;
+		}
 	}
 	pthread_mutex_unlock(&p2p_lock);
 	/* a game listed under every version this client takes: once, at the
-	newest (p2p_listing_older_copy) */
+	newest (p2p_listing_hidden_copy) */
 	for (index = 0; index < count; index++)
-		copies[index] = (unsigned char)p2p_listing_older_copy(games, heard_times, count, index);
+		copies[index] = (unsigned char)p2p_listing_hidden_copy(games, heard_times, count, index, delta_legacy_minimum(),
+			delta_legacy_maximum());
 	for (index = 0; index < count; index++)
 	{
 		if (!copies[index])

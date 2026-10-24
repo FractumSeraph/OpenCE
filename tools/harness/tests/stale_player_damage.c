@@ -73,6 +73,8 @@ static boolean network_objects_client_has(long index) { return TRUE; }
 static boolean static_target(long index) { return FALSE; }
 /* (no static targets here, so no damage is one's own: test_static_target) */
 static boolean static_target_damage(struct damage_data const *damage) { return FALSE; }
+/* (the host: whether a machine still reports a static target's own damage, test_network_rules) */
+static boolean network_game_server_machine_reports_static_damage(long machine_index) { return TRUE; }
 static void distributed_damage_from_data(struct damage_data const *damage, struct damage_data *result) { *result = *damage; }
 static void object_get_origin(long index, real_point3d *point) { memset(point, 0, sizeof(*point)); }
 static long distributed_latest_host_time(void) { return 10; }

@@ -584,6 +584,11 @@ int delta_peer_machine_lacks(const struct delta_peer *peer, delta_u32 now, int m
 no session yet and its window not over (a game that needs the capability
 waits for it) */
 int delta_peer_machine_pending(const struct delta_peer *peer, delta_u32 now, int machine_index);
+/* ... and the OpenCE network version a machine of the game said in its
+HELLO, the newest whose rules it plays (DELTA_LEGACY_NEWEST; earlier builds
+said their HALO_PORT_NETWORK_VERSION, 32 or older): 0 for one without a session
+(an OpenCE machine, or one whose HELLO has not come yet) */
+int delta_peer_machine_legacy_version(const struct delta_peer *peer, int machine_index);
 
 /* ---------- moderation (docs/delta.md, Moderation)
 
@@ -782,6 +787,9 @@ machine knows it (its own, the host's, the roster's); none for a player
 without one */
 int delta_peer_game_player_has(int player_index, int capability);
 int delta_peer_game_machine_pending(int machine_index);
+/* ... and the network version its HELLO said (delta_peer_machine_legacy_version;
+0 while this host has no Delta, or the machine no session) */
+int delta_peer_game_machine_legacy_version(int machine_index);
 /* a player's machine's profile claim, while the machine has that one player
 alone: its player ID (DELTA_WIRE_PLAYER_ID_SIZE bytes) */
 int delta_peer_player_profile(int player_index, unsigned char *player_id);

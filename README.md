@@ -86,12 +86,15 @@ then [ChupathingyCE's](#chupathingyce), then [OpenCE's](#opence).
 
 Where the two projects do the same thing two ways, the fork keeps one
 working version; nothing sent over the network differs from theirs, so
-players of all three play together: this fork's builds speak network
-version 36, as OpenCE's newest does, and join hosts of versions 11 to 37,
-in either project's form (`docs/delta.md`), reading an older host's game
-settings as it sends them. ChupathingyCE 0.8.0e (version 32) players see
-this fork's games as newer until ChupathingyCE follows 36 (wire
-`chupa-36a`: `docs/delta.md`, Wire compatibility ranges). Both
+players of all three play together: this fork's games announce network
+version 36, as OpenCE's newest does, so OpenCE 36 players join them, SWAT,
+Infection, Gun Game and Hardcore included, and ChupathingyCE players
+(0.8.0e and 0.8.0f) join them by its wire, `chupa-32a`, each sent the game
+settings of its own version (a game of one of OpenCE's game types is the
+one they can't play: 0.8.0f leaves it saying so, and the host turns 0.8.0e
+away from it). This fork's builds join hosts of versions 11 to 37, in
+either project's form (`docs/delta.md`), reading an older host's game
+settings as it sends them. Both
 projects' text chats are one, by ChupathingyCE's own bridge: its chat is
 the one typed and shown, and OpenCE players' lines reach it and its lines
 reach them, on a host of either (`docs/delta.md`, Chat).
@@ -272,7 +275,7 @@ build compiles); nothing sent over the network is changed.
 <img src="https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android-lightgrey" alt="Platforms: Windows, macOS, Linux, Android">
 </p>
 
-> **Compatible with OpenCE build-244 (network version 32) for online play.** Players on that build join our games, and ours join games hosted on network versions 11 through 33. Browser builds can't join our games, nor we theirs.
+> **Compatible with OpenCE build-244 (network version 32) for online play.** Players on that build join our games, and ours join games hosted on network versions 11 through 37. Browser builds can't join our games, nor we theirs.
 
 Chupathingy is a free, open-source port of the Halo: Combat Evolved
 decompilation. It runs natively on Windows, Mac (Apple silicon and Intel),

@@ -64,17 +64,8 @@ def test_rows():
     text = DELTA.read_text(encoding="utf-8")
     wire = re.search(r'^#define DELTA_WIRE "([^"]+)"', text, re.M).group(1)
     first = re.search(r'^#define DELTA_WIRE_FIRST_ADVERTISED "([^"]+)"', text, re.M).group(1)
-    # (the compatibility rows, up to the port's host rows after them)
-    start = text.index("#define DELTA_WIRE_COMPATIBILITY")
-    end = text.find("#define DELTA_WIRE_HOST_OLDEST", start)
-    rows = re.findall(r'X\("(chupa-\d+[a-z])", "(chupa-\d+[a-z])"\)', text[start:end if end >= 0 else len(text)])
+    rows = re.findall(r'X\("(chupa-\d+[a-z])", "(chupa-\d+[a-z])"\)', text[text.index("DELTA_WIRE_COMPATIBILITY"):])
     assert rows, "no compatibility rows"
-    # port: a host row never makes a wire's hosts take clients older than its own row, nor newer than itself
-    if end >= 0:
-        own = dict(rows)
-        for row_wire, oldest in re.findall(r'X\("(chupa-\d+[a-z])", "(chupa-\d+[a-z])"\)', text[end:end + 2000]):
-            assert row_wire in own, f"{row_wire}'s host row has no compatibility row"
-            assert wire_key(own[row_wire]) <= wire_key(oldest) <= wire_key(row_wire), row_wire
     seen = set()
     for row_wire, oldest in rows:
         assert row_wire not in seen, f"{row_wire} has two rows"

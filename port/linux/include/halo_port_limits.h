@@ -114,14 +114,21 @@ client does not join a host of another version, but tells the player which
 is newer (network_client_manager.c). A host advertises it, with its netcode,
 in its game's advertisement's reserved bytes (network_server_message_handler.c),
 which hosts built before there was a version send as zeros: version 0.
-Raise it with any change to what the machines send each other. */
+Raise it with any change to what the machines send each other.
+port (this fork): 36, OpenCE's newest, which its hosts announce (OpenCE's
+clients join only their own number) and play by (network_rules_of_version),
+its game settings record of 35's layout (OpenCE's game types); ChupathingyCE's
+hosts announce 32. Delta clients (ChupathingyCE's 0.8.0e and 0.8.0f, this
+fork's) join a host of their wire whatever number it announces, and are sent
+the record of the older of their HELLO's version and this one
+(network_server_message_handler.c). */
 #define HALO_PORT_NETWORK_VERSION 36
 /* ... the versions whose hosts a client joins: its own, and those that differ
 from it only in what the other machines leave out (a message a machine of
 the other version does not know it drops). Which are which is delta.h's
 table (DELTA_LEGACY_VERSIONS): the minimum is its newest breaking version,
-the maximum its newest or above it: hosts of OpenCE's next versions are
-joined before a release follows them, as most of its raises leave the game's
+the maximum its newest and the next (DELTA_LEGACY_PRESUMED): hosts of
+OpenCE's next versions are joined before a release follows them, as most of its raises leave the game's
 messages as they were (tools/test_delta.py checks them; they stay numbers
 here, which the command repository reads). A host
 never checks a client's version: the client does (network_client_manager.c),
@@ -134,12 +141,14 @@ int delta_legacy_announce(void);
 int delta_legacy_minimum(void);
 int delta_legacy_maximum(void);
 /* ... what a client converts of an older host's (keyed on network_game_client_
-host_network_version, network_client_manager.c; a host not known is taken
-for this build's): before 33, no ALLY FRIENDLY FIRE bit in the game settings'
-cooperative_flags (on, as the campaign has it); before 34, the scenery and
-devices whose shield alone damage breaks are not static targets
-(network_damage.c); before 35, the game settings record's shorter PC options
-(no OpenCE gametype); before 36, no shield effects message (the stock ones) */
+host_network_version, network_client_manager.c, by network_rules_of_version;
+a host not known plays by the older rules, until its game settings record
+shows it is of 35 or later): before 33, no ALLY FRIENDLY FIRE bit in the game
+settings' cooperative_flags (on, as the campaign has it); before 34, the
+scenery and devices whose shield alone damage breaks are not static targets
+(network_damage.c, network_rules.h's NETWORK_RULES_STATIC_SHIELDS_VERSION);
+before 35, the game settings record's shorter PC options (no OpenCE
+gametype); before 36, no shield effects message (the stock ones) */
 #define HALO_PORT_ALLY_FRIENDLY_FIRE_NETWORK_VERSION 33
 #define HALO_PORT_SHIELD_TARGETS_NETWORK_VERSION 34
 #define HALO_PORT_GAME_MODES_NETWORK_VERSION 35

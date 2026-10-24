@@ -164,7 +164,9 @@ void web_delta_peer_initialize(struct delta_peer *peer)
 	engine, source/game/game_engine_bomb.c being HALO_GAME_BROWSER's alone,
 	so a host playing a Bomb game type drops it with a notice rather than
 	keep a player whose game cannot play it) */
-	local.legacy_version = HALO_PORT_NETWORK_VERSION;
+	/* (the newest version this build plays, as the native builds' HELLO
+	says: a host sends the game settings record of it, delta_peer_game.c) */
+	local.legacy_version = DELTA_LEGACY_NEWEST;
 	/* (the platform policy's row for an unknown platform; a browser hosts
 	no Delta game: its own rooms are the site's) */
 	delta_platform_policy_default(_delta_platform_unknown, &local.key);

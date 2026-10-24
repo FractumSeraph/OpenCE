@@ -839,28 +839,18 @@ unsigned int network_game_client_host_network_version(
 	return network_game_client_joined_version;
 }
 
-/* port (this fork): the joined game's host's network version as it announced
-it, whatever its Delta wire (0xFFFF: not known, the host's own game, or one
-joined by an invitation), which a client of an older host converts what
-differs by (network_game_client_host_before) */
-static unsigned int network_game_client_joined_announced = 0xFFFF;
-
-unsigned int network_game_client_host_announced_version(
-	void)
-{
-	return network_game_client_joined_announced;
-}
-
-/* port: whether the joined game's host is known to be of a network version
-before this one (halo_port_limits.h's HALO_PORT_*_NETWORK_VERSION): this
-build joins hosts back to HALO_PORT_NETWORK_VERSION_MINIMUM, and plays what
-an older one sends as it sends it (network_damage.c, the game settings
-record: network_client_message_handler.c). A host not known is taken for one
-of this build's version. */
-boolean network_game_client_host_before(
+/* port: what the host showed of its version where it was not known (a game
+joined by an invitation): the version it is at least, which its rules then
+follow (a record of 35's layout, network_client_message_handler.c); a known
+version stays as it was advertised */
+void network_game_client_note_host_network_version(
 	unsigned int version)
 {
-	return network_game_client_joined_announced != 0xFFFF && network_game_client_joined_announced < version;
+	if (network_game_client_joined_version == 0xFFFF)
+	{
+		network_event("the host's network version is at least %u, by its game settings", version);
+		network_game_client_joined_version = version;
+	}
 }
 
 
@@ -2205,12 +2195,13 @@ boolean network_game_client_initiate_join_game(
 	client->join_in_progress = TRUE;
 	client->connect_process = 0;
 	client->connection_attempt_time = system_milliseconds();
-	/* port (this fork): the host's network version as it announced it, in
-	every build (network_game_client_host_before) */
+	/* port (this fork): the host's network version as it advertised it, in
+	every build (network_rules_of_version: the rules of 33 to 36 a client
+	plays by it; a Delta host of an older wire is taken as not known, below) */
 	{
 		long advertised_index = game - client->available_games;
 
-		network_game_client_joined_announced = advertised_index >= 0 &&
+		network_game_client_joined_version = advertised_index >= 0 &&
 			advertised_index < MAXIMUM_NETWORK_ADVERTISED_GAMES ?
 			network_game_client_advertised_versions[advertised_index].version : 0xFFFF;
 	}

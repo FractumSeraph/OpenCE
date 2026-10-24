@@ -69,6 +69,12 @@ short network_game_server_last_refusal_code(
 boolean network_game_server_drop_machine(
 	long machine_index,
 	short rejection_code);
+/* port (this fork): a client machine that takes the older game settings
+record dropped from a game of OpenCE's game types (as drop_machine, with
+_rejection_code_version_too_old), the host told; FALSE if it is none that
+joined */
+boolean network_game_server_refuse_game_type(
+	long machine_index);
 /* the host's ban command (console.c, hs.c) */
 enum
 {

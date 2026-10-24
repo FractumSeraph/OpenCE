@@ -2558,9 +2558,7 @@ int browser_game_version_state(const struct browser_game *game)
 	/* (a Delta host's other number may still be joined, as above) */
 	if (game->protocol == BROWSER_PROTOCOL_DELTA && delta_peer_protocol() != _delta_peer_protocol_opence)
 		return 0;
-	if (game->version < delta_legacy_minimum())
-		return -1;
-	return game->version > delta_legacy_maximum() ? 1 : 0;
+	return browser_version_state(game->version);
 }
 
 int browser_get_games(struct browser_game *games, int maximum_count)
@@ -2826,6 +2824,13 @@ static int browser_ascii_equal(const char *a, const char *b)
 			return 0;
 	}
 	return !*a && !*b;
+}
+
+int browser_version_state(int version)
+{
+	if (version < delta_legacy_minimum())
+		return -1;
+	return version > delta_legacy_maximum() ? 1 : 0;
 }
 
 int browser_map_is_campaign(const char *map)

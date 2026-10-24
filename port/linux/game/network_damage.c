@@ -35,18 +35,21 @@ being hit looks and feels like on the clients).
   (the unit's, its riders', the damage's owner's) and those sent the
   unit's player this tick, which see it; a killing blow to all.
 - Scenery and devices that can be destroyed (lights, panels), or whose
-  shields can be broken (energy shields, a map's tripmines), are the map's,
-  at the same index on every machine. A client reports its hits on them like
-  any other, and every client deals the host's damage to its own copy, which
-  breaks and plays its effects as the host's did. Their shields' stun and
-  recharge each machine runs itself (damage.c's objects_update_shields), as
-  the host sends no state of them: the same damage, and the same recharge.
-  What one of them deals itself, its shield or body breaking (a tripmine
-  going off), the host deals whoever owns it, and no client reports: a
-  client's player's tripmine is set off where the host has it. One made in
-  the game (a tripmine a grenade's effect places) is at an index of its own
-  on each machine: a machine given another's index of one takes its own
-  nearest where the other had it (static_target_near).
+  shields can be broken (energy shields, a map's tripmines: from network
+  version 34, network_rules_of_version), are the map's, at the same index
+  on every machine. A client reports its hits on them like any other, and
+  every client deals the host's damage to its own copy, which breaks and
+  plays its effects as the host's did. Their shields' stun and recharge each
+  machine runs itself (damage.c's objects_update_shields), as the host sends
+  no state of them: the same damage, and the same recharge. What one of them
+  deals itself, its shield or body breaking (a tripmine going off), the host
+  deals whoever owns it, and no client of 34 on reports: a client's player's
+  tripmine is set off where the host has it (a machine that still reports
+  it, an older build's, has its report taken instead:
+  network_game_server_machine_reports_static_damage). One made in the game
+  (a tripmine a grenade's effect places) is at an index of its own on each
+  machine: a machine given another's index of one takes its own nearest
+  where the other had it (static_target_nearest).
 */
 
 #include "cseries.h"
@@ -69,6 +72,7 @@ being hit looks and feels like on the clients).
 /* port (this fork): the host's fair play checks, and its recordings */
 #include "network_fairplay.h"
 #include "network_recording.h"
+#include "network_rules.h"
 
 #include <math.h>
 
@@ -87,10 +91,11 @@ boolean distributed_get_death(short dead_player_index, byte *killing_player_inde
 	boolean *killed_by_vehicle);
 /* cache_files.c's */
 boolean tag_index_is_group(long tag_index, long group_tag);
+/* (the host) whether a machine's players report a static target's own
+damage (network_server_message_handler.c) */
+boolean network_game_server_machine_reports_static_damage(long machine_index);
 /* game_engine.c's */
 long game_engine_network_player_score(long player_index);
-/* network_client_manager.c's */
-boolean network_game_client_host_before(unsigned int version);
 /* physics.c's (world units a tick, each tick) */
 extern real global_gravity;
 
@@ -231,10 +236,6 @@ from the target */
 #define REPORT_TARGET_TOLERANCE 3.0f
 #define REPORT_TARGET_LEAD_TICKS 15.0f
 #define REPORT_IMPACT_TOLERANCE 2.0f
-/* ... and how far beyond its size a static target made in the game may be
-from where another machine had its own copy (a tripmine: the same grenade's
-landing on each machine, static_target_near) */
-#define STATIC_TARGET_MATCH_TOLERANCE 1.0f
 /* ... and from where the host had a player's unit or vehicle then (with how
 far it moves in a few ticks: a client's copy runs a little ahead of the
 host's word on it), and further for a vehicle's (its size, and as far as a
@@ -525,47 +526,75 @@ static boolean distributed_damage_to_data(
 	return TRUE;
 }
 
-/* port (this fork): whether the scenery and devices whose shield alone damage
-can break are static targets, as network version 34 has them: not on a
-client of a host before it (HALO_PORT_SHIELD_TARGETS_NETWORK_VERSION), which
-takes no hit on them, sends no damage to them, and deals what one deals itself
-as any other damage (a client of it reports its player's), so the client keeps
-that version's rule: it reports no hit on them, expects none of the host's
-damage and runs none of their shields (damage.c's objects_update_shields) */
-static boolean static_target_shields_shared(
-	void)
-{
-	return game_connection() != _game_connection_network_client ||
-		!network_game_client_host_before(HALO_PORT_SHIELD_TARGETS_NETWORK_VERSION);
-}
-
-/* whether the object is scenery or a device that damage can destroy, or
-whose shield it can break (a shield that is all the object is: Rat Race's
-energy shields, a map's tripmines) */
+/* whether the object is scenery or a device that damage can destroy, or,
+from network version 34 (network_rules_of_version: a client of an older
+host keeps that version's rule, as the host does), one whose shield alone
+damage can break (Rat Race's energy shields, a map's tripmines): every
+machine of a game takes the same ones */
 static boolean static_target(
 	long object_index)
 {
 	return object_try_and_get_and_verify_type(object_index, STATIC_TARGET_TYPES) &&
 		(object_get_maximum_body_vitality(object_index, TRUE) > 0.0f ||
-			(static_target_shields_shared() && object_get_maximum_shield_vitality(object_index, TRUE) > 0.0f));
+			(network_rules_of_version(NETWORK_RULES_STATIC_SHIELDS_VERSION) &&
+				object_get_maximum_shield_vitality(object_index, TRUE) > 0.0f));
 }
 
-boolean network_damage_static_target(
+/* (a client) whether it runs the object's shields itself, their stun and
+recharge: a static target's, from network version 34, as the host sends no
+shield of one (else a broken one stays broken on the client's screen) */
+boolean network_damage_client_runs_shields(
 	long object_index)
 {
-	return static_target(object_index);
+	return network_rules_of_version(NETWORK_RULES_STATIC_SHIELDS_VERSION) && static_target(object_index);
 }
 
 /* whether the damage is a static target's own (an effect of its shield or
-body breaking: a map's tripmine going off), which the host deals whoever its
-owner is: a client's player's tripmine is set off where the host has it (a
-vehicle running over it), so their machine has no hit of it to report (a
-host before network version 34 takes the report: static_target_shields_shared) */
+body breaking: a map's tripmine going off), which from network version 34
+the host deals whoever its owner is: a client's player's tripmine is set off
+where the host has it (a vehicle running over it), so their machine has no
+hit of it to report (but an older build's still does:
+network_game_server_machine_reports_static_damage) */
 static boolean static_target_damage(
 	struct damage_data const *damage)
 {
-	return static_target_shields_shared() &&
+	return network_rules_of_version(NETWORK_RULES_STATIC_SHIELDS_VERSION) &&
 		damage->owner_object_index != NONE && static_target(damage->owner_object_index);
+}
+
+/* the nearest static target to the point, within its bounding sphere and
+the reach: another machine's copy of one made during play (a tripmine),
+which each machine makes at an index of its own, named by that machine's
+index (a host's event, a client's report). NONE for none; the first found
+of two as near. */
+static long static_target_nearest(
+	real_point3d const *point,
+	real reach)
+{
+	struct object_iterator iterator;
+	struct object_datum *object;
+	long nearest = NONE;
+	real nearest_distance = 0.0f;
+
+	object_iterator_new(&iterator, STATIC_TARGET_TYPES, 0);
+	while ((object = object_iterator_next(&iterator)) != NULL)
+	{
+		real_point3d origin;
+		real distance;
+
+		if (!static_target(iterator.index))
+			continue;
+		object_get_origin(iterator.index, &origin);
+		distance = (origin.x - point->x) * (origin.x - point->x) + (origin.y - point->y) * (origin.y - point->y) +
+			(origin.z - point->z) * (origin.z - point->z);
+		if (network_rules_static_within(distance, object->object.bounding_sphere_radius, reach) &&
+			(nearest == NONE || distance < nearest_distance))
+		{
+			nearest = iterator.index;
+			nearest_distance = distance;
+		}
+	}
+	return nearest;
 }
 
 /* ---------- object_cause_damage (damage.c) */
@@ -713,8 +742,9 @@ boolean network_damage_deals(
 
 			damage_replay_player_effect(unit->unit.player_index, &effect, 0.0f);
 		}
-		/* a hit of this machine's own player's, on the host's object (not a
-		static target's own damage, which the host deals: static_target_damage) */
+		/* a hit of this machine's own player's, on the host's object (but
+		not a static target's own, a tripmine's going off, which from network
+		version 34 the host deals itself, whoever placed it: static_target_damage) */
 		if (distributed_player_is_local(damage->owner_player_index) && !static_target_damage(damage) &&
 			(network_objects_client_has(object_index) || static_target(object_index)) &&
 			damage_report_count < MAXIMUM_HIT_REPORTS_PER_TICK)
@@ -740,16 +770,19 @@ boolean network_damage_deals(
 		return FALSE;
 	}
 	/* (a client's player's, whose machine reports it; but one whose machine
-	has left deals it here: their grenades and rockets still in flight; and
-	a static target's own, which no machine reports: static_target_damage) */
+	has left deals it here: their grenades and rockets still in flight) */
 	if (game_connection() == _game_connection_network_server && !damage_dealing_report &&
-		damage->owner_player_index != NONE && !distributed_player_is_local(damage->owner_player_index) &&
-		!static_target_damage(damage))
+		damage->owner_player_index != NONE && !distributed_player_is_local(damage->owner_player_index))
 	{
 		struct player_datum *owner = player_try_and_get(damage->owner_player_index);
+		long owner_machine = distributed_player_machine((short)DATUM_INDEX_TO_ABSOLUTE_INDEX(damage->owner_player_index));
 
-		if (owner && !owner->quit_out_of_game &&
-			distributed_player_machine((short)DATUM_INDEX_TO_ABSOLUTE_INDEX(damage->owner_player_index)) != NONE)
+		/* (from network version 34, a static target's own damage, a
+		tripmine's going off, dealt here whoever placed it, unless the
+		placer's machine still reports it: an older build's, such as
+		ChupathingyCE 0.8.0e's, whose HELLO says 32) */
+		if (owner && !owner->quit_out_of_game && owner_machine != NONE &&
+			!(static_target_damage(damage) && !network_game_server_machine_reports_static_damage(owner_machine)))
 		{
 			distributed_damage_material((struct damage_data *)damage, object_index, material_index);
 			return FALSE;
@@ -1393,41 +1426,6 @@ static real distributed_distance_squared(
 	real dz = a->z - b->z;
 
 	return dx * dx + dy * dy + dz * dz;
-}
-
-/* this machine's static target nearest the point where another machine had
-one, within its size and the reach of the point, else NONE. A static target
-made in the game (a tripmine a grenade's effect places) is at an index of
-its own on each machine, as the map's are not, so another machine's index of
-it names no such object here */
-static long static_target_near(
-	real_point3d const *point,
-	real reach)
-{
-	struct object_iterator iterator;
-	long nearest = NONE;
-	real nearest_distance = 0.0f;
-
-	object_iterator_new(&iterator, STATIC_TARGET_TYPES, 0);
-	while (object_iterator_next(&iterator))
-	{
-		real_point3d origin;
-		real distance;
-		real limit;
-
-		if (!static_target(iterator.index))
-			continue;
-		object_get_origin(iterator.index, &origin);
-		distance = distributed_distance_squared(point, &origin);
-		limit = object_get(iterator.index)->object.bounding_sphere_radius + reach;
-		if (distance <= limit * limit && (nearest == NONE || distance < nearest_distance))
-		{
-			nearest = iterator.index;
-			nearest_distance = distance;
-		}
-	}
-
-	return nearest;
 }
 
 /* where each player's unit and vehicle are this tick (and whether they
@@ -2109,24 +2107,29 @@ void network_damage_handle_reports(
 	for (index = 0; index < count; index++)
 	{
 		struct distributed_hit_report const *report = &reports[index];
-		struct distributed_hit_report found;
+		struct distributed_hit_report matched;
 		struct damage_data damage;
 
-		/* (a hit on the client's copy of a static target made in the game,
-		at an index of its own there: the host's where the client had it) */
-		if (distributed_object_index_valid(report->object_index) &&
+		/* (from network version 34, a report on an index that names none of
+		this machine's units, weapons, equipment or static targets: the
+		client's own copy of a static target made during play, a tripmine,
+		is this machine's nearest to where the client had it, within its
+		bounding sphere and 1.0 more) */
+		if (network_rules_of_version(NETWORK_RULES_STATIC_SHIELDS_VERSION) &&
+			distributed_object_index_valid(report->object_index) &&
+			DATUM_INDEX_TO_ABSOLUTE_INDEX(report->object_index) < MAXIMUM_OBJECTS_PER_MAP &&
 			distributed_point_valid(&report->target_position, REPORT_WORLD_BOUND) &&
 			!object_try_and_get_and_verify_type(report->object_index,
 				_object_mask_biped | _object_mask_vehicle | _object_mask_weapon | _object_mask_equipment) &&
 			!static_target(report->object_index))
 		{
-			long object_index = static_target_near(&report->target_position, STATIC_TARGET_MATCH_TOLERANCE);
+			long nearest = static_target_nearest(&report->target_position, NETWORK_RULES_STATIC_REPORT_REACH);
 
-			if (object_index != NONE)
+			if (nearest != NONE)
 			{
-				found = *report;
-				found.object_index = object_index;
-				report = &found;
+				matched = *report;
+				matched.object_index = nearest;
+				report = &matched;
 			}
 		}
 		if (!distributed_report_valid(machine_index, report, &damage))
@@ -2426,19 +2429,21 @@ void network_damage_handle_events(
 		{
 			long object_index = event->object_index;
 
-			/* (one made in the game, at an index of its own here: this machine's
-			copy at the damage, within its reach, an explosion's its radius) */
+			/* (from network version 34, an index that names no object here,
+			the host's own copy of one made during play: the nearest static
+			target to where the damage is from, within reach, an area
+			effect's its cutoff radius more; an index that names another
+			object is not taken for one) */
 			if (distributed_object_index_valid(object_index) && !static_target(object_index) &&
-				!object_try_and_get_and_verify_type(object_index, _object_mask_all))
+				network_rules_of_version(NETWORK_RULES_STATIC_SHIELDS_VERSION) &&
+				DATUM_INDEX_TO_ABSOLUTE_INDEX(object_index) < MAXIMUM_OBJECTS_PER_MAP &&
+				!object_try_and_get_and_verify_type(object_index, -1))
 			{
-				real reach = REPORT_IMPACT_TOLERANCE;
+				boolean area = TEST_FLAG(damage.flags, _damage_area_of_effect_bit) &&
+					tag_index_is_group(damage.definition_index, DAMAGE_EFFECT_DEFINITION_TAG);
 
-				if (TEST_FLAG(damage.flags, _damage_area_of_effect_bit) &&
-					tag_index_is_group(damage.definition_index, DAMAGE_EFFECT_DEFINITION_TAG))
-				{
-					reach += damage_effect_definition_get(damage.definition_index)->cutoff_radius;
-				}
-				object_index = static_target_near(&damage.origin, reach);
+				object_index = static_target_nearest(&damage.origin, network_rules_static_event_reach(area,
+					area ? damage_effect_definition_get(damage.definition_index)->cutoff_radius : 0.0f));
 			}
 			if (distributed_object_index_valid(object_index) && static_target(object_index) &&
 				distributed_damage_indices_valid(object_index, event->node_index, event->region_index,

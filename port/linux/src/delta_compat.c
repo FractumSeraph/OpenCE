@@ -110,20 +110,6 @@ void delta_compat_advertise(unsigned char *reserved, int size, int major, const 
 	{
 		return;
 	}
-	/* port: (as a host, no older than DELTA_WIRE_HOST_OLDEST's row says) */
-#define DELTA_HOST_OLDEST_ROW(row_wire, row_oldest) \
-	if (!strcmp(wire, row_wire)) \
-	{ \
-		struct delta_wire_id newer; \
-		\
-		if (delta_wire_parse(row_oldest, (int)strlen(row_oldest), &newer) && delta_wire_compare(&newer, &oldest) > 0 && \
-			delta_wire_compare(&newer, &own) <= 0) \
-		{ \
-			oldest = newer; \
-		} \
-	}
-	DELTA_WIRE_HOST_OLDEST(DELTA_HOST_OLDEST_ROW)
-#undef DELTA_HOST_OLDEST_ROW
 	/* (the slot: the oldest wire that a build of the advertisement knows,
 	never newer than the host's own) */
 	slot = delta_wire_compare(&oldest, &first) < 0 ? first : oldest;
