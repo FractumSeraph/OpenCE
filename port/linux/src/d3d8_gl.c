@@ -7738,6 +7738,9 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 			test_screenshot_requested = FALSE;
 			write_window_screenshot(window_width, window_height);
 		}
+		/* (OpenCE: the read framebuffer unbound before the swap, for OBS's game
+		capture) */
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
 		platform_video_swap();
 #ifndef HALO_GLES
 		visibility_read_batch();
