@@ -362,7 +362,7 @@ record has gone. Under 35 every other machine gets the older record at once.
 This fork's host sends co-op's second bit as its Server Setup's ALLY
 FRIENDLY FIRE (ChupathingyCE's send 0), and message 91, its SHIELD EFFECTS
 (`network_shield_effects.c`), which a client before 36 drops. This fork
-follows OpenCE's 37 and 38 too, announcing 38: 37's game kind is the LAN
+follows OpenCE's version 37 and version 38 too, announcing 38: 37's game kind is the LAN
 advertisement's fourth reserved byte, which is Delta's major byte (the wire
 and its range fill the rest), so a host that speaks Delta leaves it to the
 major (an OpenCE browser of 37 shows such a host's Slayer as SWAT, kind 1),
