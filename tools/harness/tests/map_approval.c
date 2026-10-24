@@ -111,9 +111,12 @@ int main(int argc, char **argv)
 	{
 		map_torrents_unapproved_text(text, (int)sizeof(text), "custom_maps\\secret", other, 0);
 		CHECK(strstr(text, "secret.map") != NULL, "the text names no file: %s", text);
-		CHECK(strstr(text, "af352483f44dace2e74561daee6b43b612d38a8dbd6f9a612fb437fdf59410ae") != NULL,
-			"the text has not the whole hash: %s", text);
+		CHECK(strstr(text, "af352483") != NULL, "the text has not the hash's first digits: %s", text);
+		CHECK(strstr(logged, "af352483f44dace2e74561daee6b43b612d38a8dbd6f9a612fb437fdf59410ae") != NULL,
+			"the log has not the whole hash: %s", logged);
+		CHECK(strlen(text) <= 170, "the text is longer than the error dialog's five lines: %s", text);
 		CHECK(strstr(text, MAP_APPROVAL_CONTACT) != NULL, "the text says whom to ask nowhere: %s", text);
+		CHECK(strstr(text, "malware") != NULL, "the text says not why: %s", text);
 		CHECK(strstr(logged, "secret.map") != NULL, "the log has not the file: %s", logged);
 		map_torrents_unapproved_text(text, (int)sizeof(text), "secret.map", NULL, 0xAF352483);
 		CHECK(strstr(text, "af352483") != NULL && strstr(text, "secret.map.map") == NULL,

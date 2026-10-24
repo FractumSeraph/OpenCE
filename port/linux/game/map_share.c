@@ -1403,7 +1403,12 @@ static void download_fail(
 	short index;
 
 	error(_error_silent, "map sharing: the download of %s failed: %s", download->level_name, reason);
-	snprintf(message, sizeof(message), "%s\r\n\r\n%s", download->message, reason);
+	/* (port: the reason alone when the join's own words are gone: a map
+	not on the approved map list, whose words fill the dialog) */
+	if (download->message[0])
+		snprintf(message, sizeof(message), "%s\r\n\r\n%s", download->message, reason);
+	else
+		snprintf(message, sizeof(message), "%s", reason);
 	for (index = 0; message[index] && index < NUMBEROF(text) - 1; index++)
 		text[index] = (wchar_t)(unsigned char)message[index];
 	text[index] = 0;
@@ -1707,6 +1712,7 @@ static void download_offered(
 			if (!map_torrents_approved(base_file, (unsigned int)download->version))
 			{
 				map_torrents_unapproved_text(text, (int)sizeof(text), base_file, NULL, (unsigned int)download->version);
+				download->message[0] = 0;
 				download_fail(text);
 				return;
 			}
@@ -1790,6 +1796,7 @@ static void download_offered(
 
 			csprintf(base_file, "%.*s", (int)map_share_name_base_length(name), name);
 			map_torrents_unapproved_text(text, (int)sizeof(text), base_file, file->hash, 0);
+			download->message[0] = 0;
 			download_fail(text);
 			return;
 		}

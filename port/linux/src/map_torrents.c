@@ -399,12 +399,15 @@ void map_torrents_unapproved_text(char *text, int size, const char *file_name, c
 	}
 	else
 	{
-		snprintf(digits, sizeof(digits), "%08x (the host's map version)", version);
+		snprintf(digits, sizeof(digits), "%08x (its first digits)", version);
 	}
-	snprintf(text, (size_t)size, "%s is not on the approved map list, so it was not downloaded.\r\n\r\n"
-		"Hash: %s\r\n\r\nTo get it approved, contact " MAP_APPROVAL_CONTACT " with the file name and hash.",
+	/* (why, what and whom to ask, in the five lines of about 30 characters
+	the game's error dialog shows (ui_widget.c): the hash's first 8 digits,
+	the whole hash in the log) */
+	snprintf(text, (size_t)size, "To prevent malware, only pre-approved maps are shared over p2p. Ask "
+		MAP_APPROVAL_CONTACT " to approve %s (%.8s).", file, digits);
+	platform_log("map approval: %s (%s) is not in the maps' torrent index, the approved map list: not downloaded",
 		file, digits);
-	platform_log("map approval: %s (%s) is not in the maps' torrent index: not downloaded", file, digits);
 }
 
 /* ---------- the client */

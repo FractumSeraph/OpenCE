@@ -557,16 +557,13 @@ static boolean map_unapproved_told(
 	char const *file,
 	unsigned long version)
 {
-	static wchar_t message[256];
-	char text[256];
+	static wchar_t message[512];
+	char text[512];
 	long index;
 
 	if (map_torrents_approved(file, (unsigned int)version))
 		return FALSE;
 	map_torrents_unapproved_text(text, (int)sizeof(text), file, NULL, (unsigned int)version);
-	/* (the dialog's words shorter than the log's: it has room for few) */
-	snprintf(text, sizeof(text), "%.31s.map is not an approved map (hash %08lX). Contact " MAP_APPROVAL_CONTACT
-		" to get it approved.", file, version);
 	for (index = 0; text[index] && index < NUMBEROF(message) - 1; index++)
 		message[index] = (wchar_t)(unsigned char)text[index];
 	message[index] = 0;
