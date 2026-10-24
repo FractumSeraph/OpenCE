@@ -13,10 +13,16 @@ draws the stock game's. */
 #include "networking/network_game_globals.h"
 #include "network_distributed.h"
 #include "network_shield_effects.h"
+#include "network_rules.h"
 #include <string.h>
 
 char const *config_string(char const *name);
 unsigned long config_changes(void);
+/* (the host's network version: networking/network_client_manager.c) */
+unsigned int network_game_client_host_network_version(void);
+/* (the message's values, network_rules.h's: 6, "players", the last) */
+typedef char network_shield_effects_maximum_assert[NETWORK_RULES_SHIELD_EFFECTS_MAXIMUM == NUMBER_OF_SHIELD_EFFECTS - 1 ?
+	1 : -1];
 
 static char const *const shield_effects_names[NUMBER_OF_SHIELD_EFFECTS] =
 {
@@ -117,17 +123,24 @@ boolean network_shield_effects_handles_message(word const *message, word size)
 	return header.type == _distributed_message_shield_effects;
 }
 
-/* (the host's alone, over its stream, whole) */
+/* (the host's alone, over its stream, whole; a value past the ones this
+build draws, up to the largest of the host's version's layout, a signed
+legacy table's for a version past DELTA_LEGACY_NEWEST: network_rules.h, is
+drawn as stock) */
 void network_shield_effects_handle_message(long machine_index, word const *data, word size)
 {
 	struct shield_effects_message message;
+	struct network_rules_layout layout;
 
 	if (machine_index != NONE || game_connection() != _game_connection_network_client ||
 		network_connection_last_read_was_unreliable() || size != sizeof(message))
 		return;
 	memcpy(&message, data, sizeof(message));
+	network_rules_layout(network_game_client_host_network_version(), &layout);
 	if (GET_MESSAGE_TYPE(message.header.header) != 2 || message.header.type != _distributed_message_shield_effects ||
-		message.header.count != 1 || message.effects >= NUMBER_OF_SHIELD_EFFECTS || message.reserved != 0)
+		message.header.count != 1 || message.reserved != 0 ||
+		(message.effects >= NUMBER_OF_SHIELD_EFFECTS && (message.effects > layout.shield_effects_maximum ||
+			message.effects > NETWORK_RULES_SHIELD_EFFECTS_LIMIT)))
 		return;
-	client_effects = (short)message.effects;
+	client_effects = message.effects < NUMBER_OF_SHIELD_EFFECTS ? (short)message.effects : _shield_effects_stock;
 }

@@ -1,4 +1,4 @@
-"""Tests of network versions 30 to 36: the C tests of the rules every machine
+"""Tests of network versions 30 to 38: the C tests of the rules every machine
 shares (port/linux/tests/network_rules_test.c: the aim assist policy
 message's and the input entry's bytes, the stamp window, the elevator's
 correction and riders, the policy's reach), built with the build machine's C
@@ -131,6 +131,25 @@ def test_shield_effects_are_message_91():
     assert "client_effects = _shield_effects_stock;" in effects
 
 
+def test_unknown_kinds_leave_the_forks_own():
+    """a message kind this build does not know is dropped before anything
+    reads it, and said once a game unless the host's layout lists it; (port,
+    this fork) its own kinds 78 to 86, vote kick, voice and map sharing, are
+    known: 64 to the last without a gap"""
+    source = DISTRIBUTED_C.read_text(encoding="utf-8")
+    known = source[source.index("static boolean distributed_kind_known("):]
+    known = known[:known.index("\n}\n")]
+    assert "type >= _distributed_message_actor_states && type < NUMBER_OF_DISTRIBUTED_MESSAGES" in known
+    assert "_distributed_message_votekick == _distributed_message_coop_device_states + 1" in source
+    handler = source[source.index("void network_distributed_handle_message("):]
+    assert handler.index("map_share_handles_message(") < handler.index("distributed_kind_known(header.type)")
+    assert "csmemset(distributed_unknown_kinds_seen, 0, sizeof(distributed_unknown_kinds_seen));" in source
+    # (the host's shield effects: up to the host's layout's largest, a value
+    # this build has no look for drawn as stock)
+    effects = (ROOT / "port/linux/game/network_shield_effects.c").read_text(encoding="utf-8")
+    assert "network_rules_layout(network_game_client_host_network_version(), &layout);" in effects
+
+
 def test_settings_record_by_the_hosts_version():
     """the client takes the record's size by the host's version, widens an
     older host's into this build's (35's layout: OpenCE's game types, which
@@ -141,31 +160,46 @@ def test_settings_record_by_the_hosts_version():
     assert "network_rules_settings_size_taken(network_game_client_host_network_version(), piece->total_size)" in piece
     assert "network_game_layout_from_version(" in piece
     assert "network_game_client_note_host_network_version(NETWORK_GAME_CLIENT_EXTENDED_OPTIONS_VERSION)" in piece
-    assert "network_rules_settings_fold_options(" not in piece
+    assert "network_rules_settings_fold_options(" not in piece and "network_rules_settings_fold(" not in piece
     assert "leave_unsupported_game_type" not in source and "doesn't support yet" not in source
     assert "HALO_PORT_WIRE_NETWORK_GAME_SIZE == NETWORK_GAME_CLIENT_SETTINGS_EXTENDED_SIZE" in source
+    # (a newer version's layout from the table: the options' bytes by the
+    # host's version, the record no larger than the staging's room, folded
+    # into this build's, 35's, before it is widened or taken)
+    assert "network_rules_settings_options_size(network_game_client_host_network_version()," in piece
+    assert "piece->total_size > NETWORK_GAME_CLIENT_SETTINGS_MAXIMUM" in piece
+    assert piece.index("network_rules_settings_fold_extended(") < piece.index("network_game_layout_from_version(")
+    assert "(unsigned long)received, NETWORK_GAME_CLIENT_SETTINGS_EXTENDED_SIZE," in piece
+    assert "sizeof(network_game_client_settings_staging) == NETWORK_GAME_CLIENT_SETTINGS_MAXIMUM" in source
 
 
 def test_host_sends_each_machine_the_record_of_its_version():
-    """(port, this fork) the host's record is 35's layout: a machine of 35 on
-    takes it whole, an older one narrowed, and is refused a game of OpenCE's
-    game types; the host's own machine takes it whole"""
+    """(port, this fork) the host's record is 35's layout: a machine of 35 to
+    38 takes it whole, an older one narrowed, and is refused a game of
+    OpenCE's game types, a newer layout's (a signed table's) widened; the
+    host's own machine takes it whole"""
     source = (ROOT / "source/networking/network_server_message_handler.c").read_text(encoding="utf-8")
     pieces = source[source.index("static boolean network_game_server_send_settings_pieces("):]
     pieces = pieces[:pieces.index("\n}\n")]
-    assert "network_rules_settings_legacy_copy(" in pieces and "network_rules_settings_extended_copy(" not in pieces
+    assert "network_rules_settings_record_copy(" in pieces and "network_rules_settings_extended_copy(" not in pieces
+    assert "network_rules_settings_layout_copy(" not in source
     assert "wire_size != NETWORK_GAME_SERVER_SETTINGS_EXTENDED_SIZE" in pieces
+    assert "options == NETWORK_GAME_SERVER_OPTIONS_EXTENDED_SIZE" in pieces
     assert "HALO_PORT_WIRE_NETWORK_GAME_SIZE == NETWORK_GAME_SERVER_SETTINGS_EXTENDED_SIZE" in source
-    size = source[source.index("static long network_game_server_settings_size("):]
+    size = source[source.index("static long network_game_server_settings_layout("):]
     size = size[:size.index("\n}\n")]
     local = size[size.index("network_game_server_client_machine_is_local(server, machine)"):]
     assert local.index("entry->size = NETWORK_GAME_SERVER_SETTINGS_EXTENDED_SIZE;") < local.index("return entry->size;")
+    assert local.index("entry->options = NETWORK_GAME_SERVER_OPTIONS_EXTENDED_SIZE;") < local.index("return entry->size;")
+    assert "entry->options = network_rules_host_settings_options(announce, delta_version);" in size
     refused = source[source.index("static boolean network_game_server_settings_refused("):]
     refused = refused[:refused.index("\n}\n")]
     assert "network_rules_host_takes_game_type(" in refused and "game_modes_variant_is_opence(" in refused
     assert "network_game_server_refuse_game_type(slot);" in refused
     # (every send asks: one machine's, every machine's, and the late joiner's wait)
     assert source.count("network_game_server_settings_refused(server, machine, size)") == 3
+    assert source.count("network_game_server_send_settings_pieces(server, machine, ") == 2
+    assert source.count(", size, options)") == 2
     manager = SERVER_MANAGER_C.read_text(encoding="utf-8")
     refuse = manager[manager.index("boolean network_game_server_refuse_game_type("):]
     refuse = refuse[:refuse.index("\n}\n")]
@@ -184,10 +218,11 @@ def test_the_version_and_the_wire():
     limits = (ROOT / "port/linux/include/halo_port_limits.h").read_text(encoding="utf-8")
     delta = (ROOT / "port/linux/include/delta.h").read_text(encoding="utf-8")
     # (port, this fork: its hosts announce 38, OpenCE's newest, and speak
-    # ChupathingyCE's wire, whose clients of 0.8.0e and 0.8.0f join them)
+    # ChupathingyCE's wire of 0.8.0g on, chupa-38a, which its clients of
+    # 0.8.0e and 0.8.0f, chupa-32a, join by its range: tools/test_delta_compat.py)
     assert "#define HALO_PORT_NETWORK_VERSION 38\n" in limits
-    assert '#define DELTA_WIRE "chupa-32a"' in delta
-    assert "chupa-36a" not in delta and "DELTA_WIRE_HOST_OLDEST" not in delta
+    assert '#define DELTA_WIRE "chupa-38a"' in delta
+    assert 'X("chupa-36a"' not in delta and "DELTA_WIRE_HOST_OLDEST" not in delta
     assert "#define DELTA_LEGACY_NEWEST 38\n" in delta
     for number in (30, 31, 32, 33, 34, 35, 36, 37, 38):
         assert re.search(rf'X\({number}, "build-\d+", additive\)', delta)

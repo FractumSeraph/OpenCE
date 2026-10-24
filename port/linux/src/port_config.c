@@ -299,6 +299,30 @@ static const struct config_setting config_settings[] =
 		"On a GPU without DXT textures (Mali), give it the DXT1 textures as ASTC,\n"
 		"which holds them nearly as they are in a quarter of the memory of the\n"
 		"32-bit texels they are otherwise decoded to; false decodes them." },
+/* (ChupathingyCE 0.8.0h's light limits; its own merge put them inside
+debug.gpu_fault_test's entry) */
+#ifdef HALO_CONSOLE_LIGHT_LIMITS
+	{ "display.dynamic_light_limit", _config_integer, "8", "HALO_DYNAMIC_LIGHT_LIMIT", _environment_value, _platform_all,
+#else
+	{ "display.dynamic_light_limit", _config_integer, "0", "HALO_DYNAMIC_LIGHT_LIMIT", _environment_value, _platform_all,
+#endif
+		"The most dynamic lights (muzzle flashes, plasma, explosions) that light\n"
+		"the level at once: the biggest on the screen keep their light on the\n"
+		"walls and floor, the rest light only the objects near them. 0 for no\n"
+		"limit, as on the Xbox (each redraws the level it reaches twice: a\n"
+		"firefight of many is the most of a busy frame's GPU time): the\n"
+		"desktop's default; the consoles' is 8. Changes at once." },
+#ifdef HALO_CONSOLE_LIGHT_LIMITS
+	{ "display.specular_light_limit", _config_integer, "2", "HALO_SPECULAR_LIGHT_LIMIT", _environment_value, _platform_all,
+#else
+	{ "display.specular_light_limit", _config_integer, "0", "HALO_SPECULAR_LIGHT_LIMIT", _environment_value, _platform_all,
+#endif
+		"Of those, the most that add their specular highlights (the shine on\n"
+		"metal and wet floors): the biggest on the screen, the first-person\n"
+		"weapon's first. The others still light the level, without the shine.\n"
+		"0 for no limit, as on the Xbox (a near light's highlights cover most\n"
+		"of the screen: the costliest pass of a firefight): the desktop's\n"
+		"default; the consoles' is 2. Changes at once." },
 	{ "display.full_model_detail", _config_boolean, "false", "HALO_FULL_MODEL_DETAIL", _environment_value,
 		_platform_all,
 		"Draw every model at full detail at any distance." },

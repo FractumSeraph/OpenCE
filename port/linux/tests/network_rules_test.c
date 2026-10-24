@@ -6,13 +6,16 @@ network_rules.c): the bytes of the aim assist policy message and of a
 player's input entry, the window of a datagram's stamp, what a client does
 with the host's word on its player on an elevator, who rides one, the
 policy's reach, and 33 to 36's settings record sizes, further gametype
-options, shield effects message and static target reach, and (port, this
-fork) the older record a host narrows from its own of 35's layout. The
-expected values are those of the network's documented behavior.
+options, shield effects message and static target reach, the layouts a
+signed legacy table's facts extend (sizes, dropped kinds, the shield effects'
+largest value, within the limits), and (port, this fork) the records a host
+makes from its own of 35's layout, older and newer, and a client folds into
+it. The expected values are those of the network's documented behavior.
 tools/test_network_rules.py builds and runs them.
 */
 
 #include "../game/network_rules.h"
+#include "../include/delta.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -379,28 +382,55 @@ static void test_shield_effects_message(void)
 	CHECK(NETWORK_RULES_SHIELD_EFFECTS_SIZE == 12 && NETWORK_RULES_SHIELD_EFFECTS_KIND == 91);
 	network_rules_shield_effects_write(message, 5, 0x01020304);
 	CHECK(memcmp(message, vector, 12) == 0);
-	CHECK(network_rules_shield_effects_read(vector, 12, 0, &effects) && effects == 5);
+	CHECK(network_rules_shield_effects_read(vector, 12, 0, NETWORK_RULES_SHIELD_EFFECTS_MAXIMUM, &effects) && effects == 5);
 	/* the rejects: a size of 11 or 13, effects 6, reserved 1, two entries,
 	a datagram */
 	effects = -1;
-	CHECK(!network_rules_shield_effects_read(vector, 11, 0, &effects) && effects == -1);
-	CHECK(!network_rules_shield_effects_read(vector, 13, 0, &effects));
-	CHECK(!network_rules_shield_effects_read(vector, 12, 1, &effects));
+	CHECK(!network_rules_shield_effects_read(vector, 11, 0, NETWORK_RULES_SHIELD_EFFECTS_MAXIMUM, &effects) && effects == -1);
+	CHECK(!network_rules_shield_effects_read(vector, 13, 0, NETWORK_RULES_SHIELD_EFFECTS_MAXIMUM, &effects));
+	CHECK(!network_rules_shield_effects_read(vector, 12, 1, NETWORK_RULES_SHIELD_EFFECTS_MAXIMUM, &effects));
 	memcpy(bad, vector, 12);
 	bad[8] = 6;
-	CHECK(!network_rules_shield_effects_read(bad, 12, 0, &effects));
+	CHECK(network_rules_shield_effects_read(bad, 12, 0, NETWORK_RULES_SHIELD_EFFECTS_MAXIMUM, &effects) && effects == 6);
+	bad[8] = 7;
+	CHECK(!network_rules_shield_effects_read(bad, 12, 0, NETWORK_RULES_SHIELD_EFFECTS_MAXIMUM, &effects));
 	memcpy(bad, vector, 12);
 	bad[10] = 1;
-	CHECK(!network_rules_shield_effects_read(bad, 12, 0, &effects));
+	CHECK(!network_rules_shield_effects_read(bad, 12, 0, NETWORK_RULES_SHIELD_EFFECTS_MAXIMUM, &effects));
 	memcpy(bad, vector, 12);
 	bad[3] = 2;
-	CHECK(!network_rules_shield_effects_read(bad, 12, 0, &effects));
+	CHECK(!network_rules_shield_effects_read(bad, 12, 0, NETWORK_RULES_SHIELD_EFFECTS_MAXIMUM, &effects));
 	memcpy(bad, vector, 12);
 	bad[2] = 90;
-	CHECK(!network_rules_shield_effects_read(bad, 12, 0, &effects));
+	CHECK(!network_rules_shield_effects_read(bad, 12, 0, NETWORK_RULES_SHIELD_EFFECTS_MAXIMUM, &effects));
 	/* effects past the last are written as stock */
 	network_rules_shield_effects_write(message, 9, 0);
 	CHECK(message[8] == 0 && message[9] == 0);
+	network_rules_shield_effects_write(message, 6, 0);
+	CHECK(message[8] == 6 && message[9] == 0);
+}
+
+static void test_listing_kind(void)
+{
+	/* a mode only on the Slayer engine (2) */
+	CHECK(strcmp(network_rules_kind_name(0x83, 2, 0), "HARDCORE GUN GAME") == 0);
+	CHECK(strcmp(network_rules_kind_name(0x83, 2, 1), "HC GUN GAME") == 0);
+	CHECK(strcmp(network_rules_kind_name(0x01, 2, 0), "SWAT") == 0);
+	CHECK(strcmp(network_rules_kind_name(0x02, 2, 0), "INFECTION") == 0);
+	CHECK(strcmp(network_rules_kind_name(0x03, 2, 1), "GUN GAME") == 0);
+	CHECK(strcmp(network_rules_kind_name(0x81, 2, 1), "HC SWAT") == 0);
+	CHECK(strcmp(network_rules_kind_name(0x82, 2, 1), "HC INFECTION") == 0);
+	/* any other engine: the mode counts as none, hardcore stays */
+	CHECK(strcmp(network_rules_kind_name(0x83, 1, 0), "HARDCORE CTF") == 0);
+	CHECK(strcmp(network_rules_kind_name(0x83, 1, 1), "HC CTF") == 0);
+	CHECK(network_rules_kind_name(0x03, 1, 0) == NULL);
+	CHECK(strcmp(network_rules_kind_name(0x80, 5, 0), "HARDCORE RACE") == 0);
+	CHECK(strcmp(network_rules_kind_name(0x80, 4, 1), "HC KING") == 0);
+	/* a mode it does not know is none; no name for an engine outside 1 to 5 */
+	CHECK(network_rules_kind_name(0x05, 2, 0) == NULL);
+	CHECK(strcmp(network_rules_kind_name(0x85, 2, 0), "HARDCORE SLAYER") == 0);
+	CHECK(network_rules_kind_name(0x80, 0, 0) == NULL && network_rules_kind_name(0x80, 6, 0) == NULL);
+	CHECK(network_rules_kind_name(0x00, 2, 0) == NULL);
 }
 
 static void test_static_reach(void)
@@ -542,6 +572,297 @@ static void test_host_settings_narrowed(void)
 	CHECK(network_rules_host_takes_game_type(network_rules_host_settings_size(36, 0, 0), 1));
 }
 
+/* ---------- layouts */
+
+static struct delta_layout_fact test_facts[DELTA_LAYOUT_FACTS];
+static int test_fact_count;
+
+static int test_source(struct delta_layout_fact *facts, int count)
+{
+	int used = test_fact_count < count ? test_fact_count : count;
+
+	memcpy(facts, test_facts, sizeof(*facts) * (size_t)used);
+	return used;
+}
+
+static struct delta_layout_fact *test_fact(unsigned version)
+{
+	struct delta_layout_fact *fact = &test_facts[test_fact_count++];
+
+	memset(fact, 0, sizeof(*fact));
+	fact->version = (unsigned short)version;
+	return fact;
+}
+
+static void test_layouts_built_in(void)
+{
+	struct network_rules_layout layout;
+	unsigned version;
+
+	CHECK(DELTA_LEGACY_NEWEST == 38);
+	/* (today's: the record by version, 0 to 6 for message 91 from every
+	host, 91 a kind a machine without it drops from 36) */
+	for (version = 11; version <= 40; version++)
+	{
+		network_rules_layout_built_in(version, &layout);
+		CHECK(layout.version == version && layout.learned == 0 && layout.refused == 0);
+		CHECK(layout.settings_size == (version >= 35 ? 0x3350 : 0x3340));
+		CHECK(layout.options_size == (version >= 35 ? 0x2C : 0x1C));
+		CHECK(layout.shield_effects_maximum == 6);
+		CHECK(network_rules_layout_drops(&layout, 91) == (version >= 36));
+		CHECK(!network_rules_layout_drops(&layout, 92) && !network_rules_layout_drops(&layout, 0));
+	}
+	network_rules_layout_built_in(NETWORK_RULES_VERSION_UNKNOWN, &layout);
+	CHECK(layout.settings_size == 0 && layout.options_size == 0 && layout.shield_effects_maximum == 6);
+	/* (no source: the built-in facts; the newest is the build's) */
+	network_rules_set_layout_source(NULL);
+	network_rules_layout(39, &layout);
+	CHECK(layout.settings_size == 0x3350 && layout.learned == 0);
+	CHECK(network_rules_layout_newest() == 38);
+	CHECK(network_rules_settings_options_size(36, 0x3350) == 0x2C && network_rules_settings_options_size(34, 0x3340) == 0x1C);
+	CHECK(network_rules_settings_options_size(NETWORK_RULES_VERSION_UNKNOWN, 0x3350) == 0x2C);
+	CHECK(network_rules_settings_options_size(NETWORK_RULES_VERSION_UNKNOWN, 0x3340) == 0x1C);
+	CHECK(network_rules_host_settings_options(32, 0) == 0x1C && network_rules_host_settings_options(36, 32) == 0x1C);
+	CHECK(network_rules_host_settings_options(36, 0) == 0x2C && network_rules_host_settings_options(36, 38) == 0x2C);
+}
+
+static void test_layouts_from_the_table(void)
+{
+	struct network_rules_layout layout;
+	struct delta_layout_fact *fact;
+
+	test_fact_count = 0;
+	/* (facts of the build's own versions are its rules': never taken) */
+	fact = test_fact(35);
+	fact->options_size = 0x30;
+	fact->shield_effects_maximum = 9;
+	fact = test_fact(36);
+	fact->dropped[92 >> 3] |= 1 << (92 & 7);
+	/* 39: four more option bytes, kinds 92 and 93 dropped, a seventh effect */
+	fact = test_fact(39);
+	fact->options_size = 0x30;
+	fact->shield_effects_maximum = 7;
+	fact->dropped[92 >> 3] |= 1 << (92 & 7);
+	fact->dropped[93 >> 3] |= 1 << (93 & 7);
+	/* 41: six bytes after the local data */
+	fact = test_fact(41);
+	fact->settings_size = 0x3354 + 6;
+	network_rules_set_layout_source(test_source);
+
+	network_rules_layout(38, &layout);
+	CHECK(layout.options_size == 0x2C && layout.settings_size == 0x3350 && layout.shield_effects_maximum == 6);
+	CHECK(!network_rules_layout_drops(&layout, 92) && layout.learned == 0);
+	network_rules_layout(39, &layout);
+	CHECK(layout.options_size == 0x30 && layout.settings_size == 0x3354 && layout.shield_effects_maximum == 7);
+	CHECK(network_rules_layout_drops(&layout, 92) && network_rules_layout_drops(&layout, 93) &&
+		network_rules_layout_drops(&layout, 91) && !network_rules_layout_drops(&layout, 94));
+	CHECK(layout.refused == 0);
+	/* (a fact holds until the next) */
+	network_rules_layout(40, &layout);
+	CHECK(layout.options_size == 0x30 && layout.settings_size == 0x3354);
+	network_rules_layout(41, &layout);
+	CHECK(layout.options_size == 0x30 && layout.settings_size == 0x335A && layout.shield_effects_maximum == 7);
+	network_rules_layout(60, &layout);
+	CHECK(layout.settings_size == 0x335A);
+	network_rules_layout(NETWORK_RULES_VERSION_UNKNOWN, &layout);
+	CHECK(layout.settings_size == 0 && layout.learned == 0);
+	CHECK(network_rules_layout_newest() == 41);
+
+	/* what the client and the host make of them */
+	CHECK(network_rules_settings_size(39) == 0x3354 && network_rules_settings_size(38) == 0x3350);
+	CHECK(network_rules_settings_size_taken(39, 0x3354) && !network_rules_settings_size_taken(39, 0x3350));
+	CHECK(!network_rules_settings_size_taken(NETWORK_RULES_VERSION_UNKNOWN, 0x3354));
+	CHECK(network_rules_settings_options_size(39, 0x3354) == 0x30);
+	CHECK(network_rules_settings_options_size(41, 0x335A) == 0x30);
+	CHECK(network_rules_host_settings_size(39, 0, 0) == 0x3354 && network_rules_host_settings_options(39, 0) == 0x30);
+	CHECK(network_rules_host_settings_size(39, 38, 0) == 0x3350 && network_rules_host_settings_options(39, 38) == 0x2C);
+	CHECK(network_rules_host_settings_size(39, 41, 0) == 0x3354 && network_rules_host_settings_options(39, 41) == 0x30);
+	CHECK(network_rules_host_settings_size(41, 32, 0) == 0x3340 && network_rules_host_settings_options(41, 32) == 0x1C);
+	network_rules_set_layout_source(NULL);
+}
+
+static void test_layouts_hostile(void)
+{
+	struct network_rules_layout layout;
+	struct delta_layout_fact *fact;
+
+	/* sizes that shrink, past the limits, a lower largest effect, kind 0 */
+	test_fact_count = 0;
+	fact = test_fact(39);
+	fact->options_size = 0x20;
+	fact->settings_size = 0x3300;
+	fact->shield_effects_maximum = 5;
+	fact->dropped[0] = 0x01;
+	fact = test_fact(40);
+	fact->options_size = 0x2C + NETWORK_RULES_LAYOUT_GROWTH_MAXIMUM + 1;
+	fact->shield_effects_maximum = NETWORK_RULES_SHIELD_EFFECTS_LIMIT + 1;
+	fact = test_fact(41);
+	fact->settings_size = NETWORK_RULES_SETTINGS_MAXIMUM + 1;
+	fact = test_fact(42);
+	fact->options_size = 0x2C + 40;
+	fact->settings_size = 0x3350 + 40 + 2;
+	fact = test_fact(43);
+	/* (the options grow, the bytes after the local data would shrink) */
+	fact->options_size = 0x2C + 44;
+	fact->settings_size = 0x3350 + 42;
+	fact = test_fact(44);
+	fact->options_size = 0x2C + 64;
+	network_rules_set_layout_source(test_source);
+
+	network_rules_layout(39, &layout);
+	CHECK(layout.options_size == 0x2C && layout.settings_size == 0x3350 && layout.shield_effects_maximum == 6);
+	CHECK(layout.refused == 3 && !network_rules_layout_drops(&layout, 0));
+	network_rules_layout(41, &layout);
+	CHECK(layout.options_size == 0x2C && layout.settings_size == 0x3350 && layout.shield_effects_maximum == 6);
+	CHECK(layout.refused == 6);
+	network_rules_layout(42, &layout);
+	CHECK(layout.options_size == 0x2C + 40 && layout.settings_size == 0x3350 + 42);
+	network_rules_layout(43, &layout);
+	CHECK(layout.options_size == 0x2C + 44 && layout.settings_size == 0x3350 + 46);
+	/* (past the record's limit with the bytes kept after the local data) */
+	network_rules_layout(44, &layout);
+	CHECK(layout.options_size == 0x2C + 44 && layout.settings_size <= NETWORK_RULES_SETTINGS_MAXIMUM);
+	CHECK(layout.settings_size >= NETWORK_RULES_SETTINGS_HEAD_SIZE + layout.options_size + 4);
+	network_rules_set_layout_source(NULL);
+	/* (the shield effects message never past its limit) */
+	{
+		uint8_t message[NETWORK_RULES_SHIELD_EFFECTS_SIZE];
+		int effects = -1;
+
+		network_rules_shield_effects_write(message, 0, 1);
+		message[8] = 7;
+		CHECK(!network_rules_shield_effects_read(message, 12, 0, 6, &effects));
+		CHECK(network_rules_shield_effects_read(message, 12, 0, 7, &effects) && effects == 7);
+		message[8] = 16;
+		CHECK(!network_rules_shield_effects_read(message, 12, 0, 255, &effects));
+		message[8] = 15;
+		CHECK(network_rules_shield_effects_read(message, 12, 0, 255, &effects) && effects == 15);
+	}
+}
+
+static void test_layout_record(void)
+{
+	/* a record of 0x30 bytes of options and 6 after the local data, made
+	from the older and folded back */
+	static uint8_t record[0x3340], wire[0x3354 + 6], folded[NETWORK_RULES_SETTINGS_MAXIMUM];
+	uint8_t further[NETWORK_RULES_EXTENDED_OPTIONS_SIZE], extended[NETWORK_RULES_EXTENDED_OPTIONS_SIZE];
+	int index, offset;
+
+	for (index = 0; index < (int)sizeof(record); index++)
+		record[index] = (uint8_t)(index * 7 + 3);
+	for (index = 0; index < (int)sizeof(further); index++)
+		further[index] = (uint8_t)(0xA0 + index);
+	for (offset = 0; offset < (int)sizeof(wire); offset += 0xE00)
+	{
+		int length = (int)sizeof(wire) - offset < 0xE00 ? (int)sizeof(wire) - offset : 0xE00;
+
+		network_rules_settings_layout_copy(record, further, 0x30, offset, length, wire + offset);
+	}
+	CHECK(memcmp(wire, record, 0x333C) == 0);
+	CHECK(memcmp(wire + 0x333C, further, 16) == 0);
+	for (index = 0x334C; index < 0x3350; index++)
+		CHECK(wire[index] == 0);
+	CHECK(memcmp(wire + 0x3350, record + 0x333C, 4) == 0);
+	for (index = 0x3354; index < (int)sizeof(wire); index++)
+		CHECK(wire[index] == 0);
+	memset(folded, 0xEE, sizeof(folded));
+	memcpy(folded, wire, sizeof(wire));
+	network_rules_settings_fold(folded, (int)sizeof(wire), 0x30, extended);
+	CHECK(memcmp(folded, record, sizeof(record)) == 0);
+	CHECK(memcmp(extended, further, sizeof(extended)) == 0);
+	for (index = (int)sizeof(record); index < (int)sizeof(wire); index++)
+		CHECK(folded[index] == 0);
+	CHECK(folded[sizeof(wire)] == 0xEE);
+	/* (a fold that does not fit is not made) */
+	memcpy(folded, wire, sizeof(wire));
+	network_rules_settings_fold(folded, NETWORK_RULES_SETTINGS_MAXIMUM + 1, 0x30, extended);
+	CHECK(memcmp(folded, wire, sizeof(wire)) == 0);
+	network_rules_settings_fold(folded, 0x3340, 0x30, extended);
+	CHECK(memcmp(folded, wire, sizeof(wire)) == 0);
+	/* (the older layouts as before: 0x1C copies the record as it is) */
+	network_rules_settings_layout_copy(record, further, 0x1C, 0x3300, 0x40, wire);
+	CHECK(memcmp(wire, record + 0x3300, 0x40) == 0);
+}
+
+/* port (this fork): a host whose own record is 35's layout makes the record
+of any layout from it (the older, its own, a table's newer), and a client
+folds a newer one into it */
+static void test_fork_layout_record(void)
+{
+	static uint8_t record[NETWORK_RULES_SETTINGS_EXTENDED_SIZE];
+	static uint8_t wire[NETWORK_RULES_SETTINGS_MAXIMUM], legacy[NETWORK_RULES_SETTINGS_SIZE];
+	static uint8_t folded[NETWORK_RULES_SETTINGS_MAXIMUM + 1];
+	struct delta_layout_fact *fact;
+	int index, offset, size;
+
+	for (index = 0; index < (int)sizeof(record); index++)
+		record[index] = (uint8_t)(index * 13 + 5);
+	/* 0x2C: the record itself; 0x1C: the older one, as legacy_copy makes it */
+	network_rules_settings_record_copy(record, 0x2C, 0, (int)sizeof(record), wire);
+	CHECK(memcmp(wire, record, sizeof(record)) == 0);
+	network_rules_settings_record_copy(record, 0x1C, 0, (int)sizeof(legacy), wire);
+	network_rules_settings_legacy_copy(record, 0, (int)sizeof(legacy), legacy);
+	CHECK(memcmp(wire, legacy, sizeof(legacy)) == 0);
+	CHECK(memcmp(wire, record, 0x333C) == 0 && memcmp(wire + 0x333C, record + 0x334C, 4) == 0);
+
+	/* a table's 39: 0x30 bytes of options, 6 after the local data, piece by
+	piece as the host sends it */
+	test_fact_count = 0;
+	fact = test_fact(39);
+	fact->options_size = 0x30;
+	fact->settings_size = 0x3354 + 6;
+	network_rules_set_layout_source(test_source);
+	size = network_rules_host_settings_size(39, 0, 0);
+	CHECK(size == 0x335A && network_rules_host_settings_options(39, 0) == 0x30);
+	/* (a Delta machine of 38, or 0.8.0e's 32, takes its own from a host of 39) */
+	CHECK(network_rules_host_settings_size(39, 38, 0) == 0x3350 && network_rules_host_settings_options(39, 38) == 0x2C);
+	CHECK(network_rules_host_settings_size(39, 32, 0) == 0x3340 && network_rules_host_settings_options(39, 32) == 0x1C);
+	for (offset = 0; offset < size; offset += 0xE00)
+	{
+		int length = size - offset < 0xE00 ? size - offset : 0xE00;
+
+		network_rules_settings_record_copy(record, 0x30, offset, length, wire + offset);
+	}
+	CHECK(memcmp(wire, record, 0x3320 + 0x2C) == 0);
+	for (index = 0x334C; index < 0x3350; index++)
+		CHECK(wire[index] == 0);
+	CHECK(memcmp(wire + 0x3350, record + 0x334C, 4) == 0);
+	for (index = 0x3354; index < size; index++)
+		CHECK(wire[index] == 0);
+
+	/* the client: the size its host's version says, folded back into 35's */
+	CHECK(network_rules_settings_size_taken(39, (unsigned)size));
+	CHECK(network_rules_settings_options_size(39, (unsigned)size) == 0x30);
+	memset(folded, 0xEE, sizeof(folded));
+	memcpy(folded, wire, (size_t)size);
+	CHECK(network_rules_settings_fold_extended(folded, size, 0x30) == NETWORK_RULES_SETTINGS_EXTENDED_SIZE);
+	CHECK(memcmp(folded, record, sizeof(record)) == 0);
+	for (index = (int)sizeof(record); index < size; index++)
+		CHECK(folded[index] == 0);
+	CHECK(folded[size] == 0xEE);
+	/* (35's own record folds to itself; one that does not fit is left) */
+	memcpy(folded, record, sizeof(record));
+	CHECK(network_rules_settings_fold_extended(folded, (int)sizeof(record), 0x2C) == NETWORK_RULES_SETTINGS_EXTENDED_SIZE);
+	CHECK(memcmp(folded, record, sizeof(record)) == 0);
+	memcpy(folded, wire, (size_t)size);
+	CHECK(network_rules_settings_fold_extended(folded, size, 0x1C) == 0);
+	CHECK(network_rules_settings_fold_extended(folded, NETWORK_RULES_SETTINGS_MAXIMUM + 1, 0x30) == 0);
+	CHECK(network_rules_settings_fold_extended(folded, 0x3350, 0x30) == 0);
+	CHECK(memcmp(folded, wire, (size_t)size) == 0);
+	/* (the largest a table may make: 64 bytes past 35's, all of them options) */
+	memcpy(folded, wire, NETWORK_RULES_SETTINGS_MAXIMUM);
+	for (index = 0; index < 4; index++)
+		folded[0x3320 + 0x2C + 60 + index] = (uint8_t)(index + 1);
+	CHECK(network_rules_settings_fold_extended(folded, NETWORK_RULES_SETTINGS_MAXIMUM, 0x2C + 60) ==
+		NETWORK_RULES_SETTINGS_EXTENDED_SIZE);
+	CHECK(memcmp(folded, record, 0x334C) == 0);
+	for (index = 0; index < 4; index++)
+		CHECK(folded[0x334C + index] == index + 1);
+	for (index = NETWORK_RULES_SETTINGS_EXTENDED_SIZE; index < NETWORK_RULES_SETTINGS_MAXIMUM; index++)
+		CHECK(folded[index] == 0);
+	network_rules_set_layout_source(NULL);
+}
+
 int main(void)
 {
 	test_aim_assist_message();
@@ -554,9 +875,15 @@ int main(void)
 	test_settings_size();
 	test_extended_options();
 	test_shield_effects_message();
+	test_listing_kind();
 	test_static_reach();
 	test_host_settings();
 	test_host_settings_narrowed();
+	test_layouts_built_in();
+	test_layouts_from_the_table();
+	test_layouts_hostile();
+	test_layout_record();
+	test_fork_layout_record();
 	if (failures)
 	{
 		printf("network_rules_test: %d failure(s)\n", failures);

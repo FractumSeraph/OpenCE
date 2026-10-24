@@ -87,14 +87,16 @@ then [ChupathingyCE's](#chupathingyce), then [OpenCE's](#opence).
 Where the two projects do the same thing two ways, the fork keeps one
 working version; nothing sent over the network differs from theirs, so
 players of all three play together: this fork's games announce network
-version 36, as OpenCE's newest does, so OpenCE 36 players join them, SWAT,
+version 38, as OpenCE's newest does, so OpenCE 38 players join them, SWAT,
 Infection, Gun Game and Hardcore included, and ChupathingyCE players
-(0.8.0e and 0.8.0f) join them by its wire, `chupa-32a`, each sent the game
-settings of its own version (a game of one of OpenCE's game types is the
-one they can't play: 0.8.0f leaves it saying so, and the host turns 0.8.0e
-away from it). This fork's builds join hosts of versions 11 to 37, in
-either project's form (`docs/delta.md`), reading an older host's game
-settings as it sends them. Both
+(0.8.0e to 0.8.0h) join them by its wire, `chupa-38a` (0.8.0e's and
+0.8.0f's `chupa-32a` plays with it), each sent the game settings of its own
+version (a game of one of OpenCE's game types is the one they can't play:
+0.8.0f and later leave it saying so, and the host turns 0.8.0e away from
+it). This fork's builds join hosts of versions 11 to 39, in either
+project's form (`docs/delta.md`), reading an older host's game settings as
+it sends them, and a newer one's as ChupathingyCE's signed legacy table
+lays it out ("Layouts"). Both
 projects' text chats are one, by ChupathingyCE's own bridge: its chat is
 the one typed and shown, and OpenCE players' lines reach it and its lines
 reach them, on a host of either (`docs/delta.md`, Chat).

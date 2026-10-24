@@ -16,6 +16,18 @@ static char const *config_string(char const *name){(void)name;return setting;}
 static unsigned long config_changes(void){return changes;}
 static short game_connection(void){return connection;}
 static boolean network_connection_last_read_was_unreliable(void){return unreliable;}
+/* the host's network version and its layout's largest shield effects value
+(network_rules.c: 6 built in, a signed legacy table's past 38) */
+#define NETWORK_RULES_SHIELD_EFFECTS_LIMIT 15
+struct network_rules_layout { unsigned version; int settings_size, options_size, shield_effects_maximum; };
+static unsigned host_version = 38;
+static int table_maximum = 6;
+static unsigned int network_game_client_host_network_version(void){return host_version;}
+static void network_rules_layout(unsigned version,struct network_rules_layout *layout)
+{
+ memset(layout,0,sizeof(*layout));layout->version=version;
+ layout->shield_effects_maximum=version>38&&version!=0xFFFF?table_maximum:6;
+}
 #include "under_test.inc"
 
 /* the host's message, as shield_effects_message_make makes it, from the host's stream */
@@ -71,6 +83,19 @@ int main(int argc,char **argv)
   message=message_of(_shield_effects_players);
   network_shield_effects_handle_message(3,(word const *)&message,sizeof(message));
   CHECK(network_shield_effects()==_shield_effects_glow,"another machine than the host refused");
+ } else CASE("client_newer_host") {
+  connection=_game_connection_network_client;
+  network_shield_effects_reset();
+  take(message_of(_shield_effects_glow));
+  host_version=39;table_maximum=9;
+  take(message_of(10));
+  CHECK(network_shield_effects()==_shield_effects_glow,"a value past the newer host's layout refused");
+  take(message_of(16));
+  CHECK(network_shield_effects()==_shield_effects_glow,"a value past the limit refused");
+  take(message_of(9));
+  CHECK(network_shield_effects()==_shield_effects_stock,"a value of the newer host's layout this build has no look for: stock");
+  take(message_of(_shield_effects_light_show));
+  CHECK(network_shield_effects()==_shield_effects_light_show,"and one it has");
  } else return 2;
  return 0;
 }

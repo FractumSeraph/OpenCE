@@ -3680,6 +3680,49 @@ boolean network_rules_of_version(
 /* (the host's shield effects, message 91 of network version 36, are
 network_shield_effects.c's: this build draws them) */
 
+/* the distributed message kinds this game has seen that this build does not
+know, a bit a kind (each said in the log once a game) */
+static byte distributed_unknown_kinds_seen[32];
+
+/* whether this build knows a distributed message's kind (network_distributed.h;
+port, this fork: 64 to the last without a gap, its vote kick, voice and map
+sharing, 78 to 86, among them) */
+static boolean distributed_kind_known(
+	byte type)
+{
+	return (type >= _distributed_message_player_prediction && type <= _distributed_message_pings) ||
+		(type >= _distributed_message_actor_states && type < NUMBER_OF_DISTRIBUTED_MESSAGES);
+}
+typedef char distributed_kinds_known_assert[_distributed_message_votekick == _distributed_message_coop_device_states + 1 &&
+	_distributed_message_chat_up == _distributed_message_map_share_progress + 1 &&
+	_distributed_message_shield_effects + 1 == NUMBER_OF_DISTRIBUTED_MESSAGES ? 1 : -1];
+
+/* a message of a kind this build does not know, from the host (machine_index
+NONE) or a client: dropped, as ever. A kind the layout of the sender's
+version lists (network_rules.h: built in, or a signed legacy table's facts)
+is one such a machine sends that a machine without it drops; another is said
+in the log, once a game, as the sign of a newer host's change this build and
+its table do not know. */
+static void distributed_unknown_kind(
+	long machine_index,
+	byte type)
+{
+	struct network_rules_layout layout;
+	unsigned int version = machine_index == NONE ? network_game_client_host_network_version() :
+		(unsigned int)delta_legacy_announce();
+
+	if (distributed_unknown_kinds_seen[type >> 3] & (1 << (type & 7)))
+		return;
+	distributed_unknown_kinds_seen[type >> 3] |= (byte)(1 << (type & 7));
+	network_rules_layout(version, &layout);
+	if (!network_rules_layout_drops(&layout, type))
+	{
+		error(_error_log, "network: dropped a distributed message of kind %d from %s (network version %u), which "
+			"this build does not know and its legacy table's layouts do not list", (int)type,
+			machine_index == NONE ? "the host" : "a client", version);
+	}
+}
+
 /* (the host) the setting to one client machine, or to every client (NONE) */
 static void distributed_send_aim_assist(
 	long machine_index)
@@ -3985,6 +4028,7 @@ void network_distributed_new_game(
 		network_game_client_host_network_version() != 0xFFFF &&
 		network_game_client_host_network_version() >= AIM_ASSIST_POLICY_NETWORK_VERSION;
 	distributed_aim_assist_sent = NONE;
+	csmemset(distributed_unknown_kinds_seen, 0, sizeof(distributed_unknown_kinds_seen));
 	distributed_statistics_due = FALSE;
 	distributed_pickup_count = 0;
 	/* (the tests' drift figures: none taken, no input had, of this game) */
@@ -5041,6 +5085,12 @@ void network_distributed_handle_message(
 		}
 		return;
 	}
+	/* (a kind this build does not know: dropped before anything reads it) */
+	if (!distributed_kind_known(header.type))
+	{
+		distributed_unknown_kind(machine_index, header.type);
+		return;
+	}
 	/* (entries of a size of their own: their least here, and each read no
 	further than the message's end) */
 	switch (header.type)
@@ -5450,8 +5500,10 @@ void network_distributed_handle_message(
 	case _distributed_message_shield_effects:
 		/* the host's shield effects (network version 36): the host's alone,
 		over its stream, whole (network_shield_effects.c checks it: the size,
-		one entry, effects 0 to 5, the word after them 0); a host of an older
-		version sends none, and its clients draw the stock ones */
+		one entry, effects 0 to 6, 38's "players" the last, or to a newer
+		host's layout's largest, drawn as stock; the word after them 0); a
+		host of an older version sends none, and its clients draw the stock
+		ones */
 		network_shield_effects_handle_message(machine_index, message, size);
 		break;
 	case _distributed_message_pickups:

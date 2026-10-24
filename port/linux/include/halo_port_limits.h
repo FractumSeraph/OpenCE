@@ -118,10 +118,10 @@ Raise it with any change to what the machines send each other.
 port (this fork): 38, OpenCE's newest, which its hosts announce (OpenCE's
 clients join only their own number) and play by (network_rules_of_version),
 its game settings record of 35's layout (OpenCE's game types); ChupathingyCE's
-hosts announce 32. Delta clients (ChupathingyCE's 0.8.0e and 0.8.0f, this
-fork's) join a host of their wire whatever number it announces, and are sent
-the record of the older of their HELLO's version and this one
-(network_server_message_handler.c). */
+hosts announce 32. Delta clients (ChupathingyCE's 0.8.0e to 0.8.0h, this
+fork's) join a host whose wire plays with theirs (chupa-38a, from chupa-28a,
+delta.h) whatever number it announces, and are sent the record of the older
+of their HELLO's version and this one (network_server_message_handler.c). */
 #define HALO_PORT_NETWORK_VERSION 38
 /* ... the versions whose hosts a client joins: its own, and those that differ
 from it only in what the other machines leave out (a message a machine of

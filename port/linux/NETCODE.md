@@ -299,7 +299,7 @@ and the overshield effect, Server Setup's SHIELD EFFECTS), which every client
 draws in place of its player's own, so that an OpenCE build that would draw
 its own cannot join.
 
-A client plays 33 to 36 by its host's version (`network_rules_of_version`,
+A client plays 33 to 38 by its host's version (`network_rules_of_version`,
 by the version the host advertised, `network_game_client_host_network_version`;
 a host joined without one, by an invitation, plays by the older rules until
 its game settings record shows it is of 35 or later). A client of a host
@@ -325,7 +325,7 @@ host's version, but keep the older record: they fold a record of 35's and
 leave a game of one of OpenCE's game types, telling the player which.)
 
 A host plays by the number it announces (`delta_legacy_announce()`: the
-built-in one, 36 in this fork, or a legacy table's, which only raises it
+built-in one, 38 in this fork, or a legacy table's, which only raises it
 but for a local one), which is the number of every OpenCE machine in its
 game, as they join only their own; ChupathingyCE's hosts announce 32. From
 34 a host takes scenery and devices that are a shield alone as static
@@ -343,8 +343,8 @@ options 0x2C bytes), and a machine takes only the size of its version. An
 OpenCE machine takes the announced number's; a Delta machine the record of
 the older of its HELLO's number (the newest it plays, `DELTA_LEGACY_NEWEST`;
 ChupathingyCE's builds before 0.8.0f said 32 there) and the host's. This
-build's own record being 35's layout, a machine of 35 on (an OpenCE machine
-of 36, ChupathingyCE 0.8.0f, this fork's) is sent it whole, OpenCE's game
+build's own record being 35's layout, a machine of 35 to 38 (an OpenCE
+machine of 36 to 38, ChupathingyCE 0.8.0f to 0.8.0h, this fork's) is sent it whole, OpenCE's game
 types' options with it, and an older one (ChupathingyCE 0.8.0e) the older
 record narrowed from it (`network_rules_settings_legacy_copy`), those
 options left out. A machine of the older record cannot play a game of one
@@ -369,7 +369,18 @@ major (an OpenCE browser of 37 shows such a host's Slayer as SWAT, kind 1),
 and this fork's client reads no kind from a host with a Delta wire after it;
 the internet listing's kind (its stamp's first byte) is sent by every host.
 38's "players" shield effects reach a client of 36 or 37 as a value it does
-not know, and it draws the stock ones.
+not know, and it draws the stock ones. ChupathingyCE follows 37 and 38 in
+0.8.0g (its hosts still announcing 32) with a wire of its own, `chupa-38a`,
+which this fork speaks too: its clients of 0.8.0e and 0.8.0f (`chupa-32a`)
+join this fork's hosts by the range the advertisement carries
+(`delta_compat.c`), and a 0.8.0g or later client's HELLO says 38. A version
+past 38 has the layout a signed legacy table's facts give it
+(`docs/delta.md`, "Layouts": longer gametype options, bytes after the
+record's local data, a larger shield effects value, message kinds a machine
+drops): this fork's client folds such a record into its own
+(`network_rules_settings_fold_extended`), its host makes one from its own
+(`network_rules_settings_record_copy`), and its HELLO says the newest
+version whose layout it reads (`network_rules_layout_newest`).
 
 A host never checks a joining client's version: the client reads the
 host's from its advertisement and joins only a version it plays with. That

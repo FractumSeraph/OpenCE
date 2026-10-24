@@ -362,6 +362,13 @@ def server_dist(platform: str, config: str, outputs: list) -> int:
         shutil.copy2(playlist, dist / "playlists")
     # (sv_name_filter's list, read from the data folder)
     shutil.copy2(ROOT / "server/blocked_names.txt", dist / "blocked_names.txt")
+    # port (this fork): the maps' torrent index beside the program, as the
+    # game's (maps.torrent_index): the approved map list, without which the
+    # server shares no map (map_torrents.h); and internet play's brokers on
+    # Linux too (the Windows server's above)
+    shutil.copy2(ROOT / "port/assets/network/map_torrents.txt", dist / "map_torrents.txt")
+    if not windows:
+        shutil.copy2(ROOT / "port/assets/network/brokers.txt", dist / "brokers.txt")
     for source, name in (("LICENSE", "LICENSE.txt"),
                          ("port/third_party/mbedtls/LICENSE", "mbedtls-LICENSE.txt"),
                          ("port/third_party/miniupnpc/LICENSE", "miniupnpc-LICENSE.txt"),

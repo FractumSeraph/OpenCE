@@ -180,8 +180,10 @@ struct p2p_listing
 	char map[P2P_LISTING_MAP_SIZE + 1];
 	char gametype[P2P_LISTING_GAMETYPE_SIZE + 1];
 	unsigned char player_count, maximum_player_count, engine_type;
-	/* the game's kind: an OpenCE gametype's mode, and Hardcore
-	(port/linux/game/game_modes.h's game_modes_kind) */
+	/* the game's kind (version 37, read from the listing's stamp: an OpenCE
+	gametype's mode in the low seven bits, Hardcore in bit 7, as
+	port/linux/game/game_modes.h's game_modes_kind makes it; 0 for a stock
+	game or an older host); only a name for the list */
 	unsigned char kind;
 	unsigned char open, in_progress, has_teams, dedicated;
 	/* joining it failed this run (p2p_lobby_mark_failed) */

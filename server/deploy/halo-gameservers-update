@@ -29,6 +29,8 @@ import zipfile
 
 REPOSITORY = "FractumSeraph/OpenCE"
 ASSET = "chupathingyce-server-linux-x64.zip"
+# (files of the release put beside the program too, when it has them)
+BESIDE = ("map_torrents.txt", "brokers.txt")
 BIN = "/opt/halo-dedicated/bin"
 PROGRAM = os.path.join(BIN, "chupathingyce-server")
 UNITS = ["halo-dedicated", "halo-fractumslayer"]
@@ -124,6 +126,16 @@ def main():
                 log(f"{ASSET} has no chupathingyce-server: not installed")
                 return 1
             archive.extract(names[0], work)
+            # (the files beside the program the servers read: the maps'
+            # torrent index, the approved map list, without which they share
+            # no map, and internet play's brokers; releases before
+            # fs.00183 had neither)
+            beside = {}
+            for wanted in BESIDE:
+                found = [name for name in archive.namelist() if name == wanted or name.endswith("/" + wanted)]
+                if found:
+                    archive.extract(found[0], work)
+                    beside[wanted] = os.path.join(work, found[0])
         new = os.path.join(work, names[0])
         os.chmod(new, 0o755)
         check = subprocess.run([new, "--version"], capture_output=True, text=True, timeout=60, cwd=work)
@@ -135,6 +147,15 @@ def main():
         shutil.copy2(new, PROGRAM + ".new")
         os.chown(PROGRAM + ".new", stat.st_uid, stat.st_gid)
         os.replace(PROGRAM + ".new", PROGRAM)
+        for wanted, source in beside.items():
+            target = os.path.join(os.path.dirname(PROGRAM), wanted)
+            if os.path.exists(target):
+                shutil.copy2(target, target + ".previous")
+            shutil.copy2(source, target + ".new")
+            os.chmod(target + ".new", 0o644)
+            os.chown(target + ".new", stat.st_uid, stat.st_gid)
+            os.replace(target + ".new", target)
+            log(f"{wanted} from {tag} put beside the program")
     finally:
         shutil.rmtree(work, ignore_errors=True)
 

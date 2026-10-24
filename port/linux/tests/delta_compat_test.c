@@ -238,6 +238,33 @@ static void test_matrix(void)
 	CHECK(decide(h29old, "chupa-32a") == 0);
 }
 
+/* chupa-38a (ChupathingyCE 0.8.0g on; port: this fork's since it took 0.8.0h,
+its hosts announcing OpenCE's 38): its hosts are joined by the chupa-32a
+clients of 0.8.0e and 0.8.0f by its range, by 29a's in the old slot, and its
+clients join the hosts of 28a on; the advertisement's fourth reserved byte is
+Delta's major, which OpenCE 37's game kind would be */
+static void test_wire_38a(void)
+{
+	unsigned char h38[RESERVED], h32[RESERVED], h29old[RESERVED], h28[RESERVED];
+
+	host(h38, "chupa-38a");
+	host(h32, "chupa-32a");
+	released_host(h29old, "chupa-29a");
+	host(h28, "chupa-28a");
+	CHECK(h38[3] == DELTA_MAJOR && DELTA_ADVERTISED_WIRE_OFFSET == 3);
+	CHECK(!memcmp(h38 + DELTA_ADVERTISED_WIRE_OFFSET + 1, "chupa-29a", 10));
+	CHECK(decide(h38, "chupa-38a") == 1);
+	CHECK(decide(h38, "chupa-32a") == 1);
+	CHECK(decide(h38, "chupa-29a") == 1 && old_exact(h38, DELTA_MAJOR, "chupa-29a") == 1);
+	CHECK(decide(h38, "chupa-28a") == 1);
+	CHECK(decide(h32, "chupa-38a") == 1);
+	CHECK(decide(h29old, "chupa-38a") == 1);
+	CHECK(decide(h28, "chupa-38a") == 1);
+	/* (a host's kind byte over the major would leave it no Delta host to them) */
+	h38[3] = 0x81;
+	CHECK(decide(h38, "chupa-32a") == -1 && decide(h38, "chupa-38a") == -1);
+}
+
 /* the builds before the ranges: an exact-match client, whatever host of ours advertises, joins every host
 whose old slot is its own wire, and a host of 32a is joinable by a client of 29a */
 static void test_old_clients(void)
@@ -279,6 +306,7 @@ int main(void)
 	test_matrix();
 	test_old_clients();
 	test_host_wire();
+	test_wire_38a();
 	if (failures)
 	{
 		fprintf(stderr, "delta_compat_test: %d failures\n", failures);

@@ -5,6 +5,14 @@ The rules of network_rules.h.
 */
 
 #include "network_rules.h"
+/* (the table's facts and DELTA_LEGACY_NEWEST: numbers alone, no calls) */
+#include "../include/delta.h"
+
+#include <string.h>
+
+typedef char network_rules_layout_kinds_fit[sizeof(((struct network_rules_layout *)0)->dropped) ==
+	DELTA_LAYOUT_KIND_BYTES ? 1 : -1];
+typedef char network_rules_layout_head_fits[NETWORK_RULES_SETTINGS_HEAD_SIZE == 0x3320 ? 1 : -1];
 
 int network_rules_floor_contact(int airborne, int has_support_surface, int elevator_ticks)
 {
@@ -146,10 +154,10 @@ int network_rules_aim_assist_blocks(int game_in_progress, int main_menu_active, 
 
 int network_rules_settings_size(unsigned version)
 {
-	if (version == NETWORK_RULES_VERSION_UNKNOWN)
-		return 0;
-	return version >= NETWORK_RULES_EXTENDED_OPTIONS_VERSION ? NETWORK_RULES_SETTINGS_EXTENDED_SIZE :
-		NETWORK_RULES_SETTINGS_SIZE;
+	struct network_rules_layout layout;
+
+	network_rules_layout(version, &layout);
+	return layout.settings_size;
 }
 
 int network_rules_settings_size_taken(unsigned version, unsigned total_size)
@@ -163,20 +171,32 @@ int network_rules_settings_size_taken(unsigned version, unsigned total_size)
 
 void network_rules_settings_fold_options(uint8_t *record, uint8_t *extended)
 {
+	network_rules_settings_fold(record, NETWORK_RULES_SETTINGS_EXTENDED_SIZE, NETWORK_RULES_OPTIONS_EXTENDED_SIZE,
+		extended);
+}
+
+void network_rules_settings_fold(uint8_t *record, int total_size, int options_size, uint8_t *extended)
+{
 	/* (the older record's last 4 bytes are its local data, after the
-	options' first 0x1C: there, in the newer, the further 16 begin) */
+	options' first 0x1C: there, in the newer, the further bytes begin) */
 	uint8_t *further = record + NETWORK_RULES_SETTINGS_SIZE - 4;
+	int growth = options_size - NETWORK_RULES_OPTIONS_SIZE;
 	uint8_t local[4];
 	int index;
 
+	if (growth < NETWORK_RULES_EXTENDED_OPTIONS_SIZE ||
+		total_size < NETWORK_RULES_SETTINGS_SIZE + growth || total_size > NETWORK_RULES_SETTINGS_MAXIMUM)
+	{
+		return;
+	}
 	for (index = 0; index < 4; index++)
-		local[index] = further[NETWORK_RULES_EXTENDED_OPTIONS_SIZE + index];
+		local[index] = further[growth + index];
 	for (index = 0; index < NETWORK_RULES_EXTENDED_OPTIONS_SIZE; index++)
 		extended[index] = further[index];
 	for (index = 0; index < 4; index++)
 		further[index] = local[index];
-	for (index = 0; index < NETWORK_RULES_EXTENDED_OPTIONS_SIZE; index++)
-		record[NETWORK_RULES_SETTINGS_SIZE + index] = 0;
+	for (index = NETWORK_RULES_SETTINGS_SIZE; index < total_size; index++)
+		record[index] = 0;
 }
 
 /* a ranged byte: its default outside the range */
@@ -233,6 +253,25 @@ int network_rules_extended_options_mode(uint8_t const *options, int slayer, int 
 	return mode;
 }
 
+char const *network_rules_kind_name(int kind, int engine, int short_form)
+{
+	static char const *const modes[][2] = {
+		{ "SWAT", "HC SWAT" }, { "INFECTION", "HC INFECTION" }, { "GUN GAME", "HC GUN GAME" } };
+	static char const *const modes_full[] = { "HARDCORE SWAT", "HARDCORE INFECTION", "HARDCORE GUN GAME" };
+	static char const *const engines[][2] = {
+		{ "HARDCORE CTF", "HC CTF" }, { "HARDCORE SLAYER", "HC SLAYER" }, { "HARDCORE ODDBALL", "HC ODDBALL" },
+		{ "HARDCORE KING", "HC KING" }, { "HARDCORE RACE", "HC RACE" } };
+	int mode = kind & 0x7F;
+	int hardcore = (kind & 0x80) != 0;
+
+	short_form = short_form != 0;
+	if (engine == 2 && mode >= NETWORK_RULES_MODE_SWAT && mode < NETWORK_RULES_NUMBER_OF_MODES)
+		return hardcore ? (short_form ? modes[mode - 1][1] : modes_full[mode - 1]) : modes[mode - 1][0];
+	if (hardcore && engine >= 1 && engine <= 5)
+		return engines[engine - 1][short_form];
+	return NULL;
+}
+
 void network_rules_shield_effects_write(uint8_t *message, int effects, int32_t game_time)
 {
 	put16(message, (NETWORK_RULES_SHIELD_EFFECTS_SIZE << 4) | (NETWORK_RULES_MESSAGE_TYPE_DATA << 2));
@@ -243,7 +282,8 @@ void network_rules_shield_effects_write(uint8_t *message, int effects, int32_t g
 	put16(message + 10, 0);
 }
 
-int network_rules_shield_effects_read(uint8_t const *message, int size, int from_datagram, int *effects)
+int network_rules_shield_effects_read(uint8_t const *message, int size, int from_datagram, int maximum,
+	int *effects)
 {
 	unsigned header;
 
@@ -255,7 +295,9 @@ int network_rules_shield_effects_read(uint8_t const *message, int size, int from
 	{
 		return 0;
 	}
-	if (get16(message + 8) > NETWORK_RULES_SHIELD_EFFECTS_MAXIMUM || get16(message + 10) != 0)
+	if (maximum > NETWORK_RULES_SHIELD_EFFECTS_LIMIT)
+		maximum = NETWORK_RULES_SHIELD_EFFECTS_LIMIT;
+	if (get16(message + 8) > (unsigned)maximum || get16(message + 10) != 0)
 		return 0;
 	*effects = (int)get16(message + 8);
 	return 1;
@@ -283,7 +325,17 @@ int network_rules_host_settings_size(unsigned announce, unsigned delta_version, 
 		return NETWORK_RULES_SETTINGS_SIZE;
 	if (delta_version)
 		return network_rules_settings_size(delta_version < announce ? delta_version : announce);
-	return waiting ? 0 : NETWORK_RULES_SETTINGS_EXTENDED_SIZE;
+	return waiting ? 0 : network_rules_settings_size(announce);
+}
+
+int network_rules_host_settings_options(unsigned announce, unsigned delta_version)
+{
+	struct network_rules_layout layout;
+
+	if (announce < NETWORK_RULES_EXTENDED_OPTIONS_VERSION)
+		return NETWORK_RULES_OPTIONS_SIZE;
+	network_rules_layout(delta_version && delta_version < announce ? delta_version : announce, &layout);
+	return layout.options_size;
 }
 
 int network_rules_host_static_damage_reported(unsigned announce, unsigned delta_version)
@@ -297,40 +349,244 @@ int network_rules_host_static_damage_reported(unsigned announce, unsigned delta_
 void network_rules_settings_extended_copy(uint8_t const *record, uint8_t const *extended, int offset, int length,
 	uint8_t *out)
 {
+	network_rules_settings_layout_copy(record, extended, NETWORK_RULES_OPTIONS_EXTENDED_SIZE, offset, length, out);
+}
+
+void network_rules_settings_layout_copy(uint8_t const *record, uint8_t const *extended, int options_size,
+	int offset, int length, uint8_t *out)
+{
 	/* (where the further options go: in front of the older record's local
 	data, its last 4 bytes) */
 	int further = NETWORK_RULES_SETTINGS_SIZE - 4;
+	int growth = options_size - NETWORK_RULES_OPTIONS_SIZE;
+	int known = growth < NETWORK_RULES_EXTENDED_OPTIONS_SIZE ? (growth > 0 ? growth : 0) :
+		NETWORK_RULES_EXTENDED_OPTIONS_SIZE;
 	int index;
 
+	if (growth < 0)
+		growth = 0;
 	for (index = 0; index < length; index++)
 	{
 		int at = offset + index;
 
 		if (at < further)
 			out[index] = record[at];
-		else if (at < further + NETWORK_RULES_EXTENDED_OPTIONS_SIZE)
+		else if (at < further + known)
 			out[index] = extended[at - further];
+		else if (at < further + growth)
+			out[index] = 0;
+		else if (at < further + growth + 4)
+			out[index] = record[at - growth];
 		else
-			out[index] = record[at - NETWORK_RULES_EXTENDED_OPTIONS_SIZE];
+			out[index] = 0;
 	}
 }
 
 void network_rules_settings_legacy_copy(uint8_t const *record, int offset, int length, uint8_t *out)
 {
-	/* (where the further options are: after the older record's first
-	bytes, before the newer one's last 4, its local data) */
-	int further = NETWORK_RULES_SETTINGS_SIZE - 4;
+	network_rules_settings_record_copy(record, NETWORK_RULES_OPTIONS_SIZE, offset, length, out);
+}
+
+void network_rules_settings_record_copy(uint8_t const *record, int options_size, int offset, int length, uint8_t *out)
+{
+	/* (the options begin after the record's first bytes; this build's are
+	0x2C, its local data the 4 after them) */
+	int options = NETWORK_RULES_SETTINGS_HEAD_SIZE;
+	int kept = options_size < NETWORK_RULES_OPTIONS_EXTENDED_SIZE ? options_size : NETWORK_RULES_OPTIONS_EXTENDED_SIZE;
 	int index;
 
+	if (kept < 0)
+		kept = options_size = 0;
 	for (index = 0; index < length; index++)
 	{
 		int at = offset + index;
 
-		out[index] = at < further ? record[at] : record[at + NETWORK_RULES_EXTENDED_OPTIONS_SIZE];
+		if (at < options + kept)
+			out[index] = record[at];
+		else if (at < options + options_size)
+			out[index] = 0;
+		else if (at < options + options_size + 4)
+			out[index] = record[at - options_size + NETWORK_RULES_OPTIONS_EXTENDED_SIZE];
+		else
+			out[index] = 0;
 	}
+}
+
+int network_rules_settings_fold_extended(uint8_t *record, int total_size, int options_size)
+{
+	uint8_t *options = record + NETWORK_RULES_SETTINGS_HEAD_SIZE;
+	int index;
+
+	if (options_size < NETWORK_RULES_OPTIONS_EXTENDED_SIZE || total_size > NETWORK_RULES_SETTINGS_MAXIMUM ||
+		total_size < NETWORK_RULES_SETTINGS_HEAD_SIZE + options_size + 4)
+	{
+		return 0;
+	}
+	/* (the local data after the options this build has; then zeros) */
+	for (index = 0; index < 4; index++)
+		options[NETWORK_RULES_OPTIONS_EXTENDED_SIZE + index] = options[options_size + index];
+	for (index = NETWORK_RULES_SETTINGS_EXTENDED_SIZE; index < total_size; index++)
+		record[index] = 0;
+	return NETWORK_RULES_SETTINGS_EXTENDED_SIZE;
 }
 
 int network_rules_host_takes_game_type(int size, int opence)
 {
 	return !opence || size >= NETWORK_RULES_SETTINGS_EXTENDED_SIZE;
+}
+
+/* ---------- layouts */
+
+static int (*network_rules_layout_source)(struct delta_layout_fact *facts, int count);
+
+static void layout_drop(struct network_rules_layout *layout, unsigned kind)
+{
+	if (kind > 0 && kind < 8 * sizeof(layout->dropped))
+		layout->dropped[kind >> 3] |= (uint8_t)(1 << (kind & 7));
+}
+
+void network_rules_layout_built_in(unsigned version, struct network_rules_layout *layout)
+{
+	unsigned rules = version > DELTA_LEGACY_NEWEST ? DELTA_LEGACY_NEWEST : version;
+
+	memset(layout, 0, sizeof(*layout));
+	layout->version = version;
+	layout->shield_effects_maximum = NETWORK_RULES_SHIELD_EFFECTS_MAXIMUM;
+	if (version == NETWORK_RULES_VERSION_UNKNOWN)
+	{
+		/* (either record; 36's message) */
+		layout_drop(layout, NETWORK_RULES_SHIELD_EFFECTS_KIND);
+		return;
+	}
+	if (rules >= NETWORK_RULES_EXTENDED_OPTIONS_VERSION)
+	{
+		layout->settings_size = NETWORK_RULES_SETTINGS_EXTENDED_SIZE;
+		layout->options_size = NETWORK_RULES_OPTIONS_EXTENDED_SIZE;
+	}
+	else
+	{
+		layout->settings_size = NETWORK_RULES_SETTINGS_SIZE;
+		layout->options_size = NETWORK_RULES_OPTIONS_SIZE;
+	}
+	if (rules >= NETWORK_RULES_SHIELD_EFFECTS_VERSION)
+		layout_drop(layout, NETWORK_RULES_SHIELD_EFFECTS_KIND);
+}
+
+void network_rules_layout_apply(struct network_rules_layout *layout, struct delta_layout_fact const *facts,
+	int count)
+{
+	int index;
+
+	if (layout->version == NETWORK_RULES_VERSION_UNKNOWN || layout->version <= DELTA_LEGACY_NEWEST || !facts)
+		return;
+	for (index = 0; index < count; index++)
+	{
+		struct delta_layout_fact const *fact = &facts[index];
+		int byte;
+
+		if (fact->version <= DELTA_LEGACY_NEWEST || fact->version > layout->version)
+			continue;
+		if (fact->options_size)
+		{
+			/* (the options grow in front of the local data, the record with
+			them) */
+			int growth = (int)fact->options_size - layout->options_size;
+			int settings = layout->settings_size + growth;
+
+			if (growth >= 0 && settings <= NETWORK_RULES_SETTINGS_MAXIMUM)
+			{
+				layout->options_size = fact->options_size;
+				layout->settings_size = settings;
+				layout->learned++;
+			}
+			else
+				layout->refused++;
+		}
+		if (fact->settings_size)
+		{
+			/* (the bytes after the local data, at least as many as before) */
+			if ((int)fact->settings_size >= layout->settings_size &&
+				fact->settings_size <= NETWORK_RULES_SETTINGS_MAXIMUM)
+			{
+				layout->settings_size = fact->settings_size;
+				layout->learned++;
+			}
+			else
+				layout->refused++;
+		}
+		if (fact->shield_effects_maximum)
+		{
+			if ((int)fact->shield_effects_maximum >= layout->shield_effects_maximum &&
+				fact->shield_effects_maximum <= NETWORK_RULES_SHIELD_EFFECTS_LIMIT)
+			{
+				layout->shield_effects_maximum = fact->shield_effects_maximum;
+				layout->learned++;
+			}
+			else
+				layout->refused++;
+		}
+		for (byte = 0; byte < DELTA_LAYOUT_KIND_BYTES; byte++)
+		{
+			/* (kind 0 is none) */
+			uint8_t bits = (uint8_t)(fact->dropped[byte] & (byte ? 0xFF : 0xFE));
+
+			if (bits & ~layout->dropped[byte])
+				layout->learned++;
+			layout->dropped[byte] |= bits;
+		}
+	}
+}
+
+void network_rules_set_layout_source(int (*source)(struct delta_layout_fact *facts, int count))
+{
+	network_rules_layout_source = source;
+}
+
+void network_rules_layout(unsigned version, struct network_rules_layout *layout)
+{
+	network_rules_layout_built_in(version, layout);
+	/* (the table asked only for a version it may extend) */
+	if (network_rules_layout_source && version != NETWORK_RULES_VERSION_UNKNOWN && version > DELTA_LEGACY_NEWEST)
+	{
+		struct delta_layout_fact facts[DELTA_LAYOUT_FACTS];
+		int count = network_rules_layout_source(facts, DELTA_LAYOUT_FACTS);
+
+		network_rules_layout_apply(layout, facts, count < 0 ? 0 : count > DELTA_LAYOUT_FACTS ? DELTA_LAYOUT_FACTS :
+			count);
+	}
+}
+
+unsigned network_rules_layout_newest(void)
+{
+	unsigned newest = DELTA_LEGACY_NEWEST;
+
+	if (network_rules_layout_source)
+	{
+		struct delta_layout_fact facts[DELTA_LAYOUT_FACTS];
+		int count = network_rules_layout_source(facts, DELTA_LAYOUT_FACTS);
+		int index;
+
+		for (index = 0; index < count && index < DELTA_LAYOUT_FACTS; index++)
+		{
+			if (facts[index].version > newest && facts[index].version != NETWORK_RULES_VERSION_UNKNOWN)
+				newest = facts[index].version;
+		}
+	}
+	return newest;
+}
+
+int network_rules_layout_drops(struct network_rules_layout const *layout, unsigned kind)
+{
+	return kind > 0 && kind < 8 * sizeof(layout->dropped) && (layout->dropped[kind >> 3] >> (kind & 7)) & 1;
+}
+
+int network_rules_settings_options_size(unsigned version, unsigned total_size)
+{
+	struct network_rules_layout layout;
+
+	network_rules_layout(version, &layout);
+	if (layout.settings_size && total_size == (unsigned)layout.settings_size)
+		return layout.options_size;
+	return total_size == NETWORK_RULES_SETTINGS_EXTENDED_SIZE ? NETWORK_RULES_OPTIONS_EXTENDED_SIZE :
+		NETWORK_RULES_OPTIONS_SIZE;
 }

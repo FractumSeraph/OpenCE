@@ -143,7 +143,7 @@ enum
 	_distributed_message_aim_assist_policy = 90,
 	/* the host's shield effects (network_shield_effects.c), to every client,
 	reliably, when it is ready and when they change: 12 bytes, the header and
-	a 16-bit value (0 stock to 5) and 16 bits of 0. 91 as in OpenCE's network
+	a 16-bit value (0 stock to 6, 38's "players") and 16 bits of 0. 91 as in OpenCE's network
 	version 36; a host before it sends none, and its clients draw the stock
 	ones */
 	_distributed_message_shield_effects = 91,
