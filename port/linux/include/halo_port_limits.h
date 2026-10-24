@@ -115,14 +115,14 @@ is newer (network_client_manager.c). A host advertises it, with its netcode,
 in its game's advertisement's reserved bytes (network_server_message_handler.c),
 which hosts built before there was a version send as zeros: version 0.
 Raise it with any change to what the machines send each other.
-port (this fork): 36, OpenCE's newest, which its hosts announce (OpenCE's
+port (this fork): 38, OpenCE's newest, which its hosts announce (OpenCE's
 clients join only their own number) and play by (network_rules_of_version),
 its game settings record of 35's layout (OpenCE's game types); ChupathingyCE's
 hosts announce 32. Delta clients (ChupathingyCE's 0.8.0e and 0.8.0f, this
 fork's) join a host of their wire whatever number it announces, and are sent
 the record of the older of their HELLO's version and this one
 (network_server_message_handler.c). */
-#define HALO_PORT_NETWORK_VERSION 36
+#define HALO_PORT_NETWORK_VERSION 38
 /* ... the versions whose hosts a client joins: its own, and those that differ
 from it only in what the other machines leave out (a message a machine of
 the other version does not know it drops). Which are which is delta.h's
@@ -134,7 +134,7 @@ here, which the command repository reads). A host
 never checks a client's version: the client does (network_client_manager.c),
 so the range is the client's. */
 #define HALO_PORT_NETWORK_VERSION_MINIMUM 11
-#define HALO_PORT_NETWORK_VERSION_MAXIMUM 37
+#define HALO_PORT_NETWORK_VERSION_MAXIMUM 39
 /* ... the numbers in use (port/linux/src/delta.c): the three above, until a
 legacy table (docs/delta.md) widens them; code asks these, not the numbers */
 int delta_legacy_announce(void);
@@ -148,15 +148,24 @@ settings' cooperative_flags (on, as the campaign has it); before 34, the
 scenery and devices whose shield alone damage breaks are not static targets
 (network_damage.c, network_rules.h's NETWORK_RULES_STATIC_SHIELDS_VERSION);
 before 35, the game settings record's shorter PC options (no OpenCE
-gametype); before 36, no shield effects message (the stock ones) */
+gametype); before 36, no shield effects message (the stock ones); before
+37, no game kind in a LAN advertisement's fourth reserved byte or an internet
+listing's stamp (none: this fork's hosts put Delta's major there while they
+speak it, so a kind is read only from a host that does not); before 38, no
+"players" shield effects (a client of 36 or 37 takes it for none it knows and
+draws the stock ones) */
 #define HALO_PORT_ALLY_FRIENDLY_FIRE_NETWORK_VERSION 33
 #define HALO_PORT_SHIELD_TARGETS_NETWORK_VERSION 34
 #define HALO_PORT_GAME_MODES_NETWORK_VERSION 35
 #define HALO_PORT_SHIELD_EFFECTS_NETWORK_VERSION 36
+#define HALO_PORT_GAME_KIND_NETWORK_VERSION 37
+#define HALO_PORT_PLAYERS_SHIELD_EFFECTS_NETWORK_VERSION 38
 /* ... the advertisement's reserved bytes: the version (a little-endian word),
-then flags */
+then flags, then the game's kind (an OpenCE gametype's mode, and Hardcore:
+port/linux/game/game_modes.h's game_modes_kind), for the server browser */
 #define HALO_PORT_ADVERTISED_VERSION_OFFSET 0
 #define HALO_PORT_ADVERTISED_FLAGS_OFFSET 2
+#define HALO_PORT_ADVERTISED_KIND_OFFSET 3
 /* ... the host plays the distributed netcode (always, since the lockstep
 netcode was removed; hosts of version 4 built before then may not) */
 #define HALO_PORT_ADVERTISED_DISTRIBUTED_FLAG 0x01

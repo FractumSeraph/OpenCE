@@ -183,15 +183,27 @@ def test_policy_setting_is_documented():
 def test_the_version_and_the_wire():
     limits = (ROOT / "port/linux/include/halo_port_limits.h").read_text(encoding="utf-8")
     delta = (ROOT / "port/linux/include/delta.h").read_text(encoding="utf-8")
-    # (port, this fork: its hosts announce 36, OpenCE's newest, and speak
+    # (port, this fork: its hosts announce 38, OpenCE's newest, and speak
     # ChupathingyCE's wire, whose clients of 0.8.0e and 0.8.0f join them)
-    assert "#define HALO_PORT_NETWORK_VERSION 36\n" in limits
+    assert "#define HALO_PORT_NETWORK_VERSION 38\n" in limits
     assert '#define DELTA_WIRE "chupa-32a"' in delta
     assert "chupa-36a" not in delta and "DELTA_WIRE_HOST_OLDEST" not in delta
-    assert "#define DELTA_LEGACY_NEWEST 36\n" in delta
-    for number in (30, 31, 32, 33, 34, 35, 36):
+    assert "#define DELTA_LEGACY_NEWEST 38\n" in delta
+    for number in (30, 31, 32, 33, 34, 35, 36, 37, 38):
         assert re.search(rf'X\({number}, "build-\d+", additive\)', delta)
-    assert "#define HALO_PORT_NETWORK_VERSION_MAXIMUM 37\n" in limits
+    assert "#define HALO_PORT_NETWORK_VERSION_MAXIMUM 39\n" in limits
+
+
+def test_game_kind_leaves_the_delta_major():
+    """port (this fork): network version 37's game kind is the LAN
+    advertisement's fourth reserved byte, where Delta's major is: a host that
+    speaks Delta leaves it to the major (ChupathingyCE's clients join by the
+    wire after it), and a client reads no kind from such a host"""
+    handler = (ROOT / "source/networking/network_server_message_handler.c").read_text(encoding="utf-8")
+    write = handler.index("advertisement.reserved[HALO_PORT_ADVERTISED_KIND_OFFSET] = game_modes_kind")
+    assert "if (!delta_peer_advertised_flags())" in handler[write - 400:write]
+    client = (ROOT / "source/networking/network_client_manager.c").read_text(encoding="utf-8")
+    assert '"chupa-", 6) ? 0 :' in client
 
 
 def test_elevator_carry_of_the_tick_is_for_network_games_only():

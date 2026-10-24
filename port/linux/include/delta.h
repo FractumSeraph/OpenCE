@@ -249,7 +249,7 @@ layout, and whether it reports a static target's own damage
 (network_rules_host_settings_size). Builds before it said their
 HALO_PORT_NETWORK_VERSION there, 32 or older (port: this fork's builds
 have said 36 since they followed it, their record 35's layout too). */
-#define DELTA_LEGACY_NEWEST 36
+#define DELTA_LEGACY_NEWEST 38
 
 /* OpenCE's network versions (HALO_PORT_NETWORK_VERSION in its builds), the
 first of its releases with each, and whether the version's change is one the
@@ -293,7 +293,9 @@ first; the command repository's watch adds a row when it follows OpenCE's raise
 	X(33, "build-266", additive) /* co-op's second switch in the settings' co-op byte (bit 1: the players' hits spare their AI allies, ALLY FRIENDLY FIRE), the host's to act on; a client of an older host clears it (port: this fork's network_game_layout_from_version); in no release of OpenCE's, its testing builds alone */ \
 	X(34, "build-266", additive) /* no message changed: scenery and devices that are a shield alone are static targets too, every machine runs static targets' shields, a client reports no damage a static target deals (the host deals it), a static target's copy made during play found by the nearest; in no release */ \
 	X(35, "build-266", additive) /* OpenCE's own game types (SWAT, Infection, Gun Game, Hardcore): the gametype's options 0x2C bytes, the settings record 16 bytes longer, which a machine of 34 cannot read, and Infection's game type state; this build reads both, by the host's number (port: this fork plays them, widening an older host's record, and its hosts send a machine before 35 the older record, but no game of one of them); in no release */ \
-	X(36, "build-266", additive) /* the host's shield effects, a new message (91) a machine of 35 drops (port: this fork draws them, network_shield_effects.c) */
+	X(36, "build-266", additive) /* the host's shield effects, a new message (91) a machine of 35 drops (port: this fork draws them, network_shield_effects.c) */ \
+	X(37, "build-268", additive) /* a game's kind (an OpenCE gametype's mode, Hardcore) in its LAN advertisement's fourth reserved byte and its internet listing's stamp, which older machines leave (port: this fork's hosts leave the advertisement's to Delta's major while they speak it) */ \
+	X(38, "build-268", additive) /* the shield effects "players" (each player's own, not synced): a value of message 91 a machine of 37 does not know, and draws the stock ones */
 
 /* ---------- the legacy table (port/linux/src/delta.c)
 

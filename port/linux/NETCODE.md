@@ -361,7 +361,15 @@ to be dropped), and a machine joining it in progress is started once its
 record has gone. Under 35 every other machine gets the older record at once.
 This fork's host sends co-op's second bit as its Server Setup's ALLY
 FRIENDLY FIRE (ChupathingyCE's send 0), and message 91, its SHIELD EFFECTS
-(`network_shield_effects.c`), which a client before 36 drops.
+(`network_shield_effects.c`), which a client before 36 drops. This fork
+follows OpenCE's 37 and 38 too, announcing 38: 37's game kind is the LAN
+advertisement's fourth reserved byte, which is Delta's major byte (the wire
+and its range fill the rest), so a host that speaks Delta leaves it to the
+major (an OpenCE browser of 37 shows such a host's Slayer as SWAT, kind 1),
+and this fork's client reads no kind from a host with a Delta wire after it;
+the internet listing's kind (its stamp's first byte) is sent by every host.
+38's "players" shield effects reach a client of 36 or 37 as a value it does
+not know, and it draws the stock ones.
 
 A host never checks a joining client's version: the client reads the
 host's from its advertisement and joins only a version it plays with. That

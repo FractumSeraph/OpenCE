@@ -445,6 +445,7 @@ symbols in this file:
 /* ---------- headers */
 
 #include "cseries.h"
+#include "game_modes.h" /* port: port/linux/game/game_modes.c */
 #include "bungie_net/common/message_header.h"
 #include "bungie_net/network/transport.h"
 #include "bungie_net/network/transport_address_constants.h"
@@ -487,8 +488,8 @@ void map_torrents_playing(const char *level_name, unsigned long version, int hos
 /* port: internet play's Discord presence (port/linux/src/p2p.c), and the
 server browser's listing of a public game (p2p_lobby.c) */
 void p2p_set_game_player_counts(int count, int maximum);
-void p2p_set_game_listing(const char *name, const char *map, const char *gametype, int engine_type, int open,
-	int in_progress, int has_teams);
+void p2p_set_game_listing(const char *name, const char *map, const char *gametype, int engine_type, int kind,
+	int open, int in_progress, int has_teams);
 #ifdef HALO_GAME_BROWSER
 /* port: Delta Peer (port/linux/src/delta_peer.h), beside the game's
 protocol, which it leaves as it is: the hosted game's machines and players
@@ -1639,8 +1640,10 @@ static void network_game_server_list(
 		snprintf(gametype + length, sizeof(gametype) - length, " %s", difficulty_names[game->difficulty]);
 	}
 	/* (the scenario's name, not its path: the listing has 32 characters) */
-	p2p_set_game_listing(name, tag_name_strip_path(game->map.name), gametype, game->variant.game_engine_index, open,
-		in_progress, game->variant.universal_variant.teams);
+	/* port: (and its OpenCE gametype's kind: port/linux/game/game_modes.c) */
+	p2p_set_game_listing(name, tag_name_strip_path(game->map.name), gametype, game->variant.game_engine_index,
+		game_modes_kind(&game->variant, &game->variant_options), open, in_progress,
+		game->variant.universal_variant.teams);
 	/* port: the map seeded for those joining (costs little when unchanged) */
 	map_torrents_playing(game->map.name, (unsigned long)game->map.version, 1);
 }

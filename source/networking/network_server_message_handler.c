@@ -2202,6 +2202,19 @@ static boolean network_game_server_handle_message_client_broadcast_game_search(
 			{
 				advertisement.reserved[HALO_PORT_ADVERTISED_FLAGS_OFFSET] |= HALO_PORT_ADVERTISED_IN_PROGRESS_FLAG;
 			}
+			/* (an OpenCE gametype's kind, the server browser's name for it;
+			port (this fork): not while it speaks Delta, whose major is in
+			that byte, the game wire after it, which ChupathingyCE's clients
+			join by: OpenCE's take that for a kind) */
+#ifdef HALO_GAME_BROWSER
+			{ unsigned char delta_peer_advertised_flags(void);
+			  if (!delta_peer_advertised_flags())
+#endif
+			advertisement.reserved[HALO_PORT_ADVERTISED_KIND_OFFSET] = game_modes_kind(&game->variant,
+				&game->variant_options);
+#ifdef HALO_GAME_BROWSER
+			}
+#endif
 			/* (open to joins: not while the machines load the game, nor
 			once it is over, nor in progress when no player can join it) */
 			if (network_game_server_get_state(server, NULL) == _network_game_server_state_ingame
