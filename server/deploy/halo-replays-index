@@ -183,6 +183,9 @@ def summarize(path, name):
         "time": game["time"],
         "seconds": int(round((last - first) / rate)),
         "players": len(names) or len(players),
+        # (the players' names, for the viewer's search: at most 64, as they
+        # played)
+        "names": sorted(names or set(players.values()), key=str.lower)[:64],
         "most": most,
         "kills": kills,
         "report": report,
@@ -304,7 +307,9 @@ def index_server(folder):
         # (a report that came after the game was read: the sidecar alone)
         # (a game read before, its file as it was and its map's thumbnail
         # still there: kept as it is)
-        if old and old.get("size") == status.st_size and old.get("mtime") == int(status.st_mtime) and                 (not old.get("thumb") or os.path.isfile(os.path.join(thumbs, old["thumb"]))):
+        # (and one read before the index had its players' names: read again)
+        if old and old.get("size") == status.st_size and old.get("mtime") == int(status.st_mtime) and \
+                "names" in old and (not old.get("thumb") or os.path.isfile(os.path.join(thumbs, old["thumb"]))):
             if not old.get("report"):
                 sidecar = path[:-5] + ".json"
                 if os.path.isfile(sidecar):

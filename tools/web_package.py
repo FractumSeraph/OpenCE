@@ -136,6 +136,9 @@ def main() -> int:
         # (never game data, whatever a checkout holds there)
         if path.is_file() and relative.parts[0] != "maps" and path.suffix.lower() != ".map":
             files[f"assets/{relative.as_posix()}"] = path.read_bytes()
+    # (the replay viewer at the site's /watch/ too: the same page, which finds
+    # its files at assets/replay/ from there)
+    files["watch/index.html"] = (assets / "replay" / "index.html").read_bytes()
 
     arguments.output.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(arguments.output, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:

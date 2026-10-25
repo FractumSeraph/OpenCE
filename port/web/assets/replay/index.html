@@ -1,6 +1,7 @@
 <!doctype html>
 <!--
-  The replay viewer (this fork; halo.fractumseraph.net/assets/replay/): a
+  The replay viewer (this fork; halo.fractumseraph.net/watch/, a copy of
+  this page, or halo.fractumseraph.net/assets/replay/): a
   recording a host made of a game (network.record_games,
   port/linux/game/network_recording.c, whose comment has the file's format)
   watched again in the browser, through any player's eyes, behind them, or
@@ -19,7 +20,17 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="dark">
-<link rel="icon" href="../pwa/icon-192.png" sizes="192x192" type="image/png">
+<script>
+// (opened at the site's /watch/, a copy of this page: the files beside it
+// (the icon, the loading screen, servers.json, the maps) are assets/replay/'s,
+// so that is the base; its own links keep the address it was opened at)
+if (!/\/assets\/replay\/(index\.html)?$/.test(location.pathname))
+  document.write('<base href="' + new URL("../assets/replay/", location.href).href + '">');
+// (the icon written once the base is set, so that the browser's look-ahead
+// does not fetch it from beside /watch/ first)
+document.write('<link rel="icon" href="' + new URL("../pwa/icon-192.png", document.baseURI).href +
+  '" sizes="192x192" type="image/png">');
+</script>
 <title>Halo Replay Viewer</title>
 <style>
 :root{color-scheme:dark;font-family:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
@@ -73,15 +84,37 @@ button.on{background:rgba(127,211,164,.35);border-color:var(--accent)}
 #live{display:none;font-size:12px;font-weight:700;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:2px 7px}
 #live.on{color:#fff;background:var(--bad);border-color:var(--bad)}
 #drop.list{justify-content:flex-start;overflow:auto}
-#games{display:flex;flex-direction:column;gap:18px;width:min(64rem,100%);text-align:left}
-#games section{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px 16px}
-#games h2{margin:0 0 6px;font-size:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-#games h2 .order{margin-left:auto;font-size:12px;color:var(--muted);font-weight:400;display:flex;gap:6px;align-items:center}
-#games h2 select{padding:2px 6px;font-size:12px}
-#games ol{margin:8px 0 0;padding-left:1.2rem;font-size:13px;line-height:1.6}
+/* (a phone's: the games' list over the whole page while it is shown, not
+the corner above the empty panel and buttons) */
+@media (max-width:820px){#drop.list{position:fixed;z-index:20;background:var(--bg);padding:16px 12px}}
+#games{display:flex;flex-direction:column;gap:10px;width:min(64rem,100%);text-align:left}
 #games a{color:var(--accent)}
 #games .button{color:var(--bg)}
-#games .live-line{margin:0 0 4px}
+/* (the choice of games: pinned while the list scrolls under it) */
+#games .head{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px;
+  display:flex;flex-direction:column;gap:8px}
+#games .tabs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;
+  position:sticky;top:-24px;z-index:2;background:#0b1410;padding:8px 2px;margin:0 -2px;border-bottom:1px solid var(--line)}
+@media (max-width:820px){#games .tabs{top:-16px}}
+#games .tabs::-webkit-scrollbar{display:none}
+#games .tab{flex:none;border-radius:999px;padding:6px 12px;font-size:13px;display:flex;align-items:center;gap:6px;white-space:nowrap}
+#games .tab .n{font-size:11px;color:var(--muted)}
+#games .tab.on .n{color:var(--text)}
+#games .tab .dot{width:8px;height:8px;background:var(--bad);box-shadow:0 0 6px var(--bad)}
+#games .filters{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:6px;align-items:center}
+#games .filters input[type=search]{font:inherit;color:var(--text);background:rgba(0,0,0,.25);border:1px solid var(--line);
+  border-radius:6px;padding:5px 10px;min-width:0}
+#games .filters select{min-width:0;font-size:13px}
+#games .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+#games .row label{display:flex;gap:5px;align-items:center;cursor:pointer}
+#games .row .clear{margin-left:auto}
+#games .live-now{display:flex;gap:6px;flex-wrap:wrap}
+#games .live-now a{font-size:13px;padding:5px 10px;border-radius:6px;background:var(--bad);color:#fff;text-decoration:none}
+#games .day{margin:10px 2px 0;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+#games .empty{color:var(--muted);font-size:13px;padding:10px 2px}
+.card .server{display:inline-block;font-size:10px;padding:1px 6px;border-radius:999px;border:1px solid var(--line);
+  color:var(--text);margin-left:6px;vertical-align:1px}
+@media (max-width:600px){#games .filters{grid-template-columns:1fr 1fr}#games .filters input[type=search]{grid-column:1/-1}}
 .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(14rem,1fr));gap:10px;margin-top:8px}
 .card{display:grid;grid-template-columns:72px 1fr;gap:10px;align-items:center;padding:6px;border:1px solid var(--line);
   border-radius:8px;color:inherit;text-decoration:none;background:rgba(255,255,255,.03)}
@@ -146,7 +179,7 @@ smaller) */
   #stats,#events{max-height:none;overflow:visible;flex:none}
   .player{padding:8px}}
 </style>
-<script src="../loading/loading-screen.js"></script>
+<script>document.write('<script src="' + new URL("../loading/loading-screen.js", document.baseURI).href + '"><\/script>');</script>
 <script type="importmap">
 {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
 "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
@@ -157,7 +190,7 @@ smaller) */
   <div id="drop">
     <h1>Halo Replay Viewer</h1>
     <p>Watch a game a server recorded, live or again: through any player's eyes, behind them, or from
-      anywhere. Pick a game below (the newest first; or the busiest), or open a recording (<code>recordings\*.hrec</code>: an admin's
+      anywhere. Pick a game below (a server's tab, a player's name, a map...), or open a recording (<code>recordings\*.hrec</code>: an admin's
       shows the hits the fair play checks refused or doubted). A file you open stays on this computer.</p>
     <div id="games" style="display:none"></div>
     <label class="button">Open a recording<input id="file" type="file" accept=".hrec" hidden></label>
@@ -1622,10 +1655,10 @@ textures), a part at a time by range requests; the walls stay for the
 minimap, and show again while it loads or if it cannot be had */
 
 const MAP_SOURCES = [
-  name => new URL(`../custom_maps/${encodeURIComponent(name)}.map`, location.href).href,
+  name => new URL(`../custom_maps/${encodeURIComponent(name)}.map`, document.baseURI).href,
   name => `https://halomaps.fractumseraph.net/maps/${encodeURIComponent(name)}.map`,
 ];
-const BITMAPS_URL = new URL("../custom_maps/bitmaps.map", location.href).href;
+const BITMAPS_URL = new URL("../custom_maps/bitmaps.map", document.baseURI).href;
 const PAGE = 1 << 20;
 let realMap = null, realMapOn = true, realMapLoading = 0;
 
@@ -2779,14 +2812,23 @@ async function livePoll() {
 
 function watchLive(base) {
   stopLive();
-  live.base = new URL(base.replace(/\/?$/, "/"), location.href).href;
+  live.base = new URL(base.replace(/\/?$/, "/"), document.baseURI).href;
   live.file = null;
   document.getElementById("drop").style.display = "";
   document.querySelector("#drop p").textContent = "Looking for the game...";
   livePoll();
 }
 
-/* ---------- the games (servers.json: the servers whose public folders this page knows) */
+/* ---------- the games (servers.json: the servers whose public folders this page knows)
+
+Every server's games in one list, chosen from a pinned bar: a tab for each
+server (and all of them), a button for a game being played, a player's name
+to look for, the map, the game type, full games only (two or more who played,
+a minute or more), and the order (newest, busiest, longest); the newest by
+day. The choice is kept in the address (?server=, &map=, &type=, &player=,
+&order=, &full=1), so that a link opens the same list. */
+
+const BROWSE_KEYS = ["server", "map", "type", "player", "order", "full"];
 
 async function listGames() {
   const box = document.getElementById("games");
@@ -2797,77 +2839,202 @@ async function listGames() {
   if (!Array.isArray(servers) || !servers.length) return;
   box.style.display = "";
   document.getElementById("drop").classList.add("list");
-  for (const server of servers) {
+  box.innerHTML = `<div class="tabs" role="tablist"></div><div class="head"><div class="live-now"></div>
+    <div class="filters"><input type="search" placeholder="Player name" aria-label="Player name">
+      <select class="map" aria-label="Map"></select><select class="type" aria-label="Game type"></select>
+      <select class="order" aria-label="Order"><option value="newest">Newest</option><option value="busiest">Busiest</option>
+        <option value="longest">Longest</option></select></div>
+    <div class="row"><label><input type="checkbox" class="full"> Full games only</label><span class="count"></span>
+      <a href="#" class="clear">Clear</a></div></div>
+    <div class="list"><p class="empty">Looking for games...</p></div><div class="more"></div>`;
+  const tabs = box.querySelector(".tabs"), liveNow = box.querySelector(".live-now"), list = box.querySelector(".list");
+  const search = box.querySelector("input[type=search]"), mapSelect = box.querySelector("select.map");
+  const typeSelect = box.querySelector("select.type"), order = box.querySelector("select.order");
+  const full = box.querySelector("input.full"), count = box.querySelector(".count"), more = box.querySelector(".more");
+  const query = new URLSearchParams(location.search);
+  const state = { server: query.get("server") || "", map: query.get("map") || "", type: query.get("type") || "",
+    player: query.get("player") || "", order: query.get("order") || "newest", full: query.get("full") === "1" };
+  let all = [], shown = 24;
+  const live = new Map();
+
+  const folder = value => value ? new URL(String(value).replace(/\/?$/, "/"), document.baseURI).href : null;
+  // (each folder's games: its index.json, halo-replays-index's summary of
+  // each (the map, who played, the kills, a thumbnail); without one, the
+  // folder's listing in JSON, as its web server gives it: Caddy's
+  // file_server browse, nginx's autoindex_format json; a game in both once)
+  const indexed = address => fetch(new URL("index.json", address), { cache: "no-store" })
+    .then(r => r.ok ? r.json() : null).then(index => index && Array.isArray(index.games) ? index.games.map(g => ({ ...g,
+      url: new URL(g.name, address).href, thumbUrl: g.thumb ? new URL("../thumbs/" + g.thumb, address).href : null })) : null)
+    .catch(() => null);
+  const listing = address => fetch(address, { headers: { Accept: "application/json" }, cache: "no-store" })
+    .then(r => r.ok ? r.json() : []).then(files => (Array.isArray(files) ? files : [])
+      .filter(f => f && /\.hrec$/.test(f.name)).map(f => ({ name: f.name, url: new URL(f.name, address).href })))
+    .catch(() => []);
+  const games = async address => (await indexed(address)) || (await listing(address));
+
+  // (a game's map and time, from its file's name where the index has none)
+  const fileParts = g => /^(\d{4}-\d\d-\d\d)_(\d\d)-(\d\d)-(\d\d)_(.+)\.hrec$/.exec(g.name);
+  const mapOf = g => g.map || (fileParts(g) ? fileParts(g)[5].replace(/-(ce|md|pc)$/, "") : g.name);
+  const timeOf = g => g.time ? g.time * 1000 : fileParts(g) ?
+    Date.parse(`${fileParts(g)[1]}T${fileParts(g)[2]}:${fileParts(g)[3]}:${fileParts(g)[4]}Z`) : 0;
+  const isFull = g => (g.most || 1) > 1 && (g.seconds == null || g.seconds >= 60);
+
+  const save = () => {
+    const params = new URLSearchParams(location.search);
+    for (const key of BROWSE_KEYS) params.delete(key);
+    if (state.server) params.set("server", state.server);
+    if (state.map) params.set("map", state.map);
+    if (state.type) params.set("type", state.type);
+    if (state.player) params.set("player", state.player);
+    if (state.order !== "newest") params.set("order", state.order);
+    if (state.full) params.set("full", "1");
+    const text = params.toString();
+    history.replaceState(null, "", location.pathname + (text ? "?" + text : "") + location.hash);
+  };
+
+  // (the tabs: all the servers, then each, with how many games and a red dot
+  // while it plays one)
+  const renderTabs = () => {
+    tabs.innerHTML = "";
+    for (const name of ["", ...servers.map(s => s.name)]) {
+      const b = document.createElement("button");
+      b.className = "tab" + (state.server === name ? " on" : "");
+      b.setAttribute("role", "tab");
+      b.setAttribute("aria-selected", state.server === name ? "true" : "false");
+      if (name && live.get(name)) { const dot = document.createElement("span"); dot.className = "dot"; dot.title = "Playing now"; b.append(dot); }
+      b.append(name || "All servers");
+      const n = document.createElement("span");
+      n.className = "n";
+      n.textContent = String(all.filter(g => !name || g.server === name).length);
+      b.append(n);
+      b.onclick = () => { state.server = name; shown = 24; save(); renderAll(); b.scrollIntoView({ inline: "nearest", block: "nearest" }); };
+      tabs.append(b);
+    }
+  };
+  const renderLive = () => {
+    liveNow.innerHTML = "";
+    for (const server of servers) {
+      const status = live.get(server.name);
+      if (!status || (state.server && state.server !== server.name)) continue;
+      const a = document.createElement("a");
+      a.href = `${location.pathname}?live=${encodeURIComponent(status.base)}`;
+      a.textContent = `● Watch live: ${servers.length > 1 ? server.name + " · " : ""}${mapName(status.map)}` +
+        (status.game_type ? " · " + status.game_type : "");
+      liveNow.append(a);
+    }
+  };
+  // (the map and game type lists: those of the server's games, each with how many)
+  const fillSelect = (select, label, values, chosen) => {
+    const counts = new Map();
+    for (const v of values) if (v) counts.set(v, (counts.get(v) || 0) + 1);
+    const names = [...counts.keys()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+    if (chosen && !counts.has(chosen)) names.unshift(chosen);
+    select.innerHTML = "";
+    select.append(new Option(label, ""));
+    for (const name of names) select.append(new Option(`${name} (${counts.get(name) || 0})`, name));
+    select.value = chosen;
+  };
+  const renderList = () => {
+    const needle = state.player.trim().toLowerCase();
+    const pool = all.filter(g => !state.server || g.server === state.server);
+    fillSelect(mapSelect, "All maps", pool.map(mapOf), state.map);
+    fillSelect(typeSelect, "All game types", pool.map(g => g.type), state.type);
+    const matches = pool.filter(g => (!state.map || mapOf(g) === state.map) && (!state.type || g.type === state.type) &&
+      (!state.full || isFull(g)) &&
+      (!needle || (Array.isArray(g.names) && g.names.some(n => String(n).toLowerCase().includes(needle)))));
+    const sorted = matches.slice().sort(state.order === "busiest" ?
+      (a, b) => isFull(b) - isFull(a) || (b.most || 0) - (a.most || 0) || (b.players || 0) - (a.players || 0) ||
+        (b.kills || 0) - (a.kills || 0) || timeOf(b) - timeOf(a) :
+      state.order === "longest" ? (a, b) => (b.seconds || 0) - (a.seconds || 0) || timeOf(b) - timeOf(a) :
+      (a, b) => timeOf(b) - timeOf(a));
+    list.innerHTML = "";
+    let lastDay = null;
+    for (const g of sorted.slice(0, shown)) {
+      // (the newest by day: Today, Yesterday, then the day's name or date)
+      if (state.order === "newest") {
+        const when = new Date(timeOf(g));
+        const day = when.toDateString();
+        if (day !== lastDay) {
+          lastDay = day;
+          const h = document.createElement("h3");
+          h.className = "day";
+          const today = new Date(), yesterday = new Date(Date.now() - 864e5);
+          h.textContent = !timeOf(g) ? "Earlier" : day === today.toDateString() ? "Today" :
+            day === yesterday.toDateString() ? "Yesterday" : Date.now() - when < 864e5 * 6 ?
+            when.toLocaleDateString(undefined, { weekday: "long" }) : when.toLocaleDateString(undefined,
+              { weekday: "short", month: "short", day: "numeric", year: when.getFullYear() === today.getFullYear() ? undefined : "numeric" });
+          list.append(h);
+          const grid = document.createElement("div");
+          grid.className = "cards";
+          list.append(grid);
+        }
+      } else if (!list.lastElementChild) {
+        const grid = document.createElement("div");
+        grid.className = "cards";
+        list.append(grid);
+      }
+      list.lastElementChild.append(gameCard(g, !state.server && servers.length > 1));
+    }
+    if (!sorted.length) {
+      const p = document.createElement("p");
+      p.className = "empty";
+      p.textContent = all.length ? (needle && !all.some(g => Array.isArray(g.names)) ?
+        "No games match. (The servers' lists name their players from their next update.)" : "No games match these choices.") :
+        "No games recorded yet.";
+      list.append(p);
+    }
+    count.textContent = sorted.length === pool.length ? `${pool.length} games` : `${sorted.length} of ${pool.length} games`;
+    more.innerHTML = "";
+    if (sorted.length > shown) {
+      const a = document.createElement("a");
+      a.href = "#"; a.textContent = `Show ${Math.min(24, sorted.length - shown)} more of ${sorted.length}`;
+      a.onclick = e => { e.preventDefault(); shown += 24; renderList(); };
+      more.append(a);
+    }
+  };
+  const renderAll = () => { renderTabs(); renderLive(); renderList(); };
+
+  search.value = state.player;
+  order.value = state.order;
+  full.checked = state.full;
+  let typing = null;
+  search.oninput = () => { clearTimeout(typing); typing = setTimeout(() => { state.player = search.value; shown = 24; save(); renderList(); }, 200); };
+  mapSelect.onchange = () => { state.map = mapSelect.value; shown = 24; save(); renderList(); };
+  typeSelect.onchange = () => { state.type = typeSelect.value; shown = 24; save(); renderList(); };
+  order.onchange = () => { state.order = order.value; shown = 24; save(); renderList(); };
+  full.onchange = () => { state.full = full.checked; shown = 24; save(); renderList(); };
+  box.querySelector(".clear").onclick = e => {
+    e.preventDefault();
+    Object.assign(state, { map: "", type: "", player: "", order: "newest", full: false });
+    search.value = ""; order.value = "newest"; full.checked = false; shown = 24; save(); renderList();
+  };
+  renderAll();
+
+  // (each server's games and whether it plays one now, as they come)
+  await Promise.all(servers.map(async server => {
     // (live: the folder of the game being played; replays: where finished
     // ones are kept, if elsewhere; public: both in one folder)
-    const folder = value => value ? new URL(String(value).replace(/\/?$/, "/"), location.href).href : null;
     const base = folder(server.live || server.public);
     const kept = folder(server.replays);
-    const section = document.createElement("section");
-    section.innerHTML = `<h2><span class="name"></span><span class="order">Order <select><option value="newest">newest first</option><option value="busiest">busiest first</option></select></span></h2><p class="live-line"></p><div class="cards"></div><div class="more"></div>`;
-    section.querySelector(".name").textContent = server.name;
-    box.append(section);
     if (base) fetch(new URL("live.json", base), { cache: "no-store" }).then(r => r.ok ? r.json() : null).then(status => {
-      const p = section.querySelector(".live-line");
-      if (status && status.live) {
-        const a = document.createElement("a");
-        a.href = `?live=${encodeURIComponent(base)}`;
-        a.className = "button";
-        a.textContent = `Watch live: ${mapName(status.map)}${status.game_type ? " · " + status.game_type : ""}`;
-        p.append(a);
-      } else p.textContent = "No game right now.";
+      if (status && status.live) { live.set(server.name, { ...status, base }); renderTabs(); renderLive(); }
     }).catch(() => {});
-    // (each folder's games: its index.json, halo-replays-index's summary of
-    // each (the map, how many played, the kills, a thumbnail); without one,
-    // the folder's listing in JSON, as its web server gives it: Caddy's
-    // file_server browse, nginx's autoindex_format json; a game in both once)
-    const indexed = address => fetch(new URL("index.json", address), { cache: "no-store" })
-      .then(r => r.ok ? r.json() : null).then(index => index && Array.isArray(index.games) ? index.games.map(g => ({ ...g,
-        url: new URL(g.name, address).href, thumbUrl: g.thumb ? new URL("../thumbs/" + g.thumb, address).href : null })) : null)
-      .catch(() => null);
-    const listing = address => fetch(address, { headers: { Accept: "application/json" }, cache: "no-store" })
-      .then(r => r.ok ? r.json() : []).then(files => (Array.isArray(files) ? files : [])
-        .filter(f => f && /\.hrec$/.test(f.name)).map(f => ({ name: f.name, url: new URL(f.name, address).href })))
-      .catch(() => []);
-    const games = async address => (await indexed(address)) || (await listing(address));
-    Promise.all([kept ? games(kept) : [], base ? games(base) : []]).then(([older, newer]) => {
-      const byName = new Map();
-      for (const f of [...older, ...newer]) byName.set(f.name, f);
-      const all = [...byName.values()];
-      const cards = section.querySelector(".cards"), more = section.querySelector(".more");
-      const order = section.querySelector("select");
-      let shown = 12;
-      // (a game of one player, or under a minute, is hardly one: at the end
-      // of the list whichever the order)
-      const weight = g => (g.most || 1) > 1 && (g.seconds == null || g.seconds >= 60) ? 1 : 0;
-      const render = () => {
-        const list = all.slice().sort(order.value === "newest" ? (a, b) => b.name.localeCompare(a.name) :
-          (a, b) => weight(b) - weight(a) || (b.most || 0) - (a.most || 0) || (b.players || 0) - (a.players || 0) ||
-            (b.kills || 0) - (a.kills || 0) || b.name.localeCompare(a.name));
-        cards.innerHTML = "";
-        for (const g of list.slice(0, shown)) cards.append(gameCard(g));
-        more.innerHTML = "";
-        if (list.length > shown) {
-          const a = document.createElement("a");
-          a.href = "#"; a.textContent = `Show ${Math.min(24, list.length - shown)} more of ${list.length}`;
-          a.onclick = e => { e.preventDefault(); shown += 24; render(); };
-          more.append(a);
-        }
-        if (!list.length) cards.innerHTML = "<p>No games recorded yet.</p>";
-      };
-      order.onchange = render;
-      render();
-    });
-  }
+    const [older, newer] = await Promise.all([kept ? games(kept) : [], base ? games(base) : []]);
+    const byName = new Map();
+    for (const f of [...older, ...newer]) byName.set(f.name, { ...f, server: server.name });
+    all = all.concat([...byName.values()]);
+    renderAll();
+  }));
 }
 
 // (a game's card: its map's thumbnail, the map, the game type, when, and
-// how it went; from the file's name alone where there is no index)
-function gameCard(g) {
+// how it went; from the file's name alone where there is no index; with
+// its server's name when the list has every server's)
+function gameCard(g, withServer) {
   const m = /^(\d{4}-\d\d-\d\d)_(\d\d)-(\d\d)-\d\d_(.+)\.hrec$/.exec(g.name);
   const a = document.createElement("a");
   a.className = "card";
-  a.href = `?file=${encodeURIComponent(g.url)}`;
+  a.href = `${location.pathname}?file=${encodeURIComponent(g.url)}`;
   const img = document.createElement("img");
   img.alt = "";
   img.loading = "lazy";
@@ -2875,6 +3042,12 @@ function gameCard(g) {
   const text = document.createElement("div");
   const title = document.createElement("b");
   title.textContent = g.map || (m ? m[4].replace(/-(ce|md|pc)$/, "") : g.name);
+  if (withServer && g.server) {
+    const badge = document.createElement("span");
+    badge.className = "server";
+    badge.textContent = g.server;
+    title.append(badge);
+  }
   const meta = document.createElement("div");
   meta.className = "meta";
   const when = g.time ? new Date(g.time * 1000) : m ? new Date(`${m[1]}T${m[2]}:${m[3]}:00Z`) : null;

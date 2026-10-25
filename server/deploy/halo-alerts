@@ -38,7 +38,7 @@ PANELS = {"FractumFFA": "https://halovps.fractumseraph.net:8443/", "FractumKing"
 # the replay viewer, and each server's public recordings: the live game's
 # folder (Caddy, here) and where finished ones are kept (the seedbox's,
 # halo-recordings-offload)
-VIEWER = "https://halo.fractumseraph.net/assets/replay/"
+VIEWER = "https://halo.fractumseraph.net/watch/"
 PUBLIC = {
     "halo-dedicated": ("https://halovps.fractumseraph.net/replays/fractumffa/",
                        "https://halo.fractumseraph.net/replays/halo-dedicated/"),

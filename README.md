@@ -31,7 +31,7 @@ then [ChupathingyCE's](#chupathingyce), then [OpenCE's](#opence).
   game (`network.record_public`): each player's moves, aim and kills, with
   no address or hardware id, held back 30 seconds while the game is played
   so that no one watching can help a player. Anyone watches them at
-  [halo.fractumseraph.net/assets/replay](https://halo.fractumseraph.net/assets/replay/),
+  [halo.fractumseraph.net/watch](https://halo.fractumseraph.net/watch/),
   live or once the game is over, through any player's eyes, behind them or
   freely: the games listed with a picture of each map, newest or busiest
   first; a results

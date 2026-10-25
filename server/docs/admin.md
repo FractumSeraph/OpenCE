@@ -210,7 +210,7 @@ To watch one, save it from the control panel's **Suspects** tab
 (**Recordings**: `GET /v1/recordings`, and `/v1/recordings/<name>` for one;
 a moderator's, as `sv_suspects` is, and each one taken is in the audit
 file), or copy it off the server, and open it at
-https://halo.fractumseraph.net/assets/replay/ (`port/web/assets/replay`).
+https://halo.fractumseraph.net/watch/ (`port/web/assets/replay`; also at /assets/replay/).
 The file is read in your browser and sent nowhere. The page draws the map's
 walls, every player with their aim, and the world's vehicles, items,
 projectiles (with tracers) and explosions. It follows a player through
@@ -310,7 +310,7 @@ The viewer then watches a server's game as it is played at
 the servers named in `servers.json` beside it (`[{"name", "live": the
 folder's address, "replays": where finished ones are kept, if elsewhere}]`,
 or `"public"` for one folder holding both): FractumSeraph's at
-https://halo.fractumseraph.net/assets/replay/. A public copy shows no fair
+https://halo.fractumseraph.net/watch/. A public copy shows no fair
 play panels.
 
 A small server need not keep its finished games. FractumSeraph's VPS keeps
