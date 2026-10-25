@@ -23,17 +23,18 @@ for server in /opt/halo-dedicated /opt/halo-fractumslayer; do
     for item in dedicated.env data/admin data/playlists data/control_accounts.txt \
                 data/control_credentials.txt data/control_audit.log data/delta_link.key \
                 data/gamestate.txt data/saves/lasting_invite.key; do
-        [ -e "$server/$item" ] && echo "$server/$item"
+        if [ -e "$server/$item" ]; then echo "$server/$item"; fi
     done
 done >> "$list"
 for item in /opt/halo-bans /opt/halo/config.json /etc/caddy /etc/mosquitto /etc/opentracker \
             /etc/cron.daily/umami-backup /opt/umami/docker-compose.yml /opt/umami/.env; do
-    [ -e "$item" ] && echo "$item"
+    if [ -e "$item" ]; then echo "$item"; fi
 done >> "$list"
 ls -d /etc/systemd/system/halo* /etc/systemd/system/crowdsec-ssh-only* /etc/systemd/system/crowdsec-firewall-bouncer.service.d /etc/systemd/system/caddy.service.d /usr/local/sbin/halo-* \
    /usr/local/sbin/crowdsec-ssh-only.sh 2>/dev/null >> "$list" || true
 dump=$(ls -1t /opt/umami/backups/* 2>/dev/null | head -1 || true)
-[ -n "$dump" ] && echo "$dump" >> "$list"
+# ("if", not "&&": a missing last item would fail the loop under set -e)
+if [ -n "$dump" ]; then echo "$dump" >> "$list"; fi
 
 tar -czf - --ignore-failed-read -T "$list" 2>/dev/null |
     ssh -T -i "$KEY" -o BatchMode=yes -o ConnectTimeout=60 "$TARGET"

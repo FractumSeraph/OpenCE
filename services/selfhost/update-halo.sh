@@ -30,11 +30,13 @@ answers() {
 }
 
 # (previous/: the server, and the game files the kit replaces; the maps in
-# public/ are not in the kit and stay where they are)
+# public/ are not in the kit and stay where they are. A file new in the kit
+# has nothing to keep: "if", not "&&", or the loop's last test fails the
+# script under set -e, as public/watch/index.html did on 2026-10-25)
 rm -rf previous && mkdir previous
 cp -a server start-halo.sh previous/
 (cd "$tmp/halo-server" && find public -type f) | while read -r file; do
-  [ -f "$file" ] && cp -a --parents "$file" previous/
+  if [ -f "$file" ]; then cp -a --parents "$file" previous/; fi
 done
 systemctl stop halo
 rm -rf server
