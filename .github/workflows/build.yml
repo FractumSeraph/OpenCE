@@ -218,7 +218,10 @@ jobs:
       # ChupathingyCE's ce_*.c; build/UPDATING.md, 2026-10-20)
       - name: Test
         run: |
-          python3 -m pytest -q tools/test_linux_port.py tools/test_android_asm_convert.py tools/test_android_mirror_uploads.py tools/test_touch_menu.py tools/test_ui_point.py tools/test_p2p_copies.py tools/test_ping.py tools/test_save_folder.py tools/test_server_control.py tools/test_delta.py tools/test_delta_peer.py tools/test_profile.py tools/test_map_torrents.py tools/test_map_families.py tools/test_map_packs.py tools/test_bmp_files.py tools/test_host_watch_hash.py tools/test_virtual_keyboard_input.py tools/test_settings_sections.py tools/test_loading_picture.py tools/harness tools/test_map_download.py tools/test_map_report.py tools/test_event_log.py tools/test_update_manifest.py tools/test_android_ce_texture_cache.py
+          python3 -m pytest -q tools/test_linux_port.py tools/test_android_asm_convert.py tools/test_android_mirror_uploads.py tools/test_touch_menu.py tools/test_ui_point.py tools/test_p2p_copies.py tools/test_ping.py tools/test_save_folder.py tools/test_server_control.py tools/test_delta.py tools/test_delta_peer.py tools/test_profile.py tools/test_map_torrents.py tools/test_map_families.py tools/test_map_packs.py tools/test_bmp_files.py tools/test_host_watch_hash.py tools/test_virtual_keyboard_input.py tools/test_settings_sections.py tools/test_loading_picture.py tools/harness tools/test_map_download.py tools/test_map_report.py tools/test_event_log.py tools/test_update_manifest.py tools/test_android_ce_texture_cache.py tools/test_server_sim.py tools/test_egg.py tools/test_deploy_gametypes.py
+          # OpenCE's dedicated server (halo --server): --version, and --server without maps refused (exit code 2);
+          # its cases with clients need the retail maps, and are skipped
+          python3 -m pytest -q tools/test_dedicated_server.py
           python3 tools/test_light_storage.py
           python3 tools/test_port_config.py
           python3 tools/test_tick_input.py
@@ -1011,6 +1014,8 @@ jobs:
         run: |
           source ~/emsdk/emsdk_env.sh
           node --test "port/web/tests/*.test.js"
+          # (the dedicated server's admin page, port/assets/server_ui, against tools/server_sim.py)
+          node --test tools/server_ui_tests/
           python3 -m pytest -q tools/test_web_build.py
 
       - name: Test in Chromium and Firefox
@@ -1044,7 +1049,10 @@ jobs:
     # that builds on every platform is published as v<VERSION>-fs.<run>,
     # marked latest, with the files the self-updaters ask for
     # (chupathingyce-<platform>-<config>.zip; port/linux/src/updater.c,
-    # Updater.java) and the dedicated servers; the newest five are kept.
+    # Updater.java), signed with the fork's update key, and the dedicated
+    # servers; with OpenCE's SHA256SUMS of the release's files and, when the
+    # RELEASE_SIGNING_KEY secret is set, its Ed25519 signature
+    # (SHA256SUMS.sig, tools/release_sign.sh); the newest five are kept.
     # ChupathingyCE's own releases come from its release workflows instead.
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository != 'ChupathingyCE/chupathingyce'
     needs: [linux, linux64, server, android, android64, windows, windows64, macos]
@@ -1052,12 +1060,18 @@ jobs:
     permissions:
       contents: write
     steps:
+      # (cone mode: the folders' own files come too, tools/*.py among them,
+      # which tools/ci_build.py imports)
       - uses: actions/checkout@v4
         with:
           sparse-checkout: |
             VERSION
             tools/update_sign.py
             port/linux/src/update_key.h
+            tools/ci_build.py
+            tools/version.py
+            tools/release_sign.sh
+            deploy/release-key.pub
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
@@ -1068,6 +1082,11 @@ jobs:
           # the update files; its public half is in update_key.h and
           # UpdateManifest.java
           UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+          # OpenCE's release key's seed (64 hex digits), which signs the
+          # release's SHA256SUMS; checked against deploy/release-key.pub, or
+          # the RELEASE_PUBLIC_KEY variable's key (a fork's own)
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+          RELEASE_PUBLIC_KEY: ${{ vars.RELEASE_PUBLIC_KEY }}
         run: |
           version="$(cat VERSION)-fs.$(printf '%05d' "$GITHUB_RUN_NUMBER")"
           mkdir release
@@ -1110,6 +1129,19 @@ jobs:
             files+=(release/*.sig release/updates.json)
           else
             echo "::warning::no UPDATE_SIGNING_KEY secret: this release is not signed, and the self-updaters will not install it"
+          fi
+          # (OpenCE's SHA256SUMS of the release's files, and its signature by
+          # the release key when the secret is set: tools/release_sign.sh,
+          # checked before anything is published. Beside the update files'
+          # signatures above, which the self-updaters check: not instead)
+          python3 tools/ci_build.py sums release
+          files+=(release/SHA256SUMS)
+          if [ -n "$RELEASE_SIGNING_KEY" ]; then
+            sh tools/release_sign.sh sign release/SHA256SUMS
+            sh tools/release_sign.sh verify release/SHA256SUMS
+            files+=(release/SHA256SUMS.sig)
+          else
+            echo "::warning::no RELEASE_SIGNING_KEY secret: the release's SHA256SUMS is not signed"
           fi
           ls -l release
           {

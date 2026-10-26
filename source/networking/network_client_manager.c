@@ -600,6 +600,7 @@ struct message_client_ping
 /* port/linux/src/p2p.c's */
 void p2p_hardware_id(char *hex, int size);
 void p2p_joining_host(const unsigned char *identifier);
+void p2p_join_refused(int rejection_code);
 
 struct message_client_join_game_request
 {
@@ -828,6 +829,11 @@ static struct
 	host plays after them, port/linux/include/delta.h) */
 	byte reserved[0x1A];
 	byte kind;
+	/* port (this fork): its host is a dedicated server (OpenCE 39's
+	HALO_PORT_ADVERTISED_DEDICATED_FLAG, the bit Delta's DELTA_ADVERTISED_FLAG
+	is too: set here only for a host without a Delta wire, whose flags then
+	keep no Delta bit) */
+	boolean dedicated;
 } network_game_client_advertised_versions[MAXIMUM_NETWORK_ADVERTISED_GAMES];
 
 /* the joined game's host's network version, as it advertised it (0xFFFF: not
@@ -1962,7 +1968,11 @@ boolean network_game_client_remove_player(
 			  if (dedicated_server_active())
 				network_player_index = 0; }
 #endif
-			if (network_player_index == MAXIMUM_NUMBER_OF_PLAYERS)
+			/* port: a dedicated server's own machine never has a player
+			(port/linux/game/server_director.c): it leaves only when a player
+			of its own goes, which none is */
+			if (network_player_index == MAXIMUM_NUMBER_OF_PLAYERS &&
+				(!halo_server_mode() || player->machine_index == client->machine_index))
 			{
 				network_game_client_all_local_players_have_quit();
 				network_event("no local players remain in the game, exiting the game now");
@@ -2537,6 +2547,8 @@ void network_game_client_rejected_by_game(
 		"unable to join game: reason= #%d/%s",
 		rejection_code,
 		reason);
+	/* port: why, for the server browser's line (p2p_join_progress) */
+	p2p_join_refused(rejection_code);
 	/* port: the join went to the pregame screen at once (and a machine
 	refused a game in progress, network_game_server_refuse_late_joiner, is in
 	it): with no game behind it, it is left for the main menu, which says
@@ -2730,13 +2742,31 @@ static boolean add_advertised_game(
 			csmemcpy(network_game_client_advertised_versions[game_index].reserved,
 				advertisement->__unknown5A,
 				sizeof(network_game_client_advertised_versions[game_index].reserved));
-			/* (the game's kind, network version 37; port (this fork): none
-			from a host that speaks Delta, whose major is in that byte, its
-			game wire after it: port/linux/include/delta.h) */
-			network_game_client_advertised_versions[game_index].kind =
-				advertisement->__unknown5A[HALO_PORT_ADVERTISED_KIND_OFFSET + 1] == 'c' &&
-				!csmemcmp(advertisement->__unknown5A + HALO_PORT_ADVERTISED_KIND_OFFSET + 1, "chupa-", 6) ? 0 :
-				advertisement->__unknown5A[HALO_PORT_ADVERTISED_KIND_OFFSET];
+			/* port (this fork): a host speaks Delta when its game wire
+			("chupa-...", port/linux/include/delta.h) follows its major in the
+			kind's byte; then that byte is no kind (network version 37) */
+			{
+				boolean delta_wire =
+					advertisement->__unknown5A[HALO_PORT_ADVERTISED_KIND_OFFSET + 1] == 'c' &&
+					!csmemcmp(advertisement->__unknown5A + HALO_PORT_ADVERTISED_KIND_OFFSET + 1, "chupa-", 6);
+
+				network_game_client_advertised_versions[game_index].kind = delta_wire ? 0 :
+					advertisement->__unknown5A[HALO_PORT_ADVERTISED_KIND_OFFSET];
+				/* ... and the flags' 0x04 is Delta's then; without a wire, from
+				version 39, OpenCE's dedicated server's (HALO_PORT_ADVERTISED_DEDICATED_FLAG),
+				and no Delta session is tried with its host */
+				network_game_client_advertised_versions[game_index].dedicated = FALSE;
+				if (!delta_wire && (network_game_client_advertised_versions[game_index].flags &
+					HALO_PORT_ADVERTISED_DEDICATED_FLAG))
+				{
+					network_game_client_advertised_versions[game_index].dedicated =
+						network_game_client_advertised_versions[game_index].version >= HALO_PORT_DEDICATED_NETWORK_VERSION;
+					network_game_client_advertised_versions[game_index].flags &=
+						(byte)~HALO_PORT_ADVERTISED_DEDICATED_FLAG;
+					network_game_client_advertised_versions[game_index].reserved[HALO_PORT_ADVERTISED_FLAGS_OFFSET] &=
+						(byte)~HALO_PORT_ADVERTISED_DEDICATED_FLAG;
+				}
+			}
 		}
 
 		if (advertisement->game_name[0] != L'\0')
@@ -3403,7 +3433,6 @@ boolean network_game_client_advertised_game_compatible(
 	unsigned int ours = (unsigned int)delta_legacy_announce();
 	unsigned int theirs;
 	boolean distributed;
-	char message[400];
 
 	if (game_index < 0 || game_index >= MAXIMUM_NETWORK_ADVERTISED_GAMES)
 		return FALSE;
@@ -3412,6 +3441,7 @@ boolean network_game_client_advertised_game_compatible(
 		HALO_PORT_ADVERTISED_DISTRIBUTED_FLAG) != 0;
 #ifdef HALO_GAME_BROWSER
 	{
+		char message[400];
 		char wire[24];
 		int matches = delta_peer_advertised_wire_matches(network_game_client_advertised_versions[game_index].reserved,
 			(int)sizeof(network_game_client_advertised_versions[game_index].reserved), wire, (int)sizeof(wire));
@@ -3450,6 +3480,22 @@ boolean network_game_client_advertised_game_compatible(
 		}
 		return TRUE;
 	}
+	if (tell)
+		network_game_client_tell_version(theirs, distributed);
+	return FALSE;
+}
+
+/* port: the player told why a host of this network version (and netcode)
+cannot be joined: an advertised game's, or a server browser's row's */
+void network_game_client_tell_version(
+	unsigned int theirs,
+	boolean distributed)
+{
+	unsigned int ours = (unsigned int)delta_legacy_announce();
+	char message[400];
+
+	/* (port, this fork: a host of a version this machine plays with, but
+	of the lockstep netcode) */
 	if (theirs >= (unsigned int)delta_legacy_minimum() && theirs <= (unsigned int)delta_legacy_maximum())
 	{
 		csprintf(message,
@@ -3472,13 +3518,9 @@ boolean network_game_client_advertised_game_compatible(
 			"Ask the host to update the game.",
 			ours, theirs);
 	}
-	if (tell)
-	{
-		network_event("not joining a host of network version %u%s (this machine's is %u)", theirs,
-			distributed ? "" : " with the lockstep netcode", ours);
-		platform_show_message("Halo: cannot join this game", message);
-	}
-	return FALSE;
+	network_event("not joining a host of network version %u%s (this machine's is %u)", theirs,
+		distributed ? "" : " with the lockstep netcode", ours);
+	platform_show_message("Halo: cannot join this game", message);
 }
 
 /* port: whether the advertised game is under way (HALO_PORT_ADVERTISED_IN_PROGRESS_FLAG),
@@ -3491,6 +3533,51 @@ boolean network_game_client_advertised_game_in_progress(
 
 	return game_index >= 0 && game_index < MAXIMUM_NETWORK_ADVERTISED_GAMES &&
 		(network_game_client_advertised_versions[game_index].flags & HALO_PORT_ADVERTISED_IN_PROGRESS_FLAG) != 0;
+}
+
+/* port: whether the advertised game's host is a dedicated server
+(HALO_PORT_ADVERTISED_DEDICATED_FLAG), for the lobby's line */
+boolean network_game_client_advertised_game_dedicated(
+	struct network_game_client *client,
+	struct network_advertised_game const *game)
+{
+	long game_index = client ? game - client->available_games : NONE;
+
+	/* (port, this fork: as the advertisement was read, apart from Delta's
+	flag, the same bit) */
+	return game_index >= 0 && game_index < MAXIMUM_NETWORK_ADVERTISED_GAMES &&
+		network_game_client_advertised_versions[game_index].dedicated;
+}
+
+/* port: the client's index'th advertised game, as a probe tells it (halo
+--probe: port/linux/game/network_test.c) */
+boolean network_game_client_port_advertised_game_summary(
+	long index,
+	struct network_advertised_game_summary *summary)
+{
+	struct network_game_client *client = global_network_game_client_get();
+	struct network_advertised_game *game;
+
+	if (!client || index < 0 || index >= MAXIMUM_NETWORK_ADVERTISED_GAMES)
+		return FALSE;
+	game = &client->available_games[index];
+	if (!network_game_client_advertised_game_is_valid(game))
+		return FALSE;
+	csmemset(summary, 0, sizeof(*summary));
+	csmemcpy(summary->name, game->game_name, sizeof(summary->name));
+	summary->name[NUMBEROF(summary->name) - 1] = 0;
+	csmemcpy(summary->map_name, game->map.name, sizeof(summary->map_name));
+	summary->map_name[sizeof(summary->map_name) - 1] = 0;
+	summary->engine_type = game->engine_type;
+	summary->player_count = (short)game->player_count;
+	summary->maximum_player_count = game->maximum_player_count;
+	summary->open = game->open;
+	summary->has_teams = game->has_teams;
+	summary->in_progress = network_game_client_advertised_game_in_progress(client, game);
+	summary->dedicated = network_game_client_advertised_game_dedicated(client, game);
+	summary->version = network_game_client_advertised_versions[index].version;
+	summary->kind = network_game_client_advertised_versions[index].kind;
+	return TRUE;
 }
 
 /* port: the advertised game's kind (an OpenCE gametype's mode, and Hardcore:

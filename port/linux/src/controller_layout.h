@@ -72,7 +72,8 @@ enum
 };
 
 /* the profile's button layouts (player_profile.h's _button_preset_*): the
-Xbox's five, Bumper Jumper, and the custom one in config.toml */
+Xbox's five, Bumper Jumper, the custom one in config.toml, and OpenCE's
+Fishsticks and Recon (after Custom, whose number players' profiles keep) */
 enum
 {
 	CONTROLLER_PRESET_DEFAULT,
@@ -82,6 +83,8 @@ enum
 	CONTROLLER_PRESET_SWAP_B_RIGHT_STICK,
 	CONTROLLER_PRESET_BUMPER_JUMPER,
 	CONTROLLER_PRESET_CUSTOM,
+	CONTROLLER_PRESET_FISHSTICKS,
+	CONTROLLER_PRESET_RECON,
 	CONTROLLER_PRESET_COUNT
 };
 

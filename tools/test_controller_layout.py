@@ -6,8 +6,10 @@ where they are kept.
 - its tables against the game's: the presets as player_ui.c's
   set_local_player_controls_from_player_profile has them, the buttons as
   input.h numbers them, the actions as input_abstraction.c does, the
-  presets as player_profile.h does (the custom one last, so that a build
-  without it reads it as it reads any preset it does not know: Default);
+  presets as player_profile.h does (the custom one after the game's and
+  Bumper Jumper, 6, so that a build without it reads it as it reads any
+  preset it does not know: Default; OpenCE's Fishsticks and Recon after it,
+  7 and 8, so that players' Custom stays theirs);
 - a custom layout written into config.toml (port_config.c, built as
   tools/test_port_config.py builds it) and read back, in a new process, as
   the same layout.
@@ -79,14 +81,20 @@ def check_tables():
 		"primary_trigger", "start", "back", "crouch", "zoom"]
 	if [name.replace("_game_control_", "") for name in game_controls] != expected_actions or len(actions) != 12:
 		failures.append(f"actions: input_abstraction.c has {game_controls}")
-	# the presets: the custom one after the game's
+	# the presets: the custom one after the game's and Bumper Jumper, then
+	# OpenCE's Fishsticks and Recon; controller_layout.h's in the same order
 	presets = [name for name in enum_names(profile, "_button_preset_standard") if name.startswith("_button")]
-	if presets[-1] != "_button_preset_custom" or len(presets) != 7:
+	if presets[6:] != ["_button_preset_custom", "_button_preset_fishsticks", "_button_preset_recon"] or len(presets) != 9:
 		failures.append(f"presets: player_profile.h has {presets}")
+	ours_presets = [name for name in enum_names(header, "CONTROLLER_PRESET_DEFAULT") if name != "CONTROLLER_PRESET_COUNT"]
+	if len(ours_presets) != len(presets) or ours_presets[6:] != ["CONTROLLER_PRESET_CUSTOM",
+		"CONTROLLER_PRESET_FISHSTICKS", "CONTROLLER_PRESET_RECON"]:
+		failures.append(f"presets: controller_layout.h has {ours_presets}")
 
 	# each preset's table in player_ui.c, as button names
 	short = {"a": "A", "b": "B", "x": "X", "y": "Y", "black": "BLACK", "white": "WHITE", "left_trigger": "LT",
-		"right_trigger": "RT", "start": "START", "back": "BACK", "left_thumb": "LS", "right_thumb": "RS"}
+		"right_trigger": "RT", "start": "START", "back": "BACK", "left_thumb": "LS", "right_thumb": "RS",
+		"dpad_left": "LEFT"}
 	switch = player_ui[player_ui.index("switch (controls->button_preset)"):]
 	switch = switch[:switch.index("default:")]
 	cases = re.split(r"case (_button_preset_\w+):", switch)[1:]
@@ -96,7 +104,10 @@ def check_tables():
 		tables[name] = [short[button] for _, button in sorted(buttons, key=lambda pair: int(pair[0]))]
 	rows = re.findall(r"^\t\{ ([A-Z, ]+) \},", unit[unit.index("preset_layouts["):unit.index("preset_titles")], re.M)
 	ours = [[entry.strip() for entry in row.split(",")] for row in rows]
-	for index, name in enumerate(presets[:-1]):
+	# (each but Custom's, whose layout is config.toml's: its row is the default's)
+	for index, name in enumerate(presets):
+		if name == "_button_preset_custom":
+			continue
 		if tables.get(name) != (ours[index] if index < len(ours) else None):
 			failures.append(f"{name}: player_ui.c {tables.get(name)}, controller_layout.c "
 				f"{ours[index] if index < len(ours) else None}")

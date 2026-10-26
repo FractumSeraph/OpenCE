@@ -138,6 +138,10 @@ void p2p_invite_received(const char *text);
 server browser or on the game list (going private, or a password: those who
 saw it must not get in); under p2p_lock */
 void p2p_new_invite_if_listed(void);
+/* the token of the game hosted was listed elsewhere than the brokers (a
+master server's listing: p2p_lobby_host_listing), so going private makes a
+new invite too; under p2p_lock */
+void p2p_token_listed(const unsigned char *token);
 
 /* ---------- p2p.c: pings before joining (p2p_probe.c), under p2p_lock */
 

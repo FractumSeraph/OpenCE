@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
-from .embed_assets import hud_assets_build, hud_configure_inputs, ui_fonts_build
+from .embed_assets import hud_assets_build, hud_configure_inputs, server_ui_build, ui_fonts_build
 from .ninja_syntax import Writer
 from .version import VERSION_SOURCES, identity_defines, release_build, version
 
@@ -156,14 +156,47 @@ def miniupnpc_sources() -> List[Path]:
     return sorted((MINIUPNPC_DIR / "src").glob("*.c"))
 
 
+def build_repository() -> str:
+    """the GitHub repository a build is made from, owner/name, which a client
+    tells the servers it joins (network_distributed.c): CI's
+    GITHUB_REPOSITORY, else the checkout's origin remote's (its credentials
+    left out: only the owner and the name are kept), else none"""
+    repository = os.environ.get("GITHUB_REPOSITORY", "")
+    if not repository:
+        try:
+            url = subprocess.run(["git", "remote", "get-url", "origin"], capture_output=True, text=True,
+                                 timeout=10, check=False).stdout.strip()
+        except (OSError, subprocess.SubprocessError):
+            url = ""
+        found = re.search(r"github\.com[:/]+([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+?)(?:\.git)?/*$", url)
+        repository = found.group(1) if found else ""
+    return repository if re.fullmatch(r"[A-Za-z0-9_.-]{1,39}/[A-Za-z0-9_.-]{1,100}", repository) else ""
+
+
+def build_info_defines(release: bool) -> str:
+    """OpenCE's build information, which a client tells the hosts it joins
+    (source/main/main.c's main_build_identity) and a dedicated server shows
+    (server_mode.c): its number, HALO_BUILD_NUMBER (tools/ci_build.py gives a
+    fork release's run number; 0 elsewhere), its configuration, and the
+    repository it is made from (build_repository). The same from commit to
+    commit (unlike identity_defines), so main.c is not compiled again for
+    each"""
+    number = os.environ.get("HALO_BUILD_NUMBER", "0")
+    if not number.isdigit():
+        number = "0"
+    flavor = "release" if release else "debug"
+    return (f'-DHALO_BUILD_NUMBER={number} -DHALO_BUILD_FLAVOR=\\"{flavor}\\" '
+            f'-DHALO_BUILD_REPOSITORY=\\"{build_repository()}\\"')
+
+
 def updater_defines(release: bool) -> str:
     """the version's defines (port/linux/src/updater.c, the self-updater, has
     them, and gives the version to the rest): the version (tools/version.py),
     whether this build is a release's (only those look for updates), and its
-    configuration; and the channel and commit (build_identity.c)"""
-    flavor = "release" if release else "debug"
+    configuration; the channel and commit (build_identity.c); and OpenCE's
+    build information (build_info_defines: server_mode.c has it too)"""
     defines = (f'-DHALO_VERSION=\\"{version()}\\" -DHALO_RELEASE_BUILD={int(release_build())} '
-            f'-DHALO_BUILD_FLAVOR=\\"{flavor}\\" {identity_defines()}')
+               f'{build_info_defines(release)} {identity_defines()}')
     # (HALO_UPDATE_REPOSITORY: the GitHub repository whose releases it
     # updates from, owner/name; tools/ci_build.py gives the one it is built in)
     repository = os.environ.get("HALO_UPDATE_REPOSITORY", "")
@@ -659,7 +692,11 @@ def linux32_objects(n: Writer, units: Linux32Units, obj_dir: Path, extra_cflags:
         sdk_flags,
     ])
     for source in game_sources(config):
-        add_object(source, game_cflags)
+        # (main.c: the build's information, main_build_identity)
+        if source.as_posix() == "source/main/main.c":
+            add_object(source, f"{game_cflags} {build_info_defines(getattr(sln, 'port_release', False))}")
+        else:
+            add_object(source, game_cflags)
     # Port-specific units that must see the game exactly as its own
     # sources do (port/linux/game).
     for source in sorted(Path(config["game_sources"]).glob("*.c")):
@@ -702,7 +739,8 @@ def linux32_objects(n: Writer, units: Linux32Units, obj_dir: Path, extra_cflags:
             add_object(source, f"{posix_cflags} -I{STB_DIR}", posix=True)
         elif source.name.startswith("posix_"):
             add_object(source, posix_cflags, posix=True)
-        elif source.name in VERSION_SOURCES:
+        elif source.name in (*VERSION_SOURCES, "server_mode.c"):
+            # (server_mode.c: OpenCE's halo --server, its build's information)
             add_object(source, f"{platform_cflags} {updater_defines(getattr(sln, 'port_release', False))}")
         else:
             add_object(source, platform_cflags)
@@ -835,6 +873,8 @@ def generate_linux_build(n: Writer, sln: Any) -> None:
     # the high-res HUD's textures (port/assets/hud; port/linux/src/hud_hires.c)
     embedded_assets = (hud_assets_build(n, "linux", build_dir / "generated" / "hud_hires_assets.c")
                        + ui_fonts_build(n, "linux", build_dir / "generated" / "ui_fonts.c", sln))
+    # a dedicated server's admin page (port/assets/server_ui; port/linux/src/server_http.c)
+    embedded_assets += server_ui_build(n, "linux", build_dir / "generated" / "server_ui_assets.c")
 
     # (the movies' FFmpeg, unless this build leaves it out: configure.py
     # --without-ffmpeg. Then the stubs build and the game skips the movies;
@@ -952,5 +992,9 @@ def generate_linux_build(n: Writer, sln: Any) -> None:
     # the Custom Edition maps' torrents, a file beside the game (maps.torrent_index)
     map_torrents = build_dir / "map_torrents.txt"
     n.build(outputs=map_torrents, rule="linux_copy", inputs=Path("port/assets/network/map_torrents.txt"))
-    n.build(outputs="linux", rule="phony", inputs=[output, brokers, map_torrents, validator, *sdl_outputs])
+    # the master servers of dedicated servers, a file beside the game too
+    # (network.masters_file, server.masters_file)
+    masters = build_dir / "masters.txt"
+    n.build(outputs=masters, rule="linux_copy", inputs=Path("port/assets/network/masters.txt"))
+    n.build(outputs="linux", rule="phony", inputs=[output, brokers, map_torrents, masters, validator, *sdl_outputs])
     n.newline()

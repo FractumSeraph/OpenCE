@@ -17,7 +17,7 @@ against this machine's glibc and SDL3.
 from pathlib import Path
 from typing import Any, List, Optional
 
-from .embed_assets import hud_assets_build, hud_configure_inputs, ui_fonts_build
+from .embed_assets import hud_assets_build, hud_configure_inputs, server_ui_build, ui_fonts_build
 from .linux_build import OPTIMISATION, TRACE_MARKER_LDFLAGS, ffmpeg_build, linux_sysroot, lto_flags, march_flag, portable_sdl
 from .lp64_build import (
     LINUX_PORT_CONFIG,
@@ -104,7 +104,9 @@ def generate_linux64_build(n: Writer, sln: Any) -> None:
         rspfile_content="$in_newline",
     )
     generated_sources = (hud_assets_build(n, "linux64", build_dir / "generated" / "hud_hires_assets.c")
-                         + ui_fonts_build(n, "linux64", build_dir / "generated" / "ui_fonts.c", sln))
+                         + ui_fonts_build(n, "linux64", build_dir / "generated" / "ui_fonts.c", sln)
+                         # (OpenCE's halo --server admin page: server_http.c)
+                         + server_ui_build(n, "linux64", build_dir / "generated" / "server_ui_assets.c"))
     host = Lp64Host(
         name="linux64",
         target_flags=[LINUX64_TARGET, march_flag(sln), *(sdl.cflags if sdl else [])],

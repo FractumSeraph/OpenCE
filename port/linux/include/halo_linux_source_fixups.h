@@ -93,6 +93,23 @@ void halo_screen_warp_blend(unsigned char on);
 debug.original_blur) */
 unsigned char halo_screen_fast_blur(void);
 #endif
+/* network.client_timeout_seconds, in milliseconds (port/linux/src/port_config.c) */
+unsigned long network_client_timeout_milliseconds(void);
+/* a dedicated server (halo --server: port/linux/src/server_mode.c,
+port/linux/game/server_director.c; docs/dedicated_server.md): whether this
+run is one; its start, before the game's (shell_xbox.c); its frames' pace
+(main.c); the game's fatal error ended with (main.c); and the console's
+output, which it logs and captures for its commands' replies (terminal.c) */
+int halo_server_mode(void);
+void server_mode_start(void);
+void server_mode_pace_frame(void);
+void server_fatal(char const *text);
+void server_console_output(const char *text);
+/* ... whether debug.txt's lines go to the standard error too
+(server.log_debug_echo: errors.c) */
+int halo_server_debug_echo(void);
+/* ... the level its rotation plays next, NULL if none (game_engine.c) */
+char const *server_director_first_level(void);
 /* the mouse in the menus (source/interface/ui_widget.c) */
 #include "halo_ui_pointer.h"
 /* a level not in the maps folder (source/cache/cache_files_windows.c): a

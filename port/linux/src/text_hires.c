@@ -467,7 +467,7 @@ void text_hires_register_atlas(const unsigned long *texture, unsigned long width
 
 unsigned int text_hires_atlas_texture(unsigned long data)
 {
-	if (!data || data != placeholder_data || !atlas)
+	if (!data || data != placeholder_data || !atlas || !xgpu_gl_ready())
 		return 0;
 #ifdef HALO_BGFX
 	if (xgpu_bgfx)

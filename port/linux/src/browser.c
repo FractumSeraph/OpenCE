@@ -515,7 +515,7 @@ static unsigned long public_address(unsigned long game_address)
 		(bytes[0] == 169 && bytes[1] == 254) || (bytes[0] == 100 && (bytes[1] & 0xC0) == 64);
 
 	if (!address && private_address)
-		address = p2p_public_address();
+		address = p2p_public_address_number();
 	else if (!address)
 		address = game_address;
 	return address;

@@ -250,6 +250,7 @@ symbols in this file:
 #include "cseries.h"
 #include "halo_map_families.h" /* port: map_family_wire_name */
 #include "game_modes.h" /* port: port/linux/game/game_modes.c */
+#include "network_chat.h" /* port: port/linux/game/network_chat.c */
 #include "bungie_net/common/message_header.h"
 #include "bungie_net/network/transport.h"
 #include "bungie_net/network/transport_endpoint_winsock.h"
@@ -2242,6 +2243,18 @@ static boolean network_game_server_handle_message_client_broadcast_game_search(
 			{
 				advertisement.reserved[HALO_PORT_ADVERTISED_FLAGS_OFFSET] |= HALO_PORT_ADVERTISED_IN_PROGRESS_FLAG;
 			}
+			/* port: a dedicated server, with no player of its own
+			(port/linux/game/server_director.c; port, this fork: and its own
+			dedicated server, server/src/dedicated.c). The bit is Delta's
+			DELTA_ADVERTISED_FLAG too, which a host speaking Delta sets anyway:
+			OpenCE's clients of 39 take every such host for a dedicated one */
+			if (halo_server_mode())
+				advertisement.reserved[HALO_PORT_ADVERTISED_FLAGS_OFFSET] |= HALO_PORT_ADVERTISED_DEDICATED_FLAG;
+#ifdef HALO_GAME_BROWSER
+			{ boolean dedicated_server_active(void);
+			  if (dedicated_server_active())
+				advertisement.reserved[HALO_PORT_ADVERTISED_FLAGS_OFFSET] |= HALO_PORT_ADVERTISED_DEDICATED_FLAG; }
+#endif
 			/* (an OpenCE gametype's kind, the server browser's name for it;
 			port (this fork): not while it speaks Delta, whose major is in
 			that byte, the game wire after it, which ChupathingyCE's clients
@@ -2458,8 +2471,18 @@ static boolean network_game_server_handle_message_client_join_game_request(
 				{
 					/* (the Xbox game refused a machine not named in the
 					development kit's d:\hosts.txt: a stray file of that name
-					on a PC refused machines) */
-					if (network_game_server_accept_client_machine_into_game(server, server_client_machine))
+					on a PC refused machines. port: a dedicated server's word
+					filter refuses one whose player's name it keeps out,
+					network_chat.c) */
+					boolean name_refused = network_chat_name_blocked(machine_name, MAXIMUM_MACHINE_NAME_LENGTH);
+
+					if (name_refused)
+					{
+						network_event("refusing a machine @%s: its name has words the server's filter keeps out",
+							transport_address_to_string(&source_address));
+						network_game_server_refuse_with(_rejection_code_name_refused);
+					}
+					if (!name_refused && network_game_server_accept_client_machine_into_game(server, server_client_machine))
 					{
 						struct message_server_machine_accepted acceptance;
 						struct network_message *reply;

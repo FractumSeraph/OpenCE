@@ -319,6 +319,13 @@ first; the command repository's watch adds a row when it follows OpenCE's raise
 	X(36, "build-266", additive) /* the host's shield effects, a new message (91) a machine of 35 drops (port: this fork draws them, network_shield_effects.c) */ \
 	X(37, "build-268", additive) /* a game's kind (an OpenCE gametype's mode, Hardcore) in its LAN advertisement's fourth reserved byte and its internet listing's stamp, which older machines leave (port: this fork's hosts leave the advertisement's to Delta's major while they speak it) */ \
 	X(38, "build-268", additive) /* the shield effects "players" (each player's own, not synced): a value of message 91 a machine of 37 does not know, and draws the stock ones */
+/* (port, this fork: 39, OpenCE's build-280, has no row: a dedicated server's
+flag in the LAN advertisement (0x04 of the flags, DELTA_ADVERTISED_FLAG's bit
+too) and internet listing (32), and the client build message (92) an older
+host drops; no message a game plays changed. This fork's hosts announce it
+built in (HALO_PORT_NETWORK_VERSION), on wire chupa-38a and 38's rules, as a
+legacy table's row for chupa-38a would: a row here would be a new wire,
+docs/delta.md "When the wire changes") */
 
 /* ---------- the legacy table (port/linux/src/delta.c)
 

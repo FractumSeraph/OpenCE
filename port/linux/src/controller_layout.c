@@ -24,10 +24,12 @@ The controller's buttons for the game's actions (controller_layout.h).
 #define BACK CONTROLLER_BUTTON_BACK
 #define LS CONTROLLER_BUTTON_LEFT_STICK
 #define RS CONTROLLER_BUTTON_RIGHT_STICK
+#define LEFT CONTROLLER_BUTTON_DPAD_LEFT
 
 /* the presets' layouts, as player_ui.c's set_local_player_controls_from_player_profile
-has them (tools/test_controller_layout.py checks the two agree) */
-static const unsigned char preset_layouts[CONTROLLER_PRESET_CUSTOM][CONTROLLER_ACTION_COUNT] =
+has them (tools/test_controller_layout.py checks the two agree); Custom's
+row is the default's, its own being config.toml's (controller_layout_preset) */
+static const unsigned char preset_layouts[CONTROLLER_PRESET_COUNT][CONTROLLER_ACTION_COUNT] =
 {
 	/* jump, switch grenade, action, switch weapon, melee, flashlight, grenade, fire, start, back, crouch, zoom */
 	{ A, BLACK, X, Y, B, WHITE, LT, RT, START, BACK, LS, RS },
@@ -37,12 +39,20 @@ static const unsigned char preset_layouts[CONTROLLER_PRESET_CUSTOM][CONTROLLER_A
 	{ A, BLACK, X, Y, RS, WHITE, LT, RT, START, BACK, LS, B },
 	/* (Bumper Jumper, as Halo: The Master Chief Collection's) */
 	{ WHITE, A, B, Y, BLACK, X, LT, RT, START, BACK, LS, RS },
+	/* (Custom: config.toml's) */
+	{ A, BLACK, X, Y, B, WHITE, LT, RT, START, BACK, LS, RS },
+	/* (OpenCE's Fishsticks: the grenades switched with the pad's left, which
+	then does not move, input_abstraction.c; a custom layout made from it
+	keeps no action on the pad, controller_layout_movable_button) */
+	{ A, LEFT, X, Y, RS, WHITE, BLACK, RT, START, BACK, B, LT },
+	/* (OpenCE's Recon) */
+	{ A, WHITE, BLACK, Y, B, X, LT, RT, START, BACK, LS, RS },
 };
 
 static const char *const preset_titles[CONTROLLER_PRESET_COUNT] =
 {
 	"DEFAULT", "SWAP TRIGGERS", "SWAP A, L TRIGGER", "SWAP B, L TRIGGER", "SWAP B, R STICK", "BUMPER JUMPER",
-	"CUSTOM",
+	"CUSTOM", "FISHSTICKS", "RECON",
 };
 
 static const char *const action_keys[CONTROLLER_ACTION_COUNT] =
@@ -81,7 +91,7 @@ void controller_layout_preset(int preset, const char *custom_text, unsigned char
 		controller_layout_parse(custom_text ? custom_text : "", layout);
 		return;
 	}
-	if (preset < 0 || preset >= CONTROLLER_PRESET_CUSTOM)
+	if (preset < 0 || preset >= CONTROLLER_PRESET_COUNT)
 		preset = CONTROLLER_PRESET_DEFAULT;
 	memcpy(layout, preset_layouts[preset], CONTROLLER_ACTION_COUNT);
 }

@@ -680,13 +680,16 @@ def generate_android_build(n: Writer, sln: Any) -> None:
         n.build(outputs=obj, rule="android_host_cc", inputs=source,
                 variables={"cflags": miniupnpc_cflags + (" -w" if source.name != "posix_upnp.c" else "")})
         host_objects.append(obj)
-    # internet play's DTLS with browsers (posix_dtls.c) and the game list's
-    # requests (posix_browser.c, with Android's certificate authorities), with
-    # port/third_party/mbedtls, as the other posix_*.c in the host
+    # internet play's DTLS with browsers (posix_dtls.c), the game list's
+    # requests (posix_browser.c, with Android's certificate authorities) and
+    # the server browser's requests to the master servers (posix_update.c's,
+    # host_https.c), with port/third_party/mbedtls, as the other posix_*.c in
+    # the host (with its locks, MBEDTLS_DEFINES: internet play's thread and the
+    # server browser's both use it, as on Linux)
     game_browser = getattr(sln, "game_browser", False)
     mbedtls_cflags = " ".join([host_cflags, *(game_browser_defines(sln) if game_browser else []),
                                f"-I{MBEDTLS_DIR / 'include'}", f"-I{MBEDTLS_DIR / 'library'}", *MBEDTLS_DEFINES])
-    tls_sources = [LINUX_DIR / "src" / "posix_dtls.c"]
+    tls_sources = [LINUX_DIR / "src" / "posix_dtls.c", LINUX_DIR / "src" / "posix_update.c"]
     if game_browser:
         tls_sources.append(LINUX_DIR / "src" / "posix_browser.c")
     for source in [*tls_sources, *sorted((MBEDTLS_DIR / "library").glob("*.c"))]:

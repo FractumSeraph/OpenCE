@@ -52,9 +52,14 @@ def test_limits_follow_the_table():
     newest = table[-1][0]
     last_breaking = max(number for number, _, kind in table if kind == "breaking")
     # (hosts announce a version of the table, which may be older than its
-    # newest: clients play by a newer host's version before our hosts do)
-    assert define(limits, "HALO_PORT_NETWORK_VERSION") in [number for number, _, _ in table], \
-        "hosts must announce a version of the table"
+    # newest: clients play by a newer host's version before our hosts do;
+    # port, this fork: or one past it that is presumed additive, as a legacy
+    # table's row raises a wire's announce after OpenCE's additive raise,
+    # docs/delta.md "Following OpenCE": 39 on chupa-38a, played by 38's rules)
+    presumed_announce = define(DELTA.read_text(encoding="utf-8"), "DELTA_LEGACY_PRESUMED")
+    announce = define(limits, "HALO_PORT_NETWORK_VERSION")
+    assert announce in [number for number, _, _ in table] or newest < announce <= newest + presumed_announce, \
+        "hosts must announce a version of the table, or one presumed additive past it"
     assert define(limits, "HALO_PORT_NETWORK_VERSION_MAXIMUM") >= newest, \
         "clients must join hosts up to the table's newest version, at least"
     assert define(DELTA.read_text(encoding="utf-8"), "DELTA_LEGACY_NEWEST") == newest, \

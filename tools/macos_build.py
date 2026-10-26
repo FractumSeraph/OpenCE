@@ -19,7 +19,7 @@ import subprocess
 from pathlib import Path
 from typing import Any, List
 
-from .embed_assets import hud_assets_build, hud_configure_inputs, ui_fonts_build
+from .embed_assets import hud_assets_build, hud_configure_inputs, server_ui_build, ui_fonts_build
 from .linux_build import OPTIMISATION, ffmpeg_build
 from .lp64_build import (
     Lp64Build,
@@ -205,7 +205,9 @@ def generate_macos_build(n: Writer, sln: Any) -> None:
 
     # (the generated sources: one set, compiled for each architecture)
     generated_sources = (hud_assets_build(n, "macos", build_dir / "generated" / "hud_hires_assets.c")
-                         + ui_fonts_build(n, "macos", build_dir / "generated" / "ui_fonts.c", sln))
+                         + ui_fonts_build(n, "macos", build_dir / "generated" / "ui_fonts.c", sln)
+                         # (OpenCE's halo --server admin page: server_http.c)
+                         + server_ui_build(n, "macos", build_dir / "generated" / "server_ui_assets.c"))
     if portable:
         n.rule(
             name="macos_sdl3",

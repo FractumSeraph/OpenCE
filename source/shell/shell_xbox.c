@@ -141,6 +141,10 @@ int main(
 		xbox_memory_free() >> 10);
 	physical_memory_allocate();
 #else
+	/* port: the command line's --version, --keygen..., and a dedicated
+	server's checks of its game data and settings, before anything is
+	allocated or bound (port/linux/src/server_mode.c) */
+	server_mode_start();
 	fuck_code_in_the_eye();
 	rasterizer_preinitialize__fill_you_up_with_the_devils_cock();
 	physical_memory_allocate();

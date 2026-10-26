@@ -233,6 +233,7 @@
 		<string text="Required to join from the Server Browser."/>
 		<string text="Sending players who join without the game's\nCustom Edition map the map, and how fast."/>
 		<string text="Team switching, chat filter, aim assist and port."/>
+		<string text="Listed for everyone through the brokers, and on\nthe master servers with your publisher key."/>
 	</strings>
 	<widget name="main_menu/multiplayer_type_select/server_settings/coop_options/coop_options_screen" width="640" height="480" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/gradient">
 		<child widget="main_menu/multiplayer_type_select/server_settings/coop_options/header_coop_options"/>

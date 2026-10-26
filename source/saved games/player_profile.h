@@ -43,6 +43,13 @@ enum
 	/* port: the player's own, from the Controls screen (config.toml's
 	controls.controller_layout); a build without it reads it as Default */
 	_button_preset_custom,
+	/* port: Fishsticks: zoom on the left trigger and melee on the right
+	thumbstick's button, grenade throw on the right bumper, crouch on B, grenade switch on the pad's left
+	(OpenCE's 6: after this fork's Custom here, which players' profiles keep as 6) */
+	_button_preset_fishsticks,
+	/* port: Recon: the standard buttons, with action and reload on the right
+	bumper, grenade switch on the left and the flashlight on X (OpenCE's 7) */
+	_button_preset_recon,
 	NUMBER_OF_BUTTON_PRESETS
 };
 

@@ -217,8 +217,10 @@
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_link_map_sharing" x="54" y="265" platform="desktop android"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_link_streamer" x="54" y="289" platform="desktop android"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_link_streamer" x="54" y="145" platform="web"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_link_privacy" x="54" y="313" platform="desktop android"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_link_privacy" x="54" y="169" platform="web"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_link_server_browser" x="54" y="313" platform="desktop android"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_link_server_browser" x="54" y="169" platform="web"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_link_privacy" x="54" y="337" platform="desktop android"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_link_privacy" x="54" y="193" platform="web"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/view_chat" x="54" y="73"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_enabled" x="54" y="73"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_show" x="54" y="97"/>
@@ -235,6 +237,13 @@
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_slurs" x="54" y="97"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_swearing" x="54" y="121"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_insults" x="54" y="145"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/view_server_browser" x="54" y="73"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_listings" x="54" y="73"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_browser_show_empty" x="54" y="97"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_browser_show_full" x="54" y="121"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_browser_maps" x="54" y="145"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_browser_sort" x="54" y="169"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_master_servers" x="54" y="193"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/view_privacy" x="54" y="73"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_report_hosted_games" x="54" y="73"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_report_events" x="54" y="97"/>

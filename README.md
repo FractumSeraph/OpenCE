@@ -87,13 +87,13 @@ then [ChupathingyCE's](#chupathingyce), then [OpenCE's](#opence).
 Where the two projects do the same thing two ways, the fork keeps one
 working version; nothing sent over the network differs from theirs, so
 players of all three play together: this fork's games announce network
-version 38, as OpenCE's newest does, so OpenCE 38 players join them, SWAT,
+version 39, as OpenCE's newest does, so OpenCE 39 players join them, SWAT,
 Infection, Gun Game and Hardcore included, and ChupathingyCE players
 (0.8.0e to 0.8.0h) join them by its wire, `chupa-38a` (0.8.0e's and
 0.8.0f's `chupa-32a` plays with it), each sent the game settings of its own
 version (a game of one of OpenCE's game types is the one they can't play:
 0.8.0f and later leave it saying so, and the host turns 0.8.0e away from
-it). This fork's builds join hosts of versions 11 to 39, in either
+it). This fork's builds join hosts of versions 11 to 40, in either
 project's form (`docs/delta.md`), reading an older host's game settings as
 it sends them, and a newer one's as ChupathingyCE's signed legacy table
 lays it out ("Layouts"). Both
@@ -134,6 +134,16 @@ https://halo.fractumseraph.net/assets/android/index.html
 `fractum-halo-android64.apk`. The debug zip's APK is signed with the build
 machine's own debug key, which can differ from one build to the next, and
 then does not install over an earlier one.
+
+Each release also has `SHA256SUMS`, the SHA-256 of each of its files
+(OpenCE's: `sha256sum -c --ignore-missing SHA256SUMS` checks the downloads)
+and, when the workflow has a release key (the `RELEASE_SIGNING_KEY`
+secret), `SHA256SUMS.sig`, that file's Ed25519 signature, which
+`tools/release_sign.sh verify SHA256SUMS` (OpenSSL 3) checks against
+[deploy/release-key.pub](deploy/release-key.pub) (OpenCE's key) or the key
+`RELEASE_PUBLIC_KEY` names. The game's self-updater does not go by them: it
+checks the release's update files with this fork's own update key
+(`updates.json.sig` and each zip's `.sig`, `port/linux/src/update_key.h`).
 
 **The browser version, to host it yourself** (no game data included):
 
@@ -790,6 +800,13 @@ Server Browser. It is its own download for Linux on x86, x64 and arm64
 (Oracle Cloud's free tier and Raspberry Pis included): one file, no libraries
 to install, and no port forwarding. See [server/README.md](server/README.md).
 
+The game itself is also OpenCE's dedicated server: `halo --server` (or
+`server.enabled = true`) runs a rotation of games with no player of its
+own, with a web admin page, a remote console (RCON) and a listing on
+OpenCE's master servers, the server browser's DEDICATED games. It is off
+unless asked for. See [docs/dedicated_server.md](docs/dedicated_server.md),
+and [deploy/](deploy/) for systemd, Docker, Pterodactyl and other panels.
+
 ## Cross-play and Delta
 
 - **Our own releases.** Chupathingy has its own code, releases and version
@@ -1079,6 +1096,11 @@ from it first:
   WebRTC on their internet play's socket. It is in this repository beside
   this fork's browser build (`ninja browser`), which is the one this fork's
   site plays.
+- **A dedicated server** in the game itself (`halo --server`,
+  [docs/dedicated_server.md](docs/dedicated_server.md)): a rotation of
+  games, a web admin page, RCON, and master servers that list it under the
+  server browser's DEDICATED
+  ([docs/master_protocol.md](docs/master_protocol.md)).
 - **Updates itself** from its releases.
 
 Its own documents: [port/linux/README.md](port/linux/README.md) (controls,

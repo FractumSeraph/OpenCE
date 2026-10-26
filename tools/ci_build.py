@@ -48,9 +48,20 @@ OpenCE's web build ("web": tools/web_build.py, port/web/README.md) needs
 Emscripten (emcc on the PATH, as emsdk_env.sh puts it);
 dist/halo-web-<config>/ is the whole site, which a static host serves as it
 is. This fork's browser build (ninja browser) is built by web.yml.
+
+    python tools/ci_build.py sums release/
+
+writes release/SHA256SUMS: a line for each file of the folder (the
+release's assets: the workflow zips each build there), "<sha256 hex>  <name>",
+as sha256sum writes it and `sha256sum -c` reads it. OpenCE's workflow signs it
+with OpenCE's release key (tools/release_sign.sh: SHA256SUMS.sig, checked
+against deploy/release-key.pub) and publishes both with the release; the
+fork's self-updater does not read it: its updates are checked with the
+fork's own key (updates.json.sig and each zip's .sig, update_key.h).
 """
 
 import argparse
+import hashlib
 import os
 import re
 import shutil
@@ -127,7 +138,29 @@ def run(command, cwd=ROOT):
         raise subprocess.CalledProcessError(process.returncode, command)
 
 
+def write_sums(folder: Path) -> int:
+    """folder/SHA256SUMS: each file's SHA-256 and name, in name order (the
+    sums file itself and its signature left out)"""
+    lines = []
+    for path in sorted(folder.iterdir(), key=lambda item: item.name):
+        if not path.is_file() or path.name in ("SHA256SUMS", "SHA256SUMS.sig"):
+            continue
+        digest = hashlib.sha256()
+        with path.open("rb") as file:
+            for chunk in iter(lambda: file.read(1 << 20), b""):
+                digest.update(chunk)
+        lines.append(f"{digest.hexdigest()}  {path.name}\n")
+    if not lines:
+        print(f"{folder}: no files to sum", file=sys.stderr)
+        return 1
+    (folder / "SHA256SUMS").write_text("".join(lines), encoding="utf-8", newline="\n")
+    print(f"{folder / 'SHA256SUMS'}: {len(lines)} files", flush=True)
+    return 0
+
+
 def main() -> int:
+    if len(sys.argv) == 3 and sys.argv[1] == "sums":
+        return write_sums(Path(sys.argv[2]))
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("platform", choices=sorted(OUTPUTS))
     parser.add_argument("config", choices=["debug", "release", "profile"])
@@ -168,10 +201,14 @@ def main() -> int:
     # workflow's HALO_FORK_RELEASE): VERSION's with -fs.<run number>, five
     # digits, which the updater orders by its suffix (updater_newer); a
     # release's build, whose updater looks for newer ones in the fork's
-    # releases (HALO_UPDATE_REPOSITORY)
+    # releases (HALO_UPDATE_REPOSITORY); the run number is its build number
+    # too (HALO_BUILD_NUMBER: OpenCE's build information, which a client
+    # tells the hosts it joins and halo --server shows, tools/linux_build.py
+    # build_info_defines)
     if os.environ.get("HALO_FORK_RELEASE") == "1" and os.environ.get("GITHUB_RUN_NUMBER", "").isdigit():
         os.environ["HALO_VERSION"] = f"{base_version()}-fs.{int(os.environ['GITHUB_RUN_NUMBER']):05d}"
         os.environ["HALO_RELEASE_BUILD"] = "1"
+        os.environ["HALO_BUILD_NUMBER"] = str(int(os.environ["GITHUB_RUN_NUMBER"]))
     # a release is VERSION's (or a fork's, as above), and nothing else is one
     if release_build() and version() != base_version() and not version().startswith(f"{base_version()}-fs."):
         print(f"error: a release build of {version()}, but VERSION is {base_version()}", file=sys.stderr)
@@ -276,6 +313,10 @@ def main() -> int:
     # voice chat's codec (port/third_party/opus), in every build, whose BSD
     # license asks binaries to carry its notice
     shutil.copy2(ROOT / "port/third_party/opus/COPYING", dist / "opus-COPYING.txt")
+    # the JSON tokenizer (port/third_party/jsmn) of the server browser's
+    # lists and the dedicated server's API, in every build, whose MIT
+    # license asks copies to carry its notice
+    shutil.copy2(ROOT / "port/third_party/jsmn/LICENSE", dist / "jsmn-LICENSE.txt")
     # voice chat's speaker icons and the Mods menu's warning icons
     # (port/assets/icons/lucide, drawn into the menus' bitmaps), whose ISC
     # license asks copies to carry its notice
@@ -288,6 +329,24 @@ def main() -> int:
         shutil.copy2(ROOT / "port/assets/network/brokers.txt", dist / "brokers.txt")
         # the Custom Edition maps' torrents, likewise (maps.torrent_index)
         shutil.copy2(ROOT / "port/assets/network/map_torrents.txt", dist / "map_torrents.txt")
+        # the master servers that list dedicated servers, for the server
+        # browser and the dedicated server (network.masters_file and
+        # server.masters_file, docs/dedicated_server.md)
+        masters = ROOT / "port/assets/network/masters.txt"
+        if masters.exists():
+            shutil.copy2(masters, dist / "masters.txt")
+    if args.platform in ("linux", "linux64", "windows", "windows64"):
+        # OpenCE's dedicated server's examples (halo --server: init.txt's
+        # commands and gametype files, docs/dedicated_server.md, "Files");
+        # ChupathingyCE's server, the fork's servers' own, has its
+        # downloads of its own (server_dist)
+        shutil.copy2(ROOT / "deploy/init.txt.example", dist / "init.txt.example")
+        shutil.copytree(ROOT / "deploy/gametypes", dist / "gametypes")
+    if args.platform in ("linux", "linux64"):
+        # halo --server's script, and the ways to deploy a server
+        # (deploy/: systemd, Docker, Pterodactyl, Kubernetes, other panels)
+        shutil.copy2(ROOT / "deploy/halo-server", dist / "halo-server")
+        shutil.copytree(ROOT / "deploy", dist / "deploy", ignore=shutil.ignore_patterns("*.zip", "__pycache__"))
     return 0
 
 

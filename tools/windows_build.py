@@ -44,12 +44,13 @@ from typing import Any, Dict, List, Optional, Sequence
 
 from .version import VERSION_SOURCES, identity_defines, release_build, resource_version, version
 from .linux_build import (CUSTOM_EDITION_DEFINES, LINUX_PROFILE, MBEDTLS_DIR, MINIUPNPC_DIR, OPTIMISATION, STB_DIR, WINDOWS_PROFILE,
-                          XDK_INCLUDE, configuration_defines, ffmpeg_build, game_browser_defines, lto_mode, march_flag, miniupnpc_sources,
+                          XDK_INCLUDE, build_info_defines, configuration_defines, ffmpeg_build, game_browser_defines, lto_mode,
+                          march_flag, miniupnpc_sources,
                           pgo_mode, compile_launcher, game_defines_and_includes,
                           game_sources, musl_math_cflags, musl_math_sources, opus_cflags, opus_sources, pgo_profile,
                           profile_use_flags, xdk_headers)
 from .lp64_build import lp64_excluded
-from .embed_assets import hud_assets_build, hud_configure_inputs, ui_fonts_build
+from .embed_assets import hud_assets_build, hud_configure_inputs, server_ui_build, ui_fonts_build
 from .ninja_syntax import Writer
 from .server_build import (OUTPUT_NAME as SERVER_OUTPUT_NAME, SERVER_EXCLUDED, SERVER_NATIVE_SOURCES,
                            SERVER_PLATFORM_DIR, SERVER_PLATFORM_SOURCES, webui_build)
@@ -107,9 +108,8 @@ def updater_defines(release: bool) -> str:
     them, and gives the version to the rest): the version (tools/version.py),
     whether this build is a release's (only those look for updates), and its
     configuration; and the channel and commit (build_identity.c)"""
-    flavor = "release" if release else "debug"
     defines = (f'-DHALO_VERSION=\\"{version()}\\" -DHALO_RELEASE_BUILD={int(release_build())} '
-            f'-DHALO_BUILD_FLAVOR=\\"{flavor}\\" {identity_defines()}')
+               f'{build_info_defines(release)} {identity_defines()}')
     # (HALO_UPDATE_REPOSITORY: the GitHub repository whose releases it
     # updates from, owner/name; tools/ci_build.py gives the one it is built in)
     repository = os.environ.get("HALO_UPDATE_REPOSITORY", "")
@@ -541,6 +541,9 @@ def generate_windows_target(n: Writer, sln: Any, target: WindowsTarget, server: 
     # the high-res HUD's textures (port/assets/hud; port/linux/src/hud_hires.c)
     embedded_assets = (hud_assets_build(n, prefix, build / "generated" / "hud_hires_assets.c")
                        + ui_fonts_build(n, prefix, build / "generated" / "ui_fonts.c", sln))
+    # OpenCE's dedicated server's admin page (port/assets/server_ui;
+    # port/linux/src/server_http.c), in each target that has its server_*.c
+    embedded_assets += server_ui_build(n, prefix, build / "generated" / "server_ui_assets.c")
 
     # (the game browser, the game list and dedicated servers, as every
     # desktop build has them: HALO_GAME_BROWSER, configure.py; a debug build
@@ -619,7 +622,12 @@ def generate_windows_target(n: Writer, sln: Any, target: WindowsTarget, server: 
             f"-I{XDK_INCLUDE}",
         ])
         for source in game_sources(linux_config):
-            if source.as_posix() not in excluded:
+            if source.as_posix() in excluded:
+                continue
+            if source.as_posix() == "source/main/main.c":
+                # (the build's information, main_build_identity)
+                add_object(source, f"{game_cflags} {build_info_defines(getattr(sln, 'port_release', False))}")
+            else:
                 add_object(source, game_cflags)
         for source in sorted(Path(linux_config["game_sources"]).glob("*.c")):
             add_object(source, game_cflags)
@@ -666,7 +674,8 @@ def generate_windows_target(n: Writer, sln: Any, target: WindowsTarget, server: 
                 # (internet play's DTLS with browsers: Mbed TLS sees the
                 # Windows SDK, as the win32_*.c do)
                 add_object(source, f"{win32_cflags} {mbedtls_include}")
-            elif source.name in VERSION_SOURCES:
+            elif source.name in (*VERSION_SOURCES, "server_mode.c"):
+                # (server_mode.c: OpenCE's halo --server, its build's information)
                 add_object(source, f"{platform_cflags} {updater_defines(getattr(sln, 'port_release', False))}")
             elif source.name == "posix_browser.c":
                 # (the game list's requests: on Winsock, with Mbed TLS, as
@@ -808,7 +817,11 @@ def generate_windows_target(n: Writer, sln: Any, target: WindowsTarget, server: 
     # the Custom Edition maps' torrents, a file beside the game (maps.torrent_index)
     map_torrents = build / "map_torrents.txt"
     n.build(outputs=map_torrents, rule=f"{prefix}_copy", inputs=Path("port/assets/network/map_torrents.txt"))
-    n.build(outputs=prefix, rule="phony", inputs=[output, sdl_dll, brokers, map_torrents])
+    # the master servers of dedicated servers, a file beside the game too
+    # (network.masters_file, server.masters_file)
+    masters = build / "masters.txt"
+    n.build(outputs=masters, rule=f"{prefix}_copy", inputs=Path("port/assets/network/masters.txt"))
+    n.build(outputs=prefix, rule="phony", inputs=[output, sdl_dll, brokers, map_torrents, masters])
     if server:
         # the playlists the Linux server's download has (server/playlists)
         playlists = []

@@ -4261,6 +4261,8 @@ static boolean player_profile_initialize_controller_settings(
 			break;
 		case _button_preset_bumper_jumper:
 		case _button_preset_custom:
+		case _button_preset_fishsticks:
+		case _button_preset_recon:
 			/* (the Xbox's own list has the five layouts of its map: these are
 			shown in the PC and Chupathingy menus, and here as the default) */
 			option_spinner->parameters.list.selected_index =
@@ -4920,6 +4922,9 @@ static boolean player_profile_change_controller_settings(
 		case _button_preset_swap_b_and_right_thumb: profile->controller_settings.button_preset = _button_preset_swap_b_and_right_thumb; return TRUE;
 		case _button_preset_bumper_jumper: profile->controller_settings.button_preset = _button_preset_bumper_jumper; return TRUE;
 		case _button_preset_custom: profile->controller_settings.button_preset = _button_preset_custom; return TRUE;
+		/* port: OpenCE's Fishsticks and Recon, on a list that has them */
+		case _button_preset_fishsticks: profile->controller_settings.button_preset = _button_preset_fishsticks; return TRUE;
+		case _button_preset_recon: profile->controller_settings.button_preset = _button_preset_recon; return TRUE;
 		default: error(2, "unknown button config option selected"); return TRUE;
 		}
 	}

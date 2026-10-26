@@ -12,3 +12,5 @@ server/deploy/halo-recordings-offload text eol=lf
 server/deploy/halo-recordings-receive text eol=lf
 # (the servers' deploy scripts run on Linux: LF, whatever the checkout)
 server/deploy/* text eol=lf
+# (OpenCE's dedicated server's own deploy script, run on Linux)
+deploy/halo-server text eol=lf
