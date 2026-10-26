@@ -36,7 +36,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
 
-from .embed_assets import hud_assets_build, hud_configure_inputs, server_ui_build, ui_fonts_build
+from .embed_assets import hud_assets_build, hud_configure_inputs, ui_fonts_build
 from .embed_webui import webui_inputs
 from .linux64_build import LINUX64_GAME_FLAGS, LINUX64_POSIX_FLAGS
 from .linux_build import (
@@ -267,9 +267,7 @@ def generate_server_build(n: Writer, sln: Any) -> None:
         march = server_march(arch, sln)
         lto_cflags, lto_ldflags = lto_flags(sln, build_dir / "thinlto-cache")
         generated = (hud_assets_build(n, rule_name, build_dir / "generated" / "hud_hires_assets.c")
-                     + ui_fonts_build(n, rule_name, build_dir / "generated" / "ui_fonts.c", server_sln)
-                     # (OpenCE's halo --server admin page: server_http.c)
-                     + server_ui_build(n, rule_name, build_dir / "generated" / "server_ui_assets.c"))
+                     + ui_fonts_build(n, rule_name, build_dir / "generated" / "ui_fonts.c", server_sln))
         # (the web admin page's files: plain bytes, with the host's ABI as
         # control_web.c, which serves them)
         native_sources = SERVER_NATIVE_SOURCES + webui_build(n, rule_name, build_dir / "generated" / "webui_assets.c")

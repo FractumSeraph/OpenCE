@@ -4441,7 +4441,12 @@ void distributed_client_send_build(
 		return;
 	csmemset(&message, 0, sizeof(message));
 	main_build_identity(&number, flavor, sizeof(flavor), repository, sizeof(repository), version, sizeof(version));
+#ifdef HALO_SERVER
+	/* (port, this fork: ChupathingyCE's server build has no mods, port_mods.c) */
+	mods[0] = 0;
+#else
 	port_mods_list(mods, sizeof(mods));
+#endif
 	snprintf(message.build.number, sizeof(message.build.number), "%ld", number);
 	distributed_build_text(message.build.flavor, sizeof(message.build.flavor), flavor, FALSE);
 	distributed_build_text(message.build.repository, sizeof(message.build.repository), repository, FALSE);

@@ -12,8 +12,9 @@ Android and web builds compile the server's files to nothing
 #define __HALO_LINUX_SERVER_MODE_H
 
 /* (port, this fork: and its browser build, HALO_BROWSER, whose network is
-the page's) */
-#if defined(HALO_ANDROID) || defined(HALO_WEB) || defined(HALO_BROWSER)
+the page's, and ChupathingyCE's dedicated server, HALO_SERVER: a server of
+its own, server/src, without SDL, the updater or mods) */
+#if defined(HALO_ANDROID) || defined(HALO_WEB) || defined(HALO_BROWSER) || defined(HALO_SERVER)
 #define HALO_SERVER_BUILD 0
 #else
 #define HALO_SERVER_BUILD 1
