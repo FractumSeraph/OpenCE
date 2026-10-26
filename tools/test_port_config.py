@@ -90,6 +90,14 @@ void platform_log(const char *format, ...);
 
 STUB_POSIX = """#include <sys/stat.h>
 typedef unsigned long posix_ulong;
+/* (OpenCE's command line, read by port_config.c: none here) */
+__attribute__((unused)) static int posix_command_line_argument(int index, char *buffer, posix_ulong size)
+{
+	(void)index;
+	(void)buffer;
+	(void)size;
+	return 0;
+}
 struct posix_file_information
 {
 	posix_ulong flags, size_low, size_high, modification_seconds, modification_nanoseconds,
@@ -136,6 +144,9 @@ def build(cc, kind, directory):
 	shutil.copy(ROOT / "port/linux/include/halo_console_features.h", source)
 	(source / "platform.h").write_text(STUB_PLATFORM)
 	(source / "posix.h").write_text(STUB_POSIX)
+	# (OpenCE's command line, --server: a key file's permissions, which no test here writes)
+	(source / "posix_server.h").write_text(
+		"static int posix_server_private_file(const char *path) { (void)path; return 1; }\n")
 	(source / "SDL3/SDL.h").write_text(STUB_SDL)
 	program = directory / f"port_config_test_{kind}"
 	subprocess.run([cc, "-std=c11", "-D_DEFAULT_SOURCE", "-D_DARWIN_C_SOURCE", "-Wall", "-Werror", "-g",

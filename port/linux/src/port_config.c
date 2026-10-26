@@ -1789,8 +1789,9 @@ static int config_server_mode;
 /* a run that only answers its command line (--version...): nothing written */
 static int config_answer_only;
 /* halo --probe [<invite>]: a list site's look at a game (network_test.c's
-"probe"), headless */
-static int config_probe_mode;
+"probe"), headless (port, this fork: unused where the command line is not
+read, as on Android) */
+__attribute__((unused)) static int config_probe_mode;
 #define CONFIG_PLATFORM (CONFIG_BUILD_PLATFORM | (config_server_mode ? _platform_server : 0))
 
 struct config_value

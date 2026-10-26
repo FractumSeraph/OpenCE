@@ -20,7 +20,9 @@ static int failures;
 	do { if (!(condition)) { printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, #condition); failures++; } } while (0)
 
 /* every movable action on its own movable button, Start and Back where they are */
-static int is_layout(const unsigned char layout[CONTROLLER_ACTION_COUNT])
+/* (also: a button a preset may put an action on that no player can choose,
+-1 for none: OpenCE's Fishsticks' grenade switch on the pad's left) */
+static int is_preset_layout(const unsigned char layout[CONTROLLER_ACTION_COUNT], int also)
 {
 	int action, used = 0;
 
@@ -28,12 +30,20 @@ static int is_layout(const unsigned char layout[CONTROLLER_ACTION_COUNT])
 	{
 		if (!controller_layout_movable_action(action))
 			continue;
-		if (!controller_layout_movable_button(layout[action]) || (used & (1 << layout[action])))
+		if ((!controller_layout_movable_button(layout[action]) && layout[action] != also) ||
+			(used & (1 << layout[action])))
+		{
 			return 0;
+		}
 		used |= 1 << layout[action];
 	}
 	return layout[CONTROLLER_ACTION_START] == CONTROLLER_BUTTON_START &&
 		layout[CONTROLLER_ACTION_BACK] == CONTROLLER_BUTTON_BACK;
+}
+
+static int is_layout(const unsigned char layout[CONTROLLER_ACTION_COUNT])
+{
+	return is_preset_layout(layout, -1);
 }
 
 static void test_presets(void)
@@ -48,7 +58,7 @@ static void test_presets(void)
 	for (preset = 0; preset < CONTROLLER_PRESET_COUNT; preset++)
 	{
 		controller_layout_preset(preset, "", layout);
-		CHECK(is_layout(layout));
+		CHECK(is_preset_layout(layout, preset == CONTROLLER_PRESET_FISHSTICKS ? CONTROLLER_BUTTON_DPAD_LEFT : -1));
 	}
 	/* (an unknown preset, from a newer profile, and a custom one with no
 	layout written: the default) */
