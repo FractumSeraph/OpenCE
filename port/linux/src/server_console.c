@@ -421,9 +421,13 @@ char *server_console_capture_end(void)
 
 #else
 
+/* (port, this fork: ChupathingyCE's server build has its own console,
+server/platform's server_console_start, and nothing calls this one there) */
+#ifndef HALO_SERVER
 void server_console_start(void)
 {
 }
+#endif
 
 void server_console_frame(void)
 {

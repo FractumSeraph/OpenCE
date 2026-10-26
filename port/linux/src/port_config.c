@@ -3833,6 +3833,9 @@ static void config_load(void)
 	config_path(path, sizeof(path));
 #if !defined(HALO_ANDROID) && !defined(HALO_XBOX_CONSOLE)
 	config_report_unread(path);
+	/* (port, this fork: the web build reads no command line,
+	config_argument) */
+#ifndef HALO_WEB
 	/* (a dedicated server's file has its settings too: asked for by the
 	command line or the environment, or by the file's server.enabled; a
 	probe is never one, whatever they say) */
@@ -3847,6 +3850,7 @@ static void config_load(void)
 	settings: the file read is left as it is) */
 	config_answer_only = config_argument("--help", NULL, 0) || config_argument("--version", NULL, 0) ||
 		config_argument("--keygen", NULL, 0) || config_argument("--sign", NULL, 0) || config_probe_mode;
+#endif
 #endif
 	text = config_read_file(path, &size);
 	if (text)

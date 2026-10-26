@@ -20,6 +20,14 @@ Built with the host's ABI, as the other posix_*.c.
 
 #include "update.h"
 #include "build_identity.h"
+/* port (this fork): the Android app's host (OpenCE's host_https.c compiles
+this file there for the server browser's master servers) has no game side
+to ask for build_identity_user_agent: its own agent */
+#ifdef __ANDROID__
+#define update_user_agent() "ChupathingyCE (Android)"
+#else
+#define update_user_agent() build_identity_user_agent()
+#endif
 #ifdef HALO_GAME_BROWSER
 #include "browser_http.h"
 #endif
@@ -529,14 +537,14 @@ static int https_get(const char *url, const char *form, const char *agent, struc
 		snprintf(request, sizeof(request),
 			"POST %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: %s\r\nAccept: */*\r\nConnection: close\r\n"
 			"Content-Type: application/x-www-form-urlencoded\r\nContent-Length: %lu\r\n\r\n%s",
-			path, host, agent ? agent : build_identity_user_agent(), (unsigned long)strlen(form), form);
+			path, host, agent ? agent : update_user_agent(), (unsigned long)strlen(form), form);
 	}
 	else
 	{
 		snprintf(request, sizeof(request),
 			"GET %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: %s\r\n"
 			"Accept: */*\r\nConnection: close\r\n\r\n",
-			path, host, agent ? agent : build_identity_user_agent());
+			path, host, agent ? agent : update_user_agent());
 	}
 	if (strlen(request) >= sizeof(request) - 1)
 	{
