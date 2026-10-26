@@ -374,7 +374,17 @@ static void header_value(const char *headers, const char *name, char *value, int
 	}
 }
 
-#if defined(HALO_WEB)
+#if defined(HALO_BROWSER)
+/* port (this fork): the browser build (built as the Android guest is) asks
+no master server: its page lists its own public games (web_public_games.c),
+and it has neither the app's host nor the web build's page fetch */
+static int fetch(const char *url, struct fetched *fetched)
+{
+	(void)url;
+	(void)fetched;
+	return 0;
+}
+#elif defined(HALO_WEB)
 /* the page's fetch (port/web/src/web_library.js's web_js_fetch), which this
 thread waits for: its answer in the slot. The page claims the slot for its
 answer by changing its id to -id (Atomics.compareExchange), writes it, then
