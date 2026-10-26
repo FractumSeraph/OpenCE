@@ -11,8 +11,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from harness import CHECK_FAILED, build, constant, enum_with, function, mutated, read, run, structure  # noqa: E402
 
 CASES = ["long-string", "all-escaped", "too-long", "answer-only"]
+# (port, this fork: config_write finds a commented-out line too, config_line_commented_key and
+# config_text_has_key, and config_setting_index keeps its guesses)
 NAMES = ["config_setting_index", "config_text_is_false", "config_set_from_text", "config_append", "config_copy",
-         "config_line_key", "config_line_section", "config_write"]
+         "config_line_key", "config_line_section", "config_line_commented_key", "config_text_has_key", "config_write"]
 
 # a fault in the code, the function it is in, and the case that must catch it
 NEGATIVE_CONTROLS = {
@@ -30,6 +32,8 @@ def generated(fault=None, faulty_function=None):
         enum_with(source, "_platform_desktop = 1"), structure(source, "config_setting"),
         structure(source, "config_value"), structure(source, "config_text"),
         f"#define CONFIG_MAXIMUM_WRITTEN_STRING {constant(source, 'CONFIG_MAXIMUM_WRITTEN_STRING')}",
+        enum_with(source, "CONFIG_INDEX_GUESSES = 64"),
+        "static long config_index_guesses[CONFIG_INDEX_GUESSES];",
     ]) + "\n"
     text = ""
     for name in NAMES:

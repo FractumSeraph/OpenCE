@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from harness import CHECK_FAILED, build, constant, enum_with, function, mutated, read, run  # noqa: E402
+from harness import build, CHECK_FAILED, constant, enum_with, function, mutated, port_limits, read, run  # noqa: E402
 
 CASES = ["split-words", "rest-after-words", "printable-text", "durations", "integers", "ban-fields", "find-player",
          "player-matches", "ban-limits"]
@@ -68,7 +68,8 @@ NEGATIVE_CONTROLS = {
 def generated(fault=None, faulty_function=None):
     commands = read("port/linux/game/server_commands.c")
     # (MAXIMUM_SLOTS is halo_port_limits.h's player count, which constant() does not follow into)
-    with_limits = commands + read("port/linux/include/halo_port_limits.h")
+    # (port, this fork: the desktop's limits, port_limits(), past the consoles' that come first there)
+    with_limits = commands + port_limits()
     config = f"#define MAXIMUM_WORDS {constant(commands, 'MAXIMUM_WORDS')}\n"
     config += f"#define MAXIMUM_SLOTS {constant(with_limits, 'MAXIMUM_SLOTS')}\n"
     # (a product of numbers, which constant() does not take whole)

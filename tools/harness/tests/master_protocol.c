@@ -39,6 +39,13 @@ answers, and its answer to a master's probe and the probes' limits
 #undef WIPE_BUFFER
 #undef MIN
 
+/* (port, this fork: its p2p_crypto.c logs a password key it has no memory
+for; nothing to log here) */
+void platform_log(const char *format, ...)
+{
+	(void)format;
+}
+
 #include "p2p_crypto.inc"
 #include "server_json.inc"
 

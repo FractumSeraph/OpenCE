@@ -187,7 +187,11 @@ def rewritten_inputs(extra_roots: Sequence[Path] = ()) -> List[Path]:
     files = []
     for root in roots:
         for path in sorted(root.rglob("*")):
-            if path.is_file() and path.suffix.lower() in (".c", ".h", ".inl", ".inc") and not path.name.startswith("posix_"):
+            # (port, this fork: OpenCE's posix_server.h is the game's side of
+            # posix_server.c, integers and strings only, as posix.h, which
+            # its server's game units include)
+            if path.is_file() and path.suffix.lower() in (".c", ".h", ".inl", ".inc") and \
+                    (not path.name.startswith("posix_") or path.name == "posix_server.h"):
                 files.append(path)
     return files
 

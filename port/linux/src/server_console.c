@@ -469,10 +469,14 @@ int server_role_named(const char *name)
 	return _server_role_none;
 }
 
+/* (port, this fork: ChupathingyCE's server build has its own,
+server/platform/server_roles.c) */
+#ifndef HALO_SERVER
 const char *server_role_name(int role)
 {
 	(void)role;
 	return "none";
 }
+#endif
 
 #endif

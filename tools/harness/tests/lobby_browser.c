@@ -168,7 +168,9 @@ int main(int argc, char **argv)
 		CHECK(games[0].engine_type == 1 && games[count - 1].engine_type == 3, "by type");
 	} else CASE("other_version") {
 		add("Golf newer", "bloodgulch", 1, 15, 16, 1, 0);
-		games[count - 1].network_version = HALO_PORT_NETWORK_VERSION + 1;
+		/* (port, this fork: past the versions it joins, which reach one past
+		its own) */
+		games[count - 1].network_version = HALO_PORT_NETWORK_VERSION_MAXIMUM + 1;
 		shown = p2p_lobby_filter(games, count, &choices, NULL);
 		CHECK(shown == 6 && has(shown, "Golf newer"), "kept: shown greyed");
 		p2p_lobby_sort(games, shown, P2P_LOBBY_SORT_SERVERS, 0);

@@ -3834,10 +3834,12 @@ boolean server_ok_to_countdown(
 	/* port: a dedicated server's lobby, whose own machine has no player:
 	its director's rules, server.min_players and server.team_start
 	(port/linux/game/server_director.c), in place of the players' and teams'
-	(port, this fork: the Bomb handshakes and the map's players still hold it) */
+	(port, this fork: the Bomb handshakes still hold it; a player with the map
+	is the director's own rule, as a machine has players only once it has the
+	map, and its minimum is at least one) */
 	if (halo_server_mode())
 	{
-		ok = enough_machines && bomb_ready && map_ready &&
+		ok = enough_machines && bomb_ready &&
 			server_director_ok_to_countdown(server->game.player_count, server_needs_more_teams(server));
 	}
 

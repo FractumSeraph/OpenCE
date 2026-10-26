@@ -217,16 +217,19 @@ def test_policy_setting_is_documented():
 def test_the_version_and_the_wire():
     limits = (ROOT / "port/linux/include/halo_port_limits.h").read_text(encoding="utf-8")
     delta = (ROOT / "port/linux/include/delta.h").read_text(encoding="utf-8")
-    # (port, this fork: its hosts announce 38, OpenCE's newest, and speak
-    # ChupathingyCE's wire of 0.8.0g on, chupa-38a, which its clients of
-    # 0.8.0e and 0.8.0f, chupa-32a, join by its range: tools/test_delta_compat.py)
-    assert "#define HALO_PORT_NETWORK_VERSION 38\n" in limits
+    # (port, this fork: its hosts announce 39, OpenCE's newest, played by
+    # 38's rules (39 changed nothing a game sends), and speak ChupathingyCE's
+    # wire of 0.8.0g on, chupa-38a, which its clients of 0.8.0e and 0.8.0f,
+    # chupa-32a, join by its range: tools/test_delta_compat.py)
+    assert "#define HALO_PORT_NETWORK_VERSION 39\n" in limits
     assert '#define DELTA_WIRE "chupa-38a"' in delta
     assert 'X("chupa-36a"' not in delta and "DELTA_WIRE_HOST_OLDEST" not in delta
     assert "#define DELTA_LEGACY_NEWEST 38\n" in delta
     for number in (30, 31, 32, 33, 34, 35, 36, 37, 38):
         assert re.search(rf'X\({number}, "build-\d+", additive\)', delta)
-    assert "#define HALO_PORT_NETWORK_VERSION_MAXIMUM 39\n" in limits
+    assert "#define HALO_PORT_NETWORK_VERSION_MAXIMUM 40\n" in limits
+    # (no row of 39: a row would be a new wire, docs/delta.md)
+    assert not re.search(r'X\(39, "build-', delta)
 
 
 def test_game_kind_leaves_the_delta_major():
@@ -238,7 +241,28 @@ def test_game_kind_leaves_the_delta_major():
     write = handler.index("advertisement.reserved[HALO_PORT_ADVERTISED_KIND_OFFSET] = game_modes_kind")
     assert "if (!delta_peer_advertised_flags())" in handler[write - 400:write]
     client = (ROOT / "source/networking/network_client_manager.c").read_text(encoding="utf-8")
-    assert '"chupa-", 6) ? 0 :' in client
+    assert '"chupa-", 6);' in client and ".kind = delta_wire ? 0 :" in client
+
+
+def test_dedicated_flag_is_not_delta_flag():
+    """port (this fork): OpenCE 39's dedicated flag is the bit Delta's
+    advertisement flag is (0x04): a client takes it for Delta only from a
+    host with a Delta wire, else for the dedicated flag, which it clears from
+    the flags it keeps (no Delta session tried with that host); a dedicated
+    host sets it and both listing bits"""
+    limits = (ROOT / "port/linux/include/halo_port_limits.h").read_text(encoding="utf-8")
+    delta = (ROOT / "port/linux/include/delta.h").read_text(encoding="utf-8")
+    assert "#define HALO_PORT_ADVERTISED_DEDICATED_FLAG 0x04" in limits and "#define DELTA_ADVERTISED_FLAG 0x04" in delta
+    client = (ROOT / "source/networking/network_client_manager.c").read_text(encoding="utf-8")
+    read = client[client.index("boolean delta_wire ="):]
+    read = read[:read.index("\n\t\t}\n")]
+    assert "if (!delta_wire &&" in read and "HALO_PORT_DEDICATED_NETWORK_VERSION" in read
+    assert ".flags &=\n\t\t\t\t\t\t(byte)~HALO_PORT_ADVERTISED_DEDICATED_FLAG" in read
+    dedicated = client[client.index("boolean network_game_client_advertised_game_dedicated("):]
+    assert ".dedicated;" in dedicated[:dedicated.index("\n}")]
+    lobby = (ROOT / "port/linux/src/p2p_lobby.c").read_text(encoding="utf-8")
+    assert "_listing_dedicated = 32," in lobby and "_listing_chupa_dedicated = 128," in lobby
+    assert lobby.count("_listing_dedicated | _listing_chupa_dedicated") >= 3
 
 
 def test_elevator_carry_of_the_tick_is_for_network_games_only():
