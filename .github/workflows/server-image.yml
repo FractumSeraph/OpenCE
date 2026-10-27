@@ -77,9 +77,13 @@ jobs:
           helm unittest deploy/helm/opence-server
 
   image:
+    # (port, this fork: OpenCE's image, made from its build-N releases and
+    # pushed to its own registry; the fork's releases are v<version>-fs.<run>
+    # and it publishes no image, so the job runs in OpenCE's repository alone)
     if: >-
+      github.repository == 'OpenCommunityEdition/OpenCE' && (
       github.event_name != 'workflow_run' ||
-      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'))
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
