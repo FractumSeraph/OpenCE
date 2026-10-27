@@ -1,24 +1,31 @@
 # Halo in the browser and on every platform (FractumSeraph's fork)
 
-**Play it now in your browser: [halo.fractumseraph.net](https://halo.fractumseraph.net/)**, or
-[download it](#download) for Windows, Mac, Linux and Android.
+**Play it now in your browser: [halo.fractumseraph.net](https://halo.fractumseraph.net/)**,
+[download it](#download) for Windows, Mac, Linux and Android, or play it on a
+**New Nintendo 3DS: [Fractum Halo 3DS](https://github.com/FractumSeraph/Fractum-Halo-3DS)**.
 
 This fork combines [ChupathingyCE](https://github.com/ChupathingyCE/chupathingyce)
 and [OpenCE](https://github.com/OpenCommunityEdition/OpenCE), the ports of the
-Halo: Combat Evolved decompilation, keeps up with both, and adds its own
-features on top. This page lists them in that order: [this fork's](#what-this-fork-adds),
-then [ChupathingyCE's](#chupathingyce), then [OpenCE's](#opence).
+Halo: Combat Evolved decompilation, and keeps up with both: everything the
+official OpenCE has is here too, and the fork follows OpenCE's network
+version the day it changes, so OpenCE players join its games. What follows
+is what you get here that the official OpenCE doesn't have. Further down
+are [ChupathingyCE's](#chupathingyce) and [OpenCE's](#opence) own pages.
 
-## What this fork adds
+## What this fork has that OpenCE doesn't
 
-- **Halo in your browser.** The whole game, compiled to WebAssembly: no
-  install, on computers, phones and tablets, with touch controls, and it
-  installs as an app. Play online with other browsers and with the
-  Windows, Mac, Linux and Android builds, from the game's own menus (Create
-  Game, the Server Browser) or with an invite link; voice chat; ChupathingyCE's
-  stats on [stats.chupathingy.org](https://stats.chupathingy.org). The site's Custom
-  Edition maps download the first time they are played and stay in the
-  browser.
+- **Halo on the New Nintendo 3DS.** [Fractum Halo 3DS](https://github.com/FractumSeraph/Fractum-Halo-3DS)
+  ([download](https://github.com/FractumSeraph/Fractum-Halo-3DS/releases/latest)) is
+  Generalkidd's Halo3DS with this fork's multiplayer: System Link with the
+  PC, Mac, Linux and Android builds, internet play with their servers,
+  the Online Games list, and Custom Edition maps downloaded as a game needs
+  them (map sharing). It follows this fork's releases.
+- **Players of every version in one game.** OpenCE's builds join only hosts
+  of their own network version. This fork joins hosts of versions 11 to 40,
+  OpenCE's and ChupathingyCE's alike, and its hosts take OpenCE players of
+  the newest version (39) and ChupathingyCE players (0.8.0e and later)
+  together, each sent the game as its own version reads it
+  ([below](#cross-play-and-delta)).
 - **Every Custom Edition map, downloaded when a game needs it.** All 5,829
   maps of the HaloMaps.org and HaloNet archives are unpacked at
   [halomaps.fractumseraph.net](https://halomaps.fractumseraph.net/maps/),
@@ -27,15 +34,32 @@ then [ChupathingyCE's](#chupathingyce), then [OpenCE's](#opence).
   (map sharing, never renaming a map you have), over BitTorrent and from
   the site, checks it, and joins: nothing to find or install by hand. The
   maps page also has every `.torrent` in one download.
+- **Only approved maps shared between players.** To keep malware from
+  spreading through map sharing, a map is offered or downloaded between
+  players only if it is on the fork's approved list
+  ([docs/map_torrents.md](docs/map_torrents.md)); anything else is refused
+  with its file name and hash, to send to @FractumSeraph for approval.
+- **Halo in your browser, ready to play.** OpenCE has a web build to host
+  yourself; this one is up at
+  [halo.fractumseraph.net](https://halo.fractumseraph.net/): no install, on
+  computers, phones and tablets, with touch controls, and it installs as an
+  app. Play online with other browsers and with the Windows, Mac, Linux and
+  Android builds, from the game's own menus (Create Game, the Server
+  Browser) or with an invite link, through the fork's own lobby and gateway;
+  voice chat; ChupathingyCE's stats on
+  [stats.chupathingy.org](https://stats.chupathingy.org). Every Custom
+  Edition map above downloads the first time it is played and stays in the
+  browser.
 - **Watch games live, or again.** Servers can keep a public copy of every
   game (`network.record_public`): each player's moves, aim and kills, with
   no address or hardware id, held back 30 seconds while the game is played
   so that no one watching can help a player. Anyone watches them at
   [halo.fractumseraph.net/watch](https://halo.fractumseraph.net/watch/),
   live or once the game is over, through any player's eyes, behind them or
-  freely: the games listed with a picture of each map, newest or busiest
-  first; a results
-  card at the end to save or share; heatmaps and kill lines, everyone's or
+  freely. The games are listed by server (a tab each, pinned while you
+  scroll), with a picture of each map, and found by a player's name, map,
+  game type or day, newest, busiest or longest first; a results card at the
+  end to save or share; heatmaps and kill lines, everyone's or
   one player's; frame stepping; each game and player linked to their stats
   on stats.chupathingy.org.
 - **Tools against cheaters.** A host checks each hit and move for shots
@@ -46,6 +70,12 @@ then [ChupathingyCE's](#chupathingyce), then [OpenCE's](#opence).
   any player through their eyes, as Halo PC's SightJack did. Hosts can share
   ban lists (`network.shared_bans`): FractumSeraph's servers publish theirs,
   without IP addresses.
+- **ChupathingyCE's features.** Its stats on
+  [stats.chupathingy.org](https://stats.chupathingy.org) (a carnage report
+  for every game, medals, service records), the Bomb and Grifball game types
+  ([docs/bomb.md](docs/bomb.md)), HaloMD maps and community Xbox map packs,
+  surround sound and Audio Setup, its dedicated server with a web control
+  panel, and the rest of [its features](#chupathingyce).
 - **Invite links that last.** A host's `halo://join/` link can stay the same
   from run to run (`network.lasting_invite`), to post on a website.
 - **The game's maps at the first start.** The Windows, Mac, Linux and
@@ -59,30 +89,17 @@ then [ChupathingyCE's](#chupathingyce), then [OpenCE's](#opence).
   itself: [download page](https://halo.fractumseraph.net/assets/android/index.html).
   The Windows and Linux builds keep their saves in a folder of their own
   too (`%APPDATA%\FractumHalo`, `~/.local/share/fractum-halo`).
-- **The newest of both projects.** ChupathingyCE's features, plus OpenCE's
-  work that ChupathingyCE hasn't taken in: field of view and viewmodel
-  settings, OpenCE's touch controls (profile buttons, gyroscope aiming, aim
-  assist, opacity), the high-resolution controller buttons, a screenshot
-  key (F10), mods (folders of Halo PC tag files whose sounds, bitmaps and
-  text play over a map's on your machine, with the main menu's Mods:
-  `docs/mods.md`), the portable Linux build for SteamOS, the
-  profiling build, and its CUSTOM SINGLEPLAYER and CUSTOM MULTIPLAYER map
-  lists (Custom Edition campaign maps alone or as network co-op, a map's
-  own `.bmp` picture and `.txt` description), your own legs in first
-  person, energy shields that glow and take your armor's color, the
-  shield's flare on your arms, and native builds that play with OpenCE's
-  browser build over WebRTC.
 - **Servers of its own.** Two dedicated servers, **FractumFFA** (free for
   all Slayer on small Custom Edition maps) and **FractumKing** (free for
-  all King of the Hill, the hill moving; FractumSlayer's Team Slayer until
-  2026-10-23), which update themselves when empty and can be watched live; an
+  all King of the Hill, the hill moving), which update themselves when
+  empty and can be watched live; an
   internet-play broker (`halovps.fractumseraph.net:1883`, the first of the
   five in every build's list), the maps' BitTorrent tracker, the browser
   lobby and the gateway that lets a browser join native games.
-- **Its own releases.** Every change that builds on every platform is a
-  release of this repository, and the game updates itself from them.
-- **Host it yourself.** The browser version comes as a kit to run on your
-  own computer, a VPS or a plain web host (see [Download](#download)).
+- **Host the browser version yourself, with online play.** It comes as a
+  kit to run on your own computer, a VPS or a plain web host, with the
+  lobby and the gateway that let its players join the native builds' games
+  (see [Download](#download)).
 
 Where the two projects do the same thing two ways, the fork keeps one
 working version; nothing sent over the network differs from theirs, so
