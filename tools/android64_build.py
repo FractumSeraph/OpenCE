@@ -137,8 +137,10 @@ def generate_android64_build(n: Writer, sln: Any) -> None:
         # the app's entry point and services (port/android/native64), and the
         # OpenGL ES helpers and touch controls shared with the guest build's
         # host library
+        # (port, this fork: and OpenCE's master server requests, host_https.c,
+        # which master_list.c calls on Android, over posix_update.c's client)
         host_sources=[*sorted(NATIVE_DIR.glob("*.c")), PORT_DIR / "host" / "host_gl.c",
-                      PORT_DIR / "host" / "host_touch.c"],
+                      PORT_DIR / "host" / "host_touch.c", PORT_DIR / "host" / "host_https.c"],
         ffmpeg_cflags=ffmpeg_cflags,
     )
     generated_sources = (hud_assets_build(n, "android64", build_dir / "generated" / "hud_hires_assets.c")
