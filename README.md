@@ -12,7 +12,7 @@ version the day it changes, so OpenCE players join its games. What follows
 is what you get here that the official OpenCE doesn't have. Further down
 are [ChupathingyCE's](#chupathingyce) and [OpenCE's](#opence) own pages.
 
-## What this fork has that OpenCE doesn't
+## Additional features on this fork
 
 - **Halo on the New Nintendo 3DS.** [Fractum Halo 3DS](https://github.com/FractumSeraph/Fractum-Halo-3DS)
   ([download](https://github.com/FractumSeraph/Fractum-Halo-3DS/releases/latest)) is
