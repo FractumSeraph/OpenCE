@@ -61,6 +61,10 @@ long halo_screen_width(void);
 float halo_screen_scale(void);
 /* takes up a new width between frames (F11); returns the width */
 long halo_screen_commit(void);
+/* the title-safe frame (the HUD's) shrunk to fit inside a round display, a
+watch's (display.round_screen); left alone on others
+(port/linux/src/d3d8_gl.c) */
+void halo_screen_round_frame(short *x0, short *y0, short *x1, short *y1);
 /* the shadow maps' pixels for each of their 128 texels each way, a power of
 two (display.shadow_resolution) */
 long halo_shadow_map_scale(void);

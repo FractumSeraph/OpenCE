@@ -12,6 +12,7 @@ import android.view.Display;
 import android.view.View;
 import android.view.InputDevice;
 import android.view.KeyEvent;
+import android.view.MotionEvent;
 import android.view.ViewGroup;
 import android.view.WindowInsets;
 import android.view.WindowManager;
@@ -53,6 +54,7 @@ public class HaloActivity extends SDLActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        passOnRoundScreen();
         if (savedInstanceState != null)
             pendingLayoutExport = savedInstanceState.getString("pending-layout-export");
         if (mLayout != null) {
@@ -67,6 +69,32 @@ public class HaloActivity extends SDLActivity {
         acquireMulticastLock();
         // a new version looked for while the game starts
         Updater.start(this);
+    }
+
+    /**
+     * A round display (a watch's), which native code cannot ask about: the
+     * game (display.round_screen, port/linux/src/d3d8_gl.c) lays its HUD out
+     * inside the circle. Set before SDL starts the game's thread (once the
+     * surface is there), which reads the environment (port/android/host/
+     * host_main.c passes it to the guest); by SDL's native code, since under
+     * the x86 emulator's ARM translation that code has an environment of its
+     * own, which Android's Os.setenv does not reach.
+     */
+    private void passOnRoundScreen() {
+        try {
+            SDLActivity.nativeSetenv("HALO_DISPLAY_ROUND",
+                getResources().getConfiguration().isScreenRound() ? "1" : "0");
+        } catch (UnsatisfiedLinkError e) {
+            // (SDL's libraries did not load: SDLActivity shows why)
+        }
+    }
+
+    /** a watch's rotating bezel or crown, to the touch controls (TouchControls.rotary) */
+    @Override
+    public boolean dispatchGenericMotionEvent(MotionEvent event) {
+        if (touchControls != null && touchControls.rotary(event))
+            return true;
+        return super.dispatchGenericMotionEvent(event);
     }
 
     /** the system's file picker, for the touch layout; no storage permission */

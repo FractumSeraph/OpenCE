@@ -2389,6 +2389,14 @@ static void rasterizer_screen_width_update(
 			(short)(RASTERIZER_FRAME_BOUNDS_X0 * width / RASTERIZER_SCREEN_WIDTH);
 		rasterizer_globals.reserved04.frame_bounds.x1 =
 			(short)(width - rasterizer_globals.reserved04.frame_bounds.x0);
+		/* port: the frame inside a round display (a watch's) at its new width */
+		rasterizer_globals.reserved04.frame_bounds.y0 = RASTERIZER_FRAME_BOUNDS_Y0;
+		rasterizer_globals.reserved04.frame_bounds.y1 = RASTERIZER_FRAME_BOUNDS_Y1;
+		halo_screen_round_frame(
+			&rasterizer_globals.reserved04.frame_bounds.x0,
+			&rasterizer_globals.reserved04.frame_bounds.y0,
+			&rasterizer_globals.reserved04.frame_bounds.x1,
+			&rasterizer_globals.reserved04.frame_bounds.y1);
 		if (global_d3d_surface_render_primary)
 		{
 			DWORD size = global_d3d_surface_render_primary->Size;
@@ -2931,6 +2939,14 @@ boolean _rasterizer_initialize(
 #endif
 		rasterizer_globals.reserved04.frame_bounds.y0 = RASTERIZER_FRAME_BOUNDS_Y0;
 		rasterizer_globals.reserved04.frame_bounds.y1 = RASTERIZER_FRAME_BOUNDS_Y1;
+#ifndef HALO_XBOX_CONSOLE
+		/* port: the frame inside a round display (a watch's) */
+		halo_screen_round_frame(
+			&rasterizer_globals.reserved04.frame_bounds.x0,
+			&rasterizer_globals.reserved04.frame_bounds.y0,
+			&rasterizer_globals.reserved04.frame_bounds.x1,
+			&rasterizer_globals.reserved04.frame_bounds.y1);
+#endif
 		rasterizer_globals.fps_accumulation_frame_index = 1;
 		csmemset(&d3d_present_parameters, 0, sizeof(d3d_present_parameters));
 		d3d_present_parameters.Flags = D3DPRESENTFLAG_LOCKABLE_BACKBUFFER;
