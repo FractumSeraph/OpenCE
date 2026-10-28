@@ -885,7 +885,10 @@ void network_rules_settings_record_copy(unsigned char const *record, int options
 	unsigned char *out);
 int network_rules_host_takes_game_type(int size, int opence);
 #ifdef HALO_GAME_BROWSER
-unsigned char delta_peer_advertised_flags(void);
+int delta_peer_hosting_delta(void);
+/* (the advertisement's game engine, as delta.h's DELTA_ADVERTISED_KIND_ENGINE
+says Slayer's) */
+typedef char advertised_kind_engine_is_slayer[game_engine_slayer == 2 ? 1 : -1];
 int delta_peer_game_machine_legacy_version(int machine_index);
 #endif
 
@@ -1010,7 +1013,7 @@ static long network_game_server_settings_layout(
 		if (network_game_server_get_client_machine(server, machine, &machine_index))
 			delta_version = network_game_server_machine_delta_version(machine_index);
 #ifdef HALO_GAME_BROWSER
-		waiting = delta_peer_advertised_flags() != 0 &&
+		waiting = delta_peer_hosting_delta() &&
 			now - entry->since < NETWORK_GAME_SERVER_SETTINGS_HELLO_WAIT;
 #endif
 	}
@@ -2230,13 +2233,17 @@ static boolean network_game_server_handle_message_client_broadcast_game_search(
 			advertisement.reserved[HALO_PORT_ADVERTISED_FLAGS_OFFSET] =
 				HALO_PORT_ADVERTISED_DISTRIBUTED_FLAG;
 #ifdef HALO_GAME_BROWSER
-			/* (and Delta Peer's flag, while this host speaks it, with the
-			game wire it plays after the flags: OpenCE's machines ignore
-			both; port/linux/src/delta_peer.h) */
+			/* (and a dedicated server's flag, version 39's, which released
+			Delta clients read as Delta's; the game's kind, 0; and while this
+			host speaks Delta Peer, the Delta tag at the reserved bytes' tail,
+			which OpenCE's machines ignore, and on a dedicated server, in a
+			game that is not Slayer, the old layout for released clients:
+			port/linux/src/delta_peer.h) */
 			{ unsigned char delta_peer_advertised_flags(void);
-			  void delta_peer_advertised_wire(unsigned char *reserved, int size);
+			  void delta_peer_advertised_wire(unsigned char *reserved, int size, int engine);
 			  advertisement.reserved[HALO_PORT_ADVERTISED_FLAGS_OFFSET] |= delta_peer_advertised_flags();
-			  delta_peer_advertised_wire(advertisement.reserved, (int)sizeof(advertisement.reserved)); }
+			  delta_peer_advertised_wire(advertisement.reserved, (int)sizeof(advertisement.reserved),
+				  (int)game->variant.game_engine_index); }
 #endif
 			if (network_game_server_get_state(server, NULL) != _network_game_server_state_pregame ||
 				network_game_server_game_is_loading(server))
@@ -2245,9 +2252,9 @@ static boolean network_game_server_handle_message_client_broadcast_game_search(
 			}
 			/* port: a dedicated server, with no player of its own
 			(port/linux/game/server_director.c; port, this fork: and its own
-			dedicated server, server/src/dedicated.c). The bit is Delta's
-			DELTA_ADVERTISED_FLAG too, which a host speaking Delta sets anyway:
-			OpenCE's clients of 39 take every such host for a dedicated one */
+			dedicated server, server/src/dedicated.c, which
+			delta_peer_advertised_flags marks too). A host with a player at it
+			never sets it: Delta says itself in its tag at the tail */
 			if (halo_server_mode())
 				advertisement.reserved[HALO_PORT_ADVERTISED_FLAGS_OFFSET] |= HALO_PORT_ADVERTISED_DEDICATED_FLAG;
 #ifdef HALO_GAME_BROWSER
@@ -2256,18 +2263,16 @@ static boolean network_game_server_handle_message_client_broadcast_game_search(
 				advertisement.reserved[HALO_PORT_ADVERTISED_FLAGS_OFFSET] |= HALO_PORT_ADVERTISED_DEDICATED_FLAG; }
 #endif
 			/* (an OpenCE gametype's kind, the server browser's name for it;
-			port (this fork): not while it speaks Delta, whose major is in
-			that byte, the game wire after it, which ChupathingyCE's clients
-			join by: OpenCE's take that for a kind) */
-#ifdef HALO_GAME_BROWSER
-			{ unsigned char delta_peer_advertised_flags(void);
-			  if (!delta_peer_advertised_flags())
-#endif
-			advertisement.reserved[HALO_PORT_ADVERTISED_KIND_OFFSET] = game_modes_kind(&game->variant,
-				&game->variant_options);
-#ifdef HALO_GAME_BROWSER
+			port (this fork): not where a dedicated server wrote Delta's old
+			layout for released clients, its major in that byte and its game
+			wire after it, delta_peer_advertised_wire: OpenCE's clients read no
+			kind there, outside Slayer) */
+			if (advertisement.reserved[HALO_PORT_ADVERTISED_KIND_OFFSET + 1] != 'c' ||
+				csmemcmp(advertisement.reserved + HALO_PORT_ADVERTISED_KIND_OFFSET + 1, "chupa-", 6))
+			{
+				advertisement.reserved[HALO_PORT_ADVERTISED_KIND_OFFSET] = game_modes_kind(&game->variant,
+					&game->variant_options);
 			}
-#endif
 			/* (open to joins: not while the machines load the game, nor
 			once it is over, nor in progress when no player can join it) */
 			if (network_game_server_get_state(server, NULL) == _network_game_server_state_ingame

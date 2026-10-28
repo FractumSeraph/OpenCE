@@ -217,47 +217,46 @@ def test_policy_setting_is_documented():
 def test_the_version_and_the_wire():
     limits = (ROOT / "port/linux/include/halo_port_limits.h").read_text(encoding="utf-8")
     delta = (ROOT / "port/linux/include/delta.h").read_text(encoding="utf-8")
-    # (port, this fork: its hosts announce 39, OpenCE's newest, played by
-    # 38's rules (39 changed nothing a game sends), and speak ChupathingyCE's
-    # wire of 0.8.0g on, chupa-38a, which its clients of 0.8.0e and 0.8.0f,
-    # chupa-32a, join by its range: tools/test_delta_compat.py)
+    # (port, this fork: its hosts announce 39, OpenCE's newest, and speak
+    # ChupathingyCE's wire of 0.8.1b, chupa-39a, its row 39 too, which its
+    # clients of 0.8.0e on join by its range: tools/test_delta_compat.py)
     assert "#define HALO_PORT_NETWORK_VERSION 39\n" in limits
-    assert '#define DELTA_WIRE "chupa-38a"' in delta
+    assert '#define DELTA_WIRE "chupa-39a"' in delta
     assert 'X("chupa-36a"' not in delta and "DELTA_WIRE_HOST_OLDEST" not in delta
-    assert "#define DELTA_LEGACY_NEWEST 38\n" in delta
-    for number in (30, 31, 32, 33, 34, 35, 36, 37, 38):
+    assert "#define DELTA_LEGACY_NEWEST 39\n" in delta
+    for number in (30, 31, 32, 33, 34, 35, 36, 37, 38, 39):
         assert re.search(rf'X\({number}, "build-\d+", additive\)', delta)
     assert "#define HALO_PORT_NETWORK_VERSION_MAXIMUM 40\n" in limits
-    # (no row of 39: a row would be a new wire, docs/delta.md)
-    assert not re.search(r'X\(39, "build-', delta)
 
 
-def test_game_kind_leaves_the_delta_major():
+def test_game_kind_beside_the_delta_tag():
     """port (this fork): network version 37's game kind is the LAN
-    advertisement's fourth reserved byte, where Delta's major is: a host that
-    speaks Delta leaves it to the major (ChupathingyCE's clients join by the
-    wire after it), and a client reads no kind from such a host"""
+    advertisement's fourth reserved byte, Delta's major in its old layout: a
+    host writes the kind unless a dedicated server wrote the old layout for
+    released clients there (its wire after it), and a client reads no kind
+    from such a host"""
     handler = (ROOT / "source/networking/network_server_message_handler.c").read_text(encoding="utf-8")
     write = handler.index("advertisement.reserved[HALO_PORT_ADVERTISED_KIND_OFFSET] = game_modes_kind")
-    assert "if (!delta_peer_advertised_flags())" in handler[write - 400:write]
+    assert '"chupa-", 6))' in handler[write - 400:write]
+    assert handler.index("delta_peer_advertised_wire(advertisement.reserved") < write
     client = (ROOT / "source/networking/network_client_manager.c").read_text(encoding="utf-8")
-    assert '"chupa-", 6);' in client and ".kind = delta_wire ? 0 :" in client
+    assert '"chupa-", 6);' in client and ".kind = old_slot ? 0 :" in client
 
 
 def test_dedicated_flag_is_not_delta_flag():
-    """port (this fork): OpenCE 39's dedicated flag is the bit Delta's
-    advertisement flag is (0x04): a client takes it for Delta only from a
-    host with a Delta wire, else for the dedicated flag, which it clears from
-    the flags it keeps (no Delta session tried with that host); a dedicated
-    host sets it and both listing bits"""
+    """port (this fork): OpenCE 39's dedicated flag is the bit Delta's old
+    layout's flag is (0x04): a client takes it for the dedicated flag from a
+    host of 39 or later with the Delta tag or without the old layout's wire,
+    and leaves the reserved bytes whole for Delta's own reading
+    (delta_compat_speaks_delta); a dedicated host sets both listing bits"""
     limits = (ROOT / "port/linux/include/halo_port_limits.h").read_text(encoding="utf-8")
     delta = (ROOT / "port/linux/include/delta.h").read_text(encoding="utf-8")
     assert "#define HALO_PORT_ADVERTISED_DEDICATED_FLAG 0x04" in limits and "#define DELTA_ADVERTISED_FLAG 0x04" in delta
     client = (ROOT / "source/networking/network_client_manager.c").read_text(encoding="utf-8")
-    read = client[client.index("boolean delta_wire ="):]
-    read = read[:read.index("\n\t\t}\n")]
-    assert "if (!delta_wire &&" in read and "HALO_PORT_DEDICATED_NETWORK_VERSION" in read
-    assert ".flags &=\n\t\t\t\t\t\t(byte)~HALO_PORT_ADVERTISED_DEDICATED_FLAG" in read
+    read = client[client.index("boolean old_slot ="):]
+    read = read[:read.index("\n\t\t\t}\n")]
+    assert "HALO_PORT_DEDICATED_NETWORK_VERSION" in read and "(tagged || !old_slot)" in read
+    assert "reserved[HALO_PORT_ADVERTISED_FLAGS_OFFSET] &=" not in read
     dedicated = client[client.index("boolean network_game_client_advertised_game_dedicated("):]
     assert ".dedicated;" in dedicated[:dedicated.index("\n}")]
     lobby = (ROOT / "port/linux/src/p2p_lobby.c").read_text(encoding="utf-8")

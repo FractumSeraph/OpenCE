@@ -69,6 +69,7 @@ is fetched (its page shows the pictures itself: online_client.js).
 #include <string.h>
 
 #include "halo_map_families.h"
+#include "halo_join_reasons.h"
 #include "halo_ui_map_list.h"
 #include "halomd_map_names.h"
 
@@ -1177,6 +1178,38 @@ static void add_pc_entry(
 }
 #endif
 
+#ifdef HALO_CUSTOM_EDITION
+/* an MCC map's row (Halo: The Master Chief Collection's, cache version 13):
+listed so that a player sees why it is not played, its description the
+sentence (MAP_REASON_MCC_UNSUPPORTED) and picking it for a game is refused
+at load with the same one (cache_files_windows.c) */
+static void add_mcc_entry(
+	short family,
+	char const *file)
+{
+	wchar_t name[DISPLAY_NAME_LENGTH];
+	wchar_t display_name[DISPLAY_NAME_LENGTH];
+	wchar_t lobby_name[DISPLAY_NAME_LENGTH];
+	wchar_t description[DESCRIPTION_LENGTH];
+	char map_name[MAP_NAME_LENGTH];
+	char const *reason = MAP_REASON_MCC_UNSUPPORTED;
+	long character;
+
+	for (character = 0; file[character] && character < DISPLAY_NAME_LENGTH - 12; character++)
+		name[character] = (wchar_t)(unsigned char)file[character];
+	name[character] = 0;
+	wide_copy(lobby_name, DISPLAY_NAME_LENGTH, name);
+	wide_append(lobby_name, DISPLAY_NAME_LENGTH, L" [MCC]");
+	wide_copy(display_name, DISPLAY_NAME_LENGTH, name);
+	wide_append(display_name, DISPLAY_NAME_LENGTH, L"\r\n[MCC]");
+	for (character = 0; reason[character] && character < DESCRIPTION_LENGTH - 1; character++)
+		description[character] = (wchar_t)(unsigned char)reason[character];
+	description[character] = 0;
+	snprintf(map_name, sizeof(map_name), "%s%s", file, map_family_suffix(family));
+	add_entry(map_name, display_name, lobby_name, description, NONE, 9);
+}
+#endif
+
 /* the files found of a family's maps, while the list is filled */
 struct found_files
 {
@@ -1321,6 +1354,12 @@ void ui_map_list_refresh(
 		for (file = 0; file < found.count; file++)
 			add_pc_entry(family, found.names[file], FALSE);
 		counts[family] = found.count;
+		/* (and its MCC maps, which are only said not to work) */
+		found.count = 0;
+		map_family_list_mcc(family, file_found, &found);
+		qsort(found.names, found.count, MAP_NAME_LENGTH, (int (*)(void const *, void const *))_stricmp);
+		for (file = 0; file < found.count; file++)
+			add_mcc_entry(family, found.names[file]);
 	}
 	/* (each family's campaign maps, listed apart) */
 	for (family = _map_family_custom_edition; family <= _map_family_halo_pc; family++)

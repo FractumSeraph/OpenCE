@@ -81,6 +81,8 @@ symbols in this file:
 #include "halo_perf_log.h" /* port: console.perf_log */
 /* port/linux/game/network_distributed.c's */
 void network_distributed_tick(void);
+/* port/linux/game/determinism_check.c's */
+void determinism_check_tick_end(void);
 
 /* port: the tick loop's steps, timed in the profiling build */
 PROFILE_SECTION(game_time_network_distributed_tick_section, "network_distributed_tick")
@@ -519,6 +521,11 @@ void game_time_update(
 						the main menu's scene, which a lobby's machines do not share) */
 						if (!game_time_menu_scene())
 							profile_scope(game_time_network_distributed_tick_section, network_distributed_tick();)
+						/* debug.determinism's hashes of the tick's state
+						(port/linux/game/determinism_check.c) */
+#ifndef HALO_CONSOLE_NO_NETWORK_TEST
+						determinism_check_tick_end();
+#endif
 					}
 				}
 

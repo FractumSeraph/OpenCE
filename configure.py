@@ -106,6 +106,13 @@ parser.add_argument(
     "and links Homebrew's shaderc and SPIRV-Cross",
 )
 parser.add_argument(
+    "--packaged",
+    action="store_true",
+    help="desktop builds: a package manager's build (HALO_PACKAGED; port/linux/src/packaged_install.h): "
+    "the game never updates itself, and on Linux keeps its data and settings in ~/.local/share/chupathingyce. "
+    "A package of a release's own executable sets HALO_PACKAGED=1 or puts a file named packaged beside it instead",
+)
+parser.add_argument(
     "--lto",
     choices=["full", "thin", "off"],
     default="full",
@@ -218,6 +225,7 @@ sln = SimpleNamespace(
     web_cc=args.web_cc,
     console_limits=args.console_limits,
     window_rebase=args.window_rebase,
+    packaged=args.packaged,
     port_lto=args.lto,
     renderer=args.renderer,
     port_portable=args.portable,

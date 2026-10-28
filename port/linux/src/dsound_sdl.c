@@ -173,10 +173,12 @@ struct sdl_stream
 	LONG room, room_hf;
 	float room_rolloff_factor;
 	/* SetVelocity (units a second), and the Doppler shift the mixer is
-	ramping from (doppler_ratio); SetConeAngles (degrees),
-	SetConeOrientation and SetConeOutsideVolume (millibels): voice_cone_gain */
+	at, gliding to (doppler_glide) and the frames left to get there
+	(doppler_ratio); SetConeAngles (degrees), SetConeOrientation and
+	SetConeOutsideVolume (millibels): voice_cone_gain */
 	float velocity[3];
-	float current_doppler;
+	float current_doppler, target_doppler;
+	unsigned long doppler_frames_left;
 	DWORD cone_inside, cone_outside;
 	float cone_orientation[3];
 	LONG cone_outside_volume;
@@ -570,6 +572,40 @@ static float doppler_ratio(const struct sdl_stream *stream)
 	listener_speed = clamp_real(listener_speed, -0.9f * DOPPLER_SPEED_OF_SOUND, 0.9f * DOPPLER_SPEED_OF_SOUND);
 	ratio = (DOPPLER_SPEED_OF_SOUND + listener_speed) / (DOPPLER_SPEED_OF_SOUND - source_speed);
 	return clamp_real(ratio, 1.0f / DOPPLER_MAXIMUM, DOPPLER_MAXIMUM);
+}
+
+/* A voice's Doppler shift glides to a new one over a game tick. The game
+moves its sounds, and the listener, once a tick (30 a second): taken a mix
+(5 ms) at a time, a voice going past stepped in pitch at each tick. The
+Doppler shift at the end of a mix of frames, the shift wanted now being
+target; a voice starting over (start) takes it at once */
+#define DOPPLER_GLIDE_FRAMES (OUTPUT_RATE / 30)
+
+static float doppler_glide(float *current, float *glide_target, unsigned long *frames_left,
+	float target, unsigned long frames, BOOL start)
+{
+	if (start || *current <= 0.0f)
+	{
+		*current = *glide_target = target;
+		*frames_left = 0;
+		return target;
+	}
+	if (target != *glide_target)
+	{
+		*glide_target = target;
+		*frames_left = DOPPLER_GLIDE_FRAMES;
+	}
+	if (*frames_left > frames)
+	{
+		*current += (*glide_target - *current) * (float)frames / (float)*frames_left;
+		*frames_left -= frames;
+	}
+	else
+	{
+		*current = *glide_target;
+		*frames_left = 0;
+	}
+	return *current;
 }
 
 /* the gains of a 3D voice to the left and right, and the room rolloff's
@@ -1156,12 +1192,19 @@ static void hrtf_mix(struct sdl_stream *stream, const float *mono, float *output
 
 Each voice is resampled to the output rate by band-limited interpolation (J.
 O. Smith's): an output sample is the source frames around its moment, each
-weighted by a windowed sinc low pass centred there. The low pass keeps
-RESAMPLER_CUTOFF of the source's band (a 22 kHz voice is 0.5 dB down at 10
-kHz) and takes the images of it out (80 dB down), but for those of its last
-few hundred hertz, which lie beside them, about 20 dB down. Linear
-interpolation, which the mixer did before, left the images only 8 to 20 dB
-down, a gritty haze above 11 kHz over every 22 kHz voice. A voice
+weighted by a windowed sinc low pass centred there. The low pass is half
+down at RESAMPLER_CUTOFF of the source's band and takes the images of it
+out: linear interpolation, which the mixer did before, left them only 8 to
+20 dB down, a gritty haze above 11 kHz over every 22 kHz voice. With
+ChupathingyCE's 16 zero crossings, a 22 kHz voice (most of Halo's) kept the
+band to 9.7 kHz within 0.5 dB and was 1.4 dB down at 10 kHz, the images from
+12 kHz up 70 dB down or more, and only the top half kHz's (which the game's
+sounds hold little of) left images 11 to 11.5 kHz, 13 to 30 dB down. (At
+0.88 it had cut from 8.5 kHz, 6 dB down at 9.7 kHz: duller than the Xbox.)
+This port's longer low pass (RESAMPLER_ZERO_CROSSINGS 24, its taps summed
+four at a time: resampler_dot) is 0.5 dB down at 10 kHz and takes
+the images 80 dB down, but for those of the last few hundred hertz, which
+lie beside them, about 20 dB down. A voice
 played faster than the output rate takes its frames (a step over 1) gets the
 low pass narrowed to match, up to RESAMPLER_MAXIMUM_STRETCH times, so it
 does not alias. The frames come from the voice's packets in turn, so the low
@@ -1440,13 +1483,15 @@ static void mix_voice(struct sdl_stream *stream, float *output, float *send, uns
 	if (stream->paused || !stream->packet_count || !stream->sample_rate)
 		return;
 	base_step = (double)(stream->frequency ? stream->frequency : stream->sample_rate) / OUTPUT_RATE;
-	/* the Doppler shift, moving from the last mix's to this one's over the
-	mix, so that a voice going past glides */
-	target_doppler = doppler_ratio(stream);
-	doppler = stream->current_doppler > 0.0f ? stream->current_doppler : target_doppler;
+	/* the Doppler shift, moving from where it was to where it glides to by
+	the end of the mix (doppler_glide), so that a voice going past glides */
+	doppler = stream->current_doppler;
+	target_doppler = doppler_glide(&stream->current_doppler, &stream->target_doppler,
+		&stream->doppler_frames_left, doppler_ratio(stream), frames, !stream->gains_valid);
+	if (!stream->gains_valid || doppler <= 0.0f)
+		doppler = target_doppler;
 	step = base_step * doppler;
 	ramp_step = base_step * (target_doppler - doppler) / (double)frames;
-	stream->current_doppler = target_doppler;
 	/* the low pass narrowed for a voice taking frames faster than the output
 	rate (at the fastest it is in this mix), and the frames it reaches on
 	each side */
@@ -3193,7 +3238,7 @@ HRESULT WINAPI IDirectSound_CreateSoundStream(LPDIRECTSOUND sound, LPCDSSTREAMDE
 	/* DirectSound's defaults: no cone, facing +z */
 	stream->cone_inside = stream->cone_outside = 360;
 	stream->cone_orientation[2] = 1.0f;
-	stream->current_doppler = 1.0f;
+	stream->current_doppler = stream->target_doppler = 1.0f;
 	resampler_reset(stream);
 	mixer_lock_take();
 	stream->next = streams;

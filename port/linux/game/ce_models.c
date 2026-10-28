@@ -38,7 +38,11 @@ multipurpose map is listed (ce_models_bitmap_is_multipurpose), and the
 texture cache has the renderer sample its channels from where Halo PC keeps
 them (xbox_texture_cache.c, D3DCOMMON_PORT_PC_MULTIPURPOSE; xbox_textures.c,
 a texture swizzle). A bitmap a model shader also draws as its base or detail
-map keeps its channels, which the renderer has one order of.
+map keeps its channels, which the renderer has one order of. So does the
+multipurpose map of a model shader with MCC's flag for the Xbox's channel
+order (bit 6 of its flags, "multipurpose map uses og xbox channel order",
+which Halo PC leaves unused): tags made from the Xbox's carry it, their
+masks already where the Xbox's model shaders read them.
 */
 
 #ifdef HALO_CUSTOM_EDITION
@@ -58,9 +62,8 @@ map keeps its channels, which the renderer has one order of.
 
 enum
 {
-	/* a model's geometries and shaders, a geometry's parts */
+	/* a model's geometries, a geometry's parts */
 	MODEL_GEOMETRIES_OFFSET = 0xd0,
-	MODEL_SHADERS_OFFSET = 0xdc,
 	GEOMETRY_SIZE = 0x30,
 	GEOMETRY_PARTS_OFFSET = 0x24,
 
@@ -68,7 +71,6 @@ enum
 	CE_PART_SIZE = 0x84,
 	XBOX_PART_SIZE = 0x68,
 	PART_HEADER_SIZE = 0x44, /* flags to the blocks, the same in both */
-	CE_PART_SHADER_INDEX_OFFSET = 0x04,
 	PART_CENTROID_PRIMARY_NODE_OFFSET = 0x08,
 	PART_CENTROID_SECONDARY_NODE_OFFSET = 0x0a,
 	PART_TRIANGLE_BUFFER_OFFSET = 0x44,
@@ -92,8 +94,13 @@ enum
 	CE_SHADER_TYPE_TRANSPARENT_CHICAGO = 6,
 	CE_SHADER_TYPE_TRANSPARENT_CHICAGO_EXTENDED = 7,
 
-	/* a model shader's (rasterizer_xbox_models.c) base, multipurpose and
-	detail maps: their tag indices */
+	/* a model shader's (rasterizer_xbox_models.c) flags, and MCC's flag
+	there for a multipurpose map whose channels are the Xbox's (Halo PC
+	leaves the bit unused) */
+	MODEL_SHADER_FLAGS_OFFSET = 0x28,
+	MODEL_SHADER_XBOX_MULTIPURPOSE_FLAG = 0x40,
+	/* a model shader's base, multipurpose and detail maps: their tag
+	indices */
 	MODEL_SHADER_BASE_MAP_INDEX_OFFSET = 0xb0,
 	MODEL_SHADER_MULTIPURPOSE_MAP_INDEX_OFFSET = 0xc8,
 	MODEL_SHADER_DETAIL_MAP_INDEX_OFFSET = 0xe8,
@@ -356,16 +363,26 @@ static long ce_multipurpose_bitmaps_list(
 	return changed;
 }
 
+/* whether a model shader's multipurpose map is in the Xbox's channel order:
+MCC's flag for tags made from the Xbox's */
+static boolean ce_model_shader_multipurpose_is_xbox(
+	byte const *shader)
+{
+	return (*(unsigned short const *)(shader + MODEL_SHADER_FLAGS_OFFSET) & MODEL_SHADER_XBOX_MULTIPURPOSE_FLAG) != 0;
+}
+
 /* the multipurpose maps of the map's model shaders listed, but for those a
-model shader also draws as its base or detail map: the number listed */
+model shader also draws as its base or detail map, or as a multipurpose map
+in the Xbox's order: the number listed */
 static long ce_multipurpose_bitmaps_find(
 	void *tag_instances,
 	long tag_count)
 {
 	long pass, index;
-	long kept = 0;
+	long kept = 0, xbox_order = 0, xbox_kept = 0;
 
-	/* (the multipurpose maps, then the base and detail maps taken off) */
+	/* (the multipurpose maps in Halo PC's order, then the base and detail
+	maps and those in the Xbox's order taken off) */
 	for (pass = 0; pass < 2; pass++)
 	{
 		for (index = 0; index < tag_count; index++)
@@ -380,11 +397,23 @@ static long ce_multipurpose_bitmaps_find(
 			shader = xbox_pointer(instance->base_address);
 			if (!pass)
 			{
+				if (ce_model_shader_multipurpose_is_xbox(shader))
+				{
+					xbox_order++;
+					continue;
+				}
 				group = ce_bitmap_group(tag_instances, tag_count,
 					*(long const *)(shader + MODEL_SHADER_MULTIPURPOSE_MAP_INDEX_OFFSET));
 				if (group)
 					ce_multipurpose_bitmaps_list(group, FALSE);
 				continue;
+			}
+			if (ce_model_shader_multipurpose_is_xbox(shader))
+			{
+				group = ce_bitmap_group(tag_instances, tag_count,
+					*(long const *)(shader + MODEL_SHADER_MULTIPURPOSE_MAP_INDEX_OFFSET));
+				if (group)
+					xbox_kept += ce_multipurpose_bitmaps_list(group, TRUE);
 			}
 			group = ce_bitmap_group(tag_instances, tag_count, *(long const *)(shader + MODEL_SHADER_BASE_MAP_INDEX_OFFSET));
 			if (group)
@@ -399,6 +428,11 @@ static long ce_multipurpose_bitmaps_find(
 	{
 		error(_error_silent, "Custom Edition maps: %ld multipurpose bitmaps also drawn as base or detail maps keep "
 			"their channels", kept);
+	}
+	if (xbox_order)
+	{
+		error(_error_silent, "Custom Edition maps: %ld model shaders flagged with the Xbox's multipurpose order "
+			"(%ld of their bitmaps also drawn in Halo PC's keep the Xbox's)", xbox_order, xbox_kept);
 	}
 	return ce_multipurpose_bitmap_count;
 }
@@ -428,15 +462,12 @@ boolean ce_models_tags_loaded(
 		byte *model;
 		unsigned long geometry_count, geometries;
 		unsigned long geometry;
-		long shader_count;
 
 		if (instance->group_tag != 'mod2')
 			continue;
 		model = xbox_pointer(instance->base_address);
 		geometry_count = *(unsigned long *)(model + MODEL_GEOMETRIES_OFFSET);
 		geometries = *(unsigned long *)(model + MODEL_GEOMETRIES_OFFSET + 4);
-		/* (at least one: ce_models_check) */
-		shader_count = *(long const *)(model + MODEL_SHADERS_OFFSET);
 		for (geometry = 0; geometry < geometry_count; geometry++)
 		{
 			byte *geometry_data = (byte *)xbox_pointer(geometries) + geometry * GEOMETRY_SIZE;
@@ -468,13 +499,6 @@ boolean ce_models_tags_loaded(
 
 				csmemset(xbox_part, 0, XBOX_PART_SIZE);
 				csmemcpy(xbox_part, ce_part, PART_HEADER_SIZE);
-				/* (a shader past the model's, its last: ce_models_check) */
-				{
-					short *shader_index = (short *)(xbox_part + CE_PART_SHADER_INDEX_OFFSET);
-
-					if (*shader_index < 0 || *shader_index >= shader_count)
-						*shader_index = (short)(shader_count - 1);
-				}
 				csmemset(xbox_part + PART_BLOCKS_OFFSET, 0, PART_BLOCKS_SIZE);
 				ce_part_centroid_node(xbox_part + PART_CENTROID_PRIMARY_NODE_OFFSET, ce_part);
 				ce_part_centroid_node(xbox_part + PART_CENTROID_SECONDARY_NODE_OFFSET, ce_part);
@@ -587,6 +611,7 @@ enum
 	MODEL_MARKERS_OFFSET = 0xac,
 	MODEL_NODES_OFFSET = 0xb8,
 	MODEL_REGIONS_OFFSET = 0xc4,
+	MODEL_SHADERS_OFFSET = 0xdc,
 	MODEL_MARKER_SIZE = 0x40,
 	MODEL_MARKER_INSTANCES_OFFSET = 0x34,
 	MODEL_MARKER_INSTANCE_SIZE = 0x20,
@@ -613,6 +638,7 @@ enum
 	CE_MAXIMUM_MODEL_SHADERS = 0x7fff,
 	CE_MAXIMUM_PART_VERTICES = 0xffff,
 	CE_MAXIMUM_PART_TRIANGLES = 0xffff - 2,
+	CE_PART_SHADER_INDEX_OFFSET = 0x04,
 	CE_PART_PREVIOUS_PART_OFFSET = 0x06,
 	CE_PART_NEXT_PART_OFFSET = 0x07,
 	CE_PART_CENTROID_NODES_OFFSET = 0x08,
@@ -835,7 +861,6 @@ boolean ce_models_check(
 		char const *name;
 		byte *model, *markers, *regions, *geometries, *shaders;
 		long node_count, marker_count, region_count, geometry_count, shader_count, item;
-		long shaders_bound = 0;
 
 		if (instance->group_tag != 'mod2')
 			continue;
@@ -931,21 +956,14 @@ boolean ce_models_check(
 			for (part = 0; part < part_count; part++)
 			{
 				byte const *at = parts + part * CE_PART_SIZE;
-				short shader_index = ce_read_short(at + CE_PART_SHADER_INDEX_OFFSET);
 				signed char previous = (signed char)at[CE_PART_PREVIOUS_PART_OFFSET];
 				signed char next = (signed char)at[CE_PART_NEXT_PART_OFFSET];
 				short primary = ce_read_short(at + CE_PART_CENTROID_NODES_OFFSET);
 				short secondary = ce_read_short(at + CE_PART_CENTROID_NODES_OFFSET + 2);
 
-				/* (a part naming a shader past the model's is drawn with its
-				last, ce_models_tags_loaded: bigass_v3's oak tree has geometries
-				left from a third shader the tag no longer has, which no region
-				permutation draws, and Halo PC reads past the model's shaders
-				for them; OpenCE's loader gives them the last shader too) */
-				if (shader_count < 1)
-					return ce_refuse("model %s: a part's shader is %d, and the model has none", name, shader_index);
-				if (shader_index < 0 || shader_index >= shader_count)
-					shaders_bound++;
+				/* (a part's shader past the model's is let be: Halo PC's engine
+				read past the block, and the game does not draw such a part,
+				models.c. cmt_snow_grove_v2 has a part of shader 15 of 15) */
 				if ((previous != NONE && (previous < 0 || previous >= part_count)) ||
 					(next != NONE && (next < 0 || next >= part_count)))
 				{
@@ -961,11 +979,6 @@ boolean ce_models_check(
 				}
 			}
 		}
-		if (shaders_bound)
-		{
-			error(_error_silent, "Custom Edition maps: %ld parts of the model %s name shaders it has not got, "
-				"and are given its last", shaders_bound, name);
-		}
 	}
 	return TRUE;
 }
@@ -980,8 +993,6 @@ enum
 	ANIMATION_GRAPH_NODE_SIZE = 0x40,
 	ANIMATION_GRAPH_NODE_LINKS_OFFSET = 0x20,
 	ANIMATION_SIZE = 0xb4,
-	ANIMATION_TYPE_OFFSET = 0x20,
-	ANIMATION_TYPE_BASE = 0,
 	ANIMATION_NODE_COUNT_OFFSET = 0x2c,
 	ANIMATION_FRAME_INFO_OFFSET = 0x48,
 	ANIMATION_DEFAULT_DATA_OFFSET = 0x8c,
@@ -991,29 +1002,7 @@ enum
 	an animation's nodes in are of this many) */
 	CE_MAXIMUM_ANIMATION_NODES = 64,
 	CE_MAXIMUM_GRAPH_ANIMATIONS = 0x10000,
-	/* an object (object_definitions.h): its model and animation graph's
-	tag indices */
-	OBJECT_DEFINITION_READ_SIZE = 0x48,
-	OBJECT_MODEL_INDEX_OFFSET = 0x34,
-	OBJECT_ANIMATION_GRAPH_INDEX_OFFSET = 0x44,
-	CE_OBJECT_GROUP = 'obje',
 };
-
-/* the instance at a tag handle, if it is the handle of one of the group */
-static struct ce_tag_instance const *ce_tag_of_group(
-	void const *tag_instances,
-	long tag_count,
-	unsigned long tag_index,
-	unsigned long group_tag)
-{
-	struct ce_tag_instance const *instance;
-
-	if (tag_index == 0xffffffff || (tag_index & 0xffff) >= (unsigned long)tag_count)
-		return NULL;
-	instance = (struct ce_tag_instance const *)((byte const *)tag_instances +
-		(tag_index & 0xffff) * CE_TAG_INSTANCE_SIZE);
-	return instance->tag_index == tag_index && instance->group_tag == group_tag ? instance : NULL;
-}
 
 /* an animation graph's nodes: no more than the game poses, linked to each
 other, and a tree (from the first, by siblings and children, no node reached
@@ -1096,15 +1085,15 @@ static boolean ce_animation_graph_check(
 	return TRUE;
 }
 
-/* every animation graph of a map being checked (ce_animation_graph_check),
-and every object's against its model, whose nodes the game keeps for it (one
-without a model, one): its overlays and replacements, which the game poses
-the object's nodes with, node for node (objects.c, units.c, devices.c), of no
-more nodes than the model. A graph of more nodes is otherwise let be, as Halo
-PC's engine let it (beavercreek_rev_beta's DMR has a pistol's graph of 7
-nodes and a model of 1): its base animations pose an object only when they are of its model's
-nodes (model_animations.c), and a limp body of more is posed in a copy of the
-biped's nodes (biped_limp_noodle.c) */
+/* every animation graph of a map being checked (ce_animation_graph_check).
+An object's graph may pose more nodes than its model has, as Halo PC's
+engine let it (beavercreek_rev_beta's DMR has a pistol's graph of 7 nodes and
+a model of 1; tactics has a weapon without a model whose overlays are of 4):
+an object without a model's nodes is never posed (objects.c), a base
+animation poses an object only when it is of its model's nodes
+(model_animations.c), an overlay or replacement of more nodes is skipped
+(objects.c, units.c, devices.c), and a limp body of more is posed in a copy
+of the biped's nodes (biped_limp_noodle.c) */
 boolean ce_animations_check(
 	struct ce_image const *image,
 	void const *tag_instances,
@@ -1120,60 +1109,6 @@ boolean ce_animations_check(
 
 		if (instance->group_tag == 'antr' && !ce_animation_graph_check(image, instance, &node_count))
 			return FALSE;
-	}
-	for (index = 0; index < tag_count; index++)
-	{
-		struct ce_tag_instance const *instance = (struct ce_tag_instance const *)((byte const *)tag_instances +
-			index * CE_TAG_INSTANCE_SIZE);
-		struct ce_tag_instance const *model, *graph;
-		byte const *object, *model_data, *graph_data;
-		long model_nodes;
-
-		if (instance->group_tag != CE_OBJECT_GROUP && instance->parent_group_tags[0] != CE_OBJECT_GROUP &&
-			instance->parent_group_tags[1] != CE_OBJECT_GROUP)
-		{
-			continue;
-		}
-		object = ce_image_pointer(image, instance->base_address, OBJECT_DEFINITION_READ_SIZE);
-		if (!object)
-			return ce_refuse("object %s is not in the tags", ce_image_tag_name(image, instance));
-		model = ce_tag_of_group(tag_instances, tag_count,
-			(unsigned long)ce_read_long32(object + OBJECT_MODEL_INDEX_OFFSET), 'mod2');
-		graph = ce_tag_of_group(tag_instances, tag_count,
-			(unsigned long)ce_read_long32(object + OBJECT_ANIMATION_GRAPH_INDEX_OFFSET), 'antr');
-		if (!graph || (!model && ce_read_long32(object + OBJECT_MODEL_INDEX_OFFSET) != NONE))
-			continue;
-		/* (both checked: ce_models_check, above) */
-		model_data = model ? ce_image_pointer(image, model->base_address, MODEL_HEADER_SIZE) : NULL;
-		graph_data = ce_image_pointer(image, graph->base_address, ANIMATION_GRAPH_SIZE);
-		if ((model && !model_data) || !graph_data)
-			continue;
-		model_nodes = model_data ? ce_read_long32(model_data + MODEL_NODES_OFFSET) : 1;
-		/* (its graph's overlays and replacements: each of no more nodes than its
-		model) */
-		{
-			byte *animations;
-			long animation_count, animation;
-
-			if (!ce_image_block(image, graph_data + ANIMATION_GRAPH_ANIMATIONS_OFFSET, ANIMATION_SIZE,
-				CE_MAXIMUM_GRAPH_ANIMATIONS, ce_image_tag_name(image, graph), &animation_count, &animations))
-			{
-				return FALSE;
-			}
-			for (animation = 0; animation < animation_count; animation++)
-			{
-				byte const *at = animations + animation * ANIMATION_SIZE;
-
-				if (ce_read_short(at + ANIMATION_TYPE_OFFSET) != ANIMATION_TYPE_BASE &&
-					ce_read_short(at + ANIMATION_NODE_COUNT_OFFSET) > model_nodes)
-				{
-					return ce_refuse("object %s: an overlay or replacement of its animation graph has %d nodes, its "
-						"model %ld",
-						ce_image_tag_name(image, instance), ce_read_short(at + ANIMATION_NODE_COUNT_OFFSET),
-						model_nodes);
-				}
-			}
-		}
 	}
 	return TRUE;
 }

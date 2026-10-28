@@ -503,6 +503,28 @@ static long get_players(
 	return count;
 }
 
+long server_commands_player_rows(
+	char *names,
+	long name_size,
+	long *scores,
+	long *pings,
+	long *teams,
+	long maximum)
+{
+	static struct server_player players[HALO_PORT_MAXIMUM_NETWORK_PLAYERS];
+	long count = get_players(players, maximum < (long)NUMBEROF(players) ? maximum : (long)NUMBEROF(players));
+	long index;
+
+	for (index = 0; index < count; index++)
+	{
+		snprintf(names + index * name_size, (size_t)name_size, "%s", players[index].name);
+		scores[index] = players[index].scored ? players[index].score : 0;
+		pings[index] = players[index].ping;
+		teams[index] = players[index].team_index;
+	}
+	return count;
+}
+
 /* the player a command names: a number from sv_players, else a name (the
 whole name, in either case; else the one name beginning with it); FALSE,
 with why in the output, if none or more than one */
@@ -653,9 +675,7 @@ static boolean file_is_multiplayer_map(
 }
 
 /* whether the server has a map (as a command names it) to play: a
-multiplayer map's file, in its family's folders, and for a Custom Edition,
-HaloMD or Halo PC map, one the game's checks let through (a map refused as it
-loads would end the server's game: cache_files_ce_map_check) */
+multiplayer map's file, in its family's folders */
 boolean server_map_playable(
 	char const *map,
 	struct command_output *output)
@@ -694,15 +714,6 @@ boolean server_map_playable(
 	{
 		command_output_printf(output, "no multiplayer map %s in %s\n", map, map_family_folder(family));
 		return FALSE;
-	}
-	{
-		static char why[512];
-
-		if (cache_files_ce_map_check(map, why, sizeof(why)))
-		{
-			command_output_printf(output, "the map %s can't be played: %s\n", map, why);
-			return FALSE;
-		}
 	}
 	return TRUE;
 #else
@@ -747,9 +758,16 @@ static void print_status(
 		command_output_printf(output, ", \"playlist\": ");
 		command_output_json_string(output, status.playlist);
 		command_output_printf(output, ", \"entry\": %ld, \"entries\": %ld, \"players\": %ld, \"maximum_players\": %ld, "
-			"\"minimum_players\": %ld, \"public\": %s, \"idle_limit_minutes\": %ld, \"uptime_seconds\": %lu}",
+			"\"minimum_players\": %ld, \"public\": %s, \"idle_limit_minutes\": %ld, \"uptime_seconds\": %lu",
 			status.entry + 1, status.entry_count, players, status.maximum_players, status.minimum_players,
 			status.public_game ? "true" : "false", status.idle_limit, status.uptime_seconds);
+		/* (additive: the last entry skipped and why, or null) */
+		command_output_printf(output, ", \"skipped\": ");
+		if (status.skipped[0])
+			command_output_json_string(output, status.skipped);
+		else
+			command_output_printf(output, "null");
+		command_output_printf(output, "}");
 		return;
 	}
 	command_line_duration_text((long)status.uptime_seconds, uptime, sizeof(uptime));
@@ -769,6 +787,8 @@ static void print_status(
 		status.minimum_players);
 	command_output_printf(output, "public: %s\n", status.public_game ? "yes (in the Server Browser)" : "no");
 	command_output_printf(output, "uptime: %s\n", status.uptime_seconds < 60 ? "under a minute" : uptime);
+	if (status.skipped[0])
+		command_output_printf(output, "last skipped: %s\n", status.skipped);
 }
 
 /* ---------- the commands */
@@ -1165,6 +1185,22 @@ static boolean command_map(
 	}
 	if (!server_map_playable(line->words[1], output))
 		return FALSE;
+#ifdef HALO_CUSTOM_EDITION
+	/* (a Halo PC map the game's checks refuse, refused now with why rather
+	than skipped once the game in progress has ended for it: dedicated.c's
+	set_entry opens it, cache_files_map_can_open, as it hosts it. Checked
+	without opening it, as the map being played stays open:
+	cache_files_ce_map_check) */
+	{
+		static char why[512];
+
+		if (cache_files_ce_map_check(line->words[1], why, sizeof(why)))
+		{
+			command_output_printf(output, "the map %s can't be played: %s\n", line->words[1], why);
+			return FALSE;
+		}
+	}
+#endif
 	dedicated_server_play(line->words[1], line->words[2]);
 	error(_error_silent, "dedicated: a command plays %s on %s", line->words[2], line->words[1]);
 	command_output_printf(output, "%s on %s %s\n", line->words[2], line->words[1],
@@ -1524,7 +1560,7 @@ static boolean command_maps(
 	}
 	command_output_printf(output, "maps:");
 	for (index = 0; index < listing.count; index++)
-		command_output_printf(output, " %s", listing.names[index]);
+		command_output_printf(output, strchr(listing.names[index], ' ') ? " \"%s\"" : " %s", listing.names[index]);
 	command_output_printf(output, "%s\ngame types:", listing.count ? "" : " none");
 	for (index = 0; index < (long)NUMBEROF(server_game_types); index++)
 		command_output_printf(output, " %s", server_game_types[index]);
@@ -1884,10 +1920,12 @@ static boolean command_link_status(
 	boolean json,
 	struct command_output *output)
 {
-	char text[512];
+	char text[4096];
+	struct command_actor const *actor = server_command_running.actor;
 
 	(void)line;
-	server_link_status(json ? 1 : 0, text, sizeof(text));
+	server_link_status(json ? 1 : 0, actor && (actor->permissions & SERVER_PERMISSION_ROLES) ? 1 : 0, text,
+		sizeof(text));
 	command_output_printf(output, "%s%s", text, json ? "" : "\n");
 	return TRUE;
 }
@@ -2389,6 +2427,9 @@ void server_commands_update(
 	}
 	server_moderation_update();
 	names_update();
+#ifdef HALO_SERVER
+	server_gamespy_update();
+#endif
 #ifdef HALO_SERVER
 	/* the console's and the control API's, as they came */
 	for (;;)

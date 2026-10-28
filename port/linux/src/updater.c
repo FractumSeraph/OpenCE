@@ -34,6 +34,12 @@ server_director.c) looks and installs by the same path, without a window
 and without starting the new build (updater_server_*): the same release
 list, signatures and SHA-256 are checked, with the fork's own key.
 
+A packaged install (packaged_install.h: the AUR's chupathingy-bin, marked
+by the build, HALO_PACKAGED or a file named "packaged" beside the
+executable) is its package manager's to update: nothing is downloaded or
+asked, and a newer release only puts "update Chupathingy with your package
+manager" on the main menu's version line and in the log.
+
 The system side (the HTTPS download, the files, starting the new game) is
 update.h's: posix_update.c on Linux, win32_update.c on Windows.
 
@@ -1050,10 +1056,11 @@ static void updater_clean_up(void)
 void updater_start(void)
 {
 	char *slash;
+	int packaged = platform_packaged();
 
-	/* (the macOS application only offers the download page: no files of its
-	own to find or clean up) */
-	if (UPDATER_DOWNLOAD_PAGE_ONLY)
+	/* (the macOS application only offers the download page, and a packaged
+	install the package manager: no files of their own to find or clean up) */
+	if (UPDATER_DOWNLOAD_PAGE_ONLY || packaged)
 	{
 		/* (the check's answer is kept in the save root while it is read) */
 		snprintf(updater_directory, sizeof(updater_directory), "%s", platform_save_root());
@@ -1070,16 +1077,19 @@ void updater_start(void)
 		updater_clean_up();
 	}
 	/* (not for builds other than a release's, the player's no, or runs nobody
-	is watching, but for a test with its answer; the log says which) */
+	is watching, but for a test with its answer; the log says which. A
+	packaged install's update.auto is off, and its no is the one the file or
+	the environment gave: config_packaged_update_check) */
 	if (!(HALO_RELEASE_BUILD || UPDATER_TEST))
 	{
 		platform_log("update: not looked for: only a release's builds update themselves (this one is not "
 			"built from a release's tag)");
 		return;
 	}
-	if (!config_boolean("update.auto"))
+	if (!(packaged ? config_packaged_update_check() : config_boolean("update.auto")))
 	{
-		platform_log("update: not looked for: update.auto is false");
+		platform_log(packaged ? "update: not looked for: a packaged install, and its check is off" :
+			"update: not looked for: update.auto is false");
 		return;
 	}
 	if (!config_string("debug.update_answer")[0] && (config_boolean("debug.hidden_window") ||
@@ -1273,6 +1283,15 @@ void updater_poll(SDL_Window *window)
 	if (SDL_GetAtomicInt(&updater_state) != _updater_available)
 		return;
 	SDL_SetAtomicInt(&updater_state, _updater_handled);
+	/* (a packaged install: nothing asked or downloaded, whatever a test
+	answers) */
+	if (platform_packaged())
+	{
+		platform_log("update: %s is out (this is %s); a packaged install: update Chupathingy with your "
+			"package manager", updater_latest_version, HALO_VERSION);
+		build_identity_watermark_update(updater_latest_version, "Chupathingy with your package manager");
+		return;
+	}
 	/* (an automated test's answer: debug.update_answer) */
 	if (test_answer[0])
 	{

@@ -63,6 +63,17 @@ static int config_write_file(const char *path, const char *text)
 	return 1;
 }
 
+/* (not a packaged install: update.auto is written as any setting) */
+static int platform_packaged(void)
+{
+	return 0;
+}
+
+static void platform_log(const char *format, ...)
+{
+	(void)format;
+}
+
 #include "under_test.inc"
 
 /* the file's line for the key, NULL if none */

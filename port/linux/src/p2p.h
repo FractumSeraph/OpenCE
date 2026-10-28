@@ -45,6 +45,18 @@ void p2p_joining_host(const unsigned char *identifier);
 #endif
 #endif
 
+/* why the last invite joined has not reached its host, for a failed
+join's message: 0 it has (or none was joined); P2P_JOIN_NO_ANSWER the host
+never answered (it stopped hosting, or quit); P2P_JOIN_NO_CONNECTION it
+answered, but the tunnel could not get through (both networks' NATs too
+strict) */
+enum
+{
+	P2P_JOIN_NO_ANSWER = 1,
+	P2P_JOIN_NO_CONNECTION = 2,
+};
+int p2p_join_failure(void);
+
 /* this machine's identifier, which its XNADDR carries (6 bytes) */
 const unsigned char *p2p_identifier(void);
 /* port (this fork): whether internet play's own machinery runs (its UDP
@@ -105,6 +117,15 @@ void p2p_port_taken(int stream, unsigned short port);
 a stream's) */
 void p2p_socket_closed(int socket, unsigned short datagram_port);
 
+/* the host's reachability, in one or two short sentences for the menus
+(Server Setup, the lobby): whether the router forwards the tunnel's port
+(UPnP), whether this network's NAT lets most players in (the two STUN
+servers saw the same port), and what to forward if not. 0 (text empty)
+when internet play is off. check_network starts the STUN servers' look,
+which hosting does anyway, so the status is known before the game starts */
+int p2p_hosting_status(char *text, int size);
+void p2p_check_network(void);
+
 /* text for the clipboard (a new invite link), once; NULL if none. Called
 from the main thread, which copies it only with network.copy_to_clipboard */
 const char *p2p_take_clipboard_text(void);
@@ -140,10 +161,18 @@ player hosts (a dedicated server's follows network.text_chat) */
 int p2p_hosting_listed(void);
 /* the password of the game hosted for the internet (Server Setup's
 PASSWORD; NULL or empty: none): its listing lets only those who know it
-join from the server browser (its invite link still joins it). Setting or
-changing it makes a new invite, if the old one was listed. It takes a few
-milliseconds (the password's key) */
+join from the server browser, and its invite link is a locked one, which
+joins only with the password (p2p_locked_invite_unlock). Setting or
+changing it makes a new invite at once (the old link joins no more). It
+takes a few milliseconds (the password's keys) */
 void p2p_set_hosting_password(const char *password);
+/* a locked invite (a game with a password's link, from anywhere: the
+clipboard, a link opened, Discord) waits for its password: the menus ask
+for it (invite_prompt.c). Unlock joins the game if the password is the
+game's, else returns 0 (it takes a few milliseconds); cancel forgets it */
+int p2p_locked_invite_waiting(void);
+int p2p_locked_invite_unlock(const char *password);
+void p2p_locked_invite_cancel(void);
 /* whether a dedicated server hosts: its listing says so, for browsers that
 list dedicated servers apart (the next p2p_set_game_listing publishes it) */
 void p2p_set_hosting_dedicated(int dedicated);
@@ -217,6 +246,10 @@ struct p2p_listing
 	char region[P2P_LISTING_REGION_SIZE + 1];
 	/* the network version its host plays (another's cannot be joined) */
 	unsigned short network_version;
+	/* an OpenCE dedicated server's game, by its flags (OpenCE's 32 without
+	ChupathingyCE's 128: delta_compat_opence_server_listing): only a label in
+	the lists */
+	unsigned char opence_server;
 };
 /* joins a public game the server browser found (p2p_join_invite with its
 invite), remembering its host: nonzero if it held an invite */

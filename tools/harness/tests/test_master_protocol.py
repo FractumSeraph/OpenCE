@@ -226,7 +226,10 @@ def crypto_includes():
         "P2P_LISTING_NAME_SIZE", "P2P_LISTING_MAP_SIZE", "P2P_LISTING_GAMETYPE_SIZE", "P2P_LISTING_PUBLISHER_SIZE",
         "P2P_LISTING_REGION_SIZE"))
     internal_stub = ("#include <stdint.h>\n"
-                     f"enum {{ P2P_TOKEN_SIZE = {constant(internal, 'P2P_TOKEN_SIZE')}, {sizes} }};\n"
+                     f"enum {{ P2P_TOKEN_SIZE = {constant(internal, 'P2P_TOKEN_SIZE')}, "
+                     f"P2P_KEY_HASH_SIZE = {constant(internal, 'P2P_KEY_HASH_SIZE')}, "
+                     f"P2P_INVITE_CHECK_SIZE = {constant(internal, 'P2P_INVITE_CHECK_SIZE')}, "
+                     f"P2P_IDENTIFIER_SIZE = {constant(internal, 'P2P_IDENTIFIER_SIZE')}, {sizes} }};\n"
                      "void p2p_hex(const unsigned char *bytes, int size, char *text);\n" + section)
     posix = read("port/linux/src/posix.h")
     posix_stub = "typedef unsigned long posix_ulong;\n" + \

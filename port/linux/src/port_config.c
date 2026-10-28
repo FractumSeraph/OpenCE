@@ -28,6 +28,9 @@ it did before the console had the file.
 /* (the command line: --config, --server, --probe...) */
 #include "posix_server.h"
 #endif
+#if !defined(HALO_ANDROID) && !defined(HALO_XBOX_CONSOLE)
+#include "packaged_install.h"
+#endif
 
 #include <time.h>
 #include "tomlc17.h"
@@ -181,6 +184,15 @@ static const struct config_setting config_settings[] =
 		"640x480." },
 	{ "display.screen_width", _config_integer, "0", "HALO_SCREEN_WIDTH", _environment_value, _platform_android,
 		"The picture's width in columns: 0 matches the display, 640 is 4:3." },
+#if defined(HALO_ANDROID) && !defined(HALO_SWITCH_CONSOLE)
+	/* (the Switch's own is below; port/linux/src/d3d8_gl.c) */
+	{ "display.resolution_limit", _config_string, "\"480\"", "HALO_RESOLUTION_LIMIT", _environment_value,
+		_platform_android,
+		"The lines the game draws at: \"480\" (the game's own), \"720\", \"900\",\n"
+		"\"1080\" (or any number between) or \"native\" (the display's), no more\n"
+		"than the display has, which the picture is scaled up to. More is sharper\n"
+		"and uses more battery. Changes at once." },
+#endif
 	{ "display.texture_decode", _config_string, "\"auto\"", "HALO_TEXTURE_DECODE", _environment_value,
 		_platform_android,
 		"Where compressed textures are unpacked: \"gpu\", \"cpu\" (more memory) or\n"
@@ -899,6 +911,10 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"from). A downloaded map is checked (against the index's info hash, or\n"
 		"its size, CRC-32, header, name and the host's version) before it goes\n"
 		"in maps_ce." },
+	{ "network.playlist_downloads", _config_string, "\"ask\"", "HALO_NET_PLAYLIST_DOWNLOADS", _environment_value,
+		_platform_all,
+		"Offer a playlist's missing maps from its verified map set when you join\n"
+		"one of its games: \"ask\", \"always\" or \"never\"." },
 	{ "network.tunnel_port", _config_integer, "0", "HALO_NET_TUNNEL_PORT", _environment_value, _platform_all | _platform_xbox,
 		"The UDP port for internet play; 0 picks one." },
 	{ "network.client_timeout_seconds", _config_integer, "15", "HALO_NET_CLIENT_TIMEOUT_SECONDS", _environment_value,
@@ -1471,6 +1487,12 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"Every this many seconds a test player changes teams; 0 never." },
 	{ "debug.network_test_pause", _config_real, "0.0", "HALO_NETWORK_TEST_PAUSE", _environment_value, _platform_all,
 		"Seconds into a test game to open the pause menu; 0 never." },
+	{ "debug.network_test_moderate", _config_string, "\"\"", "HALO_NETWORK_TEST_MODERATE", _environment_value,
+		_platform_all,
+		"A test host's Moderation action on its first other player (\"Kick\", \"Ban forever\"); empty for none." },
+	{ "debug.network_test_moderate_time", _config_real, "20.0", "HALO_NETWORK_TEST_MODERATE_TIME", _environment_value,
+		_platform_all,
+		"Seconds into a test game that the host's Moderation action is taken." },
 	{ "debug.network_test_local_players", _config_integer, "1", "HALO_NETWORK_TEST_LOCAL_PLAYERS", _environment_value,
 		_platform_all,
 		"A test machine's players, 1 to 4." },
@@ -1555,6 +1577,15 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		_platform_all,
 		"The network test's host lists its game in the server browser, as Create\n"
 		"Game > Internet's PUBLIC does (debug.network_test \"browse\" joins it)." },
+	{ "debug.network_test_password", _config_string, "\"\"", "HALO_NETWORK_TEST_PASSWORD", _environment_value,
+		_platform_all,
+		"With debug.network_test: the host's game's password (as Server Setup's\n"
+		"PASSWORD), or the password a joining machine types when its invite asks\n"
+		"for one; empty for none." },
+	{ "debug.network_test_invite_file", _config_string, "\"\"", "HALO_NETWORK_TEST_INVITE_FILE", _environment_value,
+		_platform_all,
+		"With debug.network_test's host: a file the host writes its invite link\n"
+		"to once it has one, for a joining machine's command line; empty for none." },
 	{ "debug.telnet_console", _config_boolean, "false", "HALO_TELNET_CONSOLE", _environment_set_is_true, _platform_all,
 		"A console on 127.0.0.1 (telnet_console_port), with no password." },
 	{ "debug.telnet_console_port", _config_integer, "2323", "HALO_TELNET_CONSOLE_PORT", _environment_value,
@@ -1586,6 +1617,23 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 	{ "debug.bot_trace", _config_integer, "0", "HALO_BOT_TRACE", _environment_value, _platform_all,
 		"Log each bot's state (bots.count) every this many seconds: where it is\n"
 		"and goes, its path, target and weapon; 0 never." },
+	{ "debug.determinism", _config_string, "\"\"", "HALO_DETERMINISM", _environment_value, _platform_all,
+		"The input-replay check (tools/test_determinism.py): \"record:<file>\"\n"
+		"writes each tick's player actions to the file, \"replay:<file>\" plays\n"
+		"them back in place of the controllers'; empty for none." },
+	{ "debug.determinism_hashes", _config_string, "\"\"", "HALO_DETERMINISM_HASHES", _environment_value,
+		_platform_all,
+		"With debug.determinism: a file for a line of hashes of the game's state\n"
+		"after each tick; empty for none." },
+	{ "debug.determinism_ticks", _config_integer, "0", "HALO_DETERMINISM_TICKS", _environment_value, _platform_all,
+		"With debug.determinism: quit after this many game ticks; 0 never." },
+	{ "debug.determinism_seed", _config_integer, "1", "HALO_DETERMINISM_SEED", _environment_value, _platform_all,
+		"With debug.determinism: the games' random seed (a replay takes its\n"
+		"recording's)." },
+	{ "debug.test_gamepads", _config_integer, "0", "HALO_TEST_GAMEPADS", _environment_value, _platform_desktop,
+		"Virtual gamepads (up to 4) for tests of split screen: debug.test_input's\n"
+		"\"menu:\" script presses their buttons and sticks as pad<n>:<button>, and\n"
+		"pad<n>:unplug and pad<n>:plug take one out and put it back. 0 none." },
 #ifndef HALO_CONSOLE_NO_UPDATER
 	{ "debug.update_answer", _config_string, "\"\"", "HALO_UPDATE_ANSWER", _environment_value, _platform_desktop,
 		"The answer to the update question, for tests: \"yes\", \"no\" or \"never\";\n"
@@ -1822,6 +1870,11 @@ default each had, as written */
 static int config_pending[NUMBER_OF_CONFIG_SETTINGS];
 static const char *config_pending_old[NUMBER_OF_CONFIG_SETTINGS];
 static int config_loaded = 0;
+#ifndef HALO_CONSOLE_NO_UPDATER
+/* update.auto as the file or the environment gave it, in a packaged
+install, where update.auto itself is off (config_load) */
+static int packaged_update_check = 1;
+#endif
 static pthread_mutex_t config_lock = PTHREAD_MUTEX_INITIALIZER;
 
 /* ---------- the command line */
@@ -1851,6 +1904,37 @@ static int config_argument(const char *name, char *value, size_t size)
 
 /* ---------- the file */
 
+int platform_packaged(void)
+{
+#if defined(HALO_ANDROID) || defined(HALO_XBOX_CONSOLE)
+	return 0;
+#else
+	static int packaged = -1;
+
+	if (packaged < 0)
+	{
+		char path[1100];
+		SDL_PathInfo information;
+
+		packaged = packaged_install_marked(getenv("HALO_PACKAGED"),
+			packaged_install_file_path(path, sizeof(path), SDL_GetBasePath()) &&
+			SDL_GetPathInfo(path, &information) && information.type == SDL_PATHTYPE_FILE);
+	}
+	return packaged;
+#endif
+}
+
+#if defined(__linux__) && !defined(HALO_ANDROID) && !defined(HALO_XBOX_CONSOLE)
+/* whether folder has maps/ or config.toml, in any case */
+static int folder_has_setup(const char *folder)
+{
+	char found[256];
+
+	return posix_find_entry_case_insensitive(folder, "maps", found, sizeof(found)) ||
+		posix_find_entry_case_insensitive(folder, "config.toml", found, sizeof(found));
+}
+#endif
+
 int platform_app_folder(char *path, unsigned long size)
 {
 #if defined(__APPLE__) && !defined(HALO_XBOX_CONSOLE)
@@ -1864,15 +1948,23 @@ int platform_app_folder(char *path, unsigned long size)
 	return 1;
 #elif defined(__linux__) && !defined(HALO_ANDROID) && !defined(HALO_XBOX_CONSOLE)
 	/* an AppImage (which sets APPIMAGE) runs from its own file, mounted
-	read-only: its data and settings go in the save root's usual place
-	(save_folder.c), or a test's HALO_SAVE_ROOT */
+	read-only, and a packaged install (packaged_install.h) from a folder
+	its player cannot write: their data and settings go in the save root's
+	usual place (save_folder.c), or a test's HALO_SAVE_ROOT. So do those of
+	a game in any folder it cannot write, unless the folder has its own
+	maps/ or config.toml (a setup made there by hand, kept as it is) */
 	const char *appimage = getenv("APPIMAGE");
 	const char *save_root = getenv("HALO_SAVE_ROOT");
 	const char *data_home = getenv("XDG_DATA_HOME");
 	const char *home = getenv("HOME");
+	const char *base = SDL_GetBasePath();
+	int writable = !base || !*base || access(base, W_OK) == 0;
 
-	if (!appimage || !*appimage)
+	if (!packaged_install_files_in_home(appimage && *appimage, platform_packaged(), writable,
+			writable || folder_has_setup(base)))
+	{
 		return 0;
+	}
 	if (save_root && *save_root)
 		snprintf(path, (size_t)size, "%s", save_root);
 	else if (data_home && *data_home)
@@ -3402,6 +3494,7 @@ static const struct
 	{ "network.protocol", { "auto", "opence", "delta", NULL }, NULL },
 	{ "network.map_downloads", { "ask", "always", "never", NULL }, "\"ask\"" },
 	{ "network.fair_play", { "refuse", "log", "off", NULL }, "\"refuse\"" },
+	{ "network.playlist_downloads", { "ask", "always", "never", NULL }, "\"ask\"" },
 	{ "network.join_from_clipboard", { "ask", "always", "never", NULL }, "\"never\"" },
 	{ "network.team_change", { "balanced", "allow", "off", NULL }, "\"balanced\"" },
 #ifndef HALO_CONSOLE_NO_DISCORD
@@ -4047,6 +4140,23 @@ static void config_load(void)
 		}
 	}
 #endif
+#ifndef HALO_CONSOLE_NO_UPDATER
+	/* (a packaged install's package manager updates it: update.auto is off
+	and stays off, packaged_install.h; whether the game still looks for a
+	new version to say so is the file's or the environment's choice) */
+	if (platform_packaged())
+	{
+		long update = config_setting_index("update.auto");
+
+		if (update >= 0)
+		{
+			packaged_update_check = config_values[update].boolean;
+			config_values[update].boolean = 0;
+			config_given[update] = 1;
+			platform_log("settings: a packaged install: update.auto is off (the package manager updates the game)");
+		}
+	}
+#endif
 #if !defined(HALO_ANDROID) && !defined(HALO_WEB)
 	if (config_server_mode)
 		config_apply_server_mode();
@@ -4093,7 +4203,30 @@ static const struct config_value *config_value(const char *name, enum config_typ
 	index = config_setting_index(name);
 	if (index < 0 || config_settings[index].type != type)
 	{
-		platform_log("settings: no %s setting %s", type == _config_string ? "string" : "such", name);
+		/* (said once a name: code asking every frame for a setting this build
+		doesn't have once filled the log, and the disk, with the line) */
+		static char said[32][64];
+		static long said_count;
+		long i;
+		int known = 0;
+
+		pthread_mutex_lock(&config_lock);
+		for (i = 0; i < said_count && !known; i++)
+			known = strncmp(said[i], name, sizeof(said[i]) - 1) == 0;
+		if (!known && said_count < (long)(sizeof(said) / sizeof(said[0])))
+		{
+			strncpy(said[said_count], name, sizeof(said[said_count]) - 1);
+			said_count++;
+		}
+		/* (past the first 32 names, none: a flood of different names is no
+		better than one name's) */
+		else if (!known)
+		{
+			known = 1;
+		}
+		pthread_mutex_unlock(&config_lock);
+		if (!known)
+			platform_log("settings: no %s setting %s", type == _config_string ? "string" : "such", name);
 		return &none;
 	}
 #ifdef HALO_XBOX_CONSOLE
@@ -4170,6 +4303,13 @@ int config_write(const char *name, const char *value)
 		return 0;
 	/* (the file read first, as the other settings are) */
 	config_value(name, config_settings[index].type);
+#ifndef HALO_CONSOLE_NO_UPDATER
+	if (platform_packaged() && !strcmp(name, "update.auto"))
+	{
+		platform_log("settings: update.auto stays off in a packaged install");
+		return 0;
+	}
+#endif
 	pthread_mutex_lock(&config_lock);
 	config_set_from_text(&config_values[index], config_settings[index].type, value);
 	/* (a run that only answers its command line, a probe's too, writes
@@ -4702,6 +4842,11 @@ int config_default(const char *name, char *text, size_t size)
 	if (index < 0)
 		return 0;
 	value = config_settings[index].default_value;
+#ifndef HALO_CONSOLE_NO_UPDATER
+	/* (Defaults on the settings screen: a packaged install's is off) */
+	if (platform_packaged() && !strcmp(name, "update.auto"))
+		value = "false";
+#endif
 	length = strlen(value);
 	/* (a string's without its quotes: the defaults have no escapes) */
 	if (config_settings[index].type == _config_string && length >= 2 && value[0] == '"')
@@ -4712,6 +4857,14 @@ int config_default(const char *name, char *text, size_t size)
 	snprintf(text, size, "%.*s", (int)length, value);
 	return 1;
 }
+
+#ifndef HALO_CONSOLE_NO_UPDATER
+int config_packaged_update_check(void)
+{
+	config_value("update.auto", _config_boolean);
+	return packaged_update_check;
+}
+#endif
 
 int config_boolean(const char *name)
 {

@@ -192,6 +192,7 @@ symbols in this file:
 /* port: the map families' names and files (port/linux/game/map_families.c):
 a pack's Xbox maps, <file>@<pack>, are read from maps_<pack> */
 #include "halo_map_families.h"
+#include "halo_join_reasons.h"
 #include "tag_files/files.h"
 #include "tag_files/tag_files.h"
 #include "scenario/scenario_definitions.h"
@@ -524,6 +525,18 @@ static boolean ce_map_open(
 	if (!map_family_find(family, file_name, path, sizeof(path)))
 	{
 		ce_refused_text[0] = 0;
+		/* (an MCC map is in the folder: said so, once, not "damaged") */
+		if (map_family_find_mcc(family, file_name, path, sizeof(path)) && _stricmp(ce_refused_map_name, map_name))
+		{
+			error(_error_silent, "%s map %s refused: %s. %s", map_family_kind(family), map_name,
+				MAP_REASON_MCC_UNSUPPORTED, path);
+			console_warning("%s map %s: %s", map_family_kind(family), map_name, MAP_REASON_MCC_UNSUPPORTED);
+			snprintf(ce_refused_map_message, sizeof(ce_refused_map_message), "%s.", MAP_REASON_MCC_UNSUPPORTED);
+			memset(ce_refused_map_name, 0, sizeof(ce_refused_map_name));
+			strncpy(ce_refused_map_name, map_name, sizeof(ce_refused_map_name) - 1);
+			ce_refused_map_size = 0;
+			ce_refused_map_checksum = 0;
+		}
 		return FALSE;
 	}
 	file = CreateFileA(path, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, NULL);
@@ -613,11 +626,13 @@ boolean cache_files_ce_map_refused(
 
 /* port: whether the map named, a Halo PC map that is here, would be refused
 as it loads (ce_map_open's checks), without opening it in the slot (the map
-open there, maybe being played, stays): why in text (size bytes). A dedicated
-server checks a map a command or playlist names so before it hosts it
-(server/src/server_commands.c: server_map_playable), as a map refused while
-it loads ends the server's game. The last few verdicts are kept, by the
-file's size and header checksum */
+open there, maybe being played, stays): why in text (size bytes). A
+dedicated server checks a map a command names so while a game may be in
+progress (server/src/server_commands.c's sv_map, OpenCE's halo --server's
+rotation and sv_map: server_director.c), as a map refused while it loads
+ends the server's game; a playlist's entry is opened as it is hosted
+instead (cache_files_map_can_open, below). The last few verdicts are kept,
+by the file's size and header checksum */
 boolean cache_files_ce_map_check(
 	char const *map_name,
 	char *text,
@@ -736,6 +751,18 @@ HANDLE cache_files_ce_map_file(
 	void)
 {
 	return ce_map_file.file && ce_map_file.file != INVALID_HANDLE_VALUE ? ce_map_file.file : NULL;
+}
+
+/* port: whether a Custom Edition, HaloMD or Halo PC map (<name>@ce, ...) is
+there and not refused, opened as loading it would (ce_map_open); TRUE for
+any other map. The dedicated server asks before it plays one: a map refused
+as it loads stops on the damaged disc error (server/src/dedicated.c) */
+boolean cache_files_map_can_open(
+	const char *map_name)
+{
+	char const *name = tag_name_strip_path(map_name);
+
+	return !ce_map_name_is(name) || ce_map_open(name);
 }
 #endif
 

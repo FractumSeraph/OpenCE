@@ -101,8 +101,9 @@ their handlers open opens.
 #include "../src/p2p.h"
 #include "../src/controller_layout.h"
 #include "networking/network_connection.h"
-#ifdef HALO_GAME_BROWSER
+/* (the game list's filter and the campaign levels: every build) */
 #include "../src/browser.h"
+#ifdef HALO_GAME_BROWSER
 #include "halo_port_limits.h"
 #endif
 /* (its games on Halo PC maps: server_browser.c) */
@@ -117,6 +118,7 @@ MULTIPLAYER) */
 /* (cache_files.c: a map file's header checksum, its version) */
 unsigned long cache_files_map_version(char const *map_name);
 #include "halo_server_browser.h"
+#include "halo_join_reasons.h"
 /* (the multiplayer maps past the Xbox's: ui_map_list.c) */
 #include "halo_ui_map_list.h"
 /* (the server browser's master servers, and Server Setup's publisher key) */
@@ -3932,6 +3934,9 @@ boolean network_game_client_advertised_game_in_progress(void *client, struct adv
 byte network_game_client_advertised_game_kind(void *client, struct advertised_game *game);
 boolean network_game_client_advertised_game_dedicated(void *client, struct advertised_game *game);
 void network_game_client_tell_version(unsigned int theirs, boolean distributed);
+#ifdef HALO_GAME_BROWSER
+boolean network_game_client_advertised_game_opence_server(void *client, struct advertised_game *game);
+#endif
 boolean ui_widget_port_join(struct widget_instance *widget, void *advertised_game, char const *lobby_name,
 	boolean *widget_deleted);
 boolean ui_widget_port_multiplayer_player(short controller_index, long profile_index);
@@ -3963,6 +3968,8 @@ void game_engine_end_game(void);
 int p2p_join_invite(char const *text);
 int p2p_join_listing(struct p2p_listing const *listing);
 int p2p_invite_link(char *link, int size);
+int p2p_hosting_status(char *text, int size);
+void p2p_check_network(void);
 void p2p_set_hosting_allowed(int allowed);
 int p2p_peer_address(unsigned char const *identifier, unsigned long *address);
 int platform_clipboard_get(char *text, int size);
@@ -5039,7 +5046,7 @@ static void browser_games_read(void)
 
 			if (network_game_client_advertised_game_is_valid(game) && !advertised_in_progress(game) == (pass == 0) &&
 				game_from_peer(game) == (multiplayer.mode == _multiplayer_mode_direct_link) &&
-				(game_from_peer(game) || !browser_map_is_campaign(game->map_name)))
+				(game_from_peer(game) || browser_list_filter_allows(game->map_name)))
 			{
 				multiplayer.games[multiplayer.game_count++] = game;
 			}
@@ -5199,6 +5206,9 @@ static boolean browser_initialize(struct widget_instance *screen, struct event_r
 		setting_load(named(screen, "browser_mode_spinner", 0));
 	visible_set(named(screen, "button_clipboard", 0), multiplayer.mode == _multiplayer_mode_direct_link);
 	visible_set(named(screen, "join_game_button_refresh", 0), multiplayer.mode == _multiplayer_mode_server_browser);
+	/* (the filter's button, the PC version's FILTERS: all games, multiplayer or co-op, in the Server Browser and LAN) */
+	visible_set(named(screen, "join_game_button_filters", 0),
+		multiplayer.mode == _multiplayer_mode_server_browser || multiplayer.mode == _multiplayer_mode_lan);
 	{
 		struct widget_instance *list = named(screen, "join_game_items_list", 0);
 		struct widget_instance *child;
@@ -5495,6 +5505,8 @@ static struct
 	browser takes up again as it comes back */
 	struct p2p_listing password_game;
 	boolean password_joined;
+	/* since when the game list is down (0: it is not), for its note */
+	unsigned long offline_time;
 } lobby_browser;
 
 /* whether the game this machine joined last is a dedicated server's: its
@@ -5735,8 +5747,8 @@ static short lobby_browser_valid_games(struct p2p_listing *games, short count)
 		wchar_t name[P2P_LISTING_NAME_SIZE + 1];
 		short index;
 
-		/* (no co-op games in a server browser) */
-		if (browser_map_is_campaign(games[read].map))
+		/* (the filter: all games, multiplayer or co-op) */
+		if (!browser_list_filter_allows(games[read].map))
 			continue;
 		text_to_wide(games[read].name, name, NUMBEROF(name));
 		if (!player_name_clean(name, NUMBEROF(name)))
@@ -6153,12 +6165,16 @@ static void lobby_browser_listing_text(struct p2p_listing const *game, wchar_t *
 	}
 }
 
-/* ---- the server browser's second source (configure.py --game-browser):
+/* ---- the server browser's main source (configure.py --game-browser):
 the games of a game list, network.browser_url (port/linux/src/browser.c;
-stats.chupathingy.org by default), merged into the listings' as listings of
-their own. A game both lists have is shown once, as its listing (the same invite
-token). One on a Halo PC map, which its host lists as <map>@ce (Custom
-Edition) or <map>@md (HaloMD), is marked PC or MD, and joined only where it
+stats.chupathingy.org by default), merged with the listings heard on the
+brokers. A game both have is shown once, as its listing (the same invite
+token: its password's lock and sealed invite are the listing's), with what
+the list says of it (its host, Delta's joining rules, its roster); one only
+the brokers have is OpenCE's (legacy) while the list answers. While the list
+is down the listings alone are shown, and the Rules line says so
+(BROWSER_LIST_OFFLINE_NOTE). One on a Halo PC map, which its host lists as
+<map>@ce (Custom Edition) or <map>@md (HaloMD), is marked PC or MD, and joined only where it
 can be played (with the map in its family's folders: server_browser.c), as
 a listing's on one is */
 
@@ -6187,7 +6203,7 @@ static struct browser_game const *lobby_browser_listed_game(struct p2p_listing c
 
 	for (index = 0; index < lobby_browser_listed.count; index++)
 	{
-		if (lobby_browser_listed.shown[index] && lobby_browser_same_token(game->invite,
+		if (!lobby_browser_listed.games[index].direct && lobby_browser_same_token(game->invite,
 			lobby_browser_listed.games[index].invite))
 		{
 			return &lobby_browser_listed.games[index];
@@ -6222,10 +6238,10 @@ static void lobby_browser_add_listed(void)
 	if (!p2p_native_online() || !config_boolean("network.public_lobby"))
 		return;
 	lobby_browser_listed.count = (short)browser_get_games(lobby_browser_listed.games, BROWSER_MAXIMUM_GAMES);
-	/* (no co-op games in a server browser) */
+	/* (the filter: all games, multiplayer or co-op) */
 	for (index = kept = 0; index < lobby_browser_listed.count; index++)
 	{
-		if (!browser_map_is_campaign(lobby_browser_listed.games[index].map))
+		if (browser_list_filter_allows(lobby_browser_listed.games[index].map))
 			lobby_browser_listed.games[kept++] = lobby_browser_listed.games[index];
 	}
 	lobby_browser_listed.count = kept;
@@ -6236,6 +6252,9 @@ static void lobby_browser_add_listed(void)
 		short other, engine;
 
 		lobby_browser_listed.shown[index] = FALSE;
+		/* (one heard directly is a listing the browser has already) */
+		if (listed->direct)
+			continue;
 		for (other = 0; other < lobby_browser.count; other++)
 		{
 			if (lobby_browser_same_token(lobby_browser.games[other].invite, listed->invite))
@@ -6347,7 +6366,8 @@ static int lobby_browser_version_state(struct p2p_listing const *game, short *ve
 }
 
 /* the Rules line's host, when the list has it (docs/delta.md, Delta List):
-" (MAC HOST, DELTA)", " (DEDICATED, LINUX, DELTA)", " (OPENCE)"; "" if not */
+" (MAC HOST, DELTA)", " (DEDICATED, LINUX, DELTA)", " (OPENCE LEGACY, NETWORK
+32)"; a listing the list lacks while it answers is OpenCE's; "" if not known */
 static void lobby_browser_host_text(struct p2p_listing const *game, wchar_t *text, short size)
 {
 	static wchar_t const *const platforms[] = {
@@ -6359,7 +6379,23 @@ static void lobby_browser_host_text(struct p2p_listing const *game, wchar_t *tex
 
 	text[0] = 0;
 	if (!listed)
+	{
+		/* (a listing the list lacks while it answers: OpenCE's, as the site says) */
+		if (config_boolean("network.online") && config_boolean("network.public_lobby") &&
+			browser_list_status() == BROWSER_LIST_ANSWERED)
+		{
+			usnprintf(text, size - 1, L" (%sOPENCE LEGACY, NETWORK %d%s)", game->dedicated ? L"DEDICATED, " : L"",
+				game->version, game->opence_server ? L", " JOIN_WIDE(HOST_LABEL_OPENCE_SERVER) : L"");
+			text[size - 1] = 0;
+		}
+		/* (and with the list down, by its listing alone) */
+		else if (game->opence_server)
+		{
+			usnprintf(text, size - 1, L" (DEDICATED, %s)", JOIN_WIDE(HOST_LABEL_OPENCE_SERVER));
+			text[size - 1] = 0;
+		}
 		return;
+	}
 	dedicated = listed->hosting == BROWSER_HOSTING_DEDICATED || listed->hosting == BROWSER_HOSTING_OFFICIAL;
 	platform = listed->has_platform && listed->host_platform < NUMBEROF(platforms) ? platforms[listed->host_platform] : L"";
 	usnprintf(text, size - 1, L"%s%s%s%s%s%s%s",
@@ -6367,7 +6403,7 @@ static void lobby_browser_host_text(struct p2p_listing const *game, wchar_t *tex
 		dedicated && platform[0] ? L", " : L"", platform, !dedicated && platform[0] ? L" HOST" : L"",
 		(dedicated || platform[0]) && listed->protocol ? L", " : L"",
 		listed->protocol == BROWSER_PROTOCOL_DELTA ? L"DELTA" : L"",
-		listed->protocol == BROWSER_PROTOCOL_OPENCE ? L"OPENCE" : L"");
+		listed->protocol == BROWSER_PROTOCOL_OPENCE ? L"OPENCE LEGACY" : L"");
 	/* (its network version: an OpenCE host's always, a Delta host's when not this build's) */
 	if (listed->version && (listed->protocol == BROWSER_PROTOCOL_OPENCE ||
 		(listed->protocol == BROWSER_PROTOCOL_DELTA && listed->version != delta_legacy_announce())))
@@ -6376,10 +6412,18 @@ static void lobby_browser_host_text(struct p2p_listing const *game, wchar_t *tex
 
 		usnprintf(text + length, size - 1 - length, L", NETWORK %d", listed->version);
 	}
+	/* (an OpenCE dedicated server's neutral label, after its marking) */
+	if (listed->opence_server)
+	{
+		short length = (short)ustrlen(text);
+
+		usnprintf(text + length, size - 1 - length, L"%s%s", length ? L", " : L"",
+			JOIN_WIDE(HOST_LABEL_OPENCE_SERVER));
+	}
 	text[size - 1] = 0;
 	if (text[0])
 	{
-		wchar_t inner[64];
+		wchar_t inner[96];
 
 		ustrncpy(inner, text, NUMBEROF(inner) - 1);
 		inner[NUMBEROF(inner) - 1] = 0;
@@ -6387,10 +6431,35 @@ static void lobby_browser_host_text(struct p2p_listing const *game, wchar_t *tex
 		text[size - 1] = 0;
 	}
 }
+
+/* whether the game list is down (its games then those heard directly):
+its note shows a while after it goes down or the browser opens, and while
+no game is found */
+static boolean lobby_browser_list_offline(unsigned long now)
+{
+	if (!config_boolean("network.online") || !config_boolean("network.public_lobby") ||
+		browser_list_status() != BROWSER_LIST_FAILED)
+	{
+		lobby_browser.offline_time = 0;
+		return FALSE;
+	}
+	if (!lobby_browser.offline_time || lobby_browser.offline_time < lobby_browser.begin_time)
+		lobby_browser.offline_time = now ? now : 1;
+	return !lobby_browser.count || now - lobby_browser.offline_time < LOBBY_BROWSER_MESSAGE_TIME;
+}
 #else
 static void lobby_browser_add_listed(void)
 {
 }
+
+static boolean lobby_browser_list_offline(unsigned long now)
+{
+	(void)now;
+	return FALSE;
+}
+
+/* (never shown: no game list here) */
+#define BROWSER_LIST_OFFLINE_NOTE ""
 
 static void lobby_browser_roster_text(struct p2p_listing const *game, wchar_t *text, short size)
 {
@@ -6420,11 +6489,11 @@ static int lobby_browser_version_state(struct p2p_listing const *game, short *ve
 #endif
 
 /* why a game of another network version is not joined (state from
-lobby_browser_version_state), in a message's words */
+lobby_browser_version_state), as every list says it (halo_join_reasons.h) */
 static void lobby_browser_version_text(int state, short version, wchar_t *text, short size)
 {
-	usnprintf(text, size - 1, L"This game runs %s version (network %d) and can't be joined.",
-		state < 0 ? L"an older" : L"a newer", version);
+	(void)version;
+	usnprintf(text, size - 1, L"%s", state < 0 ? JOIN_WIDE(JOIN_REASON_HOST_OLDER) : JOIN_WIDE(JOIN_REASON_NEEDS_UPDATE));
 	text[size - 1] = 0;
 }
 
@@ -6477,7 +6546,7 @@ static void lobby_browser_rules_text(struct p2p_listing const *game, wchar_t *te
 	wchar_t gametype[P2P_LISTING_GAMETYPE_SIZE + 1];
 	wchar_t map[ROW_TEXT_LENGTH];
 	wchar_t score[16];
-	wchar_t host[64];
+	wchar_t host[96];
 	wchar_t mark[24];
 	wchar_t listing[TICKER_TEXT_LENGTH];
 	short score_limit = lobby_browser_score_limit(game);
@@ -6605,7 +6674,8 @@ static void lobby_browser_update(struct widget_instance *list)
 			text[ROW_TEXT_LENGTH - 1] = 0;
 		}
 		text_set(named(row, "server_item_map", 0), text);
-		text_set(named(row, "server_item_type", 0), game_kind_name(game->engine_type, game->kind, TRUE));
+		text_set(named(row, "server_item_type", 0), campaign_level_of(game->map) != NONE ? game_type_name(0) :
+			game_kind_name(game->engine_type, game->kind, TRUE));
 		usnprintf(text, ROW_TEXT_LENGTH - 1, L"%d/%d", game->player_count, game->maximum_player_count);
 		text_set(named(row, "server_item_players", 0), text);
 		/* (its status: JOINING, NEWER or OLDER, in yellow; its host's ping,
@@ -6770,7 +6840,13 @@ static void lobby_browser_update(struct widget_instance *list)
 			text_to_wide(lobby_browser.failed_name, name, NUMBEROF(name));
 			usnprintf(text, NUMBEROF(text) - 1, L"%s: ", name);
 			text_append_word(text, NUMBEROF(text), lobby_browser.failed_word);
+			/* (the host answered, but strict NATs kept the connection out:
+			what helps, after it) */
+			if (lobby_browser.failed_word == _browser_word_no_route && p2p_join_failure() == P2P_JOIN_NO_CONNECTION)
+				text_append(text, NUMBEROF(text), L" " JOIN_WIDE(JOIN_HINT_NO_CONNECTION));
 		}
+		else if (lobby_browser_list_offline(now))
+			usnprintf(text, NUMBEROF(text) - 1, L"%s", JOIN_WIDE(BROWSER_LIST_OFFLINE_NOTE));
 		else if (!lobby_browser.count)
 		{
 			/* (an old build sees none of the games: it says why) */
@@ -7060,7 +7136,7 @@ static boolean lobby_browser_select(struct widget_instance *widget, short contro
 	}
 	if (!game->open)
 	{
-		lobby_browser_message(L"That game is not taking players.");
+		lobby_browser_message(JOIN_WIDE(JOIN_REASON_NOT_OPEN));
 		return campaign_fail();
 	}
 	if (!lobby_browser_online())
@@ -7072,6 +7148,16 @@ static boolean lobby_browser_select(struct widget_instance *widget, short contro
 		lobby_browser.controller = controller;
 		return ui_widget_port_open(widget, PASSWORD_NAME, widget_deleted);
 	}
+#ifdef HALO_GAME_BROWSER
+	/* (a verified playlist's game: Online Games offers its map set first,
+	then joins it: browser_screen.c) */
+	{
+		boolean browser_screen_playlist_offer(char const *link);
+
+		if (browser_screen_playlist_offer(game->invite))
+			return TRUE;
+	}
+#endif
 	return lobby_browser_join(game, controller) || campaign_fail();
 }
 
@@ -7284,6 +7370,24 @@ static void browser_update(struct widget_instance *list)
 	struct widget_instance *stats = list->parameters.list.extended_description;
 	short focused = browser_row_index(list->focused_child);
 
+	{
+		wchar_t filter[32];
+		char label[32];
+
+		/* (the server browser's FILTERS opens its Filters screen: the kind
+		of game chosen elsewhere, said after it, still applies) */
+		if (multiplayer.mode == _multiplayer_mode_server_browser)
+		{
+			if (browser_list_filter() == BROWSER_LIST_FILTER_ALL)
+				snprintf(label, sizeof(label), "FILTERS");
+			else
+				snprintf(label, sizeof(label), "FILTERS (%s)", browser_list_filter_name());
+		}
+		else
+			snprintf(label, sizeof(label), "FILTER: %s", browser_list_filter_name());
+		text_to_wide(label, filter, NUMBEROF(filter));
+		text_set(named(screen_of(list), "join_game_button_filters", 0), filter);
+	}
 	if (multiplayer.mode == _multiplayer_mode_server_browser)
 	{
 		lobby_browser_update(list);
@@ -7349,7 +7453,19 @@ static void browser_update(struct widget_instance *list)
 		}
 		text[NUMBEROF(text) - 1] = 0;
 		text_set_length(named(list, "ticker_player_info", 0), text, TICKER_TEXT_LENGTH);
-		text_set_length(named(list, "ticker_rules_info", 0), L"", TICKER_TEXT_LENGTH);
+		/* (an OpenCE dedicated server's game, by its advertisement: the
+		lists' neutral label) */
+		text[0] = 0;
+#ifdef HALO_GAME_BROWSER
+		if (multiplayer.mode != _multiplayer_mode_server_browser && multiplayer.game_count &&
+			network_game_client_advertised_game_opence_server(global_network_game_client_get(),
+				multiplayer.games[multiplayer.game_chosen]))
+		{
+			usnprintf(text, NUMBEROF(text) - 1, L"%s", JOIN_WIDE(HOST_LABEL_OPENCE_SERVER));
+		}
+#endif
+		text[NUMBEROF(text) - 1] = 0;
+		text_set_length(named(list, "ticker_rules_info", 0), text, TICKER_TEXT_LENGTH);
 	}
 	if (stats)
 	{
@@ -7426,6 +7542,17 @@ static boolean browser_select(struct widget_instance *widget, struct event_recor
 		else
 			multiplayer.game_chosen = row;
 		ui_play_audio_feedback_sound(SOUND_CURSOR);
+		return TRUE;
+	}
+	/* (FILTER in LAN and the like: the kind of game listed, all,
+	multiplayer or co-op; the server browser's FILTERS opens its Filters
+	screen, lobby_browser_select) */
+	if (multiplayer.mode != _multiplayer_mode_server_browser && strstr(widget->name, "button_filters"))
+	{
+		browser_list_filter_cycle();
+		multiplayer.game_chosen = 0;
+		lobby_browser.chosen = lobby_browser.first = 0;
+		ui_play_audio_feedback_sound(SOUND_FORWARD);
 		return TRUE;
 	}
 	if (multiplayer.mode == _multiplayer_mode_server_browser)
@@ -7534,6 +7661,20 @@ static boolean coop_friendly_fire_change(void)
 static void coop_friendly_fire_text(struct widget_instance *button)
 {
 	button->parameters.text_box.string_list_index = config_boolean("network.coop_own_friendly_fire") ? 0 : 1;
+}
+
+/* "port pause moderation" (the host's pause menu's MODERATION: menu_tags.c):
+the Moderation screen over the pause menu (moderation_screen.c), its players
+to kick or ban */
+static boolean pause_moderation(void)
+{
+#ifdef HALO_GAME_BROWSER
+	extern boolean moderation_screen_open(void);
+
+	return moderation_screen_open() ? TRUE : campaign_fail();
+#else
+	return campaign_fail();
+#endif
 }
 
 /* "port pause controls" (the pause menu's CONTROLS: menu_tags.c): the
@@ -8041,6 +8182,18 @@ enum
 	_lobby_word_dedicated,
 };
 
+/* (the status, ASCII, as wide text after what text holds) */
+static void append_hosting_status(wchar_t *text, size_t count, wchar_t const *separator, char const *status)
+{
+	size_t length = ustrlen(text);
+
+	for (; *separator && length < count - 1; separator++)
+		text[length++] = *separator;
+	for (; *status && length < count - 1; status++)
+		text[length++] = (wchar_t)(unsigned char)*status;
+	text[length] = 0;
+}
+
 /* "port lobby update" */
 static void lobby_update(struct widget_instance *list)
 {
@@ -8123,6 +8276,14 @@ static void lobby_update(struct widget_instance *list)
 #else
 			usnprintf(text + length, NUMBEROF(text) - 1 - length, L"\r\n\r\nInvite link copied.");
 #endif
+		}
+		/* (the host of an internet game: whether players can reach it) */
+		{
+			char status[192];
+
+			if (global_network_game_server_get() && p2p_invite_link(link, sizeof(link)) &&
+				p2p_hosting_status(status, sizeof(status)))
+				append_hosting_status(text, NUMBEROF(text), L"\r\n\r\n", status);
 		}
 		text_set_length(named(description, "lobby_game_data", 0), text, LOBBY_TEXT_LENGTH);
 	}
@@ -9497,8 +9658,24 @@ static boolean host_setup_value(short row, wchar_t *text)
 	return FALSE;
 }
 
+/* the host's reachability (p2p_hosting_status) after a row's help, on a
+line of its own, for an internet game: wide text in buffer */
+static wchar_t const *host_help_with_status(wchar_t const *help, wchar_t *buffer, size_t count)
+{
+	char status[192];
+
+	if (multiplayer.mode == _multiplayer_mode_host_lan || !p2p_hosting_status(status, sizeof(status)))
+		return help;
+	ustrncpy(buffer, help, count - 1);
+	buffer[count - 1] = 0;
+	append_hosting_status(buffer, count, L"\r\n", status);
+	return buffer;
+}
+
 static wchar_t const *host_setup_help(short row)
 {
+	static wchar_t with_status[ROW_TEXT_LENGTH * 3];
+
 	switch (row)
 	{
 	case _host_row_name:
@@ -9511,7 +9688,8 @@ static wchar_t const *host_setup_help(short row)
 	case _host_row_password:
 		return L"Required to join from the game list.";
 	case _host_row_port:
-		return L"The UDP port for internet play. Applies on restart.";
+		return host_help_with_status(L"The UDP port for internet play. Applies on restart.", with_status,
+			NUMBEROF(with_status));
 	case _host_row_game_type:
 		return L"Choose the game type. %a-button edits it.";
 	case _host_row_team_change:
@@ -9531,7 +9709,7 @@ static wchar_t const *host_setup_help(short row)
 	case _host_row_rules:
 		return L"Team switching, the chat filter, mouse aim assist and shield effects.";
 	case _host_row_start:
-		return L"Open the lobby.";
+		return host_help_with_status(L"Open the lobby.", with_status, NUMBEROF(with_status));
 	}
 	return L"";
 }
@@ -10102,6 +10280,9 @@ static boolean host_initialize(struct widget_instance *list)
 		{
 			host_setup.server = server;
 			host_setup_read();
+			/* (the network looked at now: the reachability the help shows
+			is known before the game starts) */
+			p2p_check_network();
 			multiplayer.game_private = !config_boolean("network.host_public");
 			multiplayer.game_password[0] = 0;
 			if (!multiplayer.game_name[0] && player_ui_get_active_player_profile_index(0) != NONE)
@@ -11088,6 +11269,10 @@ boolean pc_menu_event_function_invoke(
 		else if (!strcmp(name, "port coop friendly fire"))
 		{
 			return coop_friendly_fire_change();
+		}
+		else if (!strcmp(name, "port pause moderation"))
+		{
+			return pause_moderation();
 		}
 		else if (!strcmp(name, "port pause controls"))
 		{

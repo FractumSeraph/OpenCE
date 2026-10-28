@@ -183,6 +183,12 @@ jobs:
           key: ccache-linux-ubuntu-clang22-${{ github.sha }}
           restore-keys: ccache-linux-ubuntu-clang22-
 
+      # the FFmpeg source tarball (tools/download.py): kept so most runs fetch nothing
+      - uses: actions/cache@v4
+        with:
+          path: build/downloads
+          key: ffmpeg-source-${{ hashFiles('tools/ffmpeg_build.py') }}
+
       # the system root and SDL's source, which the build downloads
       - uses: actions/cache@v4
         with:
@@ -218,15 +224,20 @@ jobs:
       # ChupathingyCE's ce_*.c; build/UPDATING.md, 2026-10-20)
       - name: Test
         run: |
-          python3 -m pytest -q tools/test_linux_port.py tools/test_android_asm_convert.py tools/test_android_mirror_uploads.py tools/test_touch_menu.py tools/test_ui_point.py tools/test_p2p_copies.py tools/test_ping.py tools/test_save_folder.py tools/test_server_control.py tools/test_delta.py tools/test_delta_peer.py tools/test_profile.py tools/test_map_torrents.py tools/test_map_families.py tools/test_map_packs.py tools/test_bmp_files.py tools/test_host_watch_hash.py tools/test_virtual_keyboard_input.py tools/test_settings_sections.py tools/test_loading_picture.py tools/harness tools/test_map_download.py tools/test_map_report.py tools/test_event_log.py tools/test_update_manifest.py tools/test_android_ce_texture_cache.py tools/test_server_sim.py tools/test_egg.py tools/test_deploy_gametypes.py
+          python3 -m pytest -q tools/test_linux_port.py tools/test_android_asm_convert.py tools/test_android_mirror_uploads.py tools/test_touch_menu.py tools/test_ui_point.py tools/test_p2p_copies.py tools/test_ping.py tools/test_save_folder.py tools/test_packaged_install.py tools/test_server_control.py tools/test_delta.py tools/test_delta_peer.py tools/test_delta_compat.py tools/test_network_rules.py tools/test_profile.py tools/test_map_torrents.py tools/test_map_families.py tools/test_map_packs.py tools/test_bmp_files.py tools/test_host_watch_hash.py tools/test_virtual_keyboard_input.py tools/test_settings_sections.py tools/test_loading_picture.py tools/harness tools/test_map_download.py tools/test_playlist_maps.py tools/test_map_report.py tools/test_event_log.py tools/test_update_manifest.py tools/test_gamespy_listing.py tools/test_determinism.py tools/test_android_ce_texture_cache.py tools/test_server_sim.py tools/test_egg.py tools/test_deploy_gametypes.py
           # OpenCE's dedicated server (halo --server): --version, and --server without maps refused (exit code 2);
           # its cases with clients need the retail maps, and are skipped
           python3 -m pytest -q tools/test_dedicated_server.py
           python3 tools/test_light_storage.py
+          python3 tools/test_rendered_lights_storage.py
           python3 tools/test_port_config.py
           python3 tools/test_tick_input.py
+          python3 tools/test_audio_doppler.py
           python3 tools/test_controller_layout.py
           python3 tools/test_button_mappings.py
+          python3 tools/test_split_screen_input.py
+          python3 tools/test_tag_byte_swap.py
+          python3 tools/test_bitmap_byte_order.py
 
       - name: Compile cache
         run: ccache --show-stats
@@ -249,6 +260,14 @@ jobs:
         with:
           name: chupathingyce-linux-profile
           path: dist/chupathingyce-linux-profile
+          retention-days: 3
+
+      # (kept by ChupathingyCE's release, not a download)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: symbols-linux-release
+          path: dist/chupathingyce-linux-release-symbols
+          if-no-files-found: ignore
           retention-days: 3
 
       - uses: actions/cache/save@v4
@@ -298,6 +317,12 @@ jobs:
           key: ccache-linux64-ubuntu-clang22-${{ github.sha }}
           restore-keys: ccache-linux64-ubuntu-clang22-
 
+      # the FFmpeg source tarball (tools/download.py): kept so most runs fetch nothing
+      - uses: actions/cache@v4
+        with:
+          path: build/downloads
+          key: ffmpeg-source-${{ hashFiles('tools/ffmpeg_build.py') }}
+
       # the system root and SDL's source, which the build downloads
       - uses: actions/cache@v4
         with:
@@ -326,6 +351,14 @@ jobs:
         with:
           name: chupathingyce-linux64-release
           path: dist/chupathingyce-linux64-release
+          retention-days: 3
+
+      # (kept by ChupathingyCE's release, not a download)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: symbols-linux64-release
+          path: dist/chupathingyce-linux64-release-symbols
+          if-no-files-found: ignore
           retention-days: 3
 
       - uses: actions/cache/save@v4
@@ -406,6 +439,14 @@ jobs:
         with:
           name: chupathingyce-server-linux-${{ matrix.arch }}
           path: dist/chupathingyce-server-linux-${{ matrix.arch }}
+          retention-days: 3
+
+      # (kept by ChupathingyCE's release, not a download)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: symbols-server-linux-${{ matrix.arch }}-release
+          path: dist/chupathingyce-server-linux-${{ matrix.arch }}-release-symbols
+          if-no-files-found: ignore
           retention-days: 3
 
       - uses: actions/cache/save@v4
@@ -495,6 +536,12 @@ jobs:
           key: ccache-android-${{ github.sha }}
           restore-keys: ccache-android-
 
+      # the FFmpeg source tarball (tools/download.py): kept so most runs fetch nothing
+      - uses: actions/cache@v4
+        with:
+          path: build/downloads
+          key: ffmpeg-source-${{ hashFiles('tools/ffmpeg_build.py') }}
+
       # musl and SDL, which configure.py fetches
       - uses: actions/cache@v4
         with:
@@ -574,6 +621,14 @@ jobs:
           path: dist/chupathingyce-android-release
           retention-days: 3
 
+      # (kept by ChupathingyCE's release, not a download)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: symbols-android-release
+          path: dist/chupathingyce-android-release-symbols
+          if-no-files-found: ignore
+          retention-days: 3
+
       - uses: actions/cache/save@v4
         if: ${{ success() && github.ref == 'refs/heads/main' }}
         with:
@@ -612,6 +667,12 @@ jobs:
           path: .ccache
           key: ccache-android64-${{ github.sha }}
           restore-keys: ccache-android64-
+
+      # the FFmpeg source tarball (tools/download.py): kept so most runs fetch nothing
+      - uses: actions/cache@v4
+        with:
+          path: build/downloads
+          key: ffmpeg-source-${{ hashFiles('tools/ffmpeg_build.py') }}
 
       # musl and SDL, which configure.py fetches
       - uses: actions/cache@v4
@@ -676,6 +737,14 @@ jobs:
           path: dist/chupathingyce-android64-release
           retention-days: 3
 
+      # (kept by ChupathingyCE's release, not a download)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: symbols-android64-release
+          path: dist/chupathingyce-android64-release-symbols
+          if-no-files-found: ignore
+          retention-days: 3
+
       - uses: actions/cache/save@v4
         if: ${{ success() && github.ref == 'refs/heads/main' }}
         with:
@@ -717,6 +786,12 @@ jobs:
           key: ccache-windows-${{ github.sha }}
           restore-keys: ccache-windows-
 
+      # the FFmpeg source tarball (tools/download.py): kept so most runs fetch nothing
+      - uses: actions/cache@v4
+        with:
+          path: build/downloads
+          key: ffmpeg-source-${{ hashFiles('tools/ffmpeg_build.py') }}
+
       # SDL's development package, which configure.py fetches
       - uses: actions/cache@v4
         with:
@@ -740,7 +815,9 @@ jobs:
         run: python tools/ci_build.py windows release
 
       - name: Test light storage
-        run: python tools/test_light_storage.py
+        run: |
+          python tools/test_light_storage.py
+          python tools/test_rendered_lights_storage.py
 
       - name: Compile cache
         run: ccache --show-stats
@@ -827,6 +904,12 @@ jobs:
           path: .ccache
           key: ccache-windows64-${{ github.sha }}
           restore-keys: ccache-windows64-
+
+      # the FFmpeg source tarball (tools/download.py): kept so most runs fetch nothing
+      - uses: actions/cache@v4
+        with:
+          path: build/downloads
+          key: ffmpeg-source-${{ hashFiles('tools/ffmpeg_build.py') }}
 
       # SDL's development package, which configure.py fetches (the 32-bit
       # job's: it holds both builds' libraries)
@@ -928,6 +1011,12 @@ jobs:
           key: ccache-macos-${{ github.sha }}
           restore-keys: ccache-macos-
 
+      # the FFmpeg source tarball (tools/download.py): kept so most runs fetch nothing
+      - uses: actions/cache@v4
+        with:
+          path: build/downloads
+          key: ffmpeg-source-${{ hashFiles('tools/ffmpeg_build.py') }}
+
       - uses: actions/cache@v4
         with:
           path: build/macos/third_party
@@ -954,6 +1043,14 @@ jobs:
         with:
           name: chupathingyce-macos-release
           path: chupathingyce-macos-release.tar
+          retention-days: 3
+
+      # (kept by ChupathingyCE's release, not a download)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: symbols-macos-release
+          path: dist/chupathingyce-macos-release-symbols
+          if-no-files-found: ignore
           retention-days: 3
 
       - uses: actions/cache/save@v4

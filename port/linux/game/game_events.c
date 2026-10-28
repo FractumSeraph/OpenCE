@@ -64,6 +64,7 @@ Called each frame from game_stats_update (main.c).
 #include "network_recording.h"
 #include "../src/delta_maps.h"
 #include "../src/map_report.h"
+#include "../src/posix.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -179,6 +180,9 @@ static struct
 	long frames;
 	double frame_sum;
 	double frame_most;
+	/* the sockets' totals at the last health sample (posix_socket_traffic) */
+	unsigned long long traffic_sent;
+	unsigned long long traffic_received;
 } game_events;
 
 /* ---------- private code */
@@ -1016,12 +1020,17 @@ static void update_health(long tick)
 	}
 	game_events.frame_time = now;
 	if (!game_events.health_time)
+	{
 		game_events.health_time = now;
+		posix_socket_traffic(&game_events.traffic_sent, &game_events.traffic_received);
+	}
 	if (now - game_events.health_time >= HEALTH_MILLISECONDS && game_events.frames)
 	{
 		struct event_log_record record;
 		struct data_iterator iterator;
 		int cpu, resident, players = 0;
+		unsigned long long sent, received;
+		double kilobits = 8.0/(double)(now - game_events.health_time);
 
 		data_iterator_new(&iterator, player_data);
 		while (data_iterator_next(&iterator))
@@ -1037,6 +1046,13 @@ static void update_health(long tick)
 		record.value[2] = (int)(100.0 * game_events.frame_most + 0.5);
 		record.value[3] = resident;
 		record.bits = (unsigned int)cpu;
+		/* (the sockets' traffic since the last sample, in kilobits a second:
+		bytes times 8 over milliseconds) */
+		posix_socket_traffic(&sent, &received);
+		record.position[0] = (float)((double)(received - game_events.traffic_received)*kilobits);
+		record.position[1] = (float)((double)(sent - game_events.traffic_sent)*kilobits);
+		game_events.traffic_sent = sent;
+		game_events.traffic_received = received;
 		event_log_add(&record);
 		game_events.health_time = now;
 		game_events.frames = 0;

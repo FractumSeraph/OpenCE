@@ -13,7 +13,7 @@ false details:
 
 	"HL", format 1, the lobby version (2: HALO_PORT_NETWORK_VERSION; browsers
 	hide others), flags (open, under way, teams, closed, password,
-	dedicated), sequence (4: newest wins), Unix time (4), the Ed25519 key
+	dedicated as OpenCE's 39 says it, dedicated), sequence (4: newest wins), Unix time (4), the Ed25519 key
 	(32), the invite's token (16; a password's game's sealed with the
 	password's key, 56: p2p_seal_token; a tombstone's zero), players, most
 	players, the gametype's engine (1 each), the game's name,
@@ -69,6 +69,7 @@ game with a password is not: its token is sealed.
 #include "server_mode.h"
 #include "server_master.h"
 #include "master_list.h"
+#include "delta_compat.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -116,6 +117,10 @@ enum
 	/* (wide: a host whose clock is off is still listed) */
 	LIVE_WINDOW = 3600,
 };
+
+/* (delta_compat.h tells OpenCE's dedicated servers apart by these bits) */
+typedef char listing_dedicated_bits_match[_listing_dedicated == DELTA_COMPAT_LISTING_DEDICATED_OPENCE &&
+	_listing_chupa_dedicated == DELTA_COMPAT_LISTING_DEDICATED ? 1 : -1];
 
 static const char signature_label[] = "hceu-lobby-1";
 
@@ -785,6 +790,7 @@ static void listing_take(const struct queued *queued, const struct listing *list
 	/* port (this fork): the listing's own word, either bit (the ChupathingyCE
 	menus' "(DEDICATED)"), and its version as the fork's code reads it */
 	shown->listed_dedicated = (listing->flags & (_listing_dedicated | _listing_chupa_dedicated)) != 0;
+	shown->opence_server = (unsigned char)delta_compat_opence_server_listing(listing->flags);
 	shown->version = (unsigned short)listing->version;
 	shown->ping = -1;
 	/* (a dedicated server's on a master's word alone: the listing's own
@@ -1094,18 +1100,28 @@ int p2p_hosting_listed(void)
 void p2p_set_hosting_password(const char *password)
 {
 	unsigned char key[P2P_PASSWORD_KEY_SIZE];
+	unsigned char join_key[P2P_PASSWORD_KEY_SIZE];
 	int has_password = password && *password;
 
-	/* (the key takes a while: not under the lock) */
+	/* (the keys take a while: not under the lock. The listing's, salted with
+	the signing key as every browser opens it; the invite link's, salted with
+	the key's hash, which the link holds) */
 	if (has_password)
+	{
+		unsigned char hash[P2P_KEY_HASH_SIZE];
+
 		p2p_password_key(password, p2p_signing_key(), key);
+		p2p_key_hash(p2p_public_key(), hash);
+		p2p_join_password_key(password, hash, join_key);
+	}
 	pthread_mutex_lock(&p2p_lock);
 	if (has_password != lobby.has_password ||
 		(has_password && !p2p_equal(key, lobby.password_key, P2P_PASSWORD_KEY_SIZE)))
 	{
-		/* (a new invite, if one was listed: who saw it, with no password or
-		another, cannot join with it) */
-		p2p_new_invite_if_listed();
+		/* (a new invite, listed or not: whoever has the old one, which
+		joined without this password, cannot join with it; the new one is
+		locked, and only the password opens it) */
+		p2p_new_invite_for_password(has_password ? join_key : NULL);
 		lobby.has_password = has_password;
 		if (has_password)
 			memcpy(lobby.password_key, key, sizeof(key));
@@ -1116,6 +1132,7 @@ void p2p_set_hosting_password(const char *password)
 	}
 	pthread_mutex_unlock(&p2p_lock);
 	memset(key, 0, sizeof(key));
+	memset(join_key, 0, sizeof(join_key));
 }
 
 void p2p_set_game_listing(const char *name, const char *map, const char *gametype, int engine_type, int kind,

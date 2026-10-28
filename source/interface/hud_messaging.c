@@ -542,6 +542,9 @@ static void render_state_bitmap(
 	struct bitmap_data const *bitmap = NULL;
 	real_rectangle2d const *clip = NULL;
 	real scale;
+	/* port: the bitmap's size (its group's high resolution flags, a Custom
+	Edition map's: the weapons' pickup icons) */
+	real bitmap_scale = 1.0f;
 	point2d point;
 
 	/* port: keep gameplay prompts on the high-resolution HUD path, which
@@ -562,6 +565,16 @@ static void render_state_bitmap(
 	if (bitmap && _texture_cache_bitmap_get_hardware_format(
 		(struct bitmap_data *)bitmap, FALSE, TRUE))
 	{
+#ifdef HALO_CUSTOM_EDITION
+		extern boolean ce_hud_bitmap_is_xbox_button(void const *bitmap);
+
+		/* (not the Xbox's button icons added to a Custom Edition map's, at
+		their own size: ce_hud.c; asked of the map's own bitmap, before a
+		high-res sprite's placeholder of the same size stands in for it) */
+		if (!ce_hud_bitmap_is_xbox_button(bitmap))
+			bitmap_scale = hud_bitmap_group_scale(bitmap_group_index);
+#endif
+		/* port: the sprite from a high-res texture, if it has one */
 		bitmap = hud_hires_sprite_bitmap(bitmap, icon->sequence_index);
 		scale = local_player_count() > 1 ? 0.75f : 1.0f;
 		point.x = (short)(icon->offset.x * scale + cursor_bounds->x0);
@@ -571,7 +584,7 @@ static void render_state_bitmap(
 			_hud_corner_bottom_left,
 			&point,
 			clip,
-			scale,
+			scale * bitmap_scale,
 			0.0f,
 			TEST_FLAG(icon->flags, _hud_icon_use_color_bit) ? icon->color : color,
 			FALSE);
@@ -580,12 +593,12 @@ static void render_state_bitmap(
 		else if (clip)
 		{
 			cursor_bounds->x0 = (short)(
-				((clip->x1 - clip->x0) * bitmap->width + icon->width_offset) * scale + point.x);
+				((clip->x1 - clip->x0) * bitmap->width * bitmap_scale + icon->width_offset) * scale + point.x);
 		}
 		else
 		{
 			cursor_bounds->x0 = (short)(
-				(bitmap->width + icon->width_offset) * scale + point.x);
+				(bitmap->width * bitmap_scale + icon->width_offset) * scale + point.x);
 		}
 	}
 

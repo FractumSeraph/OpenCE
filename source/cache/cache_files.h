@@ -104,8 +104,8 @@ boolean cache_files_ce_map_refused(
 	char *text,
 	long size);
 /* port: whether a Halo PC map here would be refused as it loads, checked
-without opening it for play (a dedicated server's check of a map before it
-hosts it): why (cache_files_windows.c) */
+without opening it for play (a dedicated server's check of a map a command
+names, while a game may be in progress): why (cache_files_windows.c) */
 boolean cache_files_ce_map_check(
 	char const *map_name,
 	char *text,

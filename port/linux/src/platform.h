@@ -168,8 +168,10 @@ int platform_old_map_folders_move(void);
 /* the macOS application's folder for its data and settings, when the game
 runs as an application (ChupathingyCE.app): ~/Library/Application
 Support/ChupathingyCE, made if need be, into path; on Linux, when the game
-runs as an AppImage, the save root's usual place (HALO_SAVE_ROOT, else
-$XDG_DATA_HOME/chupathingyce or ~/.local/share/chupathingyce); 0 otherwise
+runs as an AppImage or a packaged install (or from a folder it cannot write
+that has no maps/ or config.toml of its own), the save root's usual place
+(HALO_SAVE_ROOT, else $XDG_DATA_HOME/chupathingyce or
+~/.local/share/chupathingyce); 0 otherwise
 (and on other systems). An application's own files are not written: it is
 signed, and may be where its player cannot write, and an AppImage is
 mounted read-only (port_config.c) */
@@ -179,6 +181,10 @@ the window opens, or between frames), with `count` buttons (3 at most: Android's
 `default_index` Enter's and Escape's: the index of the one chosen, or -1
 when it cannot ask */
 int platform_ask(const char *title, const char *text, const char *const *labels, int count, int default_index);
+/* whether the game is a packaged install, which a package manager updates:
+built as one, HALO_PACKAGED in the environment, or a file named "packaged"
+beside the executable (packaged_install.h); 0 on Android and the consoles */
+int platform_packaged(void);
 const char *platform_save_root(void);
 /* the folder of Custom Edition maps paths.custom_edition names, which the
 Xbox drive h:\ is (map_families.c looks in it after maps_ce and the older

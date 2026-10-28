@@ -285,6 +285,7 @@ def main() -> int:
                     *sorted((ROOT / "build/windows/third_party").glob(f"SDL3-*/lib/{sdl_arch}/SDL3.pdb"))]:
             shutil.copy2(pdb, symbols)
             print(f"{pdb.relative_to(ROOT)} -> {symbols.relative_to(ROOT)}", flush=True)
+    keep_native_symbols(args.platform, args.config)
     # the fork's licence, the AGPL (OpenCE's, which the whole is under), and
     # ChupathingyCE's GPL, which its parts keep: each asks every copy to
     # carry its text
@@ -373,6 +374,37 @@ def alpine_build(platform: str, config: str) -> int:
     return 0
 
 
+def keep_native_symbols(platform: str, config: str) -> None:
+    """dist/chupathingyce-<platform>-<config>-symbols for the builds that are
+    not Windows': the Linux programs with their debug information (the
+    download carries it too), the Mac application's .dSYM (its program holds
+    only a map to the objects, which are gone after the build), and the
+    Android app's native libraries before the APK strips them. Kept by the
+    release workflow for crash reports; never part of a download."""
+    symbols = ROOT / "dist" / f"chupathingyce-{platform}-{config}-symbols"
+    if platform in ("linux", "linux64"):
+        files = [ROOT / f"build/{platform}/halo"]
+    elif platform in ("android", "android64"):
+        files = sorted((ROOT / f"build/{platform}/jniLibs").glob("*/*.so"))
+    elif platform == "macos":
+        files = []
+    else:
+        return
+    if symbols.exists():
+        shutil.rmtree(symbols)
+    symbols.mkdir(parents=True)
+    for file in files:
+        shutil.copy2(file, symbols)
+        print(f"{file.relative_to(ROOT)} -> {symbols.relative_to(ROOT)}", flush=True)
+    if platform == "macos":
+        for program in sorted((ROOT / "build/macos/ChupathingyCE.app/Contents/MacOS").iterdir()):
+            if program.is_file():
+                # (a failure is a warning: the release does not wait on symbols)
+                result = subprocess.run(["dsymutil", str(program), "-o", str(symbols / f"{program.name}.dSYM")])
+                if result.returncode != 0:
+                    print(f"warning: dsymutil failed for {program.name}", flush=True)
+
+
 def strip_debug(program: Path) -> None:
     """removes a program's debug information (its symbols stay, for crash
     reports): llvm-strip, or binutils' strip"""
@@ -405,6 +437,14 @@ def server_dist(platform: str, config: str, outputs: list) -> int:
     (dist / "playlists").mkdir(parents=True)
     for built in outputs:
         shutil.copy2(ROOT / built, dist)
+    if not windows:
+        # the full program (debug information and all), apart, for crash
+        # reports (a Windows server's .pdb is apart already)
+        symbols = ROOT / "dist" / f"chupathingyce-server-linux-{arch}-{config}-symbols"
+        if symbols.exists():
+            shutil.rmtree(symbols)
+        symbols.mkdir(parents=True)
+        shutil.copy2(ROOT / output, symbols)
     if windows:
         # (its debug information is apart already: build/server-windows*/
         # chupathingyce-server.pdb)

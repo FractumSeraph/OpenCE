@@ -390,7 +390,7 @@ host's version, but keep the older record: they fold a record of 35's and
 leave a game of one of OpenCE's game types, telling the player which.)
 
 A host plays by the number it announces (`delta_legacy_announce()`: the
-built-in one, 38 in this fork, or a legacy table's, which only raises it
+built-in one, 39 in this fork, or a legacy table's, which only raises it
 but for a local one), which is the number of every OpenCE machine in its
 game, as they join only their own; ChupathingyCE's hosts announce 32. From
 34 a host takes scenery and devices that are a shield alone as static
@@ -427,19 +427,25 @@ record has gone. Under 35 every other machine gets the older record at once.
 This fork's host sends co-op's second bit as its Server Setup's ALLY
 FRIENDLY FIRE (ChupathingyCE's send 0), and message 91, its SHIELD EFFECTS
 (`network_shield_effects.c`), which a client before 36 drops. This fork
-follows OpenCE's version 37 and version 38 too, announcing 38: 37's game kind is the LAN
-advertisement's fourth reserved byte, which is Delta's major byte (the wire
-and its range fill the rest), so a host that speaks Delta leaves it to the
-major (an OpenCE browser of 37 shows such a host's Slayer as SWAT, kind 1),
-and this fork's client reads no kind from a host with a Delta wire after it;
-the internet listing's kind (its stamp's first byte) is sent by every host.
+follows OpenCE's versions 37, 38 and 39 too, announcing 39: 37's game kind is
+the LAN advertisement's fourth reserved byte, which every host of this fork
+writes, a Delta host saying itself in the Delta tag at the reserved bytes'
+tail (ChupathingyCE 0.8.1b, `docs/delta.md`, "The advertisement"); only a
+dedicated server that hosts with Delta writes the old layout's major and
+slot there too, for released clients, in a game that is not Slayer (where
+OpenCE names no kind), and this fork's client reads no kind from a host with
+a Delta wire after that byte. The internet listing's kind (its stamp's first
+byte) is sent by every host. From 39 a dedicated server (`halo --server`, and
+ChupathingyCE's `server/src/dedicated.c`) sets the advertisement's flag 0x04
+and the internet listing's flags 32 and 128; a host with a player at it sets
+neither (the old layout's Delta flag 0x04 moved into the tag).
 38's "players" shield effects reach a client of 36 or 37 as a value it does
 not know, and it draws the stock ones. ChupathingyCE follows 37 and 38 in
 0.8.0g (its hosts still announcing 32) with a wire of its own, `chupa-38a`,
-which this fork speaks too: its clients of 0.8.0e and 0.8.0f (`chupa-32a`)
+and 39 in 0.8.1b with `chupa-39a` (row 39, the tag), which this fork speaks: its clients of 0.8.0e and 0.8.0f (`chupa-32a`)
 join this fork's hosts by the range the advertisement carries
-(`delta_compat.c`), and a 0.8.0g or later client's HELLO says 38. A version
-past 38 has the layout a signed legacy table's facts give it
+(`delta_compat.c`), and a 0.8.1b or later client's HELLO says 39. A version
+past 39 has the layout a signed legacy table's facts give it
 (`docs/delta.md`, "Layouts": longer gametype options, bytes after the
 record's local data, a larger shield effects value, message kinds a machine
 drops): this fork's client folds such a record into its own

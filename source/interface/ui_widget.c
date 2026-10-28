@@ -701,7 +701,8 @@ void browser_screen_open(void);
 boolean browser_screen_open_map_offer(void);
 void browser_screen_process(void);
 void browser_screen_render(void);
-/* port: moderation on a dedicated server (port/linux/game/moderation_screen.c) */
+/* port: moderation on a dedicated server, and the host's own kick and ban
+(port/linux/game/moderation_screen.c) */
 boolean moderation_screen_active(void);
 void moderation_screen_update(boolean menu_open);
 void moderation_screen_process(void);
@@ -6184,6 +6185,8 @@ text was drawn in (the lobby's speaker icons) */
 void menu_functions_text_box_drawn(struct widget_instance *widget, rectangle2d const *bounds);
 
 #ifndef HALO_XBOX_CONSOLE
+#include "../../port/linux/src/ui_point.h"
+
 /* ---------- the mouse (desktop builds)
 
 The menus were made for a controller: the d-pad moves the focus through a
@@ -7554,6 +7557,26 @@ static void ui_widgets_process_mouse(
 		controls_screen_pointer(&pointer);
 #endif
 #endif
+	/* the carnage report's prompt is text, not targets: a click or tap on
+	one of its parts presses that part's button (game_engine_postgame_prompt,
+	#467); no menu is up to take the click instead. A finger reaches a little
+	around the text. */
+	if (pointer_active && !keyboard_active && !overlay_active && pointer.left_clicks && !ui_mouse_menu() &&
+		/* port: (nor under a map's download screen) */
+		!download_screen_active())
+	{
+		struct ui_point_prompt prompt;
+
+		if (game_engine_postgame_prompt(&prompt.top, &prompt.bottom, &prompt.left, &prompt.right, &prompt.split))
+		{
+			short part = (short)ui_point_prompt_part(&prompt, ui_mouse_pointer_is_touch ? 32 : 2,
+				pointer.click_x, pointer.click_y);
+
+			if (part != NONE)
+				game_engine_postgame_prompt_press(part);
+			pointer.left_clicks = 0;
+		}
+	}
 	if (!pointer_active || keyboard_active || overlay_active
 		/* port: (nor under a map's download screen, which hides the menus) */
 		|| download_screen_active())
@@ -8512,13 +8535,55 @@ static void widget_instance_tab_to_previous_valid_widget(
 	return;
 }
 
+/* port: whether the widget or one inside it is the local player's */
+static boolean widget_tree_has_local_player(
+	struct widget_instance const *widget,
+	short local_player_index)
+{
+	struct widget_instance const *child;
+
+	if (widget->local_player_index == local_player_index)
+		return TRUE;
+	for (child = widget->child; child; child = child->next)
+	{
+		if (widget_tree_has_local_player(child, local_player_index))
+			return TRUE;
+	}
+	return FALSE;
+}
+
+/* port: whether a screen shown has a widget of the controller's own: its
+own screen, or its part of a shared one (the Xbox menus' four quarters of
+SELECT PROFILE, where each controller presses A to join) */
+static boolean controller_has_own_widget(
+	short controller_index)
+{
+	short widget_index;
+
+	if (controller_index < 0 || controller_index >= MAXIMUM_NUMBER_OF_LOCAL_PLAYERS)
+		return FALSE;
+	if (widget_globals.active_widgets[controller_index])
+		return TRUE;
+	for (widget_index = 0; widget_index < MAXIMUM_NUMBER_OF_LOCAL_PLAYERS; widget_index++)
+	{
+		struct widget_instance const *widget = widget_globals.active_widgets[widget_index];
+
+		if (widget && widget_tree_has_local_player(widget, controller_index))
+			return TRUE;
+	}
+	return FALSE;
+}
+
 /* port: with one person playing, any controller drives the first player's
 menus, not only the first port's: a phone can list a device of its own (its
 touch controls) before the gamepad, which then reads port 2, and a player
 picks up whichever pad is at hand. Its screens read every controller's
 events (process_ui_widgets), and take them
 (widget_takes_events_of_controller). With two or more players, each
-controller keeps to its own player's menus */
+controller keeps to its own player's menus, and a controller with a widget
+of its own on the screen (a quarter of the Xbox menus' SELECT PROFILE,
+still empty while one person plays) keeps to it: else its A joined the
+first player's quarter, as the first player */
 static boolean widget_takes_any_controller(
 	struct widget_instance const *widget)
 {
@@ -8526,11 +8591,21 @@ static boolean widget_takes_any_controller(
 		(we_are_at_the_main_menu || players_port_local_player_count() <= 1);
 }
 
-/* port: the controller whose events a screen reads (NONE: every one's) */
+/* port: the controller whose events a screen reads (NONE: every one's;
+only its own while another controller has a widget of its own) */
 static short widget_event_controller(
 	struct widget_instance const *widget)
 {
-	return widget_takes_any_controller(widget) ? NONE : widget->local_player_index;
+	short controller_index;
+
+	if (!widget_takes_any_controller(widget))
+		return widget->local_player_index;
+	for (controller_index = 1; controller_index < MAXIMUM_NUMBER_OF_LOCAL_PLAYERS; controller_index++)
+	{
+		if (controller_has_own_widget(controller_index))
+			return widget->local_player_index;
+	}
+	return NONE;
 }
 
 /* port: whether a widget of the local player (NONE: any) takes the
@@ -8548,7 +8623,7 @@ static boolean widget_takes_events_of_controller(
 	if (widget->local_player_index == NONE || widget->local_player_index == controller_index)
 		return TRUE;
 	if (controller_index > 0 && controller_index < MAXIMUM_NUMBER_OF_LOCAL_PLAYERS &&
-		widget_takes_any_controller(widget))
+		widget_takes_any_controller(widget) && !controller_has_own_widget(controller_index))
 	{
 		return TRUE;
 	}
@@ -9400,7 +9475,8 @@ void process_ui_widgets(
 		return;
 	}
 #endif
-	/* port: moderation's screen, over a menu of a dedicated server's game */
+	/* port: moderation's screen, over a menu of a dedicated server's game or
+	one this machine hosts */
 	moderation_screen_update(widget_globals.active_widgets[0] != NULL);
 	if (moderation_screen_active())
 	{

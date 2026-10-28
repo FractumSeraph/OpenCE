@@ -152,14 +152,15 @@ scenery and devices whose shield alone damage breaks are not static targets
 before 35, the game settings record's shorter PC options (no OpenCE
 gametype); before 36, no shield effects message (the stock ones); before
 37, no game kind in a LAN advertisement's fourth reserved byte or an internet
-listing's stamp (none: this fork's hosts put Delta's major there while they
-speak it, so a kind is read only from a host that does not); before 38, no
-"players" shield effects (a client of 36 or 37 takes it for none it knows and
-draws the stock ones); before 39, no dedicated server flag (0x04 of the
-advertisement's flags, which is also Delta's DELTA_ADVERTISED_FLAG: this
-fork's client takes it for the dedicated flag only from a host without a
-Delta wire after it, network_client_manager.c) and no client build message
-(92, which an older host drops) */
+listing's stamp (a Delta host of the old layout has its major there and its
+wire after it, so a kind is read only from a host without them); before 38,
+no "players" shield effects (a client of 36 or 37 takes it for none it knows
+and draws the stock ones); before 39, no dedicated server flag (0x04 of the
+advertisement's flags, which is also the old layout's DELTA_ADVERTISED_FLAG:
+this fork's client takes it for the dedicated flag from a host of 39 or
+later with Delta's tag at the tail or without the old layout's wire,
+network_client_manager.c) and no client build message (92, which an older
+host drops) */
 #define HALO_PORT_ALLY_FRIENDLY_FIRE_NETWORK_VERSION 33
 #define HALO_PORT_SHIELD_TARGETS_NETWORK_VERSION 34
 #define HALO_PORT_GAME_MODES_NETWORK_VERSION 35
@@ -168,8 +169,10 @@ Delta wire after it, network_client_manager.c) and no client build message
 #define HALO_PORT_PLAYERS_SHIELD_EFFECTS_NETWORK_VERSION 38
 #define HALO_PORT_DEDICATED_NETWORK_VERSION 39
 /* ... the advertisement's reserved bytes: the version (a little-endian word),
-then flags, then the game's kind (an OpenCE gametype's mode, and Hardcore:
-port/linux/game/game_modes.h's game_modes_kind), for the server browser */
+then flags, then (version 37) the game's kind: an OpenCE gametype's mode in
+the low seven bits, Hardcore in bit 7 (port/linux/game/game_modes.h's
+game_modes_kind; port: this fork plays them and sends it). A Delta host's
+own bytes are at the tail (delta.h, DELTA_ADVERTISED_TAG_OFFSET). */
 #define HALO_PORT_ADVERTISED_VERSION_OFFSET 0
 #define HALO_PORT_ADVERTISED_FLAGS_OFFSET 2
 #define HALO_PORT_ADVERTISED_KIND_OFFSET 3
@@ -179,9 +182,13 @@ netcode was removed; hosts of version 4 built before then may not) */
 /* ... the game is under way (loading, playing or over), not in its lobby:
 the menus show it before joining it (hosts built before then never set it) */
 #define HALO_PORT_ADVERTISED_IN_PROGRESS_FLAG 0x02
-/* ... the host is a dedicated server, with no player of its own (halo
---server: port/linux/src/server_mode.c): the menus say so (from version 39) */
+/* ... a dedicated server's game (version 39), with no player of its own
+(halo --server: port/linux/src/server_mode.c; port, this fork: and
+server/src/dedicated.c's, delta_peer_advertised_flags): the menus say so.
+Hosts of Delta's old layout set 0x04 for Delta (delta.h's
+DELTA_ADVERTISED_FLAG) */
 #define HALO_PORT_ADVERTISED_DEDICATED_FLAG 0x04
+#define HALO_PORT_ADVERTISED_DEDICATED_VERSION 39
 
 /* a message header's 12-bit length allows messages of up to 0xFFF bytes,
 header included; the per-tick update of 128 players is 3,857 */

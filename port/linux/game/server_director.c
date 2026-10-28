@@ -390,7 +390,10 @@ static void server_simple_event(
 
 /* port: a Custom Edition entry's map left out if the game's checks refuse
 it (cache_files_windows.c's cache_files_ce_map_check, the fork's Custom
-Edition loader): refused as it loads, it would end the server's game */
+Edition loader): refused as it loads, it would end the server's game.
+Checked without opening it, as the rotation is read and sv_map is taken
+while a game may be in progress (ChupathingyCE's server opens a playlist's
+map as it hosts it instead: cache_files_map_can_open) */
 static void server_entry_check_custom_edition(
 	struct server_entry *entry)
 {

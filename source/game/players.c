@@ -4779,6 +4779,8 @@ static boolean players_idle_actions(
 	return TRUE;
 }
 
+boolean determinism_check_actions(boolean dequeued, struct player_action *actions);
+
 void players_update_before_game(
 	void)
 {
@@ -4794,8 +4796,14 @@ void players_update_before_game(
 	profile_enter(PLAYERS_UPDATE_BEFORE_GAME_PROFILE);
 	players_coop_note_on_foot();
 	players_coop_rescue_stranded();
-	/* port: or the main menu's scene's idle players (players_idle_actions) */
+	/* port: or the main menu's scene's idle players (players_idle_actions);
+	debug.determinism records the tick's actions or plays a recording's back
+	(port/linux/game/determinism_check.c) */
+#ifndef HALO_CONSOLE_NO_NETWORK_TEST
+	if (determinism_check_actions(update_client_dequeue(actions) || players_idle_actions(actions), actions))
+#else
 	if (update_client_dequeue(actions) || players_idle_actions(actions))
+#endif
 	{
 		/* port: the controls of a local game's bots this tick
 		(port/linux/game/bots.c), in place of what their queues held */
