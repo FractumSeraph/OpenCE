@@ -87,8 +87,8 @@ static void test_menus(void)
 	CHECK(!has("\"details\""));
 	CHECK(!has("\"party\""));
 	CHECK(!has("timestamps"));
-	CHECK(has("\"large_image\":\"https://stats.chupathingy.org/art/icon.png\""));
-	CHECK(has("{\"label\":\"Get Chupathingy\",\"url\":\"https://chupathingy.org\"}"));
+	CHECK(has("\"large_image\":\"https://halo.fractumseraph.net/assets/pwa/icon-512.png\""));
+	CHECK(has("{\"label\":\"Get Fractum Halo\",\"url\":\"https://github.com/FractumSeraph/OpenCE/releases/latest\"}"));
 	CHECK(has("{\"label\":\"Join our Discord\",\"url\":\"https://discord.gg/chupathingy\"}"));
 	CHECK(!has("secrets"));
 }
@@ -118,7 +118,7 @@ static void test_team_slayer(void)
 	CHECK(has("\"size\":[3,16]"));
 	CHECK(has("\"timestamps\":{\"start\":1760000000000}"));
 	CHECK(has("{\"label\":\"Join game\",\"url\":\"https://chupathingy.org/join/aaaa"));
-	CHECK(has("{\"label\":\"Get Chupathingy\""));
+	CHECK(has("{\"label\":\"Get Fractum Halo\""));
 	CHECK(!has("Join our Discord"));
 	CHECK(!has("secrets"));
 
@@ -153,8 +153,8 @@ static void test_minimal_and_off(void)
 	CHECK(!has("Blood Gulch"));
 	CHECK(!has("party"));
 	CHECK(!has("Join game"));
-	CHECK(has("Get Chupathingy"));
-	CHECK(has("\"large_text\":\"Chupathingy\""));
+	CHECK(has("Get Fractum Halo"));
+	CHECK(has("\"large_text\":\"Fractum Halo\""));
 
 	CHECK(build(&game, DISCORD_PRESENCE_OFF, 1, 1, join) > 0);
 	CHECK(balanced());
@@ -184,14 +184,14 @@ static void test_maps(void)
 	snprintf(game.map_name, sizeof(game.map_name), "Tensity");
 	CHECK(build(&game, DISCORD_PRESENCE_FULL, 1, 1, NULL) > 0);
 	CHECK(has("\"details\":\"King of the Hill on Tensity\""));
-	CHECK(has("\"large_image\":\"https://stats.chupathingy.org/art/icon.png\""));
+	CHECK(has("\"large_image\":\"https://halo.fractumseraph.net/assets/pwa/icon-512.png\""));
 
 	/* a custom map named as a stock one keeps its own name, and the logo */
 	snprintf(game.map, sizeof(game.map), "bloodgulch@md");
 	snprintf(game.map_name, sizeof(game.map_name), "Blood Gulch Remix");
 	CHECK(build(&game, DISCORD_PRESENCE_FULL, 1, 1, NULL) > 0);
 	CHECK(has("on Blood Gulch Remix\""));
-	CHECK(has("art/icon.png"));
+	CHECK(has("pwa/icon-512.png"));
 
 	/* Grifball, named, with Oddball's skull for an icon (as in its menus) */
 	game.mode = DISCORD_MODE_GRIFBALL;

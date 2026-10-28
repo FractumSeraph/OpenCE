@@ -456,7 +456,9 @@ BOOL platform_sdl_initialize(void)
 #endif
 	)
 		exit(EXIT_SUCCESS);
-	SDL_SetHint(SDL_HINT_APP_NAME, "ChupathingyCE");
+	/* (port: the name the system shows for it: the volume mixer's, the
+	screen saver's inhibitor) */
+	SDL_SetHint(SDL_HINT_APP_NAME, "Fractum Halo");
 #ifdef __APPLE__
 	/* closing the window is the event's to decide (platform_pump_events:
 	Command-W does not quit) */

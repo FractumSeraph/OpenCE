@@ -18,11 +18,16 @@ The activity the Discord desktop client shows while the game runs
   password), "Join game" to its page on the project's site, which opens
   its invite in whichever client the viewer has (Chupathingy's or
   OpenCE's: Discord's own Ask to Join works only within one application),
-  and "Get Chupathingy"; otherwise "Get Chupathingy" and "Join our
+  and "Get Fractum Halo"; otherwise "Get Fractum Halo" and "Join our
   Discord".
 
-discord.presence "minimal" leaves only "Playing Chupathingy" and the
-project's buttons; "off" clears the activity.
+discord.presence "minimal" leaves only "Playing <the application's name>"
+and the project's buttons; "off" clears the activity.
+
+(port, this fork: its name, Fractum Halo, on the button, the logo's text
+and the logo itself, its own icon on its site; the button opens its
+releases. The maps' pictures, the join page and the Discord server stay
+ChupathingyCE's.)
 */
 
 #include "discord_activity.h"
@@ -31,8 +36,10 @@ project's buttons; "off" clears the activity.
 #include <string.h>
 
 #define ART_URL "https://stats.chupathingy.org/art/"
-#define LOGO_URL ART_URL "icon.png"
+#define LOGO_URL "https://halo.fractumseraph.net/assets/pwa/icon-512.png"
 #define SITE_URL "https://chupathingy.org"
+/* (port: where Fractum Halo is downloaded) */
+#define GET_URL "https://github.com/FractumSeraph/OpenCE/releases/latest"
 #define DISCORD_URL "https://discord.gg/chupathingy"
 
 /* (Discord's limit on an activity's texts, in bytes as this counts) */
@@ -270,10 +277,10 @@ static void buttons(struct text *text, const char *join_url)
 	{
 		raw(text, "{\"label\":\"Join game\",\"url\":");
 		string(text, join_url);
-		raw(text, "},{\"label\":\"Get Chupathingy\",\"url\":\"" SITE_URL "\"}]");
+		raw(text, "},{\"label\":\"Get Fractum Halo\",\"url\":\"" GET_URL "\"}]");
 		return;
 	}
-	raw(text, "{\"label\":\"Get Chupathingy\",\"url\":\"" SITE_URL "\"},"
+	raw(text, "{\"label\":\"Get Fractum Halo\",\"url\":\"" GET_URL "\"},"
 		"{\"label\":\"Join our Discord\",\"url\":\"" DISCORD_URL "\"}]");
 }
 
@@ -321,7 +328,7 @@ int discord_activity_json(char *json, int size, unsigned long nonce, unsigned lo
 	raw(&text, ",\"activity\":{");
 	if (options->presence == DISCORD_PRESENCE_MINIMAL)
 	{
-		raw(&text, "\"assets\":{\"large_image\":\"" LOGO_URL "\",\"large_text\":\"Chupathingy\"}");
+		raw(&text, "\"assets\":{\"large_image\":\"" LOGO_URL "\",\"large_text\":\"Fractum Halo\"}");
 		/* (nothing of the game: no join either) */
 		join_url = NULL;
 	}
@@ -368,7 +375,7 @@ int discord_activity_json(char *json, int size, unsigned long nonce, unsigned lo
 		default:
 			details[0] = 0;
 			snprintf(state, sizeof(state), "In menus");
-			snprintf(large_text, sizeof(large_text), "Chupathingy");
+			snprintf(large_text, sizeof(large_text), "Fractum Halo");
 			break;
 		}
 		if (small_text[0] && game->platform[0])
