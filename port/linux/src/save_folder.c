@@ -336,7 +336,7 @@ static int has_profiles(const char *save_root)
 static int write_marker(const char *folder)
 {
 	static const char text[] =
-		"Chupathingy looked once for saves to copy from the save folder it shared\n"
+		"Fractum Halo looked once for saves to copy from the save folder it shared\n"
 		"with other builds of the game before it had its own. Delete this file to\n"
 		"look again.\n";
 	char path[PATH_SIZE];

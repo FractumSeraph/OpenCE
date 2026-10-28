@@ -645,7 +645,7 @@ static int updater_download_zip(const char *zip_path, char *error, size_t error_
 		snprintf(error, error_size, "could not start the download");
 		return 0;
 	}
-	window = SDL_CreateWindow("Chupathingy", 640, 150, 0);
+	window = SDL_CreateWindow("Fractum Halo", 640, 150, 0);
 	if (window)
 		renderer = SDL_CreateRenderer(window, SDL_SOFTWARE_RENDERER);
 	while (!finished)
@@ -1016,7 +1016,7 @@ static void updater_update(void)
 		char message[800];
 
 		snprintf(message, sizeof(message), "The update failed:\n\n%s", error);
-		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Chupathingy", message, NULL);
+		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Fractum Halo", message, NULL);
 	}
 }
 
@@ -1289,7 +1289,7 @@ void updater_poll(SDL_Window *window)
 	{
 		platform_log("update: %s is out (this is %s); a packaged install: update Chupathingy with your "
 			"package manager", updater_latest_version, HALO_VERSION);
-		build_identity_watermark_update(updater_latest_version, "Chupathingy with your package manager");
+		build_identity_watermark_update(updater_latest_version, "Fractum Halo with your package manager");
 		return;
 	}
 	/* (an automated test's answer: debug.update_answer) */
@@ -1321,19 +1321,19 @@ void updater_poll(SDL_Window *window)
 	if (UPDATER_DOWNLOAD_PAGE_ONLY)
 	{
 		snprintf(message, sizeof(message),
-			"Chupathingy %s is out. You have %s.\n\n"
+			"Fractum Halo %s is out. You have %s.\n\n"
 			"Open the download page?",
 			updater_latest_version, HALO_VERSION);
 	}
 	else
 	{
 		snprintf(message, sizeof(message),
-			"Chupathingy %s is out. You have %s.\n\n"
+			"Fractum Halo %s is out. You have %s.\n\n"
 			"Update now? The game will restart.",
 			updater_latest_version, HALO_VERSION);
 	}
 	{
-		SDL_MessageBoxData question = { SDL_MESSAGEBOX_INFORMATION, window, "Chupathingy: new version", message,
+		SDL_MessageBoxData question = { SDL_MESSAGEBOX_INFORMATION, window, "Fractum Halo: new version", message,
 			3, question_buttons, NULL };
 
 		if (!SDL_ShowMessageBox(&question, &answer))
@@ -1341,7 +1341,7 @@ void updater_poll(SDL_Window *window)
 	}
 	if (answer == 2)
 	{
-		SDL_MessageBoxData confirm = { SDL_MESSAGEBOX_WARNING, window, "Chupathingy: new version",
+		SDL_MessageBoxData confirm = { SDL_MESSAGEBOX_WARNING, window, "Fractum Halo: new version",
 			"Stop asking about new versions?\n\n"
 			"Turn Check for Updates back on in Settings to ask again.",
 			2, confirm_buttons, NULL };
