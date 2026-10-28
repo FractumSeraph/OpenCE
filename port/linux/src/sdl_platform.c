@@ -2129,15 +2129,15 @@ static void platform_gl_missing(const char *reason)
 	platform_log("graphics: %s; OpenGL %s is needed%s%s: quitting", reason, PLATFORM_GL_NEEDED,
 		have[0] ? ", the driver has OpenGL " : "", have);
 	snprintf(message, sizeof(message),
-		"Chupathingy can't run on this computer's graphics.\n\n"
+		"Fractum Halo can't run on this computer's graphics.\n\n"
 		"It needs OpenGL %s%s%s.\n\n"
 		"Updating the graphics driver can fix this. Some older graphics chips never get OpenGL %s, "
-		"and Chupathingy can't run on those yet.",
+		"and Fractum Halo can't run on those yet.",
 		PLATFORM_GL_NEEDED,
 		have[0] ? ", and the graphics driver here has OpenGL " : ", and the graphics driver here doesn't have it",
 		have, PLATFORM_GL_NEEDED);
 	if (!config_boolean("debug.hidden_window") && config_real("debug.exit_after") <= 0.0)
-		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Chupathingy", message, platform_window);
+		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Fractum Halo", message, platform_window);
 	exit(EXIT_FAILURE);
 }
 #endif
