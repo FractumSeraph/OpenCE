@@ -8,7 +8,8 @@ The game shows its graphics with OpenGL ES 3. It plays sound through SDL3
 (AAudio). It accepts input from game controllers, for example a PlayStation
 5 DualSense on Bluetooth, and from the touchscreen (refer to "Controls").
 The app needs Android 9 (API 28) or later. It operates on 64-bit-only
-devices, for example the Pixel 9 Pro XL.
+devices, for example the Pixel 9 Pro XL, and on Wear OS watches (refer to
+"Wear OS", experimental).
 
 The Android build uses the platform layer of the Linux build
 (`port/linux/src`). Refer to [port/linux/README.md](../linux/README.md).
@@ -479,6 +480,100 @@ the Xbox:
   and backgrounds (the pause menu's dim, dialogs, the menus' gradient).
 
 All the ports draw this way.
+
+## Wear OS (watches, experimental)
+
+The app runs on a Wear OS watch from the same APK: Wear OS is Android, and
+the app needs no watch manifest entries to be installed with adb. It was
+tried only in the Android emulator's Wear OS 6 image, set up as a Samsung
+Galaxy Watch 8 Classic (below), not yet on a watch.
+
+The Galaxy Watch 8 Classic, as Samsung publishes it: Exynos W1000 (five
+cores, one Cortex-A78 and four Cortex-A55, 3 nm, up to 1.6 GHz), Mali-G68
+graphics (OpenGL ES 3.2, Vulkan), 2 GB of memory, 64 GB of storage, a round
+1.34 inch 438x438 display (about 327 dpi), a rotating bezel, Wear OS 6 (One
+UI 8 Watch, Android 16, API level 36).
+
+On a watch the app does these things differently, and on other devices
+nothing:
+
+- The HUD is inside the circle. The 4:3 picture is letterboxed into the
+  round display, which cuts off its corners, where the HUD has the motion
+  tracker, the health and the ammunition. On a round display
+  (`display.round_screen`, "auto": as `Configuration.isScreenRound` says)
+  the title-safe frame the HUD is laid out in is made smaller about its
+  centre until its corners are inside the circle: 72,54 to 568,426 of the
+  640x480 screen on a 438x438 display, in place of 48,36 to 592,444.
+- The game draws at the lines the display shows: the picture is 437x328 on
+  a 438x438 display, so the game draws 437x328, not 640x480, which is less
+  than half of the work for the GPU (`display.resolution_limit`, which
+  takes 240 to 480 lines; a smaller number draws fewer).
+- The touch controls are kept inside the circle. Hide the ones you do not
+  use, or move them, with the touch controls' Options (refer to "Touch
+  controls").
+- The rotating bezel (or a crown) turns the view in a game, 15 degrees a
+  click, to the right for clockwise: one turn of the Galaxy Watch's bezel
+  (24 clicks) is one turn of the player. With the touch controls' option
+  **Bezel switches weapons**, each click switches weapons instead. In the
+  menus, each click moves the selection down (clockwise) or up.
+- The game data screen scrolls, with smaller text, inside the circle.
+
+To install the app on a watch:
+
+1. On the watch, open Settings, About watch, Software information, and
+   tap Software version until the watch says that Developer options are
+   on.
+2. In Developer options, turn on ADB debugging and Wireless debugging.
+   The watch and the computer must be on the same Wi-Fi network.
+3. In Wireless debugging, tap Pair new device. Enter
+   `adb pair <address>:<port>` with the address and port that the watch
+   shows, and then the pairing code.
+4. Enter `adb connect <address>:<port>` with the address and port of the
+   Wireless debugging screen (not the pairing port).
+5. Enter `adb install fractum-halo-android.apk`, or the watch build of the
+   `wearos` branch.
+6. Start the app one time, then push the maps (refer to "Game data"); the
+   multiplayer maps with `ui.map` are about 300 MB. (The app's download
+   buttons were not tried on a watch.)
+
+Settings for less heat and battery (`config.toml`, refer to "Settings"):
+`display.max_fps = 30` (Video Setup's Frame Rate: 30, the Xbox's),
+`display.resolution_limit = "300"`, `display.shadow_resolution = 128`.
+`display.anti_aliasing` is already off on Android.
+
+### The Wear OS emulator
+
+The emulator of the Android SDK has Wear OS images with ARM translation, so
+the arm64 app runs on a computer:
+
+1. Install the SDK's command-line tools, then enter
+   `sdkmanager platform-tools emulator "system-images;android-36;android-wear-signed;x86_64"`.
+2. Enter `avdmanager create avd -n watch8classic -k "system-images;android-36;android-wear-signed;x86_64" -d wearos_large_round`.
+3. In the AVD's `config.ini`, set `hw.lcd.width=438`, `hw.lcd.height=438`,
+   `hw.lcd.circular=true`, `hw.ramSize=2048`, `hw.cpu.ncore=5`,
+   `hw.gpu.mode=host` and `hw.rotaryInput=yes`.
+4. Enter `emulator -avd watch8classic`, then install the app and push the
+   maps with adb as on a watch.
+
+`adb shell input rotaryencoder scroll --axis SCROLL,-1` turns the bezel
+one click clockwise (`SCROLL,1` counterclockwise).
+
+What the emulator shows, and what it does not:
+
+- The guest image build installs, starts, shows the menus and plays. The
+  game takes 60 to 110 ms a frame there, because the ARM code is
+  translated (Berberis) and the write tracking compares page contents
+  ("write tracking: page hashes", refer to "Limits"). This says nothing
+  about the speed of a watch, whose processor runs the code itself.
+- The native 64-bit build runs the game but shows nothing in the
+  emulator: SDL cannot load the OpenGL ES library under the translation
+  ("SDL_CreateWindow failed: Could not initialize OpenGL / GLES library").
+  Use the guest image build in the emulator.
+- The game's process uses about 330 to 450 MB in a game (Blood Gulch); the
+  emulated watch has about 1 GB available.
+- Not tried: the speed, the heat and the battery of a watch, and
+  Bluetooth controllers (whether the watch's Bluetooth settings pair a
+  gamepad).
 
 ## How the port operates
 
