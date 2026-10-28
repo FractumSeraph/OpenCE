@@ -58,8 +58,9 @@ map keeps its channels, which the renderer has one order of.
 
 enum
 {
-	/* a model's geometries, a geometry's parts */
+	/* a model's geometries and shaders, a geometry's parts */
 	MODEL_GEOMETRIES_OFFSET = 0xd0,
+	MODEL_SHADERS_OFFSET = 0xdc,
 	GEOMETRY_SIZE = 0x30,
 	GEOMETRY_PARTS_OFFSET = 0x24,
 
@@ -67,6 +68,7 @@ enum
 	CE_PART_SIZE = 0x84,
 	XBOX_PART_SIZE = 0x68,
 	PART_HEADER_SIZE = 0x44, /* flags to the blocks, the same in both */
+	CE_PART_SHADER_INDEX_OFFSET = 0x04,
 	PART_CENTROID_PRIMARY_NODE_OFFSET = 0x08,
 	PART_CENTROID_SECONDARY_NODE_OFFSET = 0x0a,
 	PART_TRIANGLE_BUFFER_OFFSET = 0x44,
@@ -426,12 +428,15 @@ boolean ce_models_tags_loaded(
 		byte *model;
 		unsigned long geometry_count, geometries;
 		unsigned long geometry;
+		long shader_count;
 
 		if (instance->group_tag != 'mod2')
 			continue;
 		model = xbox_pointer(instance->base_address);
 		geometry_count = *(unsigned long *)(model + MODEL_GEOMETRIES_OFFSET);
 		geometries = *(unsigned long *)(model + MODEL_GEOMETRIES_OFFSET + 4);
+		/* (at least one: ce_models_check) */
+		shader_count = *(long const *)(model + MODEL_SHADERS_OFFSET);
 		for (geometry = 0; geometry < geometry_count; geometry++)
 		{
 			byte *geometry_data = (byte *)xbox_pointer(geometries) + geometry * GEOMETRY_SIZE;
@@ -463,6 +468,13 @@ boolean ce_models_tags_loaded(
 
 				csmemset(xbox_part, 0, XBOX_PART_SIZE);
 				csmemcpy(xbox_part, ce_part, PART_HEADER_SIZE);
+				/* (a shader past the model's, its last: ce_models_check) */
+				{
+					short *shader_index = (short *)(xbox_part + CE_PART_SHADER_INDEX_OFFSET);
+
+					if (*shader_index < 0 || *shader_index >= shader_count)
+						*shader_index = (short)(shader_count - 1);
+				}
 				csmemset(xbox_part + PART_BLOCKS_OFFSET, 0, PART_BLOCKS_SIZE);
 				ce_part_centroid_node(xbox_part + PART_CENTROID_PRIMARY_NODE_OFFSET, ce_part);
 				ce_part_centroid_node(xbox_part + PART_CENTROID_SECONDARY_NODE_OFFSET, ce_part);
@@ -575,7 +587,6 @@ enum
 	MODEL_MARKERS_OFFSET = 0xac,
 	MODEL_NODES_OFFSET = 0xb8,
 	MODEL_REGIONS_OFFSET = 0xc4,
-	MODEL_SHADERS_OFFSET = 0xdc,
 	MODEL_MARKER_SIZE = 0x40,
 	MODEL_MARKER_INSTANCES_OFFSET = 0x34,
 	MODEL_MARKER_INSTANCE_SIZE = 0x20,
@@ -602,7 +613,6 @@ enum
 	CE_MAXIMUM_MODEL_SHADERS = 0x7fff,
 	CE_MAXIMUM_PART_VERTICES = 0xffff,
 	CE_MAXIMUM_PART_TRIANGLES = 0xffff - 2,
-	CE_PART_SHADER_INDEX_OFFSET = 0x04,
 	CE_PART_PREVIOUS_PART_OFFSET = 0x06,
 	CE_PART_NEXT_PART_OFFSET = 0x07,
 	CE_PART_CENTROID_NODES_OFFSET = 0x08,
@@ -825,6 +835,7 @@ boolean ce_models_check(
 		char const *name;
 		byte *model, *markers, *regions, *geometries, *shaders;
 		long node_count, marker_count, region_count, geometry_count, shader_count, item;
+		long shaders_bound = 0;
 
 		if (instance->group_tag != 'mod2')
 			continue;
@@ -926,8 +937,15 @@ boolean ce_models_check(
 				short primary = ce_read_short(at + CE_PART_CENTROID_NODES_OFFSET);
 				short secondary = ce_read_short(at + CE_PART_CENTROID_NODES_OFFSET + 2);
 
+				/* (a part naming a shader past the model's is drawn with its
+				last, ce_models_tags_loaded: bigass_v3's oak tree has geometries
+				left from a third shader the tag no longer has, which no region
+				permutation draws, and Halo PC reads past the model's shaders
+				for them; OpenCE's loader gives them the last shader too) */
+				if (shader_count < 1)
+					return ce_refuse("model %s: a part's shader is %d, and the model has none", name, shader_index);
 				if (shader_index < 0 || shader_index >= shader_count)
-					return ce_refuse("model %s: a part's shader is %d of %ld", name, shader_index, shader_count);
+					shaders_bound++;
 				if ((previous != NONE && (previous < 0 || previous >= part_count)) ||
 					(next != NONE && (next < 0 || next >= part_count)))
 				{
@@ -942,6 +960,11 @@ boolean ce_models_check(
 					return FALSE;
 				}
 			}
+		}
+		if (shaders_bound)
+		{
+			error(_error_silent, "Custom Edition maps: %ld parts of the model %s name shaders it has not got, "
+				"and are given its last", shaders_bound, name);
 		}
 	}
 	return TRUE;

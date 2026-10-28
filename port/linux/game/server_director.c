@@ -388,6 +388,27 @@ static void server_simple_event(
 
 /* ---------- the rotation */
 
+/* port: a Custom Edition entry's map left out if the game's checks refuse
+it (cache_files_windows.c's cache_files_ce_map_check, the fork's Custom
+Edition loader): refused as it loads, it would end the server's game */
+static void server_entry_check_custom_edition(
+	struct server_entry *entry)
+{
+#ifdef HALO_CUSTOM_EDITION
+	boolean cache_files_ce_map_check(char const *map_name, char *text, long size);
+	static char why[512];
+	char map_name[SERVER_MAP_SIZE + 4];
+
+	if (entry->rejected[0] || entry->map_kind != _server_map_custom)
+		return;
+	snprintf(map_name, sizeof(map_name), "%s@ce", entry->map_name);
+	if (cache_files_ce_map_check(map_name, why, sizeof(why)))
+		snprintf(entry->rejected, sizeof(entry->rejected), "the map %s can't be played: %s", entry->map_name, why);
+#else
+	(void)entry;
+#endif
+}
+
 /* the rotation from the settings, each entry checked; a fallback's if
 nothing can be played (server.rotation_fallback) */
 static void server_read_rotation(
@@ -401,6 +422,7 @@ static void server_read_rotation(
 	{
 		server_rotation_resolve(&rotation->entries[index]);
 		server_gametype_check_entry(&rotation->entries[index]);
+		server_entry_check_custom_edition(&rotation->entries[index]);
 	}
 	if (!server_rotation_playable(rotation) && config_boolean("server.rotation_fallback") &&
 		rotation->count < SERVER_ROTATION_MAXIMUM_ENTRIES)
@@ -411,6 +433,7 @@ static void server_read_rotation(
 		{
 			server_rotation_resolve(entry);
 			server_gametype_check_entry(entry);
+			server_entry_check_custom_edition(entry);
 			rotation->count++;
 		}
 	}
@@ -696,6 +719,7 @@ boolean server_director_interpose(
 	}
 	server_rotation_resolve(&entry);
 	server_gametype_check_entry(&entry);
+	server_entry_check_custom_edition(&entry);
 	if (entry.rejected[0])
 	{
 		snprintf(reason, (size_t)reason_size, "%s", entry.rejected);

@@ -142,6 +142,10 @@ boolean network_game_server_lobby_is_open(struct network_game_server *server);
 boolean network_game_server_game_is_loading(struct network_game_server *server);
 /* (server_commands.c's) */
 void server_commands_update(void);
+#ifdef HALO_CUSTOM_EDITION
+/* (cache_files_windows.c's) */
+boolean cache_files_ce_map_check(char const *map_name, char *text, long size);
+#endif
 
 enum
 {
@@ -731,6 +735,23 @@ static boolean set_entry(
 			advance_entry();
 		return FALSE;
 	}
+#ifdef HALO_CUSTOM_EDITION
+	/* (a Custom Edition map the game's checks refuse would end the server's
+	game as it loads, and take it off the lists: skipped, with why) */
+	{
+		static char why[512];
+
+		if (cache_files_ce_map_check(map, why, sizeof(why)))
+		{
+			error(_error_silent, "dedicated: the map %s can't be played (%s); skipping the entry", map, why);
+			if (dedicated.chosen_playing)
+				dedicated.chosen_playing = FALSE;
+			else
+				advance_entry();
+			return FALSE;
+		}
+	}
+#endif
 	main_set_multiplayer_map_name(map);
 	game_engine_override_map_name(map);
 	network_game_server_change_map_name(server, map);

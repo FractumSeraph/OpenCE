@@ -2034,7 +2034,15 @@ map does. So the console and `debug.txt` say either that the file is
 damaged or another version (delete it, and the next join downloads it
 again) or that it is intact and the map itself is refused. A client joining
 a game on such a map leaves it with that message in the main menu's error,
-instead of the damaged disc error and a restart.
+instead of the damaged disc error and a restart. A dedicated server checks a
+Halo PC map before it plays it (`sv_map`, a playlist's entry, OpenCE's
+`server.rotation`): a map it would refuse is not played, and the command or
+the log says why, instead of the game ending as the map loads.
+
+Some Halo PC maps have flaws Halo PC's engine let through, and the port takes
+them as it did: a model part that names a shader past its model's (left from
+a shader the tag no longer has, as bigass_v3's oak tree) is drawn with the
+model's last shader, as OpenCE's loader does (`debug.txt` says how many).
 
 A map's scripts can call only the script functions that a map needs (the
 allowlist in `hs/hs.c`). They cannot call the functions for files, the

@@ -611,6 +611,103 @@ boolean cache_files_ce_map_refused(
 	return TRUE;
 }
 
+/* port: whether the map named, a Halo PC map that is here, would be refused
+as it loads (ce_map_open's checks), without opening it in the slot (the map
+open there, maybe being played, stays): why in text (size bytes). A dedicated
+server checks a map a command or playlist names so before it hosts it
+(server/src/server_commands.c: server_map_playable), as a map refused while
+it loads ends the server's game. The last few verdicts are kept, by the
+file's size and header checksum */
+boolean cache_files_ce_map_check(
+	char const *map_name,
+	char *text,
+	long size)
+{
+	enum
+	{
+		VERDICTS = 8,
+	};
+	static struct
+	{
+		char map_name[64];
+		unsigned long file_size;
+		unsigned long checksum;
+		boolean refused;
+		char text[512];
+	} verdicts[VERDICTS];
+	static long next_verdict;
+	char path[256], file_name[64];
+	char verdict[384];
+	struct cache_file_header header;
+	unsigned long bytes_read = 0;
+	unsigned long file_size;
+	long saved_version = ce_map_cache_version;
+	char const *reason = NULL;
+	boolean refused = FALSE;
+	short family;
+	HANDLE file;
+	long index;
+
+	if (size > 0)
+		text[0] = 0;
+	if (!map_name || !ce_map_name_is(map_name) || strlen(map_name) >= sizeof(verdicts[0].map_name) - 1)
+		return FALSE;
+	if (ce_map_file.file && !_stricmp(ce_map_name, map_name))
+		return FALSE;
+	family = map_family_parse(map_name, file_name, sizeof(file_name));
+	if (!map_family_find(family, file_name, path, sizeof(path)))
+		return FALSE;
+	file = CreateFileA(path, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, NULL);
+	if (file == INVALID_HANDLE_VALUE)
+		return FALSE;
+	memset(&header, 0, sizeof(header));
+	file_size = GetFileSize(file, NULL);
+	if (!ReadFile(file, &header, sizeof(header), &bytes_read, NULL))
+		bytes_read = 0;
+	if (bytes_read == sizeof(header) && !header.file_length && file_size <= 0x7fffffff)
+		header.file_length = (long)file_size;
+	for (index = 0; index < VERDICTS; index++)
+	{
+		if (verdicts[index].map_name[0] && !_stricmp(verdicts[index].map_name, map_name) &&
+			verdicts[index].file_size == file_size && verdicts[index].checksum == header.checksum)
+		{
+			CloseHandle(file);
+			if (verdicts[index].refused)
+				snprintf(text, (size_t)size, "%s", verdicts[index].text);
+			return verdicts[index].refused;
+		}
+	}
+	if (bytes_read != sizeof(header) || !cache_file_header_verify(&header, path, FALSE) ||
+		header.version != map_family_cache_version(family))
+	{
+		refused = TRUE;
+		reason = "it is not a cache file of this version";
+	}
+	else if (ce_map_cache_version = header.version,
+		!ce_map_check(file, map_name, header.file_length, header.tag_data_offset, header.tag_data_size))
+	{
+		refused = TRUE;
+		reason = ce_map_refusal();
+	}
+	/* (the version of the map open in the slot, as it was) */
+	ce_map_cache_version = saved_version;
+	CloseHandle(file);
+	index = next_verdict;
+	next_verdict = (next_verdict + 1) % VERDICTS;
+	memset(&verdicts[index], 0, sizeof(verdicts[index]));
+	strncpy(verdicts[index].map_name, map_name, sizeof(verdicts[index].map_name) - 1);
+	verdicts[index].file_size = file_size;
+	verdicts[index].checksum = header.checksum;
+	verdicts[index].refused = refused;
+	if (refused)
+	{
+		ce_map_refused_verify(map_name, path, header.checksum, verdict, sizeof(verdict));
+		snprintf(verdicts[index].text, sizeof(verdicts[index].text), "%s; %s", reason, verdict);
+		snprintf(text, (size_t)size, "%s", verdicts[index].text);
+	}
+	return refused;
+}
+
 /* the text a patched map (tools/map_patch.py) keeps in its header's free
 space, from 0x400: "key: value" lines that say what it is (its recipe, its
 base map, the weapons a game type hands out, its packs' credits); NULL if the

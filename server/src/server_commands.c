@@ -136,6 +136,7 @@ int team_change_move(long list_index, short team, char *text, int size);
 /* (the version: server_platform.c's, updater.c's in the game) */
 const char *updater_version(void);
 char const *cache_files_map_directory(void);
+boolean cache_files_ce_map_check(char const *map_name, char *text, long size);
 
 /* ---------- structures */
 
@@ -652,7 +653,9 @@ static boolean file_is_multiplayer_map(
 }
 
 /* whether the server has a map (as a command names it) to play: a
-multiplayer map's file, in its family's folders */
+multiplayer map's file, in its family's folders, and for a Custom Edition,
+HaloMD or Halo PC map, one the game's checks let through (a map refused as it
+loads would end the server's game: cache_files_ce_map_check) */
 boolean server_map_playable(
 	char const *map,
 	struct command_output *output)
@@ -691,6 +694,15 @@ boolean server_map_playable(
 	{
 		command_output_printf(output, "no multiplayer map %s in %s\n", map, map_family_folder(family));
 		return FALSE;
+	}
+	{
+		static char why[512];
+
+		if (cache_files_ce_map_check(map, why, sizeof(why)))
+		{
+			command_output_printf(output, "the map %s can't be played: %s\n", map, why);
+			return FALSE;
+		}
 	}
 	return TRUE;
 #else

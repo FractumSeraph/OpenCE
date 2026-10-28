@@ -470,17 +470,70 @@ boolean mods_memory_contains(unsigned long address, long size)
 	return FALSE;
 }
 
-/* (the maps' folder, where ce_hud.c looks for the Xbox ui.map for its
-controller buttons: none here) */
-char const *cache_files_map_directory(void)
-{
-	return "";
-}
-
 boolean map_family_resource(char const *name, char *path, long size)
 {
 	snprintf(path, (size_t)size, "%s", name);
 	return TRUE;
+}
+
+/* (what ce_map_refused_verify asks of a refused map's file, for the player's
+message: cache_files_windows.c calls it, the harness never does) */
+short map_family_parse(char const *map, char *file, long size)
+{
+	if (file && size > 0)
+		snprintf(file, (size_t)size, "%s", map);
+	return 1;
+}
+
+char const *map_family_kind(short family)
+{
+	(void)family;
+	return "Custom Edition";
+}
+
+unsigned long map_family_game_version(char const *map)
+{
+	(void)map;
+	return 0;
+}
+
+int map_archive_hashed_name(const char *name, char *base, int base_size, unsigned int *prefix)
+{
+	(void)name;
+	(void)base;
+	(void)base_size;
+	(void)prefix;
+	return 0;
+}
+
+int map_archive_version_matches(unsigned int version, unsigned int checksum, unsigned int hash_version)
+{
+	(void)checksum;
+	(void)hash_version;
+	return version == 0;
+}
+
+int map_file_hash_prefix(const char *path, unsigned int *prefix)
+{
+	(void)path;
+	*prefix = 0;
+	return 0;
+}
+
+int map_file_hash_version(const char *path, unsigned int *version)
+{
+	(void)path;
+	*version = 0;
+	return 0;
+}
+
+/* (cseries.c's: an assertion a map reaches halts the game, as display_assert) */
+void release_assert_failed(char const *information, char const *file, long line, boolean fatal)
+{
+	(void)fatal;
+	fprintf(stderr, "map_fuzz: assertion failed: %s (%s #%ld)\n", information ? information : "",
+		file ? file : "", (long)line);
+	abort();
 }
 
 /* (tag_groups.c's, as the game reads a block's element: a Custom Edition
