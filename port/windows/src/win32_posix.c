@@ -174,7 +174,7 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attributes, void *(*
 		free(parameter);
 		return EAGAIN;
 	}
-	/* nothing joins threads: the handle is not needed */
+	/* (the handle is not kept: pthread_join opens the thread again) */
 	CloseHandle(handle);
 	*thread = identifier;
 	return 0;
@@ -183,6 +183,22 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attributes, void *(*
 int pthread_detach(pthread_t thread)
 {
 	(void)thread;
+	return 0;
+}
+
+/* (the dedicated server's GameSpy listing thread, server/platform/
+gamespy_listing.c: opened again by its identifier, as pthread_create keeps no
+handle; one that has ended already is not found, and is joined) */
+int pthread_join(pthread_t thread, void **result)
+{
+	HANDLE handle = OpenThread(SYNCHRONIZE, FALSE, (DWORD)thread);
+
+	if (result)
+		*result = NULL;
+	if (!handle)
+		return 0;
+	WaitForSingleObject(handle, INFINITE);
+	CloseHandle(handle);
 	return 0;
 }
 

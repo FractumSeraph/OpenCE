@@ -41,6 +41,11 @@ file's mode beyond its owner's) does nothing.
 #ifndef MSG_NOSIGNAL
 #define MSG_NOSIGNAL 0
 #endif
+/* (a receive after poll says the socket is readable does not wait: the
+GameSpy listing's, gamespy_listing.c) */
+#ifndef MSG_DONTWAIT
+#define MSG_DONTWAIT 0
+#endif
 #define SHUT_RD SD_RECEIVE
 #define SHUT_WR SD_SEND
 #define SHUT_RDWR SD_BOTH

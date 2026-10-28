@@ -44,6 +44,12 @@ whom.
 #include <time.h>
 #include <unistd.h>
 
+#ifdef _WIN32
+/* port (this fork's Windows dedicated server, server/platform/win32): a
+socket is closed by Winsock, not the C runtime */
+#define close server_close_socket
+#endif
+
 enum
 {
 	MAXIMUM_MASTERS = 4,
