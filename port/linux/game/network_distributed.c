@@ -3699,7 +3699,8 @@ static byte distributed_unknown_kinds_seen[32];
 
 /* whether this build knows a distributed message's kind (network_distributed.h;
 port, this fork: 64 to the last without a gap, its vote kick, voice and map
-sharing, 78 to 86, among them; OpenCE 39's client build, 92, the last) */
+sharing, 78 to 86, among them; OpenCE's client build, 92, and fire origins, 93,
+the last) */
 static boolean distributed_kind_known(
 	byte type)
 {
@@ -3709,7 +3710,8 @@ static boolean distributed_kind_known(
 typedef char distributed_kinds_known_assert[_distributed_message_votekick == _distributed_message_coop_device_states + 1 &&
 	_distributed_message_chat_up == _distributed_message_map_share_progress + 1 &&
 	_distributed_message_shield_effects + 1 == _distributed_message_client_build &&
-	_distributed_message_client_build + 1 == NUMBER_OF_DISTRIBUTED_MESSAGES ? 1 : -1];
+	_distributed_message_client_build + 1 == _distributed_message_fire_origins &&
+	_distributed_message_fire_origins + 1 == NUMBER_OF_DISTRIBUTED_MESSAGES ? 1 : -1];
 
 /* a message of a kind this build does not know, from the host (machine_index
 NONE) or a client: dropped, as ever. A kind the layout of the sender's
@@ -5333,7 +5335,8 @@ void network_distributed_handle_message(
 	case _distributed_message_client_identity: entry_size = sizeof(struct distributed_client_identity); break;
 	case _distributed_message_client_build: entry_size = sizeof(struct distributed_client_build); break;
 	case _distributed_message_damage_events:
-	case _distributed_message_hit_reports: entry_size = network_damage_entry_size(header.type); break;
+	case _distributed_message_hit_reports:
+	case _distributed_message_fire_origins: entry_size = network_damage_entry_size(header.type); break;
 	default: entry_size = network_objects_entry_size(header.type); break;
 	}
 	if (header.type == 0 || header.type >= NUMBER_OF_DISTRIBUTED_MESSAGES ||
@@ -5397,6 +5400,7 @@ void network_distributed_handle_message(
 	case _distributed_message_coop_skip_vote:
 	case _distributed_message_votekick:
 	case _distributed_message_chat_up:
+	case _distributed_message_fire_origins:
 		if (machine_index == NONE || game_connection() != _game_connection_network_server)
 			return;
 		/* (heard from: the latency meter's connection problem) */
@@ -5551,7 +5555,7 @@ void network_distributed_handle_message(
 		network_objects_handle_changes(entries, header.count);
 		break;
 	case _distributed_message_object_states:
-		network_objects_handle_states(entries, header.count);
+		network_objects_handle_states(entries, header.count, header.game_time);
 		break;
 	case _distributed_message_game_state:
 		game_engine_read_network_state((byte const *)entries, size - sizeof(header));
@@ -5691,6 +5695,9 @@ void network_distributed_handle_message(
 		break;
 	case _distributed_message_hit_reports:
 		network_damage_handle_reports(machine_index, entries, header.count);
+		break;
+	case _distributed_message_fire_origins:
+		network_damage_handle_fire_origins(machine_index, entries, header.count);
 		break;
 	case _distributed_message_vehicle_prediction:
 		network_objects_handle_vehicle_prediction(machine_index, entries, header.count);

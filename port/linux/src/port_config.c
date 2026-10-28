@@ -718,7 +718,7 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"to throw and reload, and a player turns with the aim while throwing;\n"
 		"false: the original animations, which freeze the legs and stand a\n"
 		"rider up." },
-	{ "game.console_log", _config_string, "\"important\"", "HALO_CONSOLE_LOG", _environment_value, _platform_all | _platform_xbox,
+	{ "game.console_log", _config_string, "\"none\"", "HALO_CONSOLE_LOG", _environment_value, _platform_all | _platform_xbox,
 		"What the console shows on screen: \"important\", \"all\" or \"none\".\n"
 		"debug.txt has every line." },
 
@@ -1042,6 +1042,12 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"its light_show intensity, display.overshield_effect); \"players\": not\n"
 		"synced, each player sees their own settings'. SHIELD EFFECTS in Server\n"
 		"Setup > Player Options writes its choice here." },
+	{ "network.fire_origins", _config_boolean, "true", "HALO_NET_FIRE_ORIGINS", _environment_value, _platform_all,
+		"Host: whether a reported hit the shooter's camera had no line of sight\n"
+		"to may still count from where their machine says the shot left, when\n"
+		"that is not the camera (a VR build's hand: past a corner the camera is\n"
+		"behind), no further than a player leaning out and an arm, and in front\n"
+		"of the eye. false: from the camera and vehicles' guns only." },
 	{ "network.coop_own_friendly_fire", _config_boolean, "true", "HALO_NET_COOP_OWN_FRIENDLY_FIRE",
 		_environment_value, _platform_all,
 		"Whether this machine's players hurt, and are hurt by, the other players\n"
