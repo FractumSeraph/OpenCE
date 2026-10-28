@@ -8,7 +8,8 @@ The game shows its graphics with OpenGL ES 3. It plays sound through SDL3
 (AAudio). It accepts input from game controllers, for example a PlayStation
 5 DualSense on Bluetooth, and from the touchscreen (refer to "Controls").
 The app needs Android 9 (API 28) or later. It operates on 64-bit-only
-devices, for example the Pixel 9 Pro XL.
+devices, for example the Pixel 9 Pro XL, and on Wear OS watches (refer to
+"Wear OS", experimental).
 
 The Android build uses the platform layer of the Linux build
 (`port/linux/src`). Refer to [port/linux/README.md](../linux/README.md).
@@ -321,7 +322,8 @@ These settings are only for Android:
 | `input.touch_aim_assist` | `true` (the default): the touch controls' swipe aiming gets the aim assist of a controller (the aim slows over a target and follows a moving one). `false`: none, as with a mouse; the bullets' own autoaim stays. |
 | `input.touch_controls` | The touch controls in a game. `"on"` (the default): shown on a touchscreen, also with a controller connected. `"auto"`: shown only while no controller is connected. `"off"`: never shown. A device without a touchscreen never shows them. The menus take taps with each value. |
 | `display.screen_width` | The number of columns of the 480-line picture. `0` (the default): the shape of the display (1068 on a 20:9 phone). `640`: the 4:3 shape of the Xbox. |
-| `display.resolution_limit` | The lines the game draws at, scaled up to the display. `"480"` (the default): the game's own. `"720"`, `"900"`, `"1080"` (or any number between): sharper, but more work for the GPU and the battery. `"native"`: the display's own. Never more than the display has. Video Setup's Resolution sets it, and a change applies at once. |
+| `display.round_screen` | A round display, a watch's (refer to "Wear OS"). `"auto"` (the default): as the system says (`Configuration.isScreenRound`). `"on"`: the HUD is laid out inside the circle on any display. `"off"`: where the Xbox puts it. |
+| `display.resolution_limit` | The lines the game draws at, scaled to the display. `"480"` (the default): the game's own. `"720"`, `"900"`, `"1080"` (or any number from 240): sharper, but more work for the GPU and the battery; fewer: less. `"native"`: the display's own. Never more than the display shows: a watch's 438x438 display shows the 4:3 picture on 328 lines, which the game then draws at. Video Setup's Resolution sets it, and a change applies at once. |
 | `display.texture_decode` | Where the compressed (DXT) textures of the maps are unpacked. `"auto"` (the default): by the game on Adreno graphics (Snapdragon), whose driver draws them with dark speckles, and by the driver on other graphics. `"gpu"`: by the driver. `"cpu"`: by the game, as they load (more memory, as on Mali). |
 | `debug.sample_seconds` | Refer to "Find problems". |
 | `debug.memory_watch` | `true` (the default): the app notices the game's writes to cached textures by page protection. `false`: it compares page contents once a frame instead, which is slower. Geometry uses the streaming path in either mode. Refer to "Limits". |
@@ -478,6 +480,100 @@ the Xbox:
   and backgrounds (the pause menu's dim, dialogs, the menus' gradient).
 
 All the ports draw this way.
+
+## Wear OS (watches, experimental)
+
+The app runs on a Wear OS watch from the same APK: Wear OS is Android, and
+the app needs no watch manifest entries to be installed with adb. It was
+tried only in the Android emulator's Wear OS 6 image, set up as a Samsung
+Galaxy Watch 8 Classic (below), not yet on a watch.
+
+The Galaxy Watch 8 Classic, as Samsung publishes it: Exynos W1000 (five
+cores, one Cortex-A78 and four Cortex-A55, 3 nm, up to 1.6 GHz), Mali-G68
+graphics (OpenGL ES 3.2, Vulkan), 2 GB of memory, 64 GB of storage, a round
+1.34 inch 438x438 display (about 327 dpi), a rotating bezel, Wear OS 6 (One
+UI 8 Watch, Android 16, API level 36).
+
+On a watch the app does these things differently, and on other devices
+nothing:
+
+- The HUD is inside the circle. The 4:3 picture is letterboxed into the
+  round display, which cuts off its corners, where the HUD has the motion
+  tracker, the health and the ammunition. On a round display
+  (`display.round_screen`, "auto": as `Configuration.isScreenRound` says)
+  the title-safe frame the HUD is laid out in is made smaller about its
+  centre until its corners are inside the circle: 72,54 to 568,426 of the
+  640x480 screen on a 438x438 display, in place of 48,36 to 592,444.
+- The game draws at the lines the display shows: the picture is 437x328 on
+  a 438x438 display, so the game draws 437x328, not 640x480, which is less
+  than half of the work for the GPU (`display.resolution_limit`, which
+  takes 240 to 480 lines; a smaller number draws fewer).
+- The touch controls are kept inside the circle. Hide the ones you do not
+  use, or move them, with the touch controls' Options (refer to "Touch
+  controls").
+- The rotating bezel (or a crown) turns the view in a game, 15 degrees a
+  click, to the right for clockwise: one turn of the Galaxy Watch's bezel
+  (24 clicks) is one turn of the player. With the touch controls' option
+  **Bezel switches weapons**, each click switches weapons instead. In the
+  menus, each click moves the selection down (clockwise) or up.
+- The game data screen scrolls, with smaller text, inside the circle.
+
+To install the app on a watch:
+
+1. On the watch, open Settings, About watch, Software information, and
+   tap Software version until the watch says that Developer options are
+   on.
+2. In Developer options, turn on ADB debugging and Wireless debugging.
+   The watch and the computer must be on the same Wi-Fi network.
+3. In Wireless debugging, tap Pair new device. Enter
+   `adb pair <address>:<port>` with the address and port that the watch
+   shows, and then the pairing code.
+4. Enter `adb connect <address>:<port>` with the address and port of the
+   Wireless debugging screen (not the pairing port).
+5. Enter `adb install fractum-halo-android.apk`, or the watch build of the
+   `wearos` branch.
+6. Start the app one time, then push the maps (refer to "Game data"); the
+   multiplayer maps with `ui.map` are about 300 MB. (The app's download
+   buttons were not tried on a watch.)
+
+Settings for less heat and battery (`config.toml`, refer to "Settings"):
+`display.max_fps = 30` (Video Setup's Frame Rate: 30, the Xbox's),
+`display.resolution_limit = "300"`, `display.shadow_resolution = 128`.
+`display.anti_aliasing` is already off on Android.
+
+### The Wear OS emulator
+
+The emulator of the Android SDK has Wear OS images with ARM translation, so
+the arm64 app runs on a computer:
+
+1. Install the SDK's command-line tools, then enter
+   `sdkmanager platform-tools emulator "system-images;android-36;android-wear-signed;x86_64"`.
+2. Enter `avdmanager create avd -n watch8classic -k "system-images;android-36;android-wear-signed;x86_64" -d wearos_large_round`.
+3. In the AVD's `config.ini`, set `hw.lcd.width=438`, `hw.lcd.height=438`,
+   `hw.lcd.circular=true`, `hw.ramSize=2048`, `hw.cpu.ncore=5`,
+   `hw.gpu.mode=host` and `hw.rotaryInput=yes`.
+4. Enter `emulator -avd watch8classic`, then install the app and push the
+   maps with adb as on a watch.
+
+`adb shell input rotaryencoder scroll --axis SCROLL,-1` turns the bezel
+one click clockwise (`SCROLL,1` counterclockwise).
+
+What the emulator shows, and what it does not:
+
+- The guest image build installs, starts, shows the menus and plays. The
+  game takes 60 to 110 ms a frame there, because the ARM code is
+  translated (Berberis) and the write tracking compares page contents
+  ("write tracking: page hashes", refer to "Limits"). This says nothing
+  about the speed of a watch, whose processor runs the code itself.
+- The native 64-bit build runs the game but shows nothing in the
+  emulator: SDL cannot load the OpenGL ES library under the translation
+  ("SDL_CreateWindow failed: Could not initialize OpenGL / GLES library").
+  Use the guest image build in the emulator.
+- The game's process uses about 330 to 450 MB in a game (Blood Gulch); the
+  emulated watch has about 1 GB available.
+- Not tried: the speed, the heat and the battery of a watch, and
+  Bluetooth controllers (whether the watch's Bluetooth settings pair a
+  gamepad).
 
 ## How the port operates
 

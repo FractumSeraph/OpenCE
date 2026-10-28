@@ -21,6 +21,7 @@ import android.os.VibratorManager;
 import android.util.SparseArray;
 import android.util.SparseIntArray;
 import android.view.InputDevice;
+import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
@@ -34,6 +35,8 @@ import android.widget.Toast;
 
 import java.util.Arrays;
 import java.util.Locale;
+
+import org.libsdl.app.SDLActivity;
 
 /**
  * The on-screen touch controls: a multitouch overlay over SDL's surface,
@@ -92,6 +95,13 @@ public final class TouchControls extends View implements SensorEventListener, In
     private static final String PREFERENCES = "touch-layout-v1";
     private static final String KEY_CONFIGURATION = "configuration";
     private static final String KEY_HIDDEN = "hidden";
+    /** a watch's bezel or crown switches weapons, not turns the view (rotary) */
+    private static final String KEY_ROTARY_WEAPON = "rotary-weapon";
+
+    /** the view's turn for a click of a rotating bezel (a Galaxy Watch's has 24 a turn: one turn of it, one of the view) */
+    private static final float ROTARY_DEGREES = 15f;
+    /** the SDL button bit of Y, the weapon button (KINDS) */
+    private static final int BIT_Y = 3;
 
     /**
      * a kind of control: the SDL button bit or trigger axis it sends (-1 for
@@ -161,6 +171,10 @@ public final class TouchControls extends View implements SensorEventListener, In
     private final Vibrator vibrator;
     private final InputManager inputManager;
     private final boolean touchscreenFeature;
+    /** the display is a circle (a watch's): TouchLayout keeps the controls inside it */
+    private final boolean round;
+    /** a rotating bezel or crown (a watch's): rotary */
+    private final boolean rotaryFeature;
     private final GyroscopeAim gyroAim = new GyroscopeAim();
     private final float[] gyroDelta = new float[2];
     private final AudioAttributes rumbleAttributes = new AudioAttributes.Builder()
@@ -215,6 +229,11 @@ public final class TouchControls extends View implements SensorEventListener, In
     private final int[] bindings = DEFAULT_BINDINGS.clone();
     private final int[] bindingsRead = new int[bindings.length];
     private int bindingsSerial;
+    /** buttons pressed for one publish (the bezel's weapon presses): the game holds a press TOUCH_TAP_NS */
+    private int pulseBits;
+    /** the bezel's or crown's turn not yet a whole click (weapon presses, the menus' D-pad) */
+    private float rotaryRemainder;
+    private boolean rotaryWeapon;
 
     /** reads what the game says every frame: when to show, the buttons' names, and the rumble */
     private final Runnable poll = new Runnable() {
@@ -242,9 +261,13 @@ public final class TouchControls extends View implements SensorEventListener, In
         }
         inputManager = (InputManager) context.getSystemService(Context.INPUT_SERVICE);
         touchscreenFeature = context.getPackageManager().hasSystemFeature(PackageManager.FEATURE_TOUCHSCREEN);
+        round = context.getResources().getConfiguration().isScreenRound();
+        rotaryFeature = context.getPackageManager().hasSystemFeature("android.hardware.rotaryencoder.lowres")
+            || context.getPackageManager().hasSystemFeature(PackageManager.FEATURE_WATCH);
         preferences = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE);
         loadLayout(context);
         hidden = preferences.getBoolean(KEY_HIDDEN, false);
+        rotaryWeapon = preferences.getBoolean(KEY_ROTARY_WEAPON, false);
         refreshInputDevices();
         setFocusable(false);
         setContentDescription("Halo touch controller");
@@ -322,6 +345,7 @@ public final class TouchControls extends View implements SensorEventListener, In
         logicalHeight = height / scale;
         layout.bounds(logicalWidth, logicalHeight);
         layout.setMinimumRadius(minimumRadius());
+        layout.setRound(round);
         invalidate();
     }
 
@@ -451,7 +475,7 @@ public final class TouchControls extends View implements SensorEventListener, In
             nativeState(0, 0, 0, 0, 0, 0, 0);
             return;
         }
-        int bits = 0;
+        int bits = pulseBits;
         axes[4] = 0;
         axes[5] = 0;
         for (int i = 0; i < owners.size(); i++) {
@@ -465,6 +489,49 @@ public final class TouchControls extends View implements SensorEventListener, In
                 axes[kind.trigger] = 32767;
         }
         nativeState(axes[0], axes[1], axes[2], axes[3], axes[4], axes[5], bits);
+    }
+
+    // ---------- a watch's rotating bezel or crown
+
+    /**
+     * a turn of a rotating bezel or crown (HaloActivity's generic motion
+     * events): in a game, it turns the view as a swipe does, ROTARY_DEGREES
+     * a click, clockwise to the right; with the option "Bezel switches
+     * weapons", each click is a press of the weapon button instead; in the
+     * menus, each click is down (clockwise) or up on the D-pad. False for
+     * any other event.
+     */
+    public boolean rotary(MotionEvent event) {
+        if (event.getAction() != MotionEvent.ACTION_SCROLL
+                || !event.isFromSource(InputDevice.SOURCE_ROTARY_ENCODER))
+            return false;
+        // (clockwise is negative, as Wear OS scrolls a list down for it)
+        float clicks = -event.getAxisValue(MotionEvent.AXIS_SCROLL);
+        if (!Float.isFinite(clicks) || clicks == 0 || editing || openDialogs > 0)
+            return true;
+        boolean menus = (scene & SCENE_KNOWN) == 0 || (scene & SCENE_MENUS) != 0;
+        if (!menus && !rotaryWeapon) {
+            rotaryRemainder = 0;
+            // as a swipe of this many logical units (which the profile's invert leaves alone)
+            nativeGyro(clicks * (float) Math.toRadians(ROTARY_DEGREES) / LOOK_RADIANS_PER_UNIT, 0);
+            return true;
+        }
+        rotaryRemainder += clicks;
+        while (Math.abs(rotaryRemainder) >= 1) {
+            int direction = rotaryRemainder > 0 ? 1 : -1;
+            rotaryRemainder -= direction;
+            if (menus) {
+                int key = direction > 0 ? KeyEvent.KEYCODE_DPAD_DOWN : KeyEvent.KEYCODE_DPAD_UP;
+                SDLActivity.onNativeKeyDown(key);
+                SDLActivity.onNativeKeyUp(key);
+            } else {
+                pulseBits = 1 << BIT_Y;
+                publish();
+                pulseBits = 0;
+                publish();
+            }
+        }
+        return true;
     }
 
     private boolean held(int control) {
@@ -780,6 +847,7 @@ public final class TouchControls extends View implements SensorEventListener, In
         TouchLayout.Configuration imported = TouchLayout.importConfiguration(text);
         imported.layout.bounds(logicalWidth, logicalHeight);
         imported.layout.setMinimumRadius(minimumRadius());
+        imported.layout.setRound(round);
         String normalized = imported.layout.exportConfiguration(imported.sensitivity);
         if (!preferences.edit().putString(KEY_CONFIGURATION, normalized).commit())
             throw new IllegalArgumentException("Could not save the imported layout");
@@ -885,6 +953,18 @@ public final class TouchControls extends View implements SensorEventListener, In
             saveLayout();
         });
         panel.addView(floating);
+
+        if (rotaryFeature) {
+            Switch bezel = new Switch(getContext());
+            bezel.setText("Bezel switches weapons (off: it turns the view)");
+            bezel.setChecked(rotaryWeapon);
+            bezel.setOnCheckedChangeListener((view, enabled) -> {
+                rotaryWeapon = enabled;
+                rotaryRemainder = 0;
+                preferences.edit().putBoolean(KEY_ROTARY_WEAPON, enabled).apply();
+            });
+            panel.addView(bezel);
+        }
 
         TextView opacityLabel = text("");
         SeekBar opacity = new SeekBar(getContext());

@@ -335,6 +335,17 @@ static void *game_main(void *unused)
 				host_logf(HOST_LOG_INFO, "display density %s", text);
 			}
 		}
+		{
+			/* a round display (a watch's), from the activity
+			(HaloActivity.passOnRoundScreen): display.round_screen (d3d8_gl.c) */
+			const char *round = getenv("HALO_DISPLAY_ROUND");
+
+			if (round)
+			{
+				environment_set(&environment, "HALO_DISPLAY_ROUND", round);
+				host_logf(HOST_LOG_INFO, "display round: %s", round);
+			}
+		}
 	}
 	time_zone(zone, sizeof(zone));
 	environment_set(&environment, "TZ", zone);

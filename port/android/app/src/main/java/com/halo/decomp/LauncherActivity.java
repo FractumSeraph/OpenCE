@@ -19,6 +19,7 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
+import android.widget.ScrollView;
 import android.widget.TextView;
 
 import java.io.File;
@@ -210,16 +211,23 @@ public class LauncherActivity extends Activity {
     }
 
     private void buildInterface() {
+        // a watch's round display: the text inside the circle's middle
+        // square (about 15% in from each side), smaller, and scrolled
+        boolean round = getResources().getConfiguration().isScreenRound();
+        int inset = round ? getResources().getDisplayMetrics().widthPixels * 15 / 100 : 0;
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setGravity(Gravity.CENTER);
-        layout.setPadding(dp(48), dp(24), dp(48), dp(24));
+        if (round)
+            layout.setPadding(inset, inset, inset, inset);
+        else
+            layout.setPadding(dp(48), dp(24), dp(48), dp(24));
         layout.setBackgroundColor(Color.rgb(12, 16, 20));
 
         TextView title = new TextView(this);
         title.setText("Halo needs its game data");
         title.setTextColor(Color.WHITE);
-        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 24);
+        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, round ? 16 : 24);
         title.setGravity(Gravity.CENTER);
         layout.addView(title);
 
@@ -232,7 +240,7 @@ public class LauncherActivity extends Activity {
             + "You can also copy a maps folder from a computer:\n"
             + "adb push <folder with maps>/. " + (dataRoot != null ? dataRoot.getAbsolutePath() : "") + "/");
         message.setTextColor(Color.rgb(200, 205, 210));
-        message.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        message.setTextSize(TypedValue.COMPLEX_UNIT_SP, round ? 12 : 15);
         message.setGravity(Gravity.CENTER);
         message.setPadding(0, dp(16), 0, dp(16));
         layout.addView(message);
@@ -273,8 +281,8 @@ public class LauncherActivity extends Activity {
         progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
         progress.setMax(1000);
         progress.setVisibility(View.GONE);
-        LinearLayout.LayoutParams progressLayout = new LinearLayout.LayoutParams(dp(480),
-            LinearLayout.LayoutParams.WRAP_CONTENT);
+        LinearLayout.LayoutParams progressLayout = new LinearLayout.LayoutParams(
+            round ? LinearLayout.LayoutParams.MATCH_PARENT : dp(480), LinearLayout.LayoutParams.WRAP_CONTENT);
         progressLayout.topMargin = dp(16);
         layout.addView(progress, progressLayout);
 
@@ -284,7 +292,12 @@ public class LauncherActivity extends Activity {
         status.setPadding(0, dp(8), 0, 0);
         layout.addView(status);
 
-        setContentView(layout);
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        scroll.setBackgroundColor(Color.rgb(12, 16, 20));
+        scroll.addView(layout, new ScrollView.LayoutParams(ScrollView.LayoutParams.MATCH_PARENT,
+            ScrollView.LayoutParams.WRAP_CONTENT));
+        setContentView(scroll);
         download.requestFocus();
     }
 

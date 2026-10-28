@@ -85,6 +85,8 @@ final class TouchLayout {
     float opacity = 1f;
     /** the move stick goes where the thumb lands in the lower left, not at its place */
     boolean floatingStick = false;
+    /** the display is a circle (a watch): every control is kept inside it */
+    private boolean round;
 
     TouchLayout() {
         resetDefaults();
@@ -110,6 +112,15 @@ final class TouchLayout {
      */
     void setMinimumRadius(float radius) {
         minimumRadius = Float.isFinite(radius) && radius > 0 ? Math.min(radius, MAX_MINIMUM_RADIUS) : 0;
+        keepAllInside();
+    }
+
+    /**
+     * a round display (a watch's, Configuration.isScreenRound): the controls
+     * move in from the corners the circle cuts off, toward its centre
+     */
+    void setRound(boolean round) {
+        this.round = round;
         keepAllInside();
     }
 
@@ -208,8 +219,20 @@ final class TouchLayout {
         if (!Float.isFinite(x) || !Float.isFinite(y))
             return;
         float radius = radius(control);
-        controls.get(control).x = Math.max(radius, Math.min(width - radius, x));
-        controls.get(control).y = Math.max(radius, Math.min(height - radius, y));
+        x = Math.max(radius, Math.min(width - radius, x));
+        y = Math.max(radius, Math.min(height - radius, y));
+        if (round) {
+            float dx = x - width / 2;
+            float dy = y - height / 2;
+            float distance = (float) Math.sqrt(dx * dx + dy * dy);
+            float limit = Math.min(width, height) / 2 - radius;
+            if (limit > 0 && distance > limit) {
+                x = width / 2 + dx * limit / distance;
+                y = height / 2 + dy * limit / distance;
+            }
+        }
+        controls.get(control).x = x;
+        controls.get(control).y = y;
     }
 
     /** puts a control at a saved place on the grid, if it is a valid one */

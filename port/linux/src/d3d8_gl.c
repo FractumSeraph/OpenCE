@@ -240,12 +240,20 @@ static void screen_mode_choose(long *width, float scale[2])
 	screen_supersampling = 1.0f;
 	/* display.resolution_limit: the screen's targets drawn at that many
 	lines (as the desktop draws them at the window's), no more than the
-	display has nor than the GPU's largest target takes; the display blit
+	display shows nor than the GPU's largest target takes; the display blit
 	scales the picture to the display */
 	platform_video_drawable_size(&display_width, &display_height);
+	/* (a display narrower than the picture, a watch's square, letterboxes
+	it: it shows fewer lines than it has) */
+	if (display_width > 0 && display_height > 0 && (long)display_width * SCREEN_HEIGHT / *width < display_height)
+		display_height = (int)((long)display_width * SCREEN_HEIGHT / *width);
 	lines = !strcmp(limit, "native") ? display_height : atol(limit);
 	if (display_height > 0 && lines > display_height)
 		lines = display_height;
+	/* a display that shows fewer than 480 lines (a watch's: 328 of its
+	438), down to 240: drawn at its own, in half the time on a watch's GPU */
+	if (lines >= SCREEN_HEIGHT / 2 && lines < SCREEN_HEIGHT)
+		scale[0] = scale[1] = (float)lines / (float)SCREEN_HEIGHT;
 	if (lines > SCREEN_HEIGHT)
 	{
 		float factor = (float)lines / (float)SCREEN_HEIGHT;
@@ -306,6 +314,62 @@ long halo_screen_width(void)
 			screen_width * screen_scale[0], SCREEN_HEIGHT * screen_scale[1]);
 	}
 	return screen_width;
+}
+
+/* ---------- a round display
+
+A watch's display is a circle, and the 4:3 picture the display blit
+letterboxes into it loses its corners, where the HUD has its radar, health
+and ammunition. display.round_screen ("auto": the activity's
+Configuration.isScreenRound, HALO_DISPLAY_ROUND) shrinks the title-safe
+frame the HUD is laid out in (source/rasterizer/xbox/rasterizer_xbox.c)
+about its centre until its corners are inside the circle. */
+
+static BOOL halo_screen_round(void)
+{
+#if defined(HALO_ANDROID) && !defined(HALO_BROWSER)
+	const char *setting = config_string("display.round_screen");
+	const char *system = getenv("HALO_DISPLAY_ROUND");
+
+	if (!strcmp(setting, "on"))
+		return TRUE;
+	if (!strcmp(setting, "off"))
+		return FALSE;
+	return system && !strcmp(system, "1");
+#else
+	return FALSE;
+#endif
+}
+
+void halo_screen_round_frame(short *x0, short *y0, short *x1, short *y1)
+{
+	int display_width = 0, display_height = 0;
+	float pixels, radius, half_width, half_height, corner, factor, center_x, center_y;
+
+	if (!halo_screen_round())
+		return;
+	platform_video_drawable_size(&display_width, &display_height);
+	if (display_width <= 0 || display_height <= 0 || *x1 <= *x0 || *y1 <= *y0)
+		return;
+	/* the display's pixels for each of the screen's, as the blit letterboxes
+	it, and the circle's radius in the screen's, less 3% for its rim */
+	pixels = (float)display_width / (float)halo_screen_width();
+	if ((float)display_height / (float)SCREEN_HEIGHT < pixels)
+		pixels = (float)display_height / (float)SCREEN_HEIGHT;
+	radius = 0.97f * 0.5f * (float)(display_width < display_height ? display_width : display_height) / pixels;
+	half_width = 0.5f * (float)(*x1 - *x0);
+	half_height = 0.5f * (float)(*y1 - *y0);
+	corner = sqrtf(half_width * half_width + half_height * half_height);
+	if (corner <= radius)
+		return;
+	factor = radius / corner;
+	center_x = 0.5f * (float)(*x0 + *x1);
+	center_y = 0.5f * (float)(*y0 + *y1);
+	*x0 = (short)(center_x - half_width * factor + 0.5f);
+	*x1 = (short)(center_x + half_width * factor + 0.5f);
+	*y0 = (short)(center_y - half_height * factor + 0.5f);
+	*y1 = (short)(center_y + half_height * factor + 0.5f);
+	platform_log("round display: the HUD's frame %d,%d to %d,%d", *x0, *y0, *x1, *y1);
 }
 
 /* the display's pixels for each of the 480 lines (text_hires.c) */

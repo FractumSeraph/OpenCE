@@ -133,6 +133,19 @@ public final class TouchLayoutTest {
         }
         fingers.setMinimumRadius(Float.NaN);
         check(fingers.radius(12) == 25, "An invalid minimum radius is none");
+        TouchLayout watch = new TouchLayout();
+        watch.bounds(960, 960);
+        watch.setRound(true);
+        for (int i = 0; i < watch.size(); i++) {
+            check(Math.hypot(watch.x(i) - 480, watch.y(i) - 480) + watch.radius(i) <= 480.01,
+                  "On a round display every control is inside the circle: control " + i);
+        }
+        watch.move(0, 0, 0);
+        check(watch.x(0) > 100 && watch.x(0) == watch.y(0), "A control dragged to a corner stops at the circle");
+        float roundX = watch.savedX(0);
+        watch.setRound(false);
+        watch.move(0, 0, 0);
+        check(watch.x(0) == watch.radius(0) && watch.savedX(0) != roundX, "A square display keeps its corners");
         wide.resetDefaults();
         check(wide.size() == 18 && wide.shown(4) && wide.x(4) == 915*1200f/960,
               "Reset restores defaults on the current display and removes all copies");
