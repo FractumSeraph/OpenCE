@@ -883,9 +883,11 @@ boolean network_game_client_dont_use_directly_in_use = FALSE;
 
 #ifdef HALO_BROWSER
 /* web: Delta Peer's client (port/web/src/web_delta_peer.c, ChupathingyCE's
-network family): the joined game's advertisement's flags, whose
-DELTA_ADVERTISED_FLAG says its host speaks it (0 for the host's own game) */
-static byte network_game_client_joined_flags;
+network family): whether the joined game's advertisement says its host
+speaks it (its Delta tag, or the old layout's flag; 0 for the host's own
+game), as the native builds read it (port/linux/src/delta_peer_game.c) */
+int delta_peer_advertised_speaks_delta(unsigned char const *reserved, int size);
+static byte network_game_client_joined_delta;
 /* (and its host's identifier, as the native builds keep it:
 network_game_client_joined_host_identifier) */
 static byte network_game_client_joined_host[6];
@@ -3842,7 +3844,7 @@ static void network_game_client_delta_frame(
 			client->game.players[index].machine_index : -1);
 	}
 	web_delta_peer_client_frame(joined && host, host,
-		(network_game_client_joined_flags & DELTA_ADVERTISED_FLAG) != 0, network_game_client_get_machine_index(client),
+		network_game_client_joined_delta != 0, network_game_client_get_machine_index(client),
 		player_machines);
 	if (client->state == _network_game_client_state_ingame &&
 		web_delta_peer_take_notice((unsigned short *)notice, NUMBEROF(notice)))
