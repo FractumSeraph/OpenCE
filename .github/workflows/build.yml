@@ -219,13 +219,6 @@ jobs:
       - name: glibc 2.31
         run: python3 tools/linux_glibc_check.py dist/chupathingyce-linux-debug dist/chupathingyce-linux-release
 
-      # (Delta's wire on a big-endian machine, as the Xbox 360 and Wii U are:
-      # tools/test_delta_big_endian.py, under QEMU)
-      - name: Delta on big-endian
-        run: |
-          sudo apt-get install -y -q --no-install-recommends gcc-s390x-linux-gnu libc6-dev-s390x-cross qemu-user
-          DELTA_BE_REQUIRED=1 python3 -m pytest -q tools/test_delta_big_endian.py -rs
-
       # (not tools/stagekit/tests: OpenCE's StageKit writes Custom Edition maps
       # with OpenCE's cache_file_formats, which this fork replaces with
       # ChupathingyCE's ce_*.c; build/UPDATING.md, 2026-10-20)
@@ -247,6 +240,15 @@ jobs:
           python3 tools/test_bitmap_byte_order.py
           python3 -m pytest -q tools/test_console_link.py
           python3 tools/test_console_https.py
+
+      # (Delta's wire on a big-endian machine, as the Xbox 360 and Wii U are:
+      # tools/test_delta_big_endian.py, under QEMU). After the tests: the s390x
+      # cross compiler takes gcc-multilib's place, and the harness's 32-bit
+      # builds need its <asm/errno.h> (port, this fork)
+      - name: Delta on big-endian
+        run: |
+          sudo apt-get install -y -q --no-install-recommends gcc-s390x-linux-gnu libc6-dev-s390x-cross qemu-user
+          DELTA_BE_REQUIRED=1 python3 -m pytest -q tools/test_delta_big_endian.py -rs
 
       - name: Compile cache
         run: ccache --show-stats
