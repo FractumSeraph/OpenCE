@@ -470,6 +470,15 @@ boolean mods_memory_contains(unsigned long address, long size)
 	return FALSE;
 }
 
+/* (menu_tags.c's: the memory the PC menus' tags made, which ce_tags_pointer
+reads too; there are no menus here) */
+boolean pc_menu_owns(unsigned long address, long size)
+{
+	(void)address;
+	(void)size;
+	return FALSE;
+}
+
 boolean map_family_resource(char const *name, char *path, long size)
 {
 	snprintf(path, (size_t)size, "%s", name);

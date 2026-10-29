@@ -2,7 +2,9 @@
 
 **Play it now in your browser: [halo.fractumseraph.net](https://halo.fractumseraph.net/)**,
 [download it](#download) for Windows, Mac, Linux and Android, or play it on a
-**New Nintendo 3DS: [Fractum Halo 3DS](https://github.com/FractumSeraph/Fractum-Halo-3DS)**.
+**New Nintendo 3DS: [Fractum Halo 3DS](https://github.com/FractumSeraph/Fractum-Halo-3DS)**
+or a **smartwatch: [fractum-halo-android32.apk](https://github.com/FractumSeraph/OpenCE/releases/latest/download/fractum-halo-android32.apk)**
+(Wear OS watches with a 32-bit Android, such as the Galaxy Watch 8 Classic).
 
 This fork combines [ChupathingyCE](https://github.com/ChupathingyCE/chupathingyce)
 and [OpenCE](https://github.com/OpenCommunityEdition/OpenCE), the ports of the
@@ -20,6 +22,12 @@ are [ChupathingyCE's](#chupathingyce) and [OpenCE's](#opence) own pages.
   PC, Mac, Linux and Android builds, internet play with their servers,
   the Online Games list, and Custom Edition maps downloaded as a game needs
   them (map sharing). It follows this fork's releases.
+- **Halo on a smartwatch.** `fractum-halo-android32.apk` is a build for
+  32-bit Android, which watches such as the Samsung Galaxy Watch 8 Classic
+  (Wear OS 6) have: the HUD laid out inside a round display, the touch
+  controls kept in the circle, and the rotating bezel to turn the view or
+  switch weapons. It plays at 60 frames a second on that watch and updates
+  itself (see [port/android/README.md](port/android/README.md), "Wear OS").
 - **Players of every version in one game.** OpenCE's builds join only hosts
   of their own network version. This fork joins hosts of versions 11 to 40,
   OpenCE's and ChupathingyCE's alike, and its hosts take OpenCE players of
@@ -106,7 +114,7 @@ working version; nothing sent over the network differs from theirs, so
 players of all three play together: this fork's games announce network
 version 39, as OpenCE's newest does, so OpenCE 39 players join them, SWAT,
 Infection, Gun Game and Hardcore included, and ChupathingyCE players
-(0.8.0e to 0.8.0h) join them by its wire, `chupa-38a` (0.8.0e's and
+(0.8.0e and later) join them by its wire, `chupa-39a` (0.8.0e's and
 0.8.0f's `chupa-32a` plays with it), each sent the game settings of its own
 version (a game of one of OpenCE's game types is the one they can't play:
 0.8.0f and later leave it saying so, and the host turns 0.8.0e away from
@@ -135,6 +143,7 @@ needs them ([docs/map_torrents.md](docs/map_torrents.md)):
 | Linux (32-bit) | [chupathingyce-linux-release.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-linux-release.zip) | [chupathingyce-linux-debug.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-linux-debug.zip) |
 | Mac | [chupathingyce-macos-release.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-macos-release.zip) | [chupathingyce-macos-debug.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-macos-debug.zip) |
 | Android | [fractum-halo-android.apk](https://github.com/FractumSeraph/OpenCE/releases/latest/download/fractum-halo-android.apk) (or [chupathingyce-android-release.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-android-release.zip)) | [chupathingyce-android-debug.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-android-debug.zip) |
+| Android, 32-bit (watches) | [fractum-halo-android32.apk](https://github.com/FractumSeraph/OpenCE/releases/latest/download/fractum-halo-android32.apk) (or [chupathingyce-android32-release.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-android32-release.zip)) | [chupathingyce-android32-debug.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-android32-debug.zip) |
 | Dedicated server (Linux x64) | [chupathingyce-server-linux-x64.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-server-linux-x64.zip) | |
 | Dedicated server (Linux arm64) | [chupathingyce-server-linux-arm64.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-server-linux-arm64.zip) | |
 | Dedicated server (Linux x86) | [chupathingyce-server-linux-x86.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-server-linux-x86.zip) | |
@@ -148,7 +157,10 @@ download page, with how to install it, is
 https://halo.fractumseraph.net/assets/android/index.html
 (`port/web/assets/android/index.html`). Each release has the app bare as
 `fractum-halo-android.apk`, and the native 64-bit build (experimental) as
-`fractum-halo-android64.apk`. The debug zip's APK is signed with the build
+`fractum-halo-android64.apk`, and the 32-bit build for watches with a
+32-bit Android (the Galaxy Watch 8 Classic) as `fractum-halo-android32.apk`
+(the same app, installed with `adb install`; port/android/README.md, "Wear
+OS"). The debug zip's APK is signed with the build
 machine's own debug key, which can differ from one build to the next, and
 then does not install over an earlier one.
 

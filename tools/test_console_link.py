@@ -28,6 +28,21 @@ def test_console_link(tmp_path):
     prelude = tmp_path / "prelude.h"
     prelude.write_text("void posix_random_bytes(void *buffer, unsigned long size);\n"
                        "void platform_log(const char *format, ...);\n")
+    # (p2p.c's p2p_hex, which p2p_crypto.c calls in this fork: p2p.c is not linked here)
+    stubs = tmp_path / "stubs.c"
+    stubs.write_text("void p2p_hex(const unsigned char *bytes, int size, char *text);\n"
+                     "void p2p_hex(const unsigned char *bytes, int size, char *text)\n"
+                     "{\n"
+                     "\tstatic const char digits[] = \"0123456789abcdef\";\n"
+                     "\tint index;\n"
+                     "\n"
+                     "\tfor (index = 0; index < size; index++)\n"
+                     "\t{\n"
+                     "\t\ttext[index * 2] = digits[bytes[index] >> 4];\n"
+                     "\t\ttext[index * 2 + 1] = digits[bytes[index] & 15];\n"
+                     "\t}\n"
+                     "\ttext[size * 2] = 0;\n"
+                     "}\n")
     binary = tmp_path / "console_link_test"
     monocypher = ROOT / "port" / "third_party" / "monocypher"
     qrcodegen = ROOT / "port" / "third_party" / "qrcodegen"
@@ -38,7 +53,7 @@ def test_console_link(tmp_path):
          "-I", str(link), "-I", str(ROOT / "port" / "linux" / "src"), "-I", str(monocypher), "-I", str(qrcodegen),
          str(ROOT / "port" / "console" / "tests" / "console_link_test.c"), str(link / "console_link.c"),
          str(ROOT / "port" / "linux" / "src" / "p2p_crypto.c"), str(qrcodegen / "qrcodegen.c"),
-         str(monocypher / "monocypher.c"), str(monocypher / "monocypher-ed25519.c"),
+         str(monocypher / "monocypher.c"), str(monocypher / "monocypher-ed25519.c"), str(stubs),
          "-o", str(binary)],
         capture_output=True, text=True,
     )
