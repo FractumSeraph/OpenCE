@@ -365,6 +365,11 @@ select "Yes":
 3. Select "Update". Android replaces the app.
 4. Select "Open" to start the new version.
 
+Each build updates to the same build of the new version: the guest build
+from `chupathingyce-android`, the native 64-bit build from
+`chupathingyce-android64`, the native 32-bit ARM build (watches) from
+`chupathingyce-android32`.
+
 To install over the previous version, each build must have the same
 signature. The release workflows sign each build with ChupathingyCE's key.
 If you installed a build that has a different signature (for example a
@@ -523,9 +528,12 @@ other builds in these ways:
   assumed aligned, so clang loads it with instructions that work at any
   address.
 - No movies (no FFmpeg for this target yet: the game skips them).
-- It updates from the release asset `chupathingyce-android32`, which no
-  release has yet: the build is made by hand (`ninja android32_apk`, signed
-  with the computer's debug key) and does not update itself.
+- Each of this fork's releases has it (the workflow's `android32` job):
+  `fractum-halo-android32.apk`, signed as the other apps are, which updates
+  itself from the release asset `chupathingyce-android32`
+  (`chupathingyce-android32-release.zip`; refer to "Updates"). A build made
+  by hand (`ninja android32_apk`) has the computer's debug key and does not
+  update itself; remove it before you install the release's.
 
 On the Galaxy Watch 8 Classic (SM-L505U, Wear OS 6) it starts, shows the
 menus inside the circle, and plays Blood Gulch at the display's 60 frames a
@@ -580,9 +588,10 @@ To install the app on a watch:
 4. Enter `adb connect <address>:<port>` with the address and port of the
    Wireless debugging screen (not the pairing port).
 5. Enter `adb install fractum-halo-android.apk` on a watch with a 64-bit
-   Android, or the native 32-bit ARM build (`ninja android32_apk`) on one
-   with a 32-bit Android (`adb shell getprop ro.product.cpu.abilist` says
-   which).
+   Android, or `adb install fractum-halo-android32.apk` (the native 32-bit
+   ARM build) on one with a 32-bit Android, such as the Galaxy Watch 8
+   Classic (`adb shell getprop ro.product.cpu.abilist` says which). Both are
+   on each of this fork's releases and update themselves.
 6. Start the app one time, then push the maps (refer to "Game data"); the
    multiplayer maps with `ui.map` are about 300 MB. (The app's download
    buttons were not tried on a watch.)

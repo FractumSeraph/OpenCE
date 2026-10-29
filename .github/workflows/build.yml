@@ -1,7 +1,7 @@
 name: Build
 
 # Debug and release builds of the native ports (Linux and Windows, 32- and
-# 64-bit, Android and its native 64-bit app, macOS), and release builds of the dedicated server (Linux
+# 64-bit, Android and its native 64-bit and 32-bit ARM apps, macOS), and release builds of the dedicated server (Linux
 # x86, x64 and arm64) and its container, for every pushed commit and pull
 # request, uploaded as artifacts: whether a change builds. tools/ci_build.py does each build; see it for the options.
 #
@@ -751,6 +751,117 @@ jobs:
           path: .ccache
           key: ccache-android64-${{ github.sha }}
 
+  android32:
+    # The native 32-bit ARM Android app (ninja android32;
+    # tools/android32_build.py), for a 32-bit-only Android such as the Galaxy
+    # Watch 8 Classic's: the same app as the android job's, built with
+    # -Pnative32, in a job of its own as android32 is.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - name: Install the toolchain
+        run: |
+          mkdir -p "$RUNNER_TEMP/tools"
+          # (each download checked against the hash it had when it was pinned)
+          curl -fsSL -o ninja.zip https://github.com/ninja-build/ninja/releases/download/v1.12.1/ninja-linux.zip
+          curl -fsSL -o ccache.tar.xz https://github.com/ccache/ccache/releases/download/v4.10.2/ccache-4.10.2-linux-x86_64.tar.xz
+          sha256sum -c - <<'EOF'
+          6f98805688d19672bd699fbbfa2c2cf0fc054ac3df1f0e6a47664d963d530255  ninja.zip
+          80cab87bd510eca796467aee8e663c398239e0df1c4800a0b5dff11dca0b4f18  ccache.tar.xz
+          EOF
+          unzip -q ninja.zip -d "$RUNNER_TEMP/tools" && rm ninja.zip
+          tar -xJf ccache.tar.xz -C "$RUNNER_TEMP/tools" --strip-components=1 ccache-4.10.2-linux-x86_64/ccache && rm ccache.tar.xz
+          echo "$RUNNER_TEMP/tools" >> "$GITHUB_PATH"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit }}
+
+      # (restored on every run, saved only on main: other branches' and pull
+      # requests' runs start from main's and keep nothing of their own)
+      - uses: actions/cache/restore@v4
+        with:
+          path: .ccache
+          key: ccache-android32-${{ github.sha }}
+          restore-keys: ccache-android32-
+
+      # musl and SDL, which configure.py fetches
+      - uses: actions/cache@v4
+        with:
+          path: build/android/third_party
+          key: android-third-party-${{ hashFiles('tools/android_build.py') }}
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('port/android/**/*.gradle*', 'port/android/gradle/wrapper/gradle-wrapper.properties') }}
+
+      # (this fork's key on its pushes, as in the android job: the same app,
+      # signed the same; else the debug app has the runner's debug key, the
+      # release app is unsigned)
+      - name: Signing key
+        if: github.event_name == 'push' && github.repository == 'FractumSeraph/OpenCE'
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE" ]; then
+            echo "::warning::no ANDROID_KEYSTORE_BASE64 secret: the release app is unsigned"
+            exit 0
+          fi
+          printf '%s' "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/android.keystore"
+          umask 077
+          {
+            echo "storeFile=$RUNNER_TEMP/android.keystore"
+            echo "storePassword=$STORE_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "keyPassword=$KEY_PASSWORD"
+          } > port/android/keystore.properties
+
+      - name: Debug
+        run: python3 tools/ci_build.py android32 debug
+
+      - name: Release
+        run: python3 tools/ci_build.py android32 release
+
+      # (the key gone from the runner before anything else runs)
+      - name: Forget the signing key
+        if: always()
+        run: rm -f port/android/keystore.properties "$RUNNER_TEMP/android.keystore"
+
+      - name: Compile cache
+        run: ccache --show-stats
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chupathingyce-android32-debug-testkey
+          path: dist/chupathingyce-android32-debug
+          retention-days: 3
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chupathingyce-android32-release-unsigned
+          path: dist/chupathingyce-android32-release
+          retention-days: 3
+
+      # (kept by ChupathingyCE's release, not a download)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: symbols-android32-release
+          path: dist/chupathingyce-android32-release-symbols
+          if-no-files-found: ignore
+          retention-days: 3
+
+      - uses: actions/cache/save@v4
+        if: ${{ success() && github.ref == 'refs/heads/main' }}
+        with:
+          path: .ccache
+          key: ccache-android32-${{ github.sha }}
+
   windows:
     # The runner image has LLVM, Python, MSYS2 (the movies' FFmpeg builds
     # under its shell) and Visual Studio's x86 libraries and Windows SDK.
@@ -1152,7 +1263,7 @@ jobs:
     # (SHA256SUMS.sig, tools/release_sign.sh); the newest five are kept.
     # ChupathingyCE's own releases come from its release workflows instead.
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository != 'ChupathingyCE/chupathingyce'
-    needs: [linux, linux64, server, android, android64, windows, windows64, macos]
+    needs: [linux, linux64, server, android, android64, android32, windows, windows64, macos]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -1195,6 +1306,8 @@ jobs:
               chupathingyce-android-release-unsigned) zipname=chupathingyce-android-release ;;
               chupathingyce-android64-debug-testkey) zipname=chupathingyce-android64-debug ;;
               chupathingyce-android64-release-unsigned) zipname=chupathingyce-android64-release ;;
+              chupathingyce-android32-debug-testkey) zipname=chupathingyce-android32-debug ;;
+              chupathingyce-android32-release-unsigned) zipname=chupathingyce-android32-release ;;
               *) zipname=$name ;;
             esac
             # (macOS's builds come as a tar, keeping the application's links)
@@ -1206,8 +1319,9 @@ jobs:
           # (the release apps bare as well, signed with the fork's key, at
           # names that stay the same, for a phone to install from a link:
           # releases/latest/download/fractum-halo-android.apk is always the
-          # newest; halo.fractumseraph.net/assets/android/ links them)
-          for build in android android64; do
+          # newest; halo.fractumseraph.net/assets/android/ links them;
+          # fractum-halo-android32.apk is for a 32-bit-only Android, a watch's)
+          for build in android android64 android32; do
             apk=$(find "artifacts/chupathingyce-$build-release-unsigned" -name '*.apk' | head -n 1)
             if [ -n "$apk" ]; then cp "$apk" "release/fractum-halo-$build.apk"; fi
           done
