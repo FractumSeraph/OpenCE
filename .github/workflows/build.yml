@@ -219,12 +219,19 @@ jobs:
       - name: glibc 2.31
         run: python3 tools/linux_glibc_check.py dist/chupathingyce-linux-debug dist/chupathingyce-linux-release
 
+      # (Delta's wire on a big-endian machine, as the Xbox 360 and Wii U are:
+      # tools/test_delta_big_endian.py, under QEMU)
+      - name: Delta on big-endian
+        run: |
+          sudo apt-get install -y -q --no-install-recommends gcc-s390x-linux-gnu libc6-dev-s390x-cross qemu-user
+          DELTA_BE_REQUIRED=1 python3 -m pytest -q tools/test_delta_big_endian.py -rs
+
       # (not tools/stagekit/tests: OpenCE's StageKit writes Custom Edition maps
       # with OpenCE's cache_file_formats, which this fork replaces with
       # ChupathingyCE's ce_*.c; build/UPDATING.md, 2026-10-20)
       - name: Test
         run: |
-          python3 -m pytest -q tools/test_linux_port.py tools/test_android_asm_convert.py tools/test_android_mirror_uploads.py tools/test_touch_menu.py tools/test_ui_point.py tools/test_p2p_copies.py tools/test_ping.py tools/test_save_folder.py tools/test_packaged_install.py tools/test_server_control.py tools/test_delta.py tools/test_delta_peer.py tools/test_delta_compat.py tools/test_network_rules.py tools/test_profile.py tools/test_map_torrents.py tools/test_map_families.py tools/test_map_packs.py tools/test_bmp_files.py tools/test_host_watch_hash.py tools/test_virtual_keyboard_input.py tools/test_settings_sections.py tools/test_loading_picture.py tools/harness tools/test_map_download.py tools/test_playlist_maps.py tools/test_map_report.py tools/test_event_log.py tools/test_update_manifest.py tools/test_gamespy_listing.py tools/test_determinism.py tools/test_android_ce_texture_cache.py tools/test_server_sim.py tools/test_egg.py tools/test_deploy_gametypes.py
+          python3 -m pytest -q tools/test_linux_port.py tools/test_android_asm_convert.py tools/test_android_mirror_uploads.py tools/test_touch_menu.py tools/test_ui_point.py tools/test_p2p_copies.py tools/test_ping.py tools/test_save_folder.py tools/test_packaged_install.py tools/test_server_control.py tools/test_delta.py tools/test_delta_peer.py tools/test_delta_compat.py tools/test_network_rules.py tools/test_profile.py tools/test_map_torrents.py tools/test_map_families.py tools/test_map_packs.py tools/test_bmp_files.py tools/test_host_watch_hash.py tools/test_virtual_keyboard_input.py tools/test_settings_sections.py tools/test_loading_picture.py tools/harness tools/test_map_download.py tools/test_playlist_maps.py tools/test_map_report.py tools/test_event_log.py tools/test_update_manifest.py tools/test_gamespy_listing.py tools/test_determinism.py tools/test_android_ce_texture_cache.py tools/test_server_sim.py tools/test_egg.py tools/test_deploy_gametypes.py tools/test_p2p_host_port.py tools/test_ce_effect_flags.py
           # OpenCE's dedicated server (halo --server): --version, and --server without maps refused (exit code 2);
           # its cases with clients need the retail maps, and are skipped
           python3 -m pytest -q tools/test_dedicated_server.py
@@ -238,6 +245,8 @@ jobs:
           python3 tools/test_split_screen_input.py
           python3 tools/test_tag_byte_swap.py
           python3 tools/test_bitmap_byte_order.py
+          python3 -m pytest -q tools/test_console_link.py
+          python3 tools/test_console_https.py
 
       - name: Compile cache
         run: ccache --show-stats

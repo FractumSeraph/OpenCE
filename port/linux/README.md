@@ -636,11 +636,14 @@ When a version changes the default of settings that a `config.toml` has
 untouched (commented out, or not there), the game asks once, before the
 window opens, in a message box on the desktop and on Android: "Use the new
 settings" or "Keep mine" (Return and Escape). It lists the changes in words
-(smoother edges, sharper shadows, the Chupathingy menus, and on Android a
-larger audio buffer). Until it is answered, the settings keep their old
-values and the file is left as it is. "Keep mine" writes the old values into
-`config.toml`; "Use the new settings" lets them follow the new defaults. The
-answer is `game.defaults_answered`; the question does not come again. A new
+(smoother edges, sharper shadows, the Chupathingy menus, on Android a
+larger audio buffer, and since 0.8.1b a fixed port for hosting, UDP 2302).
+Until it is answered, the settings keep their old values and the file is
+left as it is. "Keep mine" writes the old values into `config.toml`; "Use
+the new settings" lets them follow the new defaults. The answer is
+`game.defaults_answered` (the number of the last set of changes asked
+about); the question does not come again for those, and a later version
+asks only about its own changes. A new
 `config.toml` has the new defaults and is not asked. A run without anyone to
 answer (a hidden window, a test) logs the question and keeps the old values.
 The dedicated server never asks and keeps its own defaults.
@@ -657,6 +660,7 @@ the setting for one start of the game. It has priority over the file.
 | `display.window_size` | `""` | `HALO_WINDOW_SIZE` | The size of the window, as `"<width>x<height>"`, such as `"1920x1080"`, 640x480 or more. You can change the size of the window; the game's picture takes its shape. Empty: `display.window_scale` decides. Video Setup's Window Size sets it, from sizes of each shape (4:3, 16:10, 16:9 and 21:9) that fit the desktop; it shows with Windowed. |
 | `display.window_scale` | `2` | `HALO_WINDOW_SCALE` | Used when `display.window_size` is empty: the size of the window, as a multiple of 640x480. |
 | `display.vsync` | `true` | `HALO_NO_VSYNC=1` sets `false` | `true`: each frame waits for the display. |
+| `display.skip_intro` | `false` | `HALO_SKIP_INTRO` | `true`: skip the intro movie on startup and load straight into the main menu. |
 | `display.max_fps` | `0` | `HALO_MAX_FPS` | With vsync off, the most frames each second. `0`: twice the display's refresh rate (on Android, 120). `-1`: no limit, which can hang some Intel graphics (Raptor Lake), resetting the desktop's graphics too, and heats a phone. |
 | `display.frames_in_flight` | `3` | `HALO_FRAMES_IN_FLIGHT` | Windows and Linux: the most frames the GPU has queued, 1 to 8. Each frame waits until the GPU has finished the frame this many before it, so that the frames come evenly when the GPU is slower than the game. `0`: the driver decides, which on a slow GPU can give a long frame every few frames. Refer to "Frame rate". |
 | `display.anti_aliasing` | `"msaa2x"` on 64-bit computers, `"off"` on 32-bit ones, Android and the server | `HALO_ANTI_ALIASING` | The smoothing of jagged edges, which the Xbox did not have. `"off"`: none, as on the Xbox. `"fxaa"` or `"smaa"`: a pass over the 3D view after the game draws it. The HUD and the menus stay sharp. SMAA is the sharper and costs more. `"ssaa2x"`: the game draws at two times the resolution in each direction (at most the GPU's largest texture), and the picture is scaled down. The GPU does four times the work. Not with `display.resolution_scaling = "original"`. `"msaa2x"`, `"msaa4x"` or `"msaa8x"`: each pixel of the 3D view has that many samples (at most the GPU's). On Android, `"smaa"` gives FXAA and `"ssaa2x"` none. A change applies from the next frame. Refer to "Anti-aliasing" in "What operates". |
@@ -699,7 +703,7 @@ the setting for one start of the game. It has priority over the file.
 | `display.show_quit_players` | `true` | `HALO_SHOW_QUIT_PLAYERS` | `true`: players who quit stay on the multiplayer scoreboard (hold BACK, or tab) and the score in the corner, as in the original game. `false`: they are left off, and the players still in the game are ranked among themselves, as OpenCE does. Only what this machine draws changes. |
 | `display.scoreboard_background_color` | `"16, 16, 16, 150"` | `HALO_SCOREBOARD_BACKGROUND_COLOR` | The colour of the scoreboard's panel: `"red, green, blue, alpha"`, each from `0` to `255`. Alpha `0` is see-through, `255` is solid. |
 | `display.pause_change_teams` | `true` | `HALO_PAUSE_CHANGE_TEAMS` | In a team game, the pause menu's CHANGE TEAMS (Halo PC's, in every menu set): it asks the host to put you on the other team, and the chat says what came of it. Needs a Chupathingy host (docs/delta.md, Team changes). `false` hides it. |
-| `display.pause_controls` | `true` | `HALO_PAUSE_CONTROLS` | The pause menu's CONTROLS, in the Xbox and Gearbox menus: the controller's buttons and the keyboard's keys (Controls above). `false` hides it. The Chupathingy menus have none: their SETTINGS opens Controls. |
+| `display.pause_controls` | `true` | `HALO_PAUSE_CONTROLS` | The pause menu's CONTROLS, in every menu set: the controller's buttons and the keyboard's keys (Controls above). `false` hides it. |
 | `display.server_messages` | `true` | `HALO_SERVER_MESSAGES` | `true`: a warning or notice from a Delta server is drawn as a banner over the game; `false` hides the banner. The message is written to `debug.txt` either way. Kicks and bans are not affected. |
 | `display.server_message_text_color` | `""` | `HALO_SERVER_MESSAGE_TEXT_COLOR` | The banner's text colour, `"#RRGGBB"` or `"#RRGGBBAA"`. Empty, or a value that does not parse (logged once): the default, light for a notice and amber for a warning. Applies to both kinds. |
 | `display.server_message_border_color` | `""` | `HALO_SERVER_MESSAGE_BORDER_COLOR` | The banner's outline colour, `"#RRGGBB"` or `"#RRGGBBAA"`. Empty, or a value that does not parse: the default, blue for a notice and amber for a warning. Applies to both kinds. |
@@ -784,7 +788,7 @@ the setting for one start of the game. It has priority over the file.
 | `network.lasting_invite` | `false` | `HALO_NET_LASTING_INVITE` | `true`: the invite link of the game you host stays the same from one run of the game to the next (a dedicated server's, to post on a website). Its key and token are kept in `lasting_invite.key` in the save folder, which only you can read. Anyone who has the link can always use it; a new password, or making the game private, still makes a new link, which is then kept. Copy the file to one machine only. `false`: a new link each run. |
 | `network.map_downloads` | `"ask"` | `HALO_NET_MAP_DOWNLOADS` | A Custom Edition map a game you join needs and you don't have: over BitTorrent first (`maps.torrents`: other players, the trackers and web seeds), then from the HaloNet and HaloMaps archives (`maps.archives`), then from the community map repositories (maps.halonet.net and its mirrors, as Chimera downloads from them); a host that shares its map sends it before any of these (`network.map_share`). `"ask"`: the Online Games screen offers to download it (Yes, No, Don't ask again, which writes `"always"` or `"never"` here). `"always"`: downloaded without asking. `"never"`: the game only says which map is missing (map sharing aside), and the Server Browser's join does not download it either. Halo PC's own maps (Blood Gulch, Putput, ...) are offered too in this fork; with `"never"` the game asks you to copy them from your install. Network Settings in the PC menus. The map is checked before it goes in `maps_ce`: refer to "Halo PC maps" in the [README](../../README.md). Not on the dedicated server. |
 | `network.playlist_downloads` | `"ask"` | `HALO_NET_PLAYLIST_DOWNLOADS` | When you join a game of a verified playlist, its map set (refer to [docs/playlist-maps.md](../../docs/playlist-maps.md)): `"ask"` says which of its maps you don't have and offers to download them (Yes, No, Don't ask again, which writes `"always"` or `"never"` here); `"always"` downloads them without asking; `"never"` doesn't check. Each file is checked against the signed list before it goes in its folder. Separate from `network.map_downloads`. Desktop and Android. |
-| `network.tunnel_port` | `0` | `HALO_NET_TUNNEL_PORT` | The UDP port for internet play. `0`: the game selects a port. Refer to "Internet play". |
+| `network.tunnel_port` | `2302` on the desktop and Android, `0` on the consoles and the server | `HALO_NET_TUNNEL_PORT` | The UDP port for internet play. At its default, every copy of the game starts on a port it selects, and moves to 2302 when it hosts an internet game (Server Setup, or the game's start); if another program has 2302, the next free port up to 2306; if all are taken, the selected port stays. The log names the port. A port that you set (in the file, Server Setup's PORT, or the environment variable) is used from the start, to join as well as to host, and no other is tried. `0`: the game selects a port each run, also to host. Refer to "Internet play". |
 | `network.allow_upnp` | `true` | `HALO_NET_ALLOW_UPNP` | `true`: internet play can ask the router to forward its port (UPnP). `false`: the game does not ask. Refer to "Internet play". |
 | `network.protocol` | `"auto"` | `HALO_NET_PROTOCOL` | Delta Peer, the messages between ChupathingyCE machines beside OpenCE's protocol (UDP port 5160; `docs/delta.md`). `"auto"`: Delta with the machines that speak it, plain OpenCE with the others. `"opence"`: Delta off. `"delta"`: as `"auto"` for now. |
 | `network.chat` | `"on"` | `HALO_NET_CHAT` | Text chat in the games this copy hosts: `"on"`, `"team"` (team lines alone) or `"off"`. |
@@ -1000,6 +1004,17 @@ public half and its recovery key's are in `update_key.h` and
 `UpdateManifest.java` beside ChupathingyCE's). A fork build from before
 2026-10-16 knows only ChupathingyCE's key, so it cannot install the fork's
 releases: install a newer one by hand once.
+
+The AppImage (`chupathingyce-linux64-release.AppImage`) updates as one
+file. The game downloads the new AppImage that the signed list names, checks
+its size and SHA-256, and puts it in place of the AppImage it runs from,
+with the same file name, so a renamed AppImage or a menu shortcut to it keeps
+working. The old AppImage is kept as `<name>.old` until the next start. The
+folder of the AppImage must let the game write to it. A release without a
+list, or with no AppImage in its list, is not installed over an AppImage:
+the game says to download the new AppImage instead. A packaged AppImage
+(`HALO_PACKAGED=1`) never updates itself. (This fork's releases have no
+AppImage yet: its Linux builds are the zips.)
 
 Builds that you make yourself have no build number. They do not look for
 updates.
@@ -1750,13 +1765,16 @@ punching). There is no relay.
 
 Some networks give a different port for each destination (for example some
 mobile and company networks). Two machines behind such networks cannot
-connect. To connect, forward `network.tunnel_port` on the router of one of
-the machines.
+connect. To connect, forward the host's port (UDP 2302 by default,
+`network.tunnel_port`) on its router to the host. Server Setup's status line
+names the port, and says "Forward UDP <port> on your router to this
+computer" when UPnP did not forward it.
 
 The game can ask the router to forward the port (UPnP,
 `src/posix_upnp.c`, with `port/third_party/miniupnpc`):
 
-- The host asks its router when a player uses its invite.
+- The host asks its router when it hosts an internet game, for the port
+  it hosts on. Another copy of the game asks when a player uses its invite.
 - A player that joins asks its router when it does not reach the host in
   5 seconds.
 - The forwarded port is one more address that the machine gives to the

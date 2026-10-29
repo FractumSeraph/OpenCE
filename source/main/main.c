@@ -1207,6 +1207,18 @@ real first_person_weapon_projection_scale(
 	return 1.0f;
 }
 
+/* port: what the reticle's size (and its items' offsets from the middle)
+is scaled by in the local player's first-person view: 1. (port, this fork:
+ChupathingyCE's display.reticle_scales_with_fov scaled it with their
+display.field_of_view, which this fork leaves out; OpenCE's display.fov
+scales the reticle already, view_fov.c) */
+real first_person_reticle_scale(
+	short local_player_index)
+{
+	(void)local_player_index;
+	return 1.0f;
+}
+
 /* port: display.far_clip_distance, how far the world is drawn (1024 as on
 the Xbox, to 10000). It is a floor under the camera's far clip, applied each
 frame: the map's own value, a script or init.txt can raise the clip beyond it
@@ -3984,7 +3996,9 @@ static boolean main_loop_iteration(
 #ifndef HALO_XBOX_CONSOLE
 					render_interpolation_frame_begin();
 					MAIN_STAGE("main_game_render");
+					HALO_PERF_BEGIN(_halo_perf_render);
 					main_game_render((double)main_globals.seconds_elapsed);
+					HALO_PERF_END(_halo_perf_render);
 					MAIN_STAGE("render_interpolation_frame_end");
 					render_interpolation_frame_end();
 					MAIN_STAGE("profile_render_end");

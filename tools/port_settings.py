@@ -818,7 +818,7 @@ def _controls_rows() -> tuple:
                                ("bitmap", "bitmaps/option_bkds"), ("color", "#FF2896FF")],
                          ['<on event="a" run="controls begin binding"/>',
                           '<on event="start" run="controls begin binding"/>',
-                          '<on event="left right" run="controls binding slot"/>',
+                          '<on event="left right stick_left stick_right white black" run="controls binding slot"/>',
                           f'<child{attributes([("widget", f"{base}/command_label")])}/>',
                           f'<child{attributes([("widget", f"{base}/command_binding"), ("x", 200)])}/>',
                           f'<child{attributes([("widget", f"{base}/command_binding"), ("x", 356)])}/>'])
@@ -1784,8 +1784,8 @@ HOST_OPTIONS = {
         ("MOUSE AIM ASSIST:", "network.block_mouse_aim_assist", [("ALLOWED", "false"), ("BLOCKED", "true")],
          "Allow or block aim assist for mouse players.",
          None),
-        ("PORT:", "network.tunnel_port", [("AUTO", "0")] + [(str(port), str(port)) for port in range(2302, 2311)],
-         "The UDP port for internet play. Applies on restart.",
+        ("PORT:", "network.tunnel_port", [("RANDOM", "0")] + [(str(port), str(port)) for port in range(2302, 2311)],
+         "The UDP port for hosting. Forward it on your router if friends can't join.",
          None),
     ],
 }
