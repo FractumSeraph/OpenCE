@@ -59,7 +59,7 @@ anyway, so it is 0 there. */
 /* the XDK's COM headers decorate methods with __export when _WIN32 is unset */
 #define __export
 
-/* ---------- the host C library on macOS and 64-bit Linux
+/* ---------- the host C library on macOS, 64-bit Linux and Android
 
 Apple's libc headers use `__inline` for their extern inline helpers, which the MSVC inline semantics below redefine. Include the
 C runtime headers the game uses before that happens; their include guards
@@ -69,7 +69,9 @@ with -fshort-wchar and must be fixed before the host headers define theirs.
 The 64-bit builds also need the declarations themselves: they reject an
 implicitly declared function (its int result would truncate a pointer). */
 
-#if defined(__APPLE__) || defined(HALO_64BIT)
+#if defined(__APPLE__) || defined(HALO_64BIT) || defined(__ANDROID__)
+/* (Android: the native builds, 64-bit and 32-bit ARM, whose bionic has no
+strict-ISO mode; the guest image's C library is musl) */
 #ifndef __APPLE__
 /* glibc: no extern-inline helpers (__NO_INLINE__ below; its headers are
 read here first), and the ctype functions as functions, not macros, which

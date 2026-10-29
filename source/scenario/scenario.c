@@ -215,7 +215,9 @@ struct memory_status
 
 /* ---------- prototypes */
 
-#ifdef HALO_BROWSER
+/* port: and on 32-bit ARM, where clang has no _ReadWriteBarrier builtin
+(the native 32-bit ARM Android build, tools/android32_build.py) */
+#if defined(HALO_BROWSER) || defined(__arm__)
 #define _ReadWriteBarrier() __asm__ __volatile__("" ::: "memory")
 #else
 void _ReadWriteBarrier(

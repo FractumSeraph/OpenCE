@@ -33,7 +33,8 @@ chupathingyce-android-debug-testkey.apk, which installs over nothing
 signed with ChupathingyCE's key, and the release build is unsigned,
 chupathingyce-android-release-unsigned.apk. The native 64-bit app
 (android64) is the same app, built and named the same way:
-chupathingyce-android64-<config>.apk and so on.
+chupathingyce-android64-<config>.apk and so on, and so is the native 32-bit
+ARM app (android32), for a 32-bit-only Android such as a Galaxy Watch's.
 
 The dedicated server (server-x86, server-x64, server-arm64:
 tools/server_build.py) is built against musl, so that it is one static
@@ -88,6 +89,9 @@ OUTPUTS = {
     # the native 64-bit app (ninja android64; tools/android64_build.py): the
     # same app, built with -Pnative64, its APK below
     "android64": [],
+    # the native 32-bit ARM app (ninja android32; tools/android32_build.py):
+    # the same app, built with -Pnative32, its APK below
+    "android32": [],
     # the application (universal and self-contained: --portable), whole
     "macos": ["build/macos/ChupathingyCE.app"],
     # the dedicated server (ninja server-<arch>; tools/server_build.py)
@@ -113,6 +117,7 @@ PROFILE_PLATFORMS = {"linux", "windows", "android"}
 ANDROID_BUILDS = {
     "android": ("port/android/app/build/outputs/apk", []),
     "android64": ("port/android/app/build-native64/outputs/apk", ["-Pnative64"]),
+    "android32": ("port/android/app/build-native32/outputs/apk", ["-Pnative32"]),
 }
 
 
@@ -384,7 +389,7 @@ def keep_native_symbols(platform: str, config: str) -> None:
     symbols = ROOT / "dist" / f"chupathingyce-{platform}-{config}-symbols"
     if platform in ("linux", "linux64"):
         files = [ROOT / f"build/{platform}/halo"]
-    elif platform in ("android", "android64"):
+    elif platform in ("android", "android64", "android32"):
         files = sorted((ROOT / f"build/{platform}/jniLibs").glob("*/*.so"))
     elif platform == "macos":
         files = []

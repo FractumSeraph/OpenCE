@@ -99,9 +99,12 @@ unsigned int platform_host_page_size = PAGE_SIZE_BYTES;
 #if defined(HALO_64BIT) && defined(HALO_ANDROID)
 /* where the Xbox address space is (xbox_address.h) */
 unsigned long long xbox_address_space_base;
-/* why the Xbox address space could not be reserved, or empty: an Android
-app's library is loaded into a process the system has laid out already,
-and the app tells the player (port/android/native64/android64_main.c) */
+#endif
+#if defined(HALO_ANDROID) && (defined(HALO_64BIT) || defined(__arm__))
+/* why the Xbox address space (the native 32-bit build: the contiguous
+window) could not be reserved, or empty: an Android app's library is loaded
+into a process the system has laid out already, and the app tells the
+player (port/android/native64/android64_main.c) */
 char platform_xbox_address_space_error[160];
 #endif
 
@@ -246,6 +249,35 @@ static void contiguous_arena_reserve(void)
 				(unsigned long)PLATFORM_CONTIGUOUS_SIZE, platform_contiguous_base);
 	}
 #endif
+#if defined(HALO_WINDOW_REBASE) && defined(HALO_ANDROID) && defined(__arm__)
+	/* the native 32-bit ARM Android build (tools/android32_build.py): the
+	linked address if it is free, else the first of these that is (a Galaxy
+	Watch 8 Classic's Java runtime has its JIT code cache at 0x81e00000).
+	Always the same one where it can be: a saved game is tied to the
+	window's address (xbox_files.c) */
+	{
+		static const unsigned long bases[] = {
+			0x80000000UL, 0x48000000UL, 0x50000000UL, 0x58000000UL, 0x60000000UL, 0x20000000UL,
+			0x28000000UL, 0x30000000UL, 0x10000000UL, 0x18000000UL, 0x38000000UL, 0xb0000000UL,
+		};
+		unsigned int index;
+
+		for (index = 0; index < sizeof(bases) / sizeof(bases[0]); index++)
+		{
+			void *trial = mmap((void *)bases[index], platform_contiguous_size, PROT_NONE,
+				MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE | MAP_FIXED_NOREPLACE, -1, 0);
+
+			if (trial == (void *)bases[index])
+			{
+				munmap(trial, platform_contiguous_size);
+				platform_contiguous_base = bases[index];
+				break;
+			}
+			if (trial != MAP_FAILED)
+				munmap(trial, platform_contiguous_size);
+		}
+	}
+#endif
 #ifdef HALO_WINDOW_REBASE
 	if (platform_contiguous_size < PLATFORM_CONTIGUOUS_MINIMUM)
 	{
@@ -321,6 +353,11 @@ static void contiguous_arena_reserve(void)
 			munmap(result, PLATFORM_CONTIGUOUS_SIZE);
 		platform_log("cannot reserve the Xbox contiguous memory window at %p (%s)",
 			wanted, strerror(errno));
+#if defined(HALO_ANDROID) && defined(__arm__)
+		snprintf(platform_xbox_address_space_error, sizeof(platform_xbox_address_space_error),
+			"%u MB at %p: %s", (unsigned int)(PLATFORM_CONTIGUOUS_SIZE >> 20), wanted,
+			result == MAP_FAILED ? strerror(errno) : "the system put it elsewhere");
+#endif
 #endif
 	}
 #if defined(HALO_CUSTOM_EDITION) && !defined(HALO_64BIT)

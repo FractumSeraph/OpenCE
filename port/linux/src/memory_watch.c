@@ -283,6 +283,10 @@ static void crash_report(int signal_number, siginfo_t *information, void *contex
 	pc = (unsigned long)ucontext->uc_mcontext.gregs[REG_RIP];
 	frame = (unsigned long)ucontext->uc_mcontext.gregs[REG_RBP];
 	stack = (unsigned long)ucontext->uc_mcontext.gregs[REG_RSP];
+#elif defined(__arm__)
+	pc = ucontext->uc_mcontext.arm_pc;
+	frame = ucontext->uc_mcontext.arm_r7;
+	stack = ucontext->uc_mcontext.arm_sp;
 #else
 	pc = frame = stack = 0;
 	(void)ucontext;
