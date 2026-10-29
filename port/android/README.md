@@ -483,16 +483,27 @@ All the ports draw this way.
 
 ## Wear OS (watches, experimental)
 
-The app runs on a Wear OS watch from the same APK: Wear OS is Android, and
-the app needs no watch manifest entries to be installed with adb. It was
-tried only in the Android emulator's Wear OS 6 image, set up as a Samsung
-Galaxy Watch 8 Classic (below), not yet on a watch.
+The app runs on a Wear OS watch with a 64-bit Android from the same APK:
+Wear OS is Android, and the app needs no watch manifest entries to be
+installed with adb. It was tried in the Android emulator's Wear OS 6 image,
+set up as a Samsung Galaxy Watch 8 Classic (below).
+
+It does not install on the Galaxy Watch 8 Classic itself: the watch's
+Android is 32-bit only (`ro.product.cpu.abilist` is `armeabi-v7a,armeabi`,
+`ro.zygote` is `zygote32`, there is no `/system/lib64`), though its
+processor is 64-bit, and both of the app's builds are arm64 (`arm64-v8a`):
+adb says `INSTALL_FAILED_NO_MATCHING_ABIS`. A 32-bit process cannot run the
+guest image's AArch64 code, so the watch needs an `armeabi-v7a` build of the
+game, which does not exist. Most Wear OS watches have a 32-bit Android; the
+emulator's image is 64-bit, so it does not show this.
 
 The Galaxy Watch 8 Classic, as Samsung publishes it: Exynos W1000 (five
 cores, one Cortex-A78 and four Cortex-A55, 3 nm, up to 1.6 GHz), Mali-G68
 graphics (OpenGL ES 3.2, Vulkan), 2 GB of memory, 64 GB of storage, a round
 1.34 inch 438x438 display (about 327 dpi), a rotating bezel, Wear OS 6 (One
-UI 8 Watch, Android 16, API level 36).
+UI 8 Watch, Android 16, API level 36). One watch (SM-L505U) over adb: a
+32-bit Android (`armeabi-v7a`, kernel `armv8l`), the GPU driver `mali`,
+1.7 GB of memory of which about 500 MB was available, a 438x438 display.
 
 On a watch the app does these things differently, and on other devices
 nothing:
