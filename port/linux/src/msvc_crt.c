@@ -329,6 +329,64 @@ unsigned int _clearfp(void)
 	return 0;
 }
 
+#elif defined(__arm__)
+/* 32-bit ARM (the native 32-bit Android build): the rounding mode is the
+FPSCR's RMode, bits 22 and 23 as AArch64's FPCR has it, and its sticky
+exception flags are AArch64's FPSR's bits. As on AArch64, precision control
+and exception unmasking have no equivalent; the rest of the MSVC control
+word is only remembered. */
+static unsigned int msvc_control_word = CW_DEFAULT;
+
+unsigned int _control87(unsigned int new_value, unsigned int mask)
+{
+	unsigned int fpscr;
+
+	if (mask)
+	{
+		msvc_control_word = (msvc_control_word & ~mask) | (new_value & mask);
+		fpscr = __builtin_arm_get_fpscr();
+		fpscr &= ~(3U << 22);
+		switch (msvc_control_word & _MCW_RC)
+		{
+		case _RC_UP: fpscr |= 1U << 22; break;
+		case _RC_DOWN: fpscr |= 2U << 22; break;
+		case _RC_CHOP: fpscr |= 3U << 22; break;
+		default: break;
+		}
+		__builtin_arm_set_fpscr(fpscr);
+	}
+	return msvc_control_word;
+}
+
+unsigned int _controlfp(unsigned int new_value, unsigned int mask)
+{
+	/* _controlfp ignores the denormal mask */
+	return _control87(new_value, mask & ~_EM_DENORMAL);
+}
+
+unsigned int _statusfp(void)
+{
+	unsigned int fpscr = __builtin_arm_get_fpscr();
+	unsigned int result = 0;
+
+	/* as the x87 status word's low bits: invalid, denormal, zero divide,
+	overflow, underflow, precision */
+	if (fpscr & 0x01) result |= 0x01;
+	if (fpscr & 0x80) result |= 0x02;
+	if (fpscr & 0x02) result |= 0x04;
+	if (fpscr & 0x04) result |= 0x08;
+	if (fpscr & 0x08) result |= 0x10;
+	if (fpscr & 0x10) result |= 0x20;
+	return result;
+}
+
+unsigned int _clearfp(void)
+{
+	unsigned int status = _statusfp();
+
+	__builtin_arm_set_fpscr(__builtin_arm_get_fpscr() & ~0x9fU);
+	return status;
+}
 #elif defined(HALO_ANDROID) || defined(__aarch64__)
 /* AArch64: the rounding mode lives in FPCR.RMode, the sticky exception
 flags in FPSR. Precision control and exception unmasking have no

@@ -51,6 +51,7 @@ ninja android_apk              # the APK (Gradle)
 ninja web                      # OpenCE's browser build, build/web/site (Emscripten: port/web/README.md)
 ninja windows                  # on Windows, or on Linux after configure.py --windows-cross
 ninja linux64                  # build/linux64/halo, 64-bit; also ninja windows64, ninja macos
+ninja android32_apk            # the native 32-bit ARM Android app, for 32-bit-only Android (watches)
 ninja server                   # the dedicated servers, build/server-<arch>/chupathingyce-server
 ninja browser                  # the browser build (configure.py --web-cc <emcc>)
 python tools/ci_build.py linux release   # what CI builds

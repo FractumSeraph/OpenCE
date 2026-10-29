@@ -17,6 +17,7 @@ from types import SimpleNamespace
 from tools import ninja_syntax
 from tools.android_build import android_configure_inputs, generate_android_build
 from tools.android64_build import android64_configure_inputs, generate_android64_build
+from tools.android32_build import android32_configure_inputs, generate_android32_build
 from tools.console_build import (GAME_ROOT, add_console_arguments, console_configure_inputs, load_console_port,
                                  relative)
 from tools.linux_build import check_profile_options, generate_linux_build, linux_configure_inputs
@@ -268,6 +269,7 @@ if not console_only:
     generate_linux64_build(n, sln)
     generate_android_build(n, sln)
     generate_android64_build(n, sln)
+    generate_android32_build(n, sln)
     generate_windows_build(n, sln)
     generate_macos_build(n, sln)
     generate_server_build(n, sln)
@@ -294,6 +296,7 @@ n.build(
             *linux64_configure_inputs(),
             *android_configure_inputs(),
             *android64_configure_inputs(),
+            *android32_configure_inputs(),
             *windows_configure_inputs(),
             *macos_configure_inputs(),
             *server_configure_inputs(),

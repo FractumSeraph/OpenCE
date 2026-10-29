@@ -52,6 +52,9 @@ HALO_BUILD_FLAVOR.
 /* (the Android game's code is arm64_32, on an arm64 device) */
 #if defined(__wasm__)
 #define BUILD_IDENTITY_ARCHITECTURE "wasm32"
+#elif defined(__arm__)
+/* (the native 32-bit Android build's, for a 32-bit-only Android) */
+#define BUILD_IDENTITY_ARCHITECTURE "arm"
 #elif defined(__aarch64__) || defined(__arm64__) || defined(HALO_ANDROID)
 #define BUILD_IDENTITY_ARCHITECTURE "arm64"
 #elif defined(__x86_64__) || defined(_M_X64)

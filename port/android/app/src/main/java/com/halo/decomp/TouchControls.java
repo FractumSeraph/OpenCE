@@ -371,6 +371,43 @@ public final class TouchControls extends View implements SensorEventListener, In
         return Math.max(radius, minimumRadius());
     }
 
+    /**
+     * the angle, counterclockwise from the right, of a corner toolbar item
+     * (Options, and Import and Export while editing) on a round display,
+     * whose corners are not shown: on the circle's edge instead
+     */
+    private static float roundToolbarAngle(int item) {
+        switch (item) {
+        case TOOLBAR_IMPORT: return 135;
+        case TOOLBAR_EXPORT: return 157.5f;
+        default: return 45;
+        }
+    }
+
+    /** a corner toolbar item's centre, x (logical units) */
+    private float toolbarItemX(int item) {
+        if (round) {
+            float half = Math.min(logicalWidth, logicalHeight) / 2;
+            float distance = half - toolbarRadius(OPTIONS_RADIUS) - 4;
+            return logicalWidth / 2 + distance * (float)Math.cos(Math.toRadians(roundToolbarAngle(item)));
+        }
+        if (item == TOOLBAR_EXPORT)
+            return optionsX() - 156;
+        if (item == TOOLBAR_IMPORT)
+            return optionsX() - 78;
+        return optionsX();
+    }
+
+    /** a corner toolbar item's centre, y (logical units) */
+    private float toolbarItemY(int item) {
+        if (round) {
+            float half = Math.min(logicalWidth, logicalHeight) / 2;
+            float distance = half - toolbarRadius(OPTIONS_RADIUS) - 4;
+            return logicalHeight / 2 - distance * (float)Math.sin(Math.toRadians(roundToolbarAngle(item)));
+        }
+        return toolbarY();
+    }
+
     // ---------- when the controls show
 
     /**
@@ -580,11 +617,13 @@ public final class TouchControls extends View implements SensorEventListener, In
 
     /** what is under a point (logical units): a toolbar item, a control, or NOTHING */
     private int hit(float x, float y) {
-        if (inside(x, y, optionsX(), toolbarY(), toolbarRadius(OPTIONS_RADIUS)))
+        if (inside(x, y, toolbarItemX(TOOLBAR_OPTIONS), toolbarItemY(TOOLBAR_OPTIONS), toolbarRadius(OPTIONS_RADIUS)))
             return TOOLBAR_OPTIONS;
-        if (editing && inside(x, y, optionsX() - 156, toolbarY(), toolbarRadius(OPTIONS_RADIUS)))
+        if (editing && inside(x, y, toolbarItemX(TOOLBAR_EXPORT), toolbarItemY(TOOLBAR_EXPORT),
+                toolbarRadius(OPTIONS_RADIUS)))
             return TOOLBAR_EXPORT;
-        if (editing && inside(x, y, optionsX() - 78, toolbarY(), toolbarRadius(OPTIONS_RADIUS)))
+        if (editing && inside(x, y, toolbarItemX(TOOLBAR_IMPORT), toolbarItemY(TOOLBAR_IMPORT),
+                toolbarRadius(OPTIONS_RADIUS)))
             return TOOLBAR_IMPORT;
         if (!editing && inside(x, y, logicalWidth / 2, toolbarY(), toolbarRadius(TOOLBAR_RADIUS)))
             return TOOLBAR_TOGGLE;
@@ -1290,20 +1329,29 @@ public final class TouchControls extends View implements SensorEventListener, In
 
     /** a toolbar item: never fainter than half, so that it can always be found */
     private void toolbarItem(Canvas canvas, float x, float radius, String label) {
-        circle(canvas, x, toolbarY(), toolbarRadius(radius), label, false, 11, Math.max(layout.opacity, 0.5f));
+        toolbarItem(canvas, x, toolbarY(), radius, label);
+    }
+
+    private void toolbarItem(Canvas canvas, float x, float y, float radius, String label) {
+        circle(canvas, x, y, toolbarRadius(radius), label, false, 11, Math.max(layout.opacity, 0.5f));
+    }
+
+    /** a corner toolbar item (toolbarItemX) */
+    private void cornerItem(Canvas canvas, int item, String label) {
+        toolbarItem(canvas, toolbarItemX(item), toolbarItemY(item), OPTIONS_RADIUS, label);
     }
 
     private void drawToolbar(Canvas canvas) {
         if (editing) {
-            toolbarItem(canvas, optionsX(), OPTIONS_RADIUS, "Save");
-            toolbarItem(canvas, optionsX() - 156, OPTIONS_RADIUS, "Export");
-            toolbarItem(canvas, optionsX() - 78, OPTIONS_RADIUS, "Import");
+            cornerItem(canvas, TOOLBAR_OPTIONS, "Save");
+            cornerItem(canvas, TOOLBAR_EXPORT, "Export");
+            cornerItem(canvas, TOOLBAR_IMPORT, "Import");
             paint.setColor(Color.WHITE);
             paint.setTextSize(14);
             canvas.drawText("Drag the controls, then push Save", logicalWidth / 2, toolbarY() + 58, paint);
         } else {
             toolbarItem(canvas, logicalWidth / 2, TOOLBAR_RADIUS, hidden ? "Touch" : "Hide");
-            toolbarItem(canvas, optionsX(), OPTIONS_RADIUS, "Options");
+            cornerItem(canvas, TOOLBAR_OPTIONS, "Options");
         }
     }
 

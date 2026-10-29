@@ -11,11 +11,19 @@ plugins {
 def native64 = project.hasProperty("native64")
 if (native64)
     layout.buildDirectory = file("build-native64")
+// The native 32-bit ARM build (`ninja android32`, tools/android32_build.py)
+// with -Pnative32, for a device whose Android is 32-bit only (a Galaxy
+// Watch's): the same app, ID and key, with build/android32's armeabi-v7a
+// libraries, built into build-native32.
+def native32 = project.hasProperty("native32")
+if (native32)
+    layout.buildDirectory = file("build-native32")
 
 // build/android in the repository root, where `ninja android` stages the
 // native libraries (jniLibs) and the guest image (assets); build/android64,
 // where `ninja android64` stages the native 64-bit build's
-def staged = new File(rootDir, native64 ? "../../build/android64" : "../../build/android")
+def staged = new File(rootDir, native64 ? "../../build/android64" :
+    native32 ? "../../build/android32" : "../../build/android")
 // SDL3's Java side, which `ninja android` fetches for both
 def sdlJava = new File(rootDir, "../../build/android/third_party/SDL3/android-project/app/src/main/java")
 
@@ -94,13 +102,14 @@ android {
         buildConfigField "boolean", "HALO_RELEASE_BUILD", "${releaseBuild}"
         // the release asset this build updates from: chupathingyce-android
         // or chupathingyce-android64, then -debug.zip or -release.zip
-        buildConfigField "String", "HALO_UPDATE_ASSET", native64 ? "\"chupathingyce-android64\"" : "\"chupathingyce-android\""
+        buildConfigField "String", "HALO_UPDATE_ASSET", native64 ? "\"chupathingyce-android64\"" :
+            native32 ? "\"chupathingyce-android32\"" : "\"chupathingyce-android\""
         // the native 64-bit build's heap pointers without Android's tag in
         // their top byte, as on the desktop's 64-bit builds, whose code it
         // is (AndroidManifest.xml); the guest build keeps the default
         manifestPlaceholders = [heapPointerTagging: native64 ? "false" : "true"]
         ndk {
-            abiFilters "arm64-v8a"
+            abiFilters native32 ? "armeabi-v7a" : "arm64-v8a"
         }
     }
 

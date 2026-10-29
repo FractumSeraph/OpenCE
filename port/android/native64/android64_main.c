@@ -56,7 +56,9 @@ extern int main(int argc, char *argv[]);
 
 /* port/linux/src/xbox_memory.c: where the Xbox address space is, and why
 it could not be reserved, or empty */
+#ifdef HALO_64BIT
 extern unsigned long long xbox_address_space_base;
+#endif
 extern char platform_xbox_address_space_error[];
 
 static void fatal(const char *format, ...) __attribute__((format(printf, 1, 2), noreturn));
@@ -198,6 +200,7 @@ __attribute__((visibility("default"))) int SDL_main(int argc, char *argv[])
 	(void)argc;
 	(void)argv;
 	log_to_logcat();
+#ifdef HALO_64BIT
 	__android_log_print(ANDROID_LOG_INFO, HOST_LOG_TAG, "Halo for Android starting (native 64-bit, %ld-byte pages)",
 		sysconf(_SC_PAGESIZE));
 	if (platform_xbox_address_space_error[0])
@@ -209,6 +212,20 @@ __attribute__((visibility("default"))) int SDL_main(int argc, char *argv[])
 	}
 	__android_log_print(ANDROID_LOG_INFO, HOST_LOG_TAG, "Xbox address space at %p (4 GB, chosen by the system)",
 		(void *)(uintptr_t)xbox_address_space_base);
+#else
+	/* the native 32-bit ARM build (tools/android32_build.py): the Xbox's
+	addresses are the process's own, the contiguous window at its fixed
+	address (port/linux/src/xbox_memory.c) */
+	__android_log_print(ANDROID_LOG_INFO, HOST_LOG_TAG, "Halo for Android starting (native 32-bit ARM, %ld-byte pages)",
+		sysconf(_SC_PAGESIZE));
+	if (platform_xbox_address_space_error[0])
+	{
+		log_mappings();
+		fatal("The game cannot start: Android holds the memory it needs at a fixed address (%s).\n\n"
+			"Please report it, with your device's model and Android version.",
+			platform_xbox_address_space_error);
+	}
+#endif
 
 	external = SDL_GetAndroidExternalStoragePath();
 	if (!external)

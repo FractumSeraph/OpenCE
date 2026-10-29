@@ -1,7 +1,9 @@
 /*
 LIMITS.H
 
-Host <limits.h> with MSVC's 32-bit long, for the 64-bit build (HALO_64BIT).
+Host <limits.h> with MSVC's 32-bit long, for the 64-bit build (HALO_64BIT),
+and without the macros cseries.h defines as enumerators for the native 32-bit
+ARM Android build, whose bionic includes <limits.h> from <math.h>.
 
 The game's long is 32 bits (tools/lp64_rewrite.py spells it int), so
 LONG_MAX and friends must be too: `node_index & LONG_MAX` strips a leaf flag
@@ -16,7 +18,7 @@ layer, which doesn't include cseries.h, gets 32-bit macros.
 
 #include_next <limits.h>
 
-#ifdef HALO_64BIT
+#if defined(HALO_64BIT) || defined(__ANDROID__)
 #undef LONG_MAX
 #undef LONG_MIN
 #undef ULONG_MAX

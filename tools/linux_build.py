@@ -647,12 +647,22 @@ class Linux32Units:
     # the portable build's system root and SDL's headers, after the
     # instruction set, for every unit (PortableSdl.cflags)
     sysroot_flags: List[str] = field(default_factory=list)
+    # the instruction set, in place of march_flag's x86 one (another target's)
+    march: Optional[str] = None
+    # flags of LINUX_ABI_FLAGS and POSIX_FLAGS that only x86 has, left out for
+    # another target (tools/android32_build.py)
+    dropped_flags: Set[str] = field(default_factory=set)
 
 
 def _retarget(flags: List[str], target_flags: List[str]) -> List[str]:
     """flags (LINUX_ABI_FLAGS or POSIX_FLAGS) for another target"""
     assert flags[:len(LINUX_TARGET_FLAGS)] == LINUX_TARGET_FLAGS
     return [*target_flags, *flags[len(LINUX_TARGET_FLAGS):]]
+
+
+def _retarget_units(flags: List[str], units: "Linux32Units") -> List[str]:
+    """flags for the units' target, without the flags it leaves out"""
+    return [flag for flag in _retarget(flags, units.target_flags) if flag not in units.dropped_flags]
 
 
 def linux32_objects(n: Writer, units: Linux32Units, obj_dir: Path, extra_cflags: List[str],
@@ -665,19 +675,19 @@ def linux32_objects(n: Writer, units: Linux32Units, obj_dir: Path, extra_cflags:
     platform_semantics_header = units.platform_semantics_header
     browser_defines = ["-DHALO_GAME_BROWSER"] if units.game_browser else []
     # the instruction set, and the portable build's system root
-    target = [march_flag(sln), *units.sysroot_flags]
+    target = [units.march or march_flag(sln), *units.sysroot_flags]
     # (a debug build checks its stack frames, and stops at the first one
     # overrun, as it stops at the first failed assertion; a release build
     # does not, so that an overrun nobody has met cannot end a game; and
     # --release's and --profile's defines, configuration_defines)
-    target = [march_flag(sln), *units.sysroot_flags]
-    abi = " ".join(_retarget(LINUX_ABI_FLAGS, units.target_flags) + target + configuration_defines(sln)
+    target = [units.march or march_flag(sln), *units.sysroot_flags]
+    abi = " ".join(_retarget_units(LINUX_ABI_FLAGS, units) + target + configuration_defines(sln)
                    + ([] if getattr(sln, "port_release", False) else ["-fstack-protector-strong"])
                    + browser_defines + CUSTOM_EDITION_DEFINES + COMPRESSED_MAP_DEFINES + units.extra_flags
                    + units.ffmpeg[0])
     port_include = PORT_DIR / "include"
     sdk_flags = f"-idirafter {XDK_INCLUDE}"
-    posix_flags = _retarget(POSIX_FLAGS, units.target_flags)
+    posix_flags = _retarget_units(POSIX_FLAGS, units)
     extra = " ".join(extra_cflags)
     # the posix_* units have glibc's 32-bit wchar_t, and LLVM will not
     # optimise them together with code that has a 16-bit one: they stay

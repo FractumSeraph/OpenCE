@@ -488,14 +488,50 @@ Wear OS is Android, and the app needs no watch manifest entries to be
 installed with adb. It was tried in the Android emulator's Wear OS 6 image,
 set up as a Samsung Galaxy Watch 8 Classic (below).
 
-It does not install on the Galaxy Watch 8 Classic itself: the watch's
-Android is 32-bit only (`ro.product.cpu.abilist` is `armeabi-v7a,armeabi`,
-`ro.zygote` is `zygote32`, there is no `/system/lib64`), though its
-processor is 64-bit, and both of the app's builds are arm64 (`arm64-v8a`):
-adb says `INSTALL_FAILED_NO_MATCHING_ABIS`. A 32-bit process cannot run the
-guest image's AArch64 code, so the watch needs an `armeabi-v7a` build of the
-game, which does not exist. Most Wear OS watches have a 32-bit Android; the
+The usual APKs do not install on the Galaxy Watch 8 Classic itself: the
+watch's Android is 32-bit only (`ro.product.cpu.abilist` is
+`armeabi-v7a,armeabi`, `ro.zygote` is `zygote32`, there is no
+`/system/lib64`), though its processor and kernel are 64-bit, and both of
+the app's usual builds are arm64 (`arm64-v8a`): adb says
+`INSTALL_FAILED_NO_MATCHING_ABIS`. A 32-bit process cannot run the guest
+image's AArch64 code. Such a watch takes the native 32-bit ARM build (below),
+which plays on it. Most Wear OS watches have a 32-bit Android; the
 emulator's image is 64-bit, so it does not show this.
+
+### The native 32-bit ARM build
+
+`ninja android32` (tools/android32_build.py) builds the game as native
+32-bit ARM code (`armeabi-v7a`), as the 32-bit Linux build compiles it for
+x86: the game is 32-bit code, so the Xbox's addresses are the process's own
+and nothing is rewritten. `ninja android32_apk` makes the app with it (the
+Gradle module with `-Pnative32`): the same app, ID and key, with the native
+64-bit build's entry point (`port/android/native64`). It differs from the
+other builds in these ways:
+
+- The Xbox's contiguous memory window moves (`HALO_WINDOW_REBASE`, as the
+  Switch's does): on the Galaxy Watch, Android's Java runtime has its JIT
+  code cache at 0x81e00000, inside the window's usual 0x80000000. The window
+  is the first of a few fixed addresses that is free (0x48000000 on the
+  watch; `port/linux/src/xbox_memory.c`), the same each run where it can be,
+  since a saved game is tied to it. 128 MB, with the guest build's texture
+  cache (44 MB) and limits.
+- `-fmax-type-align=1`: the game's packed structures (`#pragma pack(1)`)
+  put data at any address, and 32-bit ARM's VLDR, VSTR, LDRD, STRD, LDM and
+  STM fault (SIGBUS, `BUS_ADRALN`) on an address that is not a multiple of
+  four, which x86 and AArch64 allow. The watch's 64-bit kernel does not fix
+  them up for 32-bit processes. Nothing reached through a pointer is
+  assumed aligned, so clang loads it with instructions that work at any
+  address.
+- No movies (no FFmpeg for this target yet: the game skips them).
+- It updates from the release asset `chupathingyce-android32`, which no
+  release has yet: the build is made by hand (`ninja android32_apk`, signed
+  with the computer's debug key) and does not update itself.
+
+On the Galaxy Watch 8 Classic (SM-L505U, Wear OS 6) it starts, shows the
+menus inside the circle, and plays Blood Gulch at the display's 60 frames a
+second (16.6 ms a frame, the slowest 20 to 30 ms, drawn at 437x328), in
+about 200 MB of memory (PSS). The battery's temperature rose from 37 to
+40 degrees C in about five minutes of play.
 
 The Galaxy Watch 8 Classic, as Samsung publishes it: Exynos W1000 (five
 cores, one Cortex-A78 and four Cortex-A55, 3 nm, up to 1.6 GHz), Mali-G68
@@ -519,9 +555,10 @@ nothing:
   a 438x438 display, so the game draws 437x328, not 640x480, which is less
   than half of the work for the GPU (`display.resolution_limit`, which
   takes 240 to 480 lines; a smaller number draws fewer).
-- The touch controls are kept inside the circle. Hide the ones you do not
-  use, or move them, with the touch controls' Options (refer to "Touch
-  controls").
+- The touch controls are kept inside the circle, and the toolbar's corner
+  buttons (Options, and Import and Export while editing) are on its edge.
+  Hide the controls you do not use, or move them, with the touch controls'
+  Options (refer to "Touch controls").
 - The rotating bezel (or a crown) turns the view in a game, 15 degrees a
   click, to the right for clockwise: one turn of the Galaxy Watch's bezel
   (24 clicks) is one turn of the player. With the touch controls' option
@@ -537,12 +574,15 @@ To install the app on a watch:
 2. In Developer options, turn on ADB debugging and Wireless debugging.
    The watch and the computer must be on the same Wi-Fi network.
 3. In Wireless debugging, tap Pair new device. Enter
-   `adb pair <address>:<port>` with the address and port that the watch
-   shows, and then the pairing code.
+   `adb pair <address>:<port>` with the address and port that the pairing
+   dialog shows (not those of the Wireless debugging screen;
+   `adb mdns services` lists both), and then the pairing code.
 4. Enter `adb connect <address>:<port>` with the address and port of the
    Wireless debugging screen (not the pairing port).
-5. Enter `adb install fractum-halo-android.apk`, or the watch build of the
-   `wearos` branch.
+5. Enter `adb install fractum-halo-android.apk` on a watch with a 64-bit
+   Android, or the native 32-bit ARM build (`ninja android32_apk`) on one
+   with a 32-bit Android (`adb shell getprop ro.product.cpu.abilist` says
+   which).
 6. Start the app one time, then push the maps (refer to "Game data"); the
    multiplayer maps with `ui.map` are about 300 MB. (The app's download
    buttons were not tried on a watch.)
@@ -582,9 +622,8 @@ What the emulator shows, and what it does not:
   Use the guest image build in the emulator.
 - The game's process uses about 330 to 450 MB in a game (Blood Gulch); the
   emulated watch has about 1 GB available.
-- Not tried: the speed, the heat and the battery of a watch, and
-  Bluetooth controllers (whether the watch's Bluetooth settings pair a
-  gamepad).
+- Not tried: Bluetooth controllers (whether the watch's Bluetooth settings
+  pair a gamepad), and the battery and heat of long play.
 
 ## How the port operates
 
