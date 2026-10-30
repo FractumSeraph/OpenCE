@@ -136,7 +136,7 @@ here, which the command repository reads). A host
 never checks a client's version: the client does (network_client_manager.c),
 so the range is the client's. */
 #define HALO_PORT_NETWORK_VERSION_MINIMUM 11
-#define HALO_PORT_NETWORK_VERSION_MAXIMUM 40
+#define HALO_PORT_NETWORK_VERSION_MAXIMUM 42
 /* ... the numbers in use (port/linux/src/delta.c): the three above, until a
 legacy table (docs/delta.md) widens them; code asks these, not the numbers */
 int delta_legacy_announce(void);
@@ -168,6 +168,9 @@ host drops) */
 #define HALO_PORT_GAME_KIND_NETWORK_VERSION 37
 #define HALO_PORT_PLAYERS_SHIELD_EFFECTS_NETWORK_VERSION 38
 #define HALO_PORT_DEDICATED_NETWORK_VERSION 39
+/* ... and whether a game this machine hosts is under way, which holds the
+number announced until its end (delta.h, auto-announce) */
+void delta_legacy_hold(int hold);
 /* ... the advertisement's reserved bytes: the version (a little-endian word),
 then flags, then (version 37) the game's kind: an OpenCE gametype's mode in
 the low seven bits, Hardcore in bit 7 (port/linux/game/game_modes.h's

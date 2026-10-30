@@ -231,6 +231,9 @@ static struct
 	unsigned long sequence;
 	unsigned char listing[MAXIMUM_LISTING_SIZE];
 	int listing_size;
+	/* (the network version it carries: a newer one the legacy table proves
+	publishes it again at once, delta.c's auto-announce) */
+	int listing_version;
 	unsigned long published_time;
 	/* a publish wanted (the game changed, a query, the slot needs mending),
 	not before this */
@@ -330,6 +333,7 @@ static int listing_make_token(unsigned char *bytes, int flags, const unsigned ch
 	unsigned char *signed_part = bytes;
 	unsigned char data[sizeof(signature_label) - 1 + MAXIMUM_LISTING_SIZE];
 	int size = 0;
+	int version = delta_legacy_announce();
 
 	if (lobby.has_password && !(flags & _listing_closed))
 		flags |= _listing_password;
@@ -339,8 +343,10 @@ static int listing_make_token(unsigned char *bytes, int flags, const unsigned ch
 	bytes[size++] = 'H';
 	bytes[size++] = 'L';
 	bytes[size++] = LISTING_FORMAT;
-	bytes[size++] = (unsigned char)(delta_legacy_announce() >> 8);
-	bytes[size++] = (unsigned char)delta_legacy_announce();
+	bytes[size++] = (unsigned char)(version >> 8);
+	bytes[size++] = (unsigned char)version;
+	if (!(flags & _listing_closed))
+		lobby.listing_version = version;
 	bytes[size++] = (unsigned char)flags;
 	put_long(bytes + size, ++lobby.sequence);
 	size += 4;
@@ -535,7 +541,7 @@ static void update_hosting(const unsigned char *token, int player_count, int max
 		return;
 	}
 	if ((lobby.republish_wanted && (long)(p2p_now() - lobby.republish_time) >= 0) ||
-		elapsed(lobby.published_time, REPUBLISH_INTERVAL))
+		elapsed(lobby.published_time, REPUBLISH_INTERVAL) || delta_legacy_announce() != lobby.listing_version)
 	{
 		publish();
 	}
