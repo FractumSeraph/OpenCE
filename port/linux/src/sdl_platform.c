@@ -36,6 +36,7 @@ and the debug keyboard that the game's console reads.
 #include "shared_bans.h"
 #include "crash_report.h"
 #include "../game/text_filter.h"
+#include "launcher.h"
 
 #include <SDL3/SDL.h>
 #include <stdio.h>
@@ -219,7 +220,7 @@ static void old_map_folders_offer(BOOL quiet)
 /* whether the game is run without anyone to answer a question (a test run,
 a null renderer), or where a question cannot be shown (under gamescope, the
 Steam Deck's Game Mode: updater_gamescope) */
-static BOOL platform_run_is_quiet(void)
+BOOL platform_run_is_quiet(void)
 {
 	BOOL quiet = config_boolean("debug.hidden_window") || config_real("debug.exit_after") > 0.0 ||
 		config_boolean("debug.null_renderer") || updater_gamescope();
@@ -276,6 +277,15 @@ static void new_defaults_offer(BOOL quiet)
 
 #ifndef HALO_ANDROID
 static BOOL data_has_xbox_maps(const char *destination);
+#ifdef HALO_LAUNCHER
+/* whether data.download_url is one this fork downloads the maps from */
+static BOOL data_download_offered(void)
+{
+	const char *url = config_string("data.download_url");
+
+	return !strncmp(url, "https://", 8) && url[strlen(url) - 1] == '/';
+}
+#endif
 
 /* the maps folder checked to hold the Xbox maps (platform_maps_folder_check).
 When it holds Halo PC's instead, or no ui.map, the player is told where each
@@ -318,12 +328,23 @@ static void data_check_maps(void)
 		break;
 	default:
 		/* (a maps folder without ui.map and no Halo PC maps in it, as "make
-		the folders" leaves it: the choices offered again) */
-		if (!quiet && !maps.stray_pc_maps && platform_offer_game_data(maps.root) &&
+		the folders" leaves it: the choices offered again; the launcher's Maps
+		has them) */
+#ifdef HALO_LAUNCHER
+		/* (this fork: when the maps can be downloaded, that is offered
+		again first: platform_offer_game_data) */
+		if (!quiet && !maps.stray_pc_maps && data_download_offered() &&
+			platform_offer_game_data(maps.root, sizeof(maps.root)) && data_has_xbox_maps(maps.root))
+		{
+			return;
+		}
+#else
+		if (!quiet && !maps.stray_pc_maps && platform_offer_game_data(maps.root, sizeof(maps.root)) &&
 			data_has_xbox_maps(maps.root))
 		{
 			return;
 		}
+#endif
 		snprintf(message, sizeof(message),
 			"Halo's Xbox maps were not found: %s/maps has no ui.map.%s\n\n%s\n\n"
 			"To copy the Xbox maps from your disc image, move the maps folder aside and start Fractum Halo.",
@@ -332,6 +353,17 @@ static void data_check_maps(void)
 			where);
 		break;
 	}
+#ifdef HALO_LAUNCHER
+	/* (the launcher opens on Maps with the window, the problem shown there,
+	rather than a message and a quit) */
+	if (!quiet)
+	{
+		platform_log("maps folder: %s/maps is not the Xbox maps (ui.map version %ld): the launcher opens on Maps",
+			maps.root, maps.ui_version);
+		launcher_open_on_maps();
+		return;
+	}
+#endif
 	platform_log("maps folder: %s/maps is not the Xbox maps (ui.map version %ld): quitting", maps.root,
 		maps.ui_version);
 	platform_log("%s", message);
@@ -606,12 +638,13 @@ downloaded from it instead, the multiplayer maps alone or everything
 (data_download), and the campaign's maps later when a level needs them
 (platform_offer_missing_map) */
 
+/* (sdl_platform.h's PLATFORM_IMPORT_*) */
 enum
 {
-	_data_unknown,
-	_data_xbox_disc,
-	_data_halo_pc_disc,
-	_data_custom_edition_installer,
+	_data_unknown = PLATFORM_IMPORT_UNKNOWN,
+	_data_xbox_disc = PLATFORM_IMPORT_XBOX_DISC,
+	_data_halo_pc_disc = PLATFORM_IMPORT_HALO_PC_DISC,
+	_data_custom_edition_installer = PLATFORM_IMPORT_CE_INSTALLER,
 };
 
 #ifdef _WIN32
@@ -634,10 +667,15 @@ struct data_extraction
 	char file[256];
 	unsigned long long done;
 	unsigned long long total;
+	BOOL running;
 	BOOL finished;
 	BOOL succeeded;
 	char error[512];
 };
+
+/* (one at a time: the first-run window's or the launcher's) */
+static struct data_extraction extraction;
+static pthread_mutex_t extraction_start_lock = PTHREAD_MUTEX_INITIALIZER;
 
 static void data_extraction_progress(void *context, const char *file, unsigned long long done,
 	unsigned long long total)
@@ -936,15 +974,90 @@ static void *data_extraction_thread(void *context)
 	return NULL;
 }
 
+/* starts copying the maps out of image (a kind of _data_*), or, when image is
+NULL, downloading them from url (the files wanted: DATA_MAPS_*), on a thread
+of its own; one at a time */
+static BOOL data_extraction_start(int kind, const char *image, const char *url, const char *destination,
+	int wanted, char *error, int error_size)
+{
+	static BOOL lock_made;
+	pthread_t thread;
+
+	pthread_mutex_lock(&extraction_start_lock);
+	if (lock_made)
+	{
+		BOOL busy;
+
+		pthread_mutex_lock(&extraction.lock);
+		busy = extraction.running && !extraction.finished;
+		pthread_mutex_unlock(&extraction.lock);
+		if (busy)
+		{
+			pthread_mutex_unlock(&extraction_start_lock);
+			snprintf(error, (size_t)error_size, "Maps are being copied already.");
+			return FALSE;
+		}
+		pthread_mutex_destroy(&extraction.lock);
+	}
+	memset(&extraction, 0, sizeof(extraction));
+	pthread_mutex_init(&extraction.lock, NULL);
+	lock_made = TRUE;
+	extraction.kind = kind;
+	extraction.running = TRUE;
+	snprintf(extraction.image, sizeof(extraction.image), "%s", image ? image : "");
+	snprintf(extraction.url, sizeof(extraction.url), "%s", image ? "" : url);
+	snprintf(extraction.destination, sizeof(extraction.destination), "%s", destination);
+	extraction.wanted = wanted;
+	if (pthread_create(&thread, NULL, data_extraction_thread, &extraction) != 0)
+	{
+		extraction.running = FALSE;
+		pthread_mutex_unlock(&extraction_start_lock);
+		snprintf(error, (size_t)error_size, "Could not start the extraction.");
+		return FALSE;
+	}
+	/* (waited for through extraction.finished; the Windows port's threads
+	cannot be joined) */
+	pthread_detach(thread);
+	pthread_mutex_unlock(&extraction_start_lock);
+	return TRUE;
+}
+
+BOOL platform_import_start(int kind, const char *image, const char *destination, char *error, int error_size)
+{
+	return data_extraction_start(kind, image, NULL, destination, DATA_MAPS_ALL, error, error_size);
+}
+
+BOOL platform_import_poll(char *file, int file_size, unsigned long long *done, unsigned long long *total,
+	BOOL *succeeded, char *error, int error_size)
+{
+	BOOL finished;
+
+	pthread_mutex_lock(&extraction.lock);
+	finished = extraction.finished;
+	if (file && file_size > 0)
+		snprintf(file, (size_t)file_size, "%s", extraction.file);
+	if (done)
+		*done = extraction.done;
+	if (total)
+		*total = extraction.total;
+	if (succeeded)
+		*succeeded = extraction.succeeded;
+	if (finished && error && error_size > 0)
+		snprintf(error, (size_t)error_size, "%s", extraction.succeeded ? "" : extraction.error);
+	pthread_mutex_unlock(&extraction.lock);
+	return finished;
+}
+
 /* copies the maps out of the file picked (a kind of _data_*), or downloads
 them from url when image is NULL (the files wanted: DATA_MAPS_*), showing how
 far it has got; closing the window quits, but for a download while the game
 runs (in_game), which goes on to its end. The bytes written in written (0
-when the folder had them all) */
+when the folder had them all). (This fork's message boxes and downloads use
+it with the launcher too: launcher.c's own Add from a file polls
+platform_import_poll in the game's window) */
 static BOOL data_extract(int kind, const char *image, const char *url, const char *destination, int wanted,
 	BOOL in_game, unsigned long long *written, char *error, int error_size)
 {
-	static struct data_extraction extraction;
 	const char *title = !image ? (wanted == DATA_MAPS_CAMPAIGN ? "Downloading the campaign's maps..." :
 		"Downloading the maps folder...") :
 		kind == _data_halo_pc_disc ? "Importing Halo PC maps..." :
@@ -952,24 +1065,11 @@ static BOOL data_extract(int kind, const char *image, const char *url, const cha
 		"Extracting the maps folder...";
 	SDL_Window *window;
 	SDL_Renderer *renderer = NULL;
-	pthread_t thread;
-	BOOL finished = FALSE;
+	BOOL finished = FALSE, succeeded = FALSE;
+	unsigned long long done = 0, total = 0;
 
-	memset(&extraction, 0, sizeof(extraction));
-	pthread_mutex_init(&extraction.lock, NULL);
-	extraction.kind = kind;
-	snprintf(extraction.image, sizeof(extraction.image), "%s", image ? image : "");
-	snprintf(extraction.url, sizeof(extraction.url), "%s", image ? "" : url);
-	snprintf(extraction.destination, sizeof(extraction.destination), "%s", destination);
-	extraction.wanted = wanted;
-	if (pthread_create(&thread, NULL, data_extraction_thread, &extraction) != 0)
-	{
-		snprintf(error, (size_t)error_size, "Could not start the extraction.");
+	if (!data_extraction_start(kind, image, url, destination, wanted, error, error_size))
 		return FALSE;
-	}
-	/* (waited for through extraction.finished; the Windows port's threads
-	cannot be joined) */
-	pthread_detach(thread);
 	window = SDL_CreateWindow("Fractum Halo", 640, 150, 0);
 	if (window)
 	{
@@ -981,7 +1081,6 @@ static BOOL data_extract(int kind, const char *image, const char *url, const cha
 	{
 		SDL_Event event;
 		char file[256];
-		unsigned long long done, total;
 
 		while (SDL_PollEvent(&event))
 		{
@@ -991,12 +1090,7 @@ static BOOL data_extract(int kind, const char *image, const char *url, const cha
 				exit(EXIT_SUCCESS);
 			}
 		}
-		pthread_mutex_lock(&extraction.lock);
-		finished = extraction.finished;
-		snprintf(file, sizeof(file), "%s", extraction.file);
-		done = extraction.done;
-		total = extraction.total;
-		pthread_mutex_unlock(&extraction.lock);
+		finished = platform_import_poll(file, sizeof(file), &done, &total, &succeeded, error, error_size);
 		if (renderer)
 		{
 			char line[320];
@@ -1024,10 +1118,8 @@ static BOOL data_extract(int kind, const char *image, const char *url, const cha
 		SDL_DestroyRenderer(renderer);
 	if (window)
 		SDL_DestroyWindow(window);
-	*written = extraction.done;
-	if (!extraction.succeeded)
-		snprintf(error, (size_t)error_size, "%s", extraction.error);
-	return extraction.succeeded;
+	*written = done;
+	return succeeded;
 }
 
 struct data_image_choice
@@ -1119,9 +1211,10 @@ static BOOL data_choose_image(char *path, int size, BOOL halo_pc, BOOL *failed, 
 	return TRUE;
 }
 
+
 /* what a picked file holds (an Xbox image of a whole disc has a CD's file
 system too, so it is looked for first) */
-static int data_kind(const char *path)
+int platform_import_kind(const char *path)
 {
 	if (xiso_is_image(path))
 		return _data_xbox_disc;
@@ -1192,7 +1285,7 @@ static BOOL data_make_folders(const char *destination)
 	}
 }
 
-BOOL platform_offer_game_data(const char *destination)
+static BOOL data_offer_message_boxes(const char *destination)
 {
 	enum
 	{
@@ -1336,7 +1429,7 @@ BOOL platform_offer_game_data(const char *destination)
 			SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Fractum Halo", explanation, NULL);
 			continue;
 		}
-		kind = data_kind(image);
+		kind = platform_import_kind(image);
 		if (kind == _data_unknown)
 		{
 			platform_log("%s is no disc image or installer this reads", image);
@@ -1378,6 +1471,40 @@ BOOL platform_offer_game_data(const char *destination)
 			SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION, "Fractum Halo", done, NULL);
 		}
 	}
+}
+
+
+/* the first start without the Xbox maps. This fork: its message boxes, which
+offer the download (data.download_url) first; the launcher's Welcome
+(launcher.c, in the game's window), ChupathingyCE's, when there is no
+download to offer */
+BOOL platform_offer_game_data(char *destination, unsigned long size)
+{
+#ifdef HALO_LAUNCHER
+	/* (the window it opens finds the data root again while it is being
+	found: asked once) */
+	static BOOL offering;
+	BOOL found;
+
+	if (data_download_offered())
+		return data_offer_message_boxes(destination);
+	/* not for runs nobody is watching, nor under gamescope (the player adds
+	the maps from the desktop) */
+	if (offering || config_boolean("debug.hidden_window") || config_real("debug.exit_after") > 0.0)
+		return FALSE;
+	if (updater_gamescope())
+	{
+		platform_log("no game data: start Fractum Halo once from Desktop Mode to add the maps");
+		return FALSE;
+	}
+	offering = TRUE;
+	found = launcher_welcome(destination, size);
+	offering = FALSE;
+	return found;
+#else
+	(void)size;
+	return data_offer_message_boxes(destination);
+#endif
 }
 
 /* a level the game cannot find in its maps folder (cache_files_windows.c):
@@ -2254,10 +2381,10 @@ BOOL platform_video_initialize(unsigned long width, unsigned long height)
 	platform_window = SDL_CreateWindow(title, (int)platform_window_width, (int)platform_window_height,
 #ifdef HALO_BGFX
 		(xgpu_bgfx ? SDL_WINDOW_METAL : SDL_WINDOW_OPENGL) |
-#else
-		SDL_WINDOW_OPENGL |
-#endif
 		SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY |
+#else
+		SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY |
+#endif
 		(config_boolean("debug.hidden_window") ? SDL_WINDOW_HIDDEN : 0) |
 		(platform_fullscreen_setting() ? SDL_WINDOW_FULLSCREEN : 0));
 #endif
@@ -2385,6 +2512,11 @@ BOOL platform_video_initialize(unsigned long width, unsigned long height)
 			headroom, platform_float_window ? "floating-point" : "8-bit");
 	}
 	platform_mouse_capture(TRUE);
+#endif
+#ifdef HALO_LAUNCHER
+	/* the launcher, before the game draws or loads anything, when it was
+	asked for (--setup, a key held, the maps not right) */
+	launcher_at_start();
 #endif
 	return TRUE;
 }
@@ -2625,13 +2757,11 @@ void platform_video_swap(void)
 #endif
 }
 
-#ifdef HALO_BGFX
 SDL_Window *platform_sdl_window(void)
 {
 	return platform_window;
 }
 
-#endif
 #if !defined(HALO_ANDROID) && !defined(HALO_WEB)
 /* when SDL_SetWindowRelativeMouseMode has no XInput2 (32-bit libSDL3 on X11
 without 32-bit libXi.so.6), the mouse is held with a hidden cursor, a window

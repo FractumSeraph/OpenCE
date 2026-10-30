@@ -21,6 +21,7 @@ with the host ABI.
 #include <string.h>
 #include <sys/ioctl.h>
 #ifdef __APPLE__
+#include <CoreGraphics/CGEventSource.h>
 #include <crt_externs.h>
 #include <uuid/uuid.h>
 #include <stdlib.h>
@@ -131,7 +132,14 @@ static int fail(void)
 	return -1;
 }
 
-#ifdef __APPLE__
+/* A host whose struct sockaddr starts with sa_len (the BSDs'), not with the
+family as Winsock's does and Linux's: the game's addresses are converted at the
+boundary (to_host_address, from_host_address). port/unix says it for its hosts. */
+#if defined(__APPLE__) && !defined(HALO_SOCKADDR_LEN)
+#define HALO_SOCKADDR_LEN 1
+#endif
+
+#ifdef HALO_SOCKADDR_LEN
 static int to_host_address(const void *address, int address_length,
 	struct sockaddr_storage *host_address, socklen_t *host_length)
 {
@@ -241,7 +249,7 @@ int posix_socket_bind(int socket, const void *address, int address_length)
 #ifdef HALO_BROWSER
 	return succeed(web_net_bind(socket, address, address_length));
 #else
-#ifdef __APPLE__
+#ifdef HALO_SOCKADDR_LEN
 	struct sockaddr_storage host_address;
 	socklen_t host_length = 0;
 
@@ -258,7 +266,7 @@ int posix_socket_connect(int socket, const void *address, int address_length)
 	return succeed(web_net_connect(socket, address, address_length));
 #else
 	int result;
-#ifdef __APPLE__
+#ifdef HALO_SOCKADDR_LEN
 	struct sockaddr_storage host_address;
 	socklen_t host_length = 0;
 
@@ -310,7 +318,7 @@ int posix_socket_accept(int socket, void *address, int *address_length)
 
 	if (address_length)
 		*address_length = (int)length;
-#ifdef __APPLE__
+#ifdef HALO_SOCKADDR_LEN
 	if (result >= 0 && address && address_length)
 		from_host_address(address, address_length);
 #endif
@@ -358,7 +366,7 @@ int posix_socket_sendto(int socket, const void *buffer, int length, int flags,
 	return succeed(web_net_sendto(socket, buffer, length, flags, address, address_length));
 #else
 	int result;
-#ifdef __APPLE__
+#ifdef HALO_SOCKADDR_LEN
 	struct sockaddr_storage host_address;
 	socklen_t host_length = 0;
 
@@ -419,7 +427,7 @@ int posix_socket_recvfrom(int socket, void *buffer, int length, int flags,
 		last_error = WSAEMSGSIZE;
 		return -1;
 	}
-#ifdef __APPLE__
+#ifdef HALO_SOCKADDR_LEN
 	if (result >= 0 && address && address_length)
 		from_host_address(address, address_length);
 #endif
@@ -550,7 +558,7 @@ int posix_socket_getsockname(int socket, void *address, int *address_length)
 
 	if (address_length)
 		*address_length = (int)length;
-#ifdef __APPLE__
+#ifdef HALO_SOCKADDR_LEN
 	if (result >= 0 && address && address_length)
 		from_host_address(address, address_length);
 #endif
@@ -568,7 +576,7 @@ int posix_socket_getpeername(int socket, void *address, int *address_length)
 
 	if (address_length)
 		*address_length = (int)length;
-#ifdef __APPLE__
+#ifdef HALO_SOCKADDR_LEN
 	if (result >= 0 && address && address_length)
 		from_host_address(address, address_length);
 #endif
@@ -863,6 +871,9 @@ int posix_command_line_argument(int index, char *buffer, posix_ulong size)
 	(void)buffer;
 	(void)size;
 	return 0;
+#elif defined(HALO_UNIX_PLATFORM_NAME)
+	/* (the other Unix hosts': port/unix/src/unix_host.c) */
+	return halo_unix_command_line_argument(index, buffer, size);
 #else
 	char command_line[4096];
 	ssize_t length;
@@ -885,6 +896,15 @@ int posix_command_line_argument(int index, char *buffer, posix_ulong size)
 	}
 	snprintf(buffer, size, "%s", command_line + offset);
 	return 1;
+#endif
+}
+
+int posix_shift_key_held(void)
+{
+#ifdef __APPLE__
+	return (CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState) & kCGEventFlagMaskShift) ? 1 : 0;
+#else
+	return -1;
 #endif
 }
 

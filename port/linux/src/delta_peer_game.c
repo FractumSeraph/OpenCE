@@ -112,7 +112,11 @@ static int same_word(const char *a, const char *b)
 
 static int local_platform(void)
 {
-#if defined(HALO_XBOX_CONSOLE)
+#if defined(HALO_DELTA_PLATFORM)
+	/* (a port's own number, set by its build: -DHALO_DELTA_PLATFORM=
+	_delta_platform_ps3, say; docs/delta.md, "Platform numbers") */
+	return HALO_DELTA_PLATFORM;
+#elif defined(HALO_XBOX_CONSOLE)
 	/* (before _WIN32: the console's build is a Windows target's too) */
 	return _delta_platform_xbox;
 #elif defined(HALO_XBOX360_CONSOLE)
@@ -137,6 +141,9 @@ static int local_platform(void)
 	const char *deck = getenv("SteamDeck");
 
 	return deck && deck[0] == '1' ? _delta_platform_steam_deck : _delta_platform_pc_linux;
+#elif defined(HALO_UNIX_DELTA_PLATFORM)
+	/* (the other Unix hosts': tools/unix64_build.py) */
+	return HALO_UNIX_DELTA_PLATFORM;
 #else
 	return _delta_platform_unknown;
 #endif
@@ -1013,10 +1020,13 @@ int delta_peer_game_client_state(void)
 
 /* ---------- Delta List (browser.c) */
 
-static const char *const platform_names[NUMBER_OF_DELTA_PLATFORMS] = {
+/* (delta.h's registry, in its order) */
+static const char *const platform_names[] = {
 	"unknown", "pc_windows", "pc_macos", "pc_linux", "android", "steam_deck", "xbox", "xbox360", "wiiu", "switch",
-	"psp", "vita", "xbox_uwp"
+	"psp", "vita", "xbox_uwp", "pc_freebsd", "ps3", "ps4", "ps5", "n64", "pc_legacy"
 };
+typedef char platform_names_check[sizeof(platform_names) / sizeof(platform_names[0]) == NUMBER_OF_DELTA_PLATFORMS ?
+	1 : -1];
 
 const char *delta_peer_platform_name(int platform)
 {

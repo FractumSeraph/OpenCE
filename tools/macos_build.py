@@ -264,10 +264,10 @@ def generate_macos_build(n: Writer, sln: Any) -> None:
             outputs=arch_output,
             rule="macos_link",
             inputs=objects,
-            implicit=[*([portable_sdl] if portable else []), *bgfx_libraries, *ffmpeg_inputs],
+            implicit=[*([portable_sdl] if portable else []), *ffmpeg_inputs, *bgfx_libraries],
             variables={
                 "ldflags": " ".join([target, "-g", *LTO_FLAGS]),
-                "libs": " ".join([*ffmpeg_libs, *bgfx_libs, *([f"-L{PORTABLE_SDL_BUILD}"] if portable else []), f"-L{HOMEBREW / 'lib'}",
+                "libs": " ".join([*bgfx_libs, *ffmpeg_libs, *([f"-L{PORTABLE_SDL_BUILD}"] if portable else []), f"-L{HOMEBREW / 'lib'}",
                                   *(f"-l{lib}" for lib in libraries), *(f"-framework {fw}" for fw in frameworks)]),
             },
         )

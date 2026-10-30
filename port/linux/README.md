@@ -63,7 +63,7 @@ from GitHub Actions need no SDL3 package: they bring their own
 ### Portable build
 
 The builds from GitHub Actions are portable builds (`--portable`; refer to
-"Build options" in the main [README](../../README.md)). The portable build
+"Useful `configure.py` options" in [docs/building.md](../../docs/building.md)). The portable build
 starts on more systems than the build machine's:
 
 - It is compiled and linked against the glibc 2.31 of Debian 11, the glibc
@@ -166,21 +166,41 @@ sequence:
    contains the executable.
 
 If the game finds no data (or finds an empty `maps/`), it asks where to
-get it. This occurs at the first start:
+get it. This occurs at the first start, on the setup screen's Welcome
+(launcher.c, in the game's window, before any map loads; builds without
+the game browser show the same choices in message boxes):
 
-- "Xbox disc image" (the default) opens a file picker. Select an Xbox disc
+- "Copy from my Xbox disc image" opens a file picker. Select an Xbox disc
   image (`.xiso` or `.iso`). The game copies `maps/` next to the executable
   and shows the progress. It also copies the disc's Bink movies (`bink/`,
   the `.bik` files), only the ones `bink/` lacks.
-- "Halo PC or Custom Edition" opens the same picker for optional extras: a
-  Halo PC CD image (`.iso`) fills `maps_pc/` (pc_disc.c), and Custom
-  Edition's installer (`halocesetup_en_1.00.exe`) fills `maps_ce/`
+- "Add Halo PC or Custom Edition too" opens the same picker for optional
+  extras: a Halo PC CD image (`.iso`) fills `maps_pc/` (pc_disc.c), and
+  Custom Edition's installer (`halocesetup_en_1.00.exe`) fills `maps_ce/`
   (ce_installer.c). Both read the Microsoft cabinets the maps are packed in
   (cabinet.c). Only maps the folder lacks are written. The game still needs
   the Xbox maps, so it asks again afterward.
 - "Make the folders" makes empty `maps/`, `maps_ce/`, `maps_pc/` and
-  `maps_md/`, says what goes in each, and checks again when you say so.
-- "Quit" stops the game.
+  `maps_md/`, each with a note saying what goes in it, and opens the folder.
+  "Check again" looks for the maps.
+- "I already have a maps folder" picks a folder elsewhere; `paths.data` is
+  set to it.
+- B (Backspace or Escape) quits.
+
+A maps folder that isn't the Xbox maps later (Halo PC's ui.map, or none)
+opens the setup screen on Maps instead of a message and a quit. Held Shift
+or a controller's Back at start, `--setup`, or `launcher.show_at_start =
+"always"` open it too; runs nobody watches (`debug.hidden_window`,
+`debug.exit_after`, the null renderer, Steam Deck Game Mode) never show it.
+`debug.launcher_test` scripts it for tests and screenshots.
+
+Its Play section picks the mode: vanilla, or a pack with its own `ui.map`,
+played as `game.pack_menus` for that run. With two or more installed, the
+game asks once (`launcher.mode_choice`: "ask" or "default", with
+`launcher.default_mode`); "ask" opens Play at every start. `--play` starts
+the default mode and `--mode <id>` that mode, neither asking. A player who
+never answered keeps what `game.pack_menus` says, and `HALO_PACK_MENUS` wins
+for its run.
 
 Either picker finds out what a file is from its contents, not its name.
 
@@ -637,13 +657,13 @@ untouched (commented out, or not there), the game asks once, before the
 window opens, in a message box on the desktop and on Android: "Use the new
 settings" or "Keep mine" (Return and Escape). It lists the changes in words
 (smoother edges, sharper shadows, the Chupathingy menus, on Android a
-larger audio buffer, and since 0.8.1b a fixed port for hosting, UDP 2302).
-Until it is answered, the settings keep their old values and the file is
-left as it is. "Keep mine" writes the old values into `config.toml`; "Use
-the new settings" lets them follow the new defaults. The answer is
-`game.defaults_answered` (the number of the last set of changes asked
-about); the question does not come again for those, and a later version
-asks only about its own changes. A new
+larger audio buffer, since 0.8.1b a fixed port for hosting, UDP 2302, a
+hosted game starting alone, and Headphone 3D). Until it is answered, the settings keep their old values and
+the file is left as it is. "Keep mine" writes the old values into
+`config.toml`; "Use the new settings" lets them follow the new defaults. The
+answer is `game.defaults_answered` (the number of the last set of changes
+asked about); the question does not come again for those, and a later
+version asks only about its own changes. A new
 `config.toml` has the new defaults and is not asked. A run without anyone to
 answer (a hidden window, a test) logs the question and keeps the old values.
 The dedicated server never asks and keeps its own defaults.
@@ -664,6 +684,7 @@ the setting for one start of the game. It has priority over the file.
 | `display.max_fps` | `0` | `HALO_MAX_FPS` | With vsync off, the most frames each second. `0`: twice the display's refresh rate (on Android, 120). `-1`: no limit, which can hang some Intel graphics (Raptor Lake), resetting the desktop's graphics too, and heats a phone. |
 | `display.frames_in_flight` | `3` | `HALO_FRAMES_IN_FLIGHT` | Windows and Linux: the most frames the GPU has queued, 1 to 8. Each frame waits until the GPU has finished the frame this many before it, so that the frames come evenly when the GPU is slower than the game. `0`: the driver decides, which on a slow GPU can give a long frame every few frames. Refer to "Frame rate". |
 | `display.anti_aliasing` | `"msaa2x"` on 64-bit computers, `"off"` on 32-bit ones, Android and the server | `HALO_ANTI_ALIASING` | The smoothing of jagged edges, which the Xbox did not have. `"off"`: none, as on the Xbox. `"fxaa"` or `"smaa"`: a pass over the 3D view after the game draws it. The HUD and the menus stay sharp. SMAA is the sharper and costs more. `"ssaa2x"`: the game draws at two times the resolution in each direction (at most the GPU's largest texture), and the picture is scaled down. The GPU does four times the work. Not with `display.resolution_scaling = "original"`. `"msaa2x"`, `"msaa4x"` or `"msaa8x"`: each pixel of the 3D view has that many samples (at most the GPU's). On Android, `"smaa"` gives FXAA and `"ssaa2x"` none. A change applies from the next frame. Refer to "Anti-aliasing" in "What operates". |
+| `display.renderer` | `"gl"` | `HALO_RENDERER` | What draws the game. `"gl"`: OpenGL. `"bgfx"`: an experimental test renderer (Metal on macOS) under the same D3D8 interface, config-only with no menu row. It exists only in builds made with `--renderer bgfx` (macOS, for now). Known differences: the Halo PC ammo and health meters, a brighter first-person pistol and grainy water. FXAA, SMAA and supersampling are OpenGL only, so with bgfx they become `"msaa2x"` and one line says so in the log. Read at start-up. |
 | `debug.gpu_flush_draws` | `-1` | `HALO_GPU_FLUSH_DRAWS` | Flush the GPU's pipeline every this many draws. `-1`: every 3 on Intel graphics with Mesa's driver, which can otherwise hang in the game's long runs of small draws and reset the desktop's graphics too. `0`: never. |
 | `display.interpolation` | `true` | `HALO_INTERPOLATION` | `true`: one frame for each refresh of the display. `false`: 30 frames each second, as on the Xbox. Video Setup's Frame Rate sets it (30 (Xbox) is `false`, the others `true`). Refer to "Frame rate". |
 | `display.direct_camera` | `true` | `HALO_DIRECT_CAMERA` | `true`: in first person, on foot, the view points where the player aims in each frame, not where the last tick left it. Refer to "Frame rate". Not in Video Setup: config.toml only. |
@@ -733,7 +754,7 @@ the setting for one start of the game. It has priority over the file.
 | `audio.effects_volume` | `1.0` | `HALO_EFFECTS_VOLUME` | The volume of the other sounds (effects and speech), of the master volume. |
 | `audio.buffer_frames` | `2048` on macOS, `1024` on Android, `512` elsewhere | `HALO_AUDIO_BUFFER_FRAMES` | The audio device's buffer, in sample frames at 48 kHz, from `64` to `8192`. Larger rides out stalls that would cut the sound out; smaller has less delay (512 is 11 ms, 1024 is 21 ms, 2048 is 43 ms). |
 | `audio.channels` | `"auto"` | `HALO_AUDIO_CHANNELS` | `"stereo"`, `"5.1"` or `"7.1"`: surround sound as with Dolby Digital on the Xbox. The game sends its 2D sounds to the center and back speakers as the Xbox did, 3D sounds are panned around the front and back speakers (and the sides on 7.1), and the reverberation plays from all of them. `"auto"`: 5.1 on a device of 6 channels, 7.1 on one of 8, else stereo (a device of some other count is more likely an audio interface's outputs than speakers). The LFE channel is left to the receiver's bass management, as on the Xbox. Read when the game starts. Desktop only. Audio Setup: Speakers. |
-| `audio.hrtf` | `"off"` | `HALO_AUDIO_HRTF` | `"on"`: 3D sounds are rendered for headphones (binaural, with head-related transfer functions): each is filtered as the head and ears would hear it from its direction, the far ear a little later, so it sounds in front, behind, to the side, above or below you instead of between your ears. The Xbox filtered its 3D sounds for direction too; these are measured responses (the SADIE II database's KEMAR, `port/assets/hrtf`), equalized so they do not change the sounds' tone overall. Close sounds (your own footsteps and weapons) stay centered as with the stereo pan. `"auto"`: on when the output's name says it is headphones (a headset, AirPods, "Headphones"), checked again when the output changes. `"off"`: the stereo pan. Stereo output only; changes take effect at once. Audio Setup: Headphone 3D. |
+| `audio.hrtf` | `"on"` (consoles: `"off"`) | `HALO_AUDIO_HRTF` | `"on"`: 3D sounds are rendered for headphones (binaural, with head-related transfer functions): each is filtered as the head and ears would hear it from its direction, the far ear a little later, so it sounds in front, behind, to the side, above or below you instead of between your ears. This matches the Xbox, which filtered every 3D sound for direction, on TV stereo too, so it is the default; these are measured responses (the SADIE II database's KEMAR, `port/assets/hrtf`), not the Xbox's own,, equalized so they do not change the sounds' tone overall. Close sounds (your own footsteps and weapons) stay centered as with the stereo pan. `"auto"`: on when the output's name says it is headphones (a headset, AirPods, "Headphones"), checked again when the output changes. `"off"`: the stereo pan, for speakers if Headphone 3D sounds odd on them. Stereo output only; changes take effect at once. Audio Setup: Headphone 3D. |
 | `audio.doppler` | `true` | `HALO_AUDIO_DOPPLER` | `true`: moving sounds are Doppler shifted, higher coming at you and lower going away (a Warthog, a Banshee, a projectile going past), from the velocities the game gives each sound, as the Xbox's DirectSound shifted them. `false`: every sound plays at its own pitch. Audio Setup: Doppler. |
 | `audio.reverb` | `true` | `HALO_REVERB` | `true`: the sounds of the world reverberate as the place the player is in does: the sound environments of the maps (a corridor, a cave, a large hall, outdoors) set the reverberation, as the I3DL2 reverb of the Xbox did. A sound behind a wall or a door is muffled in it too. `false`: no reverberation (sounds behind a wall are still muffled). |
 | `audio.resampler` | `"sinc"` | `HALO_AUDIO_RESAMPLER` | How the sounds are converted to the output's rate (48 kHz): `"sinc"` with a band-limited low pass, which keeps out the images above the sound's own rate; `"linear"` between neighbouring samples, which lets some of them through and sounds brighter for it. Audio Setup's SOUND PROCESSING screen sets it, with `audio.reverb`. |
@@ -763,7 +784,7 @@ the setting for one start of the game. It has priority over the file.
 | `bots.count` | `0` | `HALO_BOTS` | Computer players (bots) in a local (split screen) Slayer game: `0` to `15` join its lobby with the players, as far as the game has room. Not in system link or internet games. `0`: none, as in the stock game. Refer to "Bots". |
 | `bots.skill` | `"normal"` | `HALO_BOT_SKILL` | How well the bots play: `"easy"`, `"normal"`, `"heroic"` or `"legendary"`: how soon they react, how far and how wide they see, how large their aim error is and how fast it settles, how fast they turn. |
 | `bots.teams` | `"even"` | `HALO_BOT_TEAMS` | In a team game: `"even"` puts the bots on both teams, evening them with the players; `"against"` puts them all on the team the players are not on. |
-| `game.start_with_one_player` | `false` | `HALO_START_WITH_ONE_PLAYER` | A system link, internet or split screen game you host can start with you alone: press START GAME in the lobby. Others can join it in progress. `false` waits for a second machine (split screen: a second player), as on the Xbox. Network Setup's Start With One Player sets it. |
+| `game.start_with_one_player` | `true` (`false` on the dedicated server) | `HALO_START_WITH_ONE_PLAYER` | A system link, internet or split screen game you host can start with you alone: press START GAME in the lobby. Others can join it in progress. `false` waits for a second machine (split screen: a second player), as on the Xbox. Network Setup's Start With One Player sets it. Players who had it off are asked once, after an update, whether to use the new default. First written by Mootjuh as `debug.solo_game`. |
 | `paths.data` | `""` | `HALO_DATA_ROOT` | The data root. Refer to "Start the game". |
 | `paths.saves` | `""` | `HALO_SAVE_ROOT` | The save root. Refer to "Files and folders". |
 | `paths.custom_edition` | `""` | `HALO_CUSTOM_EDITION_ROOT` | Desktop builds. A folder of Custom Edition maps, or a Halo Custom Edition install (then its `maps` folder), looked in last for Custom Edition maps and their `bitmaps.map`, `sounds.map` and `loc.map`: after `maps_ce`, `maps/ce` and `custom_maps`. The game names it the Xbox drive `h:\`. Empty: none. OpenCE's setting. |
@@ -929,7 +950,7 @@ the setting for one start of the game. It has priority over the file.
 | `debug.network_test_cues`, `debug.network_test_cue_players` | none, `1` | `HALO_NETWORK_TEST_CUES`, `HALO_NETWORK_TEST_CUE_PLAYERS` | Console lines a test runs at their seconds, from the first tick that many players are in (`"<second> <line>\|..."`; not on the web). |
 | `debug.bot_trace` | `0` | `HALO_BOT_TRACE` | Every this many seconds, each bot's state is written to the log: where it is and where it goes, its path, its target and its weapon. `0`: never. |
 | `debug.touch_targets` | `false` | `HALO_TOUCH_TARGETS` | Outlines the tap targets of the menus (item green, value blue, list slot yellow, legend button red, the band beside the slots of a list orange, keys of the on-screen keyboard white), marks where the last finger went down and the last tap landed for 3 seconds, and logs each tap with the target that it hit (for a value, also where it splits into previous and next): to judge the accuracy of touch. |
-| `debug.solo_game` | `false` | `HALO_SOLO_GAME` | The older name of `game.start_with_one_player`: `true` turns it on too. |
+| `debug.solo_game` | retired | `HALO_SOLO_GAME` | The older name of `game.start_with_one_player`. An old config.toml that has it still loads: a `true` moves to `game.start_with_one_player` once, and the old line is taken out. `HALO_SOLO_GAME=1` still turns `game.start_with_one_player` on for one run. |
 | `debug.log_addresses` | `false` | `HALO_LOG_ADDRESSES=1` sets `true` | `true`: other machines' internet addresses are written whole in `debug.txt` and the console, for debugging your own network. `false`: a public address is written as a tag (`addr#3f2a9c`) that matches up only within one run; local network addresses are always whole. Do not post a `debug.txt` written with this on. |
 | `debug.network_latency`, `debug.network_loss`, `debug.network_corrupt`, `debug.network_corrupt_stream`, `debug.network_corrupt_after` | `0` | `HALO_NETWORK_LATENCY`, `HALO_NETWORK_LOSS`, `HALO_NETWORK_CORRUPT`, `HALO_NETWORK_CORRUPT_STREAM`, `HALO_NETWORK_CORRUPT_AFTER` | The game holds all the data that it receives for this number of milliseconds, ignores this percentage of the datagrams, and damages this percentage of the datagrams it receives, and this percentage of its reads of streams, at random (bytes changed, cut short, stretched or replaced), from this many seconds after the start. Use the first two to test the netcode as on the internet, and the others to test that nothing another machine sends can crash the game (a damaged stream is closed, so a little goes a long way; a host's messages to its own client are damaged too, so start damaging once the game has started). |
 | `debug.voice_test` | `false` | `HALO_VOICE_TEST` | Automatic tests of voice chat: a tone replaces the microphone, and each voice that the game hears is written to the log once each second. |
@@ -943,7 +964,7 @@ Mesa. To stop this, set the environment variable `mesa_glthread=false`.
 
 ## Updates
 
-The builds from GitHub Actions (refer to the main [README](../../README.md#download))
+The builds from GitHub Actions (refer to [docs/install.md](../../docs/install.md#download))
 can update themselves. At start-up, the game asks GitHub for the latest
 release of the repository it was built in (a fork's builds, the fork's:
 `HALO_UPDATE_REPOSITORY`, from `tools/ci_build.py`). The game does not wait for the answer. If the latest release is not

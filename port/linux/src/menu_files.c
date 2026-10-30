@@ -387,21 +387,45 @@ static long current_line(struct reader *reader)
 	return (long)XML_GetCurrentLineNumber(reader->parser);
 }
 
-/* this build's platform, as the platform attribute names it (the Switch's
-game is built as Android's, with HALO_SWITCH_CONSOLE too: "android" is the
-Android app's) */
+/* the platform names a platform attribute may have, and whether this build
+is each: the Switch's game is built as Android's, with HALO_SWITCH_CONSOLE
+too ("android" is the Android app's; "web" is this fork's browser build, ninja web); "console" is the consoles that show
+the Chupathingy menus without the desktop's extras, and each of them has a
+name of its own too (HALO_CONSOLE_MENU_PLATFORM: halo_console_features.h) */
+static int platform_name_here(const char *name, size_t length, int *known)
+{
+	static const char *const names[] = { "desktop", "android", "web", "switch", "console", "x360", "wiiu" };
+	const char *here[2] = { NULL, NULL };
+	size_t index;
+
 #if defined(HALO_SWITCH_CONSOLE)
-#define MENU_PLATFORM "switch"
+	here[0] = "switch";
 #elif defined(HALO_ANDROID)
-#define MENU_PLATFORM "android"
+	here[0] = "android";
 #elif defined(HALO_WEB)
-#define MENU_PLATFORM "web"
+	here[0] = "web";
+#elif defined(HALO_CONSOLE_MENU_PLATFORM)
+	here[0] = "console";
+	here[1] = HALO_CONSOLE_MENU_PLATFORM;
 #else
-#define MENU_PLATFORM "desktop"
+	here[0] = "desktop";
 #endif
+	*known = 0;
+	for (index = 0; index < sizeof(names) / sizeof(names[0]); index++)
+	{
+		if (strlen(names[index]) == length && !strncmp(names[index], name, length))
+			*known = 1;
+	}
+	for (index = 0; index < sizeof(here) / sizeof(here[0]); index++)
+	{
+		if (here[index] && strlen(here[index]) == length && !strncmp(here[index], name, length))
+			return 1;
+	}
+	return 0;
+}
 
 /* whether the element is for this platform (its platform attribute: the
-platforms it is for, separated by spaces) */
+names of the platforms it is on, separated by spaces) */
 static int for_this_platform(struct reader *reader, const XML_Char **attributes)
 {
 	int index;
@@ -410,30 +434,37 @@ static int for_this_platform(struct reader *reader, const XML_Char **attributes)
 	{
 		if (!strcmp(attributes[index], "platform"))
 		{
-			const char *name = attributes[index + 1];
-			int found = 0;
+			const char *platform = attributes[index + 1];
+			const char *name = platform;
+			int here = 0, names = 0;
 
 			while (*name)
 			{
 				size_t length = strcspn(name, " ");
+				int known;
 
 				if (length)
 				{
-					if ((length != 7 || strncmp(name, "desktop", 7)) && (length != 7 || strncmp(name, "android", 7)) &&
-						(length != 3 || strncmp(name, "web", 3)) && (length != 6 || strncmp(name, "switch", 6)))
+					names++;
+					if (platform_name_here(name, length, &known))
+						here = 1;
+					if (!known)
 					{
-						reader_error(reader, "platform=\"%s\" names one that is not desktop, android, web or switch",
-							attributes[index + 1]);
+						reader_error(reader, "platform=\"%s\": %.*s is not desktop, android, web, switch, console, x360 or wiiu",
+							platform, (int)length, name);
 						return 1;
 					}
-					if (length == strlen(MENU_PLATFORM) && !strncmp(name, MENU_PLATFORM, length))
-						found = 1;
 				}
 				name += length;
 				while (*name == ' ')
 					name++;
 			}
-			return found;
+			if (!names)
+			{
+				reader_error(reader, "platform=\"%s\" names no platform", platform);
+				return 1;
+			}
+			return here;
 		}
 	}
 	return 1;

@@ -193,15 +193,46 @@ static void anti_aliasing_read(void)
 {
 	const char *setting = config_string("display.anti_aliasing");
 	int value;
+#ifdef HALO_BGFX
+	BOOL mapped = FALSE;
+#endif
 
 	for (value = NUMBER_OF_ANTI_ALIASING_VALUES - 1;
 		value > 0 && strcmp(setting, anti_aliasing_values[value].name);
 		value--)
 	{
 	}
+#ifdef HALO_BGFX
+	/* the bgfx test backend has multisampling only: FXAA, SMAA and
+	supersampling become 2x MSAA, said once */
+	if (xgpu_bgfx && (anti_aliasing_values[value].mode == _anti_aliasing_fxaa ||
+		anti_aliasing_values[value].mode == _anti_aliasing_smaa ||
+		anti_aliasing_values[value].mode == _anti_aliasing_ssaa))
+	{
+		static BOOL said;
+		int msaa;
+
+		for (msaa = 0; anti_aliasing_values[msaa].mode != _anti_aliasing_msaa; msaa++)
+		{
+		}
+		if (!said)
+			platform_log("anti-aliasing: %s is not in the bgfx renderer yet, so %s", setting,
+				anti_aliasing_values[msaa].name);
+		said = TRUE;
+		value = msaa;
+		mapped = TRUE;
+	}
+#endif
 	if (value == anti_aliasing_value)
 		return;
 	anti_aliasing_value = value;
+#ifdef HALO_BGFX
+	if (mapped)
+	{
+		anti_aliasing_prepare();
+		return;
+	}
+#endif
 	if (strcmp(setting, anti_aliasing_values[value].name))
 		platform_log("anti-aliasing: \"%s\" is unknown, so off", setting);
 	else
@@ -1236,6 +1267,37 @@ struct gl_device
 
 static struct gl_device device;
 
+#ifdef HALO_CONSOLE_GL_LAYER
+/* A console's visibility test runs (console.visibility_test_runs). The lens
+flares' occlusion tests come one after another, with nothing between them
+but each test's quad (rasterizer_lens_flares_submit_occlusion_tests, which
+brackets them with d3d8_gl_visibility_tests_begin and _end), so every test
+has the first one's program, state and targets. The first test is drawn as
+any draw is; each one after it puts its vertices in the stream buffer right
+after the one before, and the console's GL layer draws them with the state
+it already has (console_gl_draw_again: its program, state and vertex
+streams as the previous draw left them, the vertices from `first`). That
+leaves each later test a query and a draw call, where a full draw costs the
+360 about 25 us. A layer without the entry point draws every test in full. */
+static struct
+{
+	void (*draw_again)(GLenum mode, GLint first, GLsizei count);
+	/* the setting, and the layer has the entry point */
+	BOOL enabled;
+	/* between d3d8_gl_visibility_tests_begin and _end */
+	BOOL bracketed;
+	/* a test was drawn in full in this bracket: what the later ones keep */
+	BOOL open;
+	unsigned long base_offset;
+	unsigned long next_offset;
+	struct vertex_shader_object *vertex_shader;
+	D3DSurface *render_target;
+	D3DSurface *depth_stencil;
+	unsigned long long constants_serial;
+	D3DPRIMITIVETYPE type;
+} visibility_run;
+#endif
+
 /* debug.gpu_stats prints these once a second */
 static struct
 {
@@ -1251,6 +1313,7 @@ static struct
 	/* (draws counted when this frame began) */
 	unsigned long frame_first_draw;
 } stats;
+#ifdef HALO_BGFX
 /* debug.gpu_stats's frame work timing (D3DDevice_Present) */
 static double stats_frame_start, stats_busy_total, stats_busy_worst;
 /* debug.gpu_stats's account of a slow frame (D3DDevice_Present): the
@@ -1270,6 +1333,7 @@ static double stats_seconds(void)
 	clock_gettime(CLOCK_MONOTONIC, &now);
 	return (double)now.tv_sec + (double)now.tv_nsec / 1e9;
 }
+#endif
 
 void xgpu_statistics_texture_upload(unsigned long bytes)
 {
@@ -1867,13 +1931,17 @@ GLuint xgpu_compile_shader(GLenum type, const char *source, const char *what)
 {
 	GLuint shader = glCreateShader(type);
 	GLint status = 0;
+#ifdef HALO_BGFX
 	double start = stats_seconds();
+#endif
 
 	glShaderSource(shader, 1, &source, NULL);
 	glCompileShader(shader);
 	glGetShaderiv(shader, GL_COMPILE_STATUS, &status);
+#ifdef HALO_BGFX
 	stats_frame.compiles++;
 	stats_frame.compile_seconds += stats_seconds() - start;
+#endif
 	if (!status)
 	{
 		char log[4096];
@@ -1902,13 +1970,17 @@ GLuint xgpu_link_program(GLuint vertex_shader, GLuint fragment_shader, const cha
 {
 	GLuint program = glCreateProgram();
 	GLint status = 0;
+#ifdef HALO_BGFX
 	double start = stats_seconds();
+#endif
 
 	glAttachShader(program, vertex_shader);
 	glAttachShader(program, fragment_shader);
 	glLinkProgram(program);
 	glGetProgramiv(program, GL_LINK_STATUS, &status);
+#ifdef HALO_BGFX
 	stats_frame.compile_seconds += stats_seconds() - start;
+#endif
 	if (!status)
 	{
 		char log[4096];
@@ -2613,6 +2685,12 @@ static void gl_initialize(void)
 	if (frame_pacing.limit > MAXIMUM_FRAMES_IN_FLIGHT)
 		frame_pacing.limit = MAXIMUM_FRAMES_IN_FLIGHT;
 #endif
+#ifdef HALO_CONSOLE_GL_LAYER
+	visibility_run.draw_again = (void (*)(GLenum, GLint, GLsizei))gl_function_extra("console_gl_draw_again");
+	visibility_run.enabled = visibility_run.draw_again && config_boolean("console.visibility_test_runs");
+	platform_log("GPU: visibility test runs %s", visibility_run.enabled ? "on" :
+		visibility_run.draw_again ? "off (console.visibility_test_runs)" : "off (the GL layer has none)");
+#endif
 	{
 		GLint renderbuffer_size = 0;
 
@@ -2829,14 +2907,16 @@ HRESULT WINAPI Direct3D_CreateDevice(UINT adapter, D3DDEVTYPE device_type, void 
 			!browser_headless() &&
 #endif
 			platform_video_initialize(width, height))
-		{
 #ifdef HALO_BGFX
+		{
 			if (xgpu_bgfx)
 				bg_initialize();
 			else
-#endif
-			gl_initialize();
+				gl_initialize();
 		}
+#else
+			gl_initialize();
+#endif
 		else
 			platform_log("Direct3D: running without a window (nothing is displayed)");
 		device.created = TRUE;
@@ -5150,6 +5230,11 @@ static struct program_entry *prepare_draw(BOOL immediate)
 	BOOL has_depth = FALSE;
 	int stage;
 
+#ifdef HALO_CONSOLE_GL_LAYER
+	/* (any draw in full ends a visibility test run: its state is what the
+	run's draws keep; D3DDevice_End starts one again after a test's) */
+	visibility_run.open = FALSE;
+#endif
 	/* (the fixed-function pipeline's draws: immediate mode's only) */
 	if (!device.gl_ready || !program || !(device.vertex_shader || device.fixed_function) || !program->instructions ||
 		(device.fixed_function && !immediate))
@@ -7117,6 +7202,59 @@ static void immediate_emit(void)
 	device.immediate_count++;
 }
 
+#ifdef HALO_CONSOLE_GL_LAYER
+/* the lens flares' occlusion tests begin and end (rasterizer_lights.c):
+nothing but the tests comes between, so a run of them can keep the first
+one's state (visibility_run) */
+void d3d8_gl_visibility_tests_begin(void)
+{
+	visibility_run.bracketed = visibility_run.enabled;
+	visibility_run.open = FALSE;
+}
+
+void d3d8_gl_visibility_tests_end(void)
+{
+	visibility_run.bracketed = FALSE;
+	visibility_run.open = FALSE;
+}
+
+/* a test after the run's first: its vertices after the last test's in the
+stream buffer, drawn by the GL layer with the state it has; FALSE to draw
+it in full (and end the run) */
+static BOOL visibility_run_draw(D3DPRIMITIVETYPE type, unsigned long count, unsigned long stride)
+{
+	unsigned long size = count * stride, offset;
+
+	if (!visibility_run.open)
+		return FALSE;
+	/* (the same kind of test, under the same shader, constants and
+	targets; its vertices where the last test's ended, in the same buffer:
+	stream_reserve would orphan it at its end) */
+	if (!visibility_run.bracketed || !device.visibility_test_active || type != visibility_run.type ||
+		device.vertex_shader != visibility_run.vertex_shader || device.render_target != visibility_run.render_target ||
+		device.depth_stencil != visibility_run.depth_stencil || constants_serial != visibility_run.constants_serial ||
+		device.stream_offset != visibility_run.next_offset || ((size + 15) & ~15UL) != size ||
+		device.stream_offset + size > STREAM_BUFFER_SIZE)
+	{
+		visibility_run.open = FALSE;
+		return FALSE;
+	}
+	trace_draw("immediate", type, count, device.immediate_vertices);
+	offset = stream_upload(device.immediate_vertices, size);
+	if (offset < visibility_run.base_offset || (offset - visibility_run.base_offset) % stride)
+	{
+		/* (not expected: drawn from where it is, in full) */
+		visibility_run.open = FALSE;
+		return FALSE;
+	}
+	visibility_run.next_offset = device.stream_offset;
+	stats.immediate_draws++;
+	visibility_run.draw_again(primitive_mode(type), (GLint)((offset - visibility_run.base_offset) / stride),
+		(GLsizei)count);
+	return TRUE;
+}
+#endif
+
 void WINAPI D3DDevice_End(void)
 {
 	unsigned long stride = XGPU_VERTEX_ATTRIBUTE_COUNT * 4 * sizeof(float);
@@ -7147,6 +7285,10 @@ void WINAPI D3DDevice_End(void)
 		bg_draw_immediate(type, count);
 		return;
 	}
+#endif
+#ifdef HALO_CONSOLE_GL_LAYER
+	if (count && visibility_run_draw(type, count, stride))
+		return;
 #endif
 	if (!count)
 		return;
@@ -8323,6 +8465,7 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 	web_stream_cache_expire();
 	#endif
 	stats.presents++;
+#ifdef HALO_BGFX
 	if (debug_settings.statistics)
 	{
 		static struct timespec last_present;
@@ -8368,11 +8511,14 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 		}
 		memset(&stats_frame, 0, sizeof(stats_frame));
 	}
+#endif
 	if (debug_settings.statistics && device.frame % 60 == 0)
 	{
+#ifdef HALO_BGFX
 		platform_log("frame %lu: work %.2f ms a frame, worst %.2f ms", device.frame, stats_busy_total * 1000.0 / 60.0,
 			stats_busy_worst * 1000.0);
 		stats_busy_total = stats_busy_worst = 0.0;
+#endif
 		platform_log("frame %lu: %lu draws, %lu immediate, %lu clears, %lu target changes; skipped %lu no program, %lu no target, %lu link; "
 			"%lu KB mirrored, %lu KB streamed; in 60 frames, %lu textures uploaded (%lu KB), at most %lu draws "
 			"and %lu ms in a frame",
@@ -8411,8 +8557,10 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 		pending_flips++;
 	}
 	pthread_mutex_unlock(&vertical_blank_lock);
+#ifdef HALO_BGFX
 	if (debug_settings.statistics)
 		stats_frame_start = stats_seconds();
+#endif
 }
 
 HRESULT WINAPI D3DDevice_PersistDisplay(void)

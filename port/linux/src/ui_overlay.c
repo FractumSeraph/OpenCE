@@ -1174,6 +1174,7 @@ static void put_vertex(struct vertex *vertex, float x, float y, float u, float v
 	vertex->color[3] = (unsigned char)color;
 }
 
+#ifdef HALO_BGFX
 /* the quads as triangles in window pixels, each layer's shapes, then its
 text, then the next layer's (shape_count of them shapes, the rest glyphs);
 how many vertices */
@@ -1252,6 +1253,7 @@ static int build_vertices(int shape_count, float scale, float origin_x, float or
 	}
 	return count;
 }
+#endif
 
 void ui_overlay_present(int x, int y, int width, int height, int window_width, int window_height)
 {
@@ -1363,7 +1365,79 @@ void ui_overlay_present(int x, int y, int width, int height, int window_width, i
 		lay_out_text(index, scale, origin_x, origin_y, &atlas_full);
 
 	/* each layer's shapes, then its text, then the next layer's */
-	count = build_vertices(shape_count, scale, origin_x, origin_y);
+	{
+	int layer, pass;
+
+	for (layer = 0; layer < MAXIMUM_LAYERS; layer++)
+	for (pass = 0; pass < 2; pass++)
+	for (index = pass ? shape_count : 0; index < (pass ? overlay.quad_count : shape_count) &&
+		count + 6 <= MAXIMUM_QUADS * 6; index++)
+	{
+		const struct quad *quad = &overlay.quads[index];
+		struct vertex *v = &overlay.vertices[count];
+		float left, top, right, bottom, half_width, half_height, radius, thickness, grow;
+		unsigned int top_color = quad->top, bottom_color = quad->bottom;
+
+		if (quad->layer != layer)
+			continue;
+		if (index < shape_count && (quad->radius == ICON_MARK || quad->radius == PICTURE_MARK))
+		{
+			/* an icon: layout to window pixels, its layer in shape.x (the
+			picture: the same, marked as the picture's) */
+			float layer_index = quad->thickness;
+			float mark = quad->radius;
+
+			left = origin_x + quad->x * scale;
+			top = origin_y + quad->y * scale;
+			right = left + quad->width * scale;
+			bottom = top + quad->height * scale;
+			put_vertex(&v[0], left, top, quad->u0, quad->v0, layer_index, 0, 0, 0, mark, 0, top_color);
+			put_vertex(&v[1], right, top, quad->u1, quad->v0, layer_index, 0, 0, 0, mark, 0, top_color);
+			put_vertex(&v[2], left, bottom, quad->u0, quad->v1, layer_index, 0, 0, 0, mark, 0, top_color);
+			put_vertex(&v[3], right, top, quad->u1, quad->v0, layer_index, 0, 0, 0, mark, 0, top_color);
+			put_vertex(&v[4], right, bottom, quad->u1, quad->v1, layer_index, 0, 0, 0, mark, 0, top_color);
+			put_vertex(&v[5], left, bottom, quad->u0, quad->v1, layer_index, 0, 0, 0, mark, 0, top_color);
+		}
+		else if (index < shape_count)
+		{
+			/* a shape: layout to window pixels, a pixel larger all round for
+			the smooth edge */
+			left = origin_x + quad->x * scale;
+			top = origin_y + quad->y * scale;
+			right = left + quad->width * scale;
+			bottom = top + quad->height * scale;
+			half_width = (right - left) * 0.5f;
+			half_height = (bottom - top) * 0.5f;
+			radius = quad->radius * scale;
+			thickness = quad->thickness > 0.0f ? fmaxf(1.0f, quad->thickness * scale) : 0.0f;
+			grow = 1.0f;
+			put_vertex(&v[0], left - grow, top - grow, -1.0f, 0.0f, -half_width - grow, -half_height - grow, half_width, half_height, radius, thickness, top_color);
+			put_vertex(&v[1], right + grow, top - grow, -1.0f, 0.0f, half_width + grow, -half_height - grow, half_width, half_height, radius, thickness, top_color);
+			put_vertex(&v[2], left - grow, bottom + grow, -1.0f, 0.0f, -half_width - grow, half_height + grow, half_width, half_height, radius, thickness, bottom_color);
+			put_vertex(&v[3], right + grow, top - grow, -1.0f, 0.0f, half_width + grow, -half_height - grow, half_width, half_height, radius, thickness, top_color);
+			put_vertex(&v[4], right + grow, bottom + grow, -1.0f, 0.0f, half_width + grow, half_height + grow, half_width, half_height, radius, thickness, bottom_color);
+			put_vertex(&v[5], left - grow, bottom + grow, -1.0f, 0.0f, -half_width - grow, half_height + grow, half_width, half_height, radius, thickness, bottom_color);
+		}
+		else
+		{
+			/* a glyph, already in window pixels (its top leaning right by
+			its skew) */
+			float lean = quad->thickness * quad->height;
+
+			left = quad->x;
+			top = quad->y;
+			right = left + quad->width;
+			bottom = top + quad->height;
+			put_vertex(&v[0], left + lean, top, quad->u0, quad->v0, 0, 0, 0, 0, 0, 0, top_color);
+			put_vertex(&v[1], right + lean, top, quad->u1, quad->v0, 0, 0, 0, 0, 0, 0, top_color);
+			put_vertex(&v[2], left, bottom, quad->u0, quad->v1, 0, 0, 0, 0, 0, 0, top_color);
+			put_vertex(&v[3], right + lean, top, quad->u1, quad->v0, 0, 0, 0, 0, 0, 0, top_color);
+			put_vertex(&v[4], right, bottom, quad->u1, quad->v1, 0, 0, 0, 0, 0, 0, top_color);
+			put_vertex(&v[5], left, bottom, quad->u0, quad->v1, 0, 0, 0, 0, 0, 0, top_color);
+		}
+		count += 6;
+	}
+	}
 
 	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
 	glViewport(0, 0, window_width, window_height);

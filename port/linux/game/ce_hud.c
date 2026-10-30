@@ -35,7 +35,11 @@ know, which are put right when the map's tags load:
     custom HUD's shared sheet) keeps its channels, and only its meter's draw
     samples them so (ce_hud_bitmap_is_mixed_meter: hud_draw.c,
     halo_custom_edition_hud_meter; OpenCE's 384d9ba5, its "mixed-use"
-    sheets).
+    sheets). A meter
+    flagged "use Xbox shading" (MCC's flag, which Chimera reads too) has
+    its bitmap in the Xbox's order, as halopc-restored's Xbox order meters
+    and custom HUDs do, so its bitmap is not listed and is drawn as the
+    Xbox draws it.
 
 Some maps were made around how Halo PC drew their HUD, where Chimera (by
 SnowyMouse) draws them otherwise; Chimera lists them by name and tag data
@@ -105,8 +109,12 @@ enum
 	PLACEMENT_SCALING_FLAGS_OFFSET = 0x0c,
 	PLACEMENT_HIGH_RESOLUTION_SCALE_FLAG = 1 << 2,
 	/* a static or meter element (static_hud_element_definition,
-	meter_hud_element_definition): its placement, then its bitmap */
+	meter_hud_element_definition): its placement, then its bitmap; a
+	meter's flags, and the one saying its bitmap is in the Xbox's order
+	(after the Xbox's five: MCC's "use Xbox shading") */
 	ELEMENT_BITMAP_OFFSET = 0x24,
+	METER_FLAGS_OFFSET = 0x44,
+	METER_USE_XBOX_SHADING_FLAG = 1 << 5,
 
 	/* the unit HUD interface (unit_hud_interface_definition) */
 	UNIT_HUD_BACKGROUND_OFFSET = 0x24,
@@ -550,15 +558,19 @@ static void ce_hud_digits_halve(
 	}
 }
 
-/* the bitmap a meter element draws: each of its bitmaps listed (once) */
+/* the bitmap a meter element draws: each of its bitmaps listed (once),
+unless the meter says they are in the Xbox's order */
 static void ce_hud_meter_bitmap(
 	byte const *element)
 {
-	byte *bitmap_group = ce_hud_bitmap_group(element + ELEMENT_BITMAP_OFFSET);
+	byte *bitmap_group;
 	long count;
 	unsigned long address;
 	long index;
 
+	if (element[METER_FLAGS_OFFSET] & METER_USE_XBOX_SHADING_FLAG)
+		return;
+	bitmap_group = ce_hud_bitmap_group(element + ELEMENT_BITMAP_OFFSET);
 	if (!bitmap_group)
 		return;
 	/* (Bigass Open v1.1's shared weapon sheet has the Xbox's meter channels:

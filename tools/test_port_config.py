@@ -19,6 +19,10 @@ player's can have:
   lets them follow the new defaults; the question never comes again;
 - a file with a setting under its older name: a value the player chose
   goes on under the new one, and the old name's lines are taken out;
+- a file with a retired setting (debug.solo_game): it loads, its value
+  carries over to the setting that took its place once, and its lines go;
+- a new file's layout: the top block, each section once with its note, and
+  the Advanced part ([debug], [console]) last;
 - the per-platform defaults of each build (DEFAULTS below).
 
 Needs only a C compiler. Usage: test_port_config.py [--cc clang]
@@ -42,23 +46,39 @@ DEFAULTS = {
 		"display.anti_aliasing": "msaa2x",
 		"display.shadow_resolution": "256",
 		"network.tunnel_port": "2302",
+		"game.start_with_one_player": "true",
+		"audio.hrtf": "on",
 	},
 	"desktop32": {
 		"display.anti_aliasing": "off",
 		"display.shadow_resolution": "256",
 		"audio.buffer_frames": "512",
 		"network.tunnel_port": "2302",
+		"game.start_with_one_player": "true",
+		"audio.hrtf": "on",
 	},
 	"android": {
 		"display.anti_aliasing": "off",
 		"display.shadow_resolution": "256",
 		"audio.buffer_frames": "1024",
 		"network.tunnel_port": "2302",
+		"game.start_with_one_player": "true",
+		"audio.hrtf": "on",
 	},
 	"server": {
 		"display.anti_aliasing": "off",
 		"display.shadow_resolution": "128",
 		"network.tunnel_port": "0",
+		"game.start_with_one_player": "false",
+	},
+	# (a console's build, one on the shared GL layer: Headphone 3D stays off,
+	# the original Xbox having its own hardware path, and the port random)
+	"console": {
+		"display.anti_aliasing": "off",
+		"display.shadow_resolution": "256",
+		"network.tunnel_port": "0",
+		"game.start_with_one_player": "true",
+		"audio.hrtf": "off",
 	},
 }
 
@@ -71,16 +91,23 @@ OLD = {
 	"display.shadow_resolution": "128",
 	"audio.buffer_frames": "512",
 	"network.tunnel_port": "0",
+	"game.start_with_one_player": "false",
+	"audio.hrtf": "off",
 }
 CHANGED = {
-	"desktop": ["display.menus", "display.anti_aliasing", "display.shadow_resolution", "network.tunnel_port"],
-	"desktop32": ["display.menus", "display.shadow_resolution", "network.tunnel_port"],
-	"android": ["display.menus", "display.shadow_resolution", "audio.buffer_frames", "network.tunnel_port"],
+	"desktop": ["display.menus", "display.anti_aliasing", "display.shadow_resolution", "network.tunnel_port", "game.start_with_one_player", "audio.hrtf"],
+	"desktop32": ["display.menus", "display.shadow_resolution", "network.tunnel_port", "game.start_with_one_player", "audio.hrtf"],
+	"android": ["display.menus", "display.shadow_resolution", "audio.buffer_frames", "network.tunnel_port", "game.start_with_one_player", "audio.hrtf"],
 	"server": [],
+	"console": ["display.menus", "display.shadow_resolution", "game.start_with_one_player"],
 }
-# the changes of the second question (game.defaults_answered = 2), which a
-# file answered for the first (v0.8.0's) is asked about alone
+# the changes of the second question (game.defaults_answered = 2), the
+# third (3) and the latest (CONFIG_DEFAULTS_GENERATION): a file answered for
+# an earlier one is asked about the later ones only
 SECOND = ["network.tunnel_port"]
+THIRD = ["game.start_with_one_player"]
+LATEST = ["audio.hrtf"]
+GENERATION = "4"
 NEW = {"display.menus": "chupathingy"}
 
 # the macros each kind of build is compiled with; the others are not macOS
@@ -90,6 +117,7 @@ DEFINES = {
 	"desktop32": ["-U__APPLE__", "-DHALO_GAME_BROWSER"],
 	"android": ["-U__APPLE__", "-DHALO_ANDROID", "-DHALO_GAME_BROWSER"],
 	"server": ["-U__APPLE__", "-DHALO_SERVER", "-DHALO_64BIT", "-DHALO_GAME_BROWSER"],
+	"console": ["-U__APPLE__", "-DHALO_CONSOLE", "-DHALO_CONSOLE_GL_LAYER", "-DHALO_GAME_BROWSER"],
 }
 
 STUB_PLATFORM = """#include <stddef.h>
@@ -238,7 +266,7 @@ def new_value(name, defaults):
 
 
 def old_value_text(name):
-	return OLD[name] if OLD[name].isdigit() else f'"{OLD[name]}"'
+	return OLD[name] if OLD[name].isdigit() or OLD[name] in ("true", "false") else f'"{OLD[name]}"'
 
 
 def previous_release_file(case, kind):
@@ -293,7 +321,9 @@ def test_previous_release_file(program, directory, defaults, kind):
 			continue
 		case.run("answer", answer)
 		text = case.text()
-		check(re.search(r"^defaults_answered = 2$", text, re.M), f"previous/{answer}: the answer is not written")
+		check(re.search(rf"^defaults_answered = {GENERATION}$", text, re.M), f"previous/{answer}: the answer is not written")
+		if "audio.hrtf" in changed:
+			check("Headphone 3D on, as the original Xbox did" in output, f"previous/{answer}: no words for Headphone 3D")
 		# (asked once: a restart finds nothing, and changes nothing)
 		check(pending(case)[0] == 0, f"previous/{answer}: asked again")
 		values, _ = case.get(*names)
@@ -308,14 +338,68 @@ def test_previous_release_file(program, directory, defaults, kind):
 				check(lines == [f"{key} = {old_value_text(name)}"], f"previous/keep: {key} not pinned: {lines}")
 			else:
 				check(values[name] == new_value(name, defaults), f"previous/new: {name} is {values[name]}")
-				check(not lines and commented == [f"# {key} = " + (f'"{values[name]}"' if not values[name].isdigit() else values[name])],
+				check(not lines and commented == [f"# {key} = " + (f'"{values[name]}"' if not (values[name].isdigit() or values[name] in ("true", "false")) else values[name])],
 					f"previous/new: {key}: {lines} {commented}")
+
+
+def test_answered_earlier(program, directory, defaults, kind):
+	"""A file answered at the question before (defaults_answered = 3): asked
+	about the latest changes only (Headphone 3D), and a value kept then stays
+	whatever the answer now. A Headphone 3D the player set themselves, on,
+	off or auto, is never asked about nor changed."""
+	latest = [name for name in LATEST if name in CHANGED[kind]]
+	if not latest:
+		return
+	for answer in ("keep", "new"):
+		case = Case(program, directory / f"earlier_{answer}")
+		written = previous_release_file(case, kind)
+		# (kept at the question before: shadows written at 128; the menus left
+		# to follow, as "use the new settings" did)
+		written = written.replace("# shadow_resolution = 128", "shadow_resolution = 128")
+		written = re.sub(r"^# menus = .*$", '# menus = "chupathingy"', written, flags=re.M)
+		written = re.sub(r"^# anti_aliasing = .*$", f'# anti_aliasing = "{defaults.get("display.anti_aliasing", "off")}"',
+			written, flags=re.M)
+		written = re.sub(r"^# buffer_frames = .*$", f'# buffer_frames = {defaults.get("audio.buffer_frames", "512")}',
+			written, flags=re.M)
+		written = re.sub(r"^# tunnel_port = .*$", f'# tunnel_port = {defaults.get("network.tunnel_port", "0")}',
+			written, flags=re.M)
+		written = re.sub(r"^# start_with_one_player = .*$",
+			f'# start_with_one_player = {defaults.get("game.start_with_one_player", "false")}', written, flags=re.M)
+		written = re.sub(r"^# defaults_answered = .*$", "defaults_answered = 3", written, flags=re.M)
+		case.path.write_text(written)
+		values, _ = case.get("audio.hrtf", "display.shadow_resolution")
+		check(values["audio.hrtf"] == "off", f"earlier/{answer}: audio.hrtf is {values['audio.hrtf']} before the answer")
+		check(case.text() == written, f"earlier/{answer}: the file changed before the answer")
+		count, output = pending(case)
+		check(count == len(latest), f"earlier/{answer}: {count} changes, not {len(latest)}: {output}")
+		check("Headphone 3D on, as the original Xbox did" in output, f"earlier/{answer}: no words for Headphone 3D")
+		check("Sharper shadows" not in output and "menus" not in output and "A fixed port" not in output and
+			"Start a game you host alone" not in output,
+			f"earlier/{answer}: asked again: {output}")
+		case.run("answer", answer)
+		values, _ = case.get("audio.hrtf", "display.shadow_resolution")
+		check(values["audio.hrtf"] == ("off" if answer == "keep" else "on"), f"earlier/{answer}: audio.hrtf {values}")
+		check(values["display.shadow_resolution"] == "128", f"earlier/{answer}: the kept shadows changed: {values}")
+		text = case.text()
+		check(re.search(rf"^defaults_answered = {GENERATION}$", text, re.M), f"earlier/{answer}: the answer is not written")
+		lines, _ = value_lines(text, "hrtf")
+		check(lines == (['hrtf = "off"'] if answer == "keep" else []), f"earlier/{answer}: hrtf lines {lines}")
+		check(pending(case)[0] == 0, f"earlier/{answer}: asked again")
+	for chosen in ("off", "on", "auto"):
+		case = Case(program, directory / f"earlier_chosen_{chosen}")
+		case.path.write_text(f'config_version = 2\n\n[audio]\nhrtf = "{chosen}"\n')
+		count, output = pending(case)
+		check("Headphone 3D" not in output, f"chosen {chosen}: asked about Headphone 3D: {output}")
+		values, _ = case.get("audio.hrtf")
+		check(values["audio.hrtf"] == chosen, f"chosen {chosen}: audio.hrtf is {values['audio.hrtf']}")
+		check(f'hrtf = "{chosen}"' in case.text(), f"chosen {chosen}: the player's value left the file")
 
 
 def test_answered_first_question(program, directory, defaults, kind):
 	"""A file answered for v0.8.0's question (defaults_answered = 1): asked
-	about the hosting port alone, once; its other settings stay as they are."""
-	changed = [name for name in CHANGED[kind] if name in SECOND]
+	about the later changes alone (the hosting port, starting alone, Headphone
+	3D), once; its other settings stay as they are."""
+	changed = [name for name in CHANGED[kind] if name in SECOND + THIRD + LATEST]
 	if not changed:
 		return
 	for answer in ("keep", "new"):
@@ -325,26 +409,81 @@ def test_answered_first_question(program, directory, defaults, kind):
 		case.path.write_text(text)
 		count, output = pending(case)
 		check(count == len(changed), f"answered/{answer}: {count} changes, not {len(changed)}: {output}")
-		check("A fixed port for hosting (UDP 2302)" in output, f"answered/{answer}: no words for the port: {output}")
+		# (a console's build keeps its random port)
+		port = "network.tunnel_port" in changed
+		check(("A fixed port for hosting (UDP 2302)" in output) == port, f"answered/{answer}: words for the port: {output}")
 		check("Sharper shadows" not in output, f"answered/{answer}: asked about v0.8.0's changes again")
+		if "audio.hrtf" in changed:
+			check("Headphone 3D on, as the original Xbox did" in output, f"answered/{answer}: no words for Headphone 3D")
 		values, _ = case.get("network.tunnel_port", "display.shadow_resolution")
-		check(values["network.tunnel_port"] == "0", f"answered/{answer}: the port is {values['network.tunnel_port']} before the answer")
+		check(values["network.tunnel_port"] == "0" or not port, f"answered/{answer}: the port is {values['network.tunnel_port']} before the answer")
 		# (v0.8.0's changes were answered: they follow the defaults, as before)
 		shadows = defaults["display.shadow_resolution"]
 		check(values["display.shadow_resolution"] == shadows, f"answered/{answer}: shadows are {values['display.shadow_resolution']}")
+		values, _ = case.get("game.start_with_one_player")
+		check(values["game.start_with_one_player"] == "false", f"answered/{answer}: starting alone is on before the answer")
+		check("Start a game you host alone" in output, f"answered/{answer}: no words for starting alone: {output}")
 		case.run("answer", answer)
 		text = case.text()
-		check(re.search(r"^defaults_answered = 2$", text, re.M), f"answered/{answer}: the answer is not written")
+		check(re.search(rf"^defaults_answered = {GENERATION}$", text, re.M), f"answered/{answer}: the answer is not written")
 		check(pending(case)[0] == 0, f"answered/{answer}: asked again")
+		values, _ = case.get("game.start_with_one_player")
+		alone = "false" if answer == "keep" else "true"
+		check(values["game.start_with_one_player"] == alone, f"answered/{answer}: starting alone is {values}")
 		values, _ = case.get("network.tunnel_port", "display.shadow_resolution")
 		lines, commented = value_lines(case.text(), "tunnel_port")
 		check(values["display.shadow_resolution"] == shadows, f"answered/{answer}: shadows changed after the answer")
+		if not port:
+			continue
 		if answer == "keep":
 			check(values["network.tunnel_port"] == "0" and lines == ["tunnel_port = 0"],
 				f"answered/keep: the port is {values['network.tunnel_port']}: {lines}")
 		else:
 			check(values["network.tunnel_port"] == "2302" and not lines and commented == ["# tunnel_port = 2302"],
 				f"answered/new: the port is {values['network.tunnel_port']}: {lines} {commented}")
+
+
+def test_start_alone(program, directory, defaults, kind):
+	"""Starting a hosted game alone (game.start_with_one_player): on for a new
+	file (not the server), asked about once for a file that had it off, kept
+	off by a player who wrote false (the older debug.solo_game:
+	test_retired_setting)."""
+	if "game.start_with_one_player" not in CHANGED[kind]:
+		case = Case(program, directory / "alone_server")
+		values, _ = case.get("game.start_with_one_player")
+		check(values["game.start_with_one_player"] == "false", f"alone/server: {values}")
+		values, _ = case.run("get", "game.start_with_one_player", environment_extra={"HALO_START_WITH_ONE_PLAYER": "true"})
+		check(values["game.start_with_one_player"] == "true", f"alone/server: the environment is ignored: {values}")
+		return
+	# a file answered for the second question: this one is asked, with the
+	# later ones (Headphone 3D)
+	later = [name for name in CHANGED[kind] if name in THIRD + LATEST]
+	for answer in ("keep", "new"):
+		case = Case(program, directory / f"alone_{answer}")
+		text = previous_release_file(case, kind)
+		text = re.sub(r"^# defaults_answered = .*$", "defaults_answered = 2", text, flags=re.M)
+		text = re.sub(r"^# tunnel_port = .*$", "tunnel_port = 2302", text, flags=re.M)
+		case.path.write_text(text)
+		count, output = pending(case)
+		check(count == len(later) and "Start a game you host alone" in output, f"alone/{answer}: {count} {output}")
+		check("A fixed port" not in output, f"alone/{answer}: asked about the port again")
+		case.run("answer", answer)
+		values, _ = case.get("game.start_with_one_player")
+		lines, commented = value_lines(case.text(), "start_with_one_player")
+		if answer == "keep":
+			check(values["game.start_with_one_player"] == "false" and lines == ["start_with_one_player = false"],
+				f"alone/keep: {values} {lines}")
+		else:
+			check(values["game.start_with_one_player"] == "true" and not lines and commented == ["# start_with_one_player = true"],
+				f"alone/new: {values} {lines} {commented}")
+	# a player who wrote false chose it: not asked, and kept
+	case = Case(program, directory / "alone_chosen")
+	text = previous_release_file(case, kind)
+	text = re.sub(r"^# start_with_one_player = .*$", "start_with_one_player = false", text, flags=re.M)
+	case.path.write_text(text)
+	check("Start a game you host alone" not in pending(case)[1], "alone/chosen: asked about a chosen false")
+	values, _ = case.get("game.start_with_one_player")
+	check(values["game.start_with_one_player"] == "false", f"alone/chosen: {values}")
 
 
 def test_chosen_port_kept(program, directory, defaults, kind):
@@ -522,13 +661,115 @@ def test_renamed_setting(program, directory, defaults, kind):
 		check(values_lines == campaign_lines and len(commented) == (0 if campaign_lines else 1),
 			f"renamed/{name}: campaign's lines are {values_lines} {commented}")
 		# (the player's own line under the new name stays as they wrote it)
-		check(text.count("The least seconds the loading screen stays up when a campaign level") == (0 if name == "both" else 1),
+		check(text.count("The shortest time the loading screen stays up for a campaign level") == (0 if name == "both" else 1),
 			f"renamed/{name}: campaign's help text is not there once")
 		values_lines, commented = value_lines(text, "loading_screen_multiplayer_seconds")
 		check(not values_lines and len(commented) == 1, f"renamed/{name}: multiplayer's lines are {values_lines} {commented}")
 		before = text
 		case.get(*names)
 		check(case.text() == before, f"renamed/{name}: the file changed on the next start")
+
+
+def test_retired_setting(program, directory, defaults, kind):
+	"""A retired setting (config_renamed in port_config.c): debug.solo_game,
+	whose job game.start_with_one_player does. An older file that has it
+	loads without a word about an unknown setting. A true carries over to
+	game.start_with_one_player once, in [game], even over a false there, as
+	either one being true started the game alone; a false (its default) is
+	only taken out. The old name's lines, its help text too, are gone after
+	the first start, and the next start changes nothing. Its environment
+	variable, HALO_SOLO_GAME, still turns the new setting on."""
+	alone = defaults["game.start_with_one_player"]
+	old_block = ("\n# Old name for game.start_with_one_player.\n"
+		"# (for one run: HALO_SOLO_GAME=1 makes it true)\n")
+	cases = {
+		# (the solo_game line, the start_with_one_player line, the value after,
+		# and the [game] line the file has after)
+		"true": ("solo_game = true\n", None, "true", "start_with_one_player = true"),
+		"true_over_false": ("solo_game = true\n", "start_with_one_player = false", "true",
+			"start_with_one_player = true"),
+		"false": ("solo_game = false\n", None, alone, None),
+		"commented": ("# solo_game = false\n", None, alone, None),
+	}
+	for name, (old_line, new_line, expected, game_line) in cases.items():
+		case = Case(program, directory / f"retired_{name}")
+		case.get("display.vsync")
+		text = case.text()
+		# (the file as a version with the old setting wrote it)
+		text = text.replace("\n[debug]\n", "\n[debug]\n" + old_block + old_line, 1)
+		if new_line:
+			text = re.sub(r"^# start_with_one_player = .*$", new_line, text, flags=re.M)
+		case.path.write_text(text)
+		values, output = case.get("game.start_with_one_player")
+		check(values["game.start_with_one_player"] == expected,
+			f"retired/{name}: start_with_one_player is {values}, not {expected}")
+		check("unknown setting" not in output and "cannot be read" not in output, f"retired/{name}: {output}")
+		text = case.text()
+		check("solo_game" not in text and "HALO_SOLO_GAME" not in text, f"retired/{name}: the old lines stay")
+		lines, commented = value_lines(text, "start_with_one_player")
+		lines = [line.strip() for line in lines]
+		if game_line:
+			check(lines == [game_line] and not commented, f"retired/{name}: {lines} {commented}")
+			game = text[text.index("\n[game]\n"):]
+			game = game[:game.index("\n[", 1)]
+			check(game_line in game, f"retired/{name}: the value is not in [game]")
+		else:
+			check(not lines and len(commented) == 1, f"retired/{name}: {lines} {commented}")
+		before = text
+		case.get("game.start_with_one_player")
+		check(case.text() == before, f"retired/{name}: the file changed on the next start")
+	# (the environment variable, over the file's false and the server's default)
+	case = Case(program, directory / "retired_environment")
+	case.path.write_text("config_version = 2\n\n[game]\nstart_with_one_player = false\n")
+	values, _ = case.run("get", "game.start_with_one_player", environment_extra={"HALO_SOLO_GAME": "true"})
+	check(values["game.start_with_one_player"] == "true", f"retired/environment: {values}")
+	values, _ = case.run("get", "game.start_with_one_player", environment_extra={"HALO_SOLO_GAME": "0"})
+	check(values["game.start_with_one_player"] == "false", f"retired/environment 0: {values}")
+
+
+def test_layout(program, directory, defaults, kind):
+	"""A new file's layout: the top block, each section once with its note,
+	the everyday sections first, and the advanced ones ([debug], and
+	[console] on a console) last, after the Advanced block. A setting a newer
+	version adds to the section before that block goes above it."""
+	case = Case(program, directory / "layout")
+	case.get("display.vsync")
+	text = case.text()
+	check(text.startswith("# Chupathingy settings\n"), "layout: no top block")
+	check("Halo settings" not in text, "layout: the old title")
+	headers = re.findall(r"^\[([a-z_]+)\]$", text, re.M)
+	check(len(headers) == len(set(headers)), f"layout: a section twice: {headers}")
+	check(headers[0] == "display", f"layout: {headers[0]} first")
+	mark = text.find("\n# ---- Advanced")
+	check(mark > 0 and text.count("# ---- Advanced") == 1, "layout: no Advanced block")
+	advanced = re.findall(r"^\[([a-z_]+)\]$", text[mark:], re.M)
+	check(advanced and set(advanced) <= {"debug", "console"} and "debug" in advanced,
+		f"layout: after the Advanced block: {advanced}")
+	check(not set(headers[:len(headers) - len(advanced)]) & {"debug", "console"},
+		f"layout: an advanced section before the block: {headers}")
+	# (each section's note, under its header, then a blank line)
+	for header in headers:
+		check(re.search(rf"^\[{header}\]\n# [^\n]+\n(# [^\n]+\n)*\n", text, re.M), f"layout: [{header}] has no note")
+	# (the one-run lines, on the desktop: short and the same for each)
+	if kind != "android":
+		check("(for one run:" not in text, "layout: the old one-run lines")
+		check(re.search(r"^# \(one run: HALO_[A-Z_0-9]+=<value>\)$", text, re.M), "layout: no one-run line")
+		check(re.search(r"^# \(one run: HALO_NO_VSYNC=1 turns it off\)$", text, re.M), "layout: vsync's one-run line")
+	else:
+		check("one run:" not in text, "layout: one-run lines on Android")
+	# (every setting is in the file once, commented out at its default)
+	check(len(re.findall(r"^# vsync = ", text, re.M)) == 1, "layout: vsync not there once")
+	# the last setting of the section before the Advanced block taken out, as
+	# a file from before it: the next start writes it above the block
+	before = text[:mark]
+	last = list(re.finditer(r"\n\n(# [^\n]*\n)*# ([a-z_0-9]+) = [^\n]*\n", before))[-1]
+	key = last.group(2)
+	case.path.write_text(before[:last.start()] + "\n" + text[mark:])
+	_, output = case.get("display.vsync")
+	text = case.text()
+	where = text.find(f"\n# {key} = ")
+	check(0 < where < text.find("\n# ---- Advanced"), f"layout: {key} added after the Advanced block: {output}")
+	check(text.count(f"\n# {key} = ") == 1, f"layout: {key} not there once")
 
 
 def test_old_browser_address(program, directory, defaults, kind):
@@ -555,6 +796,9 @@ def test_packaged_install(program, directory, defaults, kind):
 	Linux its config.toml is in the save root's usual place, as is a game's in
 	a folder it cannot write with no setup of its own. Elsewhere, and in a
 	normal install, nothing changes."""
+	if kind == "console":
+		# (a console has no updater)
+		return
 	home = directory / "packaged-home"
 	own = home / "chupathingyce" / "config.toml"
 	linux = sys.platform.startswith("linux") and kind != "android"
@@ -618,9 +862,9 @@ def main():
 		for kind in DEFAULTS:
 			program = build(arguments.cc, kind, directory / kind)
 			for test in (test_new_file, test_previous_release_file, test_answered_first_question,
-				test_chosen_port_kept, test_file_without_the_settings,
+				test_start_alone, test_answered_earlier, test_chosen_port_kept, test_file_without_the_settings,
 				test_readded_by_older_version, test_before_config_version, test_renamed_setting,
-				test_old_browser_address, test_packaged_install):
+				test_retired_setting, test_layout, test_old_browser_address, test_packaged_install):
 				try:
 					test(program, directory / kind / "cases", DEFAULTS[kind], kind)
 					print(f"ok   {kind}: {test.__name__}")

@@ -19,19 +19,23 @@
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_link_multiplayer_hud" x="54" y="103"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_link_map_sharing" x="54" y="133" platform="desktop android"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_link_streamer" x="54" y="163" platform="desktop android"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_link_streamer" x="54" y="133" platform="web"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_link_streamer" x="54" y="133" platform="web switch console"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/view_chat" x="54" y="73"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_enabled" x="54" y="73"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_show" x="54" y="103"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_filter" x="54" y="133"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_streamer_mode" x="54" y="163"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_text_chat" x="54" y="193"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_chat_style" x="54" y="223"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_enabled" x="54" y="73" platform="desktop android web switch"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_show" x="54" y="103" platform="desktop android web switch"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_filter" x="54" y="133" platform="desktop android web switch"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_streamer_mode" x="54" y="163" platform="desktop android web switch"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_text_chat" x="54" y="193" platform="desktop android web switch"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_text_chat" x="54" y="73" platform="console"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_chat_style" x="54" y="223" platform="desktop android web switch"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_chat_style" x="54" y="103" platform="console"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/view_multiplayer_hud" x="54" y="73"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_player_names" x="54" y="73"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_player_name_scale" x="54" y="103"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_scoreboard_team_layout" x="54" y="133"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_scoreboard_background" x="54" y="163"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_player_names" x="54" y="73" platform="desktop android web switch"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_player_name_scale" x="54" y="103" platform="desktop android web switch"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_scoreboard_team_layout" x="54" y="133" platform="desktop android web switch"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_scoreboard_team_layout" x="54" y="73" platform="console"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_scoreboard_background" x="54" y="163" platform="desktop android web switch"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_scoreboard_background" x="54" y="103" platform="console"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/view_map_sharing" x="54" y="73"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_map_download" x="54" y="73"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_map_seed" x="54" y="103"/>
@@ -84,7 +88,7 @@
 	</widget>
 	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/view_chat" width="1" height="1">
 	</widget>
-	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_enabled" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF">
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_enabled" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF" platform="desktop android web switch">
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/enabled_label"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/enabled_spinner" x="320" y="1"/>
 	</widget>
@@ -93,7 +97,7 @@
 	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/enabled_spinner" type="spinner" left="3" top="2" width="147" height="20" flags="pass_unhandled_to_focused_child left_right_tabs_items" strings="ON|OFF" setting="chat.enabled" values="true|false" font="ui\large_ui" color="#FF2896FF" align="center" text_y="1" header_bitmap="bitmaps/arrow_sm_left" footer_bitmap="bitmaps/arrow_sm_right" header_bounds="7 -6 19 0" footer_bounds="7 150 19 156">
 		<on event="created" run="port setting load"/>
 	</widget>
-	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_show" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF">
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_show" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF" platform="desktop android web switch">
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/show_label"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/show_spinner" x="320" y="1"/>
 	</widget>
@@ -102,7 +106,7 @@
 	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/show_spinner" type="spinner" left="3" top="2" width="147" height="20" flags="pass_unhandled_to_focused_child left_right_tabs_items" strings="ALL|TEAM|OFF" setting="chat.show" values="all|team|off" font="ui\large_ui" color="#FF2896FF" align="center" text_y="1" header_bitmap="bitmaps/arrow_sm_left" footer_bitmap="bitmaps/arrow_sm_right" header_bounds="7 -6 19 0" footer_bounds="7 150 19 156">
 		<on event="created" run="port setting load"/>
 	</widget>
-	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_filter" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF">
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_filter" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF" platform="desktop android web switch">
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/filter_label"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/filter_spinner" x="320" y="1"/>
 	</widget>
@@ -111,7 +115,7 @@
 	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/filter_spinner" type="spinner" left="3" top="2" width="147" height="20" flags="pass_unhandled_to_focused_child left_right_tabs_items" strings="MASK|HIDE|SHOW" setting="chat.filter" values="mask|hide|show" font="ui\large_ui" color="#FF2896FF" align="center" text_y="1" header_bitmap="bitmaps/arrow_sm_left" footer_bitmap="bitmaps/arrow_sm_right" header_bounds="7 -6 19 0" footer_bounds="7 150 19 156">
 		<on event="created" run="port setting load"/>
 	</widget>
-	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_streamer_mode" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF">
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_streamer_mode" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF" platform="desktop android web switch">
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/streamer_mode_label"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/streamer_mode_spinner" x="320" y="1"/>
 	</widget>
@@ -140,7 +144,7 @@
 	</widget>
 	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/view_multiplayer_hud" width="1" height="1">
 	</widget>
-	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_player_names" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF">
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_player_names" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF" platform="desktop android web switch">
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/player_names_label"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/player_names_spinner" x="320" y="1"/>
 	</widget>
@@ -149,7 +153,7 @@
 	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/player_names_spinner" type="spinner" left="3" top="2" width="147" height="20" flags="pass_unhandled_to_focused_child left_right_tabs_items" strings="ALL|ALLIES|ENEMIES|NONE" setting="display.player_names" values="all|allies|enemies|none" font="ui\large_ui" color="#FF2896FF" align="center" text_y="1" header_bitmap="bitmaps/arrow_sm_left" footer_bitmap="bitmaps/arrow_sm_right" header_bounds="7 -6 19 0" footer_bounds="7 150 19 156">
 		<on event="created" run="port setting load"/>
 	</widget>
-	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_player_name_scale" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF">
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_player_name_scale" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF" platform="desktop android web switch">
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/player_name_scale_label"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/player_name_scale_spinner" x="320" y="1"/>
 	</widget>

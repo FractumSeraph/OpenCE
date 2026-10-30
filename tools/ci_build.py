@@ -7,6 +7,7 @@
     python tools/ci_build.py server-x64 release --alpine
     python tools/ci_build.py linux profile
     python tools/ci_build.py web release
+    python tools/ci_build.py freebsd64 release      (on FreeBSD)
 
 Builds are portable (any x86-64 processor; for the arm64 server, any
 64-bit ARM), so they run on other computers. Debug builds skip link-time and profile-guided optimisation,
@@ -82,6 +83,10 @@ OUTPUTS = {
     "linux": ["build/linux/halo", "build/linux/libSDL3.so.0", "build/linux/SDL3-LICENSE.txt"],
     # the native 64-bit build (ninja linux64; tools/linux64_build.py)
     "linux64": ["build/linux64/halo", "build/linux64/libSDL3.so.0", "build/linux64/SDL3-LICENSE.txt"],
+    # the native 64-bit FreeBSD build (ninja freebsd64; tools/unix64_build.py),
+    # built on FreeBSD: SDL3 is the system's package (pkg install sdl3), not
+    # brought along
+    "freebsd64": ["build/freebsd64/halo"],
     "windows": ["build/windows/halo.exe", "build/windows/SDL3.dll"],
     # the native 64-bit build (ninja windows64; tools/windows_build.py)
     "windows64": ["build/windows64/halo.exe", "build/windows64/SDL3.dll"],
@@ -390,7 +395,7 @@ def keep_native_symbols(platform: str, config: str) -> None:
     Android app's native libraries before the APK strips them. Kept by the
     release workflow for crash reports; never part of a download."""
     symbols = ROOT / "dist" / f"chupathingyce-{platform}-{config}-symbols"
-    if platform in ("linux", "linux64"):
+    if platform in ("linux", "linux64", "freebsd64"):
         files = [ROOT / f"build/{platform}/halo"]
     elif platform in ("android", "android64", "android32"):
         files = sorted((ROOT / f"build/{platform}/jniLibs").glob("*/*.so"))
