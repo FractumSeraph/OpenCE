@@ -101,7 +101,7 @@ boolean controller_glyph_draw(short style, short index,
             bitmap = bitmap_2d_new(64, 64, 0, 11);
             if (!bitmap) break;
             if (!rasterizer_bitmap_new(bitmap)) {bitmap_delete(bitmap); break;}
-            hud_hires_register_placeholder(asset, bitmap->hardware_format);
+            hud_hires_register_placeholder(asset, XBOX_POINTER(unsigned long const, bitmap->hardware_format));
             controller_glyph_cache[key].asset = asset;
             controller_glyph_cache[key].bitmap = bitmap;
             break;

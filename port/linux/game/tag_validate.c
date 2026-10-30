@@ -992,7 +992,7 @@ static void validate_tag_index(
 		return;
 	instance = instance_get(*tag_index);
 	if (header && absolute_index >= 0 && absolute_index < header->tag_count)
-		raw = &header->instances[absolute_index];
+		raw = &instances_get(header)[absolute_index];
 	if (!instance || !instance_in_groups(instance, groups) ||
 		(!instance->base_address && instance->group_tag != STRUCTURE_BSP_GROUP_TAG))
 	{

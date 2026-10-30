@@ -3733,7 +3733,8 @@ typedef char distributed_kinds_known_assert[_distributed_message_votekick == _di
 	_distributed_message_chat_up == _distributed_message_map_share_progress + 1 &&
 	_distributed_message_shield_effects + 1 == _distributed_message_client_build &&
 	_distributed_message_client_build + 1 == _distributed_message_fire_origins &&
-	_distributed_message_fire_origins + 1 == NUMBER_OF_DISTRIBUTED_MESSAGES ? 1 : -1];
+	_distributed_message_fire_origins + 1 == _distributed_message_map_vote &&
+	_distributed_message_map_vote_choice + 1 == NUMBER_OF_DISTRIBUTED_MESSAGES ? 1 : -1];
 
 /* a message of a kind this build does not know, from the host (machine_index
 NONE) or a client: dropped, as ever. A kind the layout of the sender's
