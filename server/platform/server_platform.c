@@ -342,6 +342,68 @@ void platform_screenshot_request(void)
 {
 }
 
+/* (port, this fork: what OpenCE's controller code, split screen's ADD
+PLAYER, the chat's controller wheel and the debug camera ask of the input
+layer, port/linux/src/xinput_sdl.c and sdl_platform.c, which this server
+leaves out: no gamepad, keyboard or mouse here) */
+void platform_binding_capture_cancel(void)
+{
+}
+
+unsigned long halo_chat_pad_buttons_for_port(short port)
+{
+	(void)port;
+	return 0;
+}
+
+int halo_chat_wheel_steps(void)
+{
+	return 0;
+}
+
+int halo_gamepad_count(void)
+{
+	return 0;
+}
+
+int halo_gamepad_last_used(void)
+{
+	return -1;
+}
+
+void halo_keyboard_alone_set(unsigned char alone)
+{
+	(void)alone;
+}
+
+unsigned char halo_keyboard_join_held(void)
+{
+	return 0;
+}
+
+unsigned char halo_keyboard_shares_gamepad(void)
+{
+	return 0;
+}
+
+void halo_virtual_gamepads_start(void)
+{
+}
+
+int halo_linux_debug_camera_input(int *middle, int *up, int *down, float *wheel)
+{
+	*middle = *up = *down = 0;
+	*wheel = 0.0f;
+	return 0;
+}
+
+/* (port_mods.c's, which a server leaves out: it plays no mod) */
+int port_mods_file_xbox_channels(long file)
+{
+	(void)file;
+	return 0;
+}
+
 /* ---------- no player at the machine */
 
 BOOL platform_next_keystroke(struct platform_keystroke *keystroke)

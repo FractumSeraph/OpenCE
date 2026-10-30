@@ -1500,8 +1500,13 @@ boolean tag_validate_tags(
 		if (!instance->base_address)
 		{
 			/* port: a protected map's tag without data (OpenCE's): left empty,
-			and nothing may refer to it (validate_tag_index) */
-			tag_validate_correct(&validation, "has no data");
+			and nothing may refer to it (validate_tag_index corrects what does).
+			Not a correction itself (port, this fork): nothing here changes, and
+			a map as corrected must check clean (tools/tests/map_fuzz.c). But
+			not the scenario or the globals, which the game reads whatever
+			refers to them (scenario_tags_load, game_globals) */
+			if ((short)absolute_index == (short)header->scenario_tag_index || instance->group_tag == 'matg')
+				tag_validate_refuse(&validation, "has no data, and the game reads it");
 			continue;
 		}
 		if (group && group->definition &&

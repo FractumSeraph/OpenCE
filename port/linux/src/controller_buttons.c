@@ -40,6 +40,12 @@ void controller_device_read(void *handle, struct controller_device *device)
 {
     SDL_Gamepad *gamepad = handle;
     memset(device, 0, sizeof(*device));
+#ifdef HALO_SERVER
+    /* (port, this fork: ChupathingyCE's dedicated server links no SDL) */
+    (void)gamepad;
+    (void)controller_family_from_type;
+    return;
+#else
     if (!gamepad) return;
     device->type = SDL_GetGamepadType(gamepad);
     device->family = controller_family_from_type((SDL_GamepadType)device->type);
@@ -57,6 +63,7 @@ void controller_device_read(void *handle, struct controller_device *device)
         device->family == CONTROLLER_XBOX ? "Xbox controller" :
         device->family == CONTROLLER_PLAYSTATION ? "PlayStation controller" :
         device->family == CONTROLLER_SWITCH ? "Switch controller" : "Unknown controller");
+#endif
 #endif
 }
 
