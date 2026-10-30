@@ -569,10 +569,3 @@ int host_sdl_show_message_box(uint32_t flags, const char *title, const char *mes
 	data.buttons = buttons;
 	return SDL_ShowMessageBox(&data, &answer) ? answer : -1;
 }
-
-/* ---------- the web browser (the game list's profile, sdl_platform.c) */
-
-int host_sdl_open_url(const char *url)
-{
-	return SDL_OpenURL(url) ? 1 : 0;
-}

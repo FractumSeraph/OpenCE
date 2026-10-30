@@ -69,7 +69,7 @@ symbols in this file:
 
 /* ---------- prototypes */
 
-#ifdef HALO_ANDROID
+#if defined(HALO_ANDROID) && defined(HALO_ARM64_GUEST)
 /* port: the buffers made here are written once, so Android draws them
 from GL buffers of their own (port/linux/src/d3d8_gl.c) */
 void xgpu_static_buffer_add(const void *resource, unsigned long size, int indices);
@@ -168,7 +168,7 @@ boolean rasterizer_vertex_buffer_new(
 			if (result >= 0)
 			{
 				success = TRUE;
-#ifdef HALO_ANDROID
+#if defined(HALO_ANDROID) && defined(HALO_ARM64_GUEST)
 				xgpu_static_buffer_add(d3d_vertex_buffer, (unsigned long)buffer_size, 0);
 #endif
 			}
@@ -305,7 +305,7 @@ boolean rasterizer_triangle_buffer_new(
 			if (result >= 0)
 			{
 				success = TRUE;
-#ifdef HALO_ANDROID
+#if defined(HALO_ANDROID) && defined(HALO_ARM64_GUEST)
 				xgpu_static_buffer_add(d3d_index_buffer, (unsigned long)buffer_size, 1);
 #endif
 			}

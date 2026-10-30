@@ -158,7 +158,11 @@ jobs:
           sudo apt-get update -q
           sudo apt-get install -y -q --no-install-recommends clang-$LLVM_MAJOR lld-$LLVM_MAJOR llvm-$LLVM_MAJOR \
             libclang-rt-$LLVM_MAJOR-dev gcc gcc-multilib libc6-dev-i386 cmake pkg-config libwayland-bin \
-            ninja-build ccache python3-pytest python3-pil python3-numpy python3-scipy zstd
+            ninja-build ccache python3-pytest python3-numpy python3-scipy python3-pip zstd
+          # (OpenCE's controller artwork tests render labels with Pillow and
+          # compare them pixel for pixel: a current Pillow, as OpenCE's CI
+          # has, not Ubuntu's older one, which draws text otherwise)
+          python3 -m pip install --quiet --break-system-packages --user pillow
           echo "/usr/lib/llvm-$LLVM_MAJOR/bin" >> "$GITHUB_PATH"
         env:
           LLVM_MAJOR: 22

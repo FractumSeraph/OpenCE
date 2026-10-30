@@ -151,7 +151,7 @@ ULONG WINAPI D3DResource_Release(D3DResource *resource)
 		if ((fields[0] & D3DCOMMON_TYPE_MASK) == D3DCOMMON_TYPE_VERTEXBUFFER)
 			vertex_buffer_rename_forget((const D3DVertexBuffer *)resource);
 #endif
-#ifdef HALO_ANDROID
+#if defined(HALO_ANDROID) && defined(HALO_ARM64_GUEST)
 		/* (no longer drawn from its GL buffer, before its memory is reused) */
 		if ((fields[0] & D3DCOMMON_TYPE_MASK) == D3DCOMMON_TYPE_INDEXBUFFER ||
 			(fields[0] & D3DCOMMON_TYPE_MASK) == D3DCOMMON_TYPE_VERTEXBUFFER)

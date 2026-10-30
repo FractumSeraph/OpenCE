@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, List, Optional
 
-from .embed_assets import hud_assets_build, hud_configure_inputs, ui_fonts_build
+from .embed_assets import hud_assets_build, hud_configure_inputs, server_ui_build, ui_fonts_build
 from .linux_build import OPTIMISATION, ffmpeg_build, lto_flags, march_flag
 from .lp64_build import (
     LINUX_PORT_CONFIG,
@@ -227,7 +227,9 @@ def generate_unix64_build(n: Writer, sln: Any) -> None:
         rspfile_content="$in_newline",
     )
     generated_sources = (hud_assets_build(n, name, build_dir / "generated" / "hud_hires_assets.c")
-                         + ui_fonts_build(n, name, build_dir / "generated" / "ui_fonts.c", sln))
+                         + ui_fonts_build(n, name, build_dir / "generated" / "ui_fonts.c", sln)
+                         # (OpenCE's halo --server admin page, server_http.c: port, this fork)
+                         + server_ui_build(n, name, build_dir / "generated" / "server_ui_assets.c"))
     lp64_host = Lp64Host(
         name=name,
         target_flags=[target, march_flag(sln)],

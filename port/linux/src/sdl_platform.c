@@ -4445,10 +4445,36 @@ guest's SDL has no atomics: the compiler's.) */
 static int screen_keyboard_wanted;
 static int screen_keyboard_requests;
 
+#ifdef HALO_ARM64_GUEST
 /* port/android/guest/runtime/guest_host.h: SDL's text input for the window,
 started as the SDL_TextInputType given (one line, no autocorrection) or
 stopped (-1); whether it runs */
 int host_sdl_text_input(unsigned int window, int type);
+#else
+/* (port, this fork: the native apps', android64 and android32, have SDL
+itself and no host: as port/android/host/host_sdl.c's, on the game's
+window) */
+static int host_sdl_text_input(unsigned int window, int type)
+{
+	SDL_PropertiesID properties;
+
+	(void)window;
+	if (!platform_window)
+		return 0;
+	if (type < 0)
+	{
+		SDL_StopTextInput(platform_window);
+		return 0;
+	}
+	properties = SDL_CreateProperties();
+	SDL_SetNumberProperty(properties, SDL_PROP_TEXTINPUT_TYPE_NUMBER, type);
+	SDL_SetBooleanProperty(properties, SDL_PROP_TEXTINPUT_MULTILINE_BOOLEAN, false);
+	SDL_SetBooleanProperty(properties, SDL_PROP_TEXTINPUT_AUTOCORRECT_BOOLEAN, false);
+	SDL_StartTextInputWithProperties(platform_window, properties);
+	SDL_DestroyProperties(properties);
+	return SDL_TextInputActive(platform_window) ? 1 : 0;
+}
+#endif
 
 void platform_screen_keyboard(BOOL show, BOOL password)
 {

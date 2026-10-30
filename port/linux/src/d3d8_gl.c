@@ -6238,8 +6238,12 @@ static void index_extent(const WORD *indices, unsigned long count, unsigned long
 	*maximum = high;
 }
 
-#ifdef HALO_ANDROID
+#if defined(HALO_ANDROID) && defined(HALO_ARM64_GUEST)
 /* ---------- static geometry
+
+(port, this fork: the Android guest's, OpenCE's app, whose addresses are 32
+bits; and the browser's, which registers none. Not the native android64 and
+android32 apps', which stream them as before)
 
 When Android's geometry fixes are enabled, mirror_range declines the
 contiguous window, so draws stream their vertices and indices. Geometry the game writes once and
@@ -7287,7 +7291,7 @@ static void setup_streams(unsigned long first, unsigned long count)
 		placed[stream] = TRUE;
 		stream_buffers[stream] = 0;
 		base = PLATFORM_WINDOW_ADDRESS(PLATFORM_PHYSICAL_TO_VIRTUAL(device.streams[stream].data)) + first * stride;
-#ifdef HALO_ANDROID
+#if defined(HALO_ANDROID) && defined(HALO_ARM64_GUEST)
 		/* (a model's or the BSP's vertices, uploaded once; the static ranges
 		are kept by the game's pointers, static_buffer_note) */
 		if (!stream_has_colors(declaration, stream) &&
@@ -7714,7 +7718,7 @@ void WINAPI D3DDevice_DrawIndexedVertices(D3DPRIMITIVETYPE primitive_type, UINT 
 		xgpu_capabilities.base_vertex &&
 #endif
 		mirror_range(PLATFORM_WINDOW_ADDRESS(index_data), vertex_count * sizeof(WORD), &index_buffer, &index_offset, &generation);
-#ifdef HALO_ANDROID
+#if defined(HALO_ANDROID) && defined(HALO_ARM64_GUEST)
 	/* (a model's or the BSP's indices, uploaded once: drawn as the mirror's
 	are, their extent cached under the buffer's serial) */
 	if (!mirrored && primitive_type != D3DPT_QUADLIST && xgpu_capabilities.base_vertex)
