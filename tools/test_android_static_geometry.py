@@ -41,8 +41,9 @@ def compile_test(directory, source, include, name, defines=()):
 def programs(tmp_path_factory):
     renderer = (ROOT / "port/linux/src/d3d8_gl.c").read_text()
     directory = tmp_path_factory.mktemp("android-static-geometry")
-    # (port, this fork: the guest's alone, #if defined(HALO_ANDROID) && defined(HALO_ARM64_GUEST))
-    static = between(renderer, "/* ---------- static geometry", "/* ---------- vertex data */")
+    # (port, this fork: the guest's alone, #if defined(HALO_ANDROID) && defined(HALO_ARM64_GUEST);
+    # its #endif is taken with the code)
+    static = "#if 1\n" + between(renderer, "/* ---------- static geometry", "/* ---------- vertex data */")
     pooled = (between(renderer, "#ifdef HALO_GLES\n/* port: WebGL on Metal",
                       "#ifdef HALO_GLES\n/* stream_upload, with the D3DCOLOR")
               + between(renderer, "static unsigned long index_upload(", "static void attribute_format("))
