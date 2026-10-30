@@ -42,6 +42,8 @@ def build_native(generated_files):
     root = Path(__file__).resolve().parents[3]
     command = [os.environ.get("CC", "clang"), "-std=gnu99", "-O2", "-Wall", "-Werror", "-ffp-contract=off",
                "-Wno-unused-function", "-Wno-unused-variable", "-I", str(root / "tools/harness/include"),
+               # (this fork's harness.h includes source/cseries/xbox_address.h, as the harness's build does)
+               "-I", str(root / "source" / "cseries"),
                "-I", str(work), str(Path(__file__).with_name("particle_draw_gate.c")), "-o", str(executable), "-lm"]
     result = subprocess.run(command, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr

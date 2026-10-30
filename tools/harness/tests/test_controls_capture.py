@@ -7,7 +7,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from harness import CHECK_FAILED, build, function, mutated, read, run  # noqa: E402
 
-CASES = ['cancel', 'leave', 'escape', 'earlier-kept']
+CASES = ['cancel', 'leave', 'escape', 'earlier-kept', 'click-second']
 
 
 def generated(fault=None):
@@ -45,9 +45,11 @@ def test_case(case):
       'platform_binding_capture_cancel();'), 'cancel'),
     (('\t\tplatform_binding_capture_cancel();\n', ''), 'cancel'),
     (('\tbinding_capture = _binding_capture_idle;\n\tpthread_mutex_unlock', '\tpthread_mutex_unlock'), 'cancel'),
-    # (a cancel that reloads the screen's bindings)
-    (('controls_screen.capturing_control = NONE;\n\t\tplatform_binding_capture_cancel();',
-      'controls_load(FALSE);\n\t\tplatform_binding_capture_cancel();'), 'earlier-kept'),
+    # (this fork, ChupathingyCE's: each key is written as it is set, so a cancel that reloads the screen's bindings
+    # from config.toml loses nothing; what keeps an earlier key is its write, and without it B drops it)
+    (('\tcontrols_save();\n}', '}'), 'earlier-kept'),
+    # (a click on a row's second binding that sets the first)
+    (('controls_screen.slot = click_x >= 408;', ';'), 'click-second'),
     (('\tui_widget_port_go_back(widget);\n\t*widget_deleted = TRUE;', '\t*widget_deleted = TRUE;'), 'leave'),
 ])
 def test_negative_control(fault, case):

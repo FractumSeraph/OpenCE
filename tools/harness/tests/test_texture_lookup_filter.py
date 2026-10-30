@@ -48,6 +48,8 @@ def under_test(faults=()):
             hud = mutated(hud, before, after)
     text = re.search(r"static struct\n\{\n\tunsigned long data;\n\tchar \*png;.*?\nstatic long art_count;\n", menu, re.S).group(0)
     text += menu[menu.index("static unsigned char art_filter["):menu.index("}\n", menu.index("art_filter_bit(")) + 2]
+    # (this fork: a replaced or forgotten bitmap's texture deleted by OpenGL's or the bgfx backend's)
+    text += function(menu, "menu_art_delete") + "\n"
     register, code = first_function(menu, "run_art_register", "halo_menus_art_register")
     text += code + f"\n#define art_register {register}\n"
     forget, code = first_function(menu, "run_art_forget", "halo_menus_art_forget")

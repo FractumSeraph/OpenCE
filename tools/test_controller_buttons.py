@@ -238,6 +238,8 @@ static void bitmap_delete(struct bitmap_data *b){free(b);live--;}
 static void rasterizer_psuedo_dynamic_screen_quad_draw(struct rasterizer_dynamic_screen_geometry_parameters *p,
  struct dynamic_screen_vertex *v){assert(p->framebuffer_blend_function==0);memcpy(drawn,v,sizeof(drawn));draws++;}
 '''
+    # (port, this fork: Xbox addresses read through XBOX_POINTER, the identity in this 32-bit build)
+    code += (ROOT / 'source/cseries/xbox_address.h').read_text() + '\n'
     code += (ROOT / 'port/linux/game/hud_button_layout.h').read_text() + source + r'''
 long hud_hires_asset_count(void){return NUMBEROF(controller_glyph_assets);}
 char const *hud_hires_asset_tag(long a){return controller_glyph_assets[a].tag;}

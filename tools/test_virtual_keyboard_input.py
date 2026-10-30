@@ -175,6 +175,11 @@ def fixture_source(keyboard=None, inputs=None):
     layout = c_block(keyboard, keyboard.index("static char const virtual_keyboard_layout_table")) + ";\n"
     # Include the production mode flags and all of their transition logic.
     input_mode = inputs[inputs.index("static BOOL text_typing;"):inputs.index("/* the keys held when the game")]
+    # (port, this fork: the 4-way join screen's SPACE held and the test script's SPACE and Enter, which
+    # keyboard_gamepad reads, declared with the keyboard's other state; none of them held here)
+    joins = re.search(r"(?m)^static BOOL keyboard_join_down\b[^;]*;", inputs)
+    if joins:
+        input_mode = joins.group() + "\n" + input_mode
     lifecycle = []
     if "static void virtual_keyboard_set_active" in keyboard:
         lifecycle.append(function(keyboard, "virtual_keyboard_set_active"))

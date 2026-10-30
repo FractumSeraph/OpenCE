@@ -37,6 +37,11 @@ REASONS = {
     "NO_ANSWER": "The host didn't answer.",
     # (a failed join's alone: the site's list never says it)
     "NO_CONNECTION": "Couldn't connect to the host.",
+    # (and an OpenCE dedicated server's refusals of network version 40 and 41, a failed join's alone too:
+    # network_client_manager.c)
+    "NO_VPN": "This server doesn't allow VPNs.",
+    "DISCORD_LINK": "This server only lets in players who link a Discord account with OpenCE.",
+    "ADDRESS_FULL": "Too many players from your address.",
 }
 
 # the wording the lists had before, each its own way

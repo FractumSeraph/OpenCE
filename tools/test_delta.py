@@ -881,7 +881,8 @@ def test_make_has_this_builds_facts():
     else:
         assert row["layouts"] == {} and delta_table.built_in_facts() == {}
     assert delta_table.built_in_layout(35) == {"settings_size": 13136, "options_size": 44,
-                                               "shield_effects_maximum": 6, "dropped_messages": []}
+                                               "shield_effects_maximum": 6, "dropped_messages": [],
+                                               "join_request_extra": 0}
     assert delta_table.built_in_layout(36)["dropped_messages"] == [91]
     delta_table.parse(delta_table.make(7, issued=1), delta_table.wire())
 
@@ -900,8 +901,10 @@ def test_make_layouts(tmp_path):
     assert row["layouts"]["42"] == {"options_size": 48, "dropped_messages": [92, 93]}
     assert row["layouts"]["43"] == {"shield_effects_maximum": 7}
     assert row["layouts"]["44"] == {"join_request_extra": 0, "join_request_fill": "zeros"}
-    # (this build's own facts say its join request too)
-    assert row["layouts"]["40"]["join_request_extra"] == 234 and row["layouts"]["40"]["join_request_fill"] == "zeros"
+    # (this build's own facts say its join request too; port, this fork: its
+    # builds announce 41, OpenCE's newest, so its row has no facts of its own)
+    if floor()["announce"] < 40:
+        assert row["layouts"]["40"]["join_request_extra"] == 234 and row["layouts"]["40"]["join_request_fill"] == "zeros"
     # (made again, and with a --row for the wire: the facts past its own stay)
     # (port, this fork: its maximum past an announce 6 newer than its own 38)
     wide = f"{floor()['announce'] + 6},{floor()['minimum']},{max(floor()['maximum'] + 2, floor()['announce'] + 7)}"
@@ -909,7 +912,9 @@ def test_make_layouts(tmp_path):
     assert result.returncode == 0, result.stderr
     row = json.loads(result.stdout)["wires"][own]
     assert row["announce"] == floor()["announce"] + 6 and row["layouts"]["42"]["options_size"] == 48
-    assert "33" in row["layouts"]
+    # (ChupathingyCE's builds, announcing 32, keep 33's facts; this fork's announce 41)
+    if floor()["announce"] < 33:
+        assert "33" in row["layouts"]
     # (port, this fork: the layouts between its announce and the table's newest)
     assert all(str(version) in row["layouts"] for version in range(floor()["announce"] + 1, delta_table.newest() + 1))
     for bad in (f"{own}=41:options_size=48", f"{own}=42:options_size=40", f"{own}=42:settings_size=13300",

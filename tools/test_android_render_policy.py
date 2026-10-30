@@ -137,15 +137,24 @@ def test_texture_dispatch_boundaries(tmp_path, enabled, ce, cached, valid, loads
     source = (ROOT / "source/cache/xbox_texture_cache.c").read_text()
     get = function(source, "_texture_cache_bitmap_get_hardware_format")
     block = get[get.index("#ifdef HALO_ANDROID"):get.index("#endif") + len("#endif")]
+    # (port, this fork: the cache is the 32-bit Android guest's, HALO_ANDROID_CE_TEXTURES, as its header says; a
+    # Custom Edition map is ChupathingyCE's loader's, cache_file_tags_are_ce)
+    header = (ROOT / "port/linux/game/android_ce_texture_cache.h").read_text()
+    guard = header[header.index("#if defined(HALO_ANDROID)"):]
+    guard = guard[:guard.index("#endif") + len("#endif")]
     code = r'''
 #include <stddef.h>
 #define HALO_ANDROID 1
+''' + guard + r'''
+#ifndef HALO_ANDROID_CE_TEXTURES
+#error the 32-bit Android guest has no Custom Edition texture cache
+#endif
 #define TEST_FLAG(f,b) ((f) & (1 << (b)))
 #define _bitmap_cached_bit 0
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
 struct bitmap_data { int flags, pixels_size; };
 static int ce, valid, android_texture_fixes, loads, legacy;
-static int custom_edition_cache_tags_loaded(void) { return ce; }
+static int cache_file_tags_are_ce(void) { return ce; }
 static int texture_cache_bitmap_valid(struct bitmap_data *b) { return valid; }
 static int rasterizer_xbox_bitmap_get_pixel_data_size(struct bitmap_data *b) { return 1024; }
 static void texture_cache_read_android_ce(struct bitmap_data *b, void *p) {}

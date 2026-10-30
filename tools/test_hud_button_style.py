@@ -26,11 +26,18 @@ def run_c(tmp_path, code):
 
 
 def test_pending_visibility_spacing_and_focus(tmp_path):
-    body = function((ROOT / 'port/linux/game/menu_functions.c').read_text(), 'hud_button_style_row_show')
+    # (port, this fork: the row is in one of ChupathingyCE's nested lists, whose rows views_show shows each frame
+    # before the row's own show; it moves the rows after it up to the next view's mark by its own spacing, and
+    # reads whether they were moved from their places. So the frame here is the help's: views_show, then it)
+    menus = (ROOT / 'port/linux/game/menu_functions.c').read_text()
+    body = '\n'.join(function(menus, name) for name in (
+        'view_mark_has', 'view_mark', 'first_row_shown', 'focus_widget', 'views_show', 'hud_button_style_row_show'))
     run_c(tmp_path, r'''
 #include <assert.h>
 #include <string.h>
 typedef int boolean;
+#define TRUE 1
+#define FALSE 0
 struct widget_instance {
     char const *name; short vertical_offset; int visible,definition_tag_index;
     struct widget_instance *child,*next,*parent,*focused_child;
@@ -47,22 +54,34 @@ static struct widget_instance *named(struct widget_instance *list,char const *na
     for(p=list->child;p;p=p->next) if(!strcmp(p->name,name)) return p;
     return 0;
 }
+/* (the screen: the list itself, with no CANCEL or BACK prompt) */
+static struct widget_instance *screen_of(struct widget_instance *widget) {return widget;}
+static void visible_set(struct widget_instance *widget,boolean visible) {(void)widget;(void)visible;assert(0);}
 ''' + body + r'''
+/* a frame of the settings list: the view's rows, then BUTTON STYLE's */
+static void frame(struct widget_instance *list) {views_show(list,"interface");hud_button_style_row_show(list);}
 int main(void) {
-    struct widget_instance list={0},hud={0},style={0},text={0},aa={0},bar={0}; int i;
-    list.child=&hud;hud.next=&style;style.next=&text;text.next=&aa;aa.next=&bar;
+    struct widget_instance list={0},main_mark={0},menus={0},mark={0},hud={0},style={0},text={0},aa={0},
+        advanced_mark={0},advanced={0},bar={0}; int i;
+    list.child=&main_mark;main_mark.next=&menus;menus.next=&mark;mark.next=&hud;hud.next=&style;style.next=&text;
+    text.next=&aa;aa.next=&advanced_mark;advanced_mark.next=&advanced;advanced.next=&bar;
+    main_mark.name="view_main";menus.name="op_link_interface";mark.name="view_interface";
     hud.name="op_high_res_hud";style.name="op_hud_button_style";text.name="op_high_res_text";
-    aa.name="op_anti_aliasing";bar.name="button_bar";spinner.parent=&hud;
-    style.visible=1;text.vertical_offset=133;aa.vertical_offset=163;bar.vertical_offset=414;
+    aa.name="op_anti_aliasing";advanced_mark.name="view_advanced";advanced.name="op_shadows";bar.name="button_bar";
+    spinner.parent=&hud;
+    hud.vertical_offset=73;style.vertical_offset=103;text.vertical_offset=133;aa.vertical_offset=163;
+    advanced.vertical_offset=73;bar.vertical_offset=414;
     for(i=0;i<100;i++) {
         list.focused_child=&style;spinner.parameters.list.selected_index=1;
-        hud_button_style_row_show(&list);hud_button_style_row_show(&list);
+        frame(&list);frame(&list);hud_button_style_row_show(&list);
         assert(!style.visible && text.vertical_offset==103 && aa.vertical_offset==133);
-        assert(list.focused_child==&hud && list.parameters.list.selected_index==0);
+        assert(list.focused_child==&hud && list.parameters.list.selected_index==3);
+        assert(text.visible && aa.visible && !menus.visible && !advanced.visible);
         spinner.parameters.list.selected_index=0;
-        hud_button_style_row_show(&list);hud_button_style_row_show(&list);
+        frame(&list);frame(&list);
         assert(style.visible && text.vertical_offset==133 && aa.vertical_offset==163);
-        assert(bar.vertical_offset==414);
+        /* (the next view's rows, and the button bar, stay where they are) */
+        assert(advanced.vertical_offset==73 && bar.vertical_offset==414);
     }
     list.child=&bar;hud_button_style_row_show(&list);assert(bar.vertical_offset==414);
     return 0;
@@ -147,6 +166,8 @@ static void rasterizer_psuedo_dynamic_screen_quad_draw(struct rasterizer_dynamic
     prelude += 'static char const *tags[]={' + ','.join(json.dumps(t) for t in tags) + '};\n'
     prelude += 'static long hud_hires_asset_count(void) {return sizeof(tags)/sizeof(*tags);}\n'
     prelude += 'static char const *hud_hires_asset_tag(long i) {return tags[i];}\n'
+    # (port, this fork: Xbox addresses read through XBOX_POINTER, the identity in this 32-bit build)
+    prelude += (ROOT / 'source/cseries/xbox_address.h').read_text() + '\n'
     call = r'''
         buttons[i].flags=2;buttons[i].color=0xff123456;
         assert(hud_hires_button_draw(&buttons[i],&cursor,0x7fabcdef));
@@ -161,15 +182,18 @@ static void rasterizer_psuedo_dynamic_screen_quad_draw(struct rasterizer_dynamic
         assert(drawn_color==0x00ffffff);
         '''
     dispose = 'hud_buttons_forget'
+    # (port, this fork: OpenCE's low-res drawing of a Custom Edition map's own button sheet (its
+    # custom_edition_hud_buttons.h) is
+    # not in the fork, whose Custom Edition maps are ChupathingyCE's loader's: with HIGH-RES HUD off nothing is
+    # drawn here, whatever the map, and the game draws its own buttons)
     check_off = (r'''
         enabled=0;assert(!hud_hires_button_draw(&buttons[0],&cursor,0xffffffff));
         ce=1;assert(!hud_hires_button_draw(&buttons[0],&cursor,0xffffffff));
-        stock_sheet=0;assert(hud_hires_button_draw(&buttons[0],&cursor,0xffffffff));
-        assert(lowres_draws==1);
-        for(i=1;i<18;i++) assert(hud_hires_button_draw(&buttons[i],&cursor,0xffffffff));
-        assert(lowres_draws==18);
+        stock_sheet=0;assert(!hud_hires_button_draw(&buttons[0],&cursor,0xffffffff));
+        for(i=1;i<18;i++) assert(!hud_hires_button_draw(&buttons[i],&cursor,0xffffffff));
+        assert(lowres_draws==0);
         enabled=1;assert(hud_hires_button_draw(&buttons[0],&cursor,0xffffffff));
-        assert(lowres_draws==18);
+        assert(lowres_draws==0);
         enabled=0;
         assert(!hud_hires_button_draw(&unrelated,&cursor,0xffffffff));
         ce=0;assert(!hud_hires_button_draw(&buttons[0],&cursor,0xffffffff));

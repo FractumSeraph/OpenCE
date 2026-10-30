@@ -316,11 +316,12 @@ def test_minimal_maps_are_accepted(built, tmp_path):
 
 def test_long_tag_names(built, tmp_path):
     """a tag's name longer than a tag's path is (256 with its terminator):
-    an Xbox map's is corrected (the tag is given no name), a Custom Edition
-    map's refused"""
+    an Xbox map's is corrected (the tag is given no name), and a Custom
+    Edition map's too (port, this fork: OpenCE's protected maps, whose
+    protection strips names: ce_repairs.c's ce_repairs_protection empties it)"""
     binaries, _ = built
     for target, data, expected in (("xbox", xbox_map(b"x" * 300), "has no name"),
-                                   ("ce", ce_map(b"x" * 300), "longer than 255 characters")):
+                                   ("ce", ce_map(b"x" * 300), "1 tags' names emptied")):
         path = tmp_path / f"{target}.map"
         path.write_bytes(data)
         result = run(binaries[target], [path], environment={"MAP_FUZZ_VERBOSE": "1"})

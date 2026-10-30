@@ -12,9 +12,11 @@ from harness import CHECK_FAILED, build, constant, enum_with, function, mutated,
 
 CASES = ["long-string", "all-escaped", "too-long", "answer-only"]
 # (port, this fork: config_write finds a commented-out line too, config_line_commented_key and
-# config_text_has_key, and config_setting_index keeps its guesses)
+# config_text_has_key, and config_setting_index keeps its guesses; its line goes in by ChupathingyCE's
+# config_text_with_line, the fork's line of a value of any length made first)
 NAMES = ["config_setting_index", "config_text_is_false", "config_set_from_text", "config_append", "config_copy",
-         "config_line_key", "config_line_section", "config_line_commented_key", "config_text_has_key", "config_write"]
+         "config_line_key", "config_line_section", "config_line_commented_key", "config_text_has_key",
+         "config_text_with_line", "config_write"]
 
 # a fault in the code, the function it is in, and the case that must catch it
 NEGATIVE_CONTROLS = {

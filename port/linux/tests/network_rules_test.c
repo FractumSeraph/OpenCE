@@ -874,18 +874,18 @@ static void test_fork_layout_record(void)
 	CHECK(memcmp(wire, legacy, sizeof(legacy)) == 0);
 	CHECK(memcmp(wire, record, 0x333C) == 0 && memcmp(wire + 0x333C, record + 0x334C, 4) == 0);
 
-	/* a table's 40 (past 39, the built-in newest): 0x30 bytes of options, 6 after the local data, piece by
+	/* a table's 42 (past 41, the built-in newest): 0x30 bytes of options, 6 after the local data, piece by
 	piece as the host sends it */
 	test_fact_count = 0;
-	fact = test_fact(40);
+	fact = test_fact(42);
 	fact->options_size = 0x30;
 	fact->settings_size = 0x3354 + 6;
 	network_rules_set_layout_source(test_source);
-	size = network_rules_host_settings_size(40, 0, 0);
-	CHECK(size == 0x335A && network_rules_host_settings_options(40, 0) == 0x30);
-	/* (a Delta machine of 38, or 0.8.0e's 32, takes its own from a host of 40) */
-	CHECK(network_rules_host_settings_size(40, 38, 0) == 0x3350 && network_rules_host_settings_options(40, 38) == 0x2C);
-	CHECK(network_rules_host_settings_size(40, 32, 0) == 0x3340 && network_rules_host_settings_options(40, 32) == 0x1C);
+	size = network_rules_host_settings_size(42, 0, 0);
+	CHECK(size == 0x335A && network_rules_host_settings_options(42, 0) == 0x30);
+	/* (a Delta machine of 38, or 0.8.0e's 32, takes its own from a host of 42) */
+	CHECK(network_rules_host_settings_size(42, 38, 0) == 0x3350 && network_rules_host_settings_options(42, 38) == 0x2C);
+	CHECK(network_rules_host_settings_size(42, 32, 0) == 0x3340 && network_rules_host_settings_options(42, 32) == 0x1C);
 	for (offset = 0; offset < size; offset += 0xE00)
 	{
 		int length = size - offset < 0xE00 ? size - offset : 0xE00;
@@ -900,8 +900,8 @@ static void test_fork_layout_record(void)
 		CHECK(wire[index] == 0);
 
 	/* the client: the size its host's version says, folded back into 35's */
-	CHECK(network_rules_settings_size_taken(40, (unsigned)size));
-	CHECK(network_rules_settings_options_size(40, (unsigned)size) == 0x30);
+	CHECK(network_rules_settings_size_taken(42, (unsigned)size));
+	CHECK(network_rules_settings_options_size(42, (unsigned)size) == 0x30);
 	memset(folded, 0xEE, sizeof(folded));
 	memcpy(folded, wire, (size_t)size);
 	CHECK(network_rules_settings_fold_extended(folded, size, 0x30) == NETWORK_RULES_SETTINGS_EXTENDED_SIZE);

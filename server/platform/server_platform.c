@@ -336,6 +336,12 @@ void platform_mouse_capture(BOOL capture)
 	(void)capture;
 }
 
+/* (port, this fork: OpenCE's controller remapping asks for one,
+port/linux/src/controller_remap_input.c; a server draws nothing) */
+void platform_screenshot_request(void)
+{
+}
+
 /* ---------- no player at the machine */
 
 BOOL platform_next_keystroke(struct platform_keystroke *keystroke)

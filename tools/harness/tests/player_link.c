@@ -33,6 +33,13 @@ test_player_link.py takes the code (under_test.inc).
 #undef WIPE_BUFFER
 #undef MIN
 
+/* (port, this fork: its p2p_crypto.c logs a password key it has no memory
+for; nothing to log here) */
+void platform_log(const char *format, ...)
+{
+	(void)format;
+}
+
 #include "p2p_crypto.inc"
 
 void posix_random_bytes(void *buffer, posix_ulong size)

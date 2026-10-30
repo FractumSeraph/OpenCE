@@ -79,6 +79,10 @@ static short local_player_count(void) { return local_players; }
 /* (port, this fork: players.c's count of the local players, which ui_widget.c asks) */
 static short players_port_local_player_count(void) { return local_players; }
 unsigned char pc_menu_split_players(void) { return split_players; }
+/* (OpenCE's ADD PLAYER screen, whose quarters read every controller and route
+them themselves: menu_functions.c; none of the screens here) */
+unsigned char pc_menu_screen_reads_every_controller(struct widget_instance const *widget) { (void)widget; return 0; }
+unsigned char pc_menu_screen_routes_by_controller(struct widget_instance const *widget) { (void)widget; return 0; }
 static short player_ui_get_single_player_local_player_controller(short player) { return player; }
 '''
 

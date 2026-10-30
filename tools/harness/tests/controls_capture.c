@@ -17,15 +17,24 @@ static struct widget_instance screen,spinner,row;
 static struct widget_instance *named(struct widget_instance *w,char const *name,long nth)
 {(void)w;(void)nth;return !strcmp(name,"group_spinner")?&spinner:NULL;}
 static struct widget_instance *screen_of(struct widget_instance *w){(void)w;return &screen;}
-/* config.toml: the saved bindings, and what OK writes */
+/* config.toml: the saved bindings ("W, Up", until one is written), and what is written (each key as it is set,
+and OK) */
 static char written[64][128];static int writes;
-static char const *config_string(char const *name){(void)name;return "W, Up";}
+static char const *config_string(char const *name)
+{
+ size_t length=strlen(name);
+ for(int w=writes<64?writes:64;w-->0;)if(!strncmp(written[w],name,length)&&written[w][length]=='=')return written[w]+length+1;
+ return "W, Up";
+}
 static int config_default(char const *name,char *text,unsigned size){(void)name;snprintf(text,size,"S");return 1;}
 static int config_write(char const *name,char const *value){(void)name;snprintf(written[writes++%64],128,"%s=%s",name,value);return 1;}
 #define platform_log(...) ((void)0)
 static void halo_input_name(int input,char *name,unsigned size){snprintf(name,size,"Key %d",input);}
 static int went_back;
 static void ui_widget_port_go_back(struct widget_instance *w){(void)w;went_back++;}
+/* ui_widget.c's column of a click that pressed a row's A (NONE: A pressed on the controller) */
+static short item_click_x=NONE;
+short ui_widget_port_item_click_x(void){short x=item_click_x;item_click_x=NONE;return x;}
 #include "under_test.inc"
 /* sdl_platform.c's key event while a binding is waited for */
 static void key_down(int scancode,int result)
@@ -65,10 +74,19 @@ int main(int argc,char **argv)
  } else CASE("earlier-kept") {
   begin(0);key_down(7,1);control_capture_poll();
   CHECK(!strcmp(controls_screen.bindings[forward][0],"Key 7"),"MOVE FORWARD not set: %s",controls_screen.bindings[forward][0]);
+  /* (this fork, ChupathingyCE's: each key written as it is set, so that B, which leaves, keeps it) */
+  CHECK(writes==1&&!strcmp(written[0],"controls.move_forward=Key 7, Up"),"the key set wrote %d: %s",writes,written[0]);
   begin(1);CHECK(!b()&&!went_back,"B left the screen while capturing");
   CHECK(!strcmp(controls_screen.bindings[forward][0],"Key 7"),"MOVE FORWARD lost: %s",controls_screen.bindings[forward][0]);
   CHECK(controls_save(),"OK failed");
-  CHECK(writes==1&&!strcmp(written[0],"controls.move_forward=Key 7, Up"),"OK wrote %d: %s",writes,written[0]);
+  CHECK(writes==1,"OK wrote again (%d): %s",writes,written[(writes-1)%64]);
+ } else CASE("click-second") {
+  /* (a click on a row's second binding, at 410 of the menus' 640, sets that one) */
+  item_click_x=420;begin(0);CHECK(controls_screen.capturing_slot==1,"the click set binding %d",controls_screen.capturing_slot);
+  key_down(7,1);control_capture_poll();
+  CHECK(!strcmp(controls_screen.bindings[forward][0],"W")&&!strcmp(controls_screen.bindings[forward][1],"Key 7"),
+   "MOVE FORWARD: %s, %s",controls_screen.bindings[forward][0],controls_screen.bindings[forward][1]);
+  CHECK(writes==1&&!strcmp(written[0],"controls.move_forward=W, Key 7"),"wrote %d: %s",writes,written[0]);
  } else return 2;
  return 0;
 }
