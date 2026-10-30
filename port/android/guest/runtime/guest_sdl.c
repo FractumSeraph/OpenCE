@@ -123,13 +123,6 @@ bool SDL_ShowMessageBox(const SDL_MessageBoxData *data, int *answer)
 	return chosen != -1;
 }
 
-/* ---------- the web browser (the game list's profile) */
-
-bool SDL_OpenURL(const char *url)
-{
-	return host_sdl_open_url(url) != 0;
-}
-
 int SDL_strncasecmp(const char *first, const char *second, size_t length)
 {
 	for (; length; length--, first++, second++)

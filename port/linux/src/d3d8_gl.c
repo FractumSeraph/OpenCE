@@ -9047,7 +9047,7 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 			glBindBuffer(GL_COPY_READ_BUFFER, 0);
 			glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
 		}
-#ifdef HALO_ANDROID
+#if defined(HALO_ANDROID) && defined(HALO_ARM64_GUEST)
 		static_buffers_collect();
 #endif
 		host_gl_fence_frame((unsigned int)device.buffer_ring);
