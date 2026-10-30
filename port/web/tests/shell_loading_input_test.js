@@ -150,8 +150,10 @@ assert(connectedGamepads, 'missing connected_gamepads');
 assert.match(connectedGamepads[0], /first pad shares port 0 with the keyboard/);
 assert.doesNotMatch(connectedGamepads[0], /HALO_BROWSER/,
   'web must not shift the first physical controller away from player one');
+/* (OpenCE's per-player remapping merges the pad's state through
+controller_remap_merge since its controller remapping) */
 assert.match(xinput,
-  /if \(port_gamepad\(gamepads, count, 0\)\)\s+sdl_gamepad_state\(gamepads\[0\], &state->Gamepad\);/,
+  /if \(port_gamepad\(gamepads, count, 0\)\)\s+(?:sdl_gamepad_state\(gamepads\[0\], &state->Gamepad\)|controller_remap_merge\(&physical, &state->Gamepad\));/,
   'the first physical controller must merge into Halo player one');
 /* (OpenCE's keys are settings: the browser's default crouch key is C alone) */
 const portConfig = fs.readFileSync(
