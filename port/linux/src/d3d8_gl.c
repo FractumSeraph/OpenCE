@@ -33,7 +33,7 @@ Conventions carried over from the Xbox:
 #ifdef HALO_ANDROID
 #include "../../android/include/android_render_policy.h"
 #endif
-#if defined(HALO_ANDROID) && !defined(HALO_ARM64_GUEST)
+#if defined(HALO_ANDROID) && (!defined(HALO_ARM64_GUEST) || defined(HALO_BROWSER))
 /* port (this fork): OpenCE's Android render policy for the builds without
 its guest runtime (port/android/guest/runtime/guest_render_policy.c sets it
 by the device's chip): the native 64-bit and 32-bit apps (android64,

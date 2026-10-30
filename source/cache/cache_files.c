@@ -713,7 +713,7 @@ void scenario_tags_unload(
 	else
 #endif
 	{
-#if defined(HALO_ANDROID) && defined(HALO_ARM64_GUEST)
+#if defined(HALO_ANDROID) && defined(HALO_ARM64_GUEST) && !defined(HALO_BROWSER)
 		struct cache_file_tag_header *tags = cache_file_globals.tag_header;
 
 		xgpu_static_buffers_remove(xbox_pointer(tags->vertex_buffers), tags->vertex_buffer_count, CACHE_FILE_BUFFER_SIZE, 0);
@@ -1950,7 +1950,7 @@ long scenario_tags_load(
 					's'));
 			global_tag_instances = xbox_pointer(cache_file_globals.tag_header->tag_instances);
 			tags_header_register_vertex_and_index_buffers(cache_file_globals.tag_header);
-#if defined(HALO_ANDROID) && defined(HALO_ARM64_GUEST)
+#if defined(HALO_ANDROID) && defined(HALO_ARM64_GUEST) && !defined(HALO_BROWSER)
 			/* port: (an Xbox map's model vertices and indices, in its tags
 			from the first buffer to their end) */
 			{
@@ -2166,7 +2166,7 @@ boolean scenario_structure_bsp_load(
 		ce_repairs_bsp_loaded(xbox_pointer(cache_file_globals.structure_bsp_header->base_address));
 	}
 #endif
-#if defined(HALO_ANDROID) && defined(HALO_ARM64_GUEST)
+#if defined(HALO_ANDROID) && defined(HALO_ARM64_GUEST) && !defined(HALO_BROWSER)
 	/* port: (an Xbox bsp's vertices and lightmap vertices, from the first
 	buffer to the bsp's end, and the indices its surfaces draw: a Custom
 	Edition bsp's too, whose vertices custom_edition_geometry.c gave buffers) */
@@ -2199,7 +2199,7 @@ void scenario_structure_bsp_unload(
 {
 	struct cache_file_tag_instance *tag_instance;
 
-#if defined(HALO_ANDROID) && defined(HALO_ARM64_GUEST)
+#if defined(HALO_ANDROID) && defined(HALO_ARM64_GUEST) && !defined(HALO_BROWSER)
 	{
 		struct cache_file_structure_bsp_header *bsp = cache_file_globals.structure_bsp_header;
 

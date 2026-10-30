@@ -77,3 +77,10 @@ int updater_gamescope(void)
 {
 	return 0;
 }
+
+/* OpenCE's carnage report's touch buttons (touch_postgame.c): the page's own
+touch controls have none, so its A and B prompt shows */
+int touch_input_screen_buttons(void)
+{
+	return 0;
+}
