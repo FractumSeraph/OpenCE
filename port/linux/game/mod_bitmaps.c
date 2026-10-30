@@ -41,9 +41,11 @@ not); the texture cache is told which keep their channels where Halo PC does
 (model shaders' multipurpose maps and HUD meters, found in the map's tags
 once the mods' bitmaps are in them: mod_bitmaps_channel_order,
 xbox_texture_cache.c), as it is a Custom Edition map's (ce_models.c,
-ce_hud.c). A bitmap whose pixels are more than a
-quarter of the texture cache is left out: it could not be drawn with what
-the map draws around it. A bitmap is drawn, not simulated: nothing a network
+ce_hud.c), unless the mod's mod.toml says its keep them where the Xbox does
+(channel_order = "xbox": bitmaps taken from an Xbox map). A bitmap whose
+pixels are more than a quarter of the texture cache is left out: it could not
+be drawn with what the map draws around it. A bitmap is drawn, not
+simulated: nothing a network
 game's machines agree on reads one.
 
 The map's bitmap tag takes the file's values in place, so everything that
@@ -74,6 +76,9 @@ everything stored in the game's structures as an Xbox address
 #include "shaders/shader_definitions.h"
 #include "ce_hud.h"
 #include "mods.h"
+/* (port_mods.c, as the others mods.h names: a mod whose mod.toml says
+channel_order = "xbox") */
+int port_mods_file_xbox_channels(long file);
 
 #include <stddef.h>
 #include <stdlib.h>
@@ -1639,7 +1644,11 @@ short mod_bitmaps_channel_order(
 {
 	struct mod_bitmap const *made = bitmap_of(bitmap);
 
-	return made ? (short)(made->channel_orders[bitmap - made->bitmaps] & CHANNELS_ORDER_MASK) : _channels_xbox;
+	/* (OpenCE's channel_order = "xbox" in the mod's mod.toml: bitmaps taken
+	from an Xbox map, drawn with their channels as they are) */
+	if (!made || port_mods_file_xbox_channels(made->file))
+		return _channels_xbox;
+	return (short)(made->channel_orders[bitmap - made->bitmaps] & CHANNELS_ORDER_MASK);
 }
 
 boolean mod_bitmaps_read(

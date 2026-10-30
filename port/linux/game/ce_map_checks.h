@@ -62,6 +62,11 @@ struct ce_image
 	unsigned long size;
 };
 
+/* reads size bytes at offset in the map's file into buffer (context is the
+caller's: the file being checked, or the one loaded): FALSE if they could not
+all be read */
+typedef boolean (*ce_map_read_proc)(void *context, unsigned long offset, void *buffer, unsigned long size);
+
 /* ---------- inline code */
 
 /* a tag's field, of any alignment */
@@ -151,6 +156,15 @@ the file damaged, or the map itself refused) in verdict (size bytes), logged
 and shown as the refusal is */
 void ce_map_refused_verify(char const *map_name, char const *path, unsigned long header_checksum, char *verdict,
 	long size);
+
+/* a protected map's tag table repaired as Halo PC's engine let it be
+(ce_repairs.c): image is the map's own tag data (its tag header first, no
+resource maps' tags yet), read_proc is how its structure BSPs are read from its
+file (each within file_size bytes of it). Done before the map's tags are
+checked (ce_map_checks.c) and again, the same, before they are used as they
+load (ce_resources_tags_loaded) */
+void ce_repairs_protection(struct ce_image const *image, ce_map_read_proc read_proc, void *context,
+	unsigned long file_size);
 
 /* the cache version of the map being checked or loaded (ce_map_checks.c):
 Custom Edition's (609), or Halo PC retail's (7: HaloMD's maps, played as

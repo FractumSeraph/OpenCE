@@ -15,7 +15,13 @@ what it points into, with arithmetic that cannot overflow:
   - the tag index: the instances within the tag data, each one's handle its
     own index, its name within the tag data and terminated, its data within
     the tag data (a structure BSP's none: it is read when the BSP loads), and
-    only bitmaps, sounds, fonts and strings held by the resource maps;
+    only bitmaps, sounds, fonts and strings held by the resource maps. A
+    protected map's tag table is repaired first, as Halo PC's engine let it
+    be (ce_repairs.c, ce_repairs_protection: OpenCE's 29426d53c): a name map
+    protection stripped made empty (but a resource map's tag's, which is
+    found by it), a renamed BSP's group restored, a scrambled group taken
+    from the references to the tag, and a tag with no data (a garbage tag)
+    left with no group, which nothing reads;
   - the scenario and its structure BSPs: each one's range in the file and its
     place in the tag cache (above the tags, below the cache's end), its
     header and its lightmaps' materials' vertices (ce_bsp.c);
@@ -222,6 +228,16 @@ static boolean ce_file_read(
 	return ReadFile(file, buffer, size, &bytes_read, NULL) && bytes_read == size;
 }
 
+/* (ce_file_read, for ce_repairs_protection: context is the file) */
+static boolean ce_file_read_proc(
+	void *context,
+	unsigned long offset,
+	void *buffer,
+	unsigned long size)
+{
+	return ce_file_read((HANDLE)context, offset, buffer, size);
+}
+
 /* whether a cache needs OpenSauce: its header says so, by setting any of
 its flags. A cache that carries OpenSauce's header with none set (SPV3's
 releases that also run on stock Custom Edition) needs nothing of it, and its
@@ -277,6 +293,8 @@ static boolean ce_tag_index_check(
 		if (!memchr(name, 0, MIN(image->base + image->size - instance->name,
 			(unsigned long)CE_MAXIMUM_TAG_NAME_LENGTH)))
 			return ce_refuse("tag %ld's name is longer than %d characters", index, CE_MAXIMUM_TAG_NAME_LENGTH - 1);
+		/* (a name map protection stripped is an empty one by now, but for a
+		tag held by a resource map: ce_repairs_protection) */
 		if (instance->indexed)
 		{
 			switch (instance->group_tag)
@@ -297,6 +315,13 @@ static boolean ce_tag_index_check(
 			/* (read when the BSP loads: cache_files.c) */
 			if (instance->base_address)
 				return ce_refuse("structure BSP %s is placed before it is loaded", name);
+		}
+		/* (a tag with no data, which Halo PC's engine let be while nothing
+		read it: a protected map's garbage tag, left with no group and the
+		references to it none, ce_repairs_protection) */
+		else if (!instance->base_address)
+		{
+			continue;
 		}
 		else if (!ce_image_pointer(image, instance->base_address, 4))
 		{
@@ -580,6 +605,9 @@ static boolean ce_map_check_tags(
 		ce_refuse("its %ld tags' instances (at %08lx) are not in its tag data", tag_count, header.tag_instances);
 		goto done;
 	}
+	/* (a protected map's tag table repaired first, as it is when the map
+	loads: ce_repairs.c) */
+	ce_repairs_protection(&image, ce_file_read_proc, (void *)file, file_size);
 	if (!ce_tag_index_check(&image, instances, tag_count))
 		goto done;
 	/* (a protected map's scenario may have another group: ce_repairs.c) */

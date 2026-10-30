@@ -744,6 +744,25 @@ def build_asset(entry: dict, renders: dict) -> np.ndarray:
     scale = entry["scale"]
     image = np.zeros((entry["height"] * scale, entry["width"] * scale, 4), np.uint8)
     for cell in entry["cells"]:
+        if "source_png" in cell:
+            # Supplied monochrome pictures: luminance becomes coverage,
+            # retaining their antialiasing and all interior cutouts. Never
+            # threshold, trace or reconstruct the artwork or its lettering.
+            source = Image.open(ASSETS / cell["source_png"]).convert("L")
+            left, top, right, bottom = cell["crop"]
+            if not 0 <= left < right <= source.width or not 0 <= top < bottom <= source.height:
+                raise ValueError("correction crop outside supplied image")
+            alpha = source.crop(cell["crop"])
+            x0, y0, x1, y1 = [round(v * scale) for v in cell["xbox"]]
+            if not 0 <= x0 < x1 <= image.shape[1] or not 0 <= y0 < y1 <= image.shape[0]:
+                raise ValueError("correction cell outside atlas")
+            ratio = min((x1-x0)/alpha.width, (y1-y0)/alpha.height)
+            alpha = alpha.resize((max(1, round(alpha.width*ratio)), max(1, round(alpha.height*ratio))), Image.Resampling.LANCZOS)
+            x0 += (x1-x0-alpha.width)//2
+            y0 += (y1-y0-alpha.height)//2
+            # HUD blend mode expects premultiplied white: RGB equals alpha.
+            image[y0:y0+alpha.height, x0:x0+alpha.width] = np.asarray(alpha)[..., None]
+            continue
         # (the restored art, or the redraw, at the texture's scale, its
         # coordinates with it)
         zoom = scale / cell["source_scale"]
@@ -784,6 +803,11 @@ def thresholds(arguments) -> None:
 def build(arguments) -> None:
     description = json.loads(LAYOUT.read_text())
     names = {f"{entry['name']}.png" for entry in description["assets"]}
+    # Other map families own their layouts and generated pictures. A native
+    # rebuild must not treat their independently generated atlases as stale.
+    ce_layout = ASSETS / "ce_layout.json"
+    if ce_layout.is_file():
+        names.update(f"{entry['name']}.png" for entry in json.loads(ce_layout.read_text())["assets"])
     for stale in ASSETS.glob("*.png"):
         if stale.name not in names:
             stale.unlink()

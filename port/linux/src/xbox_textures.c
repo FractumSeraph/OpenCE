@@ -37,6 +37,9 @@ ES build's alone: the 64-bit Android build draws without HALO_GLES) */
 #if defined(HALO_ANDROID) && defined(HALO_GLES) && !defined(HALO_BROWSER)
 #define XGPU_DXT1_ASTC 1
 #endif
+#ifdef HALO_ANDROID
+#include "../../android/include/android_render_policy.h"
+#endif
 
 #ifndef GL_COMPRESSED_RGBA_S3TC_DXT1_EXT
 #define GL_COMPRESSED_RGBA_S3TC_DXT1_EXT 0x83f1
@@ -1629,7 +1632,7 @@ GLuint xgpu_texture_get(const DWORD *resource, const D3DCOLOR *palette, GLenum *
 	unsigned long watch_serial = memory_watch_serial();
 #ifdef HALO_ANDROID_CE_TEXTURES
 	unsigned long ce_bytes;
-	const void *ce_pixels = android_ce_texture_pixels(resource, &ce_bytes);
+	const void *ce_pixels = android_texture_fixes ? android_ce_texture_pixels(resource, &ce_bytes) : NULL;
 	const void *ce_resource = ce_pixels ? resource : NULL;
 #endif
 

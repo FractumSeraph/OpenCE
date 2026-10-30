@@ -158,7 +158,7 @@ jobs:
           sudo apt-get update -q
           sudo apt-get install -y -q --no-install-recommends clang-$LLVM_MAJOR lld-$LLVM_MAJOR llvm-$LLVM_MAJOR \
             libclang-rt-$LLVM_MAJOR-dev gcc gcc-multilib libc6-dev-i386 cmake pkg-config libwayland-bin \
-            ninja-build ccache python3-pytest zstd
+            ninja-build ccache python3-pytest python3-pil python3-numpy python3-scipy zstd
           echo "/usr/lib/llvm-$LLVM_MAJOR/bin" >> "$GITHUB_PATH"
         env:
           LLVM_MAJOR: 22
@@ -224,11 +224,12 @@ jobs:
       # ChupathingyCE's ce_*.c; build/UPDATING.md, 2026-10-20)
       - name: Test
         run: |
-          python3 -m pytest -q tools/test_linux_port.py tools/test_android_asm_convert.py tools/test_android_mirror_uploads.py tools/test_touch_menu.py tools/test_ui_point.py tools/test_p2p_copies.py tools/test_ping.py tools/test_save_folder.py tools/test_packaged_install.py tools/test_server_control.py tools/test_delta.py tools/test_delta_peer.py tools/test_delta_compat.py tools/test_network_rules.py tools/test_profile.py tools/test_map_torrents.py tools/test_map_families.py tools/test_map_packs.py tools/test_bmp_files.py tools/test_host_watch_hash.py tools/test_virtual_keyboard_input.py tools/test_settings_sections.py tools/test_loading_picture.py tools/harness tools/test_map_download.py tools/test_playlist_maps.py tools/test_map_report.py tools/test_event_log.py tools/test_update_manifest.py tools/test_gamespy_listing.py tools/test_determinism.py tools/test_android_ce_texture_cache.py tools/test_server_sim.py tools/test_egg.py tools/test_deploy_gametypes.py tools/test_p2p_host_port.py tools/test_ce_effect_flags.py
+          python3 -m pytest -q tools/test_linux_port.py tools/test_android_asm_convert.py tools/test_android_mirror_uploads.py tools/test_android_static_geometry.py tools/test_android_render_policy.py tools/test_touch_menu.py tools/test_ui_point.py tools/test_p2p_copies.py tools/test_ping.py tools/test_save_folder.py tools/test_packaged_install.py tools/test_server_control.py tools/test_delta.py tools/test_delta_peer.py tools/test_delta_compat.py tools/test_network_rules.py tools/test_profile.py tools/test_map_torrents.py tools/test_map_families.py tools/test_map_packs.py tools/test_bmp_files.py tools/test_host_watch_hash.py tools/test_virtual_keyboard_input.py tools/test_settings_sections.py tools/test_loading_picture.py tools/harness tools/test_map_download.py tools/test_playlist_maps.py tools/test_map_report.py tools/test_event_log.py tools/test_update_manifest.py tools/test_gamespy_listing.py tools/test_determinism.py tools/test_android_ce_texture_cache.py tools/test_server_sim.py tools/test_egg.py tools/test_deploy_gametypes.py tools/test_p2p_host_port.py tools/test_ce_effect_flags.py
           # OpenCE's dedicated server (halo --server): --version, and --server without maps refused (exit code 2);
           # its cases with clients need the retail maps, and are skipped
           python3 -m pytest -q tools/test_dedicated_server.py
           python3 tools/test_light_storage.py
+          python3 -m pytest -q tools/test_controller_buttons.py tools/test_controller_remap.py tools/test_hud_button_style.py tools/test_hud_corrections.py
           python3 tools/test_rendered_lights_storage.py
           python3 tools/test_port_config.py
           python3 tools/test_tick_input.py

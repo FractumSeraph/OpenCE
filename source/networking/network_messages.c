@@ -222,7 +222,7 @@ struct network_game_message_packet_definitions
 	struct data_packet_definition server_begin_game;
 	struct data_packet_field server_graceful_game_exit_pregame_fields[2];
 	struct data_packet_definition server_graceful_game_exit_pregame;
-	struct data_packet_field client_join_game_request_fields[4];
+	struct data_packet_field client_join_game_request_fields[5];
 	struct data_packet_definition client_join_game_request;
 	struct data_packet_field client_add_player_request_pregame_fields[4];
 	struct data_packet_definition client_add_player_request_pregame;
@@ -297,8 +297,9 @@ server_pregame_keep_alive_fields) */
 DEFINE_NETWORK_GAME_MESSAGE(message_server_pregame_keep_alive, 0x04);
 DEFINE_NETWORK_GAME_MESSAGE(message_server_postgame_keep_alive, 0x02);
 /* (port: the joining machine's hardware id after the Xbox's, 0x20 bytes of
-hex: p2p.c's p2p_hardware_id) */
-DEFINE_NETWORK_GAME_MESSAGE(message_client_join_game_request, 0x70);
+hex: p2p.c's p2p_hardware_id; then a Discord account's pass, 170 bytes, and
+its proof, 64: port/linux/src/player_link.c) */
+DEFINE_NETWORK_GAME_MESSAGE(message_client_join_game_request, 0x70 + 170 + 64);
 DEFINE_NETWORK_GAME_MESSAGE(message_client_add_player_request_pregame, 0x20);
 DEFINE_NETWORK_GAME_MESSAGE(message_client_remove_player_request_pregame, 0x20);
 DEFINE_NETWORK_GAME_MESSAGE(message_client_settings_request, 0x44);
@@ -411,6 +412,8 @@ static struct network_game_message_packet_definitions data_0030aa68 =
 		DATA_PACKET_FIELD(_data_packet_field_shorts, 32),
 		DATA_PACKET_FIELD(_data_packet_field_bytes, 16),
 		DATA_PACKET_FIELD(_data_packet_field_bytes, 32),
+		/* (port: the Discord pass, 170 bytes, and its proof, 64) */
+		DATA_PACKET_FIELD(_data_packet_field_bytes, 234),
 		DATA_PACKET_FIELD_END,
 	},
 	NETWORK_GAME_MESSAGE_DEFINITION(client_join_game_request, "message_client_join_game_request_packet", message_client_join_game_request),
@@ -693,9 +696,11 @@ void *create_network_game_message(
 
 /* port: as create_network_game_message, with tail_size zero bytes after the
 message's fields, before its type byte: what a newer host's longer message
-has there (the join request to an OpenCE host of 40 or later,
-network_rules_join_request_extra). The decoder reads the fields it knows and
-ignores bytes left after them, so an older host takes it too. */
+has there (network_rules_join_request_extra). The decoder reads the fields it
+knows and ignores bytes left after them, so an older host takes it too. A
+negative tail_size cuts that many of the fields' last bytes instead: this
+fork's join request is OpenCE's of 40 on, 0x70 + 234 bytes, which a host of
+an older version is sent as the Xbox's 0x70. */
 void *create_network_game_message_with_tail(
 	enum network_game_message_type message_type,
 	const void *message_struct,
@@ -882,6 +887,20 @@ void *create_network_game_message_with_tail(
 		else if (tail_size > 0)
 		{
 			network_event("create_network_game_message(): no room for the message's tail");
+			return NULL;
+		}
+		/* (port: a negative one, the fields' last bytes cut: OpenCE's longer
+		join request to a host that reads the Xbox's 0x70 bytes) */
+		else if (tail_size < 0 && encoded_message_size.value - 1 + tail_size >= 0)
+		{
+			long type_at = encoded_message_size.value - 1;
+
+			encoded_message[type_at + tail_size] = encoded_message[type_at];
+			encoded_message_size.value += tail_size;
+		}
+		else if (tail_size < 0)
+		{
+			network_event("create_network_game_message(): the message is shorter than its cut");
 			return NULL;
 		}
 		/* a message header holds lengths up to HALO_PORT_MAXIMUM_NETWORK_MESSAGE_SIZE-1,

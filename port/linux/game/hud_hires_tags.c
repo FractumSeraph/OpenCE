@@ -39,6 +39,8 @@ int hud_hires_sprites_drawable(long asset, unsigned long address, unsigned long 
 #include "rasterizer/rasterizer.h"
 #include "text/draw_string.h"
 #include "hud_button_layout.h"
+#include "hud_hires_crosshairs.h"
+#include "controller_glyphs.h"
 #include "scenario/scenario_definitions.h"
 #include "cache/texture_cache.h"
 /* (HALO_ANDROID_CE_TEXTURES: the 32-bit Android guest's Custom Edition
@@ -172,6 +174,7 @@ static void hud_hires_sprite_bitmaps_forget(
 	}
 	hires_sprite_bitmap_count = 0;
 	hud_buttons_forget();
+	controller_glyphs_dispose();
 
 	return;
 }
@@ -393,6 +396,24 @@ struct bitmap_data const *hud_hires_sprite_bitmap(
 	return bitmap;
 }
 
+/* CE packs 2x and 8x into the same sequence. Only the supplied 2x and
+ * reticle have replacements; the original 8x must keep its own pixels.
+ * Identify the registered stock sheet, then use the existing CRC-checked,
+ * setting-gated placeholder path. No tags, bounds or anchoring are changed. */
+struct bitmap_data const *hud_hires_crosshair_bitmap(struct bitmap_data const *bitmap,
+    short sequence_index,short frame_index)
+{
+    long index;
+    if (!cache_file_tags_are_ce() || !config_boolean("display.high_res_hud") ||
+        frame_index!=0 || (sequence_index!=0 && sequence_index!=1)) return bitmap;
+    for (index=0;index<hires_sprite_bitmap_count;index++)
+        if (hires_sprite_bitmaps[index].bitmap==bitmap && !strcmp(
+            hud_hires_asset_tag(hires_sprite_bitmaps[index].asset),
+            "ui\\hud\\bitmaps\\sniper\\hud_reticles_scope"))
+            return hud_hires_sprite_bitmap(bitmap,sequence_index);
+    return bitmap;
+}
+
 /* whether the bitmap at address that `asset` stands for is a Custom Edition
 map's stock one (its pixels are not those the texture was drawn from) */
 long hud_hires_asset_stock_custom_edition(
@@ -507,11 +528,15 @@ boolean hud_hires_button_draw(struct icon_hud_element_definition const *icon,
 		if (icon == buttons + index) break;
 	if (index >= 18 || index >= hud_globals->messaging.button_icons.count)
 		return FALSE;
+	/* (OpenCE's controller families' artwork, controller_glyphs.c, for the
+	styles past display.hud_button_style's classic, gems and menu_gems, 0
+	to 2, which are drawn below as before) */
+	style = controller_glyph_style();
+	if (controller_glyph_draw(style, (short)index, icon, cursor, color)) return TRUE;
 	slot = index < 6 ? (short)index : hud_button_control_slot((short)index,
 		icon->frame_rate > 0 ? game_time_get() / icon->frame_rate : 0);
 	if (slot < 0) return FALSE;
-	style = (!strcmp(config_string("display.hud_button_style"), "dark_gems") || !strcmp(config_string("display.hud_button_style"), "menu_gems")) ? 2 :
-		!strcmp(config_string("display.hud_button_style"), "gems");
+	if (style >= 3) style = 0; /* unavailable new artwork: the legacy fallback */
 	if (style != hud_buttons_style)
 	{
 		hud_buttons_forget();

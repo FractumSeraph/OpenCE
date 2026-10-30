@@ -2,7 +2,8 @@
 screen players when game.start_with_one_player is on (without it the host waits for a second machine), a split screen
 game and machines together, and a machine joining without a player does not stop it; and a dedicated server's rule, its
 director's (server_director.c's server_director_ok_to_countdown): server.min_players held to 1 to 16,
-server.team_start, and its own state."""
+server.team_start, and its own state; the host's START NOW starts the game at once, a client machine's takes five
+seconds off."""
 
 import re
 import sys
@@ -19,6 +20,9 @@ CASES = [
     "playerless-machine-starts-countdown", "split-screen-team-game-one-team",
     "dedicated-one-team-starts", "dedicated-both-teams-waits", "dedicated-below-minimum-waits",
     "dedicated-minimum-clamped", "dedicated-director-refuses",
+    "dedicated-start-now-five-seconds",
+    "host-start-now-starts", "host-start-now-ends-countdown",
+    "split-screen-host-start-now-starts", "client-start-now-five-seconds", "host-start-now-team-game-needs-both-teams",
 ]
 FUNCTIONS = (
     "countdown_timer_update", "countdown_timer_get_time_remaining", "countdown_timer_increment",
@@ -27,7 +31,9 @@ FUNCTIONS = (
     "server_has_enough_machines", "server_players_on_one_machine",
     # (this fork's: a player on each machine, and one with the map)
     "server_has_a_player_on_each_machine", "server_has_a_player_with_the_map", "server_ok_to_countdown",
-    "network_game_server_update_countdown",
+    "network_game_server_update_countdown", "network_game_server_begin_game_start_countdown",
+    "network_game_server_port_countdown_begin",
+    "network_game_server_client_machine_faster_event",
 )
 CONSTANTS = (
     "MAXIMUM_NETWORK_MACHINE_COUNT", "MAXIMUM_NETWORK_PLAYER_COUNT", "NUMBER_OF_MULTIPLAYER_TEAMS",
@@ -99,6 +105,19 @@ NEGATIVE_CONTROLS = {
     "entry-ignored": (
         ("!director.entry_applied || ", ""),
         "server_director_ok_to_countdown", "dedicated-director-refuses",
+    ),
+    "dedicated-start-now-starts-countdown": (
+        ("if (!halo_server_mode() &&", "if (1 &&"),
+        "network_game_server_update_countdown", "dedicated-start-now-five-seconds",
+    ),
+    "host-takes-five-seconds": (
+        ("return _network_game_server_countdown_event_start_immediately;",
+         "return _network_game_server_countdown_event_player_joined;"),
+        "network_game_server_client_machine_faster_event", "host-start-now-starts",
+    ),
+    "client-starts-game": (
+        ("if (network_game_server_client_machine_is_local(server, machine))", "if (1)"),
+        "network_game_server_client_machine_faster_event", "client-start-now-five-seconds",
     ),
 }
 

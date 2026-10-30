@@ -185,14 +185,16 @@ def run(build, show):
 		if actual != expected:
 			print(f"FAIL: {names[message_type]} encodes to {actual}, upstream's to {expected}")
 			ok = False
-	# (the join request to an OpenCE host of 40 or later: the 0x70 bytes, 234
-	# zero bytes, the type; decoded, the 0x70 bytes alone, as an older host
-	# reads it; and the short request as before)
+	# (the join request, port, this fork: OpenCE's of 40 on, 0x70 + 234 bytes,
+	# as it is and decoded; with 234 zero bytes more, decoded the same; and
+	# cut to the 0x70 bytes for an older host, the short request as before)
 	# (the machine name's 32 shorts go out in the wire's order, each pair of
-	# bytes swapped; the token and the hardware id as they are)
-	pattern = "".join(f"{0x40 + i:02x}" for i in range(0x70))
-	wire = "".join(f"{0x40 + (i ^ 1 if i < 0x40 else i):02x}" for i in range(0x70))
-	expected = {"join 0": "01" + wire + "0c", "join 0 decoded": pattern,
+	# bytes swapped; the token, the hardware id and the pass as they are)
+	size = 0x70 + 234
+	pattern = "".join(f"{(0x40 + i) & 0xFF:02x}" for i in range(size))
+	wire = "".join(f"{(0x40 + (i ^ 1 if i < 0x40 else i)) & 0xFF:02x}" for i in range(size))
+	expected = {"join -234": "01" + wire[:0x70 * 2] + "0c",
+		"join 0": "01" + wire + "0c", "join 0 decoded": pattern,
 		"join 234": "01" + wire + "00" * 234 + "0c", "join 234 decoded": pattern}
 	joins = {" ".join(line.split()[:-1]): line.split()[-1] for line in lines if line.startswith("join ")}
 	for key, value in expected.items():

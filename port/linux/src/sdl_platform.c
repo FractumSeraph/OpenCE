@@ -25,6 +25,7 @@ and the debug keyboard that the game's console reads.
 #include "port_mods.h"
 #include "server_mode.h"
 #include "server_master.h"
+#include "player_link.h"
 #include "xiso.h"
 #ifndef HALO_ANDROID
 #include "update.h"
@@ -42,6 +43,7 @@ and the debug keyboard that the game's console reads.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #ifdef HALO_WINDOWS
 /* port/windows/src/win32_window.c, compiled with the Windows SDK */
 void win32_window_borderless_apply(SDL_Window *window);
@@ -55,6 +57,10 @@ void win32_window_borderless_apply(SDL_Window *window);
 #if defined(__linux__) && !defined(HALO_ARM64_GUEST) && !defined(HALO_ANDROID)
 #include <dlfcn.h>
 #include <unistd.h>
+#endif
+#ifdef HALO_ANDROID
+#include <errno.h>
+#include <time.h>
 #endif
 
 static SDL_Window *platform_window;
@@ -142,13 +148,15 @@ static BOOL scoreboard_pointer_active;
 static struct platform_keystroke keystroke_queue[KEYSTROKE_QUEUE_SIZE];
 static unsigned long keystroke_head, keystroke_count;
 
+/* the system's on-screen keyboard shown or hidden as wanted (Steam's, or
+Android's) */
+static void screen_keyboard_update(void);
 #ifndef HALO_ANDROID
 /* dsound_sdl.c's: the output device followed */
 void dsound_sdl_output_device_check(void);
 /* updater.c's: the desktop self-updater */
 void updater_start(void);
 void updater_poll(SDL_Window *window);
-static void screen_keyboard_update(void);
 #ifndef HALO_GLES
 /* the windows' icon, a PNG (tools/embed_assets.py, from port/assets/icon) */
 extern const unsigned int platform_window_icon[];
@@ -599,6 +607,11 @@ BOOL platform_sdl_initialize(void)
 	delta_legacy_start();
 	/* (port, this fork: the ban lists of network.shared_bans, shared_bans.c) */
 	shared_bans_start();
+	/* (a Discord account linked at a master server: its passes asked for
+	again before they run out, player_link.c; not this fork's browser
+	build's, as the ban lists' are not) */
+	if (!halo_server_mode())
+		player_link_start();
 #endif
 	/* (Custom Edition maps downloaded and seeded: map_torrents.c) */
 	map_torrents_initialize();
@@ -1755,8 +1768,9 @@ static BOOL platform_window_fullscreen(void)
 /* the size in pixels the game draws its picture at (d3d8_gl.c): the
 window's, the display's while fullscreen, or display.resolution's while
 fullscreen (either kind) where the display has room for it; before the
-window opens, what it will be. FALSE where display.resolution_scaling is
-"original": the Xbox's 640x480, scaled to the window. */
+window opens, what it will be (d3d8_gl.c draws a part of it for
+display.resolution_scaling's percentages). FALSE where it is "original": the
+Xbox's 640x480, scaled to the window. */
 BOOL platform_screen_mode(long *width, long *height)
 {
 	/* (the size last given, for a window that has none: minimized) */
@@ -2105,10 +2119,9 @@ BOOL platform_video_hdr(float *sdr_white, float *headroom)
 The blue arrow the menus show for the mouse, in place of the system's. Halo
 PC drew its cursor in the menus' 640 x 480, so it took the same part of the
 screen at any resolution; this one is made again whenever the window's size
-in pixels changes (menu_cursor_fit, from platform_pump_events). */
+in pixels or display.menu_cursor changes (menu_cursor_fit, from
+platform_pump_events). */
 
-/* the arrow's height in the menus' 480 lines (72 pixels at 1080p) */
-#define MENU_CURSOR_HEIGHT 32
 /* the arrow's tip in the picture, past its soft edge: the click point */
 #define MENU_CURSOR_TIP 2
 
@@ -2140,14 +2153,41 @@ static SDL_Surface *menu_cursor_scale(int height)
 	return surface;
 }
 
-/* the cursor made for the window's size, when that has changed: its height
-the part of the window the menus' 480 lines take (their 4:3 fits a window of
-another shape), in pixels; where the desktop counts in points (macOS, Wayland
-at a scale) the cursor is that size in points, with the pixels' image as its
-alternate */
+/* display.menu_cursor: the arrow's height in the menus' 480 lines (large,
+the default, Halo PC's: 72 pixels at 1080p), or 0 for the system's pointer;
+read again when a setting changes */
+static int menu_cursor_size(void)
+{
+	static const struct { const char *name; int lines; } sizes[] =
+	{
+		{ "off", 0 }, { "small", 18 }, { "medium", 24 }, { "large", 32 }, { "extra_large", 40 }
+	};
+	static unsigned long read_at = (unsigned long)-1;
+	static int lines = 32;
+
+	if (read_at != config_changes())
+	{
+		const char *name = config_string("display.menu_cursor");
+		size_t index;
+
+		read_at = config_changes();
+		lines = 32;
+		for (index = 0; index < sizeof(sizes) / sizeof(sizes[0]); index++)
+			if (!strcmp(name, sizes[index].name))
+				lines = sizes[index].lines;
+	}
+	return lines;
+}
+
+/* the cursor made for the window's size and display.menu_cursor, when one
+has changed: its height the part of the window the menus' 480 lines take
+(their 4:3 fits a window of another shape), in pixels; where the desktop
+counts in points (macOS, Wayland at a scale) the cursor is that size in
+points, with the pixels' image as its alternate. Off, the system's pointer
+again. */
 static void menu_cursor_fit(void)
 {
-	int width = 0, height = 0, lines, cursor_height;
+	int width = 0, height = 0, lines, cursor_height, size = menu_cursor_size();
 	float density;
 	SDL_Surface *pixels, *points;
 	SDL_Cursor *cursor = NULL;
@@ -2155,8 +2195,19 @@ static void menu_cursor_fit(void)
 	if (!menu_cursor_picture || !SDL_GetWindowSizeInPixels(platform_window, &width, &height) ||
 		width <= 0 || height <= 0)
 		return;
+	if (!size)
+	{
+		if (menu_cursor)
+		{
+			SDL_SetCursor(SDL_GetDefaultCursor());
+			SDL_DestroyCursor(menu_cursor);
+			menu_cursor = NULL;
+		}
+		menu_cursor_height = 0;
+		return;
+	}
 	lines = height < width * 3 / 4 ? height : width * 3 / 4;
-	cursor_height = lines * MENU_CURSOR_HEIGHT / 480;
+	cursor_height = lines * size / 480;
 	if (cursor_height < 16)
 		cursor_height = 16;
 	if (cursor_height == menu_cursor_height)
@@ -2270,6 +2321,34 @@ static void platform_gl_missing(const char *reason)
 	exit(EXIT_FAILURE);
 }
 #endif
+
+/* the swap interval set, each change only (on the desktop
+platform_video_swap's: vsync while focused, none unfocused, its frames
+paced at the refresh instead). On the Mac it is the context's own, SDL's
+staying off (platform_video_initialize); this fork's browser build has none,
+the page presenting as each main-loop callback returns */
+#ifdef __APPLE__
+/* port/macos/src/macos_video.c */
+void macos_set_swap_interval(int interval);
+#endif
+static int platform_swap_interval_applied = -1;
+
+static void platform_swap_interval(int interval)
+{
+	if (platform_swap_interval_applied == interval)
+		return;
+#ifdef HALO_BGFX
+	/* (none of OpenGL's with bgfx, whose device presents: d3d8_bgfx.inl) */
+	if (xgpu_bgfx)
+		return;
+#endif
+#ifdef __APPLE__
+	macos_set_swap_interval(interval);
+#elif !defined(HALO_BROWSER)
+	SDL_GL_SetSwapInterval(interval);
+#endif
+	platform_swap_interval_applied = interval;
+}
 
 BOOL platform_video_initialize(unsigned long width, unsigned long height)
 {
@@ -2479,16 +2558,14 @@ BOOL platform_video_initialize(unsigned long width, unsigned long height)
 	version = 0;
 #else
 #ifdef __APPLE__
-	{
-		/* port/macos/src/macos_video.c */
-		void macos_set_swap_interval(int interval);
-
-		version = SDL_GL_SetSwapInterval(0);
-		macos_set_swap_interval(config_boolean("display.vsync") ? 1 : 0);
-	}
+	/* (SDL's own interval off, its vsync waiting on a display link that the
+	main thread's run loop drives: platform_swap_interval sets the
+	context's) */
+	version = SDL_GL_SetSwapInterval(0);
 #else
-	version = SDL_GL_SetSwapInterval(config_boolean("display.vsync") ? 1 : 0);
+	version = 0;
 #endif
+	platform_swap_interval(config_boolean("display.vsync") ? 1 : 0);
 #endif
 	(void)version;
 	platform_event_thread = SDL_GetCurrentThreadID();
@@ -2552,20 +2629,10 @@ void platform_display_apply(void)
 	if (!platform_window)
 		return;
 #endif
-#ifndef HALO_BROWSER
-	/* (the browser presents when each main-loop callback returns: no swap
-	interval, platform_video_initialize) */
-#ifdef __APPLE__
-	{
-		/* (the context's own interval, as at start-up: SDL's stays off) */
-		void macos_set_swap_interval(int interval);
-
-		macos_set_swap_interval(config_boolean("display.vsync") ? 1 : 0);
-	}
-#else
-	SDL_GL_SetSwapInterval(config_boolean("display.vsync") ? 1 : 0);
-#endif
-#endif
+	/* (on the Mac the context's interval, as at start-up; none in the
+	browser, which presents when each main-loop callback returns:
+	platform_swap_interval) */
+	platform_swap_interval(config_boolean("display.vsync") ? 1 : 0);
 }
 
 void platform_video_drawable_size(int *width, int *height)
@@ -2596,41 +2663,127 @@ static Uint64 frame_interval_ns(void)
 	rate = (float)maximum;
 	if (!maximum)
 	{
-#ifndef HALO_ANDROID
+#ifdef HALO_ANDROID
+		/* the app passes the display's refresh rate (port/android/host/host_main.c):
+		the guest cannot ask SDL for the display mode */
+		const char *refresh = getenv("HALO_DISPLAY_REFRESH");
+
+		rate = 2.0f * (refresh && atof(refresh) > 0.0f ? (float)atof(refresh) : 60.0f);
+#else
 		SDL_DisplayID display = SDL_GetDisplayForWindow(platform_window);
 		const SDL_DisplayMode *mode = display ? SDL_GetCurrentDisplayMode(display) : NULL;
 
 		rate = 2.0f * (mode && mode->refresh_rate > 0.0f ? mode->refresh_rate : 60.0f);
-#else
-		/* (the Android guest's SDL has no display modes to ask) */
-		rate = 2.0f * 60.0f;
 #endif
 	}
 	return (Uint64)(1e9f / rate);
 }
 
-#ifndef HALO_ANDROID
-#define frame_clock_ns SDL_GetTicksNS
-#define frame_delay_ns SDL_DelayPrecise
-#else
-/* (the Android guest's SDL has neither SDL_GetTicksNS nor
-SDL_DelayPrecise: the system's clock and sleep) */
-static Uint64 frame_clock_ns(void)
+/* (the swap's sound thread and the unfocused window's pacing: the desktop's
+alone) */
+#if !defined(HALO_ANDROID) && !defined(HALO_WEB)
+static Uint64 refresh_period_ns(void)
 {
-	struct timespec now;
+	SDL_DisplayID display;
+	const SDL_DisplayMode *mode;
+	float rate;
 
-	clock_gettime(CLOCK_MONOTONIC, &now);
-	return (Uint64)now.tv_sec * 1000000000u + (Uint64)now.tv_nsec;
+	display = platform_window ? SDL_GetDisplayForWindow(platform_window) : 0;
+	mode = display ? SDL_GetCurrentDisplayMode(display) : NULL;
+	rate = mode && mode->refresh_rate > 0.0f ? mode->refresh_rate : 60.0f;
+	return (Uint64)(1e9f / rate);
 }
 
-static void frame_delay_ns(Uint64 nanoseconds)
-{
-	struct timespec wait;
+static pthread_mutex_t swap_pump_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t swap_pump_cv = PTHREAD_COND_INITIALIZER;
+static pthread_t swap_sound_thread_id;
+static int swap_pump_started;
+static int swap_sound_thread_live;
+static int swap_blocking;
+static int swap_sound_busy;
+static Uint64 swap_blocking_since;
 
-	wait.tv_sec = (time_t)(nanoseconds / 1000000000u);
-	wait.tv_nsec = (long)(nanoseconds % 1000000000u);
-	nanosleep(&wait, NULL);
+void __stdcall DirectSoundDoWork(void);
+
+static void *swap_sound_thread(void *parameter)
+{
+	struct timespec when;
+
+	(void)parameter;
+	for (;;)
+	{
+		pthread_mutex_lock(&swap_pump_mutex);
+		while (!swap_blocking)
+			pthread_cond_wait(&swap_pump_cv, &swap_pump_mutex);
+		pthread_mutex_unlock(&swap_pump_mutex);
+
+		clock_gettime(CLOCK_REALTIME, &when);
+		when.tv_nsec += 8000000L;
+		if (when.tv_nsec >= 1000000000L)
+		{
+			when.tv_nsec -= 1000000000L;
+			when.tv_sec++;
+		}
+
+		pthread_mutex_lock(&swap_pump_mutex);
+		pthread_cond_timedwait(&swap_pump_cv, &swap_pump_mutex, &when);
+		if (!swap_blocking || SDL_GetTicks() - swap_blocking_since < 20)
+		{
+			pthread_mutex_unlock(&swap_pump_mutex);
+			continue;
+		}
+		swap_sound_busy = 1;
+		pthread_mutex_unlock(&swap_pump_mutex);
+
+		DirectSoundDoWork();
+
+		pthread_mutex_lock(&swap_pump_mutex);
+		swap_sound_busy = 0;
+		pthread_cond_broadcast(&swap_pump_cv);
+		pthread_mutex_unlock(&swap_pump_mutex);
+	}
+	return NULL;
 }
+
+static void swap_sound_begin(void)
+{
+	pthread_t thread;
+
+	if (swap_sound_thread_live && pthread_equal(pthread_self(), swap_sound_thread_id))
+		return;
+	pthread_mutex_lock(&swap_pump_mutex);
+	if (!swap_pump_started)
+	{
+		if (pthread_create(&thread, NULL, swap_sound_thread, NULL) != 0)
+		{
+			pthread_mutex_unlock(&swap_pump_mutex);
+			return;
+		}
+		pthread_detach(thread);
+		swap_sound_thread_id = thread;
+		swap_sound_thread_live = 1;
+		swap_pump_started = 1;
+	}
+	swap_blocking = 1;
+	swap_blocking_since = SDL_GetTicks();
+	pthread_cond_signal(&swap_pump_cv);
+	pthread_mutex_unlock(&swap_pump_mutex);
+}
+
+static void swap_sound_end(void)
+{
+	if (!swap_pump_started)
+		return;
+	if (swap_sound_thread_live && pthread_equal(pthread_self(), swap_sound_thread_id))
+		return;
+	pthread_mutex_lock(&swap_pump_mutex);
+	swap_blocking = 0;
+	pthread_cond_broadcast(&swap_pump_cv);
+	while (swap_sound_busy)
+		pthread_cond_wait(&swap_pump_cv, &swap_pump_mutex);
+	pthread_mutex_unlock(&swap_pump_mutex);
+}
+
 #endif
 #ifdef HALO_BROWSER
 void platform_web_frame_begin(void)
@@ -2709,12 +2862,40 @@ void web_frame_shown(void);
 void web_js_post(int kind, const char *text);
 #endif
 
+#ifdef HALO_ANDROID
+/* monotonic nanoseconds, and a sleep of that long: the guest's SDL bridge has
+no SDL_GetTicksNS nor SDL_DelayPrecise, so use musl's clocks */
+static Uint64 platform_ticks_ns(void)
+{
+	struct timespec now;
+
+	clock_gettime(CLOCK_MONOTONIC, &now);
+	return (Uint64)now.tv_sec * 1000000000ull + (Uint64)now.tv_nsec;
+}
+
+static void platform_sleep_ns(Uint64 duration)
+{
+	struct timespec request, remaining;
+
+	request.tv_sec = (time_t)(duration / 1000000000ull);
+	request.tv_nsec = (long)(duration % 1000000000ull);
+	while (nanosleep(&request, &remaining) == -1 && errno == EINTR)
+		request = remaining;
+}
+#endif
+
 void platform_video_swap(void)
 {
-	Uint64 swap_start = SDL_GetTicks(), swap_time;
 #ifndef HALO_BROWSER
+	Uint64 swap_time;
 	static Uint64 next_frame;
 	Uint64 interval, now;
+#endif
+#if !defined(HALO_ANDROID) && !defined(HALO_WEB)
+	SDL_WindowFlags window_flags;
+	int focused;
+	int vsync;
+	Uint64 swap_start;
 #endif
 #ifdef HALO_BROWSER
 	web_frame_meter.swaps++;
@@ -2725,18 +2906,41 @@ void platform_video_swap(void)
 	Keep borderless on the desktop before the driver presents a frame. */
 	win32_window_borderless_apply(platform_window);
 #endif
-
+#if !defined(HALO_ANDROID) && !defined(HALO_WEB)
+	SDL_PumpEvents();
+	window_flags = platform_window ? SDL_GetWindowFlags(platform_window) : 0;
+	focused = platform_window && (window_flags & SDL_WINDOW_INPUT_FOCUS) != 0 &&
+		(window_flags & SDL_WINDOW_MINIMIZED) == 0;
+	vsync = config_boolean("display.vsync");
+	platform_swap_interval((vsync && focused) ? 1 : 0);
+	swap_sound_begin();
+	swap_start = SDL_GetTicks();
 #ifdef HALO_BGFX
 	/* (the device presents: d3d8_bgfx.inl; this paces the frames) */
 	if (!xgpu_bgfx)
 #endif
 	SDL_GL_SwapWindow(platform_window);
+	swap_time = SDL_GetTicks() - swap_start;
+	swap_sound_end();
+	if (swap_time >= 2000)
+		platform_log("display: showing a frame took %.1f s in the graphics driver", (double)swap_time / 1000.0);
+#else
+	{
+	Uint64 swap_start;
+
+	swap_start = SDL_GetTicks();
+#ifdef HALO_BGFX
+	if (!xgpu_bgfx)
 #endif
+	SDL_GL_SwapWindow(platform_window);
 	/* (a frame the graphics driver held for seconds: the game froze, and
 	online, a host stops hearing a machine after a few; the log says where) */
 	swap_time = SDL_GetTicks() - swap_start;
 	if (swap_time >= 2000)
 		platform_log("display: showing a frame took %.1f s in the graphics driver", (double)swap_time / 1000.0);
+	}
+#endif
+#endif
 #ifdef HALO_WEB
 	web_frame_shown();
 #endif
@@ -2744,12 +2948,24 @@ void platform_video_swap(void)
 	/* (Android's too, since ChupathingyCE's parity-fixes; not this fork's
 	browser build, whose frames the page's animation frames pace) */
 	interval = frame_interval_ns();
+#if !defined(HALO_ANDROID) && !defined(HALO_WEB)
+	if (!interval && vsync && !focused)
+		interval = refresh_period_ns();
+#endif
 	if (!interval)
 		return;
-	now = frame_clock_ns();
+#ifdef HALO_ANDROID
+	now = platform_ticks_ns();
+#else
+	now = SDL_GetTicksNS();
+#endif
 	if (next_frame > now)
 	{
-		frame_delay_ns(next_frame - now);
+#ifdef HALO_ANDROID
+		platform_sleep_ns(next_frame - now);
+#else
+		SDL_DelayPrecise(next_frame - now);
+#endif
 		now = next_frame;
 	}
 	/* (a frame more than an interval late starts the count again) */
@@ -3011,6 +3227,21 @@ void platform_clipboard_set(const char *text)
 	SDL_SetClipboardText(text);
 }
 
+#ifndef HALO_GAME_BROWSER
+/* (with the game list, HALO_GAME_BROWSER, the window's thread opens it:
+platform_game_list_requests) */
+void platform_open_url(const char *url)
+{
+#ifdef HALO_WEB
+	web_js_post(5, url);
+#else
+	/* (the address logged too, for a machine whose browser does not open) */
+	if (!SDL_OpenURL(url))
+		platform_log("could not open the browser (%s): open %s", SDL_GetError(), url);
+#endif
+}
+#endif
+
 /* network.join_from_clipboard: "never" (the default), "ask" or "always"
 (true and false, of older versions, are "always" and "never":
 port_config.c) */
@@ -3174,8 +3405,10 @@ static void platform_game_list_requests(void)
 	snprintf(url, sizeof(url), "%s", platform_url);
 	platform_url[0] = 0;
 	pthread_mutex_unlock(&platform_url_lock);
+	/* (the address logged too, for a machine whose browser does not open: a
+	Discord link's page, player_link.c, comes here as well) */
 	if (url[0] && !SDL_OpenURL(url))
-		platform_log("Game list: could not open the web browser: %s", SDL_GetError());
+		platform_log("could not open the web browser (%s): open %s", SDL_GetError(), url);
 
 	if (browser_take_key_link(new_id, old_id, sizeof(new_id)))
 	{
@@ -3559,8 +3792,8 @@ void platform_pump_events(void)
 	updater_poll(platform_window);
 	/* (Settings > Audio's output device, as it changes: dsound_sdl.c) */
 	dsound_sdl_output_device_check();
-	screen_keyboard_update();
 #endif
+	screen_keyboard_update();
 	map_torrents_poll();
 	pthread_mutex_lock(&input_lock);
 #if !defined(HALO_ANDROID) || defined(HALO_BROWSER)
@@ -3951,6 +4184,13 @@ void platform_binding_capture_begin(void)
 	pthread_mutex_unlock(&input_lock);
 }
 
+void platform_binding_capture_cancel(void)
+{
+	pthread_mutex_lock(&input_lock);
+	binding_capture = _binding_capture_idle;
+	pthread_mutex_unlock(&input_lock);
+}
+
 int platform_binding_capture_poll(int *input)
 {
 	int result = 0;
@@ -4108,7 +4348,7 @@ void platform_video_window_size(int *width, int *height)
 }
 
 #endif
-#ifndef HALO_ANDROID
+#if !defined(HALO_ANDROID) || defined(HALO_BROWSER)
 /* ---------- the system's on-screen keyboard */
 
 /* A menu's text field is typed into (platform_text_field, xinput_sdl.c).
@@ -4186,6 +4426,69 @@ static void screen_keyboard_update(void)
 		SDL_StartTextInputWithProperties(platform_window, properties);
 		SDL_DestroyProperties(properties);
 	}
+}
+
+#else
+/* ---------- the system's on-screen keyboard (Android's)
+
+While a name is typed, into the game's own keyboard (Change Name's:
+platform_text_typing) or a menu's text field (the server's name:
+platform_text_field, xinput_sdl.c), SDL's text input runs where the touch
+controls would show (touch_input_screen_buttons), which brings up Android's
+keyboard. What it types arrives as keys, as a Bluetooth or USB keyboard's
+does: SDL's input connection makes a key press of each character from space
+to '~' and of each backspace, and its Enter is the Return key, which ends the
+typing as a keyboard's does. The game's own keyboard still takes taps where
+Android's does not cover it. Android's keyboard goes as the typing ends;
+closed by hand (back), it comes again with the next name begun. (The
+guest's SDL has no atomics: the compiler's.) */
+static int screen_keyboard_wanted;
+static int screen_keyboard_requests;
+
+/* port/android/guest/runtime/guest_host.h: SDL's text input for the window,
+started as the SDL_TextInputType given (one line, no autocorrection) or
+stopped (-1); whether it runs */
+int host_sdl_text_input(unsigned int window, int type);
+
+void platform_screen_keyboard(BOOL show, BOOL password)
+{
+	__atomic_store_n(&screen_keyboard_wanted, !show ? 0 : password ? 2 : 1, __ATOMIC_SEQ_CST);
+	if (show)
+		__atomic_add_fetch(&screen_keyboard_requests, 1, __ATOMIC_SEQ_CST);
+}
+
+/* (on the window's thread: platform_pump_events) */
+static void screen_keyboard_update(void)
+{
+	static int requests_handled;
+	static BOOL started;
+	unsigned int window = (unsigned int)(uintptr_t)platform_window;
+	int requests = __atomic_load_n(&screen_keyboard_requests, __ATOMIC_SEQ_CST);
+	int wanted = __atomic_load_n(&screen_keyboard_wanted, __ATOMIC_SEQ_CST);
+
+	if (!wanted)
+	{
+		if (started)
+			host_sdl_text_input(window, -1);
+		started = FALSE;
+		return;
+	}
+	if (requests == requests_handled)
+		return;
+	requests_handled = requests;
+	/* (stopped first: one closed by hand may be held by SDL to be up still,
+	and not shown again) */
+	if (started)
+		host_sdl_text_input(window, -1);
+	started = FALSE;
+	if (!touch_input_screen_buttons())
+		return;
+	platform_log("text field: showing Android's keyboard");
+	/* (a name's as a visible password, for the keyboards' sake: no
+	suggestions, and no words held back while they are put together, so that
+	each key arrives as it is typed; a password's hidden) */
+	started = host_sdl_text_input(window,
+		wanted == 2 ? SDL_TEXTINPUT_TYPE_TEXT_PASSWORD_HIDDEN : SDL_TEXTINPUT_TYPE_TEXT_PASSWORD_VISIBLE) != 0;
 }
 
 #endif

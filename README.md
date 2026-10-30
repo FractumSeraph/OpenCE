@@ -29,9 +29,9 @@ are [ChupathingyCE's](#chupathingyce) and [OpenCE's](#opence) own pages.
   switch weapons. It plays at 60 frames a second on that watch and updates
   itself (see [port/android/README.md](port/android/README.md), "Wear OS").
 - **Players of every version in one game.** OpenCE's builds join only hosts
-  of their own network version. This fork joins hosts of versions 11 to 40,
+  of their own network version. This fork joins hosts of versions 11 to 42,
   OpenCE's and ChupathingyCE's alike, and its hosts take OpenCE players of
-  the newest version (39) and ChupathingyCE players (0.8.0e and later)
+  the newest version (41) and ChupathingyCE players (0.8.0e and later)
   together, each sent the game as its own version reads it
   ([below](#cross-play-and-delta)).
 - **Every Custom Edition map, downloaded when a game needs it.** All 5,829
@@ -112,13 +112,13 @@ are [ChupathingyCE's](#chupathingyce) and [OpenCE's](#opence) own pages.
 Where the two projects do the same thing two ways, the fork keeps one
 working version; nothing sent over the network differs from theirs, so
 players of all three play together: this fork's games announce network
-version 39, as OpenCE's newest does, so OpenCE 39 players join them, SWAT,
+version 41, as OpenCE's newest does, so OpenCE 41 players join them, SWAT,
 Infection, Gun Game and Hardcore included, and ChupathingyCE players
-(0.8.0e and later) join them by its wire, `chupa-39a` (0.8.0e's and
-0.8.0f's `chupa-32a` plays with it), each sent the game settings of its own
+(0.8.0e and later) join them by its wire, `chupa-41a` (0.8.0e's and
+0.8.0f's `chupa-32a` and 0.8.1b's `chupa-39a` play with it), each sent the game settings of its own
 version (a game of one of OpenCE's game types is the one they can't play:
 0.8.0f and later leave it saying so, and the host turns 0.8.0e away from
-it). This fork's builds join hosts of versions 11 to 40, in either
+it). This fork's builds join hosts of versions 11 to 42, in either
 project's form (`docs/delta.md`), reading an older host's game settings as
 it sends them, and a newer one's as ChupathingyCE's signed legacy table
 lays it out ("Layouts"). Both

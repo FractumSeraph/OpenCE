@@ -53,6 +53,9 @@ enum
 	(network_coop_ally_friendly_fire); a client takes the bit as it is, and
 	clears it from a host before 33 (network_game_layout_from_version) */
 	_network_game_cooperative_no_ally_friendly_fire_bit = 1,
+	/* the host is a dedicated server: its loading zones ask for most of the
+	players, not the host's (network_coop_host_dedicated) */
+	_network_game_cooperative_dedicated_bit = 2,
 };
 
 struct network_game

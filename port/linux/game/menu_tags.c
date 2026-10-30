@@ -394,6 +394,9 @@ static char const *const port_function_names[] =
 	"port pause controls", "controller screen init", "controller screen defaults", "controller begin binding",
 	"port coop begin", "port coop player 2 list initialize", "port coop player 2",
 	"port lobby open", "port lobby add player", "port lobby join", "port lobby leave",
+	"port join4 open", "port join4 back", "port join4 done", "port join4 playing", "port join4 opener",
+	"port join4 select", "port join4 join", "port join4 choosing", "port join4 leave", "port join4 ready",
+	"port join4 unready",
 	"port lobby player list initialize", "port lobby player choose",
 	"port lobby preview add", "port lobby preview leave",
 	/* (the gametype editor's: the Xbox's walk their rows by place, which the
@@ -431,6 +434,10 @@ static char const *const port_function_names[] =
 	/* (the settings screens' nested lists, and Controls Setup's) */
 	"port settings views init", "port settings view", "port settings back", "port settings accept",
 	"port controls init", "port controls defaults", "port controls accept", "port controls closed",
+	"port controller init", "port controller close", "port controller defaults", "port controller save", "port controller bind", "port controller left", "port controller right",
+	/* (a dedicated server's map vote: menu_functions.c) */
+	"port map vote open", "port map vote choose",
+	"port controller clear", "port controller cancel",
 };
 
 /* the PC version's game data functions that the Xbox's have not, from
@@ -444,7 +451,7 @@ static char const *const port_game_data_input_names[] =
 	"mp map list update", "gt select list update", "gt edit list update", "load game list update",
 	"direct ip connect update", "network settings update",
 	"port settings help", "controller update menu", "color picker update", "3wide player profile list update",
-	"port lobby update", "port lobby preview update",
+	"port lobby update", "port lobby preview update", "port join4 update",
 	/* (the gametype editor's: the Xbox's stops the game on the buttons'
 	row; the Xbox's read only player_ui's gametype, not Server Setup's) */
 	"game settings lists text update", "get edit game settings name", "mp edit profile set rule text",
@@ -466,6 +473,11 @@ static char const *const port_game_data_input_names[] =
 	"port controls update",
 	/* (the gametype editor's description, with OPENCE OPTIONS' row) */
 	"port playlist edit desc",
+	"port controller update",
+	/* (a dedicated server's map vote's screen) */
+	"port map vote update",
+	/* (HDR Calibration's patterns, drawn by the renderer) */
+	"port hdr calibration",
 };
 
 struct menu_block_range
@@ -2219,6 +2231,23 @@ static void pause_screen_patch(struct cache_file_tag_instance *instances, long s
 		pause_box_trim(tag_get(UI_WIDGET_DEFINITION_TAG, children[box_child].widget_tag.index));
 		pause_box_grow(instances, tag_get(UI_WIDGET_DEFINITION_TAG, children[box_child].widget_tag.index), *grow);
 		*box_grown = TRUE;
+	}
+	/* the box within the screen (OpenCE's pause_box_fit: a split screen's
+	is 240 high, and the grown box can be taller than the room under the
+	Xbox's place for it), moved up as far as it must, with what is in it
+	and below it */
+	if (box_child != NONE)
+	{
+		struct ui_widget_definition const *box = tag_get(UI_WIDGET_DEFINITION_TAG, children[box_child].widget_tag.index);
+		short room = (short)(definition->bounds.y1 - definition->bounds.y0 - 4);
+		short top = children[box_child].vertical_offset;
+		short up = (short)MAX(0, MIN(top - 2, top + (box->bounds.y1 - box->bounds.y0) - room));
+
+		for (child = 0; up > 0 && child < definition->child_widgets.count; child++)
+		{
+			if (children[child].vertical_offset >= top)
+				children[child].vertical_offset -= up;
+		}
 	}
 }
 

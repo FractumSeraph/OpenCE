@@ -54,13 +54,25 @@ public final class TouchControls extends View implements SensorEventListener, In
     /** what a finger holds besides a control: the view swipe */
     private static final int LOOK = -5;
     private static final int NOTHING = Integer.MIN_VALUE;
-    /** the toolbar's items (at the top of the screen) */
+    /**
+     * the toolbar's items: Hide at the top, Options at the top right until
+     * it is dragged, and the layout editor's Export, Import and Save in the
+     * middle of the screen
+     */
     private static final int TOOLBAR_TOGGLE = -3;
     private static final int TOOLBAR_OPTIONS = -4;
     private static final int TOOLBAR_EXPORT = -6;
     private static final int TOOLBAR_IMPORT = -7;
+    private static final int TOOLBAR_SAVE = -8;
     private static final float TOOLBAR_RADIUS = 28;
-    private static final float OPTIONS_RADIUS = 34;
+    private static final float OPTIONS_RADIUS = TouchLayout.OPTIONS_RADIUS;
+    /** the editor's items, this far apart */
+    private static final float EDITOR_SPACING = 78;
+    /**
+     * on a round display (a watch's), the undragged Options button's angle,
+     * counterclockwise from the right, on the circle's edge
+     */
+    private static final float ROUND_OPTIONS_ANGLE = 45;
 
     /** the logical grid the controls are laid out on, scaled to the display's height */
     private static final float GRID_WIDTH = 960;
@@ -163,6 +175,7 @@ public final class TouchControls extends View implements SensorEventListener, In
     private static native int nativeRumble();
     private static native int nativeScene();
     private static native int nativeBindings(int[] controls);
+    private static native void nativeDevices(boolean touchscreen, boolean controller);
 
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final SharedPreferences preferences;
@@ -363,49 +376,38 @@ public final class TouchControls extends View implements SensorEventListener, In
         return Math.max(38, insetTop / scale + 38);
     }
 
+    /**
+     * Options: where it was dragged, else at the top right, clear of a
+     * cutout; on a round display (a watch's), whose corners are not shown,
+     * on the circle's edge up and to the right instead
+     */
     private float optionsX() {
+        if (layout.optionsMoved())
+            return layout.optionsX();
+        if (round)
+            return logicalWidth / 2 + roundOptionsDistance() * (float)Math.cos(Math.toRadians(ROUND_OPTIONS_ANGLE));
         return logicalWidth - Math.max(42, insetRight / scale + 42);
+    }
+
+    private float optionsY() {
+        if (layout.optionsMoved())
+            return layout.optionsY();
+        if (round)
+            return logicalHeight / 2 - roundOptionsDistance() * (float)Math.sin(Math.toRadians(ROUND_OPTIONS_ANGLE));
+        return toolbarY();
+    }
+
+    /** on a round display, the undragged Options button's distance from the centre: just inside the circle */
+    private float roundOptionsDistance() {
+        return Math.min(logicalWidth, logicalHeight) / 2 - toolbarRadius(OPTIONS_RADIUS) - 4;
+    }
+
+    private float editorY() {
+        return logicalHeight / 2;
     }
 
     private float toolbarRadius(float radius) {
         return Math.max(radius, minimumRadius());
-    }
-
-    /**
-     * the angle, counterclockwise from the right, of a corner toolbar item
-     * (Options, and Import and Export while editing) on a round display,
-     * whose corners are not shown: on the circle's edge instead
-     */
-    private static float roundToolbarAngle(int item) {
-        switch (item) {
-        case TOOLBAR_IMPORT: return 135;
-        case TOOLBAR_EXPORT: return 157.5f;
-        default: return 45;
-        }
-    }
-
-    /** a corner toolbar item's centre, x (logical units) */
-    private float toolbarItemX(int item) {
-        if (round) {
-            float half = Math.min(logicalWidth, logicalHeight) / 2;
-            float distance = half - toolbarRadius(OPTIONS_RADIUS) - 4;
-            return logicalWidth / 2 + distance * (float)Math.cos(Math.toRadians(roundToolbarAngle(item)));
-        }
-        if (item == TOOLBAR_EXPORT)
-            return optionsX() - 156;
-        if (item == TOOLBAR_IMPORT)
-            return optionsX() - 78;
-        return optionsX();
-    }
-
-    /** a corner toolbar item's centre, y (logical units) */
-    private float toolbarItemY(int item) {
-        if (round) {
-            float half = Math.min(logicalWidth, logicalHeight) / 2;
-            float distance = half - toolbarRadius(OPTIONS_RADIUS) - 4;
-            return logicalHeight / 2 - distance * (float)Math.sin(Math.toRadians(roundToolbarAngle(item)));
-        }
-        return toolbarY();
     }
 
     // ---------- when the controls show
@@ -464,6 +466,8 @@ public final class TouchControls extends View implements SensorEventListener, In
         }
         controllerConnected = controller;
         touchscreen = touch;
+        // (the game's own touchscreen buttons follow the same rule: touch_input.c)
+        nativeDevices(touch, controller);
         updateShowing();
     }
 
@@ -617,18 +621,29 @@ public final class TouchControls extends View implements SensorEventListener, In
 
     /** what is under a point (logical units): a toolbar item, a control, or NOTHING */
     private int hit(float x, float y) {
-        if (inside(x, y, toolbarItemX(TOOLBAR_OPTIONS), toolbarItemY(TOOLBAR_OPTIONS), toolbarRadius(OPTIONS_RADIUS)))
+        if (inside(x, y, optionsX(), optionsY(), toolbarRadius(OPTIONS_RADIUS)))
             return TOOLBAR_OPTIONS;
-        if (editing && inside(x, y, toolbarItemX(TOOLBAR_EXPORT), toolbarItemY(TOOLBAR_EXPORT),
-                toolbarRadius(OPTIONS_RADIUS)))
+        if (!editing) {
+            if (inside(x, y, logicalWidth / 2, toolbarY(), toolbarRadius(TOOLBAR_RADIUS)))
+                return TOOLBAR_TOGGLE;
+            return hidden ? NOTHING : hitControl(x, y);
+        }
+        // (the controls first: one dropped over Export, Import or Save can still be dragged away)
+        int control = hitControl(x, y);
+        if (control != NOTHING)
+            return control;
+        float middle = logicalWidth / 2;
+        if (inside(x, y, middle - EDITOR_SPACING, editorY(), toolbarRadius(OPTIONS_RADIUS)))
             return TOOLBAR_EXPORT;
-        if (editing && inside(x, y, toolbarItemX(TOOLBAR_IMPORT), toolbarItemY(TOOLBAR_IMPORT),
-                toolbarRadius(OPTIONS_RADIUS)))
+        if (inside(x, y, middle, editorY(), toolbarRadius(OPTIONS_RADIUS)))
             return TOOLBAR_IMPORT;
-        if (!editing && inside(x, y, logicalWidth / 2, toolbarY(), toolbarRadius(TOOLBAR_RADIUS)))
-            return TOOLBAR_TOGGLE;
-        if (hidden && !editing)
-            return NOTHING;
+        if (inside(x, y, middle + EDITOR_SPACING, editorY(), toolbarRadius(OPTIONS_RADIUS)))
+            return TOOLBAR_SAVE;
+        return NOTHING;
+    }
+
+    /** the control under a point (logical units), or NOTHING */
+    private int hitControl(float x, float y) {
         for (int i = 0; i < layout.size(); i++) {
             if (layout.shown(i) && layout.type(i) != TouchLayout.LEFT
                     && inside(x, y, layout.x(i), layout.y(i), layout.radius(i)))
@@ -645,13 +660,15 @@ public final class TouchControls extends View implements SensorEventListener, In
     /**
      * whether a finger went down where Android keeps its edge gestures; in
      * sticky full screen the first swipe in from an edge only shows the
-     * system bars, and Android also hands it over as an ordinary finger
+     * system bars, and Android also hands it over as an ordinary finger.
+     * Only fingers on no control are kept out of them: the zones stay their
+     * full size while the bars are hidden (all of the hidden 3-button bar),
+     * and a control drawn there would never press
      */
-    private boolean inGestureZone(float x, float y, boolean sidesOnly) {
+    private boolean inGestureZone(float x, float y) {
         int[] insets = ((HaloActivity) getContext()).getSystemGestureInsetsPixels();
-        if (x < insets[0] || x >= getWidth() - insets[2])
-            return true;
-        return !sidesOnly && (y < insets[1] || y >= getHeight() - insets[3]);
+        return x < insets[0] || x >= getWidth() - insets[2]
+            || y < insets[1] || y >= getHeight() - insets[3];
     }
 
     @Override
@@ -706,14 +723,12 @@ public final class TouchControls extends View implements SensorEventListener, In
 
     /** a finger down in a game, at a point in pixels */
     private void fingerDown(int id, float px, float py) {
-        if (inGestureZone(px, py, true))
-            return;
         float x = logical(px);
         float y = logical(py);
         int target = hit(x, y);
         int stick = TouchLayout.LEFT;
         if (target == NOTHING && layout.floatingStick && !hidden && layout.shown(stick) && !held(stick)
-                && inFloatingZone(x, y) && !inGestureZone(px, py, false)) {
+                && inFloatingZone(x, y) && !inGestureZone(px, py)) {
             floatStick(x, y);
             target = stick;
         }
@@ -723,9 +738,9 @@ public final class TouchControls extends View implements SensorEventListener, In
             owners.put(id, target);
             if (layout.type(target) == TouchLayout.LEFT)
                 moveStick(target, x, y);
-            else
+            else if (layout.buttonsAim)
                 buttonTouches.put(id, new float[] {px, py});
-        } else if (!hidden && lookPointer < 0 && !inGestureZone(px, py, false)) {
+        } else if (!hidden && lookPointer < 0 && !inGestureZone(px, py)) {
             startLook(id, px, py);
         }
     }
@@ -812,7 +827,7 @@ public final class TouchControls extends View implements SensorEventListener, In
             float x = logical(event.getX(index));
             float y = logical(event.getY(index));
             int target = hit(x, y);
-            if (target == TOOLBAR_OPTIONS) {
+            if (target == TOOLBAR_SAVE) {
                 if (saveLayout()) {
                     reset();
                     editing = false;
@@ -821,6 +836,12 @@ public final class TouchControls extends View implements SensorEventListener, In
             } else if (target == TOOLBAR_EXPORT || target == TOOLBAR_IMPORT) {
                 reset();
                 ((HaloActivity) getContext()).chooseLayoutFile(target == TOOLBAR_EXPORT, exportLayout());
+            } else if (target == TOOLBAR_OPTIONS) {
+                // (Options moves as a control does; Save is in the middle)
+                dragPointer = id;
+                dragControl = target;
+                dragOffsetX = x - optionsX();
+                dragOffsetY = y - optionsY();
             } else if (target >= 0) {
                 dragPointer = id;
                 dragControl = target;
@@ -830,8 +851,12 @@ public final class TouchControls extends View implements SensorEventListener, In
         } else if (action == MotionEvent.ACTION_MOVE && dragPointer >= 0) {
             int pointer = event.findPointerIndex(dragPointer);
             if (pointer >= 0) {
-                layout.move(dragControl, logical(event.getX(pointer)) - dragOffsetX,
-                    logical(event.getY(pointer)) - dragOffsetY);
+                float x = logical(event.getX(pointer)) - dragOffsetX;
+                float y = logical(event.getY(pointer)) - dragOffsetY;
+                if (dragControl == TOOLBAR_OPTIONS)
+                    layout.moveOptions(x, y);
+                else
+                    layout.move(dragControl, x, y);
             }
         } else if (action == MotionEvent.ACTION_CANCEL
                 || ((action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_POINTER_UP) && id == dragPointer)) {
@@ -993,6 +1018,15 @@ public final class TouchControls extends View implements SensorEventListener, In
         });
         panel.addView(floating);
 
+        Switch buttonsStill = new Switch(getContext());
+        buttonsStill.setText("Held buttons don't aim: a finger that swipes from a button only holds it");
+        buttonsStill.setChecked(!layout.buttonsAim);
+        buttonsStill.setOnCheckedChangeListener((view, enabled) -> {
+            layout.buttonsAim = !enabled;
+            saveLayout();
+        });
+        panel.addView(buttonsStill);
+
         if (rotaryFeature) {
             Switch bezel = new Switch(getContext());
             bezel.setText("Bezel switches weapons (off: it turns the view)");
@@ -1033,9 +1067,12 @@ public final class TouchControls extends View implements SensorEventListener, In
         panel.addView(opacityLabel);
         panel.addView(opacity);
 
+        // (scrolled: in portrait, or on a short display, the rows do not all fit)
+        ScrollView scroll = new ScrollView(getContext());
+        scroll.addView(panel);
         AlertDialog dialog = new AlertDialog.Builder(getContext())
             .setTitle("General")
-            .setView(panel)
+            .setView(scroll)
             .setPositiveButton("Done", null)
             .create();
         panel.addView(button("Hide or add buttons", view -> {
@@ -1159,7 +1196,7 @@ public final class TouchControls extends View implements SensorEventListener, In
     private void confirmReset(Runnable refresh) {
         new AlertDialog.Builder(getContext())
             .setTitle("Reset the buttons?")
-            .setMessage("This puts every button back in its place and size, shows them all and removes the copies.")
+            .setMessage("This puts every button, Options too, back in its place and size, shows them all and removes the copies.")
             .setNegativeButton("Cancel", null)
             .setPositiveButton("Reset", (d, which) -> {
                 reset();
@@ -1328,30 +1365,23 @@ public final class TouchControls extends View implements SensorEventListener, In
     }
 
     /** a toolbar item: never fainter than half, so that it can always be found */
-    private void toolbarItem(Canvas canvas, float x, float radius, String label) {
-        toolbarItem(canvas, x, toolbarY(), radius, label);
-    }
-
-    private void toolbarItem(Canvas canvas, float x, float y, float radius, String label) {
-        circle(canvas, x, y, toolbarRadius(radius), label, false, 11, Math.max(layout.opacity, 0.5f));
-    }
-
-    /** a corner toolbar item (toolbarItemX) */
-    private void cornerItem(Canvas canvas, int item, String label) {
-        toolbarItem(canvas, toolbarItemX(item), toolbarItemY(item), OPTIONS_RADIUS, label);
+    private void toolbarItem(Canvas canvas, float x, float y, float radius, String label, boolean pressed) {
+        circle(canvas, x, y, toolbarRadius(radius), label, pressed, 11, Math.max(layout.opacity, 0.5f));
     }
 
     private void drawToolbar(Canvas canvas) {
+        toolbarItem(canvas, optionsX(), optionsY(), OPTIONS_RADIUS, "Options", dragControl == TOOLBAR_OPTIONS);
         if (editing) {
-            cornerItem(canvas, TOOLBAR_OPTIONS, "Save");
-            cornerItem(canvas, TOOLBAR_EXPORT, "Export");
-            cornerItem(canvas, TOOLBAR_IMPORT, "Import");
+            float middle = logicalWidth / 2;
+            toolbarItem(canvas, middle - EDITOR_SPACING, editorY(), OPTIONS_RADIUS, "Export", false);
+            toolbarItem(canvas, middle, editorY(), OPTIONS_RADIUS, "Import", false);
+            toolbarItem(canvas, middle + EDITOR_SPACING, editorY(), OPTIONS_RADIUS, "Save", false);
             paint.setColor(Color.WHITE);
             paint.setTextSize(14);
-            canvas.drawText("Drag the controls, then push Save", logicalWidth / 2, toolbarY() + 58, paint);
+            canvas.drawText("Drag the controls and Options, then push Save", middle,
+                editorY() + toolbarRadius(OPTIONS_RADIUS) + 24, paint);
         } else {
-            toolbarItem(canvas, logicalWidth / 2, TOOLBAR_RADIUS, hidden ? "Touch" : "Hide");
-            cornerItem(canvas, TOOLBAR_OPTIONS, "Options");
+            toolbarItem(canvas, logicalWidth / 2, toolbarY(), TOOLBAR_RADIUS, hidden ? "Touch" : "Hide", false);
         }
     }
 

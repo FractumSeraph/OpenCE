@@ -182,9 +182,12 @@ int main(void)
 		free(message);
 	}
 
-	/* the join request to a host of 40 or later: the 0x70 bytes, 234 zero
-	bytes, the type; a host's decoder (ours, or an older one) reads the 0x70
-	and ignores the rest; and the short one, as before */
+	/* the join request (port, this fork: OpenCE's of 40 on, 0x70 + 234 bytes,
+	the pass and proof after the hardware id): as it is; with 234 zero bytes
+	more (a legacy table's longer one), which the decoder ignores; and cut to
+	the first 0x70 for a host of an older version (a tail of -234), which
+	only an older host's decoder reads (this fork's host pads it first:
+	network_server_message_handler.c) */
 	{
 		int size = message_sizes[CLIENT_JOIN_GAME_REQUEST];
 		byte *request = malloc(size);
@@ -194,7 +197,7 @@ int main(void)
 
 		for (i = 0; i < (unsigned int)size; i++)
 			request[i] = (byte)(0x40 + i);
-		for (tail = 0; tail <= JOIN_REQUEST_EXTRA; tail += JOIN_REQUEST_EXTRA)
+		for (tail = -JOIN_REQUEST_EXTRA; tail <= JOIN_REQUEST_EXTRA; tail += JOIN_REQUEST_EXTRA)
 		{
 			short encoded_size, packet_type = CLIENT_JOIN_GAME_REQUEST, packet_version = 1;
 
@@ -208,6 +211,8 @@ int main(void)
 			for (i = 0; i < captured_size; i++)
 				printf("%s%02x", i ? "" : " ", captured[i]);
 			printf("\n");
+			if (tail < 0)
+				continue;
 			encoded_size = (short)captured_size;
 			memset(decoded, 0, size);
 			if (!decode_network_game_message(decoded, captured, &encoded_size, &packet_type, &packet_version,

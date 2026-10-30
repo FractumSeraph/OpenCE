@@ -32,6 +32,18 @@ or reads past a tag's end:
     and pitfall's is 'prot'), which Halo PC's engine took as the scenario
     whatever its group said: given the scenario's group, before the map's
     scenario is checked (ce_map_checks.c);
+  - the rest of a map protector's work on the tag table (OpenCE's
+    29426d53c, "Fix custom edition protected map loading"), which Halo PC's
+    engine never read, as it found the tags by the references to them
+    (ce_repairs_protection): a tag's name left outside the tag data or not
+    terminated (stripped), given an empty one, but for a tag held by a
+    resource map, which is found there by its name; a structure BSP the
+    scenario names with another group given the structure BSP's; a tag
+    whose group is none of Halo's (scrambled; the extractors' "INVALID")
+    given the group the references to it name, in the tags and in the
+    structure BSPs, when they all name the same one; and a tag with no data
+    (a garbage tag), left with no group, which nothing then reads as one,
+    and the references to it in the tags made none;
   - a tag whose parent groups are not its group's (Invader leaves a
     vehicle's and a water shader's none: beavercreek_rev_beta's), which
     the game's tag_get checks a vehicle against as an object: given its
@@ -68,6 +80,7 @@ way (cache_files_windows.c).
 #include "ce_map_checks.h"
 #include "ce_effect_flags.h"
 
+#include <stdlib.h>
 #include <string.h>
 
 /* ---------- constants */
@@ -134,6 +147,50 @@ enum
 	ANIMATION_GRAPH_NODE_SIZE = 0x40,
 	NODE_LINKS_OFFSET = 0x20,
 	CE_MAXIMUM_NODES = 64,
+
+	/* the tag header (ce_map_checks.c's ce_tag_header): its instances, its
+	scenario's handle and its tags' count, and its size */
+	TAG_HEADER_INSTANCES_OFFSET = 0x00,
+	TAG_HEADER_SCENARIO_OFFSET = 0x04,
+	TAG_HEADER_TAG_COUNT_OFFSET = 0x0c,
+	TAG_HEADER_SIZE = 0x28,
+	/* a tag instance's unused last word (ce_tag_instance), where a tag of
+	no usable name is given an empty one */
+	TAG_INSTANCE_UNUSED_OFFSET = 0x1c,
+	/* a tag's name, with its terminator (ce_map_checks.c's) */
+	MAXIMUM_TAG_NAME_LENGTH = 256,
+	/* a tag reference (tag_groups.h): its group, name, name's length and
+	tag index */
+	TAG_REFERENCE_SIZE = 0x10,
+	/* the scenario's structure BSPs (scenario_definitions.h): each one's
+	place in the file and its tag index; no more than the game has
+	(ce_map_checks.c's) */
+	SCENARIO_BSPS_OFFSET = 0x5a4,
+	SCENARIO_BSP_SIZE = 0x20,
+	SCENARIO_BSP_FILE_OFFSET_OFFSET = 0x00,
+	SCENARIO_BSP_FILE_SIZE_OFFSET = 0x04,
+	SCENARIO_BSP_TAG_INDEX_OFFSET = 0x1c,
+	MAXIMUM_BSPS = 16,
+	STRUCTURE_BSP_GROUP = 'sbsp',
+};
+
+/* no group (a tag's, or a parent group's) */
+#define NO_GROUP 0xffffffff
+
+/* what a protected map's tag table is to each tag (ce_repairs_protection) */
+enum
+{
+	/* none of the below: left as it is */
+	_protection_tag_kept = 0,
+	/* of no group of Halo's, with data: its group is the one the references
+	to it name */
+	_protection_tag_unknown,
+	/* and a reference to it named one */
+	_protection_tag_named,
+	/* and references to it named two: left as it is */
+	_protection_tag_named_twice,
+	/* with no data: no group, and the references to it none */
+	_protection_tag_empty,
 };
 
 /* ---------- structures */
@@ -192,6 +249,22 @@ static struct
 	{ 'sgla', { 'shdr', 0xffffffff } },
 	{ 'smet', { 'shdr', 0xffffffff } },
 	{ 'spla', { 'shdr', 0xffffffff } },
+};
+
+/* Halo PC's tag groups (tag_groups.c's, as Custom Edition's tools have
+them): a tag of any other has its group scrambled (ce_repairs_protection).
+The first NUMBER_OF_CE_PARENT_GROUPS are only ever parents, never a tag's
+own */
+#define NUMBER_OF_CE_PARENT_GROUPS 5
+static unsigned long const ce_groups[] =
+{
+	'obje', 'unit', 'item', 'devi', 'shdr',
+	'actr', 'actv', 'ant!', 'antr', 'bipd', 'bitm', 'boom', 'cdmg', 'coll', 'colo', 'cont', 'ctrl', 'deca',
+	'DeLa', 'devc', 'dobc', 'effe', 'elec', 'eqip', 'flag', 'fog ', 'font', 'foot', 'garb', 'glw!', 'grhi',
+	'hmt ', 'hud#', 'hudg', 'itmc', 'jpt!', 'lens', 'lifi', 'ligh', 'lsnd', 'mach', 'matg', 'metr', 'mgs2',
+	'mod2', 'mode', 'mply', 'ngpr', 'part', 'pctl', 'phys', 'plac', 'pphy', 'proj', 'rain', 'sbsp', 'scen',
+	'scex', 'schi', 'scnr', 'senv', 'sgla', 'sky ', 'smet', 'snd!', 'snde', 'soso', 'sotr', 'Soul', 'spla',
+	'ssce', 'str#', 'swat', 'tagc', 'trak', 'udlg', 'unhi', 'ustr', 'vcky', 'vehi', 'weap', 'wind', 'wphi',
 };
 
 /* the loaded map's tags (ce_repairs_tags_loaded), for its BSPs' */
@@ -569,6 +642,171 @@ static void ce_effect_flags_repair(
 		counts->deterministic_effects++;
 }
 
+/* the place of a group among Halo PC's (ce_groups), or NONE */
+static long ce_group_find(
+	unsigned long group_tag)
+{
+	long index;
+
+	for (index = 0; index < (long)NUMBEROF(ce_groups); index++)
+	{
+		if (ce_groups[index] == group_tag)
+			return index;
+	}
+	return NONE;
+}
+
+/* a tag given a group, and that group's parents (ce_group_parents) */
+static void ce_group_give(
+	struct ce_tag_instance *instance,
+	unsigned long group_tag)
+{
+	long index;
+
+	instance->group_tag = group_tag;
+	instance->parent_group_tags[0] = NO_GROUP;
+	instance->parent_group_tags[1] = NO_GROUP;
+	for (index = 0; index < (long)NUMBEROF(ce_group_parents); index++)
+	{
+		if (ce_group_parents[index].group_tag == group_tag)
+		{
+			instance->parent_group_tags[0] = ce_group_parents[index].parent_group_tags[0];
+			instance->parent_group_tags[1] = ce_group_parents[index].parent_group_tags[1];
+		}
+	}
+}
+
+/* the tags whose names are not in the tag data, or not terminated within a
+tag path's length (map protection strips them; Halo PC's engine found tags
+by the references to them, not their names), given an empty one: a zero in
+their instance's unused word, at instances_address (the instances' Xbox
+address) in the image. Not a tag held by a resource map: it is found there
+by its name, and is refused without one (ce_map_checks.c). Returns how many */
+static long ce_protection_names(
+	struct ce_image const *image,
+	unsigned long instances_address,
+	struct ce_tag_instance *instances,
+	long tag_count)
+{
+	long index, emptied = 0;
+
+	for (index = 0; index < tag_count; index++)
+	{
+		struct ce_tag_instance *instance = &instances[index];
+		char const *name = ce_image_pointer(image, instance->name, 1);
+
+		/* (a name in the image is no further from its end than its size) */
+		if (instance->indexed || (name && memchr(name, 0, MIN(image->base + image->size - instance->name,
+			(unsigned long)MAXIMUM_TAG_NAME_LENGTH))))
+		{
+			continue;
+		}
+		instance->unused = 0;
+		instance->name = instances_address + (unsigned long)index * CE_TAG_INSTANCE_SIZE + TAG_INSTANCE_UNUSED_OFFSET;
+		emptied++;
+	}
+	return emptied;
+}
+
+/* the structure BSPs the scenario names (scenario_tag_index, its handle)
+given the structure BSP's group if map protection renamed it, as it does the
+scenario's: a tag with no data yet (a BSP has none until it loads) and not
+held by a resource map. Returns how many */
+static long ce_protection_bsp_groups(
+	struct ce_image const *image,
+	struct ce_tag_instance *instances,
+	long tag_count,
+	unsigned long scenario_tag_index)
+{
+	struct ce_tag_instance *scenario = ce_instance_by_index(instances, tag_count, scenario_tag_index);
+	byte *data = scenario && scenario->tag_index == scenario_tag_index ?
+		ce_image_pointer(image, scenario->base_address, SCENARIO_BSPS_OFFSET + 0xc) : NULL;
+	byte *bsps;
+	long count, index, regrouped = 0;
+
+	if (!data)
+		return 0;
+	bsps = ce_block(image, data + SCENARIO_BSPS_OFFSET, SCENARIO_BSP_SIZE, &count);
+	/* (more than the game has: refused by ce_map_checks.c in any case) */
+	for (index = 0; index < count && index < MAXIMUM_BSPS; index++)
+	{
+		unsigned long tag_index = ce_read_long(bsps + index * SCENARIO_BSP_SIZE + SCENARIO_BSP_TAG_INDEX_OFFSET);
+		struct ce_tag_instance *bsp = ce_instance_by_index(instances, tag_count, tag_index);
+
+		if (!bsp || bsp->tag_index != tag_index || bsp->group_tag == STRUCTURE_BSP_GROUP || bsp->base_address ||
+			bsp->indexed)
+		{
+			continue;
+		}
+		ce_group_give(bsp, STRUCTURE_BSP_GROUP);
+		regrouped++;
+	}
+	return regrouped;
+}
+
+/* the references in size bytes at data (the tags, or a structure BSP read
+from the file) to the tags of a protected map's tag table that are not as
+they should be (states, by tag index: ce_repairs_protection): each of no
+group named the group a reference to it names (named_groups), once, or
+twice if two references name two (only a group a tag can be, and not a
+structure BSP's: the scenario names those); each with no data, the
+references to it made none when make_none (the tags; a BSP read so is only
+read). A reference is known by what it is, a group of Halo's, then 8 bytes,
+then a tag's handle, its salt and all, wherever it is in the data: the tags
+are not walked by their definitions here, and a tag of no group could not
+be (nor are the tag header and the tags' instances, which hold a tag's group
+and handle so: the caller leaves them out) */
+static void ce_protection_references(
+	byte *data,
+	unsigned long size,
+	struct ce_tag_instance const *instances,
+	long tag_count,
+	byte *states,
+	unsigned long *named_groups,
+	boolean make_none,
+	long *made_none)
+{
+	unsigned long offset;
+
+	if (size < TAG_REFERENCE_SIZE)
+		return;
+	for (offset = 0; offset <= size - TAG_REFERENCE_SIZE; offset++)
+	{
+		unsigned long tag_index, absolute_index, group_tag;
+		long group;
+
+		tag_index = ce_read_long(data + offset + TAG_REFERENCE_INDEX_OFFSET);
+		absolute_index = tag_index & 0xffff;
+		if (tag_index == 0xffffffff || absolute_index >= (unsigned long)tag_count ||
+			states[absolute_index] == _protection_tag_kept || instances[absolute_index].tag_index != tag_index)
+		{
+			continue;
+		}
+		group_tag = ce_read_long(data + offset);
+		group = ce_group_find(group_tag);
+		if (group == NONE)
+			continue;
+		if (states[absolute_index] == _protection_tag_empty)
+		{
+			if (make_none)
+			{
+				ce_write_long(data + offset + TAG_REFERENCE_INDEX_OFFSET, 0xffffffff);
+				(*made_none)++;
+			}
+			continue;
+		}
+		if (group < NUMBER_OF_CE_PARENT_GROUPS || group_tag == STRUCTURE_BSP_GROUP)
+			continue;
+		if (states[absolute_index] == _protection_tag_unknown)
+		{
+			states[absolute_index] = _protection_tag_named;
+			named_groups[absolute_index] = group_tag;
+		}
+		else if (states[absolute_index] == _protection_tag_named && named_groups[absolute_index] != group_tag)
+			states[absolute_index] = _protection_tag_named_twice;
+	}
+}
+
 static void ce_repairs_log(
 	struct ce_repair_counts const *counts)
 {
@@ -603,6 +841,145 @@ boolean ce_repairs_scenario_group(
 	scenario->parent_group_tags[0] = 0xffffffff;
 	scenario->parent_group_tags[1] = 0xffffffff;
 	return TRUE;
+}
+
+/* a protected map's tag table repaired (OpenCE's 29426d53c, for its own
+loader): see above. Each step reads only what is in the image (or in a BSP's
+bytes, read whole), so a map that is merely damaged is left as it is, for
+the checks to refuse (ce_map_checks.c). It is the same, step for step, when
+the map is checked and when it loads, on the same bytes */
+void ce_repairs_protection(
+	struct ce_image const *image,
+	ce_map_read_proc read_proc,
+	void *context,
+	unsigned long file_size)
+{
+	struct ce_tag_instance *instances;
+	unsigned long instances_address, scenario_tag_index;
+	byte *states = NULL;
+	unsigned long *named_groups = NULL;
+	long tag_count, index;
+	long names = 0, scenario_group = 0, bsp_groups = 0, unknown = 0, named = 0, named_twice = 0;
+	long empty = 0, made_none = 0;
+
+	if (image->size < TAG_HEADER_SIZE)
+		return;
+	instances_address = ce_read_long(image->data + TAG_HEADER_INSTANCES_OFFSET);
+	scenario_tag_index = ce_read_long(image->data + TAG_HEADER_SCENARIO_OFFSET);
+	tag_count = (long)ce_read_long(image->data + TAG_HEADER_TAG_COUNT_OFFSET);
+	/* (as ce_map_checks.c checks them: else it refuses the map) */
+	if (tag_count <= 0 || tag_count > 0xffff || instances_address % 4)
+		return;
+	instances = ce_image_pointer(image, instances_address, (unsigned long)tag_count * CE_TAG_INSTANCE_SIZE);
+	if (!instances)
+		return;
+	names = ce_protection_names(image, instances_address, instances, tag_count);
+	/* (the scenario's, then its BSPs', which it names: a BSP has no data, so
+	that it is not taken for a garbage tag below) */
+	scenario_group = ce_repairs_scenario_group(instances, tag_count, scenario_tag_index) ? 1 : 0;
+	bsp_groups = ce_protection_bsp_groups(image, instances, tag_count, scenario_tag_index);
+	states = malloc((size_t)tag_count);
+	named_groups = malloc((size_t)tag_count * sizeof(*named_groups));
+	if (!states || !named_groups)
+		goto done;
+	for (index = 0; index < tag_count; index++)
+	{
+		struct ce_tag_instance *instance = &instances[index];
+
+		states[index] = _protection_tag_kept;
+		named_groups[index] = NO_GROUP;
+		/* (a tag held by a resource map is found there by its group and
+		name, and a BSP has no data until it loads) */
+		if (instance->indexed || instance->group_tag == STRUCTURE_BSP_GROUP)
+			continue;
+		if (!instance->base_address)
+		{
+			/* (no group, so that nothing reads it as a tag of one: tag_get
+			gives the empty tag for it, cache_files.c) */
+			states[index] = _protection_tag_empty;
+			ce_group_give(instance, NO_GROUP);
+			empty++;
+		}
+		else if (ce_group_find(instance->group_tag) == NONE)
+		{
+			states[index] = _protection_tag_unknown;
+			unknown++;
+		}
+	}
+	if (!unknown && !empty)
+		goto done;
+	/* (the references the structure BSPs hold, to their shaders, lightmaps
+	and the like, which nothing else may name; read whole, as they are when
+	they load, but only to be read) */
+	if (unknown && read_proc)
+	{
+		struct ce_tag_instance *scenario = ce_instance_by_index(instances, tag_count, scenario_tag_index);
+		byte *data = scenario && scenario->tag_index == scenario_tag_index ?
+			ce_image_pointer(image, scenario->base_address, SCENARIO_BSPS_OFFSET + 0xc) : NULL;
+		byte *bsps = NULL;
+		long count = 0;
+
+		if (data)
+			bsps = ce_block(image, data + SCENARIO_BSPS_OFFSET, SCENARIO_BSP_SIZE, &count);
+		for (index = 0; index < count && index < MAXIMUM_BSPS; index++)
+		{
+			unsigned long offset = ce_read_long(bsps + index * SCENARIO_BSP_SIZE + SCENARIO_BSP_FILE_OFFSET_OFFSET);
+			unsigned long size = ce_read_long(bsps + index * SCENARIO_BSP_SIZE + SCENARIO_BSP_FILE_SIZE_OFFSET);
+			byte *bsp;
+
+			/* (no larger than the tag cache it loads into: ce_map_checks.c) */
+			if (!size || size > CE_IMAGE_TAG_CACHE_SIZE || !ce_range_within(offset, size, file_size))
+				continue;
+			bsp = malloc(size);
+			if (!bsp)
+				continue;
+			if (read_proc(context, offset, bsp, size))
+			{
+				ce_protection_references(bsp, size, instances, tag_count, states, named_groups, FALSE,
+					&made_none);
+			}
+			free(bsp);
+		}
+	}
+	/* (the tags: not their header nor their instances, both in the image,
+	the instances usually right after the header) */
+	{
+		unsigned long instances_offset = instances_address - image->base;
+		unsigned long instances_end = instances_offset + (unsigned long)tag_count * CE_TAG_INSTANCE_SIZE;
+		unsigned long after = MAX(instances_end, (unsigned long)TAG_HEADER_SIZE);
+
+		if (instances_offset > TAG_HEADER_SIZE)
+		{
+			ce_protection_references(image->data + TAG_HEADER_SIZE, instances_offset - TAG_HEADER_SIZE, instances,
+				tag_count, states, named_groups, TRUE, &made_none);
+		}
+		ce_protection_references(image->data + after, image->size - after, instances, tag_count, states,
+			named_groups, TRUE, &made_none);
+	}
+	for (index = 0; index < tag_count; index++)
+	{
+		if (states[index] == _protection_tag_named)
+		{
+			ce_group_give(&instances[index], named_groups[index]);
+			named++;
+		}
+		else if (states[index] == _protection_tag_named_twice)
+			named_twice++;
+	}
+
+done:
+	if (states)
+		free(states);
+	if (named_groups)
+		free(named_groups);
+	if (!ce_map_checking() && (names | scenario_group | bsp_groups | unknown | empty))
+	{
+		error(_error_silent, "%s map: map protection repaired: %ld tags' names emptied, %ld scenario and %ld "
+			"structure BSPs given their group, %ld of %ld tags of no group given the one the references to them "
+			"name (%ld named as two groups, left as they were), %ld tags without data left with no group (%ld "
+			"references to them made none)", ce_map_family_name(), names, scenario_group, bsp_groups, named,
+			unknown, named_twice, empty, made_none);
+	}
 }
 
 /* the map's tags repaired, in the image they are checked or loaded in (its

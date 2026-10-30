@@ -115,16 +115,16 @@ is newer (network_client_manager.c). A host advertises it, with its netcode,
 in its game's advertisement's reserved bytes (network_server_message_handler.c),
 which hosts built before there was a version send as zeros: version 0.
 Raise it with any change to what the machines send each other.
-port (this fork): 39, OpenCE's newest, which its hosts announce (OpenCE's
-clients join only their own number), playing by 38's rules (network_rules_of_version:
-39 changed none of what a game sends, ChupathingyCE's way of following an
-additive raise, docs/delta.md "Following OpenCE", so the wire stays chupa-38a),
+port (this fork): 41, OpenCE's newest, which its hosts announce (OpenCE's
+clients join only their own number), its join request 40's (a pass and a
+proof after the hardware id) and its votes 41's (network_votekick.c,
+network_map_vote.c), speaking ChupathingyCE's wire chupa-41a,
 its game settings record of 35's layout (OpenCE's game types); ChupathingyCE's
 hosts announce 32. Delta clients (ChupathingyCE's 0.8.0e to 0.8.0h, this
 fork's) join a host whose wire plays with theirs (chupa-38a, from chupa-28a,
 delta.h) whatever number it announces, and are sent the record of the older
 of their HELLO's version and this one (network_server_message_handler.c). */
-#define HALO_PORT_NETWORK_VERSION 39
+#define HALO_PORT_NETWORK_VERSION 41
 /* ... the versions whose hosts a client joins: its own, and those that differ
 from it only in what the other machines leave out (a message a machine of
 the other version does not know it drops). Which are which is delta.h's
@@ -168,6 +168,11 @@ host drops) */
 #define HALO_PORT_GAME_KIND_NETWORK_VERSION 37
 #define HALO_PORT_PLAYERS_SHIELD_EFFECTS_NETWORK_VERSION 38
 #define HALO_PORT_DEDICATED_NETWORK_VERSION 39
+/* ... and before 41, the vote messages (78, 79) in their older layout, the
+first byte the player's index, not the vote's kind (network_votekick.c): this
+fork, of 41, reads none from a host of an older version, nor a client whose
+Delta HELLO says one (network_distributed.c), rather than misread them */
+#define HALO_PORT_VOTES_NETWORK_VERSION 41
 /* ... and whether a game this machine hosts is under way, which holds the
 number announced until its end (delta.h, auto-announce) */
 void delta_legacy_hold(int hold);

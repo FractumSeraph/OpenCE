@@ -125,6 +125,9 @@ symbols in this file:
 /* port: HALO_ANDROID_CE_TEXTURES, the 32-bit Android guest's Custom Edition
 textures (port/linux/game/android_ce_texture_cache.c) */
 #include "android_ce_texture_cache.h"
+#ifdef HALO_ANDROID
+#include "../../port/android/include/android_render_policy.h" /* port: Android chip policy */
+#endif
 
 /* ---------- constants */
 
@@ -1238,7 +1241,7 @@ void *_texture_cache_bitmap_get_hardware_format(
 	/* port: CE's frame working set is not bounded by the Xbox texture arena.
 	 * Keep dynamic textures and Xbox maps on their own paths. (A Custom
 	 * Edition map: ChupathingyCE's loader, cache_file_tags_are_ce) */
-	if (cache_file_tags_are_ce() &&
+	if (android_texture_fixes && cache_file_tags_are_ce() &&
 		TEST_FLAG(bitmap->flags, _bitmap_cached_bit))
 	{
 		if (texture_cache_bitmap_valid(bitmap))

@@ -217,10 +217,10 @@ def test_policy_setting_is_documented():
 def test_the_version_and_the_wire():
     limits = (ROOT / "port/linux/include/halo_port_limits.h").read_text(encoding="utf-8")
     delta = (ROOT / "port/linux/include/delta.h").read_text(encoding="utf-8")
-    # (port, this fork: its hosts announce 39, OpenCE's newest, and speak
+    # (port, this fork: its hosts announce 41, OpenCE's newest, and speak
     # ChupathingyCE's wire of 0.8.1d, chupa-41a, its rows 40 and 41 too, which its
     # clients of 0.8.0e on join by its range: tools/test_delta_compat.py)
-    assert "#define HALO_PORT_NETWORK_VERSION 39\n" in limits
+    assert "#define HALO_PORT_NETWORK_VERSION 41\n" in limits
     assert '#define DELTA_WIRE "chupa-41a"' in delta
     assert 'X("chupa-36a"' not in delta and "DELTA_WIRE_HOST_OLDEST" not in delta
     assert "#define DELTA_LEGACY_NEWEST 41\n" in delta

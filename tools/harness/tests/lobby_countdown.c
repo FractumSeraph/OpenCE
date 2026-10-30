@@ -9,7 +9,9 @@ game.start_with_one_player, ChupathingyCE's; without it the host waits for
 a second machine), a split screen game, and machines together;
 and a dedicated server's rule, its director's
 (port/linux/game/server_director.c's server_director_ok_to_countdown:
-server.min_players, server.team_start, and its own state).
+server.min_players, server.team_start, and its own state);
+and that the host's own START NOW starts the game at once, a client
+machine's taking five seconds off.
 test_lobby_countdown.py takes the constants, enums and timer structures
 (config.inc) and the code (under_test.inc).
 */
@@ -56,6 +58,7 @@ struct network_game_server
 	} game;
 	struct network_game_server_client_machine client_machines[MAXIMUM_NETWORK_MACHINE_COUNT];
 	struct network_game_server_countdown_state countdown_state;
+	boolean sent_start_game_message;
 };
 
 static struct network_game_server server;
@@ -105,6 +108,12 @@ static struct
 	short state;
 	boolean entry_applied;
 } director = { FALSE, _server_state_lobby, TRUE };
+static boolean network_game_server_client_machine_is_local(
+	struct network_game_server *s,
+	struct network_game_server_client_machine *machine)
+{
+	return machine == &s->client_machines[0];
+}
 
 #include "under_test.inc"
 
@@ -141,10 +150,25 @@ static void add_player(
 	player->team_index = team_index;
 }
 
-/* the lobby's START NOW */
+/* the faster event (a client machine's START NOW) */
 static void start_now(void)
 {
 	network_game_server_update_countdown(&server, _network_game_server_countdown_event_player_joined);
+}
+
+/* a machine's START NOW, as the host takes it (the message handler); the
+next tick's countdown update lets the countdown change again */
+static void machine_start_now(
+	short machine_index)
+{
+	network_game_server_update_countdown(&server,
+		network_game_server_client_machine_faster_event(&server, &server.client_machines[machine_index]));
+	server.countdown_state.adjusted_time_this_tick = FALSE;
+}
+
+static long time_remaining(void)
+{
+	return countdown_timer_get_time_remaining(&server.countdown_state.timer);
 }
 
 int main(int argc, char **argv)
@@ -334,6 +358,86 @@ int main(int argc, char **argv)
 		CHECK(!server_ok_to_countdown(&server), "a lobby with no entry set counted down");
 		director.entry_applied = TRUE;
 		CHECK(server_ok_to_countdown(&server), "the lobby did not count down again");
+		return 0;
+	}
+	/* a dedicated server's director starts its countdown (server.lobby_seconds):
+	a START NOW in a lobby whose countdown the tick stopped (its teams short,
+	server.team_start "both") starts none, and takes five seconds off the
+	director's */
+	CASE("dedicated-start-now-five-seconds")
+	{
+		dedicated = 1;
+		dedicated_team_start = "both";
+		lobby(3);
+		server.game.variant.universal_variant.teams = TRUE;
+		add_player(1, 0);
+		add_player(2, 1);
+		network_game_server_port_countdown_begin(&server, 14999);
+		server.game.players[1].team_index = 0;
+		CHECK(!server_ok_to_countdown(&server), "server.team_start both counted down with one team");
+		memset(&server.countdown_state, 0, sizeof(server.countdown_state));
+		server.game.players[1].team_index = 1;
+		start_now();
+		CHECK(!server.countdown_state.active, "a START NOW started a %ld ms countdown",
+			server.countdown_state.timer.time_remaining);
+		network_game_server_port_countdown_begin(&server, 14999);
+		start_now();
+		CHECK(server.countdown_state.timer.time_remaining == 14999 - NETWORK_GAME_COUNTDOWN_ADJUSTMENT,
+			"%ld ms to go after a START NOW", server.countdown_state.timer.time_remaining);
+		return 0;
+	}
+	CASE("host-start-now-starts")
+	{
+		lobby(2);
+		add_player(0, 0);
+		add_player(1, 1);
+		machine_start_now(0);
+		CHECK(server.countdown_state.active, "the host's START NOW did not start the countdown");
+		CHECK(time_remaining() == 0, "%ld ms to go after the host's START NOW", time_remaining());
+		return 0;
+	}
+	CASE("host-start-now-ends-countdown")
+	{
+		lobby(2);
+		add_player(0, 0);
+		add_player(1, 1);
+		machine_start_now(1);
+		machine_start_now(0);
+		CHECK(time_remaining() == 0, "%ld ms to go after the host's START NOW", time_remaining());
+		return 0;
+	}
+	CASE("split-screen-host-start-now-starts")
+	{
+		splitscreen_local = TRUE;
+		lobby(1);
+		add_player(0, 0);
+		add_player(0, 1);
+		machine_start_now(0);
+		CHECK(server.countdown_state.active, "the split screen host's START NOW did not start the countdown");
+		CHECK(time_remaining() == 0, "%ld ms to go after the split screen host's START NOW", time_remaining());
+		return 0;
+	}
+	CASE("client-start-now-five-seconds")
+	{
+		lobby(2);
+		add_player(0, 0);
+		add_player(1, 1);
+		machine_start_now(1);
+		CHECK(time_remaining() == NETWORK_GAME_COUNTDOWN_TIME,
+			"%ld ms to go after a client's first START NOW", time_remaining());
+		machine_start_now(1);
+		CHECK(time_remaining() == NETWORK_GAME_COUNTDOWN_TIME - NETWORK_GAME_COUNTDOWN_ADJUSTMENT,
+			"%ld ms to go after a client's second START NOW", time_remaining());
+		return 0;
+	}
+	CASE("host-start-now-team-game-needs-both-teams")
+	{
+		lobby(2);
+		server.game.variant.universal_variant.teams = TRUE;
+		add_player(0, 0);
+		add_player(1, 0);
+		machine_start_now(0);
+		CHECK(!server.countdown_state.active, "the host's START NOW started a game one team short");
 		return 0;
 	}
 	fprintf(stderr, "unknown case: %s\n", case_name);

@@ -981,15 +981,29 @@ static void validate_tag_index(
 	unsigned long const *groups)
 {
 	struct tag_validate_instance *instance;
+	struct tag_validate_instance *raw = NULL;
+	struct tag_validate_header *header = tag_validate_globals.header;
+	short absolute_index = (short)*tag_index;
 	char text[96];
+	char found[5] = "?";
+	char const *why = "no such tag";
 
 	if (*tag_index == NONE)
 		return;
 	instance = instance_get(*tag_index);
-	if (!instance || !instance_in_groups(instance, groups))
+	if (header && absolute_index >= 0 && absolute_index < header->tag_count)
+		raw = &header->instances[absolute_index];
+	if (!instance || !instance_in_groups(instance, groups) ||
+		(!instance->base_address && instance->group_tag != STRUCTURE_BSP_GROUP_TAG))
 	{
-		tag_validate_correct(validation, "names %08lx, not a tag of %s: none",
-			*tag_index, groups_text(groups, text, sizeof(text)));
+		if (raw)
+		{
+			tag_to_text(raw->group_tag, found);
+			why = raw->tag_index != *tag_index ? "handle differs" :
+				!instance_in_groups(raw, groups) ? "wrong group" : "no data";
+		}
+		tag_validate_correct(validation, "names %08lx, not a tag of %s (%s: instance handle %08lx, group '%s'): none",
+			*tag_index, groups_text(groups, text, sizeof(text)), why, raw ? raw->tag_index : 0, found);
 		*tag_index = NONE;
 		return;
 	}
@@ -1485,8 +1499,10 @@ boolean tag_validate_tags(
 		}
 		if (!instance->base_address)
 		{
-			tag_validate_refuse(&validation, "has no data");
-			break;
+			/* port: a protected map's tag without data (OpenCE's): left empty,
+			and nothing may refer to it (validate_tag_index) */
+			tag_validate_correct(&validation, "has no data");
+			continue;
 		}
 		if (group && group->definition &&
 			(!region_contains(&validation, xbox_pointer(instance->base_address), group->definition->size) ||

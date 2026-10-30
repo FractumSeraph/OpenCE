@@ -1234,6 +1234,17 @@ boolean ce_resources_check(
 resources copied in between first_free and end_free (Xbox addresses);
 FALSE if one could not be (the map was checked before it was opened, as
 it is copied in here: ce_map_checks.c) */
+/* (the loaded map's file read, for ce_repairs_protection: context is its
+handle, cache_files_ce_map_file, as its own sounds' samples are read) */
+static boolean ce_loaded_map_read(
+	void *context,
+	unsigned long offset,
+	void *buffer,
+	unsigned long size)
+{
+	return ce_read((HANDLE)context, offset, buffer, size);
+}
+
 boolean ce_resources_tags_loaded(
 	void *tag_instances,
 	long tag_count,
@@ -1245,6 +1256,25 @@ boolean ce_resources_tags_loaded(
 	long copied = 0;
 	long index;
 
+	/* first of all, before anything finds a tag by its group or reads its
+	name: a protected map's tag table repaired, as it was when the map was
+	checked (ce_repairs.c; cache_files.c calls nothing of the map's before
+	this). The map's own tags, no resource maps' yet, and its structure
+	BSPs read from its file (none if it is not open: its tags are then
+	repaired from themselves alone) */
+	image.data = xbox_pointer(CE_IMAGE_TAG_CACHE_BASE);
+	image.base = CE_IMAGE_TAG_CACHE_BASE;
+	image.size = first_free - CE_IMAGE_TAG_CACHE_BASE;
+	{
+		HANDLE map_file = cache_files_ce_map_file();
+		unsigned long file_size_high = 0;
+		unsigned long file_size = map_file ? GetFileSize(map_file, &file_size_high) : 0;
+
+		if (!map_file || file_size == INVALID_FILE_SIZE || file_size_high)
+			ce_repairs_protection(&image, NULL, NULL, 0);
+		else
+			ce_repairs_protection(&image, ce_loaded_map_read, (void *)map_file, file_size);
+	}
 	system_free(ce_indexed_tags);
 	ce_indexed_tags = system_malloc(tag_count);
 	ce_indexed_tag_count = ce_indexed_tags ? tag_count : 0;

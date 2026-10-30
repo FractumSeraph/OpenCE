@@ -9,8 +9,10 @@ controller (port/linux/src/touch_input.c). The game hands back what the
 overlay needs to know: whether it is in a game with no menu or cinematic up
 and the input.touch_controls setting (host_touch_scene), the profile's
 button mapping, which names the buttons (host_touch_bindings), and how hard
-port 0 rumbles.
-It asks the activity for the system's gesture insets (host_gesture_insets).
+port 0 rumbles. The overlay also says whether the device has a touchscreen
+and a controller (host_touch_devices), for the game's own touchscreen
+buttons. It asks the activity for the system's gesture insets
+(host_gesture_insets).
 
 The native 64-bit build (tools/android64_build.py) links this file too: the
 game calls these functions directly there.
@@ -51,6 +53,11 @@ static int64_t gyro_ns;
 static int rumble_amplitude;
 static int64_t rumble_ns;
 static volatile int touch_scene;
+/* the overlay's devices (host_touch_devices): a touchscreen, a game
+controller (a stick or a hat, not a phone's few gamepad keys) */
+#define HOST_TOUCH_DEVICE_TOUCHSCREEN 1
+#define HOST_TOUCH_DEVICE_CONTROLLER 2
+static volatile int touch_devices;
 /* the game control on each of the game's 16 controller buttons (-1: none),
 and a count of its changes, which the overlay polls */
 #define TOUCH_BUTTONS 16
@@ -228,6 +235,24 @@ JNIEXPORT jint JNICALL Java_com_halo_decomp_TouchControls_nativeBindings(JNIEnv 
 	if (controls && (*env)->GetArrayLength(env, controls) >= TOUCH_BUTTONS)
 		(*env)->SetIntArrayRegion(env, controls, 0, TOUCH_BUTTONS, (const jint *)copy);
 	return serial;
+}
+
+/* the overlay's devices, as it last found them (TouchControls'
+refreshInputDevices) */
+JNIEXPORT void JNICALL Java_com_halo_decomp_TouchControls_nativeDevices(JNIEnv *env, jclass cls,
+	jboolean touchscreen, jboolean controller)
+{
+	(void)env;
+	(void)cls;
+	touch_devices = (touchscreen ? HOST_TOUCH_DEVICE_TOUCHSCREEN : 0) |
+		(controller ? HOST_TOUCH_DEVICE_CONTROLLER : 0);
+}
+
+/* the guest's: the overlay's devices as HOST_TOUCH_DEVICE_* bits; 0 until it
+has looked */
+int host_touch_devices(void)
+{
+	return touch_devices;
 }
 
 /* 0 until the game has read its controller once */
