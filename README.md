@@ -35,7 +35,8 @@ are [ChupathingyCE's](#chupathingyce) and [OpenCE's](#opence) own pages.
   together, each sent the game as its own version reads it
   ([below](#cross-play-and-delta)).
 - **Every Custom Edition map, downloaded when a game needs it.** All 5,829
-  maps of the HaloMaps.org and HaloNet archives are unpacked at
+  maps of the HaloMaps.org and HaloNet archives, and the newer maps approved
+  since, are unpacked at
   [halomaps.fractumseraph.net](https://halomaps.fractumseraph.net/maps/),
   each with a torrent, seeded around the clock. Join a game on a map you
   don't have and the game downloads it, from the host and other players

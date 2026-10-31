@@ -113,7 +113,8 @@ for checking a map got elsewhere without remaking its torrent: `b2sum -l 256`
 gives it), then, a column each, the archives' zips that hold it:
 `halonet:<zip file name>` (https://maps.halonet.net/maps/<zip file name>)
 and `halomaps:<file id>` (https://halomaps.org/hce/detail.cfm?fid=<file id>);
-5,827 of the 5,829 lines have at least one, which `python tools/map_torrents.py
+5,827 of the archives' 5,829 lines have at least one (maps approved since,
+which no archive holds, have none), which `python tools/map_torrents.py
 sources --halonet <folder> --halomaps <folder>` notes from copies of the
 archives' zips. The builds put it beside the game as `map_torrents.txt`
 (`maps.torrent_index`). It was made from the halomaps.org and HaloNet
