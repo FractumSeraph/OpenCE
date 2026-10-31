@@ -195,8 +195,52 @@ files itself.
    torrent in `torrents/`, add its info hash to the tracker's
    `/etc/opentracker/whitelist.txt` (then `systemctl reload opentracker`), and
    seed it.
-4. Commit the index: players' games know the map once they run a build with
-   it (the dedicated servers' too, by their updates).
+4. Commit the index and push it to main: `map-index.yml` publishes it, and
+   players' games and the dedicated servers take it within the hour (sooner
+   for one that was just refused the map: below), with no release. The next
+   release carries it too, as its built-in list.
+
+### The list, fetched
+
+A build carries the index as it was when it was made, so on its own a map
+approved later would wait for the next release. Instead the index is
+published between releases (`port/linux/src/map_index.h`, `map_index.c`):
+
+- Its second line is its serial, `# serial <n>`: the time its entries last
+  changed, in unix seconds, which `tools/map_torrents.py` raises (always past
+  the one before) whenever it changes them.
+- On every change to `port/assets/network/map_torrents.txt` on main,
+  `.github/workflows/map-index.yml` signs it with the fork's release key (the
+  `UPDATE_SIGNING_KEY` secret the releases are signed with: `map_torrents.py
+  sign`, an Ed25519 signature over `fractum-halo-map-index 1\n` and the
+  index's exact bytes, so that it cannot stand for a release's signature or
+  the other way round), and puts it and its `.sig` on the `map-index` branch,
+  one commit replacing the last. A list whose serial is not past the
+  published one's is refused. Such a push does not build a release
+  (`build.yml`'s `paths-ignore`).
+- The games (every native build, the dedicated servers too; not the browser
+  build, which reads its maps from the site) look at `maps.index_url`
+  (`https://raw.githubusercontent.com/FractumSeraph/OpenCE/map-index/map_torrents.txt`,
+  a comma-separated list, empty for none) on a thread of their own when they
+  start and every hour, and two minutes after a map was refused as not
+  approved, in case it was approved since. They ask for `<url>.sig` first: a
+  signature they already know costs nothing more. A new one's list is
+  downloaded (16 MB at most), checked against the keys of
+  `map_index_key.h` (the fork's release key and its recovery key, not
+  ChupathingyCE's), and taken only when its serial is newer than the list in
+  use; it is cached in the save root (`map_torrents.signed`: the
+  signature's digits, a line feed, the list) and read from there at the next
+  start, checked again. A list that does not verify is logged and dropped.
+- The game's thread puts a taken list in place of the one in use between
+  frames, when no map download is under way (a download holds the index's
+  entries), and logs it: `map torrents: the approved map list from <url> is
+  in use: serial <n>, <count> maps`.
+- The build's own list (`maps.torrent_index`) is always the floor: an older
+  list, even one signed, is never taken over it, so an old copy cannot bring
+  back a map taken off the list since.
+
+So approving a map is steps 1 to 4, and the push. The tracker's whitelist and
+the web seed are still done by hand (step 3).
 
 ## Seeding the archive
 
@@ -274,6 +318,11 @@ names have spaces, brackets or letters beyond ASCII).
 
 - `tools/test_map_torrents.py`: the tool's torrents and index, from tiny
   caches made in memory; and the committed index's form.
+- `tools/test_map_index.py`: the published list's serial and signature, as
+  `map_torrents.py` writes and signs them (a test key) and as the game checks
+  them (`map_index.c`, built by itself with that key): a changed list,
+  another key's signature and the key's signature without the context are
+  refused.
 - `tools/torrent_check.c`: the client alone, seeding a file on one port
   and downloading it on another (two copies, on the loopback), as
   `tools/test_linux_port.py` does for the lobby. By hand, with a map from

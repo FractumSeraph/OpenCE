@@ -47,7 +47,10 @@ are [ChupathingyCE's](#chupathingyce) and [OpenCE's](#opence) own pages.
   spreading through map sharing, a map is offered or downloaded between
   players only if it is on the fork's approved list
   ([docs/map_torrents.md](docs/map_torrents.md)); anything else is refused
-  with its file name and hash, to send to @FractumSeraph for approval.
+  with its file name and hash, to send to @FractumSeraph for approval. The
+  game fetches the list as published (signed with the fork's release key)
+  when it starts and every hour, so a map approved after your build came out
+  downloads without an update.
 - **Halo in your browser, ready to play.** OpenCE has a web build to host
   yourself; this one is up at
   [halo.fractumseraph.net](https://halo.fractumseraph.net/): no install, on

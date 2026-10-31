@@ -18,6 +18,9 @@ on:
   push:
     paths-ignore:
       - "**.md"
+      # (the approved map list, which the browser build does not read:
+      # map-index.yml publishes it)
+      - "port/assets/network/map_torrents.txt"
   pull_request:
   workflow_dispatch:
 

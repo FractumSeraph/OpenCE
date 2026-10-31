@@ -18,6 +18,12 @@ void map_torrents_initialize(void);
 void map_torrents_dispose(void);
 /* every frame, on the game's thread (sdl_platform.c) */
 void map_torrents_poll(void);
+/* port (this fork): the approved map list alone, every frame on the game's
+thread, for a platform that neither downloads nor seeds (ChupathingyCE's
+dedicated server, server_platform.c): read at the first call, its published
+copy looked for (maps.index_url: map_index.h), and a newer one put in place.
+map_torrents_poll does this too */
+void map_torrents_index_poll(void);
 
 /* the files a joining machine lacks for the host's map: level_name the
 map's (custom_maps\<name>), version its header checksum as the host sent

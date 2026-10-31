@@ -30,6 +30,7 @@ never hosts.
 #include "halo_port_limits.h"
 #include "delta.h"
 #include "shared_bans.h"
+#include "map_torrents.h"
 
 #include <signal.h>
 #include <stdio.h>
@@ -538,6 +539,10 @@ void platform_pump_events(void)
 		platform_log("dedicated server: stopping");
 		exit(EXIT_SUCCESS);
 	}
+	/* port (this fork): the approved map list, which the server's map
+	sharing offers by, kept up with its published copy (map_torrents.h; the
+	server neither downloads nor seeds maps) */
+	map_torrents_index_poll();
 }
 
 /* ---------- the version (updater.c's, which the server leaves out: it

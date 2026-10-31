@@ -39,7 +39,11 @@ web seeds and DHT of the [maps] settings, and stopped with the game.
 #include "port_config.h"
 #include "map_torrents.h"
 #include "map_archives.h"
+#include "map_index.h"
 #include "torrent.h"
+#ifdef HALO_GAME_BROWSER
+#include "browser_http.h"
+#endif
 
 /* halo_map_families.h's (the game's boolean is a byte) */
 enum { MAP_FAMILY_XBOX, MAP_FAMILY_CUSTOM_EDITION };
@@ -51,9 +55,13 @@ void map_downloaded_remember(char const *map_name);
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 #ifndef _WIN32
 #include <fcntl.h>
+#endif
+#ifdef HALO_GAME_BROWSER
+#include <pthread.h>
 #endif
 
 #ifdef _WIN32
@@ -62,7 +70,9 @@ void map_downloaded_remember(char const *map_name);
 #define PATH_SEPARATOR "/"
 #endif
 
-#define INDEX_FORMAT "# halo map torrents v1"
+#define INDEX_FORMAT MAP_INDEX_FORMAT
+/* the fetched list as cached (map_index.h), in the save root */
+#define INDEX_CACHE_NAME "map_torrents.signed"
 /* (ChupathingyCE's folder of Custom Edition maps: halo_map_families.h) */
 #define CUSTOM_MAPS_XBOX_PATH "d:\\maps_ce\\"
 #define DOWNLOADS_FOLDER "downloads"
@@ -99,15 +109,21 @@ struct index_entry
 	int has_blake2b;
 };
 
-static struct
+struct torrent_index
 {
 	int loaded;
 	struct index_entry *entries;
 	int count;
 	char *names;
 	unsigned long names_size;
+	/* where it was read from, for the log: the file, or the fetched list's
+	source */
 	char path[1024];
-} torrent_maps_index;
+	/* port (this fork): its serial (map_index.h; 0 for none) */
+	unsigned long long serial;
+};
+
+static struct torrent_index torrent_maps_index;
 
 static int same_name(const char *a, const char *b)
 {
@@ -175,40 +191,28 @@ static int column_hash(const char *sources, const char *key, unsigned char *hash
 	return 0;
 }
 
-/* reads the index once: each line a map's file name, header checksum,
-size, piece length and info hash, tab-separated (tools/map_torrents.py) */
-static void index_load(void)
+/* an index's text (file_size bytes, NUL terminated: its lines are cut up
+in place) into index, which was empty: each line a map's file name, header
+checksum, size, piece length and info hash, tab-separated
+(tools/map_torrents.py); index->path names it in the log. 1 if it is an
+index */
+static int index_parse(struct torrent_index *index, char *file, size_t file_size)
 {
-	char *file;
-	size_t file_size = 0;
 	char *line;
 	char *next;
 	int capacity = 0;
 	int number = 0;
 
-	if (torrent_maps_index.loaded)
-		return;
-	torrent_maps_index.loaded = 1;
-	index_path(torrent_maps_index.path, sizeof(torrent_maps_index.path));
-	file = config_file_read(torrent_maps_index.path, &file_size);
-	if (!file)
+	if (!map_index_format(file, file_size))
 	{
-		platform_log("map torrents: the index %s cannot be read (maps.torrent_index)", torrent_maps_index.path);
-		return;
+		platform_log("map torrents: %s is not a map torrent index (its first line is not \"%s\")", index->path,
+			INDEX_FORMAT);
+		return 0;
 	}
-	if (strncmp(file, INDEX_FORMAT, strlen(INDEX_FORMAT)))
-	{
-		platform_log("map torrents: %s is not a map torrent index (its first line is not \"%s\")",
-			torrent_maps_index.path, INDEX_FORMAT);
-		free(file);
-		return;
-	}
-	torrent_maps_index.names = malloc(file_size + 1);
-	if (!torrent_maps_index.names)
-	{
-		free(file);
-		return;
-	}
+	index->serial = map_index_serial(file, file_size);
+	index->names = malloc(file_size + 1);
+	if (!index->names)
+		return 0;
 	for (line = file; line && *line; line = next)
 	{
 		char *fields[6];
@@ -245,59 +249,545 @@ static void index_load(void)
 		}
 		if (field < 5 || strlen(fields[4]) != 40)
 		{
-			platform_log("map torrents: %s line %d is not an entry (left out)", torrent_maps_index.path, number);
+			platform_log("map torrents: %s line %d is not an entry (left out)", index->path, number);
 			continue;
 		}
-		if (torrent_maps_index.count == capacity)
+		if (index->count == capacity)
 		{
 			struct index_entry *grown;
 
 			capacity = capacity ? capacity * 2 : 1024;
-			grown = realloc(torrent_maps_index.entries, (size_t)capacity * sizeof(*grown));
+			grown = realloc(index->entries, (size_t)capacity * sizeof(*grown));
 			if (!grown)
 				break;
-			torrent_maps_index.entries = grown;
+			index->entries = grown;
 		}
-		entry = &torrent_maps_index.entries[torrent_maps_index.count];
+		entry = &index->entries[index->count];
 		name_length = strlen(fields[0]);
-		entry->name = torrent_maps_index.names_size;
-		memcpy(torrent_maps_index.names + torrent_maps_index.names_size, fields[0], name_length + 1);
-		torrent_maps_index.names_size += (unsigned long)name_length + 1;
+		entry->name = index->names_size;
+		memcpy(index->names + index->names_size, fields[0], name_length + 1);
+		index->names_size += (unsigned long)name_length + 1;
 		entry->checksum = strtoul(fields[1], NULL, 16);
 		entry->size = strtoull(fields[2], NULL, 10);
 		entry->piece_length = strtoul(fields[3], NULL, 10);
 		memcpy(entry->info_hash, fields[4], 41);
-		entry->sources = torrent_maps_index.names_size;
+		entry->sources = index->names_size;
 		if (fields[5])
 		{
 			size_t sources_length = strlen(fields[5]);
 
-			memcpy(torrent_maps_index.names + torrent_maps_index.names_size, fields[5], sources_length + 1);
-			torrent_maps_index.names_size += (unsigned long)sources_length + 1;
+			memcpy(index->names + index->names_size, fields[5], sources_length + 1);
+			index->names_size += (unsigned long)sources_length + 1;
 		}
 		else
 		{
-			torrent_maps_index.names[torrent_maps_index.names_size++] = 0;
+			index->names[index->names_size++] = 0;
 		}
 		{
 			unsigned char whole[32];
 
-			entry->has_share = column_hash(torrent_maps_index.names + entry->sources, "share:", entry->share);
-			entry->has_blake2b = column_hash(torrent_maps_index.names + entry->sources, "blake2b:", whole);
+			entry->has_share = column_hash(index->names + entry->sources, "share:", entry->share);
+			entry->has_blake2b = column_hash(index->names + entry->sources, "blake2b:", whole);
 			entry->blake2b_prefix = entry->has_blake2b ? (unsigned int)whole[0] << 24 | (unsigned int)whole[1] << 16 |
 				(unsigned int)whole[2] << 8 | (unsigned int)whole[3] : 0;
 		}
 		if (!name_length || !entry->size || !entry->piece_length)
 		{
 			platform_log("map torrents: %s line %d has a bad size or piece length (left out)",
-				torrent_maps_index.path, number);
+				index->path, number);
 			continue;
 		}
-		torrent_maps_index.count++;
+		index->count++;
 	}
-	free(file);
-	platform_log("map torrents: %d maps indexed in %s", torrent_maps_index.count, torrent_maps_index.path);
+	return 1;
 }
+
+static void index_free(struct torrent_index *index)
+{
+	free(index->entries);
+	free(index->names);
+	index->entries = NULL;
+	index->names = NULL;
+	index->count = 0;
+	index->names_size = 0;
+}
+
+static void index_cache_path(char *path, size_t size)
+{
+	snprintf(path, size, "%s/%s", platform_save_root(), INDEX_CACHE_NAME);
+}
+
+static void index_known(unsigned long long serial, const unsigned char *signature);
+
+/* port (this fork): a signed list (map_index.h: the signature's digits, a
+line feed, the index), fetched or cached, in place of the one in use when
+its serial is newer; checked first when check (the cache's: a fetched one
+was checked as it came). 1 when it is the one in use now */
+static int index_take_signed(char *text, size_t size, const char *source, int check)
+{
+	unsigned char signature[MAP_INDEX_SIGNATURE_SIZE];
+	size_t offset;
+	struct torrent_index taken;
+	unsigned long long serial;
+	char *document;
+	size_t document_size;
+
+	if (!map_index_split(text, size, signature, &offset))
+	{
+		platform_log("map torrents: the approved map list from %s is not a signed list: not taken", source);
+		return 0;
+	}
+	document = text + offset;
+	document_size = size - offset;
+	if (check && (!map_index_format(document, document_size) ||
+		!map_index_signature_check(signature, document, document_size)))
+	{
+		platform_log("map torrents: the approved map list from %s is not signed by the fork's key: not taken", source);
+		return 0;
+	}
+	serial = map_index_serial(document, document_size);
+	if (serial <= torrent_maps_index.serial)
+	{
+		/* (the list in use as signed: its signature known, so that the
+		published one, the same, is not downloaded again) */
+		if (serial == torrent_maps_index.serial)
+			index_known(serial, signature);
+		else
+			platform_log("map torrents: the approved map list from %s (serial %llu) is older than the one in use "
+				"(serial %llu): not taken", source, serial, torrent_maps_index.serial);
+		return 0;
+	}
+	memset(&taken, 0, sizeof(taken));
+	snprintf(taken.path, sizeof(taken.path), "%s", source);
+	/* (the text NUL terminated for the parse: the caller's has room) */
+	document[document_size] = 0;
+	if (!index_parse(&taken, document, document_size) || !taken.count)
+	{
+		index_free(&taken);
+		return 0;
+	}
+	platform_log("map torrents: the approved map list from %s is in use: serial %llu, %d maps (was serial %llu, "
+		"%d maps)", source, taken.serial, taken.count, torrent_maps_index.serial, torrent_maps_index.count);
+	index_free(&torrent_maps_index);
+	taken.loaded = 1;
+	torrent_maps_index = taken;
+	index_known(taken.serial, signature);
+	return 1;
+}
+
+/* reads the index once: the build's (maps.torrent_index), then the fetched
+list cached, if newer */
+static void index_load(void)
+{
+	char *file;
+	size_t file_size = 0;
+	char path[1024];
+
+	if (torrent_maps_index.loaded)
+		return;
+	torrent_maps_index.loaded = 1;
+	index_path(torrent_maps_index.path, sizeof(torrent_maps_index.path));
+	file = config_file_read(torrent_maps_index.path, &file_size);
+	if (!file)
+	{
+		platform_log("map torrents: the index %s cannot be read (maps.torrent_index)", torrent_maps_index.path);
+	}
+	else
+	{
+		if (!index_parse(&torrent_maps_index, file, file_size))
+			index_free(&torrent_maps_index);
+		free(file);
+		platform_log("map torrents: %d maps indexed in %s (serial %llu)", torrent_maps_index.count,
+			torrent_maps_index.path, torrent_maps_index.serial);
+	}
+	index_known(torrent_maps_index.serial, NULL);
+	index_cache_path(path, sizeof(path));
+	file = config_file_read(path, &file_size);
+	if (file)
+	{
+		index_take_signed(file, file_size, "the cache", 1);
+		free(file);
+	}
+}
+
+/* ---------- the approved map list, fetched (port, this fork) */
+
+/* maps.index_url's lists (map_index.h), the newest serial taken: looked at
+on a thread of this file's when the game starts and every
+INDEX_REFRESH_SECONDS, sooner (INDEX_ASKED_SECONDS at the least) when a map
+is turned away as not approved; a list taken is cached (INDEX_CACHE_NAME)
+and handed to the game's thread, which puts it in place of the index in
+use (index_take_fetched) when no download is under way. A source's
+<url>.sig is asked for first: a signature already known (the list in use,
+or one seen and found no newer) needs no download. */
+
+#ifdef HALO_GAME_BROWSER
+
+#ifndef INDEX_REFRESH_SECONDS
+#define INDEX_REFRESH_SECONDS (60 * 60)
+#endif
+#ifndef INDEX_RETRY_SECONDS
+#define INDEX_RETRY_SECONDS (15 * 60)
+#endif
+#ifndef INDEX_ASKED_SECONDS
+#define INDEX_ASKED_SECONDS (2 * 60)
+#endif
+
+static pthread_mutex_t index_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t index_wake = PTHREAD_COND_INITIALIZER;
+static struct
+{
+	/* the newest serial known (in use, or taken and on its way to the
+	game's thread), and the last signature seen */
+	unsigned long long serial;
+	unsigned char signature[MAP_INDEX_SIGNATURE_SIZE];
+	int has_signature;
+	/* a signed list for the game's thread (malloc'd, NUL terminated), and
+	its source */
+	char *taken;
+	size_t taken_size;
+	char taken_source[160];
+	/* a look asked for, and when the last one was */
+	int asked;
+	time_t last;
+	char urls[1024];
+	int started;
+} index_fetch;
+
+static void index_known(unsigned long long serial, const unsigned char *signature)
+{
+	pthread_mutex_lock(&index_lock);
+	if (serial > index_fetch.serial)
+		index_fetch.serial = serial;
+	if (signature)
+	{
+		memcpy(index_fetch.signature, signature, sizeof(index_fetch.signature));
+		index_fetch.has_signature = 1;
+	}
+	pthread_mutex_unlock(&index_lock);
+}
+
+/* the signed list written to the cache: a new file beside it, then moved
+over it */
+static void index_cache_write(const char *text, size_t size)
+{
+	char path[1024], temporary[1100];
+	FILE *file;
+	int ok;
+
+	index_cache_path(path, sizeof(path));
+	snprintf(temporary, sizeof(temporary), "%s.new", path);
+	file = fopen(temporary, "wb");
+	if (!file)
+		return;
+	ok = fwrite(text, 1, size, file) == size;
+	ok = fclose(file) == 0 && ok;
+	/* (Windows does not rename over a file) */
+	if (ok && rename(temporary, path) != 0)
+	{
+		remove(path);
+		ok = rename(temporary, path) == 0;
+	}
+	if (!ok)
+	{
+		remove(temporary);
+		platform_log("map torrents: the approved map list could not be cached");
+	}
+}
+
+const char *build_identity_user_agent(void);
+
+/* the document at url, at most MAP_INDEX_MAXIMUM_SIZE bytes, after room
+for the signature's line (offset bytes) before it, NUL terminated: malloc'd,
+or NULL and why in error */
+static char *index_download(const char *url, size_t offset, size_t *size, char *error, int error_size)
+{
+	int status = 0, length = -1, download, count;
+	size_t used = 0, capacity;
+	char *buffer, *grown;
+
+	download = posix_browser_download_open(url, build_identity_user_agent(), &status, &length, error, error_size);
+	if (!download)
+	{
+		if (status)
+			snprintf(error, (size_t)error_size, "HTTP %d", status);
+		return NULL;
+	}
+	if (length > 0 && (unsigned long)length > MAP_INDEX_MAXIMUM_SIZE)
+	{
+		posix_browser_download_close(download);
+		snprintf(error, (size_t)error_size, "it is %d bytes, more than a list may be", length);
+		return NULL;
+	}
+	capacity = offset + (length > 0 ? (size_t)length : 2 * 1024 * 1024) + 1;
+	buffer = malloc(capacity);
+	while (buffer)
+	{
+		if (capacity - offset - used - 1 < 65536)
+		{
+			if (used >= MAP_INDEX_MAXIMUM_SIZE)
+			{
+				snprintf(error, (size_t)error_size, "it is more than a list may be");
+				break;
+			}
+			grown = realloc(buffer, capacity * 2);
+			if (!grown)
+			{
+				snprintf(error, (size_t)error_size, "out of memory");
+				break;
+			}
+			buffer = grown;
+			capacity *= 2;
+		}
+		count = posix_browser_download_read(download, buffer + offset + used, 65536);
+		if (count < 0)
+		{
+			snprintf(error, (size_t)error_size, "the download broke off");
+			break;
+		}
+		if (!count)
+		{
+			posix_browser_download_close(download);
+			buffer[offset + used] = 0;
+			*size = used;
+			return buffer;
+		}
+		used += (size_t)count;
+	}
+	if (!buffer)
+		snprintf(error, (size_t)error_size, "out of memory");
+	posix_browser_download_close(download);
+	free(buffer);
+	return NULL;
+}
+
+/* one source's list: 1 when it answered (its list known, taken if newer),
+0 when not; *absent when it has none (HTTP 404) */
+static int index_fetch_from(const char *url, int *absent)
+{
+	static const char digits[] = "0123456789abcdef";
+	char signature_url[1100], answer[300], error[256];
+	unsigned char signature[MAP_INDEX_SIGNATURE_SIZE];
+	size_t line = MAP_INDEX_SIGNATURE_SIZE * 2 + 1, size = 0, index;
+	unsigned long long serial;
+	char *text;
+	int status, known, newer, same;
+
+	*absent = 0;
+	snprintf(signature_url, sizeof(signature_url), "%s.sig", url);
+	status = posix_browser_request_as(signature_url, NULL, NULL, build_identity_user_agent(), answer,
+		(int)sizeof(answer), error, (int)sizeof(error));
+	if (status == 404)
+	{
+		*absent = 1;
+		return 0;
+	}
+	if (status != 200)
+	{
+		platform_log("map torrents: no approved map list from %s (%s)", url, status ? "the server refused" : error);
+		return 0;
+	}
+	if (!map_index_signature_parse(answer, strlen(answer), signature))
+	{
+		platform_log("map torrents: %s is not a signature: the approved map list there is not taken", signature_url);
+		return 0;
+	}
+	pthread_mutex_lock(&index_lock);
+	known = index_fetch.has_signature && !memcmp(index_fetch.signature, signature, sizeof(signature));
+	pthread_mutex_unlock(&index_lock);
+	if (known)
+		return 1;
+	text = index_download(url, line, &size, error, (int)sizeof(error));
+	if (!text)
+	{
+		platform_log("map torrents: no approved map list from %s (%s)", url, error);
+		return 0;
+	}
+	if (!map_index_format(text + line, size) || !map_index_signature_check(signature, text + line, size))
+	{
+		platform_log("map torrents: the approved map list from %s is not signed by the fork's key: not taken", url);
+		free(text);
+		return 0;
+	}
+	serial = map_index_serial(text + line, size);
+	/* (the cache's form: the signature's digits and a line feed first) */
+	for (index = 0; index < MAP_INDEX_SIGNATURE_SIZE; index++)
+	{
+		text[index * 2] = digits[signature[index] >> 4];
+		text[index * 2 + 1] = digits[signature[index] & 15];
+	}
+	text[line - 1] = '\n';
+	pthread_mutex_lock(&index_lock);
+	newer = serial > index_fetch.serial;
+	same = serial == index_fetch.serial;
+	memcpy(index_fetch.signature, signature, sizeof(signature));
+	index_fetch.has_signature = 1;
+	pthread_mutex_unlock(&index_lock);
+	if (!newer)
+	{
+		/* (the one in use, as signed: cached, so that the next start knows
+		its signature) */
+		if (same)
+			index_cache_write(text, line + size);
+		else
+			platform_log("map torrents: the approved map list from %s (serial %llu) is older than this machine's",
+				url, serial);
+		free(text);
+		return 1;
+	}
+	index_cache_write(text, line + size);
+	pthread_mutex_lock(&index_lock);
+	index_fetch.serial = serial;
+	free(index_fetch.taken);
+	index_fetch.taken = text;
+	index_fetch.taken_size = line + size;
+	snprintf(index_fetch.taken_source, sizeof(index_fetch.taken_source), "%s", url);
+	pthread_mutex_unlock(&index_lock);
+	platform_log("map torrents: a newer approved map list from %s (serial %llu)", url, serial);
+	return 1;
+}
+
+/* the sources in maps.index_url's order, until one answers: 1 if one did */
+static int index_refresh(void)
+{
+	/* (none published anywhere: said once a run) */
+	static int absence_said;
+	char *url, *comma;
+	int absent, any_absent = 0, answered = 0;
+
+	for (url = index_fetch.urls; url && *url && !answered; url = comma)
+	{
+		comma = strchr(url, ',');
+		if (comma)
+			*comma = 0;
+		while (*url == ' ')
+			url++;
+		if (*url)
+		{
+			answered = index_fetch_from(url, &absent);
+			any_absent |= absent;
+		}
+		if (comma)
+			*comma++ = ',';
+	}
+	if (!answered && any_absent && !absence_said)
+	{
+		platform_log("map torrents: no approved map list is published at %s: the built-in one is used",
+			index_fetch.urls);
+		absence_said = 1;
+	}
+	return answered;
+}
+
+static void *index_thread(void *unused)
+{
+	(void)unused;
+	for (;;)
+	{
+		int answered = index_refresh();
+		time_t next;
+
+		pthread_mutex_lock(&index_lock);
+		index_fetch.last = time(NULL);
+		index_fetch.asked = 0;
+		next = index_fetch.last + (answered ? INDEX_REFRESH_SECONDS : INDEX_RETRY_SECONDS);
+		for (;;)
+		{
+			struct timespec deadline;
+			time_t now = time(NULL), until = next;
+
+			if (index_fetch.asked)
+			{
+				time_t soonest = index_fetch.last + INDEX_ASKED_SECONDS;
+
+				if (soonest <= now)
+					break;
+				if (soonest < until)
+					until = soonest;
+			}
+			if (until <= now)
+				break;
+			deadline.tv_sec = until;
+			deadline.tv_nsec = 0;
+			pthread_cond_timedwait(&index_wake, &index_lock, &deadline);
+		}
+		pthread_mutex_unlock(&index_lock);
+	}
+	return NULL;
+}
+
+static void index_fetch_start(void)
+{
+	pthread_t thread;
+	const char *urls = config_string("maps.index_url");
+
+	if (index_fetch.started || !urls[0])
+		return;
+	index_fetch.started = 1;
+	snprintf(index_fetch.urls, sizeof(index_fetch.urls), "%s", urls);
+	if (pthread_create(&thread, NULL, index_thread, NULL) == 0)
+		pthread_detach(thread);
+	else
+		platform_log("map torrents: could not start the approved map list's thread");
+}
+
+/* a map turned away as not approved: the sources looked at again soon, in
+case it was approved since */
+static void index_fetch_ask(void)
+{
+	if (!index_fetch.started)
+		return;
+	pthread_mutex_lock(&index_lock);
+	index_fetch.asked = 1;
+	pthread_cond_signal(&index_wake);
+	pthread_mutex_unlock(&index_lock);
+}
+
+/* (the game's thread) a list the thread took, in place of the one in use;
+not while a download holds the index's entries */
+static void index_take_fetched(int downloading)
+{
+	char *text;
+	size_t size;
+	char source[160];
+
+	if (downloading || !index_fetch.started)
+		return;
+	pthread_mutex_lock(&index_lock);
+	text = index_fetch.taken;
+	size = index_fetch.taken_size;
+	snprintf(source, sizeof(source), "%s", index_fetch.taken_source);
+	index_fetch.taken = NULL;
+	pthread_mutex_unlock(&index_lock);
+	if (!text)
+		return;
+	index_load();
+	index_take_signed(text, size, source, 0);
+	free(text);
+}
+
+#else
+
+static void index_known(unsigned long long serial, const unsigned char *signature)
+{
+	(void)serial;
+	(void)signature;
+}
+
+static void index_fetch_start(void)
+{
+}
+
+static void index_fetch_ask(void)
+{
+}
+
+static void index_take_fetched(int downloading)
+{
+	(void)downloading;
+}
+
+#endif
 
 /* the entry of the file named, of the checksum (0: any) */
 static const struct index_entry *index_find(const char *file_name, unsigned long checksum)
@@ -408,6 +898,7 @@ void map_torrents_unapproved_text(char *text, int size, const char *file_name, c
 		MAP_APPROVAL_CONTACT " to approve %s (%.8s).", file, digits);
 	platform_log("map approval: %s (%s) is not in the maps' torrent index, the approved map list: not downloaded",
 		file, digits);
+	index_fetch_ask();
 }
 
 /* ---------- the client */
@@ -1274,12 +1765,24 @@ void map_torrents_initialize(void)
 	/* (the game ends with exit(): the client's thread stopped then, its
 	torrents' files left as they are) */
 	atexit(map_torrents_dispose);
+	/* port (this fork): the approved map list read now, and the published
+	one looked for (maps.index_url) */
+	index_load();
+	index_fetch_start();
 }
 
 void map_torrents_poll(void)
 {
 	fetch_poll();
 	seed_poll();
+	index_take_fetched(fetch.active);
+}
+
+void map_torrents_index_poll(void)
+{
+	index_load();
+	index_fetch_start();
+	index_take_fetched(fetch.active);
 }
 
 void map_torrents_dispose(void)

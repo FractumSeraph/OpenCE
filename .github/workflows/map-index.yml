@@ -1,0 +1,92 @@
+name: Map list
+
+# The approved map list published between releases (port/linux/src/map_index.h;
+# docs/map_torrents.md, "The list, fetched"): on every change to
+# port/assets/network/map_torrents.txt on main, the index is signed with the
+# fork's release key (the UPDATE_SIGNING_KEY secret, as the releases are;
+# tools/map_torrents.py sign, over "fractum-halo-map-index 1\n" and the
+# index's bytes) and put on the map-index branch as map_torrents.txt and
+# map_torrents.txt.sig, one commit replacing the last. The games fetch it
+# from there (maps.index_url: raw.githubusercontent.com) and take it in place
+# of their own when its serial is newer, so an approved map reaches them
+# without a release; build.yml leaves such a push unreleased.
+#
+# A list whose serial is not more than the published one's is refused (the
+# games would never take it): tools/map_torrents.py raises it with each change.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - port/assets/network/map_torrents.txt
+      - port/linux/src/map_index_key.h
+      - tools/map_torrents.py
+      - .github/workflows/map-index.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: map-index
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sign and publish
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ -z "$UPDATE_SIGNING_KEY" ]; then
+            echo "::error::no UPDATE_SIGNING_KEY secret: the map list cannot be signed"
+            exit 1
+          fi
+          index=port/assets/network/map_torrents.txt
+          serial=$(python3 tools/map_torrents.py serial --index "$index")
+          if [ "$serial" = 0 ]; then
+            echo "::error::$index has no serial line (tools/map_torrents.py writes one)"
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/published"
+          published=0
+          if git fetch -q --depth=1 origin map-index 2>/dev/null; then
+            git show FETCH_HEAD:map_torrents.txt > "$RUNNER_TEMP/published/map_torrents.txt"
+            published=$(python3 tools/map_torrents.py serial --index "$RUNNER_TEMP/published/map_torrents.txt")
+            if cmp -s "$index" "$RUNNER_TEMP/published/map_torrents.txt"; then
+              echo "The published list is this one (serial $serial): nothing to do"
+              exit 0
+            fi
+          fi
+          if [ "$serial" -le "$published" ]; then
+            echo "::error::the list's serial $serial is not more than the published one's ($published): the games would not take it"
+            exit 1
+          fi
+          out="$RUNNER_TEMP/map-index"
+          mkdir -p "$out"
+          cp "$index" "$out/map_torrents.txt"
+          key="$RUNNER_TEMP/update-key.pem"
+          (umask 077 && printf '%s\n' "$UPDATE_SIGNING_KEY" > "$key")
+          python3 tools/map_torrents.py sign "$key" --index "$out/map_torrents.txt"
+          rm -f "$key"
+          python3 tools/map_torrents.py verify --index "$out/map_torrents.txt"
+          cat > "$out/README.md" <<EOF
+          # The approved map list, as published
+
+          Made by .github/workflows/map-index.yml from main's
+          port/assets/network/map_torrents.txt (commit $GITHUB_SHA, serial $serial),
+          signed with the fork's release key: the games fetch it (maps.index_url).
+          Do not commit here; this branch is replaced on every change.
+          EOF
+          cd "$out"
+          git init -q -b map-index
+          git add map_torrents.txt map_torrents.txt.sig README.md
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -q -m "The approved map list, serial $serial (from $GITHUB_SHA)"
+          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" map-index
+          echo "Published serial $serial ($(grep -vc '^#' map_torrents.txt) maps)"

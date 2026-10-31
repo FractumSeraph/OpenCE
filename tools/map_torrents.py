@@ -76,6 +76,27 @@ given have their columns made again; the others' are kept.
 
 The work of a run is remembered in <torrents>/.map_torrents_cache.json by
 path, size and modification time, so a rerun hashes only new files.
+
+The index's second line is its serial ("# serial <n>": the time it changed,
+in unix seconds, and always more than the one before), which every command
+here raises when it changes the entries. The games fetch the index as
+published between releases (port/linux/src/map_index.h, maps.index_url):
+signed with the fork's release key over "fractum-halo-map-index 1\n" and
+the index's bytes, and taken in place of a build's own when its serial is
+newer. .github/workflows/map-index.yml publishes it on every change:
+
+    python tools/map_torrents.py sign <key.pem> [--index <file>]
+
+writes <index>.sig, the signature's 128 hex digits and a line feed (openssl
+does the signing, as for tools/update_sign.py);
+
+    python tools/map_torrents.py verify [--public <hex>] [--index <file>]
+
+checks <index>.sig against port/linux/src/map_index_key.h's keys; and
+
+    python tools/map_torrents.py serial [--index <file>]
+
+prints the index's serial (0 for none).
 """
 
 import argparse
@@ -91,6 +112,11 @@ from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 INDEX_FORMAT = "halo map torrents v1"
+# the published index's signature covers this, then the index's bytes
+# (port/linux/src/map_index.h)
+INDEX_SIGNATURE_CONTEXT = b"fractum-halo-map-index 1\n"
+INDEX_KEY_HEADER = Path(__file__).resolve().parent.parent / "port/linux/src/map_index_key.h"
+SERIAL_PATTERN = re.compile(r"^# serial (\d{1,19})\s*$")
 DEFAULT_INDEX = Path(__file__).resolve().parents[1] / "port/assets/network/map_torrents.txt"
 RESOURCE_MAP_NAMES = ("bitmaps.map", "sounds.map", "loc.map")
 
@@ -386,10 +412,27 @@ def read_index(path):
     return entries
 
 
+def index_serial(text):
+    """the serial of an index's text: its "# serial <n>" line among the
+    comment lines it opens with, 0 for none (map_index_serial's reading)"""
+    for line in text.splitlines():
+        if not line.startswith("#"):
+            break
+        match = SERIAL_PATTERN.match(line)
+        if match:
+            return int(match.group(1))
+    return 0
+
+
+def without_serial(text):
+    return "".join(line for line in text.splitlines(True) if not SERIAL_PATTERN.match(line.rstrip("\r\n")))
+
+
 def write_index(path, entries):
     path.parent.mkdir(parents=True, exist_ok=True)
     lines = [
         f"# {INDEX_FORMAT}",
+        "# serial {serial}",
         "# The Custom Edition maps (tools/map_torrents.py): each line a map,",
         "# tab-separated: file name, header checksum (the map version a host sends; 0 for",
         "# the resource maps, matched by name alone), size in bytes, piece length, info hash,",
@@ -399,11 +442,22 @@ def write_index(path, entries):
         "# missing here is downloaded from a host or the map repositories (map_torrents.h).",
         "# A map's single-file torrent has info = {length, name, piece length, pieces}: a",
         "# download is checked against its info hash (port/linux/src/map_archives.c).",
+        "# The serial (the time the entries changed, in unix seconds) is the published",
+        "# list's (port/linux/src/map_index.h): a newer one is fetched in place of a build's.",
     ]
     for entry in sorted(entries.values(), key=lambda e: (e.file_name.lower(), e.checksum)):
         lines.append(entry.line())
+    text = "\n".join(lines) + "\n"
+    # (the serial kept when nothing else changed, else raised: never the
+    # same or less for other entries)
+    old = path.read_text(encoding="utf-8").replace("\r\n", "\n") if path.is_file() else ""
+    old_serial = index_serial(old)
+    if old_serial and without_serial(old) == without_serial(text.replace("{serial}", "0")):
+        serial = old_serial
+    else:
+        serial = max(old_serial + 1, int(time.time()))
     with open(path, "w", encoding="utf-8", newline="\n") as f:
-        f.write("\n".join(lines) + "\n")
+        f.write(text.replace("# serial {serial}", f"# serial {serial}", 1))
 
 
 # ---------- making
@@ -799,6 +853,63 @@ def check(args):
     return 1 if failures else 0
 
 
+# ---------- the published list (port/linux/src/map_index.h)
+
+def index_key_header_keys():
+    text = INDEX_KEY_HEADER.read_text()
+    # (the fork's keys: the block before the test key's #else)
+    text = text.split("#else", 1)[0]
+    keys = []
+    for block in re.findall(r"\{([^{}]*)\}", text):
+        values = re.findall(r"0x([0-9a-fA-F]{2})", block)
+        if len(values) == 32:
+            key = bytes(int(value, 16) for value in values)
+            if any(key):
+                keys.append(key)
+    return keys
+
+
+def sign_index(args):
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from update_sign import sign_bytes
+    index = Path(args.index)
+    data = index.read_bytes()
+    if not data.startswith(f"# {INDEX_FORMAT}".encode()) or not index_serial(data.decode("utf-8")):
+        raise SystemExit(f"{index}: not an index with a serial")
+    signature = sign_bytes(Path(args.key), INDEX_SIGNATURE_CONTEXT + data)
+    Path(f"{index}.sig").write_text(signature.hex() + "\n", newline="\n")
+    print(f"{index}.sig: serial {index_serial(data.decode('utf-8'))}")
+
+
+def verify_index(args):
+    import subprocess
+    import tempfile
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from update_sign import ED25519_SPKI_PREFIX, openssl
+    index = Path(args.index)
+    keys = [bytes.fromhex(args.public)] if args.public else index_key_header_keys()
+    signature = bytes.fromhex(Path(f"{index}.sig").read_text().strip())
+    good = False
+    with tempfile.TemporaryDirectory() as directory:
+        message = Path(directory) / "message"
+        message.write_bytes(INDEX_SIGNATURE_CONTEXT + index.read_bytes())
+        sigfile = Path(directory) / "signature"
+        sigfile.write_bytes(signature)
+        for key in keys:
+            public = Path(directory) / "public.der"
+            public.write_bytes(ED25519_SPKI_PREFIX + key)
+            result = subprocess.run([openssl(), "pkeyutl", "-verify", "-pubin", "-keyform", "DER", "-inkey",
+                                     str(public), "-rawin", "-in", str(message), "-sigfile", str(sigfile)],
+                                    capture_output=True)
+            good = good or result.returncode == 0
+    print(f"{index}: {'signed' if good else 'NOT SIGNED by map_index_key.h'}")
+    return 0 if good else 1
+
+
+def print_serial(args):
+    print(index_serial(Path(args.index).read_text(encoding="utf-8")))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -842,6 +953,17 @@ def main():
                               help="what tools/map_share_hash.c printed of the maps, taken instead of hashing them")
     share_parser.add_argument("--index", metavar="FILE", default=str(DEFAULT_INDEX))
     share_parser.set_defaults(run=share)
+    sign_parser = commands.add_parser("sign", help="sign the index for publishing (writes <index>.sig)")
+    sign_parser.add_argument("key", help="the fork's release key (Ed25519 PEM)")
+    sign_parser.add_argument("--index", metavar="FILE", default=str(DEFAULT_INDEX))
+    sign_parser.set_defaults(run=sign_index)
+    verify_parser = commands.add_parser("verify", help="check <index>.sig against map_index_key.h")
+    verify_parser.add_argument("--public", help="a public key's 64 hex digits, in place of map_index_key.h's")
+    verify_parser.add_argument("--index", metavar="FILE", default=str(DEFAULT_INDEX))
+    verify_parser.set_defaults(run=verify_index)
+    serial_parser = commands.add_parser("serial", help="print the index's serial")
+    serial_parser.add_argument("--index", metavar="FILE", default=str(DEFAULT_INDEX))
+    serial_parser.set_defaults(run=print_serial)
     args = parser.parse_args()
     sys.exit(args.run(args) or 0)
 

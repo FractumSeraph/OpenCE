@@ -1,4 +1,5 @@
 # halo map torrents v1
+# serial 1793481173
 # The Custom Edition maps (tools/map_torrents.py): each line a map,
 # tab-separated: file name, header checksum (the map version a host sends; 0 for
 # the resource maps, matched by name alone), size in bytes, piece length, info hash,
@@ -8,6 +9,8 @@
 # missing here is downloaded from a host or the map repositories (map_torrents.h).
 # A map's single-file torrent has info = {length, name, piece length, pieces}: a
 # download is checked against its info hash (port/linux/src/map_archives.c).
+# The serial (the time the entries changed, in unix seconds) is the published
+# list's (port/linux/src/map_index.h): a newer one is fetched in place of a build's.
 ''H3''_prisioner.map	38A1F1A5	95348399	262144	b5c5f4daa91b617761cf203e14609382688a9d94	blake2b:d96c2656c0521a418c780e390a03a6186e66edb7d3976d8799f0d63a8f3f608f	share:ce04df8b37e30bca422f3468f68ff0576f4d27feff2741f307ab69530ba0cafb	halomaps:5988
 (!V1¡)-(HR)Floodinthebase.map	5475464E	256799462	262144	a0e8663211bb1f141fd7e40194fbe717dfe96f01	blake2b:67d5df6fd1f63c603a5a85c1820e71dfde50c43c962ff1d669d1404e5905b184	share:79750e7627596352902248381c0a06ea14a676e471500cce358bb3e6fabac54c	halomaps:6762
 (182) Zombies.map	EF22A88F	32327989	262144	50e111ac1983a47f48808d0c304cbca758cbf40c	blake2b:87bc1319d856859b1a595db76c850f2c8680ef8f398d69254ce0a0a1326a1709	share:b969bb66aaa2c6787bd9125c37e498685d058dd0bee454d4d69bc5e6c8f227d8	halomaps:4791

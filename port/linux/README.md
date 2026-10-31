@@ -999,6 +999,7 @@ the setting for one start of the game. It has priority over the file.
 | `maps.web_seeds` | `"http://halomaps.fractumseraph.net/maps/"` | `HALO_MAP_WEB_SEEDS` | The `http://` folders that hold the maps under their file names, with commas between them; a download also takes pieces from them. Empty: none. |
 | `maps.archives` | `"halonet,halomaps"` | `HALO_MAP_ARCHIVES` | Linux, Windows and macOS. When BitTorrent does not give a map (the download fails, or brings nothing for 30 seconds), it is taken out of the zip that the index names for it in the community's archives, in this order: `halonet` (maps.halonet.net), `halomaps` (halomaps.org), and checked against the index's info hash. Empty: none. Refer to `docs/map_torrents.md`. |
 | `maps.torrent_index` | `"map_torrents.txt"` | `HALO_MAP_TORRENT_INDEX` | The index of the maps' torrents (`tools/map_torrents.py`), next to `config.toml` unless a full path. The builds put `port/assets/network/map_torrents.txt` there. |
+| `maps.index_url` | `"https://raw.githubusercontent.com/FractumSeraph/OpenCE/map-index/map_torrents.txt"` | `HALO_MAP_INDEX_URL` | Comma-separated `https://` URLs of the approved map list as published, each with its signature at `<url>.sig`; looked at when the game starts and every hour. A list signed with the fork's release key and newer than `maps.torrent_index`'s is used in its place, and cached, so maps approved since the build are downloaded too (`docs/map_torrents.md`, "The list, fetched"). Empty for none. |
 | `update.auto` | `true` | `HALO_UPDATE_AUTO` | `true`: at start-up, the game looks for a new version. Refer to "Updates". `false`: the game does not look. |
 | `crash_reports.upload` | `"yes"` (this fork's; ChupathingyCE's is `"ask"`) | `HALO_CRASH_REPORTS` | Desktop builds (releases and nightlies). `"yes"`: the game sends a report of each crash to the developers, through `network.browser_url`. `"no"`: the game sends no reports. `"ask"`: the game asks after the next crash (on Linux and macOS, when it starts the next time) and writes the answer here. On the Privacy screen (Gearbox menus). Refer to "Crash reports" below and in [port/windows/README.md](../windows/README.md#crash-reports). |
 | `streamer.enabled` | `false` | `HALO_STREAMER_MODE` | `true`: streamer mode hides offensive words, as stars, in the names and text of other players, maps and mods, at the levels below. Refer to "Streamer mode". STREAMER MODE in Settings > Network Setup > Streamer Mode. |
@@ -1737,7 +1738,11 @@ the index's maps anyway. A host does not offer a map that is not on it. A
 player who would get one is told the map's file name and hash, and to contact
 @FractumSeraph to have it approved (`docs/map_torrents.md`, "Approving a
 map"). The browser version reads every map from the site, whose maps are the
-index's.
+index's. A map approved after a build was made reaches it without an update:
+the game fetches the list as published (`maps.index_url`), signed with the
+fork's release key, when it starts, every hour, and soon after a map is
+refused, and uses it when it is newer than its own (`docs/map_torrents.md`,
+"The list, fetched").
 
 Over the internet, the players of a game connect only to the host. To send
 each other a map, a player answers the other players of the game (who have

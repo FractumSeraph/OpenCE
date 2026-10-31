@@ -28,6 +28,9 @@ name: Build
 #   has its Build (ChupathingyCE/command's nightly takes main's newest);
 # - changes that only touch documentation do not build (no check is
 #   required to merge, so a pull request without a Build is not blocked);
+# - a push that only changes the approved map list
+#   (port/assets/network/map_torrents.txt) does not build or release:
+#   map-index.yml publishes it, and the games fetch it;
 # - the compile caches are saved only on main (each run restores main's
 #   newest), so branches and pull requests do not crowd main's out of the
 #   repository's 10 GB of caches;
@@ -44,6 +47,9 @@ on:
     paths-ignore:
       - "**.md"
       - "docs/**"
+      # (the approved map list alone: published by map-index.yml, which the
+      # games fetch, without a release)
+      - "port/assets/network/map_torrents.txt"
   pull_request:
     paths-ignore:
       - "**.md"

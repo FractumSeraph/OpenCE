@@ -1432,6 +1432,15 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"The index of the maps' torrents (tools/map_torrents.py), beside this\n"
 		"file unless a full path: port/assets/network/map_torrents.txt, which\n"
 		"the builds put there." },
+	{ "maps.index_url", _config_string,
+		"\"https://raw.githubusercontent.com/FractumSeraph/OpenCE/map-index/map_torrents.txt\"", "HALO_MAP_INDEX_URL",
+		_environment_value, _platform_all,
+		"Comma-separated https:// URLs of the approved map list as published\n"
+		"(each with its signature at <url>.sig), looked at when the game starts\n"
+		"and every hour: a list signed with the fork's key and newer than\n"
+		"torrent_index's is used in its place (and cached), so that maps\n"
+		"approved since this build are downloaded too; empty for none\n"
+		"(docs/map_torrents.md)." },
 	/* ---- crash_reports */
 	{ "crash_reports.upload", _config_string, "\"yes\"", "HALO_CRASH_REPORTS", _environment_value, _platform_desktop,
 		"Send a report of each crash to the developers, through network.browser_url\n"
