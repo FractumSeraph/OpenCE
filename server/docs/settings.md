@@ -16,7 +16,7 @@ the file.
 | `HALO_DEDICATED_IDLE_LIMIT` | `5` | A game in which nobody scores for this many minutes ends. `0`: never. |
 | `HALO_DEDICATED_PUBLIC` | `true` | A public game, listed in every in-game Server Browser (OpenCE's and ChupathingyCE's) through internet play's brokers. `false`: not listed there; the game list still lists it, and its invite still works. |
 | `HALO_DEDICATED_NAME_FILTER` | `false` | `true`: players with a blocked name are warned and kicked ([below](#blocked-names)); `sv_name_filter 1` on the console does the same. |
-| `HALO_DEDICATED_CHAT` | `2` | Text chat between ChupathingyCE players: `2` on, `1` team lines alone, `0` off (`sv_chat` sets it; the environment wins over the settings file). |
+| `HALO_DEDICATED_CHAT` | `2` | Text chat between ChupathingyCE players: `2` (or `on`) on, `1` (`team`) team lines alone, `0` (`off`) off (`sv_chat` sets it; the environment wins over the settings file, and `sv_chat` then lasts only until a restart). |
 | `HALO_DEDICATED_CHAT_FILTER` | `true` | A chat line with a word of `blocked_names.txt`'s list (the game has it built in) is not passed on; its sender's game says "Not sent: blocked words". Nobody is kicked. |
 | `HALO_DEDICATED_CHAT_LEGACY` | `true` | OpenCE players chat too, over their own text chat, bridged to ChupathingyCE's ([below](#text-chat)), while `HALO_DEDICATED_CHAT` is on. `false`: they get no chat here (`sv_set chat_legacy false`). |
 | `HALO_DEDICATED_CHAT_COOLDOWN` | `5` | Once a player says lines faster than the chat allows (1 a second, 3 at once), their chat pauses for this many seconds and their game says "Chat paused for 5 seconds" (an older game says "Not sent: slow down"). `0`: no pause, each line past the limit is refused alone. Up to 600. |
@@ -61,6 +61,16 @@ server bridges: they see every line (accents dropped, cut to 63 characters),
 and theirs pass the same checks and reach everyone. `chat_legacy` (or
 `HALO_DEDICATED_CHAT_LEGACY=false`) leaves them out; with the chat off they
 are left out anyway.
+
+An OpenCE player who joined from the **server browser** has no text chat on
+a listed game unless an OpenCE master server lists it as an approved
+operator's dedicated server: their own game turns it off ("Text chat is off
+in this game"), whatever this server says. Joined by the server's invite
+link, they chat. `HALO_NET_LASTING_INVITE=true` keeps that link the same
+across restarts (a new link each start otherwise, and players who had the
+old one go to the browser). ChupathingyCE players chat either way. At start
+the log says what the chat is: `dedicated: text chat on, blocked words
+filtered` (`..., OpenCE players left out` with `chat_legacy` off).
 
 ## Team changes
 

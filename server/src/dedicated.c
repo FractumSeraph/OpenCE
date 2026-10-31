@@ -349,6 +349,33 @@ static long setting_number(
 	return default_value;
 }
 
+/* port (this fork): HALO_DEDICATED_CHAT as sv_chat's words too ("on", "team",
+"off"; "true", "yes", "false", "no"), else a number (2 on, 1 team, 0 off):
+"on" read as a number was 0, the chat off at every start; the settings
+file's, else on, when it is none of them (logged) */
+static long chat_mode_setting(
+	struct server_settings const *settings)
+{
+	char const *value = getenv("HALO_DEDICATED_CHAT");
+	char *end;
+	long number;
+
+	if (!value || !value[0])
+		return settings->set[SERVER_SETTING_CHAT] ? settings->values[SERVER_SETTING_CHAT] : 2;
+	if (!_stricmp(value, "on") || !_stricmp(value, "true") || !_stricmp(value, "yes"))
+		return 2;
+	if (!_stricmp(value, "team"))
+		return 1;
+	if (!_stricmp(value, "off") || !_stricmp(value, "false") || !_stricmp(value, "no"))
+		return 0;
+	number = strtol(value, &end, 10);
+	if (end != value && !*end && number >= 0 && number <= 2)
+		return number;
+	error(_error_silent, "dedicated: HALO_DEDICATED_CHAT=%s is not on, team, off, 2, 1 or 0; text chat %s", value,
+		settings->set[SERVER_SETTING_CHAT] ? "as the settings file says" : "on");
+	return settings->set[SERVER_SETTING_CHAT] ? settings->values[SERVER_SETTING_CHAT] : 2;
+}
+
 static void initialize(
 	void)
 {
@@ -477,7 +504,7 @@ static void initialize(
 	/* text chat: on, and filtered, unless set */
 	{
 		char const *chat_filter = getenv("HALO_DEDICATED_CHAT_FILTER");
-		long mode = setting_number("HALO_DEDICATED_CHAT", &settings, SERVER_SETTING_CHAT, 2);
+		long mode = chat_mode_setting(&settings);
 		boolean filter = settings.set[SERVER_SETTING_CHAT_FILTER] ? settings.values[SERVER_SETTING_CHAT_FILTER] != 0 :
 			TRUE;
 
