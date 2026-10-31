@@ -32,6 +32,13 @@ not just the playlist's.
 timberland@ce    team_slayer
 ```
 
+Without `@ce`, the name is an Xbox map's, looked for in `maps/`: the entry is
+skipped, and the rotation stays on the entries it can play. The skipped
+entry's reason (the log, `sv_status`, the control panel's playlist editor)
+says which name plays a map found in `maps_ce/`, `maps_md/` or `maps_pc/`
+instead ("no multiplayer map Sneak in the maps folder; maps_ce has it:
+write Sneak@ce"; this fork).
+
 A map's name is its file's name without `.map`, as Halo PC takes it:
 commas, brackets and spaces too (`bigassv2,104@ce`, `[h3]_sandtrap@ce`).
 A name with a space (or a `#`) goes in double quotes:

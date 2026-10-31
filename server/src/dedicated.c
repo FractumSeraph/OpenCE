@@ -797,7 +797,7 @@ static boolean set_entry(
 	/* (and a map that is there, and opens: one missing or refused as it
 	loads would stop the server on the damaged disc error) */
 	{
-		static char scratch[160];
+		static char scratch[DEDICATED_SKIPPED_SIZE];
 		struct command_output output;
 
 		command_output_begin(&output, scratch, sizeof(scratch));

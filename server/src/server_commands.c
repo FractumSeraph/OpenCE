@@ -689,6 +689,24 @@ boolean server_map_playable(
 		snprintf(path, sizeof(path), "%s%s.map", cache_files_map_directory(), file);
 		if (!file_is_multiplayer_map(path))
 		{
+#ifdef HALO_CUSTOM_EDITION
+			/* port (this fork): a Halo PC map named without its suffix
+			("Sneak" for Sneak@ce) is the Xbox's to the server: say which
+			name plays it, as a playlist's owner rarely guesses */
+			short other;
+
+			for (other = _map_family_custom_edition; other <= _map_family_halo_pc; other++)
+			{
+				char other_path[256];
+
+				if (map_family_find(other, file, other_path, sizeof(other_path)) && file_is_multiplayer_map(other_path))
+				{
+					command_output_printf(output, "no multiplayer map %s in the maps folder; %s has it: write %s%s\n",
+						file, map_family_folder(other), file, map_family_suffix(other));
+					return FALSE;
+				}
+			}
+#endif
 			command_output_printf(output, "no multiplayer map %s in the maps folder\n", file);
 			return FALSE;
 		}
