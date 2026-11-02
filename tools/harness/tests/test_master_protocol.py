@@ -127,7 +127,7 @@ NEGATIVE_CONTROLS = {
                                 "publish-body"),
     "publish-port-unswapped": (("(long long)(unsigned short)(port << 8 | port >> 8)", "(long long)port"), "publish_body",
                                "publish-body"),
-    "publish-never-dedicated": (('server_json_boolean(json, "dedicated", halo_server_mode() != 0);',
+    "publish-never-dedicated": (('server_json_boolean(json, "dedicated", master_dedicated() != 0);',
                                  'server_json_boolean(json, "dedicated", 0);'), "publish_body", "publish-body"),
     "publish-never-closed": (('server_json_boolean(json, "closed", closed);', 'server_json_boolean(json, "closed", 0);'),
                              "publish_body", "publish-body"),
@@ -271,6 +271,11 @@ def generated(fault=None, faulty_function=None):
     for name in ("PROBE_ANSWERS_PER_SECOND", "PROBE_ANSWERS_PER_ADDRESS", "REMEMBERED_NONCES", "REMEMBERED_SOURCES",
                  "PROBE_SIZE", "PROBE_ANSWER_SIZE", "MAXIMUM_ANSWER"):
         config += f"#define {name} {constant(publisher, name)}\n"
+    # (port: the game's test; ChupathingyCE's server, built with HALO_SERVER, is always dedicated)
+    dedicated = re.search(r"^#define master_dedicated\(\) halo_server_mode\(\)$", publisher, re.M)
+    if not dedicated:
+        raise LookupError("server_master.c's master_dedicated() for the game not found")
+    config += dedicated.group(0) + "\n"
     config += structure(read("port/linux/src/update.h"), "update_response") + "\n"
     config += structure(publisher, "master") + "\n" + state.group(0) + "\n"
     config += enum_with(lobby, "LISTING_FORMAT = 1") + "\n" + label.group(0) + "\n" + structure(lobby, "listing") + "\n"
