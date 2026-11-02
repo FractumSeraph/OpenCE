@@ -30,10 +30,12 @@ def generated(fault=None):
     source = read("port/linux/src/map_torrents.c").replace("\r\n", "\n")
     header = read("port/linux/src/map_torrents.h").replace("\r\n", "\n")
     entry = re.search(r"^struct index_entry\n\{\n.*?\n\};\n", source, re.S | re.M).group(0)
-    index = re.search(r"^static struct\n\{\n\tint loaded;.*?\n\} torrent_maps_index;\n", source, re.S | re.M).group(0)
+    index = (re.search(r"^struct torrent_index\n\{\n\tint loaded;.*?\n\};\n", source, re.S | re.M).group(0) +
+             re.search(r"^static struct torrent_index torrent_maps_index;\n", source, re.M).group(0))
     defines = "\n".join(re.findall(r"^#define (?:NAME_SIZE|MAP_FILE_EXTENSION) .*$", source, re.M) +
                         re.findall(r"^#define MAP_APPROVAL_CONTACT .*$", header, re.M))
-    parts = [defines, entry, index, "static void index_load(void);"]
+    # (the fetched list is asked for when a map is refused: nothing to ask here)
+    parts = [defines, entry, index, "static void index_load(void);", "static void index_fetch_ask(void) {}"]
     for name in ("same_name", "column_hash", "approval_file_name", "map_torrents_approved_hash",
                  "map_torrents_approved", "map_torrents_unapproved_text"):
         code = function(source, name)
