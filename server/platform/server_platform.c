@@ -31,6 +31,7 @@ never hosts.
 #include "delta.h"
 #include "shared_bans.h"
 #include "map_torrents.h"
+#include "server_master.h"
 
 #include <signal.h>
 #include <stdio.h>
@@ -77,8 +78,11 @@ static void print_usage(FILE *stream)
 		"\n"
 		"HALO_PROBE=<invite> reads the game an invite leads to, prints it and exits.\n"
 		"\n"
-		"  --version  prints the version\n"
-		"  --help     prints this\n"
+		"  --version       prints the version\n"
+		"  --help          prints this\n"
+		"  --keygen        makes the publisher key for OpenCE's master servers (publisher.key\n"
+		"                  beside config.toml) and prints its public key\n"
+		"  --sign <text>   prints the publisher key's signature of the text (an application's nonce)\n"
 		"\n"
 		"More: server/README.md, https://github.com/ChupathingyCE/chupathingyce\n");
 }
@@ -175,6 +179,20 @@ static void server_arguments(void)
 			printf("\n");
 			print_usage(stdout);
 			exit(EXIT_SUCCESS);
+		}
+		/* port (this fork): the publisher key of OpenCE's master servers
+		(server_master.c; server/docs/settings.md, "OpenCE's master servers"),
+		as halo --server's --keygen and --sign */
+		if (!strcmp(argument, "--keygen"))
+			exit(server_master_keygen() ? EXIT_SUCCESS : EXIT_FAILURE);
+		if (!strcmp(argument, "--sign"))
+		{
+			if (!posix_command_line_argument(index + 1, argument, sizeof(argument)))
+			{
+				fprintf(stderr, "chupathingyce-server: --sign needs the text to sign\n");
+				exit(2);
+			}
+			exit(server_master_sign_text(argument) ? EXIT_SUCCESS : EXIT_FAILURE);
 		}
 		fprintf(stderr, "chupathingyce-server: unknown argument %s\n\n", argument);
 		print_usage(stderr);
@@ -543,6 +561,18 @@ void platform_pump_events(void)
 	sharing offers by, kept up with its published copy (map_torrents.h; the
 	server neither downloads nor seeds maps) */
 	map_torrents_index_poll();
+	/* port (this fork): the game on OpenCE's master servers too, with a
+	publisher key (server_master.c: nothing without one), once the settings
+	are read */
+	{
+		static int master_started;
+
+		if (!master_started)
+		{
+			master_started = 1;
+			server_master_start_host();
+		}
+	}
 }
 
 /* ---------- the version (updater.c's, which the server leaves out: it

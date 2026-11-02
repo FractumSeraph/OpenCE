@@ -10,7 +10,25 @@ A dedicated server's publishing to the official master servers
 #include "server_master.h"
 #include "server_mode.h"
 
-#if HALO_SERVER_BUILD
+/* port (this fork): ChupathingyCE's dedicated server (server/src,
+HALO_SERVER) publishes with this file too, as a player's host does
+(server_master_start_host, from server_platform.c's event pump): its game is
+the internet lobby's listing, which carries the dedicated bits, and the
+probes are answered on its tunnel's port. It is a dedicated server whatever
+halo_server_mode() says, and its name is HALO_DEDICATED_NAME */
+#if HALO_SERVER_BUILD || defined(HALO_SERVER)
+#define MASTER_PUBLISHER 1
+#else
+#define MASTER_PUBLISHER 0
+#endif
+#ifdef HALO_SERVER
+#define master_dedicated() 1
+const char *updater_version(void);
+#else
+#define master_dedicated() halo_server_mode()
+#endif
+
+#if MASTER_PUBLISHER
 
 #include "p2p.h"
 #include "p2p_internal.h"
@@ -301,7 +319,12 @@ static void instance_name(char *instance, int size)
 {
 	const char *setting = config_string("server.instance");
 	/* (a player's host: "host", unless server.instance names it) */
+#ifdef HALO_SERVER
+	const char *name = getenv("HALO_DEDICATED_NAME");
+	const char *source = setting[0] ? setting : name && name[0] ? name : "main";
+#else
 	const char *source = setting[0] ? setting : halo_server_mode() ? config_string("server.name") : "host";
+#endif
 	int length = 0, index;
 
 	for (index = 0; source[index] && length < size - 1 && length < 32; index++)
@@ -394,8 +417,13 @@ static int publish_body(struct server_json *json, int closed, int *has_listing)
 
 		server_json_integer(json, "tunnel_port", (long long)(unsigned short)(port << 8 | port >> 8));
 	}
-	server_json_boolean(json, "dedicated", halo_server_mode() != 0);
+	server_json_boolean(json, "dedicated", master_dedicated() != 0);
+#ifdef HALO_SERVER
+	/* (its version: it has no CI build number) */
+	server_json_string(json, "build", updater_version());
+#else
 	server_json_string(json, "build", server_mode_build());
+#endif
 	if (config_string("server.region")[0])
 		server_json_string(json, "region", config_string("server.region"));
 	/* (network.public_address as internet play looked it up, an IPv4
@@ -660,7 +688,7 @@ static int SDLCALL master_thread_main(void *unused)
 	player's host's only where its game is listed */
 	for (index = 0; index < master.master_count; index++)
 	{
-		if (halo_server_mode() || master.masters[index].published)
+		if (master_dedicated() || master.masters[index].published)
 			publish_to(&master.masters[index], 1);
 	}
 	SDL_LockMutex(master.lock);

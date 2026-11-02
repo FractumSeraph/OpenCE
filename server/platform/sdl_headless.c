@@ -4,7 +4,9 @@ SDL_HEADLESS.C
 The few SDL functions the platform units the server shares with the game
 call (port_config.c, menu_files.c, browser.c, dsound_sdl.c, gl_functions.c),
 for a server built without SDL (tools/server_build.py): files and folders
-with the C library, and no audio device or OpenGL to open. Each behaves as
+with the C library, and no audio device or OpenGL to open; and (port, this
+fork) the threads, locks and conditions the master servers' publisher
+(server_master.c) runs on, with POSIX's. Each behaves as
 SDL 3's does for what those units ask of it. Built with the host's ABI, as
 SDL is; only SDL's headers are needed, for the declarations.
 */
@@ -15,6 +17,7 @@ SDL is; only SDL's headers are needed, for the declarations.
 #include <errno.h>
 #include <glob.h>
 #include <limits.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -334,4 +337,150 @@ Uint64 SDL_GetTicks(void)
 	clock_gettime(CLOCK_MONOTONIC, &now);
 	return (Uint64)((long long)(now.tv_sec - start.tv_sec) * 1000 +
 		(now.tv_nsec - start.tv_nsec) / 1000000);
+}
+
+/* ---------- threads (port, this fork: the master servers' publisher,
+server_master.c, which a ChupathingyCE server runs too: a thread, a lock and
+a condition, with POSIX's) */
+
+struct SDL_Mutex
+{
+	pthread_mutex_t mutex;
+};
+
+struct SDL_Condition
+{
+	pthread_cond_t condition;
+};
+
+struct headless_thread
+{
+	SDL_ThreadFunction function;
+	void *data;
+};
+
+/* (nanoseconds since the server started) */
+Uint64 SDL_GetTicksNS(void)
+{
+	static struct timespec start;
+	struct timespec now;
+
+	if (!start.tv_sec && !start.tv_nsec)
+		clock_gettime(CLOCK_MONOTONIC, &start);
+	clock_gettime(CLOCK_MONOTONIC, &now);
+	return (Uint64)((long long)(now.tv_sec - start.tv_sec) * 1000000000LL + (now.tv_nsec - start.tv_nsec));
+}
+
+SDL_Mutex *SDL_CreateMutex(void)
+{
+	SDL_Mutex *mutex = malloc(sizeof(*mutex));
+
+	if (!mutex)
+		return NULL;
+	pthread_mutex_init(&mutex->mutex, NULL);
+	return mutex;
+}
+
+void SDL_LockMutex(SDL_Mutex *mutex)
+{
+	if (mutex)
+		pthread_mutex_lock(&mutex->mutex);
+}
+
+void SDL_UnlockMutex(SDL_Mutex *mutex)
+{
+	if (mutex)
+		pthread_mutex_unlock(&mutex->mutex);
+}
+
+/* (on the monotonic clock, as SDL's: a change of the time of day stretches
+or cuts no wait) */
+SDL_Condition *SDL_CreateCondition(void)
+{
+	SDL_Condition *condition = malloc(sizeof(*condition));
+	pthread_condattr_t attributes;
+
+	if (!condition)
+		return NULL;
+	pthread_condattr_init(&attributes);
+	pthread_condattr_setclock(&attributes, CLOCK_MONOTONIC);
+	pthread_cond_init(&condition->condition, &attributes);
+	pthread_condattr_destroy(&attributes);
+	return condition;
+}
+
+void SDL_SignalCondition(SDL_Condition *condition)
+{
+	if (condition)
+		pthread_cond_signal(&condition->condition);
+}
+
+void SDL_BroadcastCondition(SDL_Condition *condition)
+{
+	if (condition)
+		pthread_cond_broadcast(&condition->condition);
+}
+
+/* true if signalled, false on the timeout (a negative one waits for ever) */
+bool SDL_WaitConditionTimeout(SDL_Condition *condition, SDL_Mutex *mutex, Sint32 milliseconds)
+{
+	struct timespec until;
+
+	if (!condition || !mutex)
+		return false;
+	if (milliseconds < 0)
+		return pthread_cond_wait(&condition->condition, &mutex->mutex) == 0;
+	clock_gettime(CLOCK_MONOTONIC, &until);
+	until.tv_sec += milliseconds / 1000;
+	until.tv_nsec += (long)(milliseconds % 1000) * 1000000L;
+	if (until.tv_nsec >= 1000000000L)
+	{
+		until.tv_sec++;
+		until.tv_nsec -= 1000000000L;
+	}
+	return pthread_cond_timedwait(&condition->condition, &mutex->mutex, &until) == 0;
+}
+
+static void *headless_thread_main(void *argument)
+{
+	struct headless_thread thread = *(struct headless_thread *)argument;
+
+	free(argument);
+	thread.function(thread.data);
+	return NULL;
+}
+
+/* (detached: the server waits for none of its threads, it stops them by
+their own flags) */
+SDL_Thread *SDL_CreateThreadRuntime(SDL_ThreadFunction function, const char *name, void *data,
+	SDL_FunctionPointer begin_thread, SDL_FunctionPointer end_thread)
+{
+	struct headless_thread *thread = malloc(sizeof(*thread));
+	pthread_attr_t attributes;
+	pthread_t handle;
+	int created;
+
+	(void)name;
+	(void)begin_thread;
+	(void)end_thread;
+	if (!thread)
+		return NULL;
+	thread->function = function;
+	thread->data = data;
+	pthread_attr_init(&attributes);
+	pthread_attr_setdetachstate(&attributes, PTHREAD_CREATE_DETACHED);
+	created = pthread_create(&handle, &attributes, headless_thread_main, thread) == 0;
+	pthread_attr_destroy(&attributes);
+	if (!created)
+	{
+		free(thread);
+		headless_set_error("cannot start a thread");
+		return NULL;
+	}
+	/* (not a handle to wait on: only whether it started) */
+	{
+		static char started;
+
+		return (SDL_Thread *)&started;
+	}
 }

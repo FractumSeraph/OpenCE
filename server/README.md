@@ -4,7 +4,9 @@ A Halo: Combat Evolved server for Linux and Windows. It hosts games by itself, w
 player of its own, around the clock, from a playlist of maps and game types.
 Its games show on [stats.chupathingy.org](https://stats.chupathingy.org), the
 community's game list, and in the in-game Server Browser of Chupathingy
-and OpenCE. Finished games get carnage reports there.
+and OpenCE. Finished games get carnage reports there. (This fork: with an
+approved publisher key it is listed on OpenCE's master servers too:
+[docs/settings.md](docs/settings.md#opences-master-servers).)
 
 It is the game itself (the same code, network protocol and version as the
 ChupathingyCE release it comes with), built as a program of its own with

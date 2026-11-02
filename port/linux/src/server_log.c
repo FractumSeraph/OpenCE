@@ -189,12 +189,35 @@ unsigned long server_log_latest(void)
 
 #else
 
+#ifdef HALO_SERVER
+/* port (this fork): ChupathingyCE's dedicated server (HALO_SERVER) has a
+log of its own, the game's: the lines of the shared code it runs (the
+master servers' publisher, server_master.c; the door's Discord passes) go
+there, "<category>: <text>", a warning's and an error's marked */
+#include <stdarg.h>
+#include <stdio.h>
+
+void platform_log(const char *format, ...);
+
+void server_log(int level, const char *category, const char *format, ...)
+{
+	char text[1024];
+	va_list arguments;
+
+	va_start(arguments, format);
+	vsnprintf(text, sizeof(text), format, arguments);
+	va_end(arguments);
+	platform_log("%s: %s%s", category, level == _server_log_error ? "error: " :
+		level == _server_log_warning ? "warning: " : "", text);
+}
+#else
 void server_log(int level, const char *category, const char *format, ...)
 {
 	(void)level;
 	(void)category;
 	(void)format;
 }
+#endif
 
 void server_log_private(int level, const char *category, const char *format, ...)
 {

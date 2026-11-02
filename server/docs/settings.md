@@ -154,6 +154,53 @@ The UDP port must be open (forwarded) for the queries to reach the server
 from outside. The naming of Xbox maps is the Custom Edition community's,
 passed on by ugoboom.
 
+## OpenCE's master servers
+
+(This fork.) Besides ChupathingyCE's list (stats.chupathingy.org) and the
+in-game Server Browser, the server can be listed by OpenCE's master servers
+(`https://master.opencommunityedition.com`), whose list OpenCE's own server
+browser shows as dedicated servers, with their text chat on. It publishes
+there as OpenCE's dedicated server (`halo --server`) does, with the same
+code (`port/linux/src/server_master.c`, [docs/master_protocol.md](../../docs/master_protocol.md)):
+its internet game's signed listing every 30 seconds and within 5 seconds of
+a change, signed with its operator's **publisher key**, and the master's
+reachability probes answered on its tunnel's UDP port. It is withdrawn as
+the server stops.
+
+Nothing of this happens without a publisher key, and nothing is said of it
+then. To be listed:
+
+1. `chupathingyce-server --keygen` makes the key (`publisher.key`, beside
+   `config.toml`, readable by its owner alone) and prints its public key
+   (`ed25519:...`) and key id. Run it as the user the server runs as. The
+   private key never leaves the machine; whoever has the file publishes as
+   you. Several servers on one machine share the one key.
+2. Apply once to the masters, through their Discord bot (`/apply` on the
+   master's Discord server: `https://master.opencommunityedition.com/apply`
+   says how). The bot gives a nonce to sign:
+   `chupathingyce-server --sign <nonce>` prints the signature it asks for.
+3. Start the server (restart it, if it ran before the key was made). Until
+   an approver decides, the masters answer `publisher pending` (logged
+   once a minute); then the server is listed at its next publish.
+
+The log says what each master answered when it changes:
+`master: publishing to 1 master server as fractumffa (key id ..., server id ...)`,
+then `master: https://master.opencommunityedition.com: listed (probe ok)`.
+A failed probe is a UDP port the master cannot reach: the tunnel's
+(`network.tunnel_port`) must be open from the internet, as for players.
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `HALO_SERVER_MASTER_PUBLISH` | `true` | `false`: not published to the masters, even with a key. |
+| `HALO_SERVER_MASTERS_FILE` | `masters.txt` | The masters (beside `config.toml`): one `https://` URL and its list key on each line. One that names none, as the release's, means the official master. |
+| `HALO_SERVER_PUBLISHER_KEY_FILE` | `publisher.key` | The key's file, beside `config.toml` unless a full path. |
+| `HALO_SERVER_PUBLISHER_KEY` | (none) | The key itself, 64 hexadecimal digits, in place of the file. |
+| `HALO_SERVER_INSTANCE` | `HALO_DEDICATED_NAME`, as a slug | The name the masters know this server by among its operator's (`fractumffa`); two servers with one key need two. |
+| `HALO_SERVER_REGION` | (none) | A region the masters show (`na-us`): up to 16 of `a-z`, `0-9` and `-`. |
+
+Only a public game is published (`HALO_DEDICATED_PUBLIC`): one that is not
+is withdrawn.
+
 ## Folders
 
 | Variable | Default | What it does |
@@ -197,13 +244,15 @@ found.
 ## The command line
 
 ```
-chupathingyce-server [--version | --help]
+chupathingyce-server [--version | --help | --keygen | --sign <text>]
 ```
 
 | | |
 | --- | --- |
 | `--version`, `-v` | Prints the version, architecture and network version, and exits. |
 | `--help`, `-h` | Prints a summary of the settings, and exits. |
+| `--keygen` | Makes the publisher key for OpenCE's master servers, unless there is one, and prints its public key and id ([above](#opences-master-servers)). |
+| `--sign <text>` | Prints the publisher key's signature of the text: the master's application's nonce. |
 
 Commands for a running server (kick, ban, change the map, ...) are typed
 on its console or sent to its control API: [admin.md](admin.md).

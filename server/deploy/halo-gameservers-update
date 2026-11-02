@@ -9,7 +9,9 @@
 #      once every platform built), and its server's zip and digest;
 #   2. nothing to do if the servers run it already;
 #   3. only while both servers have no players (the public game list, asked
-#      twice a minute apart): never in the middle of a game;
+#      twice a minute apart): never in the middle of a game. `--force`, run
+#      by hand, skips this (a server whose count is stuck above 0 would
+#      otherwise never be updated);
 #   4. the zip checked against GitHub's SHA-256 digest, the program run once
 #      (--version), the one running until now kept as chupathingyce-server.previous;
 #   5. both servers restarted, and if either is not running a minute later,
@@ -99,15 +101,18 @@ def main():
     if current == version:
         return 0
     log(f"{tag} is out; the servers run {current or 'an unknown version'}")
-    count = players()
-    if count != 0:
-        log(f"the servers have players ({count}); trying again later")
-        return 0
-    time.sleep(60)
-    count = players()
-    if count != 0:
-        log(f"the servers have players ({count}); trying again later")
-        return 0
+    if "--force" in sys.argv[1:]:
+        log(f"--force: updating with the servers' players ({players()})")
+    else:
+        count = players()
+        if count != 0:
+            log(f"the servers have players ({count}); trying again later")
+            return 0
+        time.sleep(60)
+        count = players()
+        if count != 0:
+            log(f"the servers have players ({count}); trying again later")
+            return 0
 
     work = tempfile.mkdtemp(prefix="halo-update-")
     try:

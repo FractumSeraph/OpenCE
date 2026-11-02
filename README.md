@@ -88,6 +88,11 @@ are [ChupathingyCE's](#chupathingyce) and [OpenCE's](#opence) own pages.
   ([docs/bomb.md](docs/bomb.md)), HaloMD maps and community Xbox map packs,
   surround sound and Audio Setup, its dedicated server with a web control
   panel, and the rest of [its features](#chupathingyce).
+- **ChupathingyCE's server on OpenCE's master servers.** With an approved
+  publisher key (`chupathingyce-server --keygen`), the ChupathingyCE
+  dedicated server is listed on master.opencommunityedition.com too, as
+  OpenCE's own server is, so OpenCE's server browser shows it as a dedicated
+  server ([server/docs/settings.md](server/docs/settings.md#opences-master-servers)).
 - **Invite links that last.** A host's `halo://join/` link can stay the same
   from run to run (`network.lasting_invite`), to post on a website.
 - **The game's maps at the first start.** The Windows, Mac, Linux and
