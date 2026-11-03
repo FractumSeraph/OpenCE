@@ -1619,8 +1619,16 @@ offer alone, the host's word, would take the disk) */
 static boolean download_file_create(
 	struct download_file *file)
 {
-	FILE *stream = fopen(file->part_path, "wb");
+	FILE *stream;
+	char folder[MAP_SHARE_PATH_SIZE];
 
+	/* port (this fork): the folder made first: a player whose Custom Edition
+	maps are in OpenCE's custom_maps has no maps_ce yet (as map_download.c
+	makes it) */
+	csprintf(folder, "%s", CUSTOM_EDITION_MAP_DIRECTORY);
+	folder[csstrlen(folder) - 1] = 0;
+	CreateDirectoryA(folder, NULL);
+	stream = fopen(file->part_path, "wb");
 	if (!stream)
 		return FALSE;
 	fclose(stream);
@@ -2644,7 +2652,7 @@ static void frame_hashes(
 	file->piece_hashes = file->hashes_coming;
 	file->hashes_coming = NULL;
 	if (!download_file_open(file, connection->download_file[body[0]]))
-		download_fail("The map could not be written to custom_maps.");
+		download_fail("The map could not be written to maps_ce.");
 }
 
 /* the frames read in, handled */
@@ -3136,7 +3144,7 @@ static void download_update(
 			/* (unreadable, or changed meanwhile: made anew) */
 			else if (!download_file_create(file))
 			{
-				download_fail("The map could not be written to custom_maps.");
+				download_fail("The map could not be written to maps_ce.");
 				return;
 			}
 			download->progress_at = now;
