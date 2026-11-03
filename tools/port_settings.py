@@ -12,8 +12,8 @@ port/linux/game/menu_functions.c: "port setting load" shows its value,
 settings defaults" shows the defaults. A screen's VIEWS are nested lists in
 it, which a row of its list opens; a few rows open screens of their own
 instead, OpenCE's that a nested list cannot be (_screen_link: HDR
-Calibration, Discord Account, the controller's Button Remapping and Button
-Appearance). Controls Setup has every device's
+Calibration, Discord Account, the controller's Button Remapping, Button
+Appearance and Stick Dead Zones). Controls Setup has every device's
 controls in one list: the keyboard's keys, the mouse's settings, and the
 controller's settings and buttons. Each platform's rows are packed in places
 of their own, so that a row another platform has leaves no gap (_layout).
