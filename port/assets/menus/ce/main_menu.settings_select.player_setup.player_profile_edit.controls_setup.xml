@@ -17,52 +17,53 @@
 		<on event="deleted" run="port controls closed"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_device" x="54" y="73" platform="desktop android web switch"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/view_keyboard_mouse" x="54" y="73"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_group" x="54" y="97" platform="desktop android web switch"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_group" x="54" y="95" platform="desktop android web switch"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/view_keyboard" x="54" y="73"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_command_1" x="54" y="121" platform="desktop android web switch"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_command_2" x="54" y="145" platform="desktop android web switch"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_command_3" x="54" y="169" platform="desktop android web switch"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_command_4" x="54" y="193" platform="desktop android web switch"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_command_5" x="54" y="217" platform="desktop android web switch"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_command_6" x="54" y="241" platform="desktop android web switch"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_command_7" x="54" y="265" platform="desktop android web switch"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_command_1" x="54" y="117" platform="desktop android web switch"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_command_2" x="54" y="139" platform="desktop android web switch"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_command_3" x="54" y="161" platform="desktop android web switch"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_command_4" x="54" y="183" platform="desktop android web switch"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_command_5" x="54" y="205" platform="desktop android web switch"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_command_6" x="54" y="227" platform="desktop android web switch"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_command_7" x="54" y="249" platform="desktop android web switch"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/view_mouse" x="54" y="73"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_mouse_sensitivity" x="54" y="121" platform="desktop android web switch"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_mouse_vertical_sensitivity" x="54" y="145" platform="desktop android web switch"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_invert_mouse" x="54" y="169" platform="desktop android web switch"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_mouse_aim_assist" x="54" y="193" platform="desktop android web switch"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_menu_cursor" x="54" y="217" platform="desktop"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_mouse_sensitivity" x="54" y="117" platform="desktop android web switch"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_mouse_vertical_sensitivity" x="54" y="139" platform="desktop android web switch"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_invert_mouse" x="54" y="161" platform="desktop android web switch"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_mouse_aim_assist" x="54" y="183" platform="desktop android web switch"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_menu_cursor" x="54" y="205" platform="desktop"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/view_gamepad_buttons" x="54" y="73"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_page" x="54" y="97" platform="desktop android web switch"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_page" x="54" y="95" platform="desktop android web switch"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/view_gamepad" x="54" y="73"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_layout" x="54" y="121" platform="desktop android web switch"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_look_sensitivity" x="54" y="145" platform="desktop android web switch"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_layout" x="54" y="117" platform="desktop android web switch"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_look_sensitivity" x="54" y="139" platform="desktop android web switch"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_look_sensitivity" x="54" y="73" platform="console"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_invert_look" x="54" y="169" platform="desktop android web switch"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_invert_look" x="54" y="97" platform="console"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_flight_inversion" x="54" y="193" platform="desktop android web switch"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_flight_inversion" x="54" y="121" platform="console"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_autocenter" x="54" y="217" platform="desktop android web switch"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_autocenter" x="54" y="145" platform="console"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_joystick_preset" x="54" y="241" platform="desktop android web switch"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_joystick_preset" x="54" y="169" platform="console"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_vibration" x="54" y="265" platform="desktop android web switch"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_vibration" x="54" y="193" platform="console"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_ingame_help" x="54" y="289" platform="desktop android web switch"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_ingame_help" x="54" y="217" platform="console"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_screen:controller_remapping" x="54" y="313" platform="desktop android web switch"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_screen:controller_appearance" x="54" y="337" platform="desktop android web switch"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_invert_look" x="54" y="161" platform="desktop android web switch"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_invert_look" x="54" y="95" platform="console"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_flight_inversion" x="54" y="183" platform="desktop android web switch"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_flight_inversion" x="54" y="117" platform="console"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_autocenter" x="54" y="205" platform="desktop android web switch"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_autocenter" x="54" y="139" platform="console"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_joystick_preset" x="54" y="227" platform="desktop android web switch"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_joystick_preset" x="54" y="161" platform="console"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_vibration" x="54" y="249" platform="desktop android web switch"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_vibration" x="54" y="183" platform="console"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_ingame_help" x="54" y="271" platform="desktop android web switch"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_ingame_help" x="54" y="205" platform="console"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_screen:controller_remapping" x="54" y="293" platform="desktop android web switch"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_screen:controller_appearance" x="54" y="315" platform="desktop android web switch"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_screen:dead_zones" x="54" y="337" platform="desktop android web switch"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/view_buttons" x="54" y="73"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_button_1" x="54" y="121" platform="desktop android web switch"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_button_2" x="54" y="145" platform="desktop android web switch"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_button_3" x="54" y="169" platform="desktop android web switch"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_button_4" x="54" y="193" platform="desktop android web switch"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_button_5" x="54" y="217" platform="desktop android web switch"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_button_6" x="54" y="241" platform="desktop android web switch"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_button_7" x="54" y="265" platform="desktop android web switch"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_button_8" x="54" y="289" platform="desktop android web switch"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_button_9" x="54" y="313" platform="desktop android web switch"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_button_10" x="54" y="337" platform="desktop android web switch"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_button_1" x="54" y="117" platform="desktop android web switch"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_button_2" x="54" y="139" platform="desktop android web switch"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_button_3" x="54" y="161" platform="desktop android web switch"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_button_4" x="54" y="183" platform="desktop android web switch"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_button_5" x="54" y="205" platform="desktop android web switch"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_button_6" x="54" y="227" platform="desktop android web switch"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_button_7" x="54" y="249" platform="desktop android web switch"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_button_8" x="54" y="271" platform="desktop android web switch"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_button_9" x="54" y="293" platform="desktop android web switch"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_button_10" x="54" y="315" platform="desktop android web switch"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/button_bar" y="414"/>
 	</widget>
 	<widget name="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/button_bar" type="column_list" width="640" height="28" flags="pass_unhandled_to_focused_child left_right_tabs_items">
@@ -296,6 +297,14 @@
 	</widget>
 	<widget name="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/screen:controller_appearance_label" type="text" controller="1" width="300" height="22" string_list="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/labels" string_index="13" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="4">
 	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_screen:dead_zones" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF" platform="desktop android web switch">
+		<on event="a" open="main_menu/settings_select/player_setup/player_profile_edit/dead_zones/dead_zone_settings_screen"/>
+		<on event="start" open="main_menu/settings_select/player_setup/player_profile_edit/dead_zones/dead_zone_settings_screen"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/screen:dead_zones_label"/>
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/screen:dead_zones_label" type="text" controller="1" width="300" height="22" string_list="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/labels" string_index="14" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="4">
+	</widget>
 	<widget name="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/view_buttons" width="1" height="1">
 	</widget>
 	<widget name="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_button_1" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF">
@@ -395,6 +404,7 @@
 		<string text="IN-GAME HELP:"/>
 		<string text="BUTTON REMAPPING"/>
 		<string text="BUTTON APPEARANCE"/>
+		<string text="STICK DEAD ZONES"/>
 	</strings>
 	<strings name="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/help_strings">
 		<string text=""/>
@@ -412,6 +422,7 @@
 		<string text="Show control hints during play."/>
 		<string text="Custom button layouts for P1-P4.&#10;Use / Reload stays combined."/>
 		<string text="Controller artwork and bumper style.&#10;Requires High-Res HUD in Interface."/>
+		<string text="How far each stick moves before it does&#10;anything."/>
 	</strings>
 	<widget name="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/button_defaults" type="text" width="128" height="24" bitmap="bitmaps/text_button_background" string_list="strings/common_button_captions" string_index="3" font="ui\small_ui" color="#FFFFFFFF" align="center" text_y="2">
 		<on event="a" run="port controls defaults"/>

@@ -495,6 +495,23 @@ SCREENS["video_settings/hdr_calibration"] = {
     ],
 }
 
+# the controller's sticks' dead zones (port/linux/src/xinput_sdl.c's
+# halo_stick_dead_range): OpenCE's screen of its own, config.toml's, for
+# every profile; Controls Setup's controller settings open it
+# (CONTROLLER_LINKS). The game's own, about 27%, first, then 0% to 50% in
+# steps of 5.
+DEAD_ZONES = [("DEFAULT", "-1")] + [(f"{percent}%", str(percent)) for percent in range(0, 51, 5)]
+SCREENS["dead_zones"] = {
+    "screen": "dead_zone_settings_screen", "spacing": 30,
+    "header": ("header_profile_controller_setting", f"{PE}/controller_edit/header_profile_controller_setting"),
+    "rows": [
+        ("LEFT STICK:", "input.left_stick_dead_zone", DEAD_ZONES,
+         "How far the left stick moves before you move.\nDefault: the game's own, 27%.", None),
+        ("RIGHT STICK:", "input.right_stick_dead_zone", DEAD_ZONES,
+         "How far the right stick moves before the view\nturns. Default: the game's own, 27%.", None),
+    ],
+}
+
 # Network Setup's Discord account (port/linux/src/player_link.c): the account
 # linked at the master servers (masters.txt's, up to 4), which a dedicated
 # server that blocks VPNs lets in from one when it is listed by the master the
@@ -602,6 +619,8 @@ CONTROLLER_LINKS = [
                  "Custom button layouts for P1-P4.\nUse / Reload stays combined.", NOT_CONSOLE),
     _screen_link("BUTTON APPEARANCE", "controller_appearance",
                  "Controller artwork and bumper style.\nRequires High-Res HUD in Interface.", NOT_CONSOLE),
+    _screen_link("STICK DEAD ZONES", "dead_zones", "How far each stick moves before it does\nanything.",
+                 NOT_CONSOLE),
 ]
 
 # Controls Setup: the keyboard and mouse's actions, in groups (the order of
@@ -1042,7 +1061,9 @@ CONTROLLER_PRESETS = ["DEFAULT", "SWAP TRIGGERS", "SWAP A, L TRIGGER", "SWAP B, 
 # (port/linux/game/menu_functions.c's button_row_actions, in order)
 CONTROLLER_ACTIONS = ["FIRE:", "GRENADE:", "MELEE:", "JUMP:", "ACTION / RELOAD:", "SWITCH WEAPON:",
                       "SWITCH GRENADE:", "FLASHLIGHT:", "CROUCH:", "ZOOM:"]
-CONTROLS_SPEC = {"screen": "controls_settings_screen", "spacing": 24, "help_top": 368, "help_text": True,
+# (thirteen places, the controller's settings': 22 apart, as Server Setup's,
+# puts the last above the help)
+CONTROLS_SPEC = {"screen": "controls_settings_screen", "spacing": 22, "help_top": 368, "help_text": True,
                  "header": ("header_profile_controls_settings",
                             f"{PE}/controls_setup/header_profile_controls_settings")}
 

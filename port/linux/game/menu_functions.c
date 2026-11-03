@@ -2032,11 +2032,11 @@ static boolean settings_view_back(struct widget_instance *widget, boolean *widge
 
 /* the rows that open a screen of their own (tools/port_settings.py's
 _screen_link: OpenCE's HDR Calibration, Discord Account and the controller's
-Button Remapping and Button Appearance), by their names */
+Button Remapping, Button Appearance and Stick Dead Zones), by their names */
 static boolean screen_link_row(struct widget_instance *row)
 {
 	static char const *const names[] = { "op_hdr_calibration", "op_discord_account", "op_controller_remapping",
-		"op_controller_appearance" };
+		"op_controller_appearance", "op_dead_zones" };
 	short index;
 
 	for (index = 0; row && index < (short)NUMBEROF(names); index++)

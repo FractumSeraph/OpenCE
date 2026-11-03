@@ -42,6 +42,13 @@ int halo_linux_mouse_look(short gamepad_index, float *yaw, float *pitch)
 	return FALSE;
 }
 
+/* (no controller: the game's own dead range, input_xbox.c's) */
+short halo_stick_dead_range(short stick)
+{
+	(void)stick;
+	return 9000;
+}
+
 int halo_linux_mouse_aiming(short gamepad_index)
 {
 	(void)gamepad_index;

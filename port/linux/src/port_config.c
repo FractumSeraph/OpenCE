@@ -753,6 +753,14 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"Invert the gyroscope's up and down. With true, tilting the controller\n"
 		"up looks down. The stick's invert is separate." },
 #endif
+	{ "input.left_stick_dead_zone", _config_integer, "-1", "HALO_LEFT_STICK_DEAD_ZONE", _environment_value, _platform_all,
+		"How far the controller's left stick moves before it moves the player,\n"
+		"in percent of its travel (0 to 50): lower for finer control, higher for\n"
+		"a worn stick that drifts; -1 for the game's own (27%). On Android, the\n"
+		"touch controls' stick too." },
+	{ "input.right_stick_dead_zone", _config_integer, "-1", "HALO_RIGHT_STICK_DEAD_ZONE", _environment_value, _platform_all,
+		"How far the controller's right stick moves before it turns the view, in\n"
+		"percent of its travel (0 to 50); -1 for the game's own (27%)." },
 
 	{ "input.auto_button_detection", _config_boolean, "true", "HALO_AUTO_BUTTON_DETECTION", _environment_value, _platform_all,
 		"Limit Button Style to the assigned controller's family. Unknown devices\n"
