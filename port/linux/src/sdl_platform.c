@@ -4619,14 +4619,53 @@ static void screen_keyboard_update(void)
 }
 
 #endif
+#ifdef _WIN32
+/* (user32's and kernel32's: this file does without <windows.h>) */
+__declspec(dllimport) void *__stdcall GetForegroundWindow(void);
+__declspec(dllimport) unsigned long __stdcall GetWindowThreadProcessId(void *window, unsigned long *process);
+__declspec(dllimport) unsigned long __stdcall GetCurrentProcessId(void);
+#endif
+
+/* port (this fork): whether the game's window has the focus now: SDL's
+window flags, or on Windows the foreground window being one of this
+process's (the game's, or an overlay's in it, as Steam's). The focus
+events alone left a player in fullscreen with Steam Input with a dead
+controller in the menus, the window in front: unfocused, the game drops
+every gamepad's input (controller_remap_input) */
+static BOOL platform_window_focused_now(void)
+{
+	if (!platform_window)
+		return FALSE;
+	if (SDL_GetWindowFlags(platform_window) & SDL_WINDOW_INPUT_FOCUS)
+		return TRUE;
+	/* (HALO_TEST_FOCUSED=1: always, for a test driving the menus with
+	debug.test_gamepads where the window never gets the focus, a locked
+	desktop's) */
+	{
+		char const *test = SDL_getenv("HALO_TEST_FOCUSED");
+
+		if (test && test[0] == '1')
+			return TRUE;
+	}
+#ifdef _WIN32
+	{
+		unsigned long process = 0;
+		void *foreground = GetForegroundWindow();
+
+		if (foreground && GetWindowThreadProcessId(foreground, &process) && process == GetCurrentProcessId())
+			return TRUE;
+	}
+#endif
+	return FALSE;
+}
+
 #ifdef HALO_LAUNCHER
-/* port (this fork): the window's focus as SDL has it now. The launcher
+/* port (this fork): the window's focus as it is now. The launcher
 (launcher.c) reads the events before the game does, the window's first
-focus among them, and without it the game took itself for unfocused, which
-drops every gamepad's input (controller_remap_input) */
+focus among them, and without it the game took itself for unfocused */
 void platform_input_focus_sync(void)
 {
-	BOOL focused = platform_window && (SDL_GetWindowFlags(platform_window) & SDL_WINDOW_INPUT_FOCUS) != 0;
+	BOOL focused = platform_window_focused_now();
 
 	pthread_mutex_lock(&input_lock);
 	input_state.focused = focused;
@@ -4637,6 +4676,13 @@ void platform_input_focus_sync(void)
 void platform_input_read(struct platform_input_state *state, BOOL consume_motion)
 {
 	pthread_mutex_lock(&input_lock);
+	/* (unfocused by the events, but the window has the focus: a focus
+	event missed or never sent; platform_window_focused_now) */
+	if (!input_state.focused && platform_window_focused_now())
+	{
+		platform_log("input: the window has the focus, though no focus event said so");
+		input_state.focused = TRUE;
+	}
 	*state = input_state;
 	/* (rebinding: nothing reaches the controller until the input is taken
 	and every key and button is up again) */

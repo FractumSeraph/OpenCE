@@ -9423,6 +9423,32 @@ static void widget_instance_process_one_event_recursive(
 	return;
 }
 
+/* port: whether a screen of ours (port/assets/menus) takes Start itself, as
+the Chupathingy menus' settings pages do (their OK): it, or a widget along
+its focus's path, has a handler of its own for it */
+static boolean ui_widget_port_screen_takes_start(
+	struct widget_instance *widget)
+{
+	if (!widget || !pc_menu_tag(widget->definition_tag_index))
+		return FALSE;
+	for (; widget; widget = widget->focused_child)
+	{
+		struct ui_widget_definition *definition = ui_widget_definition_get(widget->definition_tag_index);
+		long handler_index;
+
+		for (handler_index = 0; handler_index < definition->event_handlers.count; handler_index++)
+		{
+			struct ui_widget_event_handler_reference *handler =
+				(struct ui_widget_event_handler_reference *)xbox_pointer(definition->event_handlers.address) +
+				handler_index;
+
+			if (handler->event_type == _gamepad_binary_button_start)
+				return TRUE;
+		}
+	}
+	return FALSE;
+}
+
 static boolean ui_check_for_pause_game(
 	void)
 {
@@ -9447,6 +9473,10 @@ static boolean ui_check_for_pause_game(
 				input_get_gamepad_state(gamepad_index)->
 					buttons[_gamepad_binary_button_start] == 1)
 			{
+				/* port: a screen of ours that takes Start (the settings
+				pages' OK) gets it: closing the menu dropped its changes */
+				if (ui_widget_port_screen_takes_start(widget_globals.active_widgets[gamepad_index]))
+					continue;
 				pause_pressed = TRUE;
 				controller_index = gamepad_index;
 				break;

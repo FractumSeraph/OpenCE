@@ -379,7 +379,8 @@ Recon is the standard layout with action and reload on the right bumper and
 grenades switched with the left bumper (the flashlight moves to X).
 
 Controls Setup (Settings > Controls, or the Xbox and Gearbox menus' pause
-menu's CONTROLS) has
+menu's CONTROLS; the Chupathingy menus' X or Start accepts it, B cancels;
+in a game, Start there accepts rather than closing the pause menu) has
 every device's controls in one list: DEVICE chooses KEYBOARD/MOUSE or
 GAMEPAD (the device used last when it opens), and SHOW chooses the keys'
 groups or the mouse's settings, or the controller's settings or buttons.

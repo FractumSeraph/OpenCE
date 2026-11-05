@@ -92,6 +92,9 @@ int controller_remap_capture_poll(int *button)
     return result;
 }
 
+/* (the ports whose gamepad was ignored for the window's focus, and said so) */
+static unsigned int unfocused_said;
+
 int controller_remap_input(short port, XINPUT_GAMEPAD *pad, int connected)
 {
     unsigned char values[16], layout[CONTROLLER_REMAP_ACTIONS], targets[CONTROLLER_REMAP_ACTIONS];
@@ -116,7 +119,18 @@ int controller_remap_input(short port, XINPUT_GAMEPAD *pad, int connected)
     for (i = 0; i < 16; i++) if (values[i] > 30) held |= 1u << i;
     platform_input_read(&input, FALSE);
     controller_device_get(port, &device);
-    if (!input.focused) connected = 0;
+    if (!input.focused && connected)
+    {
+        /* port (this fork): said in the log once each time, for a player
+         * whose gamepad does nothing in the menus */
+        if (!(unfocused_said & (1u << port)))
+            platform_log("input: gamepad %d (%s) ignored: the window has no focus", port + 1,
+                device.name[0] ? device.name : "unnamed");
+        unfocused_said |= 1u << port;
+        connected = 0;
+    }
+    else if (input.focused)
+        unfocused_said &= ~(1u << port);
     if (capture.phase && capture.port == port)
     {
         controller_device_get(port, &device);

@@ -1361,7 +1361,10 @@ def chupathingy_settings_pages() -> list:
             spec = CONTROLS_SPEC
             rows, _ = _controls_rows()
             inputs = CONTROLS_LIST_INPUTS
+            # (Start accepts too, as on the other pages: unhandled, it went
+            # on to the pause menu, which closed with the change dropped)
             handlers = [*CONTROLS_LIST_HANDLERS, '<on event="x" run="port controls accept" back="true"/>',
+                        '<on event="start" run="port controls accept" back="true"/>',
                         '<on event="y" run="port controls defaults"/>']
             prompts = (_xbox_prompt("y", 60, "defaults") + _xbox_prompt("x", 215, "accept") +
                        _xbox_prompt("b", 350, "cancel") +
@@ -1378,11 +1381,13 @@ def chupathingy_settings_pages() -> list:
                 # there in CANCEL's place: menu_functions.c)
                 handlers = ['<on event="created" run="port settings views init"/>',
                             '<on event="a" run="port settings accept"/>',
+                            '<on event="start" run="port settings accept"/>',
                             '<on event="y" run="port settings defaults"/>']
                 back = _back_handlers(spec)
                 prompts += _xbox_prompt("b", 360, "cancel") + _xbox_prompt("b", 360, "back")[1:]
             else:
                 handlers = ['<on event="a" run="port settings save" back="true"/>',
+                            '<on event="start" run="port settings save" back="true"/>',
                             '<on event="y" run="port settings defaults"/>']
                 prompts += _xbox_prompt("b", 360, "cancel")
         header = spec["header"][0]

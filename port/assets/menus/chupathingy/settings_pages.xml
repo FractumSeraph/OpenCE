@@ -20,6 +20,7 @@
 		<on event="created" run="port controls init"/>
 		<on event="deleted" run="port controls closed"/>
 		<on event="x" run="port controls accept" back="true"/>
+		<on event="start" run="port controls accept" back="true"/>
 		<on event="y" run="port controls defaults"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/op_device" x="54" y="73" platform="desktop android web switch"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controls_setup/view_keyboard_mouse" x="54" y="73"/>
@@ -88,6 +89,7 @@
 		<data input="port settings help"/>
 		<on event="created" run="port settings views init"/>
 		<on event="a" run="port settings accept"/>
+		<on event="start" run="port settings accept"/>
 		<on event="y" run="port settings defaults"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/video_settings/view_main" x="54" y="73"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/video_settings/op_mode" x="54" y="73" platform="desktop"/>
@@ -201,6 +203,7 @@
 		<data input="port settings help"/>
 		<on event="created" run="port settings views init"/>
 		<on event="a" run="port settings accept"/>
+		<on event="start" run="port settings accept"/>
 		<on event="y" run="port settings defaults"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/view_main" x="54" y="73"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/op_volume" x="54" y="73"/>
@@ -242,6 +245,7 @@
 		<data input="port settings help"/>
 		<on event="created" run="port settings views init"/>
 		<on event="a" run="port settings accept"/>
+		<on event="start" run="port settings accept"/>
 		<on event="y" run="port settings defaults"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/view_main" x="54" y="73"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_online" x="54" y="73" platform="desktop android web"/>
@@ -327,6 +331,7 @@
 	<widget name="chupathingy/settings/controller_appearance_list" type="column_list" width="640" height="480" flags="pass_unhandled_to_focused_child up_down_tabs_children" description="main_menu/settings_select/player_setup/player_profile_edit/controller_appearance/help">
 		<data input="port settings help"/>
 		<on event="a" run="port settings save" back="true"/>
+		<on event="start" run="port settings save" back="true"/>
 		<on event="y" run="port settings defaults"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controller_appearance/op_auto_button_detection" x="54" y="73"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/controller_appearance/op_hud_button_style" x="54" y="103"/>
@@ -351,6 +356,7 @@
 		<data input="port settings help"/>
 		<data input="port hdr calibration"/>
 		<on event="a" run="port settings save" back="true"/>
+		<on event="start" run="port settings save" back="true"/>
 		<on event="y" run="port settings defaults"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/video_settings/hdr_calibration/op_hdr_peak_brightness" x="54" y="73"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/video_settings/hdr_calibration/op_hdr_paper_white" x="54" y="103"/>
@@ -370,6 +376,7 @@
 	<widget name="chupathingy/settings/dead_zones_list" type="column_list" width="640" height="480" flags="pass_unhandled_to_focused_child up_down_tabs_children" description="main_menu/settings_select/player_setup/player_profile_edit/dead_zones/help">
 		<data input="port settings help"/>
 		<on event="a" run="port settings save" back="true"/>
+		<on event="start" run="port settings save" back="true"/>
 		<on event="y" run="port settings defaults"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/dead_zones/op_left_stick_dead_zone" x="54" y="73"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/dead_zones/op_right_stick_dead_zone" x="54" y="103"/>
@@ -389,6 +396,7 @@
 	<widget name="chupathingy/settings/network_setup/discord_account_list" type="column_list" width="640" height="480" flags="pass_unhandled_to_focused_child up_down_tabs_children" description="main_menu/settings_select/player_setup/player_profile_edit/network_setup/discord_account/help">
 		<data input="port settings help"/>
 		<on event="a" run="port settings save" back="true"/>
+		<on event="start" run="port settings save" back="true"/>
 		<on event="y" run="port settings defaults"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/discord_account/op_discord_account" x="54" y="73"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/discord_account/op_link_master_1" x="54" y="103"/>
@@ -415,6 +423,7 @@
 		<data input="port settings help"/>
 		<on event="created" run="port settings views init"/>
 		<on event="a" run="port settings accept"/>
+		<on event="start" run="port settings accept"/>
 		<on event="y" run="port settings defaults"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/view_main" x="54" y="73"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_link_chat" x="54" y="73"/>
@@ -463,6 +472,7 @@
 	<widget name="chupathingy/settings/delta_privacy_setup_list" type="column_list" width="640" height="480" flags="pass_unhandled_to_focused_child up_down_tabs_children" description="main_menu/settings_select/player_setup/player_profile_edit/delta_privacy_setup/help">
 		<data input="port settings help"/>
 		<on event="a" run="port settings save" back="true"/>
+		<on event="start" run="port settings save" back="true"/>
 		<on event="y" run="port settings defaults"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/delta_privacy_setup/op_share_profile" x="54" y="73"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/delta_privacy_setup/op_report_joined_games" x="54" y="103"/>
