@@ -1345,6 +1345,22 @@ typedef char verify_king_network_state_size[
 typedef char verify_king_hill_points[
 	MAXIMUM_HILL_POINTS == NUMBEROF(king_globals.hill_points) ? 1 : -1];
 
+#ifdef HALO_PORT_CONSOLE_LIMITS
+/* port: the console's limits: a PC host's state, by its fields
+(game_engine_network_state_fold) */
+static struct game_engine_network_state_field const king_network_state_fields[] =
+{
+	{ sizeof(long), TRUE, 0, sizeof(long) }, /* score (by team: a player's in free for all) */
+	{ sizeof(long), TRUE, 0, sizeof(long) }, /* score_tick */
+	{ sizeof(boolean), TRUE, 0, 0 }, /* on_the_hill */
+	/* the hill, from hill_point_count to hill_timer: every part a long or a
+	real */
+	{ sizeof(struct king_globals) - offsetof(struct king_globals, hill_point_count), FALSE, 0, sizeof(long) },
+};
+
+#define KING_NETWORK_STATE_FIELDS ((long)(sizeof(king_network_state_fields) / sizeof(king_network_state_fields[0])))
+#endif
+
 /* the distributed netcode (port/linux/game/network_distributed.c): the game
 type's state the host sends its clients */
 long game_engine_king_write_network_state(
@@ -1453,13 +1469,26 @@ boolean game_engine_king_read_network_state(
 	long team_index;
 	short hill_index;
 
-	/* port: and Multi-Hill's other hills after it */
-	csmemset(&extra_hills, 0, sizeof(extra_hills));
-	if (size == (long)(sizeof(state) + sizeof(extra_hills)))
-		csmemcpy(&extra_hills, buffer + sizeof(state), sizeof(extra_hills));
-	else if (size != (long)sizeof(state))
+#ifdef HALO_PORT_CONSOLE_LIMITS
+	long folded = game_engine_network_state_fold(buffer, size, &state, sizeof(state), king_network_state_fields,
+		KING_NETWORK_STATE_FIELDS, "king");
+
+	if (folded == FALSE)
 		return FALSE;
-	csmemcpy(&state, buffer, sizeof(state));
+#endif
+	/* port: and Multi-Hill's other hills after it (none in a state the
+	console's limits folded) */
+	csmemset(&extra_hills, 0, sizeof(extra_hills));
+#ifdef HALO_PORT_CONSOLE_LIMITS
+	if (folded == NONE)
+#endif
+	{
+		if (size == (long)(sizeof(state) + sizeof(extra_hills)))
+			csmemcpy(&extra_hills, buffer + sizeof(state), sizeof(extra_hills));
+		else if (size != (long)sizeof(state))
+			return FALSE;
+		csmemcpy(&state, buffer, sizeof(state));
+	}
 	if (!VALID_INDEX(extra_hills.hill_count, MAXIMUM_HILLS_AT_ONCE))
 		return FALSE;
 	for (team_index = 0; team_index < (long)NUMBEROF(state.score); team_index++)
@@ -1507,6 +1536,14 @@ void game_engine_king_network_state_byte_swap(
 {
 	struct king_globals *state = (struct king_globals *)buffer;
 
+#ifdef HALO_PORT_CONSOLE_LIMITS
+	/* (a PC host's, at the network's 128 slots, which the read folds) */
+	if (game_engine_network_state_fields_byte_swap(buffer, size, sizeof(*state), king_network_state_fields,
+		KING_NETWORK_STATE_FIELDS))
+	{
+		return;
+	}
+#endif
 	if (size != (long)sizeof(*state))
 		return;
 	GAME_ENGINE_NETWORK_STATE_SWAP(state, score, score_tick, sizeof(long));

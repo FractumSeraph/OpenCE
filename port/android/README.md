@@ -305,8 +305,9 @@ each time this changes.
 
 The buttons at the top of the screen:
 
-- "Hide" removes the controls (and stops the gyroscope aiming and the
-  vibration) until you push "Touch"; the app remembers it.
+- "Hide" removes the controls, and the "Options" button with them (and
+  stops the gyroscope aiming and the vibration), until you push "Touch"; the
+  app remembers it.
 - "Options" opens these items:
   - "General": the phone's vibration (on by default; it follows the
     vibration setting of the game's profile), aiming with the gyroscope
@@ -404,7 +405,7 @@ select "Yes":
 
 1. The app downloads the new version.
 2. The package installer of Android opens. At the first update, Android asks
-   you to let ChupathingyCE install apps. Allow it.
+   you to let Chupathingy install apps. Allow it.
 3. Select "Update". Android replaces the app.
 4. Select "Open" to start the new version.
 
@@ -940,12 +941,16 @@ and reload, address reuse and allocation failure.
 
 ## Limits
 
+The limits of memory, fixed addresses and page size are the usual build's.
+The native 64-bit build has the desktop's memory and needs no fixed
+address (refer to "The native 64-bit build").
+
 - Bink video is decoded with FFmpeg behind the Bink calls the game makes
   (`port/linux/src/bink_ffmpeg.c`, as on Linux and macOS), built for the
   guest (`tools/android_ffmpeg.py`) and for the 64-bit app
   (`tools/ffmpeg_build.py`). A missing or unreadable movie is skipped.
 - The Xbox memory is the 128 MB of a development kit, not the 512 MB of the
-  computer builds. Thus the texture cache is 44 MB, not 128 MB
+  computer builds. Thus the texture cache is 44 MB, not 256 MB
   (`port/linux/include/halo_port_capacity.h`). This is sufficient for the
   Xbox maps and for most Halo PC maps (Portent draws 23 MB of textures in
   a frame). Foundation draws up to 66 MB in a frame: some surfaces then
@@ -961,7 +966,8 @@ and reload, address reuse and allocation failure.
   tablet they are larger than on a phone. They are a finger wide or larger,
   except on a small screen of high density (refer to "Touch controls").
 - Kernels with 16 KB pages (a developer option of Android 15) do not
-  operate. The Xbox memory uses 4 KB pages.
+  operate with this build. The Xbox memory uses 4 KB pages. The native
+  64-bit build supports them.
 - The x86 Android emulator runs the app through its ARM translation. The
   translation cannot deliver the page faults that the renderer uses to
   notice changed textures. On the emulator the app compares

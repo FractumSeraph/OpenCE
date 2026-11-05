@@ -294,6 +294,12 @@ static BOOL data_download_offered(void)
 	return !strncmp(url, "https://", 8) && url[strlen(url) - 1] == '/';
 }
 #endif
+#ifdef HALO_CONSOLE_SETUP_SCREENS
+/* the port's start-up screens, for a console with no dialogs or file picker
+(halo_console_features.h); platform_offer_game_data is the port's too */
+void console_setup_start(void);
+void console_setup_after_data(const char *data_root);
+#endif
 
 /* the maps folder checked to hold the Xbox maps (platform_maps_folder_check).
 When it holds Halo PC's instead, or no ui.map, the player is told where each
@@ -567,6 +573,10 @@ BOOL platform_sdl_initialize(void)
 		return FALSE;
 	}
 	platform_sdl_started = TRUE;
+#ifdef HALO_CONSOLE_SETUP_SCREENS
+	/* (the port's: halo_console_features.h) */
+	console_setup_start();
+#endif
 	/* which build this is, first in its log (build_identity.c) */
 	build_identity_log();
 #if !defined(HALO_ANDROID) || defined(HALO_BROWSER)
@@ -581,6 +591,9 @@ BOOL platform_sdl_initialize(void)
 	server's were checked by server_mode.c) */
 	if (!halo_server_mode())
 		data_check_maps();
+#endif
+#ifdef HALO_CONSOLE_SETUP_SCREENS
+	console_setup_after_data(platform_data_root());
 #endif
 	/* (a new version looked for meanwhile, updater_poll asking about it; a
 	dedicated server's is server.auto_update's) */
@@ -1248,6 +1261,10 @@ static BOOL data_has_xbox_maps(const char *destination)
 	return posix_find_entry_case_insensitive(maps, "ui.map", on_disk, sizeof(on_disk)) != 0;
 }
 
+/* (port, this fork: data_extract stays for the launcher and missing maps;
+a console with the port's start-up screens has its own
+platform_offer_game_data, ChupathingyCE's HALO_CONSOLE_SETUP_SCREENS) */
+#ifndef HALO_CONSOLE_SETUP_SCREENS
 /* "make the folders": the maps folders made empty, what goes where shown,
 and checked again when the player says so; TRUE once the Xbox maps are
 there, FALSE to go back to the choices */
@@ -1519,6 +1536,7 @@ BOOL platform_offer_game_data(char *destination, unsigned long size)
 	return data_offer_message_boxes(destination);
 #endif
 }
+#endif
 
 /* a level the game cannot find in its maps folder (cache_files_windows.c):
 one of the campaign's, left out by the first start's Multiplayer only, is
@@ -2327,7 +2345,7 @@ platform_video_swap's: vsync while focused, none unfocused, its frames
 paced at the refresh instead). On the Mac it is the context's own, SDL's
 staying off (platform_video_initialize); this fork's browser build has none,
 the page presenting as each main-loop callback returns */
-#ifdef __APPLE__
+#if defined(__APPLE__) && !defined(HALO_IOS)
 /* port/macos/src/macos_video.c */
 void macos_set_swap_interval(int interval);
 #endif
@@ -2342,13 +2360,18 @@ static void platform_swap_interval(int interval)
 	if (xgpu_bgfx)
 		return;
 #endif
-#ifdef __APPLE__
+#if defined(__APPLE__) && !defined(HALO_IOS)
 	macos_set_swap_interval(interval);
 #elif !defined(HALO_BROWSER)
 	SDL_GL_SetSwapInterval(interval);
 #endif
 	platform_swap_interval_applied = interval;
 }
+
+#ifdef HALO_BGFX
+/* bgfx could not start (d3d8_bgfx.inl): the game draws with OpenGL */
+static BOOL platform_bgfx_refused;
+#endif
 
 BOOL platform_video_initialize(unsigned long width, unsigned long height)
 {
@@ -2361,9 +2384,10 @@ BOOL platform_video_initialize(unsigned long width, unsigned long height)
 	if (!platform_sdl_initialize())
 		return FALSE;
 #ifdef HALO_BGFX
-	/* the bgfx test backend draws instead (d3d8_bgfx.inl): a window without
-	an OpenGL context, whose Metal layer bgfx draws into */
-	xgpu_bgfx = strcmp(config_string("display.renderer"), "bgfx") == 0;
+	/* the bgfx renderer draws instead (d3d8_bgfx.inl): a window without an
+	OpenGL context, whose Metal layer (macOS) or Vulkan surface bgfx draws
+	into; unless it could not start before (platform_video_reopen_for_gl) */
+	xgpu_bgfx = !platform_bgfx_refused && strcmp(config_string("display.renderer"), "bgfx") == 0;
 #endif
 #ifndef HALO_ANDROID
 #ifdef HALO_WEB
@@ -2389,6 +2413,12 @@ BOOL platform_video_initialize(unsigned long width, unsigned long height)
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
+#elif defined(HALO_CONSOLE_GLES2)
+	/* ES 2, which the port fills out to the ES 3 the renderer uses
+	(console_gles2_layer) */
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
 #elif defined(__APPLE__)
 	/* macOS stops at OpenGL 4.1, whose core contexts must be forward
 	compatible; the renderer does without what it uses from later versions
@@ -2458,8 +2488,12 @@ BOOL platform_video_initialize(unsigned long width, unsigned long height)
 	(void)height;
 	platform_window_size_setting(&platform_window_width, &platform_window_height);
 	platform_window = SDL_CreateWindow(title, (int)platform_window_width, (int)platform_window_height,
-#ifdef HALO_BGFX
+#if defined(HALO_BGFX) && defined(__APPLE__)
 		(xgpu_bgfx ? SDL_WINDOW_METAL : SDL_WINDOW_OPENGL) |
+		SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY |
+#elif defined(HALO_BGFX)
+		/* (bgfx makes the Vulkan surface itself) */
+		(xgpu_bgfx ? 0 : SDL_WINDOW_OPENGL) |
 		SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY |
 #else
 		SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY |
@@ -2557,7 +2591,7 @@ BOOL platform_video_initialize(unsigned long width, unsigned long height)
 	callback returns. */
 	version = 0;
 #else
-#ifdef __APPLE__
+#if defined(__APPLE__) && !defined(HALO_IOS)
 	/* (SDL's own interval off, its vsync waiting on a display link that the
 	main thread's run loop drives: platform_swap_interval sets the
 	context's) */
@@ -2597,6 +2631,24 @@ BOOL platform_video_initialize(unsigned long width, unsigned long height)
 #endif
 	return TRUE;
 }
+
+#ifdef HALO_BGFX
+/* bgfx did not start (d3d8_bgfx.inl, bg_initialize): the window again,
+with an OpenGL context, for the OpenGL renderer, so that a computer whose
+Vulkan (or Metal) is missing or broken still shows the game */
+BOOL platform_video_reopen_for_gl(void)
+{
+	platform_log("renderer: bgfx did not start, so OpenGL");
+	platform_bgfx_refused = TRUE;
+	xgpu_bgfx = FALSE;
+	if (platform_window)
+	{
+		SDL_DestroyWindow(platform_window);
+		platform_window = NULL;
+	}
+	return platform_video_initialize(0, 0);
+}
+#endif
 
 /* display.mode, display.resolution (fullscreen's display mode),
 display.window_size (when it changes: the window can be resized) and
@@ -2639,6 +2691,45 @@ void platform_video_drawable_size(int *width, int *height)
 {
 	SDL_GetWindowSizeInPixels(platform_window, width, height);
 }
+
+#ifdef HALO_IOS
+/* the part of the window the picture goes in, as fractions of it (x, y,
+width, height from the top left): port/ios/src/ios_touch.m */
+void host_present_area(float *area);
+
+void platform_video_present_area(int *x, int *y, int *width, int *height)
+{
+	int drawable_width = 0, drawable_height = 0;
+	float area[4] = { 0.0f, 0.0f, 1.0f, 1.0f };
+
+	platform_video_drawable_size(&drawable_width, &drawable_height);
+	*x = *y = 0;
+	*width = drawable_width;
+	*height = drawable_height;
+	host_present_area(area);
+	if (area[2] > 0.0f && area[3] > 0.0f && area[0] >= 0.0f && area[1] >= 0.0f &&
+		area[0] + area[2] <= 1.0f && area[1] + area[3] <= 1.0f)
+	{
+		*x = (int)(area[0] * drawable_width);
+		*y = (int)(area[1] * drawable_height);
+		*width = (int)(area[2] * drawable_width);
+		*height = (int)(area[3] * drawable_height);
+	}
+	if (*width <= 0 || *height <= 0)
+	{
+		*x = *y = 0;
+		*width = drawable_width;
+		*height = drawable_height;
+	}
+}
+
+/* (SDL's view makes it with the context: xgpu.h) */
+unsigned int platform_window_framebuffer(void)
+{
+	return (unsigned int)SDL_GetNumberProperty(SDL_GetWindowProperties(platform_window),
+		SDL_PROP_WINDOW_UIKIT_OPENGL_FRAMEBUFFER_NUMBER, 0);
+}
+#endif
 
 /* with vsync off, the time between frames display.max_fps asks for (0:
 twice the display's refresh rate), or 0 for no limit. A GPU never left idle
@@ -3739,6 +3830,12 @@ static void platform_pump_events_headless(void)
 	}
 }
 
+#ifdef HALO_CONSOLE_PERFORMANCE_MODE
+/* the port's: performance mode's passes left out, and its switch read
+(halo_console_features.h) */
+void console_performance_update(void);
+#endif
+
 void platform_pump_events(void)
 {
 	SDL_Event event;
@@ -3748,6 +3845,10 @@ void platform_pump_events(void)
 	BOOL mouse_needs_warp = FALSE;
 #endif
 	static int null_renderer = -1;
+
+#ifdef HALO_CONSOLE_PERFORMANCE_MODE
+	console_performance_update();
+#endif
 
 #ifdef HALO_GAME_BROWSER
 	/* the dedicated server has no window, but stops as asked (SIGTERM or
@@ -4074,7 +4175,7 @@ void platform_pump_events(void)
 			break;
 #endif
 		case SDL_EVENT_GAMEPAD_ADDED:
-#ifdef HALO_ARM64_GUEST
+#if defined(HALO_ARM64_GUEST) && !defined(HALO_IOS)
 			/* (the guest reaches SDL only through host_imports.list, which
 			has no SDL_GetGamepadName) */
 			SDL_OpenGamepad(event.gdevice.which);

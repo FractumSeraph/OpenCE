@@ -10,8 +10,9 @@ byte-for-byte identical to what the matching MSVC build compiles.
 #ifndef __HALO_LINUX_PREFIX_H
 #define __HALO_LINUX_PREFIX_H
 
-#if !defined(__i386__) && !defined(HALO_ANDROID) && !defined(HALO_64BIT) && !defined(__wasm32__)
-#error the Linux port targets 32-bit x86: game data structures assume 32-bit pointers
+#if !defined(__i386__) && !defined(__arm__) && !defined(HALO_ANDROID) && !defined(HALO_64BIT) && \
+	!defined(__wasm32__)
+#error the Linux port targets 32-bit x86 or ARM: game data structures assume 32-bit pointers
 #endif
 
 /* ---------- musl's wide characters (the static dedicated servers,
@@ -46,6 +47,25 @@ most of a frame's time. The address would name nothing a log could use
 anyway, so it is 0 there. */
 #ifdef __wasm32__
 #define __builtin_return_address(level) ((void *)0)
+#endif
+
+/* ---------- the renderer's OpenGL ES path
+
+OpenGL ES rather than desktop OpenGL (port/linux/src/d3d8_gl.c and the
+rest of the renderer): Android's ES 3, and a console whose ES 2 the port
+fills out to the ES 3 the renderer uses (HALO_CONSOLE_GLES2, the Steam
+Link's: console_gles2_layer) */
+
+#if (defined(HALO_GLES) || defined(HALO_CONSOLE_GLES2)) && !defined(HALO_GL_ES)
+#define HALO_GL_ES 1
+#endif
+/* (port, this fork: HALO_GLES is OpenCE's name for the same path, which
+the build scripts define for Android and the web builds, OpenCE's HALO_WEB
+without HALO_ANDROID; HALO_ANDROID alone, the app, does not imply it
+(fb9f03cf2). Each name stands for the other, so that code under either is
+built alike) */
+#if defined(HALO_GL_ES) && !defined(HALO_GLES)
+#define HALO_GLES 1
 #endif
 
 /* ---------- XDK architecture selection (MSVC predefines these) */

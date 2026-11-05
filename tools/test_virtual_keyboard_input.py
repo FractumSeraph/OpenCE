@@ -84,12 +84,15 @@ enum {
     in use, by these, in last_input_scheme) */
     SDL_SCANCODE_LCTRL, SDL_SCANCODE_RCTRL, SDL_SCANCODE_LGUI, SDL_SCANCODE_RGUI,
     /* (and Q, the left bumper's: the game type editor's pages) */
-    SDL_SCANCODE_Q
+    SDL_SCANCODE_Q,
+    /* (ChupathingyCE's F2, Start: Online Games' My Profile; and X, the right
+    trigger's: Online Games' next sort) */
+    SDL_SCANCODE_F2, SDL_SCANCODE_X
 };
 static int last_input_scheme;
 static BOOL last_input_seen;
 enum {XINPUT_GAMEPAD_A, XINPUT_GAMEPAD_B, XINPUT_GAMEPAD_X, XINPUT_GAMEPAD_Y, XINPUT_GAMEPAD_BLACK,
-    XINPUT_GAMEPAD_WHITE};
+    XINPUT_GAMEPAD_WHITE, XINPUT_GAMEPAD_LEFT_TRIGGER, XINPUT_GAMEPAD_RIGHT_TRIGGER};
 enum {XINPUT_GAMEPAD_DPAD_UP=1, XINPUT_GAMEPAD_DPAD_DOWN=2,
     XINPUT_GAMEPAD_DPAD_LEFT=4, XINPUT_GAMEPAD_DPAD_RIGHT=8,
     XINPUT_GAMEPAD_START=16, XINPUT_GAMEPAD_BACK=32, SDL_BUTTON_X1=4};

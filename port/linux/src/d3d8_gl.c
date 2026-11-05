@@ -76,6 +76,7 @@ static void bg_frame_account(char *text, size_t size);
 static void bg_visibility_begin(void);
 static void bg_visibility_end(DWORD index);
 static UINT bg_visibility_result(DWORD index);
+static BOOL bg_back_buffer_size(int *width, int *height, int *pixel_width, int *pixel_height);
 #endif
 
 void d3d8_surface_initialize(D3DSurface *surface, D3DFORMAT format, unsigned long width, unsigned long height);
@@ -282,6 +283,81 @@ static float resolution_scaling_part(void)
 		!strcmp(setting, "50%") ? 0.5f : !strcmp(setting, "25%") ? 0.25f : 1.0f;
 }
 
+#ifdef HALO_CONSOLE_PERFORMANCE_MODE
+/* the port's (halo_console_features.h) */
+long console_performance_lines(void);
+#endif
+
+static GLuint framebuffer_get(GLuint color, GLuint depth);
+
+#ifdef HALO_CONSOLE_CACHE_SCREEN
+/* (steamlink_cache_screen.c) */
+const unsigned char *console_ring_frame(float fraction, int with_sound);
+int console_ring_due(void);
+
+/* the ring while the shaders of earlier runs are made ready at start-up
+(xgpu_shader_cache_warm), before the game has a back buffer to draw into: each
+few steps, as they are the slow part and this must not make them slower */
+void console_warm_screen(unsigned long done, unsigned long total)
+{
+	static GLuint picture;
+	float fraction = total ? (float)done / (float)total : 1.0f;
+	const unsigned char *frame;
+	int window_width = 0, window_height = 0, width, height, x, y;
+	char percent[16];
+
+	if (!console_ring_due())
+		return;
+	frame = console_ring_frame(fraction, 1);
+	if (!frame)
+		return;
+	platform_video_drawable_size(&window_width, &window_height);
+	if (!picture)
+	{
+		glGenTextures(1, &picture);
+		glBindTexture(GL_TEXTURE_2D, picture);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 640, 480, 0, GL_RGBA, GL_UNSIGNED_BYTE, frame);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	}
+	else
+	{
+		glBindTexture(GL_TEXTURE_2D, picture);
+		glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 640, 480, GL_RGBA, GL_UNSIGNED_BYTE, frame);
+	}
+	glBindTexture(GL_TEXTURE_2D, 0);
+	height = window_height;
+	width = window_height * 640 / 480;
+	x = (window_width - width) / 2;
+	y = 0;
+	{
+		GLuint source = framebuffer_get(picture, 0);
+
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+		glDisable(GL_SCISSOR_TEST);
+		glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT);
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, source);
+		/* (row 0 of a texture is the top of the picture) */
+		glBlitFramebuffer(0, 0, 640, 480, x, y + height, x + width, y, GL_COLOR_BUFFER_BIT, GL_LINEAR);
+	}
+	xgpu_gl_state_invalidate();
+#ifdef HALO_GAME_BROWSER
+	snprintf(percent, sizeof(percent), "%d%%", (int)(fraction * 100.0f));
+	ui_overlay_text_glow(UI_FONT_TITLE, 21.0f, 320.0f, 338.0f, UI_ALIGN_CENTER, 0xa8ccffffu, 0x3c78ff80u, "FRACTUM HALO");
+	ui_overlay_text(UI_FONT_MENU, 24.0f, 320.0f, 376.0f, UI_ALIGN_CENTER, 0xffffffffu, percent);
+	ui_overlay_text(UI_FONT_MENU_SMALL, 15.0f, 320.0f, 420.0f, UI_ALIGN_CENTER, 0x8ca8d0ffu, "GETTING THE SHADERS READY.");
+	ui_overlay_present(x, y, width, height, window_width, window_height);
+	xgpu_gl_state_invalidate();
+#endif
+	platform_video_swap();
+}
+#endif
+
 static void screen_mode_choose(long *width, float scale[2])
 {
 	/* (the browser as the desktop: the page's canvas is its window,
@@ -299,6 +375,20 @@ static void screen_mode_choose(long *width, float scale[2])
 	long lines;
 
 	*width = config_integer("display.screen_width");
+#ifdef HALO_IOS
+	/* on iOS, the window's shape once it is open: it changes as iPhone Duo
+	folds and unfolds, and with an iPad's or a Vision Pro's window; or the
+	part of it the picture is shown in (iPhone Duo part open like a laptop:
+	the half above the fold) */
+	if (*width <= 0)
+	{
+		int area_x, area_y, window_width = 0, window_height = 0;
+
+		platform_video_present_area(&area_x, &area_y, &window_width, &window_height);
+		if (window_width > 0 && window_height > 0)
+			*width = (SCREEN_HEIGHT * window_width + window_height / 2) / window_height;
+	}
+#endif
 	if (*width <= 0)
 		*width = display ? atol(display) : 640;
 	if (*width < 640)
@@ -369,6 +459,16 @@ static void screen_mode_choose(long *width, float scale[2])
 		if (factor > 1.0f)
 			scale[0] = scale[1] = factor;
 	}
+#ifdef HALO_CONSOLE_PERFORMANCE_MODE
+	/* performance mode's fewer lines: the screen's targets drawn smaller,
+	and the present's blit scales the back buffer up to the window */
+	{
+		long lines = console_performance_lines();
+
+		if (lines > 0 && lines < SCREEN_HEIGHT)
+			scale[0] = scale[1] = (float)lines / (float)SCREEN_HEIGHT;
+	}
+#endif
 #else
 	long display_width, display_height;
 	float part = resolution_scaling_part();
@@ -1171,7 +1271,15 @@ static GLsizei feedback_snapshot_width, feedback_snapshot_height;
 
 /* ---------- the device */
 
-#ifdef HALO_GLES
+#if defined(HALO_CONSOLE_GLES2)
+/* A console whose ES 2 layer keeps buffers in the process's memory and
+draws from them as client arrays (the Steam Link's 256 MB): the driver
+copies what each draw reads as it draws, so a buffer is free to be written
+again at once, and one small one serves (written over when full) */
+#define STREAM_BUFFER_SIZE (4 * 1024 * 1024)
+#define INDEX_BUFFER_SIZE (1 * 1024 * 1024)
+#define STREAM_BUFFER_RING 1
+#elif defined(HALO_GLES)
 /* Mobile drivers (Mali) keep every orphaned copy of a buffer until the GPU
 is done with it, so a large buffer orphaned each frame costs its size per
 frame in flight and more. Instead each frame streams into the next of a few
@@ -1413,6 +1521,11 @@ static struct
 	unsigned long most_draws, slowest_frame;
 	/* (draws counted when this frame began) */
 	unsigned long frame_first_draw;
+#ifdef HALO_GLES
+	/* (indexed draws, those whose indices are the mirror's, and those drawn
+	from them without a base vertex: DrawIndexedVertices) */
+	unsigned long indexed, indexed_mirrored, indexed_direct;
+#endif
 } stats;
 #ifdef HALO_BGFX
 /* debug.gpu_stats's frame work timing (D3DDevice_Present) */
@@ -2251,6 +2364,18 @@ static struct render_target_entry *render_target_get(const D3DSurface *surface)
 	gl_check_errors("target texture parameters");
 	render_target_storage(&entry->target);
 	gl_check_errors(depth ? "depth target storage" : "color target storage");
+#ifdef HALO_CONSOLE_GLES2
+	/* (black until it is drawn: its memory holds whatever was last there, the
+	Steam Link's own screen, and the first present shows it) */
+	if (!depth)
+	{
+		glBindFramebuffer(GL_FRAMEBUFFER, framebuffer_get(entry->target.texture, 0));
+		glDisable(GL_SCISSOR_TEST);
+		glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT);
+	}
+#endif
 	xgpu_gl_state_invalidate();
 	entry->next = render_targets;
 	render_targets = entry;
@@ -2948,6 +3073,24 @@ static void gl_initialize(void)
 		if (renderbuffer_size < maximum_target_size)
 			maximum_target_size = renderbuffer_size;
 	}
+#ifdef HALO_CONSOLE_GLES2
+	/* the window's buffers black before anything is shown: they hold what was
+	last in that memory, the Steam Link's own screen, in another layout, which
+	the television would show in garbled blocks until the first frame */
+	{
+		int buffer;
+
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		glDisable(GL_SCISSOR_TEST);
+		glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+		for (buffer = 0; buffer < 3; buffer++)
+		{
+			glClear(GL_COLOR_BUFFER_BIT);
+			platform_video_swap();
+		}
+	}
+#endif
 	/* the shaders and programs of earlier runs, made now rather than in the
 	middle of the frames that first draw with them (xgpu_shader_cache.c) */
 	xgpu_shader_cache_warm(program_adopt);
@@ -3097,14 +3240,14 @@ HRESULT WINAPI Direct3D_CreateDevice(UINT adapter, D3DDEVTYPE device_type, void 
 			device.presentation = *presentation_parameters;
 		width = device.presentation.BackBufferWidth ? device.presentation.BackBufferWidth : 640;
 		height = device.presentation.BackBufferHeight ? device.presentation.BackBufferHeight : 480;
-#if defined(HALO_ANDROID) && !defined(HALO_BROWSER)
+#if (defined(HALO_ANDROID) || defined(HALO_CONSOLE_GLES2)) && !defined(HALO_BROWSER) && !defined(HALO_IOS)
 		d3d8_surface_initialize(&device.back_buffer, D3DFMT_LIN_A8R8G8B8, width, height);
 		d3d8_surface_initialize(&device.depth_buffer, D3DFMT_LIN_D24S8, width, height);
 #else
 		/* (the browser too: its page resizes the canvas, so its screen's
 		width changes as the desktop's does) */
 		/* room for the widest screen, which F11 can switch to (the screen's
-		width, above) */
+		width, above), or iOS's window can take */
 		d3d8_surface_initialize(&device.back_buffer, D3DFMT_LIN_A8R8G8B8, SCREEN_MAXIMUM_WIDTH, height);
 		d3d8_surface_initialize(&device.depth_buffer, D3DFMT_LIN_D24S8, SCREEN_MAXIMUM_WIDTH, height);
 		d3d8_surface_resize(&device.back_buffer, D3DFMT_LIN_A8R8G8B8, width, height);
@@ -3159,9 +3302,10 @@ HRESULT WINAPI Direct3D_CreateDevice(UINT adapter, D3DDEVTYPE device_type, void 
 			platform_video_initialize(width, height))
 #ifdef HALO_BGFX
 		{
-			if (xgpu_bgfx)
-				bg_initialize();
-			else
+			/* (OpenGL when bgfx does not start: a window of its own) */
+			if (!xgpu_bgfx)
+				gl_initialize();
+			else if (!bg_initialize() && platform_video_reopen_for_gl())
 				gl_initialize();
 		}
 #else
@@ -3188,12 +3332,30 @@ int d3d8_gl_ready(void)
 there is no back buffer or window yet */
 static BOOL ui_point_view_get(struct ui_point_view *view)
 {
-	struct render_target_entry *back_buffer = render_target_get(&device.back_buffer);
+	struct render_target_entry *back_buffer;
 
-	if (!back_buffer)
+	/* (the present area only iOS has: 0 elsewhere, the whole window; left
+	unset, a click landed wherever the stack's leftovers put it) */
+	memset(view, 0, sizeof(*view));
+#ifdef HALO_BGFX
+	/* (bgfx's back buffer is its own: OpenGL has none while it draws) */
+	if (bg_active())
+	{
+		if (!bg_back_buffer_size(&view->target_width, &view->target_height, &view->gl_width, &view->gl_height))
+			return FALSE;
+		platform_video_window_size(&view->window_width, &view->window_height);
+		platform_video_drawable_size(&view->pixel_width, &view->pixel_height);
+		view->screen_width = halo_screen_width();
+		return TRUE;
+	}
+#endif
+	if (!(back_buffer = render_target_get(&device.back_buffer)))
 		return FALSE;
 	platform_video_window_size(&view->window_width, &view->window_height);
 	platform_video_drawable_size(&view->pixel_width, &view->pixel_height);
+#ifdef HALO_IOS
+	platform_video_present_area(&view->area_left, &view->area_top, &view->area_width, &view->area_height);
+#endif
 	view->target_width = (int)back_buffer->target.width;
 	view->target_height = (int)back_buffer->target.height;
 	view->gl_width = (int)back_buffer->target.gl_width;
@@ -3270,7 +3432,11 @@ int halo_ui_pointer_update(int menus_active, struct halo_ui_pointer *pointer)
 
 	platform_menus_set_active(menus_active != 0);
 	platform_ui_pointer_set_active(menus_active != 0);
+#ifdef HALO_BGFX
+	if (!menus_active || !(device.gl_ready || bg_active()) || !platform_ui_pointer_read(&state))
+#else
 	if (!menus_active || !device.gl_ready || !platform_ui_pointer_read(&state))
+#endif
 		return 0;
 	memset(pointer, 0, sizeof(*pointer));
 	ui_point_from_window_now(state.x, state.y, &pointer->x, &pointer->y);
@@ -3355,7 +3521,7 @@ long halo_screen_commit(void)
 		screen_width = width;
 		screen_scale[0] = scale[0];
 		screen_scale[1] = scale[1];
-#if !defined(HALO_ANDROID) || defined(HALO_BROWSER)
+#if !(defined(HALO_ANDROID) || defined(HALO_CONSOLE_GLES2)) || defined(HALO_BROWSER) || defined(HALO_IOS)
 		if (device.created)
 		{
 			device.presentation.BackBufferWidth = (UINT)width;
@@ -4626,7 +4792,12 @@ linearly, 0 or 1 for the game's own filtering. The Xbox game asks for none
 (it never sets D3DTEXF_ANISOTROPIC or D3DTSS_MAXANISOTROPY), so the floors,
 walls and terrain seen at a grazing angle blur toward their smaller mip
 levels. At most the GPU's most (16 on the desktop's), and none on GLES
-without GL_EXT_texture_filter_anisotropic. */
+without GL_EXT_texture_filter_anisotropic. Cube and 3D textures never get
+it (ChupathingyCE's): the game looks things up in them by direction (the
+vector normalization cube map of the lightmap pass), where it sharpens
+nothing, and Mesa's llvmpipe drew such lookups black with it (walls seen at
+a slant on the Custom Edition and HaloMD maps, whose normalization cube map
+has mip levels). */
 static long anisotropic_level = -1;
 static unsigned long anisotropic_level_read_at;
 
@@ -4658,8 +4829,9 @@ static DWORD anisotropic_filtering(void)
 /* hires: a high-res HUD texture (hud_hires.h), drawn smaller than it is, so
 filtered and from its mip levels whatever the game asks: the HUD's meters are
 point sampled for one player, to keep the Xbox bitmaps' texels sharp.
-rendered: a render target the game draws into */
-static void configure_sampler(int stage, BOOL mipmapped, BOOL hires, BOOL rendered)
+rendered: a render target the game draws into; flat: a 2D texture (not a
+cube or 3D one), the only kind given forced anisotropy */
+static void configure_sampler(int stage, BOOL mipmapped, BOOL hires, BOOL rendered, BOOL flat)
 {
 	/* the texture stage state each stage's sampler was last chosen by */
 	static DWORD configured[D3DTSS_MAXSTAGES][SAMPLER_STATE_WORDS];
@@ -4679,9 +4851,9 @@ static void configure_sampler(int stage, BOOL mipmapped, BOOL hires, BOOL render
 	inputs[9] = state[D3DTSS_BORDERCOLOR];
 	inputs[10] = hires;
 	/* (display.anisotropic_filtering, over the game's linear filtering of
-	the maps' textures with mip levels; not of what the game renders, the
+	the maps' 2D textures with mip levels; not of what the game renders, the
 	water's ripples, whose finer levels seen far off are noise) */
-	if (!hires && mipmapped && !rendered && inputs[1] != D3DTEXF_NONE &&
+	if (!hires && mipmapped && flat && !rendered && inputs[1] != D3DTEXF_NONE &&
 		(inputs[0] == D3DTEXF_LINEAR || inputs[0] == D3DTEXF_ANISOTROPIC) && anisotropic_filtering() > 1)
 	{
 		inputs[0] = D3DTEXF_ANISOTROPIC;
@@ -5129,7 +5301,7 @@ static void bind_textures(struct nv2a_pixel_shader_key *key, float texture_scale
 			}
 			gl_targets[stage] = gl_target;
 			gl_textures[stage] = gl_texture;
-			configure_sampler(stage, description.levels > 1, description.hires, target != NULL);
+			configure_sampler(stage, description.levels > 1, description.hires, target != NULL, gl_target == GL_TEXTURE_2D);
 			if (stage == 0)
 			{
 				key->coverage_alpha = description.hires_coverage != FALSE;
@@ -5967,7 +6139,7 @@ every write; after a few such rewrites a page counts as volatile for a
 while, and draws that use it stream their data as before. */
 
 #define MIRROR_SEGMENT_SIZE 0x400000UL
-#ifdef HALO_CONSOLE_GL_LAYER
+#if defined(HALO_CONSOLE_GL_LAYER) || defined(HALO_CONSOLE_GLES2)
 void console_gl_buffer_alias(GLenum target, void *memory, unsigned long size);
 #endif
 #define MIRROR_SEGMENT_COUNT (PLATFORM_CONTIGUOUS_MAXIMUM / MIRROR_SEGMENT_SIZE)
@@ -6081,10 +6253,11 @@ static BOOL mirror_refresh(unsigned long first, unsigned long last)
 		{
 			glGenBuffers(1, &mirror.buffers[segment]);
 			glBindBuffer(GL_COPY_WRITE_BUFFER, mirror.buffers[segment]);
-#ifdef HALO_CONSOLE_GL_LAYER
+#if defined(HALO_CONSOLE_GL_LAYER) || defined(HALO_CONSOLE_GLES2)
 			/* (the console's GPU reads the window where it is: the segment's
 			buffer is the window's memory, and an upload only makes the CPU's
-			writes visible to it) */
+			writes visible to it; an ES 2 layer's client arrays read it as
+			they draw) */
 			console_gl_buffer_alias(GL_COPY_WRITE_BUFFER,
 				xbox_pointer(PLATFORM_CONTIGUOUS_BASE + segment * MIRROR_SEGMENT_SIZE), MIRROR_SEGMENT_SIZE);
 #else
@@ -7261,6 +7434,37 @@ static BOOL vertex_array_cache_use(const struct vertex_shader_object *declaratio
 }
 #endif
 
+#ifdef HALO_GLES
+/* whether every stream a draw of count vertices from first reads is in the
+mirror (setup_streams would stream none of them) */
+static BOOL streams_mirrored(unsigned long first, unsigned long count)
+{
+	struct vertex_shader_object *declaration = device.vertex_shader;
+	BOOL checked[16] = { FALSE };
+	unsigned long index;
+
+	for (index = 0; index < declaration->element_count; index++)
+	{
+		const struct vertex_element *element = &declaration->elements[index];
+		unsigned long stream = element->stream;
+		unsigned long stride = device.streams[stream].stride;
+		unsigned long offset;
+		GLuint buffer;
+
+		if (!device.streams[stream].data || element->type == D3DVSDT_NONE || checked[stream])
+			continue;
+		checked[stream] = TRUE;
+		if (stream_has_colors(declaration, stream) ||
+			!mirror_range(PLATFORM_WINDOW_ADDRESS(PLATFORM_PHYSICAL_TO_VIRTUAL(device.streams[stream].data)) +
+				first * stride, stride ? stride * count : 64, &buffer, &offset, NULL))
+		{
+			return FALSE;
+		}
+	}
+	return TRUE;
+}
+#endif
+
 static void setup_streams(unsigned long first, unsigned long count)
 {
 	struct vertex_shader_object *declaration = device.vertex_shader;
@@ -7714,7 +7918,9 @@ void WINAPI D3DDevice_DrawIndexedVertices(D3DPRIMITIVETYPE primitive_type, UINT 
 		return;
 	/* quads are drawn as triangles, from indices made for the draw */
 	mirrored = primitive_type != D3DPT_QUADLIST &&
-#ifdef HALO_GLES
+#ifdef HALO_WEB
+		/* (OpenCE's web build: without a base vertex, its index cache below
+		draws them) */
 		xgpu_capabilities.base_vertex &&
 #endif
 		mirror_range(PLATFORM_WINDOW_ADDRESS(index_data), vertex_count * sizeof(WORD), &index_buffer, &index_offset, &generation);
@@ -7741,6 +7947,27 @@ void WINAPI D3DDevice_DrawIndexedVertices(D3DPRIMITIVETYPE primitive_type, UINT 
 #endif
 	index_extent(index_data, vertex_count, generation, mirrored, &minimum, &maximum);
 	trace_draw("indexed", primitive_type, vertex_count, NULL);
+#ifdef HALO_GLES
+	stats.indexed++;
+	stats.indexed_mirrored += mirrored;
+	/* no base vertex: the mirror's indices drawn as they are, the streams
+	from the base vertex itself, when they are all in the mirror too (the
+	driver then copies nothing, and a model's draws point at the same
+	vertices one after another) */
+	if (mirrored && !xgpu_capabilities.base_vertex)
+	{
+		if (streams_mirrored(device.base_vertex_index, maximum + 1))
+		{
+			setup_streams(device.base_vertex_index, maximum + 1);
+			state_element_array_buffer(index_buffer);
+			glDrawElements(primitive_mode(primitive_type), (GLsizei)vertex_count, GL_UNSIGNED_SHORT,
+				(const void *)(uintptr_t)index_offset);
+			stats.indexed_direct++;
+			return;
+		}
+		mirrored = FALSE;
+	}
+#endif
 	/* (the streams from the base vertex on: index i is vertex base + i) */
 	setup_streams(device.base_vertex_index + minimum, maximum - minimum + 1);
 	#ifndef HALO_BROWSER
@@ -8496,7 +8723,7 @@ static void write_screenshot(struct render_target_entry *target)
 (debug.screenshot_window) */
 static void write_window_screenshot(int window_width, int window_height)
 {
-	glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+	glBindFramebuffer(GL_READ_FRAMEBUFFER, platform_window_framebuffer());
 	write_screenshot_from("window", (unsigned long)window_width, (unsigned long)window_height, FALSE, FALSE);
 }
 
@@ -8923,12 +9150,21 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 	if (device.gl_ready)
 	{
 		struct render_target_entry *back_buffer = render_target_get(&device.back_buffer);
-#ifdef HALO_BROWSER
-		/* (looked up before the default framebuffer is bound for the blit: a
-		new framebuffer_get entry binds itself) */
-		GLuint back_buffer_framebuffer = framebuffer_get(back_buffer->target.texture, 0);
-#endif
 		int window_width, window_height, width, height, x, y;
+		/* (the browser's too: looked up before the default framebuffer is
+		bound for the blit, as a new framebuffer_get entry binds itself) */
+		GLuint read_framebuffer;
+#ifdef HALO_IOS
+		int area_x, area_y, area_width, area_height;
+#endif
+#if defined(HALO_GAME_BROWSER) && defined(HALO_CONSOLE_GLES2)
+		/* (the picture's size: the back buffer's, or the screens' below) */
+		GLint picture_width = (GLint)back_buffer->target.gl_width;
+		GLint picture_height = (GLint)back_buffer->target.gl_height;
+#else
+#define picture_width ((GLint)back_buffer->target.gl_width)
+#define picture_height ((GLint)back_buffer->target.gl_height)
+#endif
 
 		if (trace_frame())
 			platform_log("present back buffer %08lx texture %u", (unsigned long)device.back_buffer.Data,
@@ -8945,6 +9181,24 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 #endif
 
 		platform_video_drawable_size(&window_width, &window_height);
+#ifdef HALO_IOS
+		/* letterbox to the back buffer's aspect ratio, in the part of the
+		window the picture is shown in (all of it, but on iPhone Duo part
+		open like a laptop: port/ios/src/ios_touch.m) */
+		platform_video_present_area(&area_x, &area_y, &area_width, &area_height);
+		width = area_width;
+		height = (int)((long)area_width * back_buffer->target.gl_height / back_buffer->target.gl_width);
+		if (height > area_height)
+		{
+			height = area_height;
+			width = (int)((long)area_height * back_buffer->target.gl_width / back_buffer->target.gl_height);
+		}
+		x = area_x + (area_width - width) / 2;
+		/* (GL's rows count up from the bottom, the area's down from the top:
+		the area's bottom row, then the picture centered above it, rounded as
+		the whole window's is) */
+		y = window_height - (area_y + area_height) + (area_height - height) / 2;
+#else
 		/* letterbox to the back buffer's aspect ratio */
 		width = window_width;
 		height = (int)((long)window_width * back_buffer->target.gl_height / back_buffer->target.gl_width);
@@ -8955,7 +9209,60 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 		}
 		x = (window_width - width) / 2;
 		y = (window_height - height) / 2;
-		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+#endif
+		/* (the lookup can create a framebuffer and bind it to both targets,
+		so it comes before the window is bound as the draw target) */
+		read_framebuffer = framebuffer_get(back_buffer->target.texture, 0);
+#if defined(HALO_GAME_BROWSER) && defined(HALO_CONSOLE_GLES2)
+		/* the overlay's screens, when there are any, at the game's own 640x480:
+		soft, as the picture they are over, and with text that can still be read,
+		which performance mode's 240 lines cannot draw; and with a quarter of the
+		window's pixels for the GPU to fill */
+		if (ui_overlay_pending())
+		{
+			static GLuint screens;
+			static BOOL screens_cleared;
+			GLuint screens_framebuffer;
+
+			if (!screens)
+			{
+				GLint bound = 0;
+
+				glGetIntegerv(GL_TEXTURE_BINDING_2D, &bound);
+				glGenTextures(1, &screens);
+				glBindTexture(GL_TEXTURE_2D, screens);
+				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 640, 480, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+				/* (not left bound where the next draw into it would sample it) */
+				glBindTexture(GL_TEXTURE_2D, (GLuint)bound);
+			}
+			glDisable(GL_SCISSOR_TEST);
+			glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+			/* (asked for after the picture's: making a framebuffer binds it
+			for both) */
+			screens_framebuffer = framebuffer_get(screens, 0);
+			if (!screens_cleared)
+			{
+				/* (its memory holds whatever was last there) */
+				screens_cleared = TRUE;
+				glBindFramebuffer(GL_DRAW_FRAMEBUFFER, screens_framebuffer);
+				glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+				glClear(GL_COLOR_BUFFER_BIT);
+			}
+			glBindFramebuffer(GL_READ_FRAMEBUFFER, read_framebuffer);
+			glBindFramebuffer(GL_DRAW_FRAMEBUFFER, screens_framebuffer);
+			glBlitFramebuffer(0, 0, picture_width, picture_height, 0, 0, 640, 480, GL_COLOR_BUFFER_BIT, GL_LINEAR);
+			ui_overlay_present_to(screens_framebuffer, 640, 480);
+			xgpu_gl_state_invalidate();
+			read_framebuffer = screens_framebuffer;
+			picture_width = 640;
+			picture_height = 480;
+		}
+#endif
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, platform_window_framebuffer());
 		glDisable(GL_SCISSOR_TEST);
 		glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -8967,23 +9274,21 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 			xgpu_post_present(back_buffer->target.texture, x, y, width, height,
 				hdr.float_window ? hdr.sdr_white : 0.0f)))
 		{
-#ifdef HALO_BROWSER
-			glBindFramebuffer(GL_READ_FRAMEBUFFER, back_buffer_framebuffer);
-#else
-			glBindFramebuffer(GL_READ_FRAMEBUFFER, framebuffer_get(back_buffer->target.texture, 0));
-#endif
+			glBindFramebuffer(GL_READ_FRAMEBUFFER, read_framebuffer);
 			/* row 0 of the render target is the top of the picture */
 #ifdef HALO_BROWSER
 			/* WebGL rejects a framebuffer blit whose destination rectangle is
 			vertically reversed.  Its canvas presentation already uses the same
 			top-left convention as the ES shader path. */
-			glBlitFramebuffer(0, 0, (GLint)back_buffer->target.gl_width, (GLint)back_buffer->target.gl_height,
+			glBlitFramebuffer(0, 0, picture_width, picture_height,
 				x, y, x + width, y + height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
 #else
-			glBlitFramebuffer(0, 0, (GLint)back_buffer->target.gl_width, (GLint)back_buffer->target.gl_height,
+			glBlitFramebuffer(0, 0, picture_width, picture_height,
 				x, y + height, x + width, y, GL_COLOR_BUFFER_BIT, GL_LINEAR);
 #endif
 		}
+#undef picture_width
+#undef picture_height
 		/* (the HDR calibration screen's pattern, brighter than the back
 		buffer's white can be) */
 		if (hdr_calibration_shown(FALSE) && hdr.display_on)
@@ -8998,16 +9303,16 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 		}
 		glBindVertexArray(device.vertex_array);
 		gl_check_errors("present blit");
-#ifdef HALO_GAME_BROWSER
+#if defined(HALO_GAME_BROWSER) && !defined(HALO_CONSOLE_GLES2)
 		/* the overlay's screens, over the picture at the window's resolution
 		(ui_overlay.c) */
 		ui_overlay_present(x, y, width, height, window_width, window_height);
 #endif
-#ifndef HALO_ANDROID
+#if !defined(HALO_ANDROID) && !defined(HALO_CONSOLE_GLES2)
 		/* the picture's alpha is the render target's, which the game uses
 		for its own blending, not coverage: the window is opaque whatever
 		the driver gave its pixels (sdl_platform.c asks for none) */
-		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, platform_window_framebuffer());
 		glDisable(GL_SCISSOR_TEST);
 		glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_TRUE);
 		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -9142,6 +9447,16 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 			stats_busy_worst * 1000.0);
 		stats_busy_total = stats_busy_worst = 0.0;
 #endif
+#ifdef HALO_GLES
+		platform_log("frame %lu: %lu draws, %lu immediate, %lu clears, %lu target changes; skipped %lu no program, %lu no target, %lu link; "
+			"%lu KB mirrored, %lu KB streamed; %lu indexed, %lu from the mirror's indices, %lu drawn from them; "
+			"in 60 frames, %lu textures uploaded (%lu KB), at most %lu draws and %lu ms in a frame",
+			device.frame, stats.draws / stats.presents, stats.immediate_draws / stats.presents, stats.clears / stats.presents,
+			stats.target_changes / stats.presents, stats.skipped_no_program, stats.skipped_no_target, stats.skipped_link,
+			stats.mirrored_bytes / stats.presents / 1024, stats.streamed_bytes / stats.presents / 1024,
+			stats.indexed / stats.presents, stats.indexed_mirrored / stats.presents, stats.indexed_direct / stats.presents,
+			stats.texture_uploads, stats.texture_upload_bytes / 1024, stats.most_draws, stats.slowest_frame);
+#else
 		platform_log("frame %lu: %lu draws, %lu immediate, %lu clears, %lu target changes; skipped %lu no program, %lu no target, %lu link; "
 			"%lu KB mirrored, %lu KB streamed; in 60 frames, %lu textures uploaded (%lu KB), at most %lu draws "
 			"and %lu ms in a frame",
@@ -9149,6 +9464,7 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 			stats.target_changes / stats.presents, stats.skipped_no_program, stats.skipped_no_target, stats.skipped_link,
 			stats.mirrored_bytes / stats.presents / 1024, stats.streamed_bytes / stats.presents / 1024,
 			stats.texture_uploads, stats.texture_upload_bytes / 1024, stats.most_draws, stats.slowest_frame);
+#endif
 		memset(&stats, 0, sizeof(stats));
 #ifndef HALO_GLES
 		{

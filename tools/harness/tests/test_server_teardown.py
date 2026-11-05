@@ -8,18 +8,23 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from harness import CHECK_FAILED, build, constant, enum_with, function, mutated, read, run  # noqa: E402
 
+# (the original game's one-second wait before the host's transport closes is
+# kept on the original Xbox alone, HALO_CONSOLE_SERVER_CLOSE_GRACE in
+# halo_console_features.h: ChupathingyCE 0.9.0's 1a1325d39; the Mac's,
+# FreeBSD's, any other port's and the browser's transports flush and need none)
 PLATFORMS = {
     'windows': ('#define HALO_WINDOWS 1', 0),
     'linux': ('#define __linux__ 1', 0),
     'android': ('#define HALO_ANDROID 1', 0),
-    'xbox': ('', 1000),
-    'other-port': ('#define HALO_UNEXAMINED_PORT 1', 1000),
+    'web': ('#define HALO_WEB 1', 0),
+    'xbox': ('#define HALO_XBOX_CONSOLE 1', 1000),
+    'other-port': ('#define HALO_UNEXAMINED_PORT 1', 0),
 }
 CASES = [(platform, case) for platform in PLATFORMS for case in ('back', 'reopen')]
 CASES += [('windows', case) for case in ('postgame', 'ingame', 'message-failure',
                                        'send-failure', 'machine-failure', 'no-server')]
 CASES += [('xbox', case) for case in ('postgame', 'ingame')]
-GUARD = '#if !defined(HALO_WINDOWS) && !defined(HALO_ANDROID) && !defined(HALO_WEB) && !defined(__linux__)'
+GUARD = '#ifdef HALO_CONSOLE_SERVER_CLOSE_GRACE'
 CONTROLS = {
     'native-sleeps': (GUARD, '#if 1', 'windows', 'back'),
     'xbox-loses-grace': ('SleepEx(MILLISECONDS_PER_SECOND, FALSE);', ';', 'xbox', 'back'),
@@ -44,6 +49,8 @@ def generated(platform, control=None):
     defines, sleep = PLATFORMS[platform]
     # The harness runs on Linux; each compiled variant selects its own target.
     config = '#undef __linux__\n#define xbox 1\n' + defines + f'\n#define EXPECTED_SLEEP {sleep}\n'
+    # (each build's console capabilities, as the prefix header has them: halo_port_limits.h)
+    config += read('port/linux/include/halo_console_features.h') + '\n'
     config += f'#define MILLISECONDS_PER_SECOND {constant(read("source/cseries/cseries.h"), "MILLISECONDS_PER_SECOND")}\n'
     for member in ('_network_game_server_state_pregame', '_network_game_server_game_open_bit'):
         config += enum_with(server, member) + '\n'

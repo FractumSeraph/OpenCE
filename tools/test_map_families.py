@@ -169,6 +169,15 @@ static int WriteFile(HANDLE file, void const *buffer, unsigned long size, unsign
 {
 	return 0;
 }
+/* (ChupathingyCE's resource map checks, map_family_resources_ready: no file
+is here to measure) */
+#define FILE_BEGIN 0
+#define INVALID_FILE_SIZE 0xffffffffUL
+#define INVALID_SET_FILE_POINTER 0xffffffffUL
+static unsigned long GetFileSize(HANDLE file, unsigned long *high)
+{
+	return INVALID_FILE_SIZE;
+}
 """
 LINK_STUBS = r"""
 /* (ChupathingyCE's hashed names and versions, port/linux/src/map_archive.c
@@ -215,6 +224,12 @@ void platform_log(char const *format, ...)
 plays them has it: map_families_playable) */
 int platform_ce_tag_cache_ready = 1;
 char platform_ce_tag_cache_error[160];
+/* (xbox_files.c's: a path as the host names it, for ChupathingyCE's resource
+map checks' log, map_family_resources_ready: as it is here) */
+void platform_translate_path(const char *xbox_path, char *host_path, unsigned long host_path_size)
+{
+	snprintf(host_path, (size_t)host_path_size, "%s", xbox_path);
+}
 """
 FILES_HARNESS = r"""
 #include <stdio.h>
@@ -417,6 +432,23 @@ static unsigned long SetFilePointer(HANDLE file, long distance, long *high, int 
 static int WriteFile(HANDLE file, void const *buffer, unsigned long size, unsigned long *written, void *overlapped)
 {
 	return 0;
+}
+/* (ChupathingyCE's resource map checks, map_family_resources_ready: a
+file's size, as it is in the test's folder) */
+#define FILE_BEGIN 0
+#define INVALID_FILE_SIZE 0xffffffffUL
+#define INVALID_SET_FILE_POINTER 0xffffffffUL
+static unsigned long GetFileSize(HANDLE handle, unsigned long *high)
+{
+	long at, size;
+
+	if (!handle->file || (at = ftell(handle->file)) < 0 || fseek(handle->file, 0, SEEK_END))
+		return INVALID_FILE_SIZE;
+	size = ftell(handle->file);
+	fseek(handle->file, at, SEEK_SET);
+	if (high)
+		*high = 0;
+	return size < 0 ? INVALID_FILE_SIZE : (unsigned long)size;
 }
 """
 REAL_HARNESS = FILES_HARNESS.replace("""	else if (!strcmp(argv[1], "resource"))""", """	else if (!strcmp(argv[1], "campaigns"))

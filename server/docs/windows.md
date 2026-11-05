@@ -10,8 +10,10 @@ a Command Prompt window, or as a scheduled task with no window.
 | `chupathingyce-server-windows-x64` | 64-bit Windows: almost every PC. Plays Xbox and Halo PC (Custom Edition, HaloMD) maps. |
 | `chupathingyce-server-windows-x86` | 32-bit Windows, and the Xbox maps (it can load the others, with less room for their textures and sounds). |
 
-Each holds `chupathingyce-server.exe`, `SDL3.dll` (which it needs beside it),
-`start-server.cmd`, the `playlists` folder, `brokers.txt` and the licenses.
+Each holds `chupathingyce-server.exe` (it needs no DLL beside it: it links
+no SDL, as the Linux server), `start-server.bat` and its `README.txt`
+(ChupathingyCE's, `server/windows`), the `playlists` folder, `brokers.txt`
+and the licenses.
 
 ## Quick start
 
@@ -21,7 +23,7 @@ Each holds `chupathingyce-server.exe`, `SDL3.dll` (which it needs beside it),
    Halo PC maps go in folders beside `maps`: `maps_ce` (with Custom
    Edition's `bitmaps.map`, `sounds.map` and `loc.map`), `maps_md`,
    `maps_pc` ([Playlists](playlists.md)).
-3. Open `start-server.cmd` in Notepad, set the playlist, the server's name
+3. Open `start-server.bat` in Notepad, set the playlist, the server's name
    and the rest, save it, and double-click it.
 
 The window shows what the server does, and takes its commands (`help` lists
@@ -34,16 +36,16 @@ this computer is on one, or players cannot reach the server.
 
 On a home connection you don't need to forward any ports: players reach the
 server as they reach anyone's invite link. `set HALO_NET_LASTING_INVITE=true`
-in `start-server.cmd` keeps that link the same each time the server starts. On a cloud server, open one UDP
+in `start-server.bat` keeps that link the same each time the server starts. On a cloud server, open one UDP
 port, as on Linux (the README's "It shows, but nobody can join").
 
 ## Settings
 
 Every setting is an environment variable, as on Linux
-([Settings](settings.md)). `start-server.cmd` sets the common ones with
+([Settings](settings.md)). `start-server.bat` sets the common ones with
 `set NAME=value` lines; add any other the same way. The data folder
 (`HALO_DATA_ROOT`) is the script's folder unless set: the one with `maps`
-and `playlists` in it. The server writes its settings file (`config.toml`)
+and `playlists` in it; its saves go in `saves` there (`HALO_SAVE_ROOT`). The server writes its settings file (`config.toml`)
 beside the program, and its log (`debug.txt`) in the data folder.
 
 ## Sending maps
@@ -68,12 +70,22 @@ allowed through Windows Firewall.
 ## Running without a window
 
 To start the server with Windows and keep it running without anyone signed
-in, make a scheduled task (Task Scheduler, Create Task):
+in, make it a Windows service (ChupathingyCE's, `server/platform/server_windows.c`):
+from a Command Prompt run as administrator in the server's folder,
+`start-server.bat install [name]` (`chupathingyce-server.exe
+--install-service [name]`) makes the service (`ChupathingyServer` unless
+named) with the settings `start-server.bat` sets, runs it as its own
+account (`NT SERVICE\<name>`), which is given the folder, starts it with
+Windows and again after a crash; `start-server.bat uninstall [name]` stops
+it and takes it out. Stop it from the Services panel or with `sc stop`, as
+Ctrl+C would. Without a console its output goes to `logs\server-output.txt`.
+
+Or make a scheduled task (Task Scheduler, Create Task):
 
 - General: "Run whether user is signed in or not".
 - Triggers: "At startup".
 - Actions: start `C:\HaloServer\chupathingyce-server.exe` in
-  `C:\HaloServer`. A task has no `start-server.cmd` window, so put the
+  `C:\HaloServer`. A task has no `start-server.bat` window, so put the
   settings in the task's environment instead: a small `.cmd` file with the
   `set` lines and the program's path as the action does it.
 - Settings: untick "Stop the task if it runs longer than".
@@ -82,8 +94,10 @@ Its console is then off (no window to type in); use the control panel.
 
 ## What differs from Linux
 
-- Ctrl+C, Ctrl+Break and closing the window stop the server, as SIGTERM and
-  SIGINT do on Linux.
+- Ctrl+C, Ctrl+Break, closing the window and a service's Stop stop the
+  server, as SIGTERM and SIGINT do on Linux.
+- The console has no line editing (the Linux server's, `server_terminal.c`):
+  a line is read as it is typed.
 - Windows has no file modes beyond the owner's: the server does not warn
   about files others can read (on Linux it does for `control_credentials.txt`
   and `control_accounts.txt`); keep the data folder where only you and the

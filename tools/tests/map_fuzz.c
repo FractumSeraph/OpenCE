@@ -479,6 +479,16 @@ boolean pc_menu_owns(unsigned long address, long size)
 	return FALSE;
 }
 
+/* (stubbs_mode.c's: Stubbs mode's animation data block, which
+tag_validate.c leaves to it; the fuzzer never runs Stubbs mode, so it owns
+nothing, as tools/map_validate.c has it) */
+boolean stubbs_mode_owns_data(void const *address, long size)
+{
+	(void)address;
+	(void)size;
+	return FALSE;
+}
+
 boolean map_family_resource(char const *name, char *path, long size)
 {
 	snprintf(path, (size_t)size, "%s", name);

@@ -301,6 +301,14 @@ static void crash_report(int signal_number, siginfo_t *information, void *contex
 		information ? information->si_addr : NULL, pc, frame, stack);
 	write(STDERR_FILENO, line, (size_t)length);
 	crash_debug_line(line);
+#if defined(__arm__)
+	/* (32-bit ARM: a call leaves its return address in lr, not on the
+	stack; fp is r11 in ARM code, r7 (above) in Thumb) */
+	length = snprintf(line, sizeof(line), PLATFORM_LOG_PREFIX "lr %08lx fp %08lx\n",
+		(unsigned long)ucontext->uc_mcontext.arm_lr, (unsigned long)ucontext->uc_mcontext.arm_fp);
+	write(STDERR_FILENO, line, (size_t)length);
+	crash_debug_line(line);
+#endif
 	if (stack)
 	{
 		/* the return address a call through a bad pointer left behind */

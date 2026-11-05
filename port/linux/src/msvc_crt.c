@@ -329,69 +329,26 @@ unsigned int _clearfp(void)
 	return 0;
 }
 
-#elif defined(__arm__)
-/* 32-bit ARM (the native 32-bit Android build): the rounding mode is the
-FPSCR's RMode, bits 22 and 23 as AArch64's FPCR has it, and its sticky
-exception flags are AArch64's FPSR's bits. As on AArch64, precision control
-and exception unmasking have no equivalent; the rest of the MSVC control
-word is only remembered. */
-static unsigned int msvc_control_word = CW_DEFAULT;
-
-unsigned int _control87(unsigned int new_value, unsigned int mask)
-{
-	unsigned int fpscr;
-
-	if (mask)
-	{
-		msvc_control_word = (msvc_control_word & ~mask) | (new_value & mask);
-		fpscr = __builtin_arm_get_fpscr();
-		fpscr &= ~(3U << 22);
-		switch (msvc_control_word & _MCW_RC)
-		{
-		case _RC_UP: fpscr |= 1U << 22; break;
-		case _RC_DOWN: fpscr |= 2U << 22; break;
-		case _RC_CHOP: fpscr |= 3U << 22; break;
-		default: break;
-		}
-		__builtin_arm_set_fpscr(fpscr);
-	}
-	return msvc_control_word;
-}
-
-unsigned int _controlfp(unsigned int new_value, unsigned int mask)
-{
-	/* _controlfp ignores the denormal mask */
-	return _control87(new_value, mask & ~_EM_DENORMAL);
-}
-
-unsigned int _statusfp(void)
-{
-	unsigned int fpscr = __builtin_arm_get_fpscr();
-	unsigned int result = 0;
-
-	/* as the x87 status word's low bits: invalid, denormal, zero divide,
-	overflow, underflow, precision */
-	if (fpscr & 0x01) result |= 0x01;
-	if (fpscr & 0x80) result |= 0x02;
-	if (fpscr & 0x02) result |= 0x04;
-	if (fpscr & 0x04) result |= 0x08;
-	if (fpscr & 0x08) result |= 0x10;
-	if (fpscr & 0x10) result |= 0x20;
-	return result;
-}
-
-unsigned int _clearfp(void)
-{
-	unsigned int status = _statusfp();
-
-	__builtin_arm_set_fpscr(__builtin_arm_get_fpscr() & ~0x9fU);
-	return status;
-}
-#elif defined(HALO_ANDROID) || defined(__aarch64__)
+/* (32-bit ARM, the native 32-bit Android build: ChupathingyCE's FPSCR in
+the AArch64 code below, which this fork had as a branch of its own) */
+#elif defined(HALO_ANDROID) || defined(__aarch64__) || defined(__arm__)
 /* AArch64: the rounding mode lives in FPCR.RMode, the sticky exception
 flags in FPSR. Precision control and exception unmasking have no
-equivalent; the rest of the MSVC control word is only remembered. */
+equivalent; the rest of the MSVC control word is only remembered. 32-bit
+ARM (VFP) has both in FPSCR, at the same bits */
 static unsigned int msvc_control_word = CW_DEFAULT;
+
+#if defined(__arm__)
+#define ARM_FP_CONTROL_READ() ((unsigned long long)__builtin_arm_get_fpscr())
+#define ARM_FP_CONTROL_WRITE(value) __builtin_arm_set_fpscr((unsigned int)(value))
+#define ARM_FP_STATUS_READ() ARM_FP_CONTROL_READ()
+#define ARM_FP_STATUS_WRITE(value) ARM_FP_CONTROL_WRITE(value)
+#else
+#define ARM_FP_CONTROL_READ() __builtin_arm_rsr64("fpcr")
+#define ARM_FP_CONTROL_WRITE(value) __builtin_arm_wsr64("fpcr", (value))
+#define ARM_FP_STATUS_READ() __builtin_arm_rsr64("fpsr")
+#define ARM_FP_STATUS_WRITE(value) __builtin_arm_wsr64("fpsr", (value))
+#endif
 
 unsigned int _control87(unsigned int new_value, unsigned int mask)
 {
@@ -400,7 +357,7 @@ unsigned int _control87(unsigned int new_value, unsigned int mask)
 	if (mask)
 	{
 		msvc_control_word = (msvc_control_word & ~mask) | (new_value & mask);
-		fpcr = __builtin_arm_rsr64("fpcr");
+		fpcr = ARM_FP_CONTROL_READ();
 		fpcr &= ~(3ULL << 22);
 		switch (msvc_control_word & _MCW_RC)
 		{
@@ -409,7 +366,7 @@ unsigned int _control87(unsigned int new_value, unsigned int mask)
 		case _RC_CHOP: fpcr |= 3ULL << 22; break;
 		default: break;
 		}
-		__builtin_arm_wsr64("fpcr", fpcr);
+		ARM_FP_CONTROL_WRITE(fpcr);
 	}
 	return msvc_control_word;
 }
@@ -422,7 +379,7 @@ unsigned int _controlfp(unsigned int new_value, unsigned int mask)
 
 unsigned int _statusfp(void)
 {
-	unsigned long long fpsr = __builtin_arm_rsr64("fpsr");
+	unsigned long long fpsr = ARM_FP_STATUS_READ();
 	unsigned int result = 0;
 
 	/* as the x87 status word's low bits: invalid, denormal, zero divide,
@@ -440,9 +397,18 @@ unsigned int _clearfp(void)
 {
 	unsigned int status = _statusfp();
 
-	__builtin_arm_wsr64("fpsr", __builtin_arm_rsr64("fpsr") & ~0x9fULL);
+	ARM_FP_STATUS_WRITE(ARM_FP_STATUS_READ() & ~0x9fULL);
 	return status;
 }
+
+#if defined(__arm__)
+/* MSVC's compiler barrier (scenario.c), a builtin of clang's on x86 but not
+on 32-bit ARM: a call is a barrier already */
+void _ReadWriteBarrier(void)
+{
+	__asm__ volatile ("" ::: "memory");
+}
+#endif
 #elif defined(HALO_WEB)
 /* WebAssembly: rounding to nearest and no exception flags, always. The MSVC
 control word is only remembered, so that the game reads back what it set. */

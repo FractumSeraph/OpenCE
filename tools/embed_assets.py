@@ -5,8 +5,10 @@ tools/title_assets.py), their controller button icons (port/assets/buttons,
 made by tools/button_assets.py), the fonts the text is drawn with
 (port/assets/fonts), the menus' files (port/assets/menus, made by
 tools/ce_menus.py), SMAA's shader and lookup textures
-(port/third_party/smaa) and the mixer's head-related impulse responses
-(port/assets/hrtf, made by tools/hrtf_assets.py) in the game as C data:
+(port/third_party/smaa), the mixer's head-related impulse responses
+(port/assets/hrtf, made by tools/hrtf_assets.py) and Chupathingy's loading
+picture (port/assets/loading, made by tools/make_loading_picture.py) in the
+game as C data:
 
     python tools/embed_assets.py OUTPUT.c
     python tools/embed_assets.py --fonts OUTPUT.c
@@ -63,6 +65,8 @@ WINDOW_ICON = Path("port/assets/icon/fractum-halo-256.png")
 MENU_CURSOR = Path("port/assets/cursor/menu_cursor.png")
 # the head-related impulse responses (dsound_sdl.c's hrtf)
 HRTF_FILE = Path("port/assets/hrtf/sadie_d2_48k.hrtf")
+# Chupathingy's loading picture (port/linux/game/loading_picture.c)
+LOADING_PICTURE_FILE = Path("port/assets/loading/chupathingy_loading.tga")
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 # the overlay's fonts (the game browser's; posix_ui_font.c), in its order
 UI_FONTS = Path("port/linux/ui/fonts")
@@ -134,7 +138,8 @@ def hud_asset_inputs() -> List[Path]:
             *(SMAA_ASSETS / name for name, _ in smaa_files()),
             *([WINDOW_ICON] if (ROOT / WINDOW_ICON).is_file() else []),
             *([MENU_CURSOR] if (ROOT / MENU_CURSOR).is_file() else []),
-            *([HRTF_FILE] if (ROOT / HRTF_FILE).is_file() else [])]
+            *([HRTF_FILE] if (ROOT / HRTF_FILE).is_file() else []),
+            *([LOADING_PICTURE_FILE] if (ROOT / LOADING_PICTURE_FILE).is_file() else [])]
 
 
 def hud_configure_inputs() -> List[Path]:
@@ -461,6 +466,14 @@ def main() -> None:
     lines.extend(words(data) if data else ["\t0,"])
     lines.append("};")
     lines.append(f"const unsigned long dsound_hrtf_data_size = {len(data)};")
+    # Chupathingy's loading picture (loading_picture.c), of size 0 if the
+    # checkout does not have it
+    data = (ROOT / LOADING_PICTURE_FILE).read_bytes() if (ROOT / LOADING_PICTURE_FILE).is_file() else b""
+    lines.append("")
+    lines.append("const unsigned int loading_picture_data[] = {")
+    lines.extend(words(data) if data else ["\t0,"])
+    lines.append("};")
+    lines.append(f"const unsigned long loading_picture_data_size = {len(data)};")
     write(Path(sys.argv[1]), lines)
 
 

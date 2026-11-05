@@ -31,6 +31,9 @@ REASONS = {
     "MAPS_UNSUPPORTED": "%s maps don't work on this build.",
     "OPENCE_GAME_TYPE": "Uses an OpenCE game type Chupathingy doesn't have yet: %s.",
     "NEEDS_BOMB": "Needs a Chupathingy build with Bomb.",
+    # (a Custom Edition or HaloMD map's, when Custom Edition's resource maps are missing:
+    # ChupathingyCE 681c12bd8, map_families.c)
+    "CE_RESOURCES": "Needs Custom Edition's bitmaps.map, sounds.map and loc.map in maps_ce.",
     "NOT_OPEN": "Not taking players right now.",
     "FULL": "Game is full.",
     "PASSWORD": "Password needed.",

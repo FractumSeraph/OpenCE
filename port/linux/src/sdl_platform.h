@@ -100,6 +100,10 @@ BOOL platform_import_poll(char *file, int file_size, unsigned long long *done, u
 BOOL platform_sdl_initialize(void);
 /* creates the window and makes its OpenGL context current on this thread */
 BOOL platform_video_initialize(unsigned long width, unsigned long height);
+#ifdef HALO_BGFX
+/* the window again for OpenGL, when bgfx does not start (d3d8_bgfx.inl) */
+BOOL platform_video_reopen_for_gl(void);
+#endif
 #if !defined(HALO_ANDROID) || defined(HALO_BROWSER)
 BOOL platform_screen_mode(long *width, long *height);
 #endif
@@ -126,6 +130,12 @@ void platform_video_drawable_size(int *width, int *height);
 scRGB's units, 1.0 being 80 nits) and how many times brighter than it the
 display goes (1.0 without HDR) */
 BOOL platform_video_hdr(float *sdr_white, float *headroom);
+#endif
+#ifdef HALO_IOS
+/* the part of the drawable the picture is shown in, in pixels from its top
+left: all of it, but where the platform keeps part for itself (iPhone Duo
+held part open like a laptop, its touch controls below the fold) */
+void platform_video_present_area(int *x, int *y, int *width, int *height);
 #endif
 /* the window's mode and size and V-Sync, from config.toml as Settings has
 just written it (the main thread's) */

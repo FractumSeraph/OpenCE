@@ -186,15 +186,14 @@ int pthread_detach(pthread_t thread)
 	return 0;
 }
 
-/* (the dedicated server's GameSpy listing thread, server/platform/
-gamespy_listing.c: opened again by its identifier, as pthread_create keeps no
-handle; one that has ended already is not found, and is joined) */
-int pthread_join(pthread_t thread, void **result)
+/* (the thread by its identifier: one that has ended already is not there
+to open, and is joined) */
+int pthread_join(pthread_t thread, void **value)
 {
 	HANDLE handle = OpenThread(SYNCHRONIZE, FALSE, (DWORD)thread);
 
-	if (result)
-		*result = NULL;
+	if (value)
+		*value = NULL;
 	if (!handle)
 		return 0;
 	WaitForSingleObject(handle, INFINITE);

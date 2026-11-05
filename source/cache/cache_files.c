@@ -143,6 +143,7 @@ symbols in this file:
 #include "halo_map_families.h"
 #ifdef HALO_MAP_LIST
 #include "halo_map_packs.h"
+#include "stubbs_mode.h"
 #endif
 #include "models/models.h"
 #include "map_share.h" /* port: port/linux/game/map_share.c */
@@ -226,6 +227,18 @@ Custom Edition's resource maps, port/linux/game/ce_resources.c) */
 	((version) == CACHE_FILE_CE_VERSION || (version) == CACHE_FILE_RETAIL_VERSION)
 #define CE_TAG_CACHE_BASE 0x40440000U
 #define CE_TAG_CACHE_SIZE 0x01700000U
+#ifdef HALO_CONSOLE_CE_SHARED_TAG_CACHE
+/* a 64 MB console's Custom Edition tag cache, the Xbox's (port/xbox's
+xbox_ce_files.c) */
+#define CE_SHARED_TAG_CACHE_SIZE 0x01600000U
+extern int platform_ce_alias;
+void platform_ce_load_begin(void);
+void platform_ce_load_end(void);
+void platform_ce_alias_whole(void);
+unsigned long platform_ce_room_end(unsigned long end_free);
+void *platform_ce_scratch_malloc(size_t size);
+void platform_ce_scratch_free(void *address);
+#endif
 
 struct cache_file_ce_tag_header
 {
@@ -813,7 +826,12 @@ long tag_loaded(
 void cache_files_enable_writes(
 	void)
 {
+#if defined(HALO_MAP_LIST) && !defined(HALO_XBOX_CONSOLE)
+	/* port: (Stubbs mode's tag cache is lower: port/linux/game/stubbs_mode.c) */
+	XPhysicalProtect((void *)(__UINTPTR_TYPE__)stubbs_mode_tag_cache_base(0x803A6000), 0x01600000, PAGE_READWRITE);
+#else
 	XPhysicalProtect((void *)0x803A6000, 0x01600000, PAGE_READWRITE);
+#endif
 
 	return;
 }
@@ -821,7 +839,12 @@ void cache_files_enable_writes(
 void cache_files_disable_writes(
 	void)
 {
+#if defined(HALO_MAP_LIST) && !defined(HALO_XBOX_CONSOLE)
+	/* port: (Stubbs mode's tag cache is lower: port/linux/game/stubbs_mode.c) */
+	XPhysicalProtect((void *)(__UINTPTR_TYPE__)stubbs_mode_tag_cache_base(0x803A6000), 0x01600000, PAGE_READONLY);
+#else
 	XPhysicalProtect((void *)0x803A6000, 0x01600000, PAGE_READONLY);
+#endif
 	XPhysicalProtect(
 		xbox_pointer(cache_file_globals.tag_header->vertex_buffers),
 		cache_file_globals.tag_header->vertex_buffer_count * 12,
@@ -970,6 +993,24 @@ void const *cache_file_loaded_header(
 {
 	return cache_file_globals.tags_loaded ? &cache_file_globals.header : NULL;
 }
+
+#if defined(HALO_MAP_LIST) && !defined(HALO_XBOX_CONSOLE)
+/* port: a read of the open map's file for Stubbs mode (stubbs_mode.c) */
+static boolean cache_file_stubbs_read(
+	long offset,
+	long size,
+	void *buffer)
+{
+	boolean read_complete = FALSE;
+
+	if (offset < 0 || size <= 0 || offset > cache_file_globals.header.file_length - size)
+		return FALSE;
+	cache_file_read(NONE, offset, size, buffer, &read_complete, TRUE);
+	while (!read_complete)
+		SwitchToThread();
+	return read_complete == TRUE;
+}
+#endif
 
 boolean cache_file_header_verify(
 	struct cache_file_header *header,
@@ -1449,7 +1490,30 @@ boolean cache_files_map_present(
 	else
 #endif
 #ifdef HALO_CUSTOM_EDITION
-	if (family != _map_family_xbox)
+#ifdef HALO_CONSOLE_NO_HALOMD_MAPS
+	/* (a HaloMD map, which this console doesn't play: said so, and the map
+	the next game opens on is the first one again, not this one, which the
+	menus' list leaves out and could not change from) */
+	if (family == _map_family_halomd)
+	{
+		void game_engine_override_map_name(char const *map_name);
+		void main_set_multiplayer_map_name(char const *map_name);
+
+		snprintf(message, sizeof(message), "%.63s is a HaloMD map. HaloMD maps can't be played on %s.", file,
+			HALO_CONSOLE_NO_HALOMD_MAPS);
+		game_engine_override_map_name("levels\\test\\carousel\\carousel");
+		main_set_multiplayer_map_name("levels\\test\\carousel\\carousel");
+	}
+	else
+#endif
+	/* (Custom Edition's resource maps, which every map past the Xbox's reads:
+	without them the map is refused as it loads, so the join is given up here,
+	before it is downloaded or loaded, saying what is needed) */
+	if (family != _map_family_xbox && !map_family_resources_ready(message, sizeof(message)))
+	{
+		platform_log("map %s: Custom Edition's resource maps are missing or not Custom Edition's", map_name);
+	}
+	else if (family != _map_family_xbox)
 	{
 		int map_torrents_fetch(const char *level_name, unsigned long version, const char *files);
 		char path[256];
@@ -1720,6 +1784,28 @@ long scenario_tags_load(
 			struct cache_file_ce_tag_header *ce_header;
 
 			tag_cache_base_address = xbox_pointer(CE_TAG_CACHE_BASE);
+#ifdef HALO_CONSOLE_CE_SHARED_TAG_CACHE
+			/* port: a 64 MB console's tag cache is the Xbox's, by the page
+			tables, and the memory the load needs a while the texture cache's,
+			lent (port/xbox's xbox_ce_files.c); the map checked here, in it,
+			not as it opened (the menus' map was in it then) */
+			if (platform_ce_alias)
+			{
+				extern boolean ce_map_check_deferred(void);
+
+				platform_ce_load_begin();
+				if (!ce_map_check_deferred())
+				{
+					platform_ce_load_end();
+					cache_file_close();
+					return NONE;
+				}
+				platform_ce_alias_whole();
+				/* (its 22 MB: the range's last megabyte is no memory) */
+				csmemset(tag_cache_base_address, 0xCD, CE_SHARED_TAG_CACHE_SIZE);
+			}
+			else
+#endif
 			csmemset(tag_cache_base_address, 0xCD, CE_TAG_CACHE_SIZE);
 			cache_file_read(NONE, cache_file_globals.header.tag_data_offset, cache_file_globals.header.tag_data_size,
 				tag_cache_base_address, &read_complete, TRUE);
@@ -1761,6 +1847,10 @@ long scenario_tags_load(
 
 					ce_map_cache_version = cache_file_globals.header.version;
 				}
+#ifdef HALO_CONSOLE_CE_SHARED_TAG_CACHE
+				/* (the BSPs' window made, and the room below what isn't memory) */
+				end_free = platform_ce_room_end(end_free);
+#endif
 				if (!ce_resources_tags_loaded(global_tag_instances, ce_header->tag_count,
 					CE_TAG_CACHE_BASE + cache_file_globals.header.tag_data_size, end_free))
 				{
@@ -1782,7 +1872,12 @@ long scenario_tags_load(
 			{
 				extern boolean ce_models_tags_loaded(void *tag_instances, long tag_count, byte const *model_data,
 					unsigned long vertex_data_size);
+#ifdef HALO_CONSOLE_CE_SHARED_TAG_CACHE
+				byte *model_data = platform_ce_alias ? platform_ce_scratch_malloc(ce_header->model_data_size) :
+					system_malloc(ce_header->model_data_size);
+#else
 				byte *model_data = system_malloc(ce_header->model_data_size);
+#endif
 
 				if (model_data)
 				{
@@ -1808,6 +1903,11 @@ long scenario_tags_load(
 
 						ce_shaders_tags_loaded(global_tag_instances, ce_header->tag_count);
 					}
+#ifdef HALO_CONSOLE_CE_SHARED_TAG_CACHE
+					if (platform_ce_alias)
+						platform_ce_scratch_free(model_data);
+					else
+#endif
 					system_free(model_data);
 				}
 				else
@@ -1817,6 +1917,11 @@ long scenario_tags_load(
 				}
 			}
 
+#ifdef HALO_CONSOLE_CE_SHARED_TAG_CACHE
+			/* (what the load borrowed given back, before anything of it is drawn) */
+			if (platform_ce_alias)
+				platform_ce_load_end();
+#endif
 			/* (none of the high-res HUD: Halo PC's HUD bitmaps are laid out
 			otherwise than the Xbox's it was drawn for, so a Custom Edition map
 			draws its own) */
@@ -1914,6 +2019,12 @@ long scenario_tags_load(
 				tag_cache_base_address,
 				XBOX_ADDRESS(tag_cache_base_address),
 				cache_file_globals.header.tag_data_size);
+#endif
+#if defined(HALO_MAP_LIST) && !defined(HALO_XBOX_CONSOLE)
+			/* port: Stubbs the Zombie's tags in Halo's layouts, in Stubbs
+			mode only (port/linux/game/stubbs_mode.c) */
+			stubbs_mode_set_file_reader(cache_file_stubbs_read);
+			stubbs_mode_convert_tags(tag_cache_base_address, cache_file_globals.header.tag_data_size);
 #endif
 #ifndef HALO_CONSOLE_NO_TAG_VALIDATE
 			/* port: and every tag checked against its group's schema before
@@ -2133,6 +2244,10 @@ boolean scenario_structure_bsp_load(
 	/* port: and checked against its schema, as the map's tags were
 	(port/linux/game/tag_validate.c); a Custom Edition or HaloMD map's
 	tags are Halo PC's layout, checked as they load (ce_map_checks.c) */
+#if defined(HALO_MAP_LIST) && !defined(HALO_XBOX_CONSOLE)
+	/* (Stubbs mode: port/linux/game/stubbs_mode.c) */
+	stubbs_mode_convert_structure_bsp(xbox_pointer(reference->base_address), reference->file_size);
+#endif
 #ifndef HALO_CONSOLE_NO_TAG_VALIDATE
 	if (
 #ifdef HALO_CUSTOM_EDITION

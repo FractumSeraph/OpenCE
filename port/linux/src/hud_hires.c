@@ -31,8 +31,10 @@ zlib (port/third_party/zlib).
 #include "zlib_prefixed.h"
 
 /* (decoding a map's HUD ahead: the desktop builds'; not Android's or the
-web's, nor the dedicated server's, which draws nothing) */
-#if !defined(HALO_ANDROID) && !defined(HALO_WEB) && !defined(HALO_SERVER)
+web's, nor the dedicated server's, which draws nothing, nor a console's that
+asks to decode each when first drawn (HALO_CONSOLE_HUD_ON_DEMAND): holding a
+map's decoded HUD pictures takes about 60 MB more at once) */
+#if !defined(HALO_ANDROID) && !defined(HALO_WEB) && !defined(HALO_SERVER) && !defined(HALO_CONSOLE_HUD_ON_DEMAND)
 #define HUD_HIRES_DECODE_AHEAD
 #include <pthread.h>
 #endif

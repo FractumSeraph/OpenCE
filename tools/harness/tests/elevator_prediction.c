@@ -130,6 +130,15 @@ enum
 #define network_fairplay_refused_move(player_index, kind, amount) ((void)(amount))
 #define network_fairplay_moved_by_host(player_index) ((void)0)
 
+/* (ChupathingyCE's evidence for the server's moderators, host_evidence.h:
+each refused move noted against the player's machine; none kept here) */
+enum
+{
+	_host_evidence_movement
+};
+#define distributed_player_machine(player_index) ((long)(player_index))
+#define host_evidence_note(machine_index, kind) ((void)(machine_index), (void)(kind))
+
 /* the unit put where the host takes it to be */
 static boolean apply(long unit_index, real_point3d const *position)
 {

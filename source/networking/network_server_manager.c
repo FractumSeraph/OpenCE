@@ -858,6 +858,12 @@ ban's end, 0 for ever; an internet play peer's real address for its
 stand-in) */
 boolean network_distributed_banned(unsigned long address, char const *hardware_id, char const *discord_id);
 unsigned long network_distributed_ban(long machine_index, unsigned long address, char const *names);
+/* (its budget for a client machine's lobby messages, full again) */
+void network_distributed_lobby_budget_reset(long machine_index);
+/* (its limit on the machines of one address: network.max_machines_per_address,
+a dedicated server's max_machines_per_address) */
+boolean network_distributed_address_full(unsigned long address, unsigned long const *others, short count);
+long network_distributed_address_limit(void);
 void network_distributed_ban_until(long machine_index, unsigned long address, char const *names, char const *reason,
 	unsigned long until);
 void network_distributed_kick(char const *names);
@@ -1659,9 +1665,9 @@ newer one the legacy table proves is taken: port/linux/src/delta.c) */
 
 #ifdef xbox
 	/* port: native transports flush before closing sockets, and unregistering
-	an XNet key is a stub (the web build's too: Emscripten is no __linux__).
-	Preserve the original grace period on other builds. */
-#if !defined(HALO_WINDOWS) && !defined(HALO_ANDROID) && !defined(HALO_WEB) && !defined(__linux__)
+	an XNet key is a stub. The original grace period stays on a console on
+	the XDK's XNet (halo_console_features.h). */
+#ifdef HALO_CONSOLE_SERVER_CLOSE_GRACE
 	SleepEx(MILLISECONDS_PER_SECOND, FALSE);
 #endif
 	transport_server_terminate();
@@ -2482,8 +2488,10 @@ boolean network_game_server_game_is_valid(
 
 /* port: why network_game_server_accept_client_machine_into_game last
 refused a machine: a banned one's, or one dropped for cheating, is told it
-is kept out (_rejection_code_blacklisted_machine); any other, that the game
-is not open */
+is kept out (_rejection_code_blacklisted_machine); one past the limit on
+the machines of one address, that its address has too many (OpenCE's code
+for it, which network_client_manager.c says plainly); any other, that the
+game is not open */
 static short network_game_server_refusal_code = _rejection_code_game_is_closed;
 
 short network_game_server_last_refusal_code(
@@ -2595,6 +2603,40 @@ address, real address or hardware id) */
 				return FALSE;
 			}
 		}
+		/* (and not one past the limit on the machines of an address, by
+		the address the internet has: internet play's stand-ins, one a
+		peer, are counted by the peer's real one; a local network's never.
+		A machine of the same stand-in, joining again, takes its old one's
+		place below, and is not counted with it) */
+		if (!network_game_server_client_machine_is_local(server, machine) &&
+			address.address.long_words[0] != IPV4_LOOPBACK_ADDRESS &&
+			network_distributed_address_limit() > 0)
+		{
+			unsigned long others[MAXIMUM_NETWORK_MACHINE_COUNT];
+			short count = 0;
+			long other_index;
+
+			for (other_index = 0; other_index < MAXIMUM_NETWORK_MACHINE_COUNT; other_index++)
+			{
+				struct network_game_server_client_machine *other = &server->client_machines[other_index];
+
+				if (other != machine &&
+					network_game_server_client_machine_is_joined_to_game(server, other) &&
+					!network_game_server_client_machine_is_local(server, other) &&
+					network_game_server_client_machine_addresses[other_index] != address.address.long_words[0])
+				{
+					others[count++] = network_game_server_client_machine_addresses[other_index];
+				}
+			}
+			if (network_distributed_address_full(address.address.long_words[0], others, count))
+			{
+				network_event("refusing a machine @ %s: %ld machines of its address are in the game already "
+					"(network.max_machines_per_address)",
+					transport_address_to_string(&address), network_distributed_address_limit());
+				network_game_server_refusal_code = _rejection_code_address_full;
+				return FALSE;
+			}
+		}
 	}
 	/* (a kick asked for the slot's machine before is not this one's) */
 	if (VALID_INDEX(machine_index, MAXIMUM_NETWORK_MACHINE_COUNT))
@@ -2665,6 +2707,7 @@ address, real address or hardware id) */
 				network_afk_machine_joined(machine_index);
 				/* (and its voice chat key) */
 				network_voice_machine_joined(machine_index);
+				network_distributed_lobby_budget_reset(machine_index);
 			}
 			else
 			{
@@ -2703,6 +2746,8 @@ boolean network_game_server_switch_machine_from_postgame_to_pregame(
 		"machine #%d has successfully switched to pregame",
 		machine->machine_index);
 	SET_FLAG(machine->flags, _network_client_machine_level_loaded_bit, FALSE);
+	/* port: a new lobby, a new budget for its lobby messages */
+	network_distributed_lobby_budget_reset(machine->machine_index);
 
 	return TRUE;
 }

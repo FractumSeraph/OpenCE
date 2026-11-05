@@ -621,7 +621,8 @@ public final class TouchControls extends View implements SensorEventListener, In
 
     /** what is under a point (logical units): a toolbar item, a control, or NOTHING */
     private int hit(float x, float y) {
-        if (inside(x, y, optionsX(), optionsY(), toolbarRadius(OPTIONS_RADIUS)))
+        // (hidden controls leave only the "Touch" button: Options comes back with the controls)
+        if ((!hidden || editing) && inside(x, y, optionsX(), optionsY(), toolbarRadius(OPTIONS_RADIUS)))
             return TOOLBAR_OPTIONS;
         if (!editing) {
             if (inside(x, y, logicalWidth / 2, toolbarY(), toolbarRadius(TOOLBAR_RADIUS)))
@@ -1370,7 +1371,8 @@ public final class TouchControls extends View implements SensorEventListener, In
     }
 
     private void drawToolbar(Canvas canvas) {
-        toolbarItem(canvas, optionsX(), optionsY(), OPTIONS_RADIUS, "Options", dragControl == TOOLBAR_OPTIONS);
+        if (!hidden || editing)
+            toolbarItem(canvas, optionsX(), optionsY(), OPTIONS_RADIUS, "Options", dragControl == TOOLBAR_OPTIONS);
         if (editing) {
             float middle = logicalWidth / 2;
             toolbarItem(canvas, middle - EDITOR_SPACING, editorY(), OPTIONS_RADIUS, "Export", false);

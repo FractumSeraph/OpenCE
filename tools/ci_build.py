@@ -44,7 +44,10 @@ Alpine's Docker container of the server's architecture (an x86 one runs on
 an x86-64 machine, an arm64 one on an arm64 machine); it goes into
 dist/chupathingyce-server-linux-<arch> (-debug for a debug build), with
 its README and playlists. A release's server there is stripped of its debug
-information; a debug build's keeps it.
+information; a debug build's keeps it. The Windows servers
+(server-windows, server-windows64: tools/windows_build.py, on Windows) go
+into dist/chupathingyce-server-windows-x86 and -x64, with start-server.bat
+and its README (server/windows); their symbols are their PDBs, apart.
 
 OpenCE's web build ("web": tools/web_build.py, port/web/README.md) needs
 Emscripten (emcc on the PATH, as emsdk_env.sh puts it);
@@ -104,10 +107,10 @@ OUTPUTS = {
     "server-x64": ["build/server-x64/chupathingyce-server"],
     "server-arm64": ["build/server-arm64/chupathingyce-server"],
     "web": [],  # the site, below
-    # the dedicated server for Windows (ninja server-windows, server-windows64;
-    # tools/windows_build.py), with the SDL it links
-    "server-windows": ["build/server-windows/chupathingyce-server.exe", "build/server-windows/SDL3.dll"],
-    "server-windows64": ["build/server-windows64/chupathingyce-server.exe", "build/server-windows64/SDL3.dll"],
+    # the dedicated servers for Windows (ninja server-windows, server-windows64;
+    # tools/windows_build.py)
+    "server-windows": ["build/server-windows/chupathingyce-server.exe"],
+    "server-windows64": ["build/server-windows64/chupathingyce-server.exe"],
 }
 # the servers' Alpine Linux (--alpine), and Docker's name for each one's
 # architecture
@@ -332,6 +335,18 @@ def main() -> int:
     # (port/assets/icons/lucide, drawn into the menus' bitmaps), whose ISC
     # license asks copies to carry its notice
     shutil.copy2(ROOT / "port/assets/icons/lucide/LICENSE", dist / "lucide-LICENSE.txt")
+    # the bgfx renderer of the 64-bit desktop builds (tools/bgfx_build.py):
+    # bgfx's, bx's and bimg's BSD licenses ask binaries to carry their
+    # notices, as do glslang's and, on macOS, SPIRV-Cross's
+    if (ROOT / "build" / args.platform / "bgfx").is_dir():
+        bgfx_sources = ROOT / "build/bgfx"
+        bgfx_licenses = [("bgfx/LICENSE", "bgfx-LICENSE.txt"), ("bx/LICENSE", "bx-LICENSE.txt"),
+                         ("bimg/LICENSE", "bimg-LICENSE.txt"),
+                         ("bgfx/3rdparty/glslang/LICENSE.txt", "glslang-LICENSE.txt")]
+        if args.platform == "macos":
+            bgfx_licenses.append(("bgfx/3rdparty/spirv-cross/LICENSE", "SPIRV-Cross-LICENSE.txt"))
+        for source, name in bgfx_licenses:
+            shutil.copy2(bgfx_sources / source, dist / name)
     # internet play's MQTT brokers, a file beside the game (network.brokers_file;
     # Android's APK has its own copy; the macOS application reads its settings
     # folder in Application Support, never beside the app, so it uses the
@@ -435,41 +450,47 @@ WINDOWS_SERVERS = {"server-windows": "x86", "server-windows64": "x64"}
 
 
 def server_dist(platform: str, config: str, outputs: list) -> int:
-    """dist/chupathingyce-server-linux-<arch>[-debug] (or -windows-<arch>):
-    the server, its README, its playlists, its blocked names list, its license
-    and the notices its parts' licenses ask for; on Windows SDL3.dll beside
-    it, the brokers' list, the guide (server/docs/windows.md) and a script
-    that starts it"""
+    """dist/chupathingyce-server-linux-<arch>[-debug]: the server, its
+    README, its playlists, its blocked names list, its license and the notices
+    its parts' licenses ask for. A Windows one,
+    dist/chupathingyce-server-windows-<arch>[-debug], also has start-server.bat
+    and its own README.txt (server/windows), the guide (server/docs/windows.md),
+    the brokers' list, and the server's README as README-server.md"""
     windows = platform in WINDOWS_SERVERS
     arch = WINDOWS_SERVERS[platform] if windows else platform[len("server-"):]
-    system = "windows" if windows else "linux"
-    dist = ROOT / "dist" / f"chupathingyce-server-{system}-{arch}{'' if config == 'release' else '-debug'}"
+    name = f"chupathingyce-server-{'windows' if windows else 'linux'}-{arch}"
+    dist = ROOT / "dist" / f"{name}{'' if config == 'release' else '-debug'}"
     output = outputs[0]
     if dist.exists():
         shutil.rmtree(dist)
     (dist / "playlists").mkdir(parents=True)
-    for built in outputs:
-        shutil.copy2(ROOT / built, dist)
-    if not windows:
-        # the full program (debug information and all), apart, for crash
-        # reports (a Windows server's .pdb is apart already)
-        symbols = ROOT / "dist" / f"chupathingyce-server-linux-{arch}-{config}-symbols"
-        if symbols.exists():
-            shutil.rmtree(symbols)
-        symbols.mkdir(parents=True)
-        shutil.copy2(ROOT / output, symbols)
+    shutil.copy2(ROOT / output, dist)
+    # the full program (debug information and all), apart, for crash reports
+    # (Windows': its PDB and the linker's map)
+    symbols = ROOT / "dist" / f"{name}-{config}-symbols"
+    if symbols.exists():
+        shutil.rmtree(symbols)
+    symbols.mkdir(parents=True)
+    shutil.copy2(ROOT / output, symbols)
     if windows:
-        # (its debug information is apart already: build/server-windows*/
-        # chupathingyce-server.pdb)
+        for extra in (".pdb", ".map"):
+            shutil.copy2((ROOT / output).with_suffix(extra), symbols)
+        # (Windows' line ends, which cmd.exe's labels need)
+        for source, copy in (("server/windows/start-server.bat", "start-server.bat"),
+                             ("server/windows/README.txt", "README.txt")):
+            text = (ROOT / source).read_text(encoding="utf-8").replace("\r\n", "\n")
+            (dist / copy).write_bytes(text.replace("\n", "\r\n").encode("utf-8"))
+        shutil.copy2(ROOT / "server/README.md", dist / "README-server.md")
+        # port (this fork): internet play's brokers and the Windows guide
         shutil.copy2(ROOT / "port/assets/network/brokers.txt", dist / "brokers.txt")
         shutil.copy2(ROOT / "server/docs/windows.md", dist / "WINDOWS.md")
-        shutil.copy2(ROOT / "server/deploy/windows/start-server.cmd", dist / "start-server.cmd")
-    elif config == "release":
-        # a release's download without its debug information (about 20 MB
-        # of 33); build/server-<arch>/ keeps the full program, and a debug
-        # build ships it
-        strip_debug(dist / Path(output).name)
-    shutil.copy2(ROOT / "server/README.md", dist / "README.md")
+    else:
+        if config == "release":
+            # a release's download without its debug information (about 20 MB
+            # of 33); build/server-<arch>/ keeps the full program, and a debug
+            # build ships it
+            strip_debug(dist / Path(output).name)
+        shutil.copy2(ROOT / "server/README.md", dist / "README.md")
     for playlist in sorted((ROOT / "server/playlists").glob("*.txt")):
         shutil.copy2(playlist, dist / "playlists")
     # (sv_name_filter's list, read from the data folder)
