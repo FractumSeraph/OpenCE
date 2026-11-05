@@ -4619,6 +4619,21 @@ static void screen_keyboard_update(void)
 }
 
 #endif
+#ifdef HALO_LAUNCHER
+/* port (this fork): the window's focus as SDL has it now. The launcher
+(launcher.c) reads the events before the game does, the window's first
+focus among them, and without it the game took itself for unfocused, which
+drops every gamepad's input (controller_remap_input) */
+void platform_input_focus_sync(void)
+{
+	BOOL focused = platform_window && (SDL_GetWindowFlags(platform_window) & SDL_WINDOW_INPUT_FOCUS) != 0;
+
+	pthread_mutex_lock(&input_lock);
+	input_state.focused = focused;
+	pthread_mutex_unlock(&input_lock);
+}
+#endif
+
 void platform_input_read(struct platform_input_state *state, BOOL consume_motion)
 {
 	pthread_mutex_lock(&input_lock);

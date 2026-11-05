@@ -51,6 +51,7 @@ const char *updater_version(void);
 int delta_legacy_announce(void);
 /* (sdl_platform.c's) */
 SDL_Window *platform_sdl_window(void);
+void platform_input_focus_sync(void);
 
 /* where Send my logs goes (puma's dumps.py: the page's form, POST /upload),
 unless debug.dump_url says otherwise; and the Discord invite */
@@ -3522,6 +3523,9 @@ static void run(void)
 	}
 	free(launcher.upload.body);
 	launcher.upload.body = NULL;
+	/* (the window's focus, whose event this loop took: the game drops a
+	gamepad's input while it thinks it has none) */
+	platform_input_focus_sync();
 	platform_mouse_capture(TRUE);
 }
 
