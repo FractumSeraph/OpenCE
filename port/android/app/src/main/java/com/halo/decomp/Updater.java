@@ -237,8 +237,8 @@ final class Updater {
         if (activity.isFinishing())
             return;
         new AlertDialog.Builder(activity)
-            .setTitle("ChupathingyCE: new version")
-            .setMessage("A new version of ChupathingyCE is out (" + latest + "; this is "
+            .setTitle("Fractum Halo: new version")
+            .setMessage("A new version of Fractum Halo is out (" + latest + "; this is "
                 + BuildConfig.HALO_VERSION + ").\n\nDo you want to update? The game will close and start "
                 + "the new version.")
             .setCancelable(false)
@@ -250,7 +250,7 @@ final class Updater {
 
     private static void confirmNever(Activity activity) {
         new AlertDialog.Builder(activity)
-            .setTitle("ChupathingyCE: new version")
+            .setTitle("Fractum Halo: new version")
             .setMessage("Stop asking about new versions?\n\nTo ask again, set auto = true in the [update] section "
                 + "of config.toml.")
             .setCancelable(false)
@@ -299,7 +299,7 @@ final class Updater {
         layout.addView(status);
         layout.addView(bar);
         AlertDialog progress = new AlertDialog.Builder(activity)
-            .setTitle("ChupathingyCE: new version")
+            .setTitle("Fractum Halo: new version")
             .setView(layout)
             .setCancelable(false)
             .show();
@@ -334,7 +334,7 @@ final class Updater {
                 activity.runOnUiThread(() -> {
                     progress.dismiss();
                     new AlertDialog.Builder(activity)
-                        .setTitle("ChupathingyCE: new version")
+                        .setTitle("Fractum Halo: new version")
                         .setMessage("The update failed:\n\n" + e.getMessage())
                         .setPositiveButton("OK", null)
                         .show();

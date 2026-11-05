@@ -1560,8 +1560,9 @@ jobs:
     # A fork's own releases (FractumSeraph/OpenCE): every push to its main
     # that builds on every platform is published as v<VERSION>-fs.<run>,
     # marked latest, with the files the self-updaters ask for
-    # (chupathingyce-<platform>-<config>.zip; port/linux/src/updater.c,
-    # Updater.java), signed with the fork's update key, and the dedicated
+    # (fractum-halo-<platform>-<config>.zip, as updates.json names them:
+    # port/linux/src/updater.c, Updater.java; chupathingyce-* before
+    # fs.00222), signed with the fork's update key, and the dedicated
     # servers; with OpenCE's SHA256SUMS of the release's files and, when the
     # RELEASE_SIGNING_KEY secret is set, its Ed25519 signature
     # (SHA256SUMS.sig, tools/release_sign.sh); the newest five are kept.
@@ -1614,6 +1615,10 @@ jobs:
               chupathingyce-android32-release-unsigned) zipname=chupathingyce-android32-release ;;
               *) zipname=$name ;;
             esac
+            # (the fork's name for its downloads; the self-updaters, the VPS's
+            # halo-gameservers-update among them, take the names updates.json
+            # and the release give, so the builds before keep updating)
+            zipname="fractum-halo-${zipname#chupathingyce-}"
             # (macOS's builds come as a tar, keeping the application's links)
             if ls "$dir"/*.tar >/dev/null 2>&1; then
               mkdir -p "unpacked/$name" && tar -C "unpacked/$name" -xf "$dir"/*.tar && dir="unpacked/$name/$name/"

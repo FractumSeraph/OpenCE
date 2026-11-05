@@ -52,8 +52,9 @@ from pathlib import Path
 
 KEY_HEADER = Path(__file__).resolve().parent.parent / "port/linux/src/update_key.h"
 WORD = re.compile(r"^[A-Za-z0-9._+-]{1,127}$")
-# (a release's update file: chupathingyce-<platform>-<configuration>.<kind's extension>)
-UPDATE_FILE = re.compile(r"^chupathingyce-([a-z0-9]+)-(release|debug)\.(zip|AppImage)$")
+# (a release's update file: chupathingyce-<platform>-<configuration>.<kind's extension>,
+# or fractum-halo-<platform>-... on the fork's releases)
+UPDATE_FILE = re.compile(r"^(?:chupathingyce|fractum-halo)-([a-z0-9]+)-(release|debug)\.(zip|AppImage)$")
 KINDS = {"zip": "zip", "AppImage": "appimage"}
 MANIFEST_FORMAT = "chupathingyce-updates 1"
 # the game's executable by its later names: a zip with one starts it after

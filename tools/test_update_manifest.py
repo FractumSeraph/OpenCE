@@ -118,6 +118,24 @@ def test_list_written_signed_and_read(keys, checker, tmp_path):
             f"found {tag} {name} {len(data)} {hashlib.sha256(data).hexdigest()}"
 
 
+def test_list_of_the_forks_names(keys, checker, tmp_path):
+    """the fork's releases name their files fractum-halo-* (the release
+    workflow): listed by platform as before, the server's left out, so a
+    build that asks the list for its platform finds the file by its new name"""
+    directory = tmp_path / "release"
+    directory.mkdir()
+    for index, name in enumerate(("fractum-halo-windows64-release.zip", "fractum-halo-android64-debug.zip",
+                                  "fractum-halo-server-linux-x64.zip")):
+        (directory / name).write_bytes(bytes([index]) * 900)
+    listed, signature = write_list(keys, directory)
+    assert check(checker, "document", listed, signature) == "signed"
+    names = sorted(entry["name"] for entry in json.loads(listed.read_text())["files"])
+    assert names == ["fractum-halo-android64-debug.zip", "fractum-halo-windows64-release.zip"]
+    assert find(checker, listed, "windows64").split(" ")[:3] == ["found", f"v{VERSION}",
+                                                                "fractum-halo-windows64-release.zip"]
+    assert find(checker, listed, "android64", "debug").split(" ")[2] == "fractum-halo-android64-debug.zip"
+
+
 def test_list_missing_a_file(keys, checker, tmp_path):
     """no file for this platform: the zip by its old name (the updater's)"""
     listed, _ = write_list(keys, release(tmp_path / "release"))

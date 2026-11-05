@@ -146,16 +146,20 @@ needs them ([docs/map_torrents.md](docs/map_torrents.md)):
 
 | Platform | Release | Debug |
 | --- | --- | --- |
-| Windows (64-bit) | [chupathingyce-windows64-release.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-windows64-release.zip) | [chupathingyce-windows64-debug.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-windows64-debug.zip) |
-| Windows (32-bit) | [chupathingyce-windows-release.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-windows-release.zip) | [chupathingyce-windows-debug.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-windows-debug.zip) |
-| Linux (64-bit) | [chupathingyce-linux64-release.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-linux64-release.zip) | [chupathingyce-linux64-debug.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-linux64-debug.zip) |
-| Linux (32-bit) | [chupathingyce-linux-release.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-linux-release.zip) | [chupathingyce-linux-debug.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-linux-debug.zip) |
-| Mac | [chupathingyce-macos-release.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-macos-release.zip) | [chupathingyce-macos-debug.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-macos-debug.zip) |
-| Android | [fractum-halo-android.apk](https://github.com/FractumSeraph/OpenCE/releases/latest/download/fractum-halo-android.apk) (or [chupathingyce-android-release.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-android-release.zip)) | [chupathingyce-android-debug.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-android-debug.zip) |
-| Android, 32-bit (watches) | [fractum-halo-android32.apk](https://github.com/FractumSeraph/OpenCE/releases/latest/download/fractum-halo-android32.apk) (or [chupathingyce-android32-release.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-android32-release.zip)) | [chupathingyce-android32-debug.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-android32-debug.zip) |
-| Dedicated server (Linux x64) | [chupathingyce-server-linux-x64.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-server-linux-x64.zip) | |
-| Dedicated server (Linux arm64) | [chupathingyce-server-linux-arm64.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-server-linux-arm64.zip) | |
-| Dedicated server (Linux x86) | [chupathingyce-server-linux-x86.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/chupathingyce-server-linux-x86.zip) | |
+| Windows (64-bit) | [fractum-halo-windows64-release.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/fractum-halo-windows64-release.zip) | [fractum-halo-windows64-debug.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/fractum-halo-windows64-debug.zip) |
+| Windows (32-bit) | [fractum-halo-windows-release.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/fractum-halo-windows-release.zip) | [fractum-halo-windows-debug.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/fractum-halo-windows-debug.zip) |
+| Linux (64-bit) | [fractum-halo-linux64-release.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/fractum-halo-linux64-release.zip) | [fractum-halo-linux64-debug.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/fractum-halo-linux64-debug.zip) |
+| Linux (32-bit) | [fractum-halo-linux-release.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/fractum-halo-linux-release.zip) | [fractum-halo-linux-debug.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/fractum-halo-linux-debug.zip) |
+| Mac | [fractum-halo-macos-release.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/fractum-halo-macos-release.zip) | [fractum-halo-macos-debug.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/fractum-halo-macos-debug.zip) |
+| Android | [fractum-halo-android.apk](https://github.com/FractumSeraph/OpenCE/releases/latest/download/fractum-halo-android.apk) (or [fractum-halo-android-release.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/fractum-halo-android-release.zip)) | [fractum-halo-android-debug.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/fractum-halo-android-debug.zip) |
+| Android, 32-bit (watches) | [fractum-halo-android32.apk](https://github.com/FractumSeraph/OpenCE/releases/latest/download/fractum-halo-android32.apk) (or [fractum-halo-android32-release.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/fractum-halo-android32-release.zip)) | [fractum-halo-android32-debug.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/fractum-halo-android32-debug.zip) |
+| Dedicated server (Linux x64) | [fractum-halo-server-linux-x64.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/fractum-halo-server-linux-x64.zip) | |
+| Dedicated server (Linux arm64) | [fractum-halo-server-linux-arm64.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/fractum-halo-server-linux-arm64.zip) | |
+| Dedicated server (Linux x86) | [fractum-halo-server-linux-x86.zip](https://github.com/FractumSeraph/OpenCE/releases/latest/download/fractum-halo-server-linux-x86.zip) | |
+
+(Before fs.00222 these files were named `chupathingyce-*`; the game's
+updater follows the release's list of files, so older installs update to
+the new names on their own.)
 
 **The Android app** is "Fractum Halo" (`net.fractumseraph.halo`, beside
 ChupathingyCE's app rather than over it), signed with this fork's key, whose

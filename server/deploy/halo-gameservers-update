@@ -30,7 +30,8 @@ import urllib.request
 import zipfile
 
 REPOSITORY = "FractumSeraph/OpenCE"
-ASSET = "chupathingyce-server-linux-x64.zip"
+# (the server's zip by its name since fs.00222, then by the one before)
+ASSETS = ("fractum-halo-server-linux-x64.zip", "chupathingyce-server-linux-x64.zip")
 # (files of the release put beside the program too, when it has them)
 BESIDE = ("map_torrents.txt", "brokers.txt")
 BIN = "/opt/halo-dedicated/bin"
@@ -93,9 +94,11 @@ def main():
                                "application/vnd.github+json"))
     tag = release.get("tag_name", "")
     version = tag[1:] if tag.startswith("v") else tag
-    asset = next((item for item in release.get("assets", []) if item.get("name") == ASSET), None)
+    named = {item.get("name"): item for item in release.get("assets", [])}
+    asset_name = next((name for name in ASSETS if name in named), ASSETS[0])
+    asset = named.get(asset_name)
     if not asset or not str(asset.get("digest", "")).startswith("sha256:"):
-        log(f"{tag}: no {ASSET} with a digest; nothing done")
+        log(f"{tag}: no {asset_name} with a digest; nothing done")
         return 0
     current = running_version()
     if current == version:
@@ -116,11 +119,11 @@ def main():
 
     work = tempfile.mkdtemp(prefix="halo-update-")
     try:
-        zip_path = os.path.join(work, ASSET)
+        zip_path = os.path.join(work, asset_name)
         data = fetch(asset["browser_download_url"])
         digest = hashlib.sha256(data).hexdigest()
         if digest != asset["digest"].split(":", 1)[1]:
-            log(f"{ASSET}'s SHA-256 is {digest}, not GitHub's {asset['digest']}: not installed")
+            log(f"{asset_name}'s SHA-256 is {digest}, not GitHub's {asset['digest']}: not installed")
             return 1
         with open(zip_path, "wb") as file:
             file.write(data)
@@ -128,7 +131,7 @@ def main():
             names = [name for name in archive.namelist() if name.endswith("/chupathingyce-server") or
                      name == "chupathingyce-server"]
             if not names:
-                log(f"{ASSET} has no chupathingyce-server: not installed")
+                log(f"{asset_name} has no chupathingyce-server: not installed")
                 return 1
             archive.extract(names[0], work)
             # (the files beside the program the servers read: the maps'
