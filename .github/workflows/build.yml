@@ -170,10 +170,16 @@ jobs:
       - name: Install the toolchain
         run: |
           sudo install -d -m 0755 /etc/apt/keyrings
-          curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/keyrings/apt.llvm.org.asc > /dev/null
           echo "deb [signed-by=/etc/apt/keyrings/apt.llvm.org.asc] http://apt.llvm.org/noble/ llvm-toolchain-noble-$LLVM_MAJOR main" \
             | sudo tee /etc/apt/sources.list.d/llvm.list
-          sudo apt-get update -q
+          # (apt.llvm.org now and then fails a run: its name not found, or a
+          # key that does not read; up to three tries, the key fetched anew)
+          for try in 1 2 3; do
+            curl -fsSL --retry 3 https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/keyrings/apt.llvm.org.asc > /dev/null &&
+              sudo apt-get update -q && apt-cache show clang-$LLVM_MAJOR > /dev/null 2>&1 && break
+            [ "$try" = 3 ] && exit 1
+            sleep 20
+          done
           sudo apt-get install -y -q --no-install-recommends clang-$LLVM_MAJOR lld-$LLVM_MAJOR llvm-$LLVM_MAJOR \
             libclang-rt-$LLVM_MAJOR-dev gcc gcc-multilib libc6-dev-i386 cmake pkg-config libwayland-bin \
             ninja-build ccache python3-pytest python3-numpy python3-scipy python3-pip zstd
@@ -329,10 +335,16 @@ jobs:
       - name: Install the toolchain
         run: |
           sudo install -d -m 0755 /etc/apt/keyrings
-          curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/keyrings/apt.llvm.org.asc > /dev/null
           echo "deb [signed-by=/etc/apt/keyrings/apt.llvm.org.asc] http://apt.llvm.org/noble/ llvm-toolchain-noble-$LLVM_MAJOR main" \
             | sudo tee /etc/apt/sources.list.d/llvm.list
-          sudo apt-get update -q
+          # (apt.llvm.org now and then fails a run: its name not found, or a
+          # key that does not read; up to three tries, the key fetched anew)
+          for try in 1 2 3; do
+            curl -fsSL --retry 3 https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/keyrings/apt.llvm.org.asc > /dev/null &&
+              sudo apt-get update -q && apt-cache show clang-$LLVM_MAJOR > /dev/null 2>&1 && break
+            [ "$try" = 3 ] && exit 1
+            sleep 20
+          done
           sudo apt-get install -y -q --no-install-recommends clang-$LLVM_MAJOR lld-$LLVM_MAJOR llvm-$LLVM_MAJOR \
             gcc cmake pkg-config libwayland-bin ninja-build ccache zstd
           echo "/usr/lib/llvm-$LLVM_MAJOR/bin" >> "$GITHUB_PATH"
