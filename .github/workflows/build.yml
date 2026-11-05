@@ -44,6 +44,9 @@ name: Build
 on:
   push:
     branches:
+      # (port, this fork: every push to main is a release, HALO_FORK_RELEASE;
+      # ChupathingyCE builds main nightly instead, so its list has no main)
+      - main
       - "release-*"
       - "release/**"
     tags:
