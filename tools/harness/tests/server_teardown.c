@@ -83,6 +83,8 @@ static short transport_server_terminate(void)
 /* (the fork's map torrents: the hosted map no longer seeded; nothing of the
 teardown's order) */
 static void map_torrents_playing(const char *level_name, unsigned long version, int hosting) { }
+/* (network_damage.c: the host's damage tables, let go with the server) */
+static void network_damage_host_tables_free(void) { }
 /* (the fork's Delta compatibility: hosting's hold on the network number
 announced ends with the server; nothing of the teardown's order) */
 static void delta_legacy_hold(int hold)

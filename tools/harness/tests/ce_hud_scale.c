@@ -206,7 +206,8 @@ static void world(
 
 	/* the weapon HUD: three statics (a bitmap that halves, one flagged,
 	one of neither), a flagged number, a crosshair whose bitmap halves its
-	items and an overlay whose bitmap does not (one item flagged) */
+	items and an overlay whose bitmap does not (one item flagged, which
+	keeps its scale) */
 	put_block(WEAPON_HUD + WEAPON_HUD_STATICS_OFFSET, 3, STATICS);
 	for (element = 0; element < 3; element++)
 	{
@@ -303,16 +304,16 @@ int main(int argc, char **argv)
 			scale_of(GRENADE_HUD + GRENADE_HUD_COUNT_NUMBERS_OFFSET));
 		return 0;
 	}
-	/* crosshair and overlay items: halved by their own flag, or by the
-	bitmap of their crosshair or overlay (force HUD high resolution scale
-	too) */
+	/* crosshair and overlay items: halved by the bitmap of their crosshair
+	or overlay (force HUD high resolution scale too), never by their own
+	flag (Halo PC scales only elements by it: ChupathingyCE f9447e7d3) */
 	CASE("items")
 	{
 		load("some map", 0x12345678);
 		CHECK(scale_of(CROSSHAIR_ITEMS) == 0.5f && scale_of(CROSSHAIR_ITEMS + WEAPON_HUD_CROSSHAIR_ITEM_SIZE) == 0.5f,
 			"the crosshair's items: %g, %g", scale_of(CROSSHAIR_ITEMS),
 			scale_of(CROSSHAIR_ITEMS + WEAPON_HUD_CROSSHAIR_ITEM_SIZE));
-		CHECK(scale_of(OVERLAY_ITEMS) == 0.5f && scale_of(OVERLAY_ITEMS + WEAPON_HUD_OVERLAY_ITEM_SIZE) == 1.0f,
+		CHECK(scale_of(OVERLAY_ITEMS) == 1.0f && scale_of(OVERLAY_ITEMS + WEAPON_HUD_OVERLAY_ITEM_SIZE) == 1.0f,
 			"the overlay's items: %g, %g", scale_of(OVERLAY_ITEMS), scale_of(OVERLAY_ITEMS + WEAPON_HUD_OVERLAY_ITEM_SIZE));
 		CHECK(scale_of(GRENADE_ITEMS) == 0.5f, "the grenade overlay's item: %g", scale_of(GRENADE_ITEMS));
 		return 0;

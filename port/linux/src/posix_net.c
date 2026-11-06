@@ -1150,8 +1150,9 @@ int posix_register_url_scheme(const char *scheme, const char *description)
 
 int posix_register_discord_launch(const char *application)
 {
-#if defined(__ANDROID__) || (defined(__APPLE__) && !TARGET_OS_OSX)
-	/* (an app declares its links: iOS's and Android's have no Discord) */
+#if defined(__ANDROID__) || defined(HALO_BROWSER) || (defined(__APPLE__) && !TARGET_OS_OSX)
+	/* (an app declares its links: iOS's and Android's have no Discord, nor
+	the browser) */
 	(void)application;
 	return DISCORD_REGISTER_NONE;
 #elif defined(__APPLE__)

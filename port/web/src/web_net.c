@@ -1629,3 +1629,11 @@ void posix_discord_close(int handle)
 {
 	(void)handle;
 }
+
+/* (no Discord in the browser: never connected, so never asked; -1 is
+DISCORD_REGISTER_FAILED, port/linux/src/discord_register.h) */
+int posix_register_discord_launch(const char *application)
+{
+	(void)application;
+	return -1;
+}
