@@ -4667,6 +4667,11 @@ static BOOL platform_window_focused_now(void)
 {
 	if (!platform_window)
 		return FALSE;
+#ifdef HALO_ANDROID
+	/* (the Android guest has neither of SDL's calls below, guest_sdl.c: the
+	app's focus comes with its events alone, as before) */
+	return FALSE;
+#else
 	if (SDL_GetWindowFlags(platform_window) & SDL_WINDOW_INPUT_FOCUS)
 		return TRUE;
 	/* (HALO_TEST_FOCUSED=1: always, for a test driving the menus with
@@ -4688,6 +4693,7 @@ static BOOL platform_window_focused_now(void)
 	}
 #endif
 	return FALSE;
+#endif
 }
 
 #ifdef HALO_LAUNCHER

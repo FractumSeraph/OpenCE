@@ -97,6 +97,7 @@ static int menu[4],camera[4],key_result,key_cancels,focused=1,screenshots;
 struct platform_input_state {int focused;};
 static void platform_input_read(struct platform_input_state *p,int consume){p->focused=focused;}
 static void platform_screenshot_request(void){screenshots++;}
+static void platform_log(const char *format,...){(void)format;}
 static unsigned int instance[4]={1,2,3,4};
 static Uint64 SDL_GetTicks(void){return now;}
 static void platform_binding_capture_begin(void) {key_result=0;}
