@@ -242,6 +242,9 @@ enum
 	UI_MAP_LIST_ROW_PICTURE_BASE = 0x5800,
 	UI_MAP_LIST_CAMPAIGN_PICTURE_BASE = 0x5C00,
 	MAP_PATH_LENGTH = 256,
+	/* and from here the campaign's levels' pictures (ui.map's sp_levels, a
+	frame for each level: add_campaign_entries) */
+	UI_MAP_LIST_LEVEL_PICTURE_BASE = 0x6000,
 };
 
 typedef char verify_ui_map_list_string_bases[
@@ -284,7 +287,7 @@ enum
 typedef char verify_ui_map_list_picture_bases[
 	UI_MAP_LIST_PICTURE_BASE + MAXIMUM_CE_PICTURES <= UI_MAP_LIST_ROW_PICTURE_BASE &&
 	UI_MAP_LIST_ROW_PICTURE_BASE + MAXIMUM_MAP_LIST <= UI_MAP_LIST_CAMPAIGN_PICTURE_BASE &&
-	UI_MAP_LIST_CAMPAIGN_PICTURE_BASE + MAXIMUM_CAMPAIGN_LIST <= 0x7000 ? 1 : -1];
+	UI_MAP_LIST_CAMPAIGN_PICTURE_BASE + MAXIMUM_CAMPAIGN_LIST <= UI_MAP_LIST_LEVEL_PICTURE_BASE ? 1 : -1];
 #endif
 
 /* ---------- structures */
@@ -306,6 +309,9 @@ struct ui_map_entry
 	char path[MAP_PATH_LENGTH];
 	boolean picture_read;
 	struct bitmap_data *picture;
+	/* its game's type in the lobby, for a row that has one of its own (a
+	campaign level's: co-op), else NULL */
+	wchar_t const *game_type;
 };
 
 /* ---------- globals */
@@ -316,6 +322,9 @@ static long ui_map_list_count_value;
 /* the campaign maps found */
 static struct ui_map_entry ui_campaign_list[MAXIMUM_CAMPAIGN_LIST];
 static long ui_campaign_list_count;
+/* the rows that are multiplayer maps (the campaign's levels come after
+them, for hosting network co-op: ui_map_list_count_with_campaign) */
+static long ui_map_list_multiplayer_count;
 
 #ifdef HALO_CUSTOM_EDITION
 /* ---------- prototypes */
@@ -554,7 +563,7 @@ static long ce_bitmap_read(
 				char path[512];
 
 				map_family_resource("bitmaps", path, sizeof(path));
-				bitmaps_file = CreateFileA(path, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+				bitmaps_file = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 				if (bitmaps_file == INVALID_HANDLE_VALUE)
 					break;
 			}
@@ -614,7 +623,7 @@ static HANDLE ce_ui_open(
 	HANDLE file;
 
 	map_family_resource("ui", path, sizeof(path));
-	file = CreateFileA(path, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+	file = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 	if (file == INVALID_HANDLE_VALUE || ce_tags)
 		return file;
 	/* ('head', its version, its size, ..., its tags' offset and size) */
@@ -698,6 +707,7 @@ static struct ui_map_entry *entry_add(
 	entry->xbox_index = xbox_index;
 	entry->picture_index = picture_index;
 	entry->stock_picture_index = picture_index;
+	entry->game_type = NULL;
 	return entry;
 }
 
@@ -1254,6 +1264,45 @@ static int pack_map_compare(
 	return order ? order : _stricmp(first, second);
 }
 
+/* the campaign's levels, after the maps, for a network co-op game hosted
+from the Xbox's map list (the Chupathingy menus' Select Map, as the Gearbox
+menus' map list offers them): named as the server browser names them, with
+the level select menus' picture of each. Counted apart from the maps:
+only that list shows them (ui_map_list_count_with_campaign) */
+#ifdef HALO_GAME_BROWSER
+char const *main_get_solo_level_name(short level_index);
+long tag_loaded(long group_tag, char const *name);
+struct bitmap_data *bitmap_group_get_bitmap_from_sequence(long bitmap_group_index, short sequence_index,
+	short frame_index);
+
+static wchar_t const *const campaign_level_names[] =
+{
+	L"The Pillar of Autumn", L"Halo", L"The Truth and Reconciliation", L"The Silent Cartographer",
+	L"Assault on the Control Room", L"343 Guilty Spark", L"The Library", L"Two Betrayals", L"Keyes", L"The Maw",
+};
+#endif
+
+static void add_campaign_entries(
+	void)
+{
+#ifdef HALO_GAME_BROWSER
+	short level;
+
+	for (level = 0; level < (short)NUMBEROF(campaign_level_names); level++)
+	{
+		char const *map_name = main_get_solo_level_name(level);
+
+		if (map_name)
+		{
+			add_entry(map_name, campaign_level_names[level], campaign_level_names[level],
+				L"Campaign co-op\r\n\r\nPlay this level with\r\nfriends", NONE,
+				(short)(UI_MAP_LIST_LEVEL_PICTURE_BASE + level));
+			ui_map_list[ui_map_list_count_value - 1].game_type = L"Co-op";
+		}
+	}
+#endif
+}
+
 /* ---------- public code */
 
 /* the list anew: the Xbox's maps (the game's thirteen names, in its order),
@@ -1398,6 +1447,8 @@ void ui_map_list_refresh(
 	}
 	counts[_map_family_pack] = found.count;
 	(void)family;
+	ui_map_list_multiplayer_count = ui_map_list_count_value;
+	add_campaign_entries();
 	if (memcmp(counts, logged_counts, sizeof(counts)) || logged_campaign_count != ui_campaign_list_count)
 	{
 		memcpy(logged_counts, counts, sizeof(counts));
@@ -1412,7 +1463,21 @@ void ui_map_list_refresh(
 long ui_map_list_count(
 	void)
 {
+	return ui_map_list_multiplayer_count;
+}
+
+/* the rows with the campaign's levels after the maps */
+long ui_map_list_count_with_campaign(
+	void)
+{
 	return ui_map_list_count_value;
+}
+
+/* whether a row is one of the campaign's levels */
+boolean ui_map_list_row_is_campaign(
+	long row)
+{
+	return row >= ui_map_list_multiplayer_count && row < ui_map_list_count_value;
 }
 
 /* the rows' map names, for the list widget's items */
@@ -1509,6 +1574,16 @@ and UI_MAP_LIST_CAMPAIGN_PICTURE_BASE), or NULL for any other */
 struct bitmap_data *ui_map_list_picture(
 	short frame_index)
 {
+#ifdef HALO_GAME_BROWSER
+	if (frame_index >= UI_MAP_LIST_LEVEL_PICTURE_BASE &&
+		frame_index < UI_MAP_LIST_LEVEL_PICTURE_BASE + (short)NUMBEROF(campaign_level_names))
+	{
+		long bitmap_index = tag_loaded('bitm', "ui\\shell\\bitmaps\\sp_levels");
+
+		return bitmap_index == NONE ? NULL :
+			bitmap_group_get_bitmap_from_sequence(bitmap_index, 0, frame_index - UI_MAP_LIST_LEVEL_PICTURE_BASE);
+	}
+#endif
 #ifdef HALO_CUSTOM_EDITION
 	if (frame_index >= UI_MAP_LIST_CAMPAIGN_PICTURE_BASE &&
 		frame_index - UI_MAP_LIST_CAMPAIGN_PICTURE_BASE < ui_campaign_list_count)
@@ -1560,6 +1635,8 @@ wchar_t const *ui_map_list_text(
 		return entry->description;
 	case _ui_map_list_string_lobby_name:
 		return entry->lobby_name;
+	case _ui_map_list_string_game_type:
+		return entry->game_type;
 	default:
 		return entry->display_name;
 	}

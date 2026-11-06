@@ -129,6 +129,7 @@ STUB_WINDOWS_FILES = STUB_WINDOWS + r"""
 typedef void *HANDLE;
 #define INVALID_HANDLE_VALUE ((HANDLE)-1)
 #define GENERIC_READ 0
+#define FILE_SHARE_READ 0
 #define OPEN_EXISTING 0
 #define FILE_ATTRIBUTE_NORMAL 0
 typedef struct { char cFileName[260]; } WIN32_FIND_DATAA;
@@ -345,6 +346,7 @@ $DRIVES/d/maps_ce/a.map) */
 typedef struct { FILE *file; DIR *folder; } *HANDLE;
 #define INVALID_HANDLE_VALUE ((HANDLE)0)
 #define GENERIC_READ 0
+#define FILE_SHARE_READ 0
 #define OPEN_EXISTING 0
 #define FILE_ATTRIBUTE_NORMAL 0
 typedef struct { char cFileName[260]; } WIN32_FIND_DATAA;

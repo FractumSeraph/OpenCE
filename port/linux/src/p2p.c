@@ -472,6 +472,12 @@ static struct
 	addresses came), and the tunnel then could not reach it */
 	int join_host_answered;
 	int join_punch_failed;
+	/* the invite joined is a public game's, without a password: a listing's
+	(the game list's, the server browser's open one) or Discord's Join. A
+	player in the game shares it on Discord too: the host makes a new one
+	when its game goes private or takes a password, so it never opens one
+	that is not public */
+	int join_public;
 	/* a locked invite (a game with a password) waiting for its password
 	(p2p_locked_invite_unlock): its host's key hash, door and check */
 	int locked_waiting;
@@ -3005,8 +3011,10 @@ static int probe_taken_up(const unsigned char *host)
 
 /* ---------- invites */
 
-/* an invite given before internet play started, joined once it has */
+/* an invite given before internet play started, joined once it has (and
+whether it is a public game's: join_public) */
 static char pending_startup_invite[256];
+static int pending_startup_public;
 
 /* the host's key hash and the token in an invite link or code within text:
 1 if it holds one, 2 if it is a locked one (a game with a password: its
@@ -3038,8 +3046,9 @@ static void join_progress_begin(int answered)
 	p2p.join_refused = -1;
 }
 
-/* under p2p_lock: parse_invite's result */
-static int join_invite(const char *text)
+/* under p2p_lock: parse_invite's result. public: the invite is a public
+game's (join_public) */
+static int join_invite(const char *text, int public)
 {
 	unsigned char hash[P2P_KEY_HASH_SIZE], host[P2P_IDENTIFIER_SIZE], token[P2P_TOKEN_SIZE];
 	unsigned char check[P2P_INVITE_CHECK_SIZE];
@@ -3110,7 +3119,11 @@ static int join_invite(const char *text)
 	}
 	if ((p2p.joining || p2p.join_requested) && !memcmp(hash, p2p.join_host_hash, sizeof(hash)) &&
 		!memcmp(token, p2p.join_token, sizeof(token)))
+	{
+		p2p.join_public |= public;
 		return 1;
+	}
+	p2p.join_public = public;
 	memcpy(p2p.join_host, host, sizeof(host));
 	memcpy(p2p.join_host_hash, hash, sizeof(hash));
 	memcpy(p2p.join_token, token, sizeof(token));
@@ -3192,6 +3205,7 @@ void p2p_joining_host(const unsigned char *identifier)
 	{
 		memset(p2p.join_host_hash, 0, sizeof(p2p.join_host_hash));
 		memset(p2p.join_token, 0, sizeof(p2p.join_token));
+		p2p.join_public = 0;
 	}
 	pthread_mutex_unlock(&p2p_lock);
 }
@@ -3308,7 +3322,7 @@ const char *p2p_invite_log_text(const char *invite, char *text, int size)
 	return text;
 }
 
-int p2p_join_invite(const char *text)
+static int join_invite_text(const char *text, int public)
 {
 	int result;
 
@@ -3336,6 +3350,7 @@ int p2p_join_invite(const char *text)
 			return 0;
 		}
 		snprintf(pending_startup_invite, sizeof(pending_startup_invite), "%s", text);
+		pending_startup_public = public;
 		{
 			char shown[128];
 
@@ -3345,7 +3360,7 @@ int p2p_join_invite(const char *text)
 		return 1;
 	}
 	pthread_mutex_lock(&p2p_lock);
-	result = join_invite(text);
+	result = join_invite(text, public);
 	pthread_mutex_unlock(&p2p_lock);
 	return result > 0;
 }
@@ -3354,7 +3369,9 @@ int p2p_join_listing(const struct p2p_listing *listing)
 {
 	unsigned char hash[P2P_KEY_HASH_SIZE], token[P2P_TOKEN_SIZE];
 
-	if (!p2p_join_invite(listing->invite))
+	/* (an open listing's invite is a public game's, which a player in it
+	shares on Discord too; a password game's never) */
+	if (!(listing->locked ? p2p_join_invite(listing->invite) : p2p_join_listed_invite(listing->invite)))
 		return 0;
 	/* (its host as the invite names it, as the tunnel knows its peers) */
 	pthread_mutex_lock(&p2p_lock);
@@ -3457,10 +3474,20 @@ void p2p_join_refused(int rejection_code)
 	pthread_mutex_unlock(&p2p_lock);
 }
 
-void p2p_invite_received(const char *text)
+int p2p_join_invite(const char *text)
+{
+	return join_invite_text(text, 0);
+}
+
+int p2p_join_listed_invite(const char *text)
+{
+	return join_invite_text(text, 1);
+}
+
+void p2p_invite_received(const char *text, int public)
 {
 	/* (an older version's is logged as such) */
-	if (!join_invite(text))
+	if (!join_invite(text, public))
 		platform_log("Internet play: that is not an invite");
 }
 
@@ -3714,7 +3741,7 @@ int p2p_locked_invite_unlock(const char *password)
 	p2p_hex(bytes, sizeof(bytes), text + 12);
 	pthread_mutex_lock(&p2p_lock);
 	p2p.locked_waiting = 0;
-	opened = join_invite(text) > 0;
+	opened = join_invite(text, 0) > 0;
 	pthread_mutex_unlock(&p2p_lock);
 	memset(token, 0, sizeof(token));
 	memset(bytes, 0, sizeof(bytes));
@@ -4351,7 +4378,7 @@ static void handoff_readable(void)
 	invite[size] = 0;
 	handoff_answer(p2p.handoff_key, message, answer);
 	posix_socket_sendto(p2p.handoff_socket, answer, sizeof(answer), 0, &from, sizeof(from));
-	p2p_invite_received(invite);
+	p2p_invite_received(invite, 0);
 }
 
 /* (not on the Switch, which builds as Android too: there is no app to write
@@ -4384,7 +4411,7 @@ static void poll_invite_file(void)
 	fclose(file);
 	remove(taken);
 	text[size] = 0;
-	p2p_invite_received(text);
+	p2p_invite_received(text, 0);
 }
 #endif
 
@@ -4739,6 +4766,29 @@ static void update_host_port(void)
 }
 #endif
 
+/* a player's share of the public game it joined (join_public) on Discord:
+the host's invite, under the host's party, while the host is reached */
+static void discord_share_joined(void)
+{
+	static const unsigned char none[P2P_KEY_HASH_SIZE];
+	struct peer *peer = p2p.join_public && !p2p.hosting && memcmp(p2p.join_host_hash, none, sizeof(none)) ?
+		find_peer(p2p.join_host) : NULL;
+	unsigned char code[P2P_KEY_HASH_SIZE + P2P_TOKEN_SIZE];
+	char text[2 * (P2P_KEY_HASH_SIZE + P2P_TOKEN_SIZE) + 1];
+	char party[2 * P2P_IDENTIFIER_SIZE + 1];
+
+	if (!peer || !peer->connected || !peer->is_host)
+	{
+		p2p_discord_set_join(NULL, NULL, 0, 0);
+		return;
+	}
+	memcpy(code, p2p.join_host_hash, P2P_KEY_HASH_SIZE);
+	memcpy(code + P2P_KEY_HASH_SIZE, p2p.join_token, P2P_TOKEN_SIZE);
+	p2p_hex(code, sizeof(code), text);
+	p2p_hex(p2p.join_host, P2P_IDENTIFIER_SIZE, party);
+	p2p_discord_set_join(text, party, 0, 0);
+}
+
 static void *p2p_thread(void *unused)
 {
 	enum
@@ -4989,9 +5039,19 @@ static void *p2p_thread(void *unused)
 		update_ping_probes();
 		update_upnp();
 		/* (a public game's invite is in everyone's server browser already:
-		its Join game button on Discord) */
-		p2p_discord_set_join(p2p.hosting && p2p.has_token && p2p_lobby_open() ?
-			p2p.invite + strlen("halo://join/") : NULL);
+		its join secret on Discord; a password game's never) */
+		{
+			int count = 0, maximum = 0;
+			int joinable = p2p.hosting && p2p.has_token && !p2p.has_join_key && p2p_lobby_open();
+
+			if (joinable)
+			{
+				hosted_player_counts(&count, &maximum);
+				p2p_discord_set_join(p2p.invite + strlen("halo://join/"), NULL, count, maximum);
+			}
+			else
+				discord_share_joined();
+		}
 		p2p_discord_update();
 #if defined(HALO_ANDROID) && !defined(HALO_SWITCH_CONSOLE)
 		poll_invite_file();
@@ -5075,9 +5135,10 @@ void p2p_initialize(unsigned long local_address)
 		platform_log("Internet play: applying stashed startup invite: %s",
 			p2p_invite_log_text(pending_startup_invite, shown, sizeof(shown)));
 		pthread_mutex_lock(&p2p_lock);
-		join_invite(pending_startup_invite);
+		join_invite(pending_startup_invite, pending_startup_public);
 		pthread_mutex_unlock(&p2p_lock);
 		pending_startup_invite[0] = '\0';
+		pending_startup_public = 0;
 	}
 	else if (command_line_invite(invite, sizeof(invite)))
 		p2p_join_invite(invite);

@@ -4679,6 +4679,15 @@ boolean game_engine_in_play(
 	return game_engine == NULL || game_engine_globals.postgame_state == game_engine_mode_active;
 }
 
+/* port: where the game is past its end (0 playing, 1 the delay before the
+scores, 2 and 3 the scores coming up and shown), for the server's Custom
+Edition players (server/src/server_ce.c) */
+long game_engine_postgame_mode(
+	void)
+{
+	return game_engine != NULL ? game_engine_globals.postgame_state : game_engine_mode_active;
+}
+
 void game_variant_options_default(
 	struct game_variant const *variant,
 	struct game_variant_options *options)

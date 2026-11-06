@@ -790,7 +790,7 @@ the setting for one start of the game. It has priority over the file.
 | `display.server_message_text_color` | `""` | `HALO_SERVER_MESSAGE_TEXT_COLOR` | The banner's text colour, `"#RRGGBB"` or `"#RRGGBBAA"`. Empty, or a value that does not parse (logged once): the default, light for a notice and amber for a warning. Applies to both kinds. |
 | `display.server_message_border_color` | `""` | `HALO_SERVER_MESSAGE_BORDER_COLOR` | The banner's outline colour, `"#RRGGBB"` or `"#RRGGBBAA"`. Empty, or a value that does not parse: the default, blue for a notice and amber for a warning. Applies to both kinds. |
 | `display.server_message_background_color` | `""` | `HALO_SERVER_MESSAGE_BACKGROUND_COLOR` | The banner's background colour, `"#RRGGBB"` or `"#RRGGBBAA"`. Empty, or a value that does not parse: the default, dark blue. |
-| `chat.enabled` | `true` | `HALO_CHAT` | Text chat with other Chupathingy players, in a game whose host is a Chupathingy copy or server (Delta Peer's `chat`; OpenCE players are never sent a line). T says a line to everyone, Y to your team; Enter sends, Escape cancels, and while you type the keyboard drives nothing else. The lines show at the lower left above the motion sensor, in the HUD's message font and tint (a size smaller, with a heavier shadow), four at a time, and fade after 6 seconds; H shows the last ones and the players, where up and down choose one and M mutes them for you alone. `false`: no chat at all, neither said nor shown; the server's own lines still show (as `display.server_messages` says). Nothing of what is said is written down. |
+| `chat.enabled` | `true` | `HALO_CHAT` | Text chat in network games: with other Chupathingy players over Delta Peer's `chat`, and with OpenCE players over their own chat, which the host bridges (`docs/delta.md`, Chat). T says a line to everyone, Y to your team; Enter sends, Escape cancels, and while you type the keyboard drives nothing else. The lines show at the lower left above the motion sensor, in the HUD's message font and tint (a size smaller, with a heavier shadow), four at a time, and fade after 6 seconds; H shows the last ones and the players, where up and down choose one and M mutes them for you alone. Hosting, `/mute <player> [minutes]` and `/unmute <player>` typed as a line mute a player for everyone (until they leave unless minutes are given); typed in someone else's game they are never sent. `false`: no chat at all, neither said nor shown; the server's own lines still show (as `display.server_messages` says). Nothing of what is said is written down. |
 | `chat.show` | `"all"` | `HALO_CHAT_SHOW` | Which players' lines show: `"all"`, `"team"` (your team's alone) or `"off"` (none; you can still talk). |
 | `chat.filter` | `"mask"` | `HALO_CHAT_FILTER` | Blocked words in the lines you are shown: `"mask"` stars them out, `"hide"` leaves such a line out, `"show"` shows it as sent. The words are the blocked names list's (`server/blocked_names.txt`, built in) and your own (`chat.filter_file`). Nobody is told and nobody is kicked. |
 | `chat.filter_file` | `"chat_filter.txt"` | `HALO_CHAT_FILTER_FILE` | Your own blocked words, a file in the save folder: a word a line (blocked anywhere in a word), or `whole <word>` (only as a whole word); `#` starts a comment. |
@@ -906,6 +906,7 @@ the setting for one start of the game. It has priority over the file.
 | `network.coop_ally_friendly_fire` | `true` | `HALO_NET_COOP_ALLY_FRIENDLY_FIRE` | Whether the players of an online co-op game hurt their AI allies (the Marines, Captain Keyes, the Sentinels while they are allies), as in the campaign. `false`: the players' weapons, grenades, melee and vehicles do them no harm, so that no player can kill the allies a level needs. The allies' and enemies' own damage is unchanged. ALLY FRIENDLY FIRE in co-op's Server Setup > Co-op Options writes its choice here; the host sends it with the game's settings. |
 | `network.block_mouse_aim_assist` | `false` | `HALO_NET_BLOCK_MOUSE_AIM_ASSIST` | The host's policy on aiming assist for the mouse and keyboard in a game this machine hosts. `false`: each player's own `input.mouse_aim_assist` decides. `true`: the view's magnetism is off for a player aiming with the mouse, whatever their setting, in the game; the players' own settings are never changed. Clients are told when they join and when it changes (network version 32); a client honors the policy of any host that sends one, and, until a host of version 32 or later speaks, treats the mouse's magnetism as blocked. The bullets' autoaim is unaffected. |
 | `network.hit_line_of_sight` | `true` | `HALO_NET_HIT_LINE_OF_SIGHT` | In a game this machine hosts, a client's hit on a target with a wall between them is refused, as a hit the shooter could not have made. A shot needs a clear line from where the host had the shooter (their view, their head, or the gun of the vehicle seat they drive or gun) to the target where the shooter saw it, its edges included; an explosion needs one from where it went off, so a grenade thrown around a corner still hits. Glass and what the projectile goes through don't block it, and a projectile that homes in or falls in an arc may go around or over. Melee and vehicle hits are not checked. The host's log counts these refusals with the others. `false`: no line is looked for, as before. Only the host checks; nothing changes for the players who join. Refer to `NETCODE.md`. |
+| `network.late_join_wait` | `5` | `HALO_NET_LATE_JOIN_WAIT` | In the games this copy hosts, how many seconds a machine that joins a game in progress waits after its first player is in, so the players on its other controllers can join too (split screen), 0 to 30. It starts sooner when the machine has four players; 0 starts it at once. Only the host reads it. |
 | `network.host_cheats` | `false` | `HALO_NET_HOST_CHEATS` | `false`: in a public internet game you host, once another machine is in it, your developer console and cheats cannot change the game. `true`: they can, and Online Games shows "Host cheats on" for the game. LAN and private games always allow them. |
 | `network.host_console_objects` | `32` | `HALO_NET_HOST_CONSOLE_OBJECTS` | How many objects your console and cheats may make in each network game you host (`cheat_all_vehicles`, `object_create` and the like). Past it they are refused. At most 8 while an original Xbox plays. `0`: no limit. |
 | `network.coop_own_friendly_fire` | `true` | `HALO_NET_COOP_OWN_FRIENDLY_FIRE` | Whether this machine's players hurt, and are hurt by, the other players of an online co-op game. Two players hurt each other only if both have it `true`, and then as the host's `network.coop_friendly_fire` says. FRIENDLY FIRE in that game's pause menu writes its choice here. A player away from the controls for over 70 seconds is hurt by every player, whatever either chose. |
@@ -1019,7 +1020,9 @@ the setting for one start of the game. It has priority over the file.
 | `discord.application_id` | the application of the project (Chupathingy) | `HALO_DISCORD_APPLICATION` | The Discord application the game shows as. Empty: no Discord. |
 | `discord.presence` | `"full"` | `HALO_DISCORD_PRESENCE` | What Discord shows: `"full"` (game type, map, score, players, time, pictures), `"minimal"` (only "Playing" and the Discord application's name, `discord.application_id`'s: Chupathingy's) or `"off"`. The buttons say "Get Fractum Halo" (the fork's releases) and the logo is the fork's. Network Setup in the PC menus. |
 | `discord.show_server_name` | `true` | `HALO_DISCORD_SHOW_SERVER_NAME` | `true`: Discord shows the name of the network game. |
-| `discord.show_join` | `true` | `HALO_DISCORD_SHOW_JOIN` | `true`: while this machine hosts a public game (in the server browser, no password), Discord shows a Join game button. |
+| `discord.show_join` | `true` | `HALO_DISCORD_SHOW_JOIN` | `true`: while this machine hosts a public game (in the server browser, no password), Discord friends can join it: Join and Ask to Join on your profile, and a Join card for an invite sent in a chat. |
+| `discord.accept_join_requests` | `false` | `HALO_DISCORD_ACCEPT_JOIN_REQUESTS` | `true`: the game accepts every Ask to Join for the public game you host. `false`: Discord handles the request. |
+| `discord.register_launch` | `true` | `HALO_DISCORD_REGISTER_LAUNCH` | `true`: once connected to Discord, the game tells it how to start Fractum Halo, as Discord's own SDK does. Then Discord shows Join to friends whose game is closed, and starts the game for it. Windows: `HKEY_CURRENT_USER\Software\Classes\discord-<application>`. Linux and FreeBSD: `discord-<application>.desktop` in `~/.local/share/applications`. macOS: the app becomes the handler of `discord-<application>://`. An entry of another program's is left alone (ChupathingyCE's is taken as the fork's own: the two share the Discord application, and either one joins its games). `false`: nothing is registered. |
 | `maps.torrents` | `true` | `HALO_MAP_TORRENTS` | `true`: a Custom Edition map that this machine does not have is downloaded when joining a game on it, from other players and seed boxes (BitTorrent), if the index of the maps' torrents has it. `false`: never downloads (and never seeds). Refer to [docs/map_torrents.md](../../docs/map_torrents.md). Not in the browser build. |
 | `maps.download_screen` | `true` | `HALO_MAP_DOWNLOAD_SCREEN` | `true`: while a map downloads before its game is joined, Halo's loading screen covers the menus, its light sweeping across as the map comes, with the map's name and how much has come; B stops the download (`port/linux/game/download_screen.c`). It follows every download: over BitTorrent, from the map repositories and archives of Online Games, and from the host's own map sharing (there B leaves the lobby). `false`: the menus stay up, and their status line says how the download goes. Also in the browser build, for a map the page fetches before the Server Browser joins. |
 | `maps.seed` | `"host"` | `HALO_MAP_SEED` | Seed the Custom Edition map that this machine's network game is on: `"host"` while hosting, `"all"` also while joined, `"off"` never. |
@@ -1969,14 +1972,28 @@ If the Discord desktop client runs, Discord shows what the player does
 Discord says is being played): the game type and the map ("Team Slayer on
 Blood Gulch"), a team game's score, the network game's name and players,
 the time since the game started, or the campaign's level and difficulty, or
-the menus. The pictures are the game list site's, by URL. A host of a public
-game (in the server browser, with no password) gets a Join game button: it
-opens the game's page on chupathingy.org, which opens the invite
-(`halo://join/`) in the game of the person who clicks it, Chupathingy or
-OpenCE. Otherwise the buttons go to the project's site and Discord server.
-Discord's own Ask to Join is not used: it works only between players of the
-same Discord application. `discord.presence`, `discord.show_server_name` and
-`discord.show_join` choose what shows; `debug.discord_log` logs each
+the menus. The pictures are the game list site's, by URL.
+
+A host of a public game (in the server browser, with no password) can be
+joined from Discord. The activity carries the game's invite (`halo://join/`)
+as its join secret, with the party's size ("3 of 16"). Your friends see Join
+and Ask to Join on your profile, and an invite you send from Discord's chat
+shows up as a card with a Join button. When someone picks Join, their game
+joins yours as if they had opened the invite link. This works between
+Chupathingy players only: Discord hands the secret only to players of the
+same Discord application, so OpenCE players still use the invite link or
+the server browser. If a friend's game is closed, Discord starts it
+(`discord.register_launch`), and the join waits until the game is up.
+Players in a public game they joined from the server browser, Online Games
+or a Join share its invite too, while they play in it. A password game
+never sends its invite, and the
+invite is a code, never an address. Discord allows no buttons with an
+invite, so the big picture's hover text says "Free at chupathingy.org"
+instead. Otherwise the activity has buttons to the project's site and
+Discord server. `discord.presence`,
+`discord.show_server_name`, `discord.show_join` and
+`discord.accept_join_requests` choose what shows and who gets in (only
+`"full"` presence shares the invite); `debug.discord_log` logs each
 activity sent (without the invite).
 
 ### Online Games and the profile

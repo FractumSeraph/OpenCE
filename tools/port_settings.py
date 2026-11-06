@@ -428,8 +428,8 @@ SCREENS = {
                  "Choose what your Discord status shows.", "desktop"),
                 ("DISCORD SERVER NAME:", "discord.show_server_name", [("SHOW", "true"), ("HIDE", "false")],
                  "Show the game's name on Discord.", "desktop"),
-                ("DISCORD JOIN BUTTON:", "discord.show_join", ON_OFF,
-                 "Show a Join button on Discord while hosting.", "desktop"),
+                ("DISCORD INVITES:", "discord.show_join", ON_OFF,
+                 "Let Discord friends join your public game.", "desktop"),
                 # (OpenCE's Discord account at the master servers: a screen of
                 # its own, network_setup/discord_account)
                 _screen_link("DISCORD ACCOUNT", "network_setup/discord_account",

@@ -1322,6 +1322,12 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"In games you host, the most machines that may join from one internet\n"
 		"address, from 1 to 16. 0 means no limit. Players on your local\n"
 		"network are never limited." },
+	{ "network.late_join_wait", _config_integer, "5", "HALO_NET_LATE_JOIN_WAIT", _environment_value,
+		_platform_all | _platform_server | _platform_xbox | _platform_console_gl,
+		"In games you host, how many seconds a machine that joins a game in\n"
+		"progress waits after its first player is in, so the players on its\n"
+		"other controllers can join too (split screen), from 0 to 30. It starts\n"
+		"sooner when it has four players. 0 starts it at once." },
 	{ "network.coop_friendly_fire", _config_string, "\"on\"", "HALO_NET_COOP_FRIENDLY_FIRE", _environment_value,
 		_platform_all,
 		"Friendly fire in online co-op: \"off\", \"on\", \"shields_only\" or\n"
@@ -1532,7 +1538,13 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"Show the network game's name on Discord." },
 	{ "discord.show_join", _config_boolean, "true", "HALO_DISCORD_SHOW_JOIN", _environment_value,
 		_platform_desktop,
-		"Show a Join game button on Discord while you host a public game." },
+		"Let Discord friends join the public game you host (Join and Ask to Join)." },
+	{ "discord.accept_join_requests", _config_boolean, "false", "HALO_DISCORD_ACCEPT_JOIN_REQUESTS",
+		_environment_value, _platform_desktop,
+		"Accept every Ask to Join on Discord for the public game you host." },
+	{ "discord.register_launch", _config_boolean, "true", "HALO_DISCORD_REGISTER_LAUNCH", _environment_value,
+		_platform_desktop,
+		"Tell Discord how to start Fractum Halo, so friends can Join you from it." },
 	{ "discord.application_id", _config_string, "\"1560397272166957136\"", "HALO_DISCORD_APPLICATION",
 		_environment_value, _platform_desktop,
 		"The Discord application Fractum Halo shows as. Leave it empty for none." },
@@ -1983,6 +1995,15 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		_platform_all,
 		"The network test's host lists its game in the server browser, as Create\n"
 		"Game > Internet's PUBLIC does (debug.network_test \"browse\" joins it)." },
+	{ "debug.network_test_pickup_every", _config_real, "0.0", "HALO_NETWORK_TEST_PICKUP_EVERY", _environment_value,
+		_platform_all,
+		"Repeats debug.network_test_pickup this many seconds after each one (for\n"
+		"the map's items to be taken and come back). 0 picks up once." },
+	{ "debug.network_test_items", _config_real, "0.0", "HALO_NETWORK_TEST_ITEMS", _environment_value, _platform_all,
+		"Every this many seconds of a test game, each machine logs every weapon,\n"
+		"equipment and vehicle it has, where it is and who holds it (the host\n"
+		"also the map's item spawns, once a game), for the machines' items to be\n"
+		"compared (tools/item_sync_check.py). 0 never does." },
 	{ "debug.network_test_bomb", _config_real, "0.0", "HALO_NETWORK_TEST_BOMB", _environment_value, _platform_all,
 		"For an automated test Bomb game (host:<map>:grifball). After this many\n"
 		"seconds, and again each time that long after, the last player is stood\n"
@@ -5590,8 +5611,28 @@ enum
 {
 	/* config.toml's time looked at no more often than this (seconds; the
 	C library's clock, which the dedicated server, without SDL, has too) */
-	CONFIG_FOLLOW_INTERVAL_SECONDS = 1
+	CONFIG_FOLLOW_INTERVAL_SECONDS = 1,
+	/* the clock read once in this many calls to config_changes */
+	CONFIG_FOLLOW_CLOCK_CALLS = 16
 };
+
+/* the clock the follow check reads: seconds, from the cheapest clock the
+system has (the draw code asks config_changes for every glyph) */
+static time_t config_follow_clock(void)
+{
+#if defined(CLOCK_MONOTONIC_RAW_APPROX)
+	struct timespec now;
+
+	if (clock_gettime(CLOCK_MONOTONIC_RAW_APPROX, &now) == 0)
+		return now.tv_sec;
+#elif defined(CLOCK_MONOTONIC_COARSE)
+	struct timespec now;
+
+	if (clock_gettime(CLOCK_MONOTONIC_COARSE, &now) == 0)
+		return now.tv_sec;
+#endif
+	return time(NULL);
+}
 
 /* config.toml changed on disk since it was last looked at: its live
 settings read again from it (one given by the environment kept), and
@@ -5601,8 +5642,9 @@ static void config_follow_file(void)
 	static time_t looked_at;
 	static posix_ulong modified, modified_nanoseconds, modified_size;
 	static int looked;
+	static unsigned calls_since_clock;
 	static char path[1024];
-	time_t now = time(NULL);
+	time_t now;
 	struct posix_file_information info;
 	size_t size = 0;
 	char *text;
@@ -5610,7 +5652,16 @@ static void config_follow_file(void)
 	size_t live;
 	int changed = 0;
 
-	if (!config_loaded || (looked && now - looked_at < CONFIG_FOLLOW_INTERVAL_SECONDS))
+	if (!config_loaded)
+		return;
+	/* (config_changes is called for every glyph drawn: the clock is read
+	only every few calls, and a second's wait still ends within about a
+	second, the draw code calling it many times each frame) */
+	if (looked && ++calls_since_clock < CONFIG_FOLLOW_CLOCK_CALLS)
+		return;
+	calls_since_clock = 0;
+	now = config_follow_clock();
+	if (looked && now - looked_at < CONFIG_FOLLOW_INTERVAL_SECONDS)
 		return;
 	looked_at = now;
 	if (!path[0])

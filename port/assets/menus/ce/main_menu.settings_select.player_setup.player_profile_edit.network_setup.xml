@@ -493,7 +493,7 @@
 		<string text="CRASH REPORTS:"/>
 		<string text="DISCORD STATUS:"/>
 		<string text="DISCORD SERVER NAME:"/>
-		<string text="DISCORD JOIN BUTTON:"/>
+		<string text="DISCORD INVITES:"/>
 		<string text="DISCORD ACCOUNT"/>
 	</strings>
 	<strings name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/help_strings">
@@ -535,7 +535,7 @@
 		<string text="Send crash reports to the developers."/>
 		<string text="Choose what your Discord status shows."/>
 		<string text="Show the game's name on Discord."/>
-		<string text="Show a Join button on Discord while hosting."/>
+		<string text="Let Discord friends join your public game."/>
 		<string text="Link a Discord account, which lets you join\nservers that block VPNs while you use one."/>
 	</strings>
 	<strings name="main_menu/settings_select/player_setup/player_profile_edit/network_setup/words">
