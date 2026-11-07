@@ -113,6 +113,15 @@ int main(void) {
 ''')
 
 
+def without_sightjack(code):
+    """(port, this fork) director_choose_camera_game without a moderator's
+    sightjack (port/linux/game/sightjack.c), which is not this test's"""
+    start = code.index('\t\t/* port (this fork): a moderator watching a player')
+    end_text = '\t\t\tdirector_choose_game_perspective(local_player_index, TRUE);\n'
+    end = code.index(end_text, start) + len(end_text)
+    return code[:start] + code[end:]
+
+
 def test_cycle_still_obeys_director_client_permission(tmp_path):
     director = (ROOT / 'source/camera/director.c').read_text()
     run_c(tmp_path, integrated_source() + r'''
@@ -132,7 +141,8 @@ static int players_coop_waiting_to_start(long player){return 0;}
 static int coop_spectating(void){return 0;}
 static long coop_spectate_unit(short local){return NONE;}
 static void coop_spectate_camera(struct dead_camera *p){}
-''' + function(director, 'director_choose_camera_game') + r'''
+static long follow_camera_unit(short local){return NONE;}
+''' + without_sightjack(function(director, 'director_choose_camera_game')) + r'''
 int main(void) {
  int cycle;
  layout_save();widget_globals.active_widgets[0]=NULL;director_camera_switch_fast=1;
