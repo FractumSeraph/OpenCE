@@ -118,7 +118,10 @@ static void read_pixels(struct bitmap_data *b,void *h) {
 def gpu_lookup(source):
     # Exercise the common texture lookup; other owners dispatch before it.
     lookup = function(source, 'xgpu_texture_get')
-    return lookup[:lookup.index('{') + 1] + '\n' + lookup[lookup.index('\tDWORD data ='):]
+    # (a new texture's name: texture_name_new, ChupathingyCE's c42ff76ef, gives
+    # them 64 at a time from glGenTextures; one at a time here)
+    names = 'static GLuint texture_name_new(void) { GLuint texture = 0; glGenTextures(1, &texture); return texture; }\n'
+    return names + lookup[:lookup.index('{') + 1] + '\n' + lookup[lookup.index('\tDWORD data ='):]
 
 
 

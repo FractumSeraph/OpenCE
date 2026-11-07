@@ -117,13 +117,16 @@ check */
 static const unsigned char *refused_host;
 static int probes_held;
 static int probe_count, probe_asked;
+/* (a broker's burst lists dozens of live games, each probed in a pass:
+burst_check raises this while it runs) */
+static int probe_limit = 64;
 static unsigned char probed_hash[P2P_KEY_HASH_SIZE], probed_token[P2P_TOKEN_SIZE];
 static unsigned char probed_hosts[16][P2P_IDENTIFIER_SIZE];
 int p2p_probe_start(const unsigned char *host_hash, const unsigned char *token)
 {
 	unsigned char host[P2P_IDENTIFIER_SIZE];
 
-	if (++probe_asked > 64)
+	if (++probe_asked > probe_limit)
 	{
 		printf("FAIL: a game is probed again and again\n");
 		exit(1);
@@ -704,10 +707,11 @@ static int burst_check(int live)
 	unsigned long order = 12345;
 	int *numbers = malloc(sizeof(*numbers) * (size_t)total);
 
+	probe_limit = total + 64;
 	p2p_ed25519_public(seed, signing_key, x25519_secret);
 	p2p_x25519(x25519_public, x25519_secret, NULL);
 	p2p_set_hosting_public(1);
-	p2p_set_game_listing("Test game", "bloodgulch", "Slayer", 2, 1, 0, 1);
+	p2p_set_game_listing("Test game", "bloodgulch", "Slayer", 2, 0, 1, 0, 1);
 	clock_now += 100000;
 	lobby_update(NULL, 3, 16);
 	lobby_update((const unsigned char *)"0123456789abcdef", 3, 16);
@@ -764,6 +768,7 @@ static int burst_check(int live)
 	printf("burst: %d of %d live games listed (%d slots heard)\n", kept, live, total);
 	p2p_lobby_browse(0);
 	lobby_update(NULL, 3, 16);
+	probe_limit = 64;
 	return kept == live;
 }
 
@@ -779,9 +784,10 @@ int main(int argc, char **argv)
 	}
 	crypto_checks();
 	lobby_checks();
+	/* (the probe order first: the bursts leave hundreds of games behind) */
+	probe_order_checks();
 	check(burst_check(31), "a broker's burst: every live game listed (31 live)");
 	check(burst_check(70), "a broker's burst: every live game listed (70 live)");
-	probe_order_checks();
 	printf("%s (%d failures)\n", failures ? "FAIL" : "PASS", failures);
 	return failures != 0;
 }

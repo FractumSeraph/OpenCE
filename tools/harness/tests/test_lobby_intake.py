@@ -33,6 +33,8 @@ def generated(fault=None):
     # (the file's constants: the listing's format and sizes, the windows and the queue's places)
     config += re.search(r"^enum\n\{\n\tLISTING_FORMAT.*?^\};\n", source, re.M | re.S).group(0)
     config += structure(source, 'queued') + '\n'
+    # (ChupathingyCE's d98e604c2: both intake checks, as the game builds it)
+    config += '#define P2P_LOBBY_INTAKE_CHECKS 3\n'
     code = '\n'.join([structure(source, 'listing')] +
                      [function(source, name) for name in ('sanitize', 'get_long', 'get_text', 'listing_read',
                                                           'listing_current', 'version_joinable', 'queued_joinable',
@@ -55,7 +57,7 @@ def test_case(case):
     # every version taken as joinable
     (('return version >= delta_legacy_minimum() && version <= delta_legacy_maximum();', 'return 1;'), 'burst'),
     # a full queue that takes nothing more, a joinable listing's place never made
-    (('if (!queued_joinable(payload, size))\n\t\t\treturn;', 'return;'), 'burst'),
+    (('if (!(P2P_LOBBY_INTAKE_CHECKS & 2) || !queued_joinable(payload, size))\n\t\t\treturn;', 'return;'), 'burst'),
     # a newer version's host counted though this build joins it
     (('if (listing.version > HALO_PORT_NETWORK_VERSION && listing.version > delta_legacy_maximum() &&',
       'if (listing.version > HALO_PORT_NETWORK_VERSION &&'), 'filter'),
