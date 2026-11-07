@@ -326,6 +326,8 @@ struct stream
 	int remote_closed;
 	unsigned long created_time;
 	unsigned long closed_time;
+	/* (KCP has messages from this pass that its tick has not sent yet) */
+	int written;
 	unsigned char pending[STREAM_BUFFER_SIZE];
 	int pending_size;
 };
@@ -514,7 +516,10 @@ static struct
 	which the host's status needs to say "forward it" */
 	int host_port_wanted;
 	int port_fixed;
-} p2p = { 0, 0, -1, 0, -1, .hosting_socket = -1 };
+/* (all zero, so that it is in .bss and not written into an executable:
+112 KB on the console. Its sockets are none, -1, from p2p_initialize on;
+nothing reads them before, as nothing runs until then) */
+} p2p;
 
 /* the router's answer to UPnP, as the host's status says it */
 enum
@@ -2534,6 +2539,7 @@ static void stream_message(struct stream *stream, unsigned char type, const void
 	if (size > 0)
 		memcpy(message + 1, data, (size_t)size);
 	ikcp_send(stream->kcp, (const char *)message, size + 1);
+	stream->written = 1;
 }
 
 static void stream_local_closed(struct stream *stream)
@@ -2682,6 +2688,16 @@ static void stream_update(struct stream *stream)
 	unsigned char message[1 + STREAM_CHUNK_SIZE];
 
 	ikcp_update(stream->kcp, p2p_now());
+	/* what this pass wrote goes out now, not on KCP's next tick up to
+	LOOP_INTERVAL later. The same messages in the same format, only
+	sooner; one flush a pass however many writes the pass made
+	(port/linux/tests/kcp_flush_test.c). Reworked for our engine, based on
+	work by goatbutt and the OpenH1 team. */
+	if (stream->written)
+	{
+		stream->written = 0;
+		ikcp_flush(stream->kcp);
+	}
 	/* what the peer sent */
 	for (;;)
 	{
@@ -5071,6 +5087,12 @@ void p2p_initialize(unsigned long local_address)
 	int chosen = config_chosen("network.tunnel_port");
 	int index;
 
+	if (!p2p.running)
+	{
+		p2p.tunnel_socket = -1;
+		p2p.handoff_socket = -1;
+		p2p.hosting_socket = -1;
+	}
 	p2p_identifier();
 	if (p2p.running || !p2p_native_online())
 		return;

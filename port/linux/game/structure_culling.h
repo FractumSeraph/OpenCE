@@ -80,10 +80,20 @@ long structure_culling_split(
 long structure_culling_gather_pairings(long const *list, long list_count, boolean from_surface_list,
 	short group_material, long surface_count, short const *surface_materials, long const *material_vertex_counts,
 	word const *surface_vertex_indices, struct structure_culling_pairing *pairings);
+#ifdef HALO_XBOX_CONSOLE
+/* (the original Xbox build draws the structure as the Xbox did: its 64 MB
+has no room for the buckets, and the culling file isn't built there) */
+#define structure_culling_structure_bsp_loaded() ((void)0)
+#define structure_culling_dispose() ((void)0)
+#define structure_culling_traverse(structure) ((void)(structure), FALSE)
+#else
 void structure_culling_structure_bsp_loaded(void);
 void structure_culling_dispose(void);
+#endif
 void structure_culling_order_clusters(short *order, real const *distances, short count);
+#ifndef HALO_XBOX_CONSOLE
 boolean structure_culling_traverse(struct structure_bsp *structure);
+#endif
 /* reads the starting tests from the settings */
 void structure_culling_initialize(void);
 void structure_culling_set_tests(long tests);

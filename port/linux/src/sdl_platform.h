@@ -207,6 +207,9 @@ while it is, where there is one that text input shows (Steam's, Android's on
 a touchscreen); each field begun brings it up again */
 void platform_screen_keyboard(BOOL show, BOOL password);
 BOOL platform_next_keystroke(struct platform_keystroke *keystroke);
+/* nonzero when a key, mouse button or touch was pressed since the last call
+(which forgets them): a movie's skip (bink_playback.c) */
+int platform_movie_skip_pressed(void);
 /* the multiplayer scoreboard (game_engine.c) open or not: while it is, the
 mouse wheel and Page Up/Down scroll it instead of switching weapons; how
 far they moved it since the last call (notches and pages, down positive) */

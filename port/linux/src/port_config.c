@@ -696,20 +696,22 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"refresh rates. The default is false on the desktop and true on the\n"
 		"consoles. Takes effect at the next map." },
 	{ "display.dynamic_light_limit", _config_integer, DEFAULT_DYNAMIC_LIGHT_LIMIT, "HALO_DYNAMIC_LIGHT_LIMIT",
-		_environment_value, _platform_all,
+		_environment_value, _platform_all | _platform_xbox,
 		"The most dynamic lights that light the level at once, like muzzle\n"
 		"flashes, plasma and explosions. The biggest on screen light the walls\n"
 		"and floor. The rest light only the objects near them. 0 means no limit,\n"
 		"as on the Xbox. Each light redraws the level it reaches twice, and in a\n"
 		"big firefight that is most of the GPU's time. The default is 0 on the\n"
-		"desktop and 8 on the consoles. Changes at once." },
+		"desktop and the original Xbox, and 8 on the other consoles. Changes at\n"
+		"once." },
 	{ "display.specular_light_limit", _config_integer, DEFAULT_SPECULAR_LIGHT_LIMIT, "HALO_SPECULAR_LIGHT_LIMIT",
-		_environment_value, _platform_all,
+		_environment_value, _platform_all | _platform_xbox,
 		"Of those lights, the most that also add their shine to metal and wet\n"
 		"floors. The first-person weapon's go first, then the biggest on screen.\n"
 		"The others still light the level, without the shine. 0 means no limit,\n"
 		"as on the Xbox. Near lights' shine is the costliest pass in a firefight.\n"
-		"The default is 0 on the desktop and 2 on the consoles. Changes at once." },
+		"The default is 0 on the desktop and the original Xbox, and 2 on the\n"
+		"other consoles. Changes at once." },
 	{ "display.texture_decode", _config_string, "\"auto\"", "HALO_TEXTURE_DECODE", _environment_value,
 		_platform_android,
 		"Where compressed textures are unpacked: \"gpu\" or \"cpu\". \"cpu\"\n"
@@ -2164,6 +2166,9 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 	{ "debug.gpu_flush_draws", _config_integer, "-1", "HALO_GPU_FLUSH_DRAWS", _environment_value, _platform_desktop,
 		"Flush the GPU every this many draws. -1 means every 3 on Intel with\n"
 		"Mesa. 0 never does." },
+	{ "debug.gpu_visibility_readback", _config_string, "\"auto\"", "HALO_GPU_VISIBILITY_READBACK", _environment_value, _platform_desktop,
+		"How lens flare and light glow tests get their results. auto reads\n"
+		"them on the CPU except on NVIDIA. cpu or buffer forces one." },
 	{ "debug.gpu_stats", _config_boolean, "false", "HALO_GPU_STATS", _environment_set_is_true, _platform_all,
 		"Log the renderer's draw counts once a second." },
 	{ "debug.gpu_trace_frame", _config_integer, "-1", "HALO_GPU_TRACE", _environment_value, _platform_all,

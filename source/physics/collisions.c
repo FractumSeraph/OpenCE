@@ -113,9 +113,18 @@ symbols in this file:
 #include "scenario/scenario.h"
 #include "structures/structure_bsp_definitions.h"
 #include "units/bipeds.h"
+
+#include "halo_perf_log.h" /* port: console.perf_log */
+
 /* port: object_bounds_cache.c's */
 boolean object_bounds_cache_out_of_reach(long object_index, real_point3d const *point, real radius);
+#ifdef HALO_XBOX_CONSOLE
+/* (the original Xbox build keeps no bounds cache: its out_of_reach is a stub
+that passes nothing over, port/xbox/game/xbox_desktop_stubs.c) */
+#define object_bounds_cache_missed_by_vector(object_index, point, vector) FALSE
+#else
 boolean object_bounds_cache_missed_by_vector(long object_index, real_point3d const *point, real_vector3d const *vector);
+#endif
 
 #undef REAL_MATH_EXTERNAL_POINT_FROM_LINE3D
 
@@ -488,6 +497,7 @@ boolean collision_test_vector(
 		TEST_FLAG(flags, _collision_test_media_bit) ||
 		TEST_FLAG(flags, _collision_test_objects_bit);
 
+	HALO_PERF_BEGIN(_halo_perf_tick_collision);
 	if (debug_collision_skip_vectors)
 	{
 		test_environment = FALSE;
@@ -738,6 +748,7 @@ boolean collision_test_vector(
 		scenario_location_from_point(&collision->location, &collision->point);
 	}
 
+	HALO_PERF_END(_halo_perf_tick_collision);
 	return hit;
 }
 

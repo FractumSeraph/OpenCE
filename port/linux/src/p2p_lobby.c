@@ -55,10 +55,12 @@ going private does.
 Checking signatures takes work, and anyone can send listings: at most
 VERIFY_BUDGET milliseconds of it each pass of the p2p thread, from a queue
 of MAXIMUM_QUEUED; the rest is dropped (hosts publish again). A listing that
-could not be shown (another network version's, or one outside its time
-window) is dropped before it takes a place there (listing_wanted): on
-subscribing, a broker sends every slot it keeps, and on a public one most
-are games long gone, which filled the queue and crowded out live games.
+could not be shown (one outside its time window) is dropped before it takes
+a place there (listing_wanted), and when the queue is full one this build
+joins takes the place of one it does not: on subscribing, a broker sends
+every slot it keeps, and on a public one most are games long gone or of
+other versions, which filled the queue and crowded out live games
+(tools/p2p_lobby_check.c's burst, ChupathingyCE's d98e604c2).
 
 Each game's host is probed for its ping (p2p_probe_start: the tunnel to it
 timed, p2p.c), a few at once, again each PROBE_REFRESH and on Refresh. A
@@ -106,6 +108,9 @@ enum
 		P2P_SIGNATURE_SIZE,
 	MAXIMUM_GAMES = 256,
 	MAXIMUM_TOMBSTONES = 256,
+	/* (a burst of current listings, as a broker's on subscribing: 292 bytes
+	each, 37 KB in all on every platform; the original Xbox builds no
+	public games, port/xbox/src/xbox_p2p.c) */
 	MAXIMUM_QUEUED = 128,
 
 	/* milliseconds */
@@ -651,6 +656,12 @@ static int queued_joinable(const unsigned char *payload, int size)
 
 static int listing_wanted(const unsigned char *payload, int size, int retained, const unsigned char *key_hash);
 
+/* (tools/p2p_lobby_check.c builds the lobby without the intake's checks too,
+to show what they keep: 1 the time, 2 the version, 3 both) */
+#ifndef P2P_LOBBY_INTAKE_CHECKS
+#define P2P_LOBBY_INTAKE_CHECKS 3
+#endif
+
 void p2p_lobby_slot_heard(const char *hash_text, const unsigned char *payload, int size, int retained)
 {
 	unsigned char key_hash[P2P_KEY_HASH_SIZE];
@@ -684,7 +695,8 @@ void p2p_lobby_slot_heard(const char *hash_text, const unsigned char *payload, i
 		game->heard_time = p2p_now();
 		return;
 	}
-	if (!listing_wanted(payload, size, retained, key_hash))
+	/* (one out of its window takes no place in the queue) */
+	if ((P2P_LOBBY_INTAKE_CHECKS & 1) && !listing_wanted(payload, size, retained, key_hash))
 		return;
 	for (index = 0; index < lobby.queue_count; index++)
 	{
@@ -694,7 +706,7 @@ void p2p_lobby_slot_heard(const char *hash_text, const unsigned char *payload, i
 	if (lobby.queue_count == MAXIMUM_QUEUED)
 	{
 		/* (full: a joinable listing takes the place of one that is not) */
-		if (!queued_joinable(payload, size))
+		if (!(P2P_LOBBY_INTAKE_CHECKS & 2) || !queued_joinable(payload, size))
 			return;
 		for (index = lobby.queue_count - 1; index >= 0 && queued_joinable(lobby.queue[index].payload, lobby.queue[index].size);
 			index--)

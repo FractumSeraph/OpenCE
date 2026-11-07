@@ -120,6 +120,11 @@ gone, ends: else the keyboard stays held from the game) */
 static Uint64 binding_polled_ms;
 #define BINDING_ABANDONED_MS 500
 static unsigned mouse_buttons_down;
+/* keys (not a modifier alone, not a held key's repeats), mouse buttons and
+touches pressed since platform_movie_skip_pressed last looked: what skips a
+movie (bink_playback.c), the keys not reaching the game outside text and
+the console (xinput_sdl.c), and the mouse not being the Xbox's */
+static volatile int movie_skip_presses;
 /* (an input taken that nothing asks for is let go after this) */
 #define BINDING_UNCLAIMED_MS 2000
 /* the multiplayer scoreboard is open (platform_scoreboard_scroll): the wheel
@@ -3982,6 +3987,11 @@ void platform_pump_events(void)
 				if (event.key.down)
 					keys_pressed[event.key.scancode] = 1;
 			}
+			if (event.key.down && !event.key.repeat &&
+				(event.key.scancode < SDL_SCANCODE_LCTRL || event.key.scancode > SDL_SCANCODE_RGUI))
+			{
+				movie_skip_presses++;
+			}
 			if (binding_capture == _binding_capture_waiting && event.key.down && !event.key.repeat &&
 				event.key.scancode != SDL_SCANCODE_F11 && event.key.scancode != SDL_SCANCODE_F12)
 			{
@@ -4062,6 +4072,8 @@ void platform_pump_events(void)
 			if (event.button.down)
 				menu_cursor_mouse_used(input_state.ui_pointer);
 #endif
+			if (event.button.down)
+				movie_skip_presses++;
 			if (event.button.button < 32)
 			{
 				if (event.button.down)
@@ -4202,6 +4214,8 @@ void platform_pump_events(void)
 		case SDL_EVENT_FINGER_MOTION:
 		case SDL_EVENT_FINGER_UP:
 		case SDL_EVENT_FINGER_CANCELED:
+			if (event.type == SDL_EVENT_FINGER_DOWN)
+				movie_skip_presses++;
 			touch_input_event(event.type, &event.tfinger);
 			break;
 #endif
@@ -4774,4 +4788,12 @@ void platform_input_read(struct platform_input_state *state, BOOL consume_motion
 		input_state.mouse_wheel = 0;
 	}
 	pthread_mutex_unlock(&input_lock);
+}
+
+int platform_movie_skip_pressed(void)
+{
+	int pressed = movie_skip_presses != 0;
+
+	movie_skip_presses = 0;
+	return pressed;
 }

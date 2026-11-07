@@ -402,7 +402,18 @@ void game_time_update(
 	{
 		long connection;
 		long ticks_elapsed;
-		real ticks_per_second = game_time_globals->speed*TICKS_PER_SECOND;
+		real ticks_per_second;
+
+		/* set_speed refuses a NaN or a value past 100; a value already stored
+		there would make every leftover a NaN */
+		if (!valid_real(game_time_globals->speed) || game_time_globals->speed < 0.f ||
+			game_time_globals->speed > 100.f)
+			game_time_globals->speed = 1.f;
+		if (!valid_real(game_time_globals->leftover_dt) ||
+			game_time_globals->leftover_dt < 0.f ||
+			game_time_globals->leftover_dt >= 100.f)
+			game_time_globals->leftover_dt = 0.f;
+		ticks_per_second = game_time_globals->speed*TICKS_PER_SECOND;
 
 		/* The native builds draw several frames per tick
 		(port/linux/game/render_interpolation.c). A frame that runs no tick has
@@ -413,6 +424,10 @@ void game_time_update(
 		run as many times too fast as there are frames per tick. On the Xbox
 		every frame ran at least one tick. */
 		game_time_globals->last_local_time_elapsed = 0;
+
+		/* a NaN fails every comparison, so the frame cap keeps it */
+		if (!valid_real(time_delta_sec) || time_delta_sec < 0.f)
+			time_delta_sec = 0.f;
 
 		if (ticks_per_second > 0.f)
 		{
@@ -455,7 +470,11 @@ void game_time_update(
 			}
 
 			game_time_globals->leftover_dt = game_time - ticks_elapsed_real/ticks_per_second;
-			if (game_time_globals->leftover_dt < 0.f)
+			/* a NaN fails the old "< 0" reset and is then added back on every
+			later frame, which leaves the menu camera illegal for the session */
+			if (!valid_real(game_time_globals->leftover_dt) ||
+				game_time_globals->leftover_dt < 0.f ||
+				game_time_globals->leftover_dt >= 100.f)
 				game_time_globals->leftover_dt = 0.f;
 			/* port: debug.fixed_step, a game of this machine alone: one tick a
 			frame that has time (main.c gives it a tick's; a 30th of a second in
@@ -520,7 +539,11 @@ void game_time_update(
 						/* the distributed netcode's per-tick state (port: none of
 						the main menu's scene, which a lobby's machines do not share) */
 						if (!game_time_menu_scene())
+						{
+							HALO_PERF_BEGIN(_halo_perf_tick_netcode);
 							profile_scope(game_time_network_distributed_tick_section, network_distributed_tick();)
+							HALO_PERF_END(_halo_perf_tick_netcode);
+						}
 						/* debug.determinism's hashes of the tick's state
 						(port/linux/game/determinism_check.c) */
 #ifndef HALO_CONSOLE_NO_NETWORK_TEST

@@ -3723,6 +3723,7 @@ static BOOL visibility_queries_initialize(void)
 static void visibility_results_initialize(void)
 {
 	const char *vendor = (const char *)glGetString(GL_VENDOR);
+	const char *mode = config_string("debug.gpu_visibility_readback");
 	GLsizeiptr size = VISIBILITY_BATCH_COUNT * VISIBILITY_TEST_SLOTS * sizeof(GLuint);
 	GLbitfield flags = GL_MAP_READ_BIT | GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT;
 	BOOL success;
@@ -3736,7 +3737,10 @@ static void visibility_results_initialize(void)
 	own part, with a fence after the copies. */
 	/* (port: OpenGL 4.4's persistent buffer; without it, as on macOS, the
 	CPU reads the queries) */
-	if (glBufferStorage && (!vendor || strcmp(vendor, "ATI Technologies Inc.")))
+	/* (debug.gpu_visibility_readback, ChupathingyCE's: "cpu" or "buffer"
+	forces one; "auto" is the above) */
+	if (glBufferStorage && (!strcmp(mode, "buffer") ||
+		(strcmp(mode, "cpu") && (!vendor || strcmp(vendor, "ATI Technologies Inc.")))))
 	{
 		visibility_readback_gl_ok("before buffer creation");
 		glGenBuffers(1, &device.visibility_buffer);
