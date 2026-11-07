@@ -63,7 +63,8 @@ typedef void (*LPFNXMEDIAOBJECTCALLBACK)(void *, void *, unsigned long);
         # These SDK status expressions include casts, unlike integer capacities.
         text += next(line for line in statuses.splitlines() if line.startswith("#define " + name + " ")) + "\n"
     # (and the HRTF's sizes, which sdl_stream's arrays take: ChupathingyCE 0.8.0d)
-    for name in ["MAXIMUM_STREAM_PACKETS", "RESAMPLER_HISTORY", "MAXIMUM_OUTPUT_CHANNELS", "HRTF_INPUT", "HRTF_MAXIMUM_TAPS"]:
+    for name in ["MAXIMUM_STREAM_PACKETS", "RESAMPLER_HISTORY", "MAXIMUM_OUTPUT_CHANNELS", "HRTF_INPUT", "HRTF_MAXIMUM_TAPS",
+                 "CUT_FADE_FRAMES"]:
         text += f"#define {name} {constant(backend, name)}\n"
     for name in ["MAXIMUM_SOUND_CHANNELS", "NUMBER_OF_SOUND_CHANNEL_TYPES"]:
         text += f"#define {name} {constant(game, name)}\n"

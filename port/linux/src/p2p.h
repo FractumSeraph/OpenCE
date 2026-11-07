@@ -258,6 +258,9 @@ struct p2p_listing
 	unsigned char failed;
 	/* milliseconds, -1 if not known */
 	short ping;
+	/* its host is being probed for the ping now (a ping known stays), and
+	whether Refresh asked for it (until that probe ends) */
+	unsigned char probing, refreshing;
 	/* it has a password: its invite is sealed with it (p2p_listing_unlock) */
 	unsigned char locked;
 	unsigned char key_hash[P2P_LISTING_KEY_HASH_SIZE];
@@ -317,6 +320,10 @@ way) are one game, kept at its newest version, and of copies of that, the
 last heard (heard_times: p2p_now's); two hosts' games of one version stay
 apart. The game list's rule too (its one_per_version_set) */
 int p2p_listing_older_copy(const struct p2p_listing *games, const unsigned long *heard_times, int count, int index);
+/* the games the server browser shows, in its order (its sort, after its
+tab and Filters): their hosts are probed in that order, those not shown
+last */
+void p2p_lobby_shown(const struct p2p_listing *games, int count);
 /* the master servers' (port/linux/src/master_list.c, server_master.c): a
 fresh signed listing of the game this machine hosts for the internet, as
 the brokers get it (0 if it hosts none, or none public); a master's entry's

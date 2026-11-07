@@ -5708,6 +5708,8 @@ joined) */
 #define LOBBY_BROWSER_MESSAGE_TIME 6000
 /* the ticker's labels (join_game_ticker_labels) */
 enum { _join_game_label_rules = 1, _join_game_label_message };
+/* the longest the line below the rows says it is refreshing */
+#define LOBBY_BROWSER_REFRESH_TIME 10000
 /* the line below the rows: two rows' worth */
 #define TICKER_TEXT_LENGTH (ROW_TEXT_LENGTH * 2)
 /* between the parts of the line below the rows */
@@ -5767,6 +5769,7 @@ enum
 	_browser_word_refused_link_in_use,
 	_browser_word_refused_vpn_master,
 	_browser_word_refused_address_full,
+	_browser_word_refreshing,
 };
 
 /* the words p2p_join_progress gives a join that failed, and the browser's
@@ -6939,6 +6942,49 @@ static void lobby_browser_rules_text(struct p2p_listing const *game, wchar_t *te
 }
 
 
+/* whether a game's ping cell shows dots: its host timed with no ping yet,
+or timed again after Refresh (a known ping stays while the two-minute probe
+runs) */
+static boolean browser_ping_dots(struct p2p_listing const *game)
+{
+	return game->probing && (game->ping < 0 || game->refreshing);
+}
+
+/* a game's ping cell (the dots without a colour: pc_menu_text_color
+colours a number only) */
+static void browser_ping_text(struct p2p_listing const *game, unsigned long now, wchar_t *text, short length)
+{
+	static wchar_t const dots[3][4] = { L".", L"..", L"..." };
+
+	if (game->failed)
+		browser_word(_browser_word_failed, text, length);
+	else if (browser_ping_dots(game))
+		ustrncpy(text, dots[(now / 300) % 3], length - 1);
+	else if (game->ping >= 0)
+		usnprintf(text, length - 1, L"%d", game->ping);
+	else if (game->master && game->region[0])
+		region_to_wide(game->region, text, length);
+	else if (!game->open)
+		browser_word(_browser_word_closed, text, length);
+	else if (game->in_progress)
+		browser_word(_browser_word_live, text, length);
+	else
+		usnprintf(text, length - 1, L"-");
+}
+
+/* whether a game Refresh asked to be timed again still waits for its ping */
+static boolean browser_refreshing(void)
+{
+	short index;
+
+	for (index = 0; index < lobby_browser.count; index++)
+	{
+		if (lobby_browser.games[index].refreshing)
+			return TRUE;
+	}
+	return FALSE;
+}
+
 /* "gamespy screen update" for the server browser: the games shown (the
 tab's source, the filters) in the order chosen, the rows, the Players and
 Rules lines (or a message in the Rules line's place), the counts over the
@@ -6973,6 +7019,8 @@ static void lobby_browser_update(struct widget_instance *list)
 	/* (a map's download for a join under way: map_torrents.c) */
 	map_fetch_update(list);
 	lobby_browser_sort();
+	/* (the hosts probed in the order shown: p2p_lobby_shown) */
+	p2p_lobby_shown(lobby_browser.games, lobby_browser.count);
 	focused = lobby_browser_rows_place(list);
 	/* (the first game found takes the focus from the buttons, which had it
 	while there were none) */
@@ -7041,7 +7089,7 @@ static void lobby_browser_update(struct widget_instance *list)
 		/* (its status: JOINING, NEWER or OLDER, in yellow; its host's ping,
 		once probed (p2p_lobby.c), else FAILED, CLOSED, LIVE; a master
 		server's, which is not probed, its region) */
-		browser_row_pings[place] = game->failed || state ? -1 : game->ping;
+		browser_row_pings[place] = game->failed || state || browser_ping_dots(game) ? -1 : game->ping;
 		browser_row_greyed[place] = state != 0;
 		browser_row_marked[place] = TRUE;
 		if (lobby_browser.joining && !memcmp(game->identifier, lobby_browser.identifier, 6))
@@ -7051,18 +7099,7 @@ static void lobby_browser_update(struct widget_instance *list)
 		else
 		{
 			browser_row_marked[place] = FALSE;
-			if (game->failed)
-				browser_word(_browser_word_failed, text, ROW_TEXT_LENGTH);
-			else if (game->ping >= 0)
-				usnprintf(text, ROW_TEXT_LENGTH - 1, L"%d", game->ping);
-			else if (game->master && game->region[0])
-				region_to_wide(game->region, text, ROW_TEXT_LENGTH);
-			else if (!game->open)
-				browser_word(_browser_word_closed, text, ROW_TEXT_LENGTH);
-			else if (game->in_progress)
-				browser_word(_browser_word_live, text, ROW_TEXT_LENGTH);
-			else
-				usnprintf(text, ROW_TEXT_LENGTH - 1, L"-");
+			browser_ping_text(game, now, text, ROW_TEXT_LENGTH);
 		}
 		text_set(named(row, "server_item_ping", 0), text);
 		/* (the lock: a game with a password; the server: a dedicated
@@ -7207,6 +7244,8 @@ static void lobby_browser_update(struct widget_instance *list)
 		}
 		else if (lobby_browser_list_offline(now))
 			usnprintf(text, NUMBEROF(text) - 1, L"%s", JOIN_WIDE(BROWSER_LIST_OFFLINE_NOTE));
+		else if (now - lobby_browser.begin_time < LOBBY_BROWSER_REFRESH_TIME && browser_refreshing())
+			browser_word(_browser_word_refreshing, text, NUMBEROF(text));
 		else if (!lobby_browser.count)
 		{
 			/* (an old build sees none of the games: it says why) */

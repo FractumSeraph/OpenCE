@@ -276,7 +276,7 @@ jobs:
           # its cases with clients need the retail maps, and are skipped
           python3 -m pytest -q tools/test_dedicated_server.py
           python3 tools/test_light_storage.py
-          python3 -m pytest -q tools/test_controller_buttons.py tools/test_controller_remap.py tools/test_hud_button_style.py tools/test_hud_corrections.py
+          python3 -m pytest -q tools/test_controller_buttons.py tools/test_controller_remap.py tools/test_controller_remap_context.py tools/test_hud_button_style.py tools/test_hud_corrections.py
           python3 tools/test_saved_game_script_globals.py
           python3 tools/test_rendered_lights_storage.py
           python3 tools/test_port_config.py

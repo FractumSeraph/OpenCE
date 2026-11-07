@@ -1036,6 +1036,45 @@ static boolean rasterizer_screen_effect_video_borders(
 	return success;
 }
 
+/* port: the shader translator turns Direct3D's pixel centers (on integers)
+into OpenGL's (on halves) by moving every vertex half a pixel right and down,
+a pixel of the game's 480 lines (nv2a_vsh.c). The screen is drawn at several
+of the display's pixels to one of those (halo_screen_scale), so a pass's quad
+started half a game pixel inside its target's left and top edges, and the
+display's pixels there were never drawn: each pass of a scope's zoom warp read
+their stale contents and drew them farther in, a dark band down the left of
+the blur and along its top (the right and bottom edges are clamped to drawn
+pixels). Move the quad back by that half pixel, a pixel of the viewport it
+draws into (the whole surface for the second render-primary surface, the
+window for the primary: rasterizer_set_target), and return how far its
+texture coordinates, in the viewport's pixels, move with it, so that every
+pixel samples where it did and the quad covers the whole viewport. */
+static real rasterizer_screen_effect_cover_target(
+	short destination_target,
+	short viewport_width,
+	short viewport_height,
+	real_rectangle2d *vertex_bounds)
+{
+	real half_pixel_x;
+	real half_pixel_y;
+
+	if (destination_target == _rasterizer_target_screen_effect)
+	{
+		half_pixel_x = 1.0f / (real)halo_screen_width();
+		half_pixel_y = 1.0f / 480.0f;
+	}
+	else
+	{
+		half_pixel_x = 1.0f / (real)viewport_width;
+		half_pixel_y = 1.0f / (real)viewport_height;
+	}
+	vertex_bounds->x0 -= half_pixel_x;
+	vertex_bounds->x1 -= half_pixel_x;
+	vertex_bounds->y0 += half_pixel_y;
+	vertex_bounds->y1 += half_pixel_y;
+
+	return 0.5f;
+}
 /* ---------- public code */
 
 void _rasterizer_screen_effect(
@@ -1150,11 +1189,9 @@ void _rasterizer_screen_effect(
 		short stage;
 		short viewport_width;
 		short viewport_height;
-		short pixel_x0;
-		short pixel_y0;
-		short pixel_x1;
-		short pixel_y1;
 		real_rectangle2d vertex_bounds;
+		/* port: rasterizer_screen_effect_cover_target */
+		real texel_shift;
 		unsigned long light_enhancement_input;
 		unsigned long desaturation_input;
 		struct rasterizer_cinematic_screen_effect_parameters scaled_parameters;
@@ -1746,33 +1783,14 @@ void _rasterizer_screen_effect(
 				vertex_bounds.x1 = vertex_bounds.y0 = 1.0f;
 			}
 
-			pixel_x0 = 0;
-			pixel_y0 = 0;
-			pixel_x1 = viewport_width;
-			pixel_y1 = viewport_height;
-#ifndef HALO_XBOX_CONSOLE
-			/* port: the native builds move each screen-space vertex half a
-			pixel of the game's right and down (nv2a_vsh.c), as the HUD's
-			quads are offset half a pixel left and up to meet the Xbox's
-			pixel centers. This quad covers the whole view and is not
-			offset, so with the screen drawn at several pixels to the
-			Xbox's one, its top row and left column of pixels were left
-			out: the zoom's scope mask and blur did not reach them. A pixel
-			of the game more on each side covers them; the view's bounds
-			clip the rest, and the texture coordinates keep to the same
-			pixels. */
-			if (!(pass == 0 && main_get_window_count() > 1 && pass_count != 1))
-			{
-				vertex_bounds.x0 -= 2.0f / (real)viewport_width;
-				vertex_bounds.x1 += 2.0f / (real)viewport_width;
-				vertex_bounds.y0 += 2.0f / (real)viewport_height;
-				vertex_bounds.y1 -= 2.0f / (real)viewport_height;
-				pixel_x0 -= 1;
-				pixel_y0 -= 1;
-				pixel_x1 += 1;
-				pixel_y1 += 1;
-			}
-#endif
+			/* port: the quad covers its whole viewport on a screen drawn at
+			more pixels than the Xbox's; its texture coordinates are floats,
+			moved with it (rasterizer_screen_effect_cover_target) */
+			texel_shift = rasterizer_screen_effect_cover_target(
+				destination_target,
+				viewport_width,
+				viewport_height,
+				&vertex_bounds);
 
 			if (IDirect3DDevice8_Begin(
 				global_d3d_device,
@@ -1788,11 +1806,11 @@ void _rasterizer_screen_effect(
 					"IDirect3DDevice8_Begin(global_d3d_device, D3DPT_TRIANGLEFAN)");
 			}
 
-			if (IDirect3DDevice8_SetVertexData2s(
+			if (IDirect3DDevice8_SetVertexData2f(
 				global_d3d_device,
 				4,
-				pixel_x0,
-				pixel_y1) >= 0 && success)
+				-texel_shift,
+				(real)viewport_height - texel_shift) >= 0 && success)
 			{
 				success = TRUE;
 			}
@@ -1801,7 +1819,7 @@ void _rasterizer_screen_effect(
 				success = FALSE;
 				rasterizer_error(
 					0,
-					"IDirect3DDevice8_SetVertexData2s(global_d3d_device, 4, pixel_x0, pixel_y1)");
+					"IDirect3DDevice8_SetVertexData2f(global_d3d_device, 4, -texel_shift, viewport_height - texel_shift)");
 			}
 
 			if (IDirect3DDevice8_SetVertexData2f(
@@ -1820,11 +1838,11 @@ void _rasterizer_screen_effect(
 					"IDirect3DDevice8_SetVertexData2f(global_d3d_device, VSDE_VERTEX, vertex_bounds.x0, vertex_bounds.y1)");
 			}
 
-			if (IDirect3DDevice8_SetVertexData2s(
+			if (IDirect3DDevice8_SetVertexData2f(
 				global_d3d_device,
 				4,
-				pixel_x1,
-				pixel_y1) >= 0 && success)
+				(real)viewport_width - texel_shift,
+				(real)viewport_height - texel_shift) >= 0 && success)
 			{
 				success = TRUE;
 			}
@@ -1833,7 +1851,7 @@ void _rasterizer_screen_effect(
 				success = FALSE;
 				rasterizer_error(
 					0,
-					"IDirect3DDevice8_SetVertexData2s(global_d3d_device, 4, pixel_x1, pixel_y1)");
+					"IDirect3DDevice8_SetVertexData2f(global_d3d_device, 4, viewport_width - texel_shift, viewport_height - texel_shift)");
 			}
 
 			if (IDirect3DDevice8_SetVertexData2f(
@@ -1852,11 +1870,11 @@ void _rasterizer_screen_effect(
 					"IDirect3DDevice8_SetVertexData2f(global_d3d_device, VSDE_VERTEX, vertex_bounds.x1, vertex_bounds.y1)");
 			}
 
-			if (IDirect3DDevice8_SetVertexData2s(
+			if (IDirect3DDevice8_SetVertexData2f(
 				global_d3d_device,
 				4,
-				pixel_x1,
-				pixel_y0) >= 0 && success)
+				(real)viewport_width - texel_shift,
+				-texel_shift) >= 0 && success)
 			{
 				success = TRUE;
 			}
@@ -1865,7 +1883,7 @@ void _rasterizer_screen_effect(
 				success = FALSE;
 				rasterizer_error(
 					0,
-					"IDirect3DDevice8_SetVertexData2s(global_d3d_device, 4, pixel_x1, pixel_y0)");
+					"IDirect3DDevice8_SetVertexData2f(global_d3d_device, 4, viewport_width - texel_shift, -texel_shift)");
 			}
 
 			if (IDirect3DDevice8_SetVertexData2f(
@@ -1884,11 +1902,11 @@ void _rasterizer_screen_effect(
 					"IDirect3DDevice8_SetVertexData2f(global_d3d_device, VSDE_VERTEX, vertex_bounds.x1, vertex_bounds.y0)");
 			}
 
-			if (IDirect3DDevice8_SetVertexData2s(
+			if (IDirect3DDevice8_SetVertexData2f(
 				global_d3d_device,
 				4,
-				pixel_x0,
-				pixel_y0) >= 0 && success)
+				-texel_shift,
+				-texel_shift) >= 0 && success)
 			{
 				success = TRUE;
 			}
@@ -1897,7 +1915,7 @@ void _rasterizer_screen_effect(
 				success = FALSE;
 				rasterizer_error(
 					0,
-					"IDirect3DDevice8_SetVertexData2s(global_d3d_device, 4, pixel_x0, pixel_y0)");
+					"IDirect3DDevice8_SetVertexData2f(global_d3d_device, 4, -texel_shift, -texel_shift)");
 			}
 
 			if (IDirect3DDevice8_SetVertexData2f(

@@ -18,14 +18,18 @@ resampling) and applies:
 	  minimum and maximum distance, an equal power pan from the source's
 	  direction in listener space, and the I3DL2 direct path, obstruction
 	  and occlusion levels, their high frequency levels a low pass at the
-	  environment's HF reference: a sound behind a wall is muffled.
+	  environment's HF reference: a sound behind a wall is muffled,
+	- for 3D voices, the Doppler shift of the voice's and the listener's
+	  velocities, which moves the resampling step (doppler_ratio).
 3D voices also send to an I3DL2 reverb of the environment the listener is in
 (reverb). On stereo output with audio.hrtf on, 3D voices are rendered for
 headphones instead of panned (binaural rendering). A moving 3D voice is
 Doppler shifted (doppler_ratio; audio.doppler = false leaves it), and a
 voice whose tag gives it a sound cone is quieter facing away
 (voice_cone_gain), as DirectSound did both. A look-ahead limiter keeps the
-sum under full scale (limit).
+sum under full scale (limit). A voice the game cuts off while it plays
+fades out over 5 ms rather than stopping dead, which clicked (voice_cut:
+OpenCE's #551).
 
 The output is stereo, 5.1 or 7.1 (audio.channels; "auto" is 5.1 or 7.1 on
 a device of 6 or 8 channels, else stereo). For surround the speaker config
@@ -96,6 +100,8 @@ chunk's mix to start, stop or change a sound, so a chunk is about 5 ms of
 sound - at 1024, up to 2.7 ms of the Switch's game thread for each such call
 in a busy firefight) */
 #define MIX_CHUNK_FRAMES 256
+/* the frames a voice cut off fades out over (voice_cut): 5 ms */
+#define CUT_FADE_FRAMES 240
 
 #define XBOX_ADPCM_BLOCK_BYTES 36
 #define XBOX_ADPCM_BLOCK_SAMPLES 64
@@ -105,8 +111,9 @@ in a busy firefight) */
 #define RESAMPLER_TABLE_STEPS 256
 #define RESAMPLER_CUTOFF 0.96
 #define RESAMPLER_KAISER_BETA 6.5
-#define RESAMPLER_MAXIMUM_STRETCH 2
-#define RESAMPLER_HISTORY 128
+/* (the fastest a voice is resampled, its Doppler shift included: OpenCE's) */
+#define RESAMPLER_MAXIMUM_STRETCH 4
+#define RESAMPLER_HISTORY 256
 #if defined(__GNUC__) || defined(__clang__)
 #define RESAMPLER_ALIGNED __attribute__((aligned(16)))
 #else
@@ -159,6 +166,9 @@ struct sdl_stream
 	float stereo_pan;
 	float stereo_distance;
 	float stereo_distance_fade;
+	/* how fast it comes towards the listener, in world units a second, for
+	its Doppler effect (doppler_ratio) */
+	float stereo_approach;
 	float headroom;
 	/* on surround output: the gains from each source channel to each
 	speaker mix bin (SetMixBins, SetMixBinVolumes) */
@@ -223,6 +233,12 @@ struct sdl_stream
 	float hrtf_delays[2];
 	float current_hrtf;
 	BOOL hrtf_valid;
+	/* what the voice was playing when the game cut it off, faded out
+	(voice_cut): frames of output_channels floats and their room send, and
+	how many of them have played */
+	float cut[CUT_FADE_FRAMES * MAXIMUM_OUTPUT_CHANNELS];
+	float cut_send[CUT_FADE_FRAMES];
+	unsigned long cut_played;
 };
 
 static pthread_mutex_t mixer_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -566,6 +582,16 @@ static float doppler_ratio(const struct sdl_stream *stream)
 	float to_listener[3], length, listener_speed = 0.0f, source_speed, ratio;
 	int axis;
 
+	/* (a positioned stereo voice: the game gives how fast it comes towards
+	the listener, which is still: dsound_sdl_stream_set_stereo_position,
+	OpenCE's #550) */
+	if (doppler_enabled && !stream->has_3d && stream->channels == 2 && stream->stereo_positioned)
+	{
+		source_speed = clamp_real(stream->stereo_approach * listener.distance_factor,
+			-0.9f * DOPPLER_SPEED_OF_SOUND, 0.9f * DOPPLER_SPEED_OF_SOUND);
+		ratio = DOPPLER_SPEED_OF_SOUND / (DOPPLER_SPEED_OF_SOUND - source_speed);
+		return clamp_real(ratio, 1.0f / DOPPLER_MAXIMUM, DOPPLER_MAXIMUM);
+	}
 	if (!doppler_enabled || !stream->has_3d || stream->mode == DS3DMODE_DISABLE)
 		return 1.0f;
 	for (axis = 0; axis < 3; axis++)
@@ -1524,6 +1550,9 @@ static void mix_voice(struct sdl_stream *stream, float *output, float *send, uns
 			return;
 		resampler_reset(stream);
 		stream->gains_valid = FALSE;
+		/* (starting over at this mix's shift) */
+		step = base_step * target_doppler;
+		ramp_step = 0.0;
 	}
 	voice_gains(stream, &target_left, &target_right, &target_room, &target_direct_lowpass, &target_room_lowpass);
 	if (surround)
@@ -1741,6 +1770,59 @@ static void mix_voice(struct sdl_stream *stream, float *output, float *send, uns
 	stream->current_room_lowpass = target_room_lowpass;
 	if (surround)
 		memcpy(stream->current_surround, target_surround, sizeof(target_surround));
+}
+
+/* The game cuts a voice off (Flush) to play the next sound on its channel:
+each shot of a weapon fired faster than its sound lasts takes the last's
+channel (sound classes allow one weapon_fire sound an object). Stopped dead,
+a waveform drops from wherever it was to nothing, a click, and a rifle's
+shots crackled. The packets must go back to the game at once (it refills the
+channel, and may reuse their memory), so what the voice would play next is
+mixed now, CUT_FADE_FRAMES of it at its gains, faded out along half a cosine,
+and played over the next mixes beside the new sound (mix_cut). What is left
+of a cut still playing is kept under it. The fade is the voice's own output
+only while that is its frames at its gains through its low passes (whose
+state mix_voice carries on into it): processing of a voice that holds what
+it played (an HRTF's filters, a delay) must take the fade through itself
+too, or the cut jumps from the one to the other and clicks again. */
+static void voice_cut(struct sdl_stream *stream)
+{
+	static float output[CUT_FADE_FRAMES * MAXIMUM_OUTPUT_CHANNELS], send[CUT_FADE_FRAMES];
+	unsigned long frame, channel, left = CUT_FADE_FRAMES - stream->cut_played;
+
+	if (stream->paused || !stream->packet_count || !stream->gains_valid)
+		return;
+	memset(output, 0, sizeof(output));
+	memset(send, 0, sizeof(send));
+	mix_voice(stream, output, send, CUT_FADE_FRAMES);
+	for (frame = 0; frame < CUT_FADE_FRAMES; frame++)
+	{
+		float fade = 0.5f + 0.5f * cosf(3.14159265f * (float)(frame + 1) / CUT_FADE_FRAMES);
+
+		/* (what is left of the earlier cut is read only where it is: past
+		it is whatever it was, a NaN perhaps, which no factor of 0 hides) */
+		for (channel = 0; channel < output_channels; channel++)
+		{
+			stream->cut[frame * output_channels + channel] = output[frame * output_channels + channel] * fade +
+				(frame < left ? stream->cut[(stream->cut_played + frame) * output_channels + channel] : 0.0f);
+		}
+		stream->cut_send[frame] = send[frame] * fade +
+			(frame < left ? stream->cut_send[stream->cut_played + frame] : 0.0f);
+	}
+	stream->cut_played = 0;
+}
+
+/* a cut voice's fade out (voice_cut), into the mix */
+static void mix_cut(struct sdl_stream *stream, float *output, float *send, unsigned long frames)
+{
+	unsigned long frame, channel;
+
+	for (frame = 0; frame < frames && stream->cut_played < CUT_FADE_FRAMES; frame++, stream->cut_played++)
+	{
+		for (channel = 0; channel < output_channels; channel++)
+			output[frame * output_channels + channel] += stream->cut[stream->cut_played * output_channels + channel];
+		send[frame] += stream->cut_send[stream->cut_played];
+	}
 }
 
 /* ---------- reverb
@@ -2414,10 +2496,12 @@ static void mix(float *output, unsigned long frames)
 	memset(reverb.send, 0, frames * sizeof(float));
 	hrtf_fade(frames);
 	pthread_mutex_lock(&mixer_lock);
-	/* (a voice at a time, the game let in between them: mixer_lock_wanted) */
+	/* (a voice at a time, the game let in between them: mixer_lock_wanted;
+	and each one's cut fade, mix_cut) */
 	for (stream = streams; stream; stream = mix_cursor)
 	{
 		mix_voice(stream, output, reverb.send, frames);
+		mix_cut(stream, output, reverb.send, frames);
 		mix_cursor = stream->next;
 		if (mix_cursor && __atomic_load_n(&mixer_lock_wanted, __ATOMIC_RELAXED))
 		{
@@ -2428,7 +2512,10 @@ static void mix(float *output, unsigned long frames)
 	}
 	mix_cursor = NULL;
 	for (stream = buffers; stream; stream = stream->next)
+	{
 		mix_voice(stream, output, reverb.send, frames);
+		mix_cut(stream, output, reverb.send, frames);
+	}
 	/* a new environment, once the fade to the last is over */
 	if (reverb.serial != environment_serial && !reverb.fade)
 	{
@@ -3005,6 +3092,7 @@ static HRESULT STDMETHODCALLTYPE stream_flush(IDirectSoundStream *object)
 	struct sdl_stream *stream = stream_from_interface(object);
 
 	mixer_lock_take();
+	voice_cut(stream);
 	while (stream->packet_count)
 	{
 		struct voice_packet *head = &stream->packets[stream->packet_head];
@@ -3027,10 +3115,12 @@ it, `pan` from -1 (left) to 1 (right), and muffled and reverberated as a 3D
 voice is (its I3DL2 source, which the game sets as a 3D channel's), its room
 send rolling off from `minimum_distance` with `distance`. The game fades its
 volume with distance itself, by `distance_fade`. Not positioned, it plays as
-the Xbox played every stereo sound, unpanned and dry. (sound_manager.c,
+the Xbox played every stereo sound, unpanned and dry. It is shifted as a 3D
+voice is by `approach`, how fast it comes towards the listener in world units
+a second (doppler_ratio). (sound_manager.c,
 update_channels: sound_dsound_xbox.c calls this.) */
 void dsound_sdl_stream_set_stereo_position(IDirectSoundStream *object, BOOL positioned, float pan,
-	float distance, float minimum_distance, float distance_fade)
+	float distance, float minimum_distance, float distance_fade, float approach)
 {
 	struct sdl_stream *stream = stream_from_interface(object);
 
@@ -3039,6 +3129,7 @@ void dsound_sdl_stream_set_stereo_position(IDirectSoundStream *object, BOOL posi
 	stream->stereo_pan = pan < -1.0f ? -1.0f : (pan > 1.0f ? 1.0f : pan);
 	stream->stereo_distance = distance > 0.0f ? distance : 0.0f;
 	stream->stereo_distance_fade = distance_fade < 0.0f ? 0.0f : (distance_fade > 1.0f ? 1.0f : distance_fade);
+	stream->stereo_approach = approach == approach ? approach : 0.0f;
 	/* (as the game gives a 3D channel: no maximum) */
 	stream->minimum_distance = minimum_distance > 0.0f ? minimum_distance : 0.0f;
 	stream->maximum_distance = 3.4e38f;
@@ -3253,6 +3344,8 @@ HRESULT WINAPI IDirectSound_CreateSoundStream(LPDIRECTSOUND sound, LPCDSSTREAMDE
 	stream->channels = format && format->nChannels == 2 ? 2 : 1;
 	stream->sample_rate = format ? format->nSamplesPerSec : 0;
 	stream->frequency = stream->sample_rate;
+	/* (no cut playing: voice_cut) */
+	stream->cut_played = CUT_FADE_FRAMES;
 	stream->volume = 1.0f;
 	/* DirectSound's default mix bins: a mono voice to both fronts, a
 	stereo voice's channels to the front left and right */

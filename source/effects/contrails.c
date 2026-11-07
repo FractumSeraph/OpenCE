@@ -71,12 +71,10 @@ symbols in this file:
 #include "bitmaps/bitmap_group.h"
 #include "cseries/errors.h"
 #include "effects/contrail_definitions.h"
+#include "game/game.h" /* port: game_players_are_double_speed */
 #include "memory/data.h"
 #include "objects/object_definitions.h"
 #include "physics/point_physics.h"
-#ifdef HALO_64BIT
-#include "game/game.h"
-#endif
 #include "saved games/game_state.h"
 #include "scenario/scenario.h"
 
@@ -223,19 +221,9 @@ void contrails_initialize(
 	return;
 }
 
-#ifndef HALO_XBOX_CONSOLE
-/* the emission clock (contrails_update): reset with each map */
-static long last_point_game_time = NONE;
-static real pending_point_dt = 0.0f;
-#endif
-
 void contrails_initialize_for_new_map(
 	void)
 {
-#ifndef HALO_XBOX_CONSOLE
-	last_point_game_time = NONE;
-	pending_point_dt = 0.0f;
-#endif
 	data_make_valid(contrail_data);
 	data_make_valid(contrail_point_data);
 
@@ -245,10 +233,6 @@ void contrails_initialize_for_new_map(
 void contrails_dispose_from_old_map(
 	void)
 {
-#ifndef HALO_XBOX_CONSOLE
-	last_point_game_time = NONE;
-	pending_point_dt = 0.0f;
-#endif
 	data_make_invalid(contrail_point_data);
 	data_make_invalid(contrail_data);
 
@@ -394,29 +378,37 @@ void contrails_update(
 	real dt)
 {
 	long contrail_index;
-#ifndef HALO_XBOX_CONSOLE
 	/* The native builds update contrails every frame, several frames per
 	tick (port/linux/game/render_interpolation.c), but objects and their
 	markers move only on ticks: points due on a frame that ran no tick would
 	land on the last point, be skipped and be lost. Emit on the first frame
-	after each tick, for all the time since the last emission. The points
-	age by that same interval, not by frame time: the Xbox stepped both once
-	per tick, and aging every frame made trails thinner and dimmer above
-	30 fps. */
+	after each tick, for all the time since the last emission. */
+	static long last_point_game_time = NONE;
 	real point_dt;
 
-	pending_point_dt += dt;
+	/* port: the ticks' own time, a 30th of a second each, as the Xbox's
+	frames were (a frame a tick, a 29.97th of a second at 30 frames a
+	second): the frames' time since the last tick was four or five frames'
+	at 144 frames a second, 28 or 35 ms, so the points were made and aged by
+	uneven steps and a short trail's fades (a plasma turret's) flickered from
+	tick to tick. A game time gone back or jumping (a new map, a checkpoint)
+	counts as a tick. A tick is half as long while the players are double
+	speed, as game_frame halves the frame's time. */
 	if (last_point_game_time != game_time_get())
 	{
+		long ticks = game_time_get() - last_point_game_time;
+
+		if (last_point_game_time == NONE || ticks < 1 || ticks > TICKS_PER_SECOND)
+			ticks = 1;
 		last_point_game_time = game_time_get();
-		point_dt = pending_point_dt;
-		pending_point_dt = 0.0f;
+		point_dt = (real)ticks / TICKS_PER_SECOND;
+		if (game_players_are_double_speed())
+			point_dt *= 0.5f;
 	}
 	else
 	{
 		point_dt = 0.0f;
 	}
-#endif
 
 	for (contrail_index = data_next_index(contrail_data, NONE);
 		contrail_index != NONE;
@@ -455,17 +447,10 @@ void contrails_update(
 
 			if (active)
 			{
-#ifndef HALO_XBOX_CONSOLE
 				contrail_add_points(
 					contrail_index,
 					contrail_compute_new_point_count(contrail_index, point_dt),
 					TRUE);
-#else
-				contrail_add_points(
-					contrail_index,
-					contrail_compute_new_point_count(contrail_index, dt),
-					TRUE);
-#endif
 			}
 		}
 
@@ -501,11 +486,17 @@ void contrails_update(
 			texture_animation_v = texture_animation_v * contrail->density;
 		contrail->texture_offset_v = texture_animation_v * frame_dt + contrail->texture_offset_v;
 
-#ifndef HALO_XBOX_CONSOLE
-		contrail_update_points(contrail_index, point_dt);
-#else
-		contrail_update_points(contrail_index, dt);
-#endif
+		/* port: the points age a tick at a time too, as on the Xbox, which
+		drew a frame a tick: a point's state that ends drops the rest of the
+		frame's time (contrail_update_points), so each state lasted at least a
+		tick. A Shade's or a Spirit's points (states of 0.01, 0.05 and 0.005
+		seconds) lived four ticks, 133 ms, and aged a frame at a time at 240
+		frames a second they lived about half that, the trail half as long.
+		The points' physics and their states' fades step with them, so at a
+		high frame rate a point moves and fades once a tick, as on the Xbox,
+		not on every frame */
+		if (point_dt > 0.0f)
+			contrail_update_points(contrail_index, point_dt);
 
 		for (instance_index = 0;
 			instance_index < MAXIMUM_CONTRAIL_INSTANCES;

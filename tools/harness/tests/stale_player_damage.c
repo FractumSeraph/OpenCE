@@ -37,6 +37,12 @@ static struct player_datum *player_try_and_get(long index)
 	return player->identifier && (unsigned short)player->identifier == (unsigned long)index >> 16 ? player : NULL;
 }
 static struct player_datum *player_get(long index) { return player_try_and_get(index); }
+/* (ChupathingyCE's 1157e9686: damage keeps no owner object that is gone;
+the objects here are the units) */
+static struct object_datum *object_try_and_get(long index)
+{
+	return index >= 0 && index < 12 ? (struct object_datum *)&objects[index] : NULL;
+}
 static struct unit_datum *unit_get(long index) { CHECK(index >= 0 && index < 12, "bad unit"); return &objects[index]; }
 static struct unit_datum *unit_try_and_get(long index)
 {
