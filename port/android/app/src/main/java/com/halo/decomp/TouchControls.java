@@ -372,6 +372,17 @@ public final class TouchControls extends View implements SensorEventListener, In
         return pixels / scale;
     }
 
+    /** the controls held, a bit each (TouchLayout.MAX_CONTROLS is 64) */
+    private long heldControls() {
+        long held = 0;
+        for (int i = 0; i < owners.size(); i++) {
+            int control = owners.valueAt(i);
+            if (control >= 0 && control < 64)
+                held |= 1L << control;
+        }
+        return held;
+    }
+
     private float toolbarY() {
         return Math.max(38, insetTop / scale + 38);
     }
@@ -683,12 +694,23 @@ public final class TouchControls extends View implements SensorEventListener, In
                 reset();
             return true;
         }
-        if (editing)
+        if (editing) {
             editTouch(event);
-        else
-            gameTouch(event);
+            publish();
+            invalidate();
+            return true;
+        }
+        // (Chupathingy: most of a game's touches only aim and change nothing
+        // drawn: redraw only when the controls held, the stick or Hide changed)
+        boolean wasHidden = hidden, wasFloating = stickFloating;
+        long wasHeld = heldControls();
+        int wasStickX = axes[0], wasStickY = axes[1];
+        float wasCenterX = stickX, wasCenterY = stickY;
+        gameTouch(event);
         publish();
-        invalidate();
+        if (editing || hidden != wasHidden || stickFloating != wasFloating || heldControls() != wasHeld
+                || axes[0] != wasStickX || axes[1] != wasStickY || stickX != wasCenterX || stickY != wasCenterY)
+            invalidate();
         return true;
     }
 
