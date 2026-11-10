@@ -363,10 +363,6 @@ static const struct config_setting config_settings[] =
 		"The menus' pointer for the mouse: the game's blue arrow, \"small\",\n"
 		"\"medium\", \"large\" or \"extra_large\" (18, 24, 32 or 40 of the menus'\n"
 		"480 lines tall, at any resolution), or \"off\" for the system's pointer." },
-	{ "display.stats_log", _config_boolean, "false", "HALO_STATS_LOG", _environment_value, _platform_all,
-		"A line a second in the log with the frame rate, the mode, the map, the\n"
-		"renderer and the size of the 3D view, for a bug report or to compare two\n"
-		"builds. Nothing is drawn and nothing is sent; off by default." },
 	{ "display.anti_aliasing", _config_string, DEFAULT_ANTI_ALIASING, "HALO_ANTI_ALIASING", _environment_value,
 		_platform_all,
 		"Smooth jagged edges: \"off\", \"fxaa\", \"smaa\", \"ssaa2x\", \"msaa2x\",\n"

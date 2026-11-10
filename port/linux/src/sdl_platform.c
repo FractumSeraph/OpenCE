@@ -1790,21 +1790,6 @@ static void platform_fullscreen_kind_apply(void)
 /* whether the game last asked for the window to be fullscreen */
 static BOOL platform_fullscreen_requested = FALSE;
 
-/* the window's framebuffer bound for reading too, as the frame is shown: a
-capture hooked into the swap (OBS's game capture) copies from whatever is
-bound for reading, and the render target the frame was blitted from holds it
-upside down (row 0 the top). (ChupathingyCE's; its borderless window styles
-are this fork's win32_window_borderless_apply, win32_window.c) */
-#ifndef HALO_BROWSER
-static void platform_swap_read_framebuffer(void)
-{
-	if (platform_gl_context)
-	{
-#ifdef HALO_IOS
-		glBindFramebuffer(GL_READ_FRAMEBUFFER, platform_window_framebuffer());
-#else
-		glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-#endif
 	}
 }
 #endif
@@ -3032,6 +3017,22 @@ static void platform_sleep_ns(Uint64 duration)
 	while (nanosleep(&request, &remaining) == -1 && errno == EINTR)
 		request = remaining;
 }
+#endif
+
+/* the window's framebuffer bound for reading too, as the frame is shown: a
+capture hooked into the swap (OBS's game capture) copies from whatever is
+bound for reading, and the render target the frame was blitted from holds it
+upside down (row 0 the top). (ChupathingyCE's; its borderless window styles
+are this fork's win32_window_borderless_apply, win32_window.c) */
+#ifndef HALO_BROWSER
+static void platform_swap_read_framebuffer(void)
+{
+	if (platform_gl_context)
+	{
+#ifdef HALO_IOS
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, platform_window_framebuffer());
+#else
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
 #endif
 
 void platform_video_swap(void)
