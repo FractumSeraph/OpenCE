@@ -413,6 +413,8 @@ void interface_draw_fullscreen_overlays(
 	(port/linux/game/frame_rate_display.c) */
 	frame_rate_display_update();
 	terminal_draw();
+	/* port: display.stats_log, a line a second in the log (stats_log.c) */
+	stats_log_tick();
 	main_framerate_render();
 	render_debug_profile();
 
@@ -758,8 +760,12 @@ void interface_draw_screen(
 		rasterizer_screen_effect(NULL);
 	}
 
+	/* port: the HUD in the interface's units, after the screen effect
+	(render_interface_begin) */
+	render_interface_begin(FALSE);
 	hud_draw_screen();
 	game_engine_post_rasterize();
+	render_interface_end(FALSE);
 
 	return;
 }

@@ -1420,6 +1420,17 @@ static void resampler_dot2(const float *left_frames, const float *right_frames, 
 #endif
 }
 
+static void resampler_deltas_initialize(void)
+{
+	unsigned long phase, tap;
+
+	for (phase = 0; phase < RESAMPLER_TABLE_STEPS; phase++)
+	{
+		for (tap = 0; tap < RESAMPLER_TAPS; tap++)
+			resampler_deltas[phase][tap] = resampler_phases[phase + 1][tap] - resampler_phases[phase][tap];
+	}
+}
+
 /* a voice starting (over): silence before its first frame, which the output
 starts at */
 static void resampler_reset(struct sdl_stream *stream)
@@ -2819,6 +2830,7 @@ static void audio_start(void)
 	doppler_enabled = config_boolean("audio.doppler");
 	resampler_initialize();
 	resampler_phases_initialize();
+	resampler_deltas_initialize();
 	reverb_initialize();
 
 	if (config_boolean("audio.enabled") && platform_sdl_initialize())

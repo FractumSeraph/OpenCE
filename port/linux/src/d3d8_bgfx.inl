@@ -272,6 +272,8 @@ static struct
 	unsigned short present_view;
 
 	bgfx_texture_handle_t blank, blank_cube, blank_volume;
+	/* (1x1 white: a clear of some color channels, bg_clear_channels) */
+	bgfx_texture_handle_t white;
 	struct bg_shader *shaders[BG_SHADER_BUCKETS];
 	struct bg_fragment *fragments[BG_SHADER_BUCKETS];
 	struct bg_program *programs[BG_SHADER_BUCKETS];
@@ -304,9 +306,9 @@ static struct
 	/* the overlay's (xgpu_bgfx_overlay_draw) */
 	bgfx_program_handle_t overlay;
 	bgfx_vertex_layout_t overlay_layout;
-	bgfx_texture_handle_t overlay_atlas, overlay_icons, overlay_picture;
-	bgfx_uniform_handle_t overlay_uniforms[3], overlay_samplers[3];
-	int overlay_picture_serial;
+	bgfx_texture_handle_t overlay_atlas, overlay_icons, overlay_picture, overlay_plasma;
+	bgfx_uniform_handle_t overlay_uniforms[3], overlay_samplers[4];
+	int overlay_picture_serial, overlay_plasma_serial;
 	BOOL overlay_failed;
 
 	/* vertices converted once and kept on the GPU (bg_vertex_cache_get) */
@@ -1809,12 +1811,19 @@ static struct bg_target *bg_target_get(const D3DSurface *surface)
 	if (!surface || !surface->Data)
 		return NULL;
 	surface_dimensions(surface, &width, &height, &depth);
-	/* the screen's targets are drawn at the screen's scale, and the shadow
-	maps at display.shadow_resolution's */
+	/* the screen's targets are drawn at the screen's scale, the secondary
+	target at the 3D view's pixels with its samples (it is drawn with the
+	back buffer's depth buffer, and a frame buffer is one size:
+	render_target_scale), and the shadow maps at display.shadow_resolution's */
 	if (width == (unsigned long)halo_screen_width() && height == SCREEN_HEIGHT)
 	{
 		scale[0] = screen_scale[0];
 		scale[1] = screen_scale[1];
+		samples = bg_screen_samples();
+	}
+	else if (!depth && width == SECONDARY_TARGET_WIDTH && height == SECONDARY_TARGET_HEIGHT)
+	{
+		render_target_scale(_render_target_secondary, scale);
 		samples = bg_screen_samples();
 	}
 	else if (!depth && surface_is_shadow_map(surface))
@@ -2521,7 +2530,10 @@ static void bg_uniforms_update(float texture_scale[4][4])
 	bg_depth_range[1] = device.viewport.MaxZ - device.viewport.MinZ;
 	bg_depth_range[2] = bg_depth_range[3] = 0.0f;
 	/* (glPolygonOffset's units: the depth buffer's smallest step, 2^-24) */
-	bg_depth_bias[0] = dword_to_float(D3D__RenderState[D3DRS_POLYGONOFFSETZSLOPESCALE]);
+	/* (the slope's factor scaled by the target's pixels a unit, as the
+	OpenGL path's: apply_raster_state) */
+	bg_depth_bias[0] = dword_to_float(D3D__RenderState[D3DRS_POLYGONOFFSETZSLOPESCALE]) *
+		(bg.target_scale[0] > bg.target_scale[1] ? bg.target_scale[0] : bg.target_scale[1]);
 	bg_depth_bias[1] = dword_to_float(D3D__RenderState[D3DRS_POLYGONOFFSETZOFFSET]) / 16777216.0f;
 	bg_depth_bias[2] = bg_depth_bias[3] = 0.0f;
 	for (index = 0; index < BG_UNIFORM_COUNT; index++)
@@ -3074,23 +3086,56 @@ static void bg_draw_immediate(D3DPRIMITIVETYPE type, unsigned long count)
 	bg_draw(type, TRUE, 0, count, NULL, 0, 0);
 }
 
+/* a clear of some of the color channels (the Xbox's D3DCLEAR_TARGET_R, _G,
+_B, _A: the fog screen clears only alpha, leaving the picture under the
+fog), which bgfx's view clear can't mask: a quad over the view that writes
+only those channels, the blit's program sampling white times the blend
+factor, the clear's color */
+static void bg_clear_channels(DWORD channels, D3DCOLOR color)
+{
+	bgfx_transient_vertex_buffer_t vertices;
+	uint64_t state = BGFX_STATE_PT_TRISTRIP | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_FACTOR, BGFX_STATE_BLEND_ZERO);
+	int corner;
+
+	if (!BGFX_HANDLE_IS_VALID(bg.blit) || bgfx_get_avail_transient_vertex_buffer(4, &bg.layout) < 4)
+		return;
+	state |= channels & D3DCLEAR_TARGET_R ? BGFX_STATE_WRITE_R : 0;
+	state |= channels & D3DCLEAR_TARGET_G ? BGFX_STATE_WRITE_G : 0;
+	state |= channels & D3DCLEAR_TARGET_B ? BGFX_STATE_WRITE_B : 0;
+	state |= channels & D3DCLEAR_TARGET_A ? BGFX_STATE_WRITE_A : 0;
+	bgfx_alloc_transient_vertex_buffer(&vertices, 4, &bg.layout);
+	memset(vertices.data, 0, 4 * BG_VERTEX_BYTES);
+	for (corner = 0; corner < 4; corner++)
+	{
+		float *out = (float *)(vertices.data + corner * BG_VERTEX_BYTES);
+
+		out[0] = corner & 1 ? 1.0f : -1.0f;
+		out[1] = corner & 2 ? -1.0f : 1.0f;
+	}
+	bgfx_set_transient_vertex_buffer(0, &vertices, 0, 4);
+	bgfx_set_texture(0, bg.samplers[0], bg.white, BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP);
+	bgfx_set_state(state, (uint32_t)((color << 8) | (color >> 24)));
+	bgfx_submit(bg.view, bg.blit, 0, BGFX_DISCARD_ALL);
+}
+
 static void bg_clear(DWORD count, const D3DRECT *rectangles, DWORD flags, D3DCOLOR color, float z, DWORD stencil)
 {
 	unsigned short rect[4];
 	uint16_t clear = 0;
+	DWORD channels = flags & D3DCLEAR_TARGET;
 	BOOL has_depth, done;
 
 	if (!bg_bind_targets(&has_depth))
 		return;
-	if ((flags & D3DCLEAR_TARGET) && (flags & D3DCLEAR_TARGET) != D3DCLEAR_TARGET)
-		bg_log_once("clears of some color channels");
-	if (flags & D3DCLEAR_TARGET)
+	if (channels == D3DCLEAR_TARGET)
 		clear |= BGFX_CLEAR_COLOR;
+	else if (!channels || !bg.target_color)
+		channels = 0;
 	if (has_depth && (flags & D3DCLEAR_ZBUFFER))
 		clear |= BGFX_CLEAR_DEPTH;
 	if (has_depth && (flags & D3DCLEAR_STENCIL))
 		clear |= BGFX_CLEAR_STENCIL;
-	if (!clear)
+	if (!clear && !channels)
 		return;
 	/* the viewport's, or each rectangle's: a view of its own, which clears
 	as it starts */
@@ -3116,6 +3161,8 @@ static void bg_clear(DWORD count, const D3DRECT *rectangles, DWORD flags, D3DCOL
 		bg_view_set(bg.framebuffer, rect, TRUE);
 		bgfx_set_view_clear(bg.view, clear, (uint32_t)((color << 8) | (color >> 24)), z, (uint8_t)stencil);
 		bgfx_touch(bg.view);
+		if (channels && channels != D3DCLEAR_TARGET)
+			bg_clear_channels(channels, color);
 		bg.view_used = TRUE;
 	}
 }
@@ -3417,6 +3464,8 @@ static const char bg_overlay_fragment_source[] =
 	"uniform sampler2D atlas;\n"
 	"uniform sampler2DArray icons;\n"
 	"uniform sampler2D picture;\n"
+	"uniform sampler2D plasma;\n"
+	"uniform vec4 plasma_shift;\n"
 	"uniform vec4 cutouts[4];\n"
 	"layout(location = 0) out vec4 fragment_color;\n"
 	"void main()\n"
@@ -3426,6 +3475,20 @@ static const char bg_overlay_fragment_source[] =
 	"\tfor (int i = 0; i < 4; i++)\n"
 	"\t\tif (p.x >= cutouts[i].x && p.y >= cutouts[i].y && p.x < cutouts[i].z && p.y < cutouts[i].w)\n"
 	"\t\t\tdiscard;\n"
+	/* (the plasma: ui_overlay.c's) */
+	"\tif (xT2.x < -3.5)\n"
+	"\t{\n"
+	"\t\tvec2 q = abs(xT1.xy) - xT1.zw + vec2(xT2.y);\n"
+	"\t\tfloat d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - xT2.y;\n"
+	"\t\tvec4 t0 = texture(plasma, xT0.xy);\n"
+	"\t\tvec4 t1 = texture(plasma, xT0.xy * plasma_shift.z + plasma_shift.xy);\n"
+	"\t\tfloat a0 = t0.a * dot(t0.rgb, vec3(0.3333));\n"
+	"\t\tfloat a1 = t1.a * dot(t1.rgb, vec3(0.3333));\n"
+	"\t\tfloat thread = pow(clamp(1.0 - abs(a0 - a1) * 3.0, 0.0, 1.0), 8.0);\n"
+	"\t\tvec3 color = xD0.rgb * (0.8 + 0.6 * a0 * a1) + vec3(0.2, 0.45, 1.0) * thread * 0.18;\n"
+	"\t\tfragment_color = vec4(color, xD0.a * clamp(0.5 - d, 0.0, 1.0) * (0.92 + 0.08 * thread));\n"
+	"\t\treturn;\n"
+	"\t}\n"
 	"\tif (xT2.x < -2.5)\n"
 	"\t{\n"
 	"\t\tfragment_color = texture(picture, xT0.xy) * xD0;\n"
@@ -3453,7 +3516,7 @@ static const char bg_overlay_fragment_source[] =
 static BOOL bg_overlay_prepare(int atlas_size, const unsigned char *icons, int icon_size, int icon_count)
 {
 	struct bg_shader *vertex, *fragment;
-	static const char *const samplers[3] = { "atlas", "icons", "picture" };
+	static const char *const samplers[4] = { "atlas", "icons", "picture", "plasma" };
 	int index;
 
 	if (BGFX_HANDLE_IS_VALID(bg.overlay) || bg.overlay_failed)
@@ -3462,7 +3525,8 @@ static BOOL bg_overlay_prepare(int atlas_size, const unsigned char *icons, int i
 	/* (its uniforms before its shaders, which Vulkan's finds them by) */
 	bg.overlay_uniforms[0] = bgfx_create_uniform("scale_v4", BGFX_UNIFORM_TYPE_VEC4, 1);
 	bg.overlay_uniforms[1] = bgfx_create_uniform("cutouts", BGFX_UNIFORM_TYPE_VEC4, 4);
-	for (index = 0; index < 3; index++)
+	bg.overlay_uniforms[2] = bgfx_create_uniform("plasma_shift", BGFX_UNIFORM_TYPE_VEC4, 1);
+	for (index = 0; index < 4; index++)
 		bg.overlay_samplers[index] = bgfx_create_uniform(samplers[index], BGFX_UNIFORM_TYPE_SAMPLER, 1);
 	vertex = bg_shader_get(bg_overlay_vertex_source, FALSE, 0, "overlay vertex", TRUE);
 	fragment = bg_shader_get(bg_overlay_fragment_source, TRUE, 0, "overlay pixel", TRUE);
@@ -3516,6 +3580,8 @@ static BOOL bg_overlay_prepare(int atlas_size, const unsigned char *icons, int i
 
 		bg.overlay_picture = bgfx_create_texture_2d(1, 1, false, 1, BGFX_TEXTURE_FORMAT_RGBA8, BGFX_TEXTURE_NONE,
 			bgfx_copy(zero, 4), 0);
+		bg.overlay_plasma = bgfx_create_texture_2d(1, 1, false, 1, BGFX_TEXTURE_FORMAT_RGBA8, BGFX_TEXTURE_NONE,
+			bgfx_copy(zero, 4), 0);
 	}
 	bg.overlay_failed = FALSE;
 	return TRUE;
@@ -3524,6 +3590,7 @@ static BOOL bg_overlay_prepare(int atlas_size, const unsigned char *icons, int i
 void xgpu_bgfx_overlay_draw(const void *vertices, int count, int vertex_bytes, const unsigned char *atlas, int atlas_size,
 	int dirty_top, int dirty_bottom, const unsigned char *icons, int icon_size, int icon_count,
 	const unsigned char *picture, int picture_width, int picture_height, int picture_serial,
+	const unsigned char *plasma, int plasma_width, int plasma_height, int plasma_serial, const float plasma_shift[4],
 	const float cutouts[4][4], int window_width, int window_height)
 {
 	bgfx_transient_vertex_buffer_t buffer;
@@ -3546,6 +3613,15 @@ void xgpu_bgfx_overlay_draw(const void *vertices, int count, int vertex_bytes, c
 			bgfx_copy(picture, (uint32_t)(picture_width * picture_height * 4)), 0);
 		bg.overlay_picture_serial = picture_serial;
 	}
+	/* (the plasma's noise map, while a plasma is drawn: the Guide's) */
+	if (plasma && plasma_serial != bg.overlay_plasma_serial)
+	{
+		bgfx_destroy_texture(bg.overlay_plasma);
+		bg.overlay_plasma = bgfx_create_texture_2d((uint16_t)plasma_width, (uint16_t)plasma_height, false, 1,
+			BGFX_TEXTURE_FORMAT_RGBA8, BGFX_TEXTURE_NONE,
+			bgfx_copy(plasma, (uint32_t)(plasma_width * plasma_height * 4)), 0);
+		bg.overlay_plasma_serial = plasma_serial;
+	}
 	bgfx_alloc_transient_vertex_buffer(&buffer, (uint32_t)count, &bg.overlay_layout);
 	memcpy(buffer.data, vertices, (size_t)count * (size_t)vertex_bytes);
 	scale[0] = 2.0f / (float)window_width;
@@ -3553,9 +3629,11 @@ void xgpu_bgfx_overlay_draw(const void *vertices, int count, int vertex_bytes, c
 	scale[2] = scale[3] = 0.0f;
 	bgfx_set_uniform(bg.overlay_uniforms[0], scale, 1);
 	bgfx_set_uniform(bg.overlay_uniforms[1], cutouts, 4);
+	bgfx_set_uniform(bg.overlay_uniforms[2], plasma_shift, 1);
 	bgfx_set_texture(0, bg.overlay_samplers[0], bg.overlay_atlas, BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP);
 	bgfx_set_texture(1, bg.overlay_samplers[1], bg.overlay_icons, BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP);
 	bgfx_set_texture(2, bg.overlay_samplers[2], bg.overlay_picture, BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP);
+	bgfx_set_texture(3, bg.overlay_samplers[3], bg.overlay_plasma, BGFX_SAMPLER_NONE);
 	bgfx_set_transient_vertex_buffer(0, &buffer, 0, (uint32_t)count);
 	bgfx_set_state(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_BLEND_FUNC_SEPARATE(BGFX_STATE_BLEND_SRC_ALPHA,
 		BGFX_STATE_BLEND_INV_SRC_ALPHA, BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA), 0);
@@ -3564,6 +3642,32 @@ void xgpu_bgfx_overlay_draw(const void *vertices, int count, int vertex_bytes, c
 
 static void bg_callback_screen_shot(bgfx_callback_interface_t *self, const char *path, uint32_t width,
 	uint32_t height, uint32_t pitch, bgfx_texture_format_t format, const void *data, uint32_t size, bool flip);
+
+/* the setup launcher's frame (launcher.c), before the game draws: bgfx
+started (once; the device's start then finds it so), the window cleared to
+color (0xRRGGBBAA) and the overlay's quads over it, in the picture's place
+(x and y its lower left corner, as OpenGL's), and the window saved to
+screenshot (a .bmp's path, or NULL). FALSE if bgfx does not start */
+BOOL xgpu_bgfx_launcher_frame(unsigned int color, int x, int y, int width, int height, const char *screenshot)
+{
+	if (!bg.ready && !bg_initialize())
+		return FALSE;
+	bg_window_update();
+	bgfx_set_view_frame_buffer(0, (bgfx_frame_buffer_handle_t)BGFX_INVALID_HANDLE);
+	bgfx_set_view_rect(0, 0, 0, (uint16_t)bg.window_width, (uint16_t)bg.window_height);
+	bgfx_set_view_clear(0, BGFX_CLEAR_COLOR, color, 1.0f, 0);
+	bgfx_touch(0);
+	bg.present_view = 0;
+#ifdef HALO_GAME_BROWSER
+	ui_overlay_present(x, y, width, height, bg.window_width, bg.window_height);
+#endif
+	if (screenshot && *screenshot)
+		bgfx_request_screen_shot((bgfx_frame_buffer_handle_t)BGFX_INVALID_HANDLE, screenshot);
+	bgfx_frame(BGFX_FRAME_NONE);
+	/* (the game's first frame starts its views as bg_present leaves them) */
+	bgfx_set_view_clear(0, BGFX_CLEAR_NONE, 0, 1.0f, 0);
+	return TRUE;
+}
 
 #ifdef __APPLE__
 /* Metal's compiles (the bgfx patch, tools/bgfx-patches) */
@@ -3921,6 +4025,11 @@ static BOOL bg_initialize(void)
 	int width = 0, height = 0;
 	static const unsigned int black = 0xff000000;
 
+	/* (started already: the setup launcher draws with it before the
+	device starts, xgpu_bgfx_launcher_frame) */
+	if (bg.ready)
+		return TRUE;
+
 	bg.window = platform_sdl_window();
 	bg.view = 0;
 	bg.blit = (bgfx_program_handle_t)BGFX_INVALID_HANDLE;
@@ -4033,6 +4142,12 @@ static BOOL bg_initialize(void)
 	without one */
 	bg.blank = bgfx_create_texture_2d(1, 1, false, 1, BGFX_TEXTURE_FORMAT_BGRA8, BGFX_TEXTURE_NONE,
 		bgfx_copy(&black, 4), 0);
+	{
+		static const unsigned int white = 0xffffffff;
+
+		bg.white = bgfx_create_texture_2d(1, 1, false, 1, BGFX_TEXTURE_FORMAT_BGRA8, BGFX_TEXTURE_NONE,
+			bgfx_copy(&white, 4), 0);
+	}
 	{
 		unsigned int faces[6] = { black, black, black, black, black, black };
 

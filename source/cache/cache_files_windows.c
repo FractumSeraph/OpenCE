@@ -2423,7 +2423,9 @@ static void cached_map_file_invalidate(
 {
 	struct cached_map_file *map_file = cached_map_file_get(map_file_index);
 
-	if (map_file->file != INVALID_HANDLE_VALUE)
+	/* port: the handle is closed, not just forgotten (a cache slot that
+	failed its header read or a copy's write kept its file open) */
+	if (map_file->file != INVALID_HANDLE_VALUE && map_file->file != NULL)
 	{
 		CloseHandle(map_file->file);
 	}

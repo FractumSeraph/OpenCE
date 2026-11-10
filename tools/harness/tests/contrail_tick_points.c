@@ -114,6 +114,10 @@ static long data_next_index(struct data_array *array, long index)
 #define contrail_get(index) ((struct contrail_datum *)datum_get(contrail_data, (index)))
 #define contrail_point_get(index) ((struct contrail_point_datum *)datum_get(contrail_point_data, (index)))
 static void contrail_verify(long contrail_index) { }
+/* (ChupathingyCE's head point on the drawn marker between ticks: not this
+test's, which counts the points the ticks make) */
+static void contrail_remove_provisional_points(long contrail_index) { }
+static void contrail_add_provisional_points(long contrail_index) { }
 static void contrail_delete(long contrail_index) { datum_delete(contrail_data, contrail_index); }
 
 #include "under_test.inc"

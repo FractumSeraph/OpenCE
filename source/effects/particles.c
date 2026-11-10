@@ -1150,6 +1150,11 @@ void particles_update(
 	/* port: (particle_drawn) */
 	particles_last_update_dt = dt;
 
+	/* port: a stream of particles from an object held back in the tick,
+	made as the frames between the ticks reach them
+	(port/linux/game/render_interpolation.c) */
+	render_interpolation_particles_due();
+
 	{
 		extern long config_integer(const char *name);
 		extern void platform_log(const char *format, ...);

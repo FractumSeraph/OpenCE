@@ -441,6 +441,7 @@ void object_function_values_for_render(long object_index, real values[NUMBER_OF_
 /* port: forgets the inputs kept for the objects' pictures (objects.c's
 object_function_inputs), when a load puts the objects back or a map starts */
 void object_function_inputs_forget(void);
+real_rgb_color *object_get_change_colors(long object_index);
 short objects_in_clusters_by_indices(unsigned long class_flags, short cluster_count, short const *cluster_indices, short maximum_object_count, long *object_indices);
 long object_index_from_name_index(short name_index);
 /* port: this object takes a scenario name nobody holds, the way a placed

@@ -1334,11 +1334,17 @@ static void crosshairs_draw(
 										{
 											/* port: display.reticle_scales_with_fov, the reticle
 											and its items' places about the middle scaled as the
-											world's image is by display.field_of_view; CE warnings
+											world's image is by display.field_of_view. Not while
+											zoomed: then the crosshairs are the scope's picture
+											(its ticks, brackets and zoom label), drawn with its
+											mask, which keeps its size, so they keep theirs too,
+											or they slide off the mask in a wide view. CE warnings
 											retain HUD coordinates, independent of the aiming
 											reticle's FOV and passenger projection (port, this fork) */
 											struct hud_placement_definition placement = item->placement;
-											real reticle_scale = ce_hud_warning(state_index) ? 1.0f :
+											real reticle_scale = ce_hud_warning(state_index) ||
+												crosshair->states[_crosshair_state_zoom].value.reference_data > 0 ?
+												1.0f :
 												first_person_reticle_scale(render.local_player_index);
 
 											placement.offset.x = (short)fast_ftol(placement.offset.x * reticle_scale);
@@ -1793,7 +1799,7 @@ static void render_weapon_hud(
 			TEST_FLAG(map_type_flags, element->header.use_on_map_type) &&
 			weapon_hud_state_index_valid(element->header.state_type, NUMBER_OF_WEAPON_HUD_FLASH_REFERENCES))
 		{
-#ifndef HALO_XBOX_CONSOLE
+#ifdef HALO_PORT_WIDE_INTERFACE
 			/* (the zoomed view's, at the middle: hud_zoomed_layout_begin) */
 			rectangle2d window_bounds;
 			boolean zoomed_layout = hud_multitexture_overlays_follow_zoom(&element->static_element.multitexture_overlays);
@@ -1808,7 +1814,7 @@ static void render_weapon_hud(
 				&element->static_element,
 				state_flags[state_index],
 				hud_state->last_weapon_flash_time[state_index]);
-#ifndef HALO_XBOX_CONSOLE
+#ifdef HALO_PORT_WIDE_INTERFACE
 			if (zoomed_layout)
 				hud_zoomed_layout_end(&window_bounds);
 #endif
@@ -1860,7 +1866,7 @@ static void render_weapon_hud(
 			short magazine_size = 1;
 			short value;
 			short decimal_value;
-#ifndef HALO_XBOX_CONSOLE
+#ifdef HALO_PORT_WIDE_INTERFACE
 			rectangle2d window_bounds;
 			boolean zoomed_layout = hud_number_shows_only_when_zoomed(&element->number_element);
 #endif
@@ -1908,7 +1914,7 @@ static void render_weapon_hud(
 				decimal_value = NONE;
 			}
 
-#ifndef HALO_XBOX_CONSOLE
+#ifdef HALO_PORT_WIDE_INTERFACE
 			if (zoomed_layout)
 				hud_zoomed_layout_begin(&window_bounds);
 #endif
@@ -1921,7 +1927,7 @@ static void render_weapon_hud(
 				state_flags[state_index],
 				hud_state->last_weapon_flash_time[state_index],
 				0.0f);
-#ifndef HALO_XBOX_CONSOLE
+#ifdef HALO_PORT_WIDE_INTERFACE
 			if (zoomed_layout)
 				hud_zoomed_layout_end(&window_bounds);
 #endif

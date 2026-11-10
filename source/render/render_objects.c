@@ -628,8 +628,8 @@ static void render_object_list(
 							chosen for it (port/linux/game/shield_color.c) */
 							model_effect.modifier_animation.colors =
 								TEST_FLAG(_object_mask_unit, object->object.type) ?
-									shield_color_colors(object_index, object->object.outgoing_change_colors) :
-									object->object.outgoing_change_colors;
+									shield_color_colors(object_index, object_get_change_colors(object_index)) :
+									object_get_change_colors(object_index);
 							/* port: an overshield as it rises and lasts
 							(port/linux/game/overshield_effect.c) */
 							model_effect.modifier_animation.values =
@@ -649,18 +649,20 @@ static void render_object_list(
 
 					if (TEST_FLAG(_object_mask_unit, object->object.type))
 					{
-						struct unit_datum *unit = unit_get(object_index);
+						/* port: between the last two ticks, as the unit is
+						drawn (render_interpolation.c) */
+						real super_amount;
+						real active_camouflage = unit_get_drawn_camouflage(object_index, &super_amount);
 
-						if (unit->unit.active_camouflage > 0.f)
+						if (active_camouflage > 0.f)
 						{
 							model_effect.type =
 								_render_model_effect_type_active_camouflage;
 							model_effect.source_object_index = object_index;
 							model_effect.source_object_centroid =
 								object->object.bounding_sphere_center;
-							model_effect.intensity = unit->unit.active_camouflage;
-							model_effect.parameter =
-								unit->unit.active_camouflage_super_amount;
+							model_effect.intensity = active_camouflage;
+							model_effect.parameter = super_amount;
 						}
 					}
 
@@ -716,7 +718,7 @@ static void render_object_list(
 						level_of_detail_pixels,
 						node_matrices,
 						object->object.region_permutations,
-						object->object.outgoing_change_colors,
+						object_get_change_colors(object_index),
 						shown_functions,
 						data->lighting,
 						&object->object.bounding_sphere_center,
@@ -738,7 +740,7 @@ static void render_object_list(
 						level_of_detail_pixels * 0.3f,
 						node_matrices,
 						object->object.region_permutations,
-						object->object.outgoing_change_colors,
+						object_get_change_colors(object_index),
 						object->object.outgoing_function_values,
 						data->lighting,
 						&object->object.bounding_sphere_center,
@@ -758,7 +760,7 @@ static void render_object_list(
 				/* port: the tick's functions, moved into this frame (the
 				widgets read them as they are drawn, here) */
 				object_function_values_for_render(object_index, widget_functions);
-				animation.colors = object->object.outgoing_change_colors;
+				animation.colors = object_get_change_colors(object_index);
 				animation.values = widget_functions;
 				widgets_render(object_index, data->lighting, &animation);
 			}
@@ -887,11 +889,12 @@ static boolean render_object_shadow_begin(
 	object = object_get(data->object_index);
 	if (TEST_FLAG(_object_mask_unit, object->object.type))
 	{
-		struct unit_datum *unit = unit_get(data->object_index);
+		real super_amount;
+		real active_camouflage = unit_get_drawn_camouflage(data->object_index, &super_amount);
 
-		if (unit->unit.active_camouflage > 0.f)
+		if (active_camouflage > 0.f)
 		{
-			shadow_intensity = (1.f - unit->unit.active_camouflage) * level_of_detail;
+			shadow_intensity = (1.f - active_camouflage) * level_of_detail;
 		}
 	}
 

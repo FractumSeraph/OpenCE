@@ -459,6 +459,8 @@ void first_person_weapons_initialize_for_new_map(
 			0,
 			sizeof(first_person_weapons[local_player_index]));
 		first_person_weapons[local_player_index].unit_index= NONE;
+		/* port: no weapon, not the weapon datum 0 the clear left */
+		first_person_weapons[local_player_index].weapon_index= NONE;
 		first_person_weapons[local_player_index].current_sound_index= NONE;
 		first_person_weapons[local_player_index].current_sound_state= NONE;
 		first_person_weapon_sound_indices[local_player_index]= NONE;
@@ -589,6 +591,10 @@ void first_person_weapon_draw(
 					real const *weapon_functions = weapon->object.outgoing_function_values;
 					real const *unit_functions = unit->object.outgoing_function_values;
 					real *kept;
+					/* port: between the last two ticks, as the world's
+					units are drawn (render_interpolation.c) */
+					real camouflage_super_amount;
+					real active_camouflage= unit_get_drawn_camouflage(unit_index, &camouflage_super_amount);
 
 					/* port: the tick's functions, moved into this frame, so the
 					charge clicks with the picture instead of once a tick; kept
@@ -602,11 +608,11 @@ void first_person_weapon_draw(
 						unit_functions = kept;
 					model_effect.modifier_shader= NULL;
 					if (TEST_FLAG(unit->unit.flags, _unit_active_camouflaged_bit) ||
-						unit->unit.active_camouflage>0.0f)
+						active_camouflage>0.0f)
 					{
 						model_effect.type= _render_model_effect_type_active_camouflage;
-						model_effect.intensity= unit->unit.active_camouflage;
-						model_effect.parameter= unit->unit.active_camouflage_super_amount;
+						model_effect.intensity= active_camouflage;
+						model_effect.parameter= camouflage_super_amount;
 						model_effect.source_object_index= unit_index;
 						model_effect.source_object_centroid= render.camera.position;
 					}
@@ -635,7 +641,7 @@ void first_person_weapon_draw(
 							0.0f,
 							model_node_matrices,
 							NULL,
-							weapon->object.outgoing_change_colors,
+							object_get_change_colors(first_person_weapon->weapon_index),
 							weapon_functions,
 							lighting,
 							&render.camera.position,
@@ -691,7 +697,7 @@ void first_person_weapon_draw(
 							0.0f,
 							model_node_matrices,
 							NULL,
-							unit->object.outgoing_change_colors,
+							object_get_change_colors(unit_index),
 							unit_functions,
 							lighting,
 							&render.camera.position,

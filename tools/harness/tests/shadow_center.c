@@ -27,6 +27,12 @@ static struct object_datum object_data;
 static struct unit_datum unit_data;
 #define object_get(object_index) (&object_data)
 #define unit_get(object_index) (&unit_data)
+/* (ChupathingyCE's camouflage as drawn between ticks: the tick's here) */
+static real unit_get_drawn_camouflage(long unit_index, real *super_amount)
+{
+	*super_amount = 0.0f;
+	return unit_get(unit_index)->unit.active_camouflage;
+}
 
 /* where the tick left the object's center, and how far this frame draws it
 from there (render_interpolation_object_point) */

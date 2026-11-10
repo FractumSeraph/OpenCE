@@ -35,6 +35,15 @@ HALO_CONSOLE_WIDGET_POOL_SIZE
 	Xbox's menus: the desktop's 256 KB is for the PC menus' screens
 	(port/assets/menus), which have many more widgets (source/interface/
 	ui_widget.c; console.widget_pool_log logs what the menus use)
+HALO_CONSOLE_NO_GUIDE
+	no Guide (port/linux/game/guide.c, over any screen) and no presence
+	sent to the site (browser.c, network.share_presence), their settings
+	left out of config.toml: every console for now, until the Guide is
+	sized to each one's memory and input
+HALO_CONSOLE_NO_DELTA_IDENTITY
+	no device key, device certificate or site token (port/linux/src/
+	identity.c, browser.c; docs/delta.md, "Device identity"): every console
+	for now, until their own endpoints come; the player key alone, as before
 HALO_CONSOLE_NO_WRITE_WATCH
 	a console that will not write-protect guest memory, so the renderer's
 	write watch cannot see the game write a resource: locks and file reads
@@ -113,6 +122,20 @@ HALO_CONSOLE_GL_LAYER
 	copied by blit (no glCopyImageSubData), and the vertex mirror's
 	segments are the window's own memory (console_gl_buffer_alias, defined
 	by the port: port/linux/src/d3d8_gl.c)
+HALO_CONSOLE_PARTICLE_LIMIT
+	display.particle_limit's default on a console, as a string ("1024": the
+	original Xbox's and the retail game's cap), where the desktop's 4096
+	costs a console too many draws (port/linux/src/port_config.c)
+HALO_CONSOLE_NATIVE_RENDERER
+	a console with a renderer of its own under the Xbox's Direct3D 8 device:
+	display.renderer = "native" draws through console_renderer.h, defined
+	by the port, instead of the OpenGL layer (port/linux/src/d3d8_console.inl),
+	and "gl" as before; the setting's default is "gl", or "native" with
+	HALO_CONSOLE_NATIVE_RENDERER_FIRST on the port's compile line
+HALO_CONSOLE_RENDER_TIMING
+	a console that logs where a frame's time goes: the renderer tells it
+	when the game enters and leaves the device's draws, clears and present
+	(console_render_time, defined by the port: port/linux/src/d3d8_gl.c)
 HALO_CONSOLE_XBOX_RENDER_SIZES
 	the Xbox's texture cache and the Xbox's structure surfaces and dynamic
 	triangles in a frame (halo_port_capacity.h), on a console whose build
@@ -247,6 +270,23 @@ HALO_CONSOLE_NO_LOADING_PICTURE
 	instead of Chupathingy's picture (port/linux/game/loading_picture.c,
 	display.xbox_loading_picture): every console, whose packaging has no
 	step for the picture
+HALO_CONSOLE_ANAMORPHIC_SCREEN
+	a console that draws 640x480 and can show it on a 16:9 television,
+	which stretches the picture to fit (display.widescreen). The port says
+	how wide the interface is in the stretched picture (halo_screen_width:
+	640, or 852 for 16:9), the present flags that ask for the mode
+	(halo_screen_present_flags) and how its units and the 640 pixels
+	convert (halo_screen_interface_x, halo_screen_physical_x). The 3D view
+	is drawn at the wider aspect in the same 640 pixels (render_cameras.c),
+	and the HUD, the menus and their text are laid out as the desktop's
+	wide screen lays them out, in the wider units, between
+	rasterizer_interface_begin and rasterizer_interface_end (render.c,
+	rasterizer_xbox.c), so that they look right once stretched
+HALO_PORT_WIDE_INTERFACE
+	(not set by a port) a build whose interface can be wider than 640
+	columns: every native build, and a console with
+	HALO_CONSOLE_ANAMORPHIC_SCREEN. The HUD's zoomed view and the menus'
+	full-screen fades have code for it (hud_draw.c, ui_widget.c)
 HALO_CONSOLE_SERVER_CLOSE_GRACE
 	the original game's one-second wait when a hosted game ends, before the
 	host's transport closes (network_game_server_dispose, source/
@@ -303,6 +343,11 @@ compile lines: source/cseries/xbox_address.h).
 #define HALO_CONSOLE_XBOX_MAP_SIZES 1
 #define HALO_CONSOLE_NO_HALOMD_MAPS "the Xbox"
 #define HALO_CONSOLE_SERVER_CLOSE_GRACE 1
+#define HALO_CONSOLE_ANAMORPHIC_SCREEN 1
+#endif
+
+#if !defined(HALO_XBOX_CONSOLE) || defined(HALO_CONSOLE_ANAMORPHIC_SCREEN)
+#define HALO_PORT_WIDE_INTERFACE 1
 #endif
 
 /* (the desktop builds copy maps to the Xbox's cache files too: a map pack's
@@ -318,6 +363,9 @@ larger maps take a campaign map's there as well) */
 #define HALO_CONSOLE_HALT_TO_LAUNCHER 1
 #define HALO_CONSOLE_GL_LAYER 1
 #define HALO_CONSOLE_XBOX_RENDER_SIZES 1
+#define HALO_CONSOLE_RENDER_TIMING 1
+#define HALO_CONSOLE_NATIVE_RENDERER 1
+#define HALO_CONSOLE_PARTICLE_LIMIT "1024"
 #define HALO_CONSOLE_ONLINE_GAMES 1
 #define HALO_CONSOLE_LIGHT_LIMITS 1
 #define HALO_CONSOLE_OVERSIZED_MAPS 1
@@ -325,6 +373,31 @@ larger maps take a campaign map's there as well) */
 #ifdef HALO_CONSOLE_DEBUG_TOOLS
 #define HALO_CONSOLE_BRINGUP_LOG 1
 #endif
+#endif
+
+/* the Guide (port/linux/game/guide.c, port/linux/src/social.c) and the
+presence it tells the site (browser.c): desktop and Android first; each
+console gets them sized to its limits later */
+#if (defined(HALO_CONSOLE) || defined(HALO_SWITCH_CONSOLE) || defined(HALO_WIIU_CONSOLE) || \
+	defined(HALO_XBOX_CONSOLE) || defined(HALO_XBOX360_CONSOLE)) && !defined(HALO_CONSOLE_NO_GUIDE)
+#define HALO_CONSOLE_NO_GUIDE 1
+#endif
+/* (the Guide's builds: the game list's, not the consoles' nor the dedicated
+server's, which has no player) */
+#if defined(HALO_GAME_BROWSER) && !defined(HALO_CONSOLE_NO_GUIDE) && !defined(HALO_SERVER)
+#define HALO_GUIDE 1
+#endif
+
+/* Delta's device identity (port/linux/src/identity.c, browser.c): desktop and
+Android; consoles get it with their own endpoints later */
+#if (defined(HALO_CONSOLE) || defined(HALO_SWITCH_CONSOLE) || defined(HALO_WIIU_CONSOLE) || \
+	defined(HALO_XBOX_CONSOLE) || defined(HALO_XBOX360_CONSOLE)) && !defined(HALO_CONSOLE_NO_DELTA_IDENTITY)
+#define HALO_CONSOLE_NO_DELTA_IDENTITY 1
+#endif
+/* (its builds: the game list's, not the consoles' nor the dedicated
+server's, which has no player) */
+#if defined(HALO_GAME_BROWSER) && !defined(HALO_CONSOLE_NO_DELTA_IDENTITY) && !defined(HALO_SERVER)
+#define HALO_DELTA_IDENTITY 1
 #endif
 
 #if (defined(HALO_CONSOLE) || defined(HALO_SWITCH_CONSOLE) || defined(HALO_WIIU_CONSOLE) || \

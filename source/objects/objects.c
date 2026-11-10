@@ -1360,6 +1360,18 @@ real *object_get_function_values(
 	return object_get(object_index)->object.outgoing_function_values;
 }
 
+/* port: the object's change colors; while a frame is drawn, between the
+last two ticks (port/linux/game/render_interpolation.c) */
+real_rgb_color *object_get_change_colors(
+	long object_index)
+{
+	real_rgb_color *interpolated = render_interpolation_object_change_colors(object_index);
+
+	if (interpolated)
+		return interpolated;
+	return object_get(object_index)->object.outgoing_change_colors;
+}
+
 char const *object_get_attachment_marker_name(
 	long object_index,
 	short attachment_index)
@@ -4712,8 +4724,14 @@ void objects_update(
 			{
 				if (TEST_FLAG(object_header->flags, _object_header_active_bit))
 				{
-					match_assert("c:\\halo\\SOURCE\\objects\\objects.c", 369, object_header->cluster_index!=NONE);
-					if (!BIT_VECTOR_TEST_FLAG(active_cluster_bits, object_header->cluster_index))
+					/* port: a carried weapon put back in the world, or an
+					object whose position is outside the map, can be active
+					with no cluster (a machine joining a game in progress
+					halted here); it is in no active cluster, rather than
+					reading the bits before the first */
+					if (object_header->cluster_index<0 ||
+						object_header->cluster_index>=cluster_count ||
+						!BIT_VECTOR_TEST_FLAG(active_cluster_bits, object_header->cluster_index))
 					{
 						if (TEST_FLAG(object_header->datum->object.flags, _object_deleted_when_deactivated_bit))
 						{

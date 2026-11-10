@@ -266,6 +266,12 @@ GLuint xgpu_texture_get(const DWORD *resource, const D3DCOLOR *palette, GLenum *
 void xgpu_texture_cache_begin_frame(void);
 /* (debug.gpu_stats) a texture of this many bytes uploaded to GL (d3d8_gl.c) */
 void xgpu_statistics_texture_upload(unsigned long bytes);
+/* (not on the consoles: HALO_CONSOLE_NO_GUIDE) a plain 2D texture's first
+level, read for the port's own drawing (the Guide's plasma: ui_overlay.h),
+as RGBA bytes with rows from the top; NULL for one it does not read (a cube,
+a volume, a palette's, larger than 1024 square) or without memory. The
+caller frees it */
+unsigned char *xgpu_texture_rgba(const DWORD *resource, unsigned long *width, unsigned long *height);
 
 /* ---------- render targets */
 
@@ -300,18 +306,22 @@ struct xgpu_render_target
 /* the GL texture holding a render target with this physical address, or 0 */
 struct xgpu_render_target *xgpu_render_target_find(unsigned long data);
 
-#ifdef HALO_BGFX
-/* display.renderer is "bgfx": the bgfx test backend draws instead of OpenGL
-(d3d8_bgfx.inl), from platform_video_initialize on */
-extern BOOL xgpu_bgfx;
-/* a level of a texture that is not compressed, as 32-bit ARGB words (B, G,
-R, A in memory); FALSE without the memory for it */
+#if defined(HALO_BGFX) || defined(HALO_CONSOLE_NATIVE_RENDERER)
+/* a level of a texture that is not compressed, as 32-bit ARGB words in the
+processor's order (B, G, R, A in memory on a little-endian one); FALSE
+without the memory for it */
 BOOL xgpu_texture_decode_level(const struct xgpu_texture_description *description, unsigned long level,
 	const unsigned char *source, const D3DCOLOR *palette, unsigned long *destination);
 /* a compressed texture's DXT kind (1, 3 or 5; 0 for any other), and the
 bytes of one of its levels */
 int xgpu_texture_dxt(const struct xgpu_texture_description *description);
 unsigned long xgpu_texture_level_bytes(const struct xgpu_texture_description *description, unsigned long level);
+#endif
+
+#ifdef HALO_BGFX
+/* display.renderer is "bgfx": the bgfx test backend draws instead of OpenGL
+(d3d8_bgfx.inl), from platform_video_initialize on */
+extern BOOL xgpu_bgfx;
 /* the port's own textures under the bgfx backend (the high-res text's atlas,
 HUD sheets, menu art): RGBA texels, made with their smaller levels when
 mipmapped; a name (nonzero) as the OpenGL path's texture names are */
@@ -320,10 +330,16 @@ unsigned int xgpu_bgfx_texture_create(unsigned long width, unsigned long height,
 void xgpu_bgfx_texture_rows(unsigned int name, unsigned long top, unsigned long width, unsigned long rows,
 	const unsigned char *rgba);
 void xgpu_bgfx_texture_delete(unsigned int name);
+/* the setup launcher's frame before the game draws (launcher.c): bgfx
+started, the window cleared to color (0xRRGGBBAA), the overlay over it in
+the picture's place (x, y its lower left corner) and the window saved to
+screenshot (a .bmp's path, or NULL); FALSE if bgfx does not start */
+BOOL xgpu_bgfx_launcher_frame(unsigned int color, int x, int y, int width, int height, const char *screenshot);
 /* the overlay's quads (ui_overlay.c) over the window's picture at Present */
 void xgpu_bgfx_overlay_draw(const void *vertices, int count, int vertex_bytes, const unsigned char *atlas, int atlas_size,
 	int dirty_top, int dirty_bottom, const unsigned char *icons, int icon_size, int icon_count,
 	const unsigned char *picture, int picture_width, int picture_height, int picture_serial,
+	const unsigned char *plasma, int plasma_width, int plasma_height, int plasma_serial, const float plasma_shift[4],
 	const float cutouts[4][4], int window_width, int window_height);
 #endif
 

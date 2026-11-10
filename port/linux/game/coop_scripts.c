@@ -126,9 +126,9 @@ static short players_following(
 
 	if (unit_index == NONE || !coop_scripts_host())
 		return 0;
-	/* hs_players adds each unit to the head of a reference list. Its
-	player0 is the LAST live unit in datum order, not the first. Keep that
-	same order here, including gaps left by dead or disconnected players. */
+	/* (in the order (players) lists them: hs_players adds each unit at the
+	head of its list, so player0 is the last player with a unit in datum
+	order, player1 the one before it, and so on) */
 	data_iterator_new(&iterator, player_data);
 	while ((player = data_iterator_next(&iterator)) != NULL)
 	{
@@ -137,7 +137,7 @@ static short players_following(
 	}
 	if (player_count == 0 || players[player_count - 1] != unit_index)
 		return 0;
-	for (position = player_count - NAMED_PLAYERS - 1;
+	for (position = (short)(player_count - NAMED_PLAYERS - 1);
 		position >= 0 && count < maximum_count;
 		position--)
 	{

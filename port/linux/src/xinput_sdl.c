@@ -44,6 +44,9 @@ drive the controller.
 #include "touch_input.h"
 #include "controller_layout.h"
 #include "halo_keyboard.h"
+#ifdef HALO_GUIDE
+#include "guide_input.h"
+#endif
 #include "../game/network_rules.h"
 #include "controller_buttons.h"
 #include "controller_remap.h"
@@ -801,6 +804,181 @@ static void keyboard_gamepad(const struct platform_input_state *input, XINPUT_GA
 
 static BOOL chat_typing;
 
+#ifdef HALO_GUIDE
+/* ---------- the Guide's input (guide_input.h): while it is open, the
+first player's keyboard and controllers drive it alone */
+
+static BOOL guide_capture;
+static unsigned int guide_held;
+/* the buttons held as it closed (XINPUT_GAMEPAD_* masks, and a bit for
+each analog button), up for the game until let go of */
+static WORD guide_released_buttons;
+static unsigned int guide_released_analog;
+
+void platform_guide_capture(int capture)
+{
+	guide_capture = capture != 0;
+	if (!guide_capture)
+		guide_held = 0;
+}
+
+unsigned int platform_guide_held(void)
+{
+	return guide_capture ? guide_held : 0;
+}
+
+/* the asks to open or close it (platform_guide_toggles) */
+static int guide_toggles;
+
+int platform_guide_toggles(void)
+{
+	int toggles = guide_toggles;
+
+	guide_toggles = 0;
+	return toggles;
+}
+
+/* controls.guide's key, read again when config.toml changes (-1: none) */
+static int guide_key(void)
+{
+	static unsigned long read_at = (unsigned long)-1;
+	static int key = -1;
+
+	if (read_at != config_changes())
+	{
+		read_at = config_changes();
+		key = halo_input_from_name(config_string("controls.guide"));
+		/* (a key alone, not a mouse button) */
+		if (key < 0 || key >= SDL_SCANCODE_COUNT)
+			key = -1;
+	}
+	return key;
+}
+
+/* the asks to open or close the Guide this poll: its key and the Guide
+button pressed, Back held in the menus with guide.hold_back (pad: port 0's,
+everything merged). The Guide is the first player's: only their gamepads
+(port 0's, and those sharing its player) ask, never split screen's others,
+and nothing opens it over chat's or a field's typing */
+static void guide_asks(const struct platform_input_state *input, SDL_Gamepad *gamepads[], int count,
+	const XINPUT_GAMEPAD *pad)
+{
+	static BOOL key_was, button_was, back_asked;
+	static Uint64 back_since;
+	int key = guide_key(), index;
+	BOOL typing_free = guide_capture || (!chat_typing && !text_typing);
+	BOOL key_down = key >= 0 && input->keys[key] && !console_is_active() && typing_free;
+	BOOL button_down = FALSE;
+
+	if (key_down && !key_was)
+		guide_toggles++;
+	key_was = key_down;
+	if (config_boolean("controls.guide_button") && typing_free && !console_is_active())
+	{
+		for (index = 0; index < count; index++)
+			button_down = button_down || (gamepads[index] && SDL_GetGamepadButton(gamepads[index], SDL_GAMEPAD_BUTTON_GUIDE));
+	}
+	if (button_down && !button_was)
+		guide_toggles++;
+	button_was = button_down;
+	/* (Back held in the menus, once a hold; never in a game, where Back is
+	the scoreboard) */
+	if (!guide_capture && input->menus && (pad->wButtons & XINPUT_GAMEPAD_BACK) && config_boolean("guide.hold_back"))
+	{
+		if (!back_since)
+			back_since = SDL_GetTicks();
+		else if (!back_asked && SDL_GetTicks() - back_since >= GUIDE_HOLD_BACK)
+		{
+			back_asked = TRUE;
+			guide_toggles++;
+		}
+	}
+	else
+	{
+		back_since = 0;
+		back_asked = FALSE;
+	}
+}
+
+/* the keyboard, as the Guide reads it */
+static void guide_keyboard(const struct platform_input_state *input, XINPUT_GAMEPAD *pad)
+{
+	const unsigned char *k = input->keys;
+
+	if (k[SDL_SCANCODE_UP] || k[SDL_SCANCODE_W]) pad->wButtons |= XINPUT_GAMEPAD_DPAD_UP;
+	if (k[SDL_SCANCODE_DOWN] || k[SDL_SCANCODE_S]) pad->wButtons |= XINPUT_GAMEPAD_DPAD_DOWN;
+	if (k[SDL_SCANCODE_LEFT] || k[SDL_SCANCODE_A]) pad->wButtons |= XINPUT_GAMEPAD_DPAD_LEFT;
+	if (k[SDL_SCANCODE_RIGHT] || k[SDL_SCANCODE_D]) pad->wButtons |= XINPUT_GAMEPAD_DPAD_RIGHT;
+	pad->bAnalogButtons[XINPUT_GAMEPAD_A] |= analog(k[SDL_SCANCODE_RETURN] || k[SDL_SCANCODE_KP_ENTER] ||
+		k[SDL_SCANCODE_SPACE]);
+	pad->bAnalogButtons[XINPUT_GAMEPAD_B] |= analog(k[SDL_SCANCODE_ESCAPE] || k[SDL_SCANCODE_BACKSPACE]);
+#ifdef HALO_ANDROID
+	pad->bAnalogButtons[XINPUT_GAMEPAD_B] |= analog(k[SDL_SCANCODE_AC_BACK]);
+#endif
+	pad->bAnalogButtons[XINPUT_GAMEPAD_X] |= analog(k[SDL_SCANCODE_M]);
+	pad->bAnalogButtons[XINPUT_GAMEPAD_Y] |= analog(k[SDL_SCANCODE_TAB]);
+	pad->bAnalogButtons[XINPUT_GAMEPAD_WHITE] |= analog(k[SDL_SCANCODE_Q]);
+	pad->bAnalogButtons[XINPUT_GAMEPAD_BLACK] |= analog(k[SDL_SCANCODE_E]);
+}
+
+/* (an analog button counts as held past a third of its travel) */
+#define GUIDE_ANALOG_HELD 0x50
+
+/* port 0's state, after everything is merged into it: the Guide's while it
+is open (the game gets a controller at rest), and what was held as it
+closed kept up until let go of */
+static void guide_take(XINPUT_GAMEPAD *pad)
+{
+	static BOOL was_capturing;
+	int index;
+
+	if (guide_capture)
+	{
+		unsigned int held = 0;
+
+		if ((pad->wButtons & XINPUT_GAMEPAD_DPAD_UP) || pad->sThumbLY > 16000) held |= GUIDE_INPUT_UP;
+		if ((pad->wButtons & XINPUT_GAMEPAD_DPAD_DOWN) || pad->sThumbLY < -16000) held |= GUIDE_INPUT_DOWN;
+		if ((pad->wButtons & XINPUT_GAMEPAD_DPAD_LEFT) || pad->sThumbLX < -16000) held |= GUIDE_INPUT_LEFT;
+		if ((pad->wButtons & XINPUT_GAMEPAD_DPAD_RIGHT) || pad->sThumbLX > 16000) held |= GUIDE_INPUT_RIGHT;
+		if (pad->wButtons & XINPUT_GAMEPAD_START) held |= GUIDE_INPUT_START;
+		if (pad->wButtons & XINPUT_GAMEPAD_BACK) held |= GUIDE_INPUT_BACK;
+		if (pad->bAnalogButtons[XINPUT_GAMEPAD_A] > GUIDE_ANALOG_HELD) held |= GUIDE_INPUT_A;
+		if (pad->bAnalogButtons[XINPUT_GAMEPAD_B] > GUIDE_ANALOG_HELD) held |= GUIDE_INPUT_B;
+		if (pad->bAnalogButtons[XINPUT_GAMEPAD_X] > GUIDE_ANALOG_HELD) held |= GUIDE_INPUT_X;
+		if (pad->bAnalogButtons[XINPUT_GAMEPAD_Y] > GUIDE_ANALOG_HELD) held |= GUIDE_INPUT_Y;
+		if (pad->bAnalogButtons[XINPUT_GAMEPAD_WHITE] > GUIDE_ANALOG_HELD) held |= GUIDE_INPUT_LEFT_BUMPER;
+		if (pad->bAnalogButtons[XINPUT_GAMEPAD_BLACK] > GUIDE_ANALOG_HELD) held |= GUIDE_INPUT_RIGHT_BUMPER;
+		guide_held = held;
+		/* (and what is held as it closes, up afterwards) */
+		guide_released_buttons = pad->wButtons;
+		guide_released_analog = 0;
+		for (index = 0; index < 8; index++)
+		{
+			if (pad->bAnalogButtons[index] > 8)
+				guide_released_analog |= 1u << index;
+		}
+		memset(pad, 0, sizeof(*pad));
+		was_capturing = TRUE;
+		return;
+	}
+	if (!was_capturing)
+		return;
+	guide_released_buttons &= pad->wButtons;
+	pad->wButtons &= (WORD)~guide_released_buttons;
+	for (index = 0; index < 8; index++)
+	{
+		if (!(guide_released_analog & (1u << index)))
+			continue;
+		if (pad->bAnalogButtons[index] > 8)
+			pad->bAnalogButtons[index] = 0;
+		else
+			guide_released_analog &= ~(1u << index);
+	}
+	if (!guide_released_buttons && !guide_released_analog)
+		was_capturing = FALSE;
+}
+#endif
+
 /* the keys held when the game, the menus or the console switch, or text
 chat's line or log opens or closes, count as up until let go of: the escape
 that opens the pause menu does not also back out of it, nor the one that
@@ -814,6 +992,11 @@ static void keys_held_over_switch(struct platform_input_state *input)
 		(network_chat_typing() ? 8 : 0) | (chat_typing ? 16 : 0);
 	int scancode;
 	int now = (input->menus != FALSE) | (chat_typing ? 2 : 0);
+
+#ifdef HALO_GUIDE
+	/* (the Guide opening or closing too) */
+	next_context |= guide_capture ? 32 : 0;
+#endif
 
 	if (context != next_context)
 	{
@@ -2631,6 +2814,11 @@ DWORD WINAPI XInputGetState(HANDLE device, PXINPUT_STATE state)
 		keyboard_screenshot(held);
 		if (!console_active)
 		{
+#ifdef HALO_GUIDE
+			if (guide_capture)
+				guide_keyboard(&input, &state->Gamepad);
+			else
+#endif
 			if (input.menus)
 				keyboard_gamepad(&input, &state->Gamepad);
 			else
@@ -2656,6 +2844,24 @@ DWORD WINAPI XInputGetState(HANDLE device, PXINPUT_STATE state)
 		touch_input_gamepad(&state->Gamepad);
 #if defined(HALO_ANDROID) || defined(HALO_WEB)
 		touch_input_controls(&state->Gamepad, input.menus);
+#endif
+#ifdef HALO_GUIDE
+		{
+			/* (the first player's own gamepads: port 0's, and those sharing
+			its player) */
+			SDL_Gamepad *own[PORT_COUNT];
+			int own_count = 0, other;
+
+			if (port_gamepad(gamepads, count, 0))
+				own[own_count++] = port_gamepad(gamepads, count, 0);
+			for (other = 1; other < PORT_COUNT; other++)
+			{
+				if (port_gamepad_shared[other] && port_gamepad(gamepads, count, other))
+					own[own_count++] = port_gamepad(gamepads, count, other);
+			}
+			guide_asks(&input, own, own_count, &state->Gamepad);
+		}
+		guide_take(&state->Gamepad);
 #endif
 		/* (a right stick dead zone set below it aims from that) */
 		aiming_deflection = halo_stick_dead_range(1);
@@ -2753,6 +2959,11 @@ DWORD WINAPI XInputDebugGetKeystroke(PXINPUT_DEBUG_KEYSTROKE keystroke)
 		menus, main.c); text chat's line and log take every key, escape
 		included (chat.c: it closes them), as OpenCE's text chat's line does
 		(network_chat.c) */
+#ifdef HALO_GUIDE
+		/* (the Guide takes the keys: only their key ups pass) */
+		if (guide_capture && !key_up && !console_is_active())
+			continue;
+#endif
 		if (key_up || next.virtual_key == VK_OEM_3_BACKQUOTE || console_is_active() || chat_typing ||
 			network_chat_typing() ||
 			(text_typing && next.virtual_key != 0x1B /* escape */))

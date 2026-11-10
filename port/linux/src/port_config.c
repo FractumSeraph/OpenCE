@@ -208,7 +208,9 @@ dedicated server keeps waiting for a second player: it never needs this. */
 /* The particles, and the dynamic lights that light the level: the consoles
 keep fewer (the Switch's particles, HALO_CONSOLE_PARTICLE_TICKS and
 HALO_CONSOLE_LIGHT_LIMITS); the desktop has the Xbox's look, unlimited */
-#ifdef HALO_SWITCH_CONSOLE
+#if defined(HALO_CONSOLE_PARTICLE_LIMIT)
+#define DEFAULT_PARTICLE_LIMIT HALO_CONSOLE_PARTICLE_LIMIT
+#elif defined(HALO_SWITCH_CONSOLE)
 #define DEFAULT_PARTICLE_LIMIT "2048"
 #else
 #define DEFAULT_PARTICLE_LIMIT "4096"
@@ -361,6 +363,10 @@ static const struct config_setting config_settings[] =
 		"The menus' pointer for the mouse: the game's blue arrow, \"small\",\n"
 		"\"medium\", \"large\" or \"extra_large\" (18, 24, 32 or 40 of the menus'\n"
 		"480 lines tall, at any resolution), or \"off\" for the system's pointer." },
+	{ "display.stats_log", _config_boolean, "false", "HALO_STATS_LOG", _environment_value, _platform_all,
+		"A line a second in the log with the frame rate, the mode, the map, the\n"
+		"renderer and the size of the 3D view, for a bug report or to compare two\n"
+		"builds. Nothing is drawn and nothing is sent; off by default." },
 	{ "display.anti_aliasing", _config_string, DEFAULT_ANTI_ALIASING, "HALO_ANTI_ALIASING", _environment_value,
 		_platform_all,
 		"Smooth jagged edges: \"off\", \"fxaa\", \"smaa\", \"ssaa2x\", \"msaa2x\",\n"
@@ -378,6 +384,11 @@ static const struct config_setting config_settings[] =
 		"On a GPU without DXT textures (Mali), give it the DXT1 textures as ASTC,\n"
 		"which holds them nearly as they are in a quarter of the memory of the\n"
 		"32-bit texels they are otherwise decoded to; false decodes them." },
+	{ "display.widescreen", _config_string, "\"dashboard\"", NULL, _environment_value, _platform_xbox,
+		"Widescreen on a 16:9 TV. \"dashboard\" follows the Xbox dashboard:\n"
+		"with Widescreen set there, the game shows more to the sides and the\n"
+		"HUD and menus fit the wide screen. \"off\" keeps the 4:3 picture, as\n"
+		"the original game did. Read when Fractum Halo starts." },
 #ifdef HALO_CONSOLE_PERFORMANCE_MODE
 	{ "display.performance_mode", _config_boolean, "true", "HALO_PERFORMANCE_MODE", _environment_value, _platform_all,
 		"Start in performance mode: the level drawn without its decals, dynamic lights, reflections and specular\n"
@@ -544,6 +555,19 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 #endif
 	{ "display.delta_profile", _config_boolean, "true", "HALO_DELTA_PROFILE", _environment_value, _platform_all,
 		"Show Delta Profile in the menus and Online Games." },
+#ifdef HALO_GAME_BROWSER
+	{ "display.online_games_view", _config_string, "\"public\"", "HALO_ONLINE_GAMES_VIEW", _environment_value,
+		_platform_all,
+		"The list Online Games opens on (LB and RB switch): \"all\",\n"
+		"\"public\" (Chupathingy and players' public games, no OpenCE\n"
+		"dedicated servers), \"chupathingy\" or \"opence\" (OpenCE's\n"
+		"dedicated servers)." },
+	{ "display.opence_empty_servers", _config_string, "\"folded\"", "HALO_OPENCE_EMPTY_SERVERS", _environment_value,
+		_platform_all,
+		"Empty OpenCE dedicated servers in Online Games' ALL and OPENCE lists:\n"
+		"\"folded\" puts them in one row at the end (A opens it), \"shown\"\n"
+		"lists each one." },
+#endif
 	{ "display.profile_names", _config_boolean, "true", "HALO_PROFILE_NAMES", _environment_value, _platform_all,
 		"In Delta games, show players by their shared Delta profile name." },
 	{ "display.server_messages", _config_boolean, "true", "HALO_SERVER_MESSAGES", _environment_value, _platform_all | _platform_xbox,
@@ -731,6 +755,19 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"second for half a second: 1080 to 900, 900 to 720, 720 to 480, and\n"
 		"never lower. Go back up once a frame fits in 90% of a 60 Hz frame for\n"
 		"a second. Changes at once." },
+#endif
+#ifdef HALO_CONSOLE_NATIVE_RENDERER
+#ifdef HALO_CONSOLE_NATIVE_RENDERER_FIRST
+#define HALO_CONSOLE_NATIVE_RENDERER_DEFAULT "\"native\""
+#else
+#define HALO_CONSOLE_NATIVE_RENDERER_DEFAULT "\"gl\""
+#endif
+	{ "display.renderer", _config_string, HALO_CONSOLE_NATIVE_RENDERER_DEFAULT, "HALO_RENDERER", _environment_value,
+		_platform_console_gl,
+		"What draws the game. \"native\" is the console's own renderer, which we\n"
+		"are testing. \"gl\" is the renderer over the OpenGL layer, as before.\n"
+		"If the native one can't start, the game draws with \"gl\".\n"
+		"Read when Fractum Halo starts." },
 #endif
 #ifdef HALO_BGFX
 	{ "display.renderer", _config_string, "\"gl\"", "HALO_RENDERER", _environment_value, _platform_desktop,
@@ -956,6 +993,27 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"The Custom controller layout from the Controls screen. It is a list of\n"
 		"action and button pairs separated by commas, like \"jump=B,melee=RB\".\n"
 		"Leave it empty for the default." },
+#endif
+
+#ifdef HALO_GUIDE
+	/* ---- the Guide (port/linux/game/guide.c) */
+	{ "controls.guide", _config_string, "\"F3\"", "HALO_KEY_GUIDE", _environment_value, _platform_all,
+		"The key that opens and closes the Guide: F3 to F10." },
+	{ "controls.guide_button", _config_boolean, "true", "HALO_GUIDE_BUTTON", _environment_value, _platform_all,
+		"Open the Guide with the controller's Guide button, where Fractum Halo\n"
+		"can read it (Steam and the Xbox Game Bar may keep it for themselves)." },
+	{ "guide.hold_back", _config_boolean, "false", "HALO_GUIDE_HOLD_BACK", _environment_value, _platform_all,
+		"Open the Guide by holding Back for about half a second in the menus.\n"
+		"Off by default: the menus get the Back press first, as on the Xbox." },
+	{ "guide.pause_menu", _config_boolean, "true", "HALO_GUIDE_PAUSE_MENU", _environment_value, _platform_all,
+		"Put GUIDE in the pause menu, in every menu set." },
+	{ "guide.notify_in_game", _config_boolean, "false", "HALO_GUIDE_NOTIFY_IN_GAME", _environment_value,
+		_platform_all,
+		"Show the Guide's notifications during a game. They always show in\n"
+		"the menus." },
+	{ "guide.notify_online", _config_boolean, "false", "HALO_GUIDE_NOTIFY_ONLINE", _environment_value,
+		_platform_all,
+		"Show a notification in the menus when a friend comes online." },
 #endif
 
 	/* ---- chat */
@@ -1374,6 +1432,15 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		_platform_all,
 		"Show your Chupathingy player ID to other Chupathingy players over\n"
 		"Delta." },
+#if defined(HALO_GAME_BROWSER) && !defined(HALO_CONSOLE_NO_GUIDE)
+	{ "network.share_presence", _config_boolean, "true", "HALO_NET_SHARE_PRESENCE", _environment_value,
+		_platform_all,
+		"Let your Delta profile show which game you're playing. While you play\n"
+		"a Delta game, Fractum Halo tells the site which game, about once a\n"
+		"minute. The site shows the game only to people you allow, and lets\n"
+		"only those allowed to join see its invite. Nothing about other\n"
+		"players is sent. \"Show when I'm playing\" on the site hides it too." },
+#endif
 #ifdef HALO_GAME_BROWSER
 	{ "network.browser_url", _config_string, "\"https://stats.chupathingy.org\"", "HALO_NET_BROWSER", _environment_value,
 		_platform_all | _platform_server,
@@ -1389,7 +1456,7 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 	/* (a console's reports of the games it joins too: port/console/reports) */
 #if defined(HALO_GAME_BROWSER) || defined(HALO_CONSOLE_GAME_REPORTS)
 	{ "network.report_joined_games", _config_boolean, "true", "HALO_NET_REPORT_GAMES", _environment_value,
-		_platform_all,
+		_platform_all | _platform_xbox,
 		"Send the scores of internet games you join to the game list." },
 #endif
 #ifdef HALO_GAME_BROWSER
@@ -2125,6 +2192,12 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"The answer to the update question, for tests: \"yes\", \"no\" or\n"
 		"\"never\". Leave it empty to ask." },
 #endif
+#ifdef HALO_GUIDE
+	{ "debug.guide_open", _config_boolean, "false", "HALO_GUIDE_OPEN", _environment_set_is_true, _platform_all,
+		"Open the Guide once the menus or a map are up, for tests." },
+	{ "debug.guide_toast", _config_string, "\"\"", "HALO_GUIDE_TOAST", _environment_value, _platform_all,
+		"Show a test notification with this text once. Leave it empty for none." },
+#endif
 	{ "debug.chat_test", _config_string, "\"\"", "HALO_CHAT_TEST", _environment_value, _platform_all,
 		"Scripted chat for tests, as steps separated by ;. Each step is\n"
 		"\"<seconds>:<all|team|server|mute|unmute|localmute|log|close|type>[:<text>]\".\n"
@@ -2380,6 +2453,19 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"each test keeps the first one's state and is only a query and a draw\n"
 		"call. The picture is the same. false draws each test in full, to\n"
 		"compare. Read when Fractum Halo starts." },
+	{ "console.native_tiled_textures", _config_boolean, "false", NULL, _environment_value, _platform_console_gl,
+		"With display.renderer = \"native\": textures in the GPU's tiled layout,\n"
+		"which it samples faster. A test: false keeps them linear, as the\n"
+		"other renderer makes them. Read when Fractum Halo starts." },
+	{ "console.native_in_place", _config_boolean, "true", NULL, _environment_value, _platform_console_gl,
+		"With display.renderer = \"native\": the graphics chip reads the map's\n"
+		"vertices where they are in memory. false copies every vertex for each\n"
+		"frame instead, as the other renderer does: slower, for comparing when\n"
+		"models look broken. Read when Fractum Halo starts." },
+	{ "console.picture_frame", _config_integer, "0", NULL, _environment_value, _platform_console_gl,
+		"For comparing the renderers: the picture of this frame, and of the\n"
+		"frame three times as late, written beside the game as pictureN.raw\n"
+		"(the console's own pixels, untiled). 0, the default, writes none." },
 	{ "console.widget_pool_log", _config_boolean, "false", NULL, _environment_value,
 		_platform_xbox | _platform_console_gl,
 		"For sizing the menus' memory: write a line to debug.txt each time the\n"
@@ -2433,6 +2519,10 @@ static const struct
 	{ "chat", 0,
 		"The text chat you see and send. The chat rules for games you host are\n"
 		"in [network]." },
+#ifdef HALO_GUIDE
+	{ "guide", 0,
+		"The Guide, which opens over the menus or a game (F3)." },
+#endif
 	{ "game", 0,
 		"How games play. The bomb settings are for Bomb and Grifball games you\n"
 		"host." },
@@ -2592,13 +2682,42 @@ int platform_packaged(void)
 }
 
 #if defined(__linux__) && !defined(HALO_ANDROID) && !defined(HALO_XBOX_CONSOLE)
-/* whether folder has maps/ or config.toml, in any case */
-static int folder_has_setup(const char *folder)
+/* An AppImage (which sets APPIMAGE) runs from its own file, mounted
+read-only, and a packaged install (packaged_install.h) from a folder its
+player cannot write: their data and settings go in the save root's usual
+place (save_folder.c), or a test's HALO_SAVE_ROOT. So do those of a game in
+any folder it cannot write, but what that folder has of its own is kept
+where it is: setup is the entry, in any case, that keeps one kind of file
+there ("maps" for the data and the logs, "config.toml" for the settings).
+A read-only copy with maps/ and no config.toml (an administrator's
+/opt folder) keeps its maps and its settings now go home, where they can be
+saved; one with config.toml and no maps/ keeps its settings and copies the
+maps home. One with both, or a folder the game can write, is as before. */
+static int linux_home_folder(char *path, unsigned long size, const char *setup)
 {
+	const char *appimage = getenv("APPIMAGE");
+	const char *save_root = getenv("HALO_SAVE_ROOT");
+	const char *data_home = getenv("XDG_DATA_HOME");
+	const char *home = getenv("HOME");
+	const char *base = SDL_GetBasePath();
+	int writable = !base || !*base || access(base, W_OK) == 0;
 	char found[256];
 
-	return posix_find_entry_case_insensitive(folder, "maps", found, sizeof(found)) ||
-		posix_find_entry_case_insensitive(folder, "config.toml", found, sizeof(found));
+	if (!packaged_install_files_in_home(appimage && *appimage, platform_packaged(), writable,
+			writable || posix_find_entry_case_insensitive(base, setup, found, sizeof(found))))
+	{
+		return 0;
+	}
+	if (save_root && *save_root)
+		snprintf(path, (size_t)size, "%s", save_root);
+	else if (data_home && *data_home)
+		snprintf(path, (size_t)size, "%s/chupathingyce", data_home);
+	else if (home && *home)
+		snprintf(path, (size_t)size, "%s/.local/share/chupathingyce", home);
+	else
+		return 0;
+	SDL_CreateDirectory(path);
+	return 1;
 }
 #endif
 
@@ -2614,34 +2733,9 @@ int platform_app_folder(char *path, unsigned long size)
 	SDL_CreateDirectory(path);
 	return 1;
 #elif defined(__linux__) && !defined(HALO_ANDROID) && !defined(HALO_XBOX_CONSOLE)
-	/* an AppImage (which sets APPIMAGE) runs from its own file, mounted
-	read-only, and a packaged install (packaged_install.h) from a folder
-	its player cannot write: their data and settings go in the save root's
-	usual place (save_folder.c), or a test's HALO_SAVE_ROOT. So do those of
-	a game in any folder it cannot write, unless the folder has its own
-	maps/ or config.toml (a setup made there by hand, kept as it is) */
-	const char *appimage = getenv("APPIMAGE");
-	const char *save_root = getenv("HALO_SAVE_ROOT");
-	const char *data_home = getenv("XDG_DATA_HOME");
-	const char *home = getenv("HOME");
-	const char *base = SDL_GetBasePath();
-	int writable = !base || !*base || access(base, W_OK) == 0;
-
-	if (!packaged_install_files_in_home(appimage && *appimage, platform_packaged(), writable,
-			writable || folder_has_setup(base)))
-	{
-		return 0;
-	}
-	if (save_root && *save_root)
-		snprintf(path, (size_t)size, "%s", save_root);
-	else if (data_home && *data_home)
-		snprintf(path, (size_t)size, "%s/chupathingyce", data_home);
-	else if (home && *home)
-		snprintf(path, (size_t)size, "%s/.local/share/chupathingyce", home);
-	else
-		return 0;
-	SDL_CreateDirectory(path);
-	return 1;
+	/* (the data and the logs: a read-only folder's own maps/ kept where it
+	is; config_path asks for config.toml the same way) */
+	return linux_home_folder(path, size, "maps");
 #else
 	(void)path;
 	(void)size;
@@ -2672,7 +2766,14 @@ static void config_path(char *path, size_t size)
 #if !defined(HALO_ANDROID) && !defined(HALO_XBOX_CONSOLE)
 	/* (the application's folder: not the application, which is signed, or
 	the AppImage, which cannot be written) */
+#if defined(__linux__)
+	/* (on Linux by config.toml, not maps/: a read-only folder's own
+	config.toml is read where it is, and without one the settings go where
+	they can be saved: linux_home_folder) */
+	if (linux_home_folder(folder, sizeof(folder), "config.toml"))
+#else
 	if (platform_app_folder(folder, sizeof(folder)))
+#endif
 	{
 		snprintf(path, size, "%s/config.toml", folder);
 		return;
@@ -4470,6 +4571,8 @@ static const struct
 	{ "display.scoreboard_team_layout", { "teams", "score", NULL }, "\"teams\"" },
 	{ "display.scoreboard_platforms", { "auto", "on", "off", NULL }, "\"auto\"" },
 	{ "display.follow_camera", { "long_waits", "always", "off", NULL }, "\"off\"" },
+	{ "display.online_games_view", { "all", "public", "chupathingy", "opence", NULL }, "\"public\"" },
+	{ "display.opence_empty_servers", { "folded", "shown", NULL }, "\"folded\"" },
 	{ "display.texture_decode", { "auto", "gpu", "cpu", NULL }, "\"auto\"" },
 	{ "audio.resampling", { "sinc", "linear", NULL }, "\"sinc\"" },
 	{ "input.touch_controls", { "on", "auto", "off", NULL }, "\"on\"" },

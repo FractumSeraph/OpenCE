@@ -248,8 +248,9 @@ are never taken */
 #define hires_text_atlas ((struct bitmap_data *)NULL)
 #endif
 static long hires_text_font = NONE;
-/* port: the high-res text's fonts of the font tags of the map (forgotten
-when its tags are, by rasterizer_text_cache_flush) */
+/* port: the high-res text's fonts of the map's font tags (forgotten with
+its tags, by rasterizer_text_cache_flush: the next map's may be at the same
+addresses) */
 static struct
 {
 	struct font_header *font;
@@ -368,7 +369,7 @@ rasterizer_text_cache_flush(
 		} while (--hardware_character_count);
 	}
 	/* port: the next map's font tags may be at the same addresses */
-	memset(hires_text_fonts, 0, sizeof(hires_text_fonts));
+	csmemset(hires_text_fonts, 0, sizeof(hires_text_fonts));
 	hires_text_next_font = 0;
 
 	return;

@@ -1790,6 +1790,25 @@ static void platform_fullscreen_kind_apply(void)
 /* whether the game last asked for the window to be fullscreen */
 static BOOL platform_fullscreen_requested = FALSE;
 
+/* the window's framebuffer bound for reading too, as the frame is shown: a
+capture hooked into the swap (OBS's game capture) copies from whatever is
+bound for reading, and the render target the frame was blitted from holds it
+upside down (row 0 the top). (ChupathingyCE's; its borderless window styles
+are this fork's win32_window_borderless_apply, win32_window.c) */
+#ifndef HALO_BROWSER
+static void platform_swap_read_framebuffer(void)
+{
+	if (platform_gl_context)
+	{
+#ifdef HALO_IOS
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, platform_window_framebuffer());
+#else
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+#endif
+	}
+}
+#endif
+
 static void platform_window_set_fullscreen(BOOL fullscreen)
 {
 	platform_fullscreen_requested = fullscreen;
@@ -2589,6 +2608,10 @@ BOOL platform_video_initialize(unsigned long width, unsigned long height)
 		platform_event_thread = SDL_GetCurrentThreadID();
 		platform_log("renderer: bgfx");
 		platform_mouse_capture(TRUE);
+#ifdef HALO_LAUNCHER
+		/* (the launcher starts bgfx itself to draw: xgpu_bgfx_launcher_frame) */
+		launcher_at_start();
+#endif
 		return TRUE;
 	}
 #endif
@@ -3046,7 +3069,10 @@ void platform_video_swap(void)
 	/* (the device presents: d3d8_bgfx.inl; this paces the frames) */
 	if (!xgpu_bgfx)
 #endif
-	SDL_GL_SwapWindow(platform_window);
+	{
+		platform_swap_read_framebuffer();
+		SDL_GL_SwapWindow(platform_window);
+	}
 	swap_time = SDL_GetTicks() - swap_start;
 	swap_sound_end();
 	if (swap_time >= 2000)
@@ -3059,7 +3085,10 @@ void platform_video_swap(void)
 #ifdef HALO_BGFX
 	if (!xgpu_bgfx)
 #endif
-	SDL_GL_SwapWindow(platform_window);
+	{
+		platform_swap_read_framebuffer();
+		SDL_GL_SwapWindow(platform_window);
+	}
 	/* (a frame the graphics driver held for seconds: the game froze, and
 	online, a host stops hearing a machine after a few; the log says where) */
 	swap_time = SDL_GetTicks() - swap_start;

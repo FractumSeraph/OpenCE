@@ -79,6 +79,28 @@ static UINT bg_visibility_result(DWORD index);
 static BOOL bg_back_buffer_size(int *width, int *height, int *pixel_width, int *pixel_height);
 #endif
 
+#ifdef HALO_CONSOLE_NATIVE_RENDERER
+/* a console's native renderer in place of OpenGL (display.renderer =
+"native"; d3d8_console.inl, at the end of this file, which shares the
+device's state) */
+static BOOL cr_initialize(void);
+static BOOL cr_active(void);
+static void cr_draw_vertices(D3DPRIMITIVETYPE type, unsigned long start, unsigned long count);
+static void cr_draw_indexed(D3DPRIMITIVETYPE type, unsigned long count, const WORD *indices);
+static void cr_draw_immediate(D3DPRIMITIVETYPE type, unsigned long count);
+static void cr_clear(DWORD count, const D3DRECT *rectangles, DWORD flags, D3DCOLOR color, float z, DWORD stencil);
+static void cr_present(void);
+static void cr_visibility_begin(void);
+static void cr_visibility_end(DWORD index);
+static UINT cr_visibility_result(DWORD index);
+static BOOL cr_back_buffer_size(int *width, int *height, int *pixel_width, int *pixel_height);
+/* display.renderer is "native" */
+static BOOL console_native_renderer_chosen(void)
+{
+	return !strcmp(config_string("display.renderer"), "native");
+}
+#endif
+
 void d3d8_surface_initialize(D3DSurface *surface, D3DFORMAT format, unsigned long width, unsigned long height);
 void d3d8_surface_resize(D3DSurface *surface, D3DFORMAT format, unsigned long width, unsigned long height);
 
@@ -114,6 +136,20 @@ struct xgpu_capabilities xgpu_capabilities;
 OpenGL ES, which has no glClipControl: its depth from -1 would lose the
 precision near 0 that reversing gains */
 BOOL xgpu_reversed_depth;
+
+/* ---------- the renderer's time (HALO_CONSOLE_RENDER_TIMING)
+
+A console that logs where a frame's time goes is told when the game enters
+and leaves the device's draws, clears and present (console_render_time,
+defined by the port); nested calls count once. */
+#ifdef HALO_CONSOLE_RENDER_TIMING
+void console_render_time(int entering);
+#define RENDER_TIME_BEGIN() console_render_time(1)
+#define RENDER_TIME_END() console_render_time(0)
+#else
+#define RENDER_TIME_BEGIN() ((void)0)
+#define RENDER_TIME_END() ((void)0)
+#endif
 
 /* ---------- the screen's width
 
@@ -812,6 +848,11 @@ struct vertex_shader_object
 	/* as shader[], the bgfx backend's (d3d8_bgfx.inl) */
 	void *bg_shader[2];
 #endif
+#ifdef HALO_CONSOLE_NATIVE_RENDERER
+	/* as shader[], the console's native renderer's (d3d8_console.inl;
+	shaders_tried's bits 4 and 5) */
+	struct console_shader *console_shader[2];
+#endif
 #if !defined(HALO_GLES) && !defined(__APPLE__)
 	/* the vertex array its draws last used, and the streams they had
 	(setup_streams: the layout follows from the two) */
@@ -1218,6 +1259,9 @@ enum render_target_kind
 	_render_target_plain,
 	/* the screen's targets and the secondary target: screen_scale's */
 	_render_target_screen,
+	/* (d3d8_bgfx.inl's secondary target: the 3D view's pixels,
+	render_target_scale; the GL targets file it under _render_target_screen) */
+	_render_target_secondary,
 	/* a shadow map: halo_shadow_map_scale's */
 	_render_target_shadow_map,
 };
@@ -2259,6 +2303,31 @@ static BOOL surface_is_shadow_map(const D3DSurface *surface)
 #define SECONDARY_TARGET_WIDTH 320
 #define SECONDARY_TARGET_HEIGHT 240
 
+/* the pixels a unit of a target of this kind has now (ChupathingyCE's, for
+d3d8_bgfx.inl, whose frame buffer is one size: its secondary target gets the
+3D view's pixels, as the back buffer's depth buffer it is drawn with) */
+static void render_target_scale(enum render_target_kind kind, float scale[2])
+{
+	switch (kind)
+	{
+	case _render_target_screen:
+		scale[0] = screen_scale[0];
+		scale[1] = screen_scale[1];
+		break;
+	case _render_target_secondary:
+		scale[0] = (float)(unsigned long)(halo_screen_width() * screen_scale[0] + 0.5f) / SECONDARY_TARGET_WIDTH;
+		scale[1] = (float)(unsigned long)(SCREEN_HEIGHT * screen_scale[1] + 0.5f) / SECONDARY_TARGET_HEIGHT;
+		break;
+	case _render_target_shadow_map:
+		scale[0] = (float)halo_shadow_map_scale();
+		scale[1] = scale[0];
+		break;
+	default:
+		scale[0] = scale[1] = 1.0f;
+		break;
+	}
+}
+
 /* the targets render_target_get found last, by what it found them from:
 each draw asks again for the same two (bind_targets) */
 #define RECENT_RENDER_TARGET_COUNT 4
@@ -2310,6 +2379,7 @@ static struct render_target_entry *render_target_get(const D3DSurface *surface)
 	unsigned long width, height, slot;
 	long screen;
 	BOOL depth;
+	GLint previous_texture = -1;
 
 	if (!surface || !surface->Data)
 		return NULL;
@@ -2366,6 +2436,10 @@ static struct render_target_entry *render_target_get(const D3DSurface *surface)
 	entry->kind = kind;
 	entry->target.gl_width = (unsigned long)(width * scale[0] + 0.5f);
 	entry->target.gl_height = (unsigned long)(height * scale[1] + 0.5f);
+	/* the draw's textures are bound before its targets (prepare_draw): making
+	the target must not leave it bound as the active unit's input (restored
+	below; ChupathingyCE's) */
+	glGetIntegerv(GL_TEXTURE_BINDING_2D, &previous_texture);
 	entry->screen_buffer = surface->Data == (depth ? device.depth_buffer.Data : device.back_buffer.Data);
 	entry->target.format = depth ? (xgpu_reversed_depth ? GL_DEPTH32F_STENCIL8 : GL_DEPTH24_STENCIL8) :
 		entry->screen_buffer && hdr.active ? GL_RGBA16F : GL_RGBA8;
@@ -2377,6 +2451,9 @@ static struct render_target_entry *render_target_get(const D3DSurface *surface)
 	gl_check_errors("target texture parameters");
 	render_target_storage(&entry->target);
 	gl_check_errors(depth ? "depth target storage" : "color target storage");
+	/* (-1: a GL layer that does not answer the query) */
+	if (previous_texture >= 0)
+		glBindTexture(GL_TEXTURE_2D, (GLuint)previous_texture);
 #ifdef HALO_CONSOLE_GLES2
 	/* (black until it is drawn: its memory holds whatever was last there, the
 	Steam Link's own screen, and the first present shows it) */
@@ -2586,6 +2663,13 @@ static GLint scaled_pixel(float coordinate, float scale)
 	if ((float)pixel > value)
 		pixel--;
 	return pixel;
+}
+
+/* the pixels a unit of the bound targets has, along the axis that has more:
+what a polygon offset's slope factor is scaled by (apply_raster_state) */
+static float target_bias_scale(void)
+{
+	return target_scale[0] > target_scale[1] ? target_scale[0] : target_scale[1];
 }
 
 /* ... in the bound targets' units */
@@ -3321,6 +3405,13 @@ HRESULT WINAPI Direct3D_CreateDevice(UINT adapter, D3DDEVTYPE device_type, void 
 			else if (!bg_initialize() && platform_video_reopen_for_gl())
 				gl_initialize();
 		}
+#elif defined(HALO_CONSOLE_NATIVE_RENDERER)
+		{
+			/* (the OpenGL path when the console's renderer is not chosen or
+			does not start) */
+			if (!console_native_renderer_chosen() || !cr_initialize())
+				gl_initialize();
+		}
 #else
 			gl_initialize();
 #endif
@@ -3355,6 +3446,17 @@ static BOOL ui_point_view_get(struct ui_point_view *view)
 	if (bg_active())
 	{
 		if (!bg_back_buffer_size(&view->target_width, &view->target_height, &view->gl_width, &view->gl_height))
+			return FALSE;
+		platform_video_window_size(&view->window_width, &view->window_height);
+		platform_video_drawable_size(&view->pixel_width, &view->pixel_height);
+		view->screen_width = halo_screen_width();
+		return TRUE;
+	}
+#endif
+#ifdef HALO_CONSOLE_NATIVE_RENDERER
+	if (cr_active())
+	{
+		if (!cr_back_buffer_size(&view->target_width, &view->target_height, &view->gl_width, &view->gl_height))
 			return FALSE;
 		platform_video_window_size(&view->window_width, &view->window_height);
 		platform_video_drawable_size(&view->pixel_width, &view->pixel_height);
@@ -3447,6 +3549,8 @@ int halo_ui_pointer_update(int menus_active, struct halo_ui_pointer *pointer)
 	platform_ui_pointer_set_active(menus_active != 0);
 #ifdef HALO_BGFX
 	if (!menus_active || !(device.gl_ready || bg_active()) || !platform_ui_pointer_read(&state))
+#elif defined(HALO_CONSOLE_NATIVE_RENDERER)
+	if (!menus_active || !(device.gl_ready || cr_active()) || !platform_ui_pointer_read(&state))
 #else
 	if (!menus_active || !device.gl_ready || !platform_ui_pointer_read(&state))
 #endif
@@ -3800,6 +3904,13 @@ void WINAPI D3DDevice_BeginVisibilityTest(void)
 		return;
 	}
 #endif
+#ifdef HALO_CONSOLE_NATIVE_RENDERER
+	if (cr_active())
+	{
+		cr_visibility_begin();
+		return;
+	}
+#endif
 	if (!device.gl_ready || device.visibility_test_active)
 		return;
 	/* the test's slot is given only when it ends */
@@ -3855,6 +3966,13 @@ HRESULT WINAPI D3DDevice_EndVisibilityTest(DWORD index)
 	if (bg_active())
 	{
 		bg_visibility_end(index);
+		return S_OK;
+	}
+#endif
+#ifdef HALO_CONSOLE_NATIVE_RENDERER
+	if (cr_active())
+	{
+		cr_visibility_end(index);
 		return S_OK;
 	}
 #endif
@@ -3951,6 +4069,14 @@ HRESULT WINAPI D3DDevice_GetVisibilityTestResult(DWORD index, UINT *result, ULON
 	{
 		if (result)
 			*result = bg_visibility_result(index);
+		return S_OK;
+	}
+#endif
+#ifdef HALO_CONSOLE_NATIVE_RENDERER
+	if (cr_active())
+	{
+		if (result)
+			*result = cr_visibility_result(index);
 		return S_OK;
 	}
 #endif
@@ -5592,7 +5718,12 @@ static void apply_raster_state(BOOL has_depth)
 	{
 		float offset[2];
 
-		offset[0] = dword_to_float(rs[D3DRS_POLYGONOFFSETZSLOPESCALE]);
+		/* (the slope term is the depth's change across a pixel: a target
+		drawn at several pixels to the game's unit has that many times less
+		depth across each, so the factor is scaled by as much to keep the
+		Xbox's bias; without it decals fight with the surface under them at
+		high resolutions) */
+		offset[0] = dword_to_float(rs[D3DRS_POLYGONOFFSETZSLOPESCALE]) * target_bias_scale();
 		offset[1] = dword_to_float(rs[D3DRS_POLYGONOFFSETZOFFSET]);
 		/* The slope is the depth's change across a pixel, and a target drawn
 		at several pixels to the game's one (render_target_get) has that many
@@ -7742,12 +7873,19 @@ void WINAPI D3DDevice_SetIndices(D3DIndexBuffer *index_data, UINT base_vertex_in
 	D3D__IndexData = index_data ? (WORD *)xbox_pointer(index_data->Data) : NULL;
 }
 
-void WINAPI D3DDevice_DrawVertices(D3DPRIMITIVETYPE primitive_type, UINT start_vertex, UINT vertex_count)
+static void draw_vertices_untimed(D3DPRIMITIVETYPE primitive_type, UINT start_vertex, UINT vertex_count)
 {
 #ifdef HALO_BGFX
 	if (bg_active())
 	{
 		bg_draw_vertices(primitive_type, start_vertex, vertex_count);
+		return;
+	}
+#endif
+#ifdef HALO_CONSOLE_NATIVE_RENDERER
+	if (cr_active())
+	{
+		cr_draw_vertices(primitive_type, start_vertex, vertex_count);
 		return;
 	}
 #endif
@@ -7953,7 +8091,14 @@ static BOOL index_cache_get(const WORD *indices, unsigned long count, unsigned l
 }
 #endif
 
-void WINAPI D3DDevice_DrawIndexedVertices(D3DPRIMITIVETYPE primitive_type, UINT vertex_count, CONST WORD *index_data)
+void WINAPI D3DDevice_DrawVertices(D3DPRIMITIVETYPE primitive_type, UINT start_vertex, UINT vertex_count)
+{
+	RENDER_TIME_BEGIN();
+	draw_vertices_untimed(primitive_type, start_vertex, vertex_count);
+	RENDER_TIME_END();
+}
+
+static void draw_indexed_vertices_untimed(D3DPRIMITIVETYPE primitive_type, UINT vertex_count, CONST WORD *index_data)
 {
 	unsigned long minimum, maximum, index, count, generation = 0, index_offset = 0;
 	WORD *indices = NULL;
@@ -7965,6 +8110,13 @@ void WINAPI D3DDevice_DrawIndexedVertices(D3DPRIMITIVETYPE primitive_type, UINT 
 	if (bg_active())
 	{
 		bg_draw_indexed(primitive_type, vertex_count, index_data);
+		return;
+	}
+#endif
+#ifdef HALO_CONSOLE_NATIVE_RENDERER
+	if (cr_active())
+	{
+		cr_draw_indexed(primitive_type, vertex_count, index_data);
 		return;
 	}
 #endif
@@ -8066,6 +8218,13 @@ void WINAPI D3DDevice_DrawIndexedVertices(D3DPRIMITIVETYPE primitive_type, UINT 
 	#endif
 }
 
+void WINAPI D3DDevice_DrawIndexedVertices(D3DPRIMITIVETYPE primitive_type, UINT vertex_count, CONST WORD *index_data)
+{
+	RENDER_TIME_BEGIN();
+	draw_indexed_vertices_untimed(primitive_type, vertex_count, index_data);
+	RENDER_TIME_END();
+}
+
 /* ---------- immediate mode */
 
 void WINAPI D3DDevice_Begin(D3DPRIMITIVETYPE primitive_type)
@@ -8148,7 +8307,7 @@ static BOOL visibility_run_draw(D3DPRIMITIVETYPE type, unsigned long count, unsi
 }
 #endif
 
-void WINAPI D3DDevice_End(void)
+static void end_untimed(void)
 {
 	unsigned long stride = XGPU_VERTEX_ATTRIBUTE_COUNT * 4 * sizeof(float);
 	unsigned long offset, index, count = device.immediate_count;
@@ -8176,6 +8335,13 @@ void WINAPI D3DDevice_End(void)
 	if (bg_active())
 	{
 		bg_draw_immediate(type, count);
+		return;
+	}
+#endif
+#ifdef HALO_CONSOLE_NATIVE_RENDERER
+	if (cr_active())
+	{
+		cr_draw_immediate(type, count);
 		return;
 	}
 #endif
@@ -8377,6 +8543,13 @@ void WINAPI D3DDevice_End(void)
 	gl_check_errors("immediate draw");
 }
 
+void WINAPI D3DDevice_End(void)
+{
+	RENDER_TIME_BEGIN();
+	end_untimed();
+	RENDER_TIME_END();
+}
+
 static void set_attribute(INT reg, float a, float b, float c, float d)
 {
 	BOOL emit = FALSE;
@@ -8443,7 +8616,7 @@ static void clear_state_forget(void)
 	memset(gl_state.scissor, 0xff, sizeof(gl_state.scissor));
 }
 
-void WINAPI D3DDevice_Clear(DWORD count, CONST D3DRECT *rectangles, DWORD flags, D3DCOLOR color, float z, DWORD stencil)
+static void clear_untimed(DWORD count, CONST D3DRECT *rectangles, DWORD flags, D3DCOLOR color, float z, DWORD stencil)
 {
 	float rgba[4];
 	GLbitfield mask = 0;
@@ -8454,6 +8627,13 @@ void WINAPI D3DDevice_Clear(DWORD count, CONST D3DRECT *rectangles, DWORD flags,
 	if (bg_active())
 	{
 		bg_clear(count, rectangles, flags, color, z, stencil);
+		return;
+	}
+#endif
+#ifdef HALO_CONSOLE_NATIVE_RENDERER
+	if (cr_active())
+	{
+		cr_clear(count, rectangles, flags, color, z, stencil);
 		return;
 	}
 #endif
@@ -8525,6 +8705,13 @@ void WINAPI D3DDevice_Clear(DWORD count, CONST D3DRECT *rectangles, DWORD flags,
 	}
 	glDisable(GL_SCISSOR_TEST);
 	clear_state_forget();
+}
+
+void WINAPI D3DDevice_Clear(DWORD count, CONST D3DRECT *rectangles, DWORD flags, D3DCOLOR color, float z, DWORD stencil)
+{
+	RENDER_TIME_BEGIN();
+	clear_untimed(count, rectangles, flags, color, z, stencil);
+	RENDER_TIME_END();
 }
 
 /* ---------- the anti-aliasing passes */
@@ -9215,6 +9402,8 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 	static long screenshot_every = -1;
 	static int screenshot_window = -1;
 
+	RENDER_TIME_BEGIN();
+
 	(void)source_rectangle;
 	(void)destination_rectangle;
 	(void)unused;
@@ -9467,6 +9656,10 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 	if (bg_active())
 		bg_present();
 #endif
+#ifdef HALO_CONSOLE_NATIVE_RENDERER
+	if (cr_active())
+		cr_present();
+#endif
 	device.frame++;
 	#ifdef HALO_BROWSER
 	web_stream_cache_expire();
@@ -9558,6 +9751,7 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 		}
 #endif
 	}
+	RENDER_TIME_END();
 	platform_pump_events();
 
 	/* (the wait below is for vertical blanks, which come from their own
@@ -9594,4 +9788,7 @@ HRESULT WINAPI D3DDevice_PersistDisplay(void)
 
 #ifdef HALO_BGFX
 #include "d3d8_bgfx.inl"
+#endif
+#ifdef HALO_CONSOLE_NATIVE_RENDERER
+#include "d3d8_console.inl"
 #endif

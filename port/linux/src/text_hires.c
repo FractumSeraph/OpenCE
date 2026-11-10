@@ -336,6 +336,8 @@ long text_hires_font(char const *tag_name, float cap_height, short const *letter
 		oversample = 1.0f;
 	for (letter = 0; letter < TEXT_HIRES_FIT_LETTERS; letter++)
 		letters_width += letter_widths[letter] > 0 ? letter_widths[letter] : 0;
+	/* (by the tag's measures too: the Xbox maps and a Custom Edition loc.map
+	have tags of the same names with other measures) */
 	for (font = 0; font < font_count; font++)
 	{
 		if (!names_differ(fonts[font].tag, tag_name) && fonts[font].cap_height == cap_height &&

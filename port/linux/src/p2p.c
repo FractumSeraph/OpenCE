@@ -1803,7 +1803,7 @@ suspended (a phone app in the background) or the machine slept (a laptop).
 The NAT's mapping of the tunnel may have lapsed, so this machine's public
 address is asked again before an offer names it, and the brokers'
 connections, which the network may have dropped, are made anew rather than
-at their silence timeout */
+at their silence timeout (OpenCE #272, bmanturner) */
 static void network_resumed(unsigned long stopped)
 {
 	int index;
@@ -1812,6 +1812,7 @@ static void network_resumed(unsigned long stopped)
 	{
 		p2p.stun[index].has_mapped = 0;
 		p2p.stun[index].attempts = 0;
+		p2p.stun[index].sent_time = 0;
 	}
 	p2p_signal_reconnect();
 	platform_log("Internet play: the game was stopped for %lu seconds; its public address is asked again and "
