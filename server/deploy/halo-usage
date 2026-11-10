@@ -1,0 +1,296 @@
+#!/usr/bin/env python3
+"""halo-usage: how many installs of Fractum Halo are in use.
+
+The game checks in (port/linux/src/usage_checkin.c, network.usage_stats)
+soon after it starts and every twelve hours while it runs:
+
+    POST https://halovps.fractumseraph.net/usage/v1/checkin
+    {"id": "<32 hex>", "version": "...", "channel": "...",
+     "platform": "...", "architecture": "..."}
+
+Caddy passes that one path to this service on 127.0.0.1:8097 (the
+Caddyfile's handle /usage/v1/checkin). The id is random, made by the
+install; the service keeps a row a day for each id with the version,
+platform and the address it came from (X-Forwarded-For, which Caddy sets),
+in /var/lib/halo-usage/usage.db (SQLite).
+
+Everything else is private, on 127.0.0.1:8097 only (Caddy forwards nothing
+else here):
+    GET /             the numbers, as a page
+    GET /stats.json   the same as JSON
+Look at them from the PC with an SSH tunnel:
+    ssh -L 8097:127.0.0.1:8097 halovps   then   http://localhost:8097/
+or on the VPS: halo-usage report
+
+Usage: halo-usage [serve | report]   (serve is the default; the systemd
+unit halo-usage.service runs it)
+"""
+
+import html
+import json
+import os
+import re
+import sqlite3
+import sys
+import threading
+import time
+from datetime import datetime, timedelta, timezone
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+LISTEN = ("127.0.0.1", int(os.environ.get("HALO_USAGE_PORT", "8097")))
+DATABASE = os.environ.get("HALO_USAGE_DB", "/var/lib/halo-usage/usage.db")
+CHECKIN_PATH = "/usage/v1/checkin"
+MAXIMUM_BODY = 1024
+# (a source sending many new ids in a day is not many players: the rest of
+# its new ids that day are not counted)
+MAXIMUM_NEW_IDS_PER_ADDRESS_A_DAY = 40
+ID = re.compile(r"^[0-9a-f]{32}$")
+TEXT = re.compile(r"^[A-Za-z0-9._+\- ()]{0,48}$")
+FIELDS = ("version", "channel", "platform", "architecture")
+
+lock = threading.Lock()
+
+
+def connect():
+    os.makedirs(os.path.dirname(DATABASE), exist_ok=True)
+    db = sqlite3.connect(DATABASE, timeout=10)
+    db.executescript("""
+        CREATE TABLE IF NOT EXISTS checkins (
+            day TEXT NOT NULL, id TEXT NOT NULL,
+            version TEXT, channel TEXT, platform TEXT, architecture TEXT,
+            address TEXT, first_time INTEGER, last_time INTEGER, count INTEGER,
+            PRIMARY KEY (day, id));
+        CREATE TABLE IF NOT EXISTS installs (
+            id TEXT PRIMARY KEY, first_day TEXT, last_day TEXT, first_address TEXT);
+        CREATE INDEX IF NOT EXISTS checkins_day ON checkins (day);
+        CREATE INDEX IF NOT EXISTS installs_first_day ON installs (first_day);
+    """)
+    return db
+
+
+def today():
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+
+def record(fields, address):
+    """one check-in; False when it is not counted (too many new ids from
+    the address today)"""
+    day = today()
+    now = int(time.time())
+    with lock:
+        db = connect()
+        try:
+            known = db.execute("SELECT 1 FROM installs WHERE id = ?", (fields["id"],)).fetchone()
+            if not known:
+                new_today = db.execute("SELECT COUNT(*) FROM installs WHERE first_day = ? AND first_address = ?",
+                                       (day, address)).fetchone()[0]
+                if new_today >= MAXIMUM_NEW_IDS_PER_ADDRESS_A_DAY:
+                    return False
+                db.execute("INSERT INTO installs VALUES (?, ?, ?, ?)", (fields["id"], day, day, address))
+            else:
+                db.execute("UPDATE installs SET last_day = ? WHERE id = ?", (day, fields["id"]))
+            db.execute("""
+                INSERT INTO checkins VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                ON CONFLICT (day, id) DO UPDATE SET
+                    version = excluded.version, channel = excluded.channel,
+                    platform = excluded.platform, architecture = excluded.architecture,
+                    address = excluded.address, last_time = excluded.last_time,
+                    count = checkins.count + 1""",
+                       (day, fields["id"], fields["version"], fields["channel"], fields["platform"],
+                        fields["architecture"], address, now, now))
+            db.commit()
+            return True
+        finally:
+            db.close()
+
+
+def unique(db, first_day, last_day):
+    return db.execute("SELECT COUNT(DISTINCT id) FROM checkins WHERE day BETWEEN ? AND ?",
+                      (first_day, last_day)).fetchone()[0]
+
+
+def stats():
+    db = connect()
+    try:
+        now = datetime.now(timezone.utc)
+        day = now.strftime("%Y-%m-%d")
+
+        def ago(days):
+            return (now - timedelta(days=days)).strftime("%Y-%m-%d")
+
+        daily = []
+        for back in range(29, -1, -1):
+            d = ago(back)
+            active = unique(db, d, d)
+            new = db.execute("SELECT COUNT(*) FROM installs WHERE first_day = ?", (d,)).fetchone()[0]
+            daily.append({"day": d, "active": active, "new": new})
+
+        def breakdown(column, since):
+            rows = db.execute(f"""SELECT COALESCE({column}, ''), COUNT(DISTINCT id) FROM checkins
+                                  WHERE day >= ? GROUP BY 1 ORDER BY 2 DESC""", (since,)).fetchall()
+            return [{"name": name or "(none)", "installs": count} for name, count in rows]
+
+        return {
+            "generated": now.strftime("%Y-%m-%d %H:%M UTC"),
+            "today": unique(db, day, day),
+            "last_7_days": unique(db, ago(6), day),
+            "last_30_days": unique(db, ago(29), day),
+            "installs_ever": db.execute("SELECT COUNT(*) FROM installs").fetchone()[0],
+            "addresses_last_30_days": db.execute(
+                "SELECT COUNT(DISTINCT address) FROM checkins WHERE day >= ?", (ago(29),)).fetchone()[0],
+            "daily": daily,
+            "platforms_last_7_days": breakdown("platform || ' ' || architecture", ago(6)),
+            "versions_last_7_days": breakdown("version", ago(6)),
+            "channels_last_7_days": breakdown("channel", ago(6)),
+        }
+    finally:
+        db.close()
+
+
+def bars(daily, key, color):
+    width, height, gap = 600, 140, 4
+    top = max([row[key] for row in daily] + [1])
+    bar = (width - gap * (len(daily) - 1)) / len(daily)
+    parts = []
+    for index, row in enumerate(daily):
+        h = row[key] / top * (height - 20)
+        x = index * (bar + gap)
+        parts.append(f'<rect x="{x:.1f}" y="{height - h:.1f}" width="{bar:.1f}" height="{h:.1f}" rx="2" '
+                     f'fill="{color}"><title>{row["day"]}: {row[key]}</title></rect>')
+    return (f'<svg viewBox="0 0 {width} {height}" role="img" aria-label="{key} per day">'
+            + "".join(parts) + "</svg>")
+
+
+def table(rows):
+    if not rows:
+        return "<p class=muted>None yet.</p>"
+    body = "".join(f"<tr><td>{html.escape(r['name'])}</td><td class=n>{r['installs']}</td></tr>" for r in rows)
+    return f"<table><tr><th>Name</th><th class=n>Installs</th></tr>{body}</table>"
+
+
+def page():
+    s = stats()
+    tiles = "".join(f'<div class=tile><div class=v>{v}</div><div class=k>{k}</div></div>' for k, v in (
+        ("Active today", s["today"]), ("Last 7 days", s["last_7_days"]), ("Last 30 days", s["last_30_days"]),
+        ("Installs ever", s["installs_ever"]), ("Addresses, 30 days", s["addresses_last_30_days"])))
+    return f"""<!doctype html><html><head><meta charset=utf-8>
+<meta name=viewport content="width=device-width, initial-scale=1"><title>Fractum Halo usage</title>
+<style>
+:root {{ --bg:#f7f7f5; --fg:#1d1d1b; --muted:#6b6b66; --card:#fff; --line:#e3e3de; --a:#3b6fd4; --b:#2f9e6e; }}
+@media (prefers-color-scheme: dark) {{ :root {{ --bg:#16171a; --fg:#ececea; --muted:#9a9a94; --card:#1f2024;
+  --line:#2e2f34; --a:#6f98f0; --b:#4cc28e; }} }}
+body {{ margin:0; padding:24px 16px; background:var(--bg); color:var(--fg);
+  font:15px/1.45 system-ui, sans-serif; }}
+main {{ max-width:880px; margin:0 auto; }} h1 {{ font-size:22px; margin:0 0 4px; }}
+h2 {{ font-size:16px; margin:28px 0 8px; }} .muted {{ color:var(--muted); }}
+.tiles {{ display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:12px; margin-top:16px; }}
+.tile, .card {{ background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px; }}
+.v {{ font-size:28px; font-weight:650; font-variant-numeric:tabular-nums; }} .k {{ color:var(--muted); }}
+svg {{ width:100%; height:auto; display:block; }}
+.cols {{ display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:12px; }}
+table {{ width:100%; border-collapse:collapse; }} td, th {{ padding:4px 0; border-bottom:1px solid var(--line);
+  text-align:left; }} .n {{ text-align:right; font-variant-numeric:tabular-nums; }}
+</style></head><body><main>
+<h1>Fractum Halo usage</h1><div class=muted>Installs that checked in (network.usage_stats). {s["generated"]}</div>
+<div class=tiles>{tiles}</div>
+<h2>Active installs a day, last 30 days</h2><div class=card>{bars(s["daily"], "active", "var(--a)")}</div>
+<h2>New installs a day, last 30 days</h2><div class=card>{bars(s["daily"], "new", "var(--b)")}</div>
+<h2>Last 7 days</h2><div class=cols>
+<div class=card><b>Platform</b>{table(s["platforms_last_7_days"])}</div>
+<div class=card><b>Version</b>{table(s["versions_last_7_days"])}</div>
+<div class=card><b>Channel</b>{table(s["channels_last_7_days"])}</div></div>
+</main></body></html>"""
+
+
+class Handler(BaseHTTPRequestHandler):
+    server_version = "halo-usage"
+
+    def log_message(self, format, *args):
+        pass
+
+    def send(self, status, body=b"", content_type=None, cors=False):
+        self.send_response(status)
+        if cors:
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            self.send_header("Access-Control-Max-Age", "86400")
+        if content_type:
+            self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        if body:
+            self.wfile.write(body)
+
+    def address(self):
+        forwarded = self.headers.get("X-Forwarded-For", "")
+        return (forwarded.split(",")[0].strip() or self.client_address[0])[:64]
+
+    def do_OPTIONS(self):
+        self.send(204 if self.path == CHECKIN_PATH else 404, cors=True)
+
+    def do_POST(self):
+        if self.path != CHECKIN_PATH:
+            return self.send(404)
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            length = -1
+        if not 0 < length <= MAXIMUM_BODY:
+            return self.send(400, cors=True)
+        try:
+            data = json.loads(self.rfile.read(length))
+        except (ValueError, UnicodeDecodeError):
+            return self.send(400, cors=True)
+        if not isinstance(data, dict) or not isinstance(data.get("id"), str) or not ID.match(data["id"]):
+            return self.send(400, cors=True)
+        fields = {"id": data["id"]}
+        for name in FIELDS:
+            value = data.get(name, "")
+            if not isinstance(value, str) or not TEXT.match(value):
+                return self.send(400, cors=True)
+            fields[name] = value
+        try:
+            record(fields, self.address())
+        except sqlite3.Error as error:
+            print(f"halo-usage: {error}", file=sys.stderr, flush=True)
+            return self.send(503, cors=True)
+        self.send(204, cors=True)
+
+    def do_GET(self):
+        # (the numbers are this machine's alone: Caddy forwards only the check-in)
+        if self.headers.get("X-Forwarded-For"):
+            return self.send(404)
+        if self.path == "/":
+            return self.send(200, page().encode(), "text/html; charset=utf-8")
+        if self.path == "/stats.json":
+            return self.send(200, json.dumps(stats(), indent=2).encode(), "application/json")
+        self.send(404)
+
+
+def report():
+    s = stats()
+    print(f"Fractum Halo usage ({s['generated']})")
+    print(f"  active today {s['today']}, last 7 days {s['last_7_days']}, last 30 days {s['last_30_days']}, "
+          f"installs ever {s['installs_ever']}, addresses in 30 days {s['addresses_last_30_days']}")
+    for title, key in (("platform", "platforms_last_7_days"), ("version", "versions_last_7_days")):
+        print(f"  by {title}, last 7 days: " + ", ".join(f"{r['name']} {r['installs']}" for r in s[key]))
+    print("  last 14 days (active/new): " + ", ".join(f"{r['day'][5:]} {r['active']}/{r['new']}"
+                                                      for r in s["daily"][-14:]))
+
+
+def main():
+    command = sys.argv[1] if len(sys.argv) > 1 else "serve"
+    if command == "report":
+        return report()
+    if command != "serve":
+        sys.exit(__doc__)
+    connect().close()
+    server = ThreadingHTTPServer(LISTEN, Handler)
+    print(f"halo-usage: listening on {LISTEN[0]}:{LISTEN[1]}, {DATABASE}", flush=True)
+    server.serve_forever()
+
+
+if __name__ == "__main__":
+    main()

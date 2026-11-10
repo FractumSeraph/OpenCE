@@ -45,6 +45,7 @@ with it under the lock.
 #include "browser_ping.h"
 #include "qrcodegen.h"
 #include "delta_profile.h"
+#include "usage_checkin.h" /* (port, this fork) */
 #ifndef HALO_CONSOLE_NO_GUIDE
 #include "social.h"
 #endif
@@ -3351,6 +3352,8 @@ static void *browser_thread(void *unused)
 	(void)unused;
 	for (;;)
 	{
+		/* (port, this fork: the usage check-in, with or without a game list) */
+		usage_checkin_update();
 		if (config_string("network.browser_url")[0])
 		{
 #ifdef HALO_DELTA_IDENTITY

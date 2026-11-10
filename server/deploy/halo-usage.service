@@ -1,0 +1,23 @@
+# halo-usage: the Fractum Halo usage check-ins (server/deploy/halo-usage).
+# Install: copy halo-usage to /usr/local/sbin, this file to
+# /etc/systemd/system, then systemctl enable --now halo-usage; Caddy passes
+# https://halovps.fractumseraph.net/usage/v1/checkin to 127.0.0.1:8097.
+[Unit]
+Description=Fractum Halo usage check-ins
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/local/sbin/halo-usage serve
+DynamicUser=yes
+StateDirectory=halo-usage
+Environment=HALO_USAGE_DB=/var/lib/halo-usage/usage.db
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

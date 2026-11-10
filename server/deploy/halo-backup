@@ -32,6 +32,13 @@ for item in /opt/halo-bans /opt/halo/config.json /etc/caddy /etc/mosquitto /etc/
 done >> "$list"
 ls -d /etc/systemd/system/halo* /etc/systemd/system/crowdsec-ssh-only* /etc/systemd/system/crowdsec-firewall-bouncer.service.d /etc/systemd/system/caddy.service.d /usr/local/sbin/halo-* \
    /usr/local/sbin/crowdsec-ssh-only.sh 2>/dev/null >> "$list" || true
+# (the usage check-ins, halo-usage: a consistent copy of its SQLite file,
+# which the service may be writing; DynamicUser keeps it under private/)
+usage=/var/lib/private/halo-usage
+if [ -f "$usage/usage.db" ] && python3 -c "import sqlite3, sys; s = sqlite3.connect(sys.argv[1]); d = sqlite3.connect(sys.argv[2]); s.backup(d); d.close()" \
+        "$usage/usage.db" "$usage/usage-backup.db" 2>/dev/null; then
+    echo "$usage/usage-backup.db" >> "$list"
+fi
 dump=$(ls -1t /opt/umami/backups/* 2>/dev/null | head -1 || true)
 # ("if", not "&&": a missing last item would fail the loop under set -e)
 if [ -n "$dump" ]; then echo "$dump" >> "$list"; fi

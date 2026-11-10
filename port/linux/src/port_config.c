@@ -1441,6 +1441,12 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 	{ "network.browser_url", _config_string, "\"https://stats.chupathingy.org\"", "HALO_NET_BROWSER", _environment_value,
 		_platform_all | _platform_server,
 		"The game list server. Leave it empty for none." },
+	/* (port, this fork: usage_checkin.c) */
+	{ "network.usage_stats", _config_boolean, "true", "HALO_USAGE_STATS", _environment_value,
+		_platform_all | _platform_server,
+		"Count this install in Fractum Halo's usage numbers: twice a day the\n"
+		"game tells the fork's server that it is running, with a random ID made\n"
+		"for this install, the version and the platform. false sends nothing." },
 	{ "network.list_hosted_games", _config_boolean, "true", "HALO_NET_LIST_GAMES", _environment_value,
 		_platform_all | _platform_server,
 		"List the public games you host without a password on the game list,\n"
