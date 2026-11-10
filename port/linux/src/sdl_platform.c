@@ -1790,10 +1790,6 @@ static void platform_fullscreen_kind_apply(void)
 /* whether the game last asked for the window to be fullscreen */
 static BOOL platform_fullscreen_requested = FALSE;
 
-	}
-}
-#endif
-
 static void platform_window_set_fullscreen(BOOL fullscreen)
 {
 	platform_fullscreen_requested = fullscreen;
@@ -3033,6 +3029,9 @@ static void platform_swap_read_framebuffer(void)
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, platform_window_framebuffer());
 #else
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+#endif
+	}
+}
 #endif
 
 void platform_video_swap(void)
