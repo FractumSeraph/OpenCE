@@ -303,6 +303,12 @@ SCREENS = {
                  "While dead, follow a player's view, if the host allows it.", None),
                 ("VERSION WATERMARK:", "display.version_watermark", ON_OFF,
                  "Show the version while playing.", None),
+                ("TITLE FONT:", "display.title_font", [("CLASSIC", "classic"), ("CYBORG", "cyborg")],
+                 "Classic looks like Halo's own titles.\nCyborg matches the menu text.",
+                 # (not on the consoles, the Switch included, which have the
+                 # classic titles only: HALO_CONSOLE_NO_TITLE_CHOICE; last,
+                 # so the Switch's list has no gap)
+                 "desktop android"),
             ]),
         ],
     },
@@ -1429,7 +1435,7 @@ CHUPATHINGY_ONLY = {
         # (the friends' privacy, the site's friends.py: a list of its own,
         # so every row keeps the page's spacing)
         "views": [
-            ("friends", "FRIENDS", "Who can reach you and see you on DELTA.", [
+            ("friends", "FRIENDS", "Who can reach you and see you on Delta.", [
                 ("APPEAR OFFLINE:", "site.appear_offline", [("NO", "false"), ("YES", "true")],
                  "Show as offline to your friends.", None),
                 ("FRIEND REQUESTS FROM:", "site.friend_requests",
@@ -1437,7 +1443,7 @@ CHUPATHINGY_ONLY = {
                  "FRIENDS+ means your friends' friends too.", None),
                 ("WHO CAN JOIN ME:", "site.who_can_join",
                  [("FRIENDS", "friends"), ("ANYONE", "anyone"), ("INVITE ONLY", "invite")],
-                 "Who can join your game from DELTA.", None),
+                 "Who can join your game from Delta.", None),
                 ("SHOW MY STATUS TO:", "site.clan_presence",
                  [("FRIENDS", "friends"), ("FRIENDS+CLAN", "friends_and_clan")],
                  "Who sees when you're on and what you play.", None),
@@ -1978,10 +1984,18 @@ TITLES = {
     f"{MT}/server_settings/header_host_options": "HOST OPTIONS",
 }
 
+# the titles of the Chupathingy menus' own screens, which their files name
+# (port/assets/menus/chupathingy/delta_profile.xml): drawn as TITLES are
+CHUPATHINGY_TITLES = {
+    "chupathingy/delta_profile/header_delta_profile": "DELTA PROFILE",
+    "chupathingy/delta_profile/header_privacy": "PRIVACY",
+}
+
 
 def title_backdrop(width: float) -> str:
     """a header's dark backdrop, as the PC headers' redraws have it, for text
-    width units wide (the text is set over it in OpenCE: ce_menus.py)"""
+    width units wide (the text is set over it in Cyborg Interface Gothic:
+    ce_menus.py)"""
     return "\n".join([
         '<svg xmlns="http://www.w3.org/2000/svg" width="512" height="64" viewBox="0 0 512 64">',
         "  <defs>",

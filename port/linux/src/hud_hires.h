@@ -29,11 +29,14 @@ green is how much of each texel its shapes cover (the meter shader reads
 only its blue and alpha); point_threshold: its red
 holds exact discrete segment thresholds (zero in continuous meter sprites),
 read without filtering while blue, alpha and coverage retain their mips;
-title: a menu title (port/assets/titles, made by tools/title_assets.py) or a
-button icon (port/assets/buttons, made by tools/button_assets.py), drawn with
-display.high_res_text rather than display.high_res_hud; sprites: the sequences
-of its bitmap's group (a bit each) whose sprites it is drawn for, through a
-placeholder, or 0: the whole bitmap, in its place */
+title: a menu title (made by tools/title_assets.py) or a button icon
+(port/assets/buttons, made by tools/button_assets.py), drawn with
+display.high_res_text rather than display.high_res_hud: 1 a classic title
+(port/assets/titles) or a button icon, 2 the same title in the cyborg set
+(port/assets/titles_cyborg, with HALO_TITLE_CHOICE), drawn in its place when
+display.title_font is "cyborg"; sprites: the sequences of its bitmap's
+group (a bit each) whose sprites it is drawn for, through a placeholder,
+or 0: the whole bitmap, in its place */
 struct hud_hires_embedded
 {
 	const char *tag;
@@ -82,6 +85,11 @@ long hud_hires_override_find(unsigned long address, unsigned long width, unsigne
 /* how many times those settings have changed while the game runs: a
 texture whose stand-in was found before the last change is found again */
 unsigned long hud_hires_settings(void);
+/* whether display.title_font draws the titles in Cyborg Interface Gothic
+("cyborg"), not the classic Chupathingy Titles (any other value): the
+menus' title pictures here and in menu_files.c, the overlay's titles in
+ui_overlay.c */
+int hud_hires_title_font_cyborg(void);
 /* its GL texture (decoded and uploaded, mipmapped, on first use; 0 if it
 could not be), and the number of its mip levels */
 unsigned int hud_hires_override_texture(long asset, unsigned long *levels);

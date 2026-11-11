@@ -187,7 +187,7 @@ int hud_hires_bitmap_affected(unsigned long address, long width, long height, un
 		(changed & (hud_hires_embedded[asset].title ? 2UL : 1UL)) != 0;
 }
 
-static int hud_enabled, titles_enabled;
+static int hud_enabled, titles_enabled, titles_cyborg;
 static unsigned long settings_changes;
 
 /* the settings read again when the configuration has changed, counted when
@@ -200,12 +200,15 @@ static void settings_read(void)
 	{
 		int hud = config_boolean("display.high_res_hud");
 		int titles = config_boolean("display.high_res_text");
+		const char *title_font = config_string("display.title_font");
+		int cyborg = title_font && !strcmp(title_font, "cyborg");
 
-		if (read_at != (unsigned long)-1 && (hud != hud_enabled || titles != titles_enabled))
+		if (read_at != (unsigned long)-1 && (hud != hud_enabled || titles != titles_enabled || cyborg != titles_cyborg))
 			settings_changes++;
 		read_at = config_changes();
 		hud_enabled = hud;
 		titles_enabled = titles;
+		titles_cyborg = cyborg;
 	}
 }
 
@@ -213,6 +216,45 @@ unsigned long hud_hires_settings(void)
 {
 	settings_read();
 	return settings_changes;
+}
+
+int hud_hires_title_font_cyborg(void)
+{
+#ifdef HALO_CONSOLE_NO_TITLE_CHOICE
+	/* (a console has the classic titles alone: a "cyborg" in its
+	config.toml changes nothing, its overlay's titles included) */
+	return 0;
+#else
+	settings_read();
+	return titles_cyborg;
+#endif
+}
+
+/* whether the asset is a title of the cyborg set, which stands in for its
+classic one (hud_hires_tags.c leaves it out of a map's bitmaps) */
+long hud_hires_asset_alternate(long asset)
+{
+	return asset >= 0 && asset < hud_hires_asset_count() && hud_hires_embedded[asset].title == 2;
+}
+
+/* the cyborg set's title for a classic one, or the classic one itself if
+the build has no cyborg set (HALO_CONSOLE_NO_TITLE_CHOICE) */
+static long cyborg_title(long asset)
+{
+	const struct hud_hires_embedded *classic = &hud_hires_embedded[asset];
+	long other;
+
+	for (other = 0; other < hud_hires_asset_count(); other++)
+	{
+		const struct hud_hires_embedded *embedded = &hud_hires_embedded[other];
+
+		if (embedded->title == 2 && embedded->bitmap == classic->bitmap && embedded->crc == classic->crc &&
+			!strcmp(embedded->tag, classic->tag))
+		{
+			return other;
+		}
+	}
+	return asset;
 }
 
 long hud_hires_override_find(unsigned long address, unsigned long width, unsigned long height,
@@ -248,6 +290,9 @@ long hud_hires_override_find(unsigned long address, unsigned long width, unsigne
 			crc32(0L, (const Bytef *)address, (uInt)level0_size) == embedded->ce_crc ? asset : -1;
 #endif
 	}
+	/* (display.title_font's set) */
+	if (hud_hires_embedded[asset].title == 1 && hud_hires_title_font_cyborg())
+		asset = cyborg_title(asset);
 #ifdef HALO_64BIT
 	/* (an Xbox address: the texture's pixels in the contiguous memory) */
 	if (crc32(0L, (const Bytef *)xbox_pointer(address), (uInt)level0_size) != hud_hires_embedded[asset].crc)

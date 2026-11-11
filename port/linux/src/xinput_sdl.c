@@ -60,6 +60,8 @@ drive the controller.
 #if defined(SDL_PLATFORM_LINUX) && !defined(HALO_ANDROID)
 #include "halo_xbox_pad_buttons.h"
 #endif
+#define HALO_PROMPT_SCHEME_FUNCTIONS
+#include "halo_prompt_schemes.h"
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -565,8 +567,9 @@ int platform_chat_take_line(int *team, char *text, int size)
 }
 #endif
 /* the device the player last used (Controls Setup's page, and the button
-prompts: platform_prompt_scheme): 0 the keyboard (or mouse), 1 an Xbox-like
-pad, 2 a PlayStation pad, 3 a Nintendo pad */
+prompts: platform_prompt_scheme): halo_prompt_schemes.h's, 0 the keyboard
+(or mouse), 1 an Xbox-like pad, 2 a PlayStation pad, 3 a Nintendo pad, 4 a
+Steam Deck, 6 a Steam Controller */
 static int last_input_scheme = 1;
 static BOOL last_input_seen = FALSE;
 /* (the kind of pad used last, for prompts that never show keys) */
@@ -596,29 +599,48 @@ config.toml alone: the menus no longer have it) never the keyboard: the
 controller's buttons always, as that setting's false was */
 int platform_prompt_scheme(void)
 {
-	int scheme = platform_input_scheme();
+	static int forced = -2;
+	int scheme;
+
+	/* (debug.prompt_device: one device's prompts whatever is used, for
+	screenshots and tests) */
+	if (forced == -2 && config_loaded_yet())
+		forced = prompt_scheme_named(config_string("debug.prompt_device"));
+	if (forced >= 0)
+		return forced;
+	scheme = platform_input_scheme();
 
 	if (scheme == 0 && !config_boolean("input.keyboard_prompts"))
 		return last_pad_scheme;
 	return scheme;
 }
 
+/* a pad's scheme: by its type, but the Steam Deck's and the Steam
+Controller's by Valve's numbers (halo_prompt_schemes.h) */
 static int scheme_of(SDL_Gamepad *gamepad)
 {
+	int by_type;
+	const char *steam_deck = SDL_getenv("SteamDeck");
+
 	switch (SDL_GetGamepadType(gamepad))
 	{
 	case SDL_GAMEPAD_TYPE_PS3:
 	case SDL_GAMEPAD_TYPE_PS4:
 	case SDL_GAMEPAD_TYPE_PS5:
-		return 2;
+		by_type = PROMPT_SCHEME_PLAYSTATION;
+		break;
 	case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_PRO:
 	case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_LEFT:
 	case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_RIGHT:
 	case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_PAIR:
-		return 3;
+		by_type = PROMPT_SCHEME_NINTENDO;
+		break;
 	default:
-		return 1;
+		by_type = PROMPT_SCHEME_XBOX;
+		break;
 	}
+	return prompt_scheme_of_pad(by_type, SDL_GetGamepadVendor(gamepad), SDL_GetGamepadProduct(gamepad),
+		steam_deck && !strcmp(steam_deck, "1"));
 }
 
 void platform_input_scheme_used(void *gamepad)
@@ -2792,9 +2814,12 @@ static DWORD connected_gamepads(void)
 }
 
 /* the gamepads on each port, in the game's log (debug.txt: the 32-bit builds'
-platform_log reaches standard error alone), when they change (Android's
-guest has neither SDL_GetGamepadID nor SDL_GetGamepadName) */
-#ifndef HALO_ANDROID
+platform_log reaches standard error alone), when they change, each with
+SDL's mapping on a line of its own: which of the device's axes are the
+sticks (a stick that turns too slowly on one axis, Android's #977, shows
+there). Android's 32-bit guest has neither SDL_GetGamepadID nor
+SDL_GetGamepadName; the native 64-bit build has SDL itself */
+#if !defined(HALO_ANDROID) || defined(HALO_64BIT)
 static void gamepads_log(void)
 {
 	static SDL_JoystickID logged[PORT_COUNT];
@@ -2830,6 +2855,15 @@ static void gamepads_log(void)
 	}
 #ifdef HALO_64BIT
 	platform_log("%s", line);
+	for (port = 0; port < PORT_COUNT; port++)
+	{
+		SDL_Gamepad *gamepad = port_gamepad(gamepads, count, port);
+		char *mapping = gamepad ? SDL_GetGamepadMapping(gamepad) : NULL;
+
+		if (mapping)
+			platform_log("gamepads: port %d's mapping: %s", port + 1, mapping);
+		SDL_free(mapping);
+	}
 #else
 	{
 		void error(short priority, const char *format, ...);
@@ -2851,7 +2885,7 @@ BOOL WINAPI XGetDeviceChanges(PXPP_DEVICE_TYPE device_type, PDWORD insertions, P
 
 		*insertions = connected & ~reported_gamepads;
 		*removals = reported_gamepads & ~connected;
-#ifndef HALO_ANDROID
+#if !defined(HALO_ANDROID) || defined(HALO_64BIT)
 		gamepads_log();
 #endif
 		reported_gamepads = connected;

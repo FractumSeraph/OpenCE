@@ -77,6 +77,7 @@ int hud_hires_ce_stock_matches(long index, unsigned long address, long width, lo
 OpenCE's custom_edition_cache_tags_loaded) */
 boolean cache_file_tags_are_ce(void);
 
+long hud_hires_asset_alternate(long asset);
 void hud_hires_map_loaded(const long *assets, long count);
 void hud_hires_map_unloaded(void);
 int hud_hires_asset_custom_edition(long asset);
@@ -258,8 +259,15 @@ void hud_hires_tags_loaded(
 	}
 	for (asset = 0; asset < asset_count && hires_bitmap_count < MAXIMUM_HIRES_BITMAPS; asset++)
 	{
-		long group_index = tag_loaded(BITMAP_GROUP_TAG, hud_hires_asset_tag(asset));
-		struct bitmap_data *bitmap = group_index == NONE ? NULL :
+		long group_index;
+		struct bitmap_data *bitmap;
+
+		/* (a title of the cyborg set stands in for its classic one, which
+		the map's bitmap is found for: hud_hires.c) */
+		if (hud_hires_asset_alternate(asset))
+			continue;
+		group_index = tag_loaded(BITMAP_GROUP_TAG, hud_hires_asset_tag(asset));
+		bitmap = group_index == NONE ? NULL :
 			bitmap_group_try_and_get_bitmap(group_index, (short)hud_hires_asset_bitmap(asset));
 
 		/* Only the verified compatible resource sheets have CE redraws.

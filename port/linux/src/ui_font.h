@@ -20,13 +20,23 @@ enum
 	POSIX_UI_FONT_KEYBOARD,
 	/* the menus' faces (port/assets/fonts): the fonts fonts.json gives the
 	large and small roles, as text_hires.c draws ui\large_ui and
-	ui\small_ui, and OpenCE, the titles' */
+	ui\small_ui, and the titles' in display.title_font's two sets, as the
+	menus' title pictures are (tools/title_assets.py): Chupathingy Titles,
+	and the large role's font */
 	POSIX_UI_FONT_MENU,
 	POSIX_UI_FONT_MENU_SMALL,
 	POSIX_UI_FONT_TITLE,
+	POSIX_UI_FONT_TITLE_CYBORG,
 	/* the scoreboard's platform logos (one-color SVGs, Simple Icons and
 	Wikimedia Commons: tools/platform_icons_font.py) */
 	POSIX_UI_FONT_PLATFORMS,
+	/* more of Kenney's Input Prompts (POSIX_UI_FONT_NINTENDO is the
+	Switch's): the Steam Deck's, the Steam Controller's and the Wii U's.
+	A build may leave them out (tools/embed_assets.py --prompt-fonts): then
+	their buttons are drawn as pills */
+	POSIX_UI_FONT_STEAM_DECK,
+	POSIX_UI_FONT_STEAM_CONTROLLER,
+	POSIX_UI_FONT_WIIU,
 
 	POSIX_UI_FONT_COUNT
 };

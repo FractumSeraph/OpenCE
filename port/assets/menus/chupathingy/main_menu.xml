@@ -4,10 +4,11 @@ Xbox's, in its own look, with the PC version's PROFILES and QUIT added as
 rows like the others. CAMPAIGN and MULTIPLAYER open the Xbox's screens;
 PROFILES, SETTINGS and QUIT the PC version's, which the Xbox has not. MODS
 (this fork's, from OpenCE) opens OpenCE's Mods screen, as the PC menus' main
-menu does (ce/main_menu.mods.xml, tools/port_settings.py). DELTA opens DELTA on
-PARTY (its picture: tools/delta_menu_art.py; the Gearbox and Xbox main menus get
-the same row, menu_tags.c). (Port, this fork: seven rows on the desktop and
-Android, 32 apart, not 36, to stay above the screen's bottom.) -->
+menu does (ce/main_menu.mods.xml, tools/port_settings.py). With
+delta.menu_item, DELTA before QUIT opens DELTA on PARTY (its row is below,
+put in the list by menu_tags.c, as in Gearbox's; its picture:
+tools/delta_menu_art.py). (Port, this fork: rows 32 apart, not 36, to stay
+above the screen's bottom with DELTA's.) -->
 <menus>
 	<widget name="chupathingy/main_menu" width="640" height="480" flags="pass_unhandled_to_focused_child">
 		<on event="created" run="main menu intialize" label="ring_loop"/>
@@ -24,9 +25,7 @@ Android, 32 apart, not 36, to stay above the screen's bottom.) -->
 		<child widget="chupathingy/main_menu_profiles" x="192" y="311"/>
 		<child widget="chupathingy/main_menu_settings" x="192" y="343"/>
 		<child widget="main_menu/main_menu_item_mods" x="192" y="375"/>
-		<child widget="chupathingy/main_menu_delta" x="192" y="407" platform="desktop android"/>
-		<child widget="chupathingy/main_menu_quit" x="192" y="439" platform="desktop android"/>
-		<child widget="chupathingy/main_menu_quit" x="192" y="407" platform="switch console"/>
+		<child widget="chupathingy/main_menu_quit" x="192" y="407"/>
 	</widget>
 	<!-- (the Xbox's CAMPAIGN and MULTIPLAYER, as ui.map has them) -->
 	<widget name="chupathingy/main_menu_campaign" type="text" width="256" height="33" bitmap="main_menu/menu_load_campaign" string_list="main_menu/main_menu_options" string_index="1" font="ui\small_ui" color="#000080FF">

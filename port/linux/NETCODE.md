@@ -75,7 +75,8 @@ with ideas from VALORANT's netcode articles, keeping the 30 Hz tick:
   running ahead or doubling back drags the team through the level (while
   none of the host's players are alive, anyone's crossing does); a client
   standing on a loading zone is told it waits for the host. A player
-  outside the loaded BSP and falling for two seconds is brought back beside
+  outside the loaded BSP for two seconds, falling or standing on nothing
+  at all (not on an object, such as an elevator in its shaft), is brought back beside
   the host, else a teammate. A dead
   player watches a living teammate (`coop_spectate.c`) and comes back
   beside one once it is safe. With everyone dead, TEAM WIPE in Co-op
@@ -461,13 +462,17 @@ the signalling of 26 and of the versions before it (p2p_signal.c,
 MESSAGE_VERSION_OLD), so they join both, and take a map file whose header
 checksum or hash is the host's version (map_family_version_matches), so
 they play the Custom Edition maps of hosts of 29 and of the versions before
-it. It announces 41, OpenCE's newest, and speaks ChupathingyCE's wire of
-0.8.1d, `chupa-41a`, with its rows 40 and 41 (`docs/delta.md`). Its join
-request is version 40's, with the pass; a host of an older or unknown
-version is sent the first 0x70 bytes (the encoded message's last 234 cut,
-`create_network_game_message_with_tail`), and as a host it reads a 0x70-byte
-request as one with no pass (`network_server_message_handler.c`), so that
-ChupathingyCE's clients and its own older ones still join. Version 39's
+it. It announces 43, OpenCE's newest, and speaks the wire `chupa-43a`
+(its own, ahead of ChupathingyCE's `chupa-41a`), with rows 42 and 43
+(`port/linux/include/delta.h`). Its hosts play 43 alone: a join request
+without 42's version word (0x70 bytes, or 40's 0x70 + 234) is answered
+"version too old", as is a Delta machine whose record is older than 42's
+(`network_server_message_handler.c`). As a client it still joins hosts of
+41 and before: its connection gives their messages an epoch of 0 and takes
+it out of its own (`network_rules_header_widen` and `_narrow`), it takes
+their record without the MCC digests, waits for no checkpoint boundary,
+sends them 40's join request (234 extra bytes) or the first 0x70, and
+throws riders as they do (`network_distributed_rules_at_least`). Version 39's
 dedicated flag, 0x04 of the advertisement's flags, was also Delta's flag:
 a Delta host now says itself in the Delta tag at the reserved bytes' tail
 instead, and sets 0x04 only as a dedicated server (with Delta's old layout

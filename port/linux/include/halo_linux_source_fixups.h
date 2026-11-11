@@ -39,8 +39,14 @@ unsigned char render_interpolation_particle_later(struct new_particle_data const
 void render_interpolation_particles_due(void);
 /* a point on an object (a nav marker's), moved to where the frame draws it */
 void render_interpolation_object_point(long object_index, union real_point3d *point);
+union real_vector3d;
+void render_interpolation_flashlight(long light_index, long unit_index, union real_vector3d *forward,
+	union real_vector3d *up);
 struct observer_result const *render_interpolation_camera(short local_player_index,
 	struct observer_result const *observer);
+union real_vector3d;
+void render_interpolation_view_turn(long unit_index, union real_point3d *position, union real_vector3d *forward,
+	union real_vector3d *up);
 void render_interpolation_first_person(short local_player_index, long weapon_index, long animation_graph_index,
 	struct real_matrix4x3 *node_matrices, short node_count, struct render_camera const *camera);
 float render_interpolation_game_time_sec(long ticks);

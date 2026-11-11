@@ -243,7 +243,7 @@ defaults every machine's key starts from:
 | Steam Deck | 128 | 128 | 128 | 14 (16 GB) | yes |
 | Android | 128 | 128 | 128 | 11 (2 GB) | yes |
 | unknown | 128 | 128 | 128 | 0 | yes |
-| Xbox | 16 | 16 | 128 | 6 (64 MB) | no |
+| Xbox | 16 | 32 (16 on a stock build) | 128 | 6 (64 MB) | no |
 | Xbox 360, Wii U | 32 | 32 | 128 | 9, 10 (placeholders) | yes |
 | Switch | 16 | 16 | 128 | 12 (placeholder until its port plays) | yes |
 | PSP, Vita | 16 | 16 | 128 | 6, 9 (placeholders) | no |
@@ -259,6 +259,10 @@ Co-op: a host offers no network co-op (the Map screen's campaign levels
 refuse, and say why in the log) while a machine of a platform without it is
 in its game, nor on such a platform itself (`delta_peer_room_coop`). Of the
 platforms that play today, only the original Xbox is kept out.
+
+The original Xbox hosts 16 players at most, on LAN or online, and joins
+games of up to 32. A console build joins no more than its own tables hold
+(`HALO_CONSOLE_PLAYERS`), so a stock Xbox build of 16 claims 16 in its key.
 
 A host protects the weakest machine of its game: it takes no more players
 than the smallest of its own hosting limit and every Delta machine's join
@@ -830,7 +834,7 @@ device token):
   refuses a body that isn't an MP4 (its top-level boxes, `ftyp` first and
   a `moov`), and drops an upload that sends nothing for a minute.
 
-The game's side is `port/linux/game/report_player.c` (DELTA's PLAYERS
+The game's side is `port/linux/game/report_player.c` (the Delta Guide's PLAYERS
 HERE and the scoreboard's REPORT), the dedicated server's
 `server/src/server_reports.c` (`sv_reports`, the control panel's Reports).
 
@@ -920,7 +924,7 @@ the site.
   MOD_ACTION 6, `sv_mute`, `/mute`) is muted in voice too: the host relays
   none of their frames and tells them in VOICE_CONFIG (flag 0x01, and the
   seconds left), so their game stops sending. A player's own mutes (the
-  chat log's, DELTA's PLAYERS HERE) are their game's alone and never sent.
+  chat log's, the Delta Guide's PLAYERS HERE) are their game's alone and never sent.
 - **The codec** is Opus (our own copy of Xiph's release), set up as
   OpenCE's voice is, so that a frame could pass between the two unchanged:
   48 kHz mono, 20 ms frames, one a datagram, VOIP with the voice signal,
@@ -1027,7 +1031,7 @@ hosting ours), each side logging the other's test tone as heard.
 
 ### Party teams
 
-A party (DELTA's PARTY: up to 8 players who follow their leader into
+A party (the Delta Guide's PARTY: up to 8 players who follow their leader into
 games, kept by the site in memory) wants to play on one
 team. Halo's teams are the host's to place, so the party asks and the host
 decides, over `party_teams` (bit 21). It is additive and host-side: nothing
@@ -1333,7 +1337,7 @@ dedicated server, fetches `GET /v1/identity/revoked` every ten minutes.
 **One name.** A Delta profile has one name, its **Delta Tag**: the handle,
 3 to 20 of `a-z 0-9 _ -`, unique on the site however it's capitalized, and
 the key of every lookup and URL. The account shows it in the capitals its
-owner picked ("Milenko" for `milenko`), on the site, on DELTA, in ID_CARD
+owner picked ("Milenko" for `milenko`), on the site, in the Delta Guide, in ID_CARD
 and on the scoreboard. The capitals are ASCII, can change on the site at
 any time, and the letters can't. There's no other display name. Profiles
 from before keep their old free-form names on the site (`old_display`),
@@ -1366,7 +1370,7 @@ and show their handle until their owner picks its capitals.
   all show as "Milenko" (and as "Player N" next to a verified Milenko). A player who isn't connected to Delta (no
   linked profile, or a guest) never has the mark.
 - **The same name everywhere.** The scoreboard, the postgame report, the
-  lobby, DELTA, chat, the kill feed and the other HUD lines (a player
+  lobby, the Delta Guide, chat, the kill feed and the other HUD lines (a player
   quitting, the name under the crosshair) all show a player the same way:
   a verified player by their Delta name, an impersonation as "Player N".
 - **On Delta you play under your verified name.** A Halo profile linked to
@@ -2279,7 +2283,7 @@ drawn by the overlay). The icons come, fade and scroll with that line.
 Medals no kill's line took get a line of their own, the icons alone. Off,
 the kill feed is retail's. The icons need the game list
 (`HALO_GAME_BROWSER`), so every console build and the dedicated server are
-without them and show the medal's name as a line of the HUD's messages. DELTA's SERVICE
+without them and show the medal's name as a line of the HUD's messages. The Delta Guide's SERVICE
 RECORD shows your top medals with their icons, names and counts.
 
 ### Map facts
@@ -2610,7 +2614,7 @@ copy: every Halo profile on a copy counts for the same Delta profile.
   reported). An older site sends none of these and the game shows what it
   has. `GET /v1/profiles/ID/record` gives the same record to anyone, except
   for a locked profile or one that hides its service record (404).
-- **DELTA's SERVICE RECORD** (`port/linux/game/guide_record.c`) shows the
+- **The Delta Guide's SERVICE RECORD** (`port/linux/game/guide_record.c`) shows the
   first player's Halo profile's own record beside the site's. The game
   keeps it in the profile's folder (`service_record.txt`,
   `port/linux/src/service_record.c`): every multiplayer game the profile
@@ -2950,7 +2954,7 @@ endpoint below is new, and the player key's endpoints stay.
 **Sign-in by code (Quick Connect).** A copy with a device key and no
 account (or one that signs in to another) asks for a code. Its player
 approves the code where they're already signed in: on the site at
-`/connect`, or from another signed-in device's LINK A DEVICE (in DELTA). The device
+`/connect`, or from another signed-in device's LINK A DEVICE (in the Delta Guide). The device
 asks its own player to confirm, then gets its certificate. The player key is
 never sent or shown.
 
@@ -3082,12 +3086,12 @@ and no key.
   account's confirmed address, and kept in the admin log (by its profile
   name, never an address).
 - **The game** shows the list under Delta Profile's DEVICES, also opened
-  from DELTA's SETTINGS: this device offers SIGN OUT, another device REVOKE
-  (asked first). DELTA's SETTINGS (and X in the list) also have LINK A
+  from the Delta Guide's SETTINGS: this device offers SIGN OUT, another device REVOKE
+  (asked first). The Delta Guide's SETTINGS (and X in the list) also have LINK A
   DEVICE, where the player enters another device's code with the d-pad: 8
   characters, or an older copy's 6-character Link Profile code. A device's
   code shows the device and the warning first, then APPROVE or DENY.
-  DELTA's SIGN IN shows a Quick Connect code right in its row, and A there
+  The Delta Guide's SIGN IN shows a Quick Connect code right in its row, and A there
   answers the question; Link Profile's dialog shows the same code with its
   QR code.
 - **The server panel** shows a player's verified profile name (from proof
@@ -3168,7 +3172,7 @@ signout signature   f579b26e3db2c34573a7a4e9842d85ef6646513dbf73706aeae41c825a44
 
 ### The doorbell
 
-DELTA asks the site for its friends every 20 seconds in the menus and
+The Delta Guide asks the site for its friends every 20 seconds in the menus and
 every minute in a game (`POST /v1/social/state`; the site takes 6 a minute
 from a copy). The doorbell makes invites, friend requests, party changes
 and friends coming online show up within about a second instead: the site
@@ -3235,7 +3239,7 @@ rings, and the game asks at once.
   rings, never what changed or for whom.
 - **The setting:** `network.doorbell` (on by default; it changes nothing in
   a game). Off, or a copy not linked, no user name and no subscription.
-  Consoles keep polling (they have no DELTA friends yet).
+  Consoles keep polling (they have no Delta friends yet).
 - **The code:** `p2p_signal.c` (`p2p_signal_doorbell`), `p2p.c`
   (`p2p_doorbell`, `p2p_doorbell_rings`), `browser.c` and `social.c` (the
   ring's poll), and the site's `doorbell.py`. Tests: `tools/test_doorbell.py`
@@ -3249,9 +3253,9 @@ Clans are groups of Delta profiles, kept by the game list (its
 motto, an emblem and ranked members (leader, officers, members). Making a
 clan, ranks, handing the clan to another member and the emblem are on the
 site (`/profile#clan`, `/clans/TAG`). Inviting and kicking are on the site
-and in DELTA.
+and in the Delta Guide.
 
-- **In DELTA:** the CLAN section shows the clan's members by rank, each
+- **In the Delta Guide:** the CLAN section shows the clan's members by rank, each
   with where they are (in a game, online or offline, worked out as a
   friend's: hidden while they appear offline or hide their game). The
   leader and officers also see the invites they have out, and get INVITE
@@ -3278,7 +3282,7 @@ and in DELTA.
   with a handle, or `roster`) answers with the same two, the members'
   handles and presence, and a leader's or officer's `clan_invited`. The
   friends poll (`/v1/social/state` with `"clan": true`) carries the same
-  roster, so DELTA spends no extra requests on it. A site from before
+  roster, so the Delta Guide spends no extra requests on it. A site from before
   these leaves them out, and the game shows what `/v1/game/profile` has.
 - **Tags in games:** a verified player ("Verified names") who shows their
   clan tag is "[TAG] Name" on the scoreboard, the postgame report and the
@@ -3302,7 +3306,8 @@ and in DELTA.
 - **Warthog (the consoles):** speaks the legacy protocol with OpenCE's
   layout (the cross-play work) and joins as a Delta Peer client with its
   platform key (`HALO_CONSOLE_DELTA`), so hosts keep games to its limits
-  (16 players on the original Xbox) unless its player opts in.
+  unless its player opts in. The original Xbox hosts 16 players at most and
+  joins games of up to 32. A stock Xbox build holds 16, so it joins 16.
 - **Halo Custom Edition 1.0.10 players:** outside Delta. A dedicated
   server can list itself on the GameSpy masters (`gamespy_listing`), and
   with `ce_joins` (off by default) it answers a Custom Edition client's

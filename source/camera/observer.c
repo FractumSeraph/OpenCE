@@ -485,6 +485,22 @@ void observer_get_tick_velocity(
 	return;
 }
 
+/* port: where the observer's camera is centered (the unit it follows, a
+camera point) before its offset and distance, for drawing it between ticks
+(port/linux/game/render_interpolation.c); TRUE while it glides there frame by
+frame (a timed command), FALSE when it is put on its target, which moves once
+a tick */
+boolean observer_get_focus(
+	short local_player_index,
+	real_point3d *focus)
+{
+	struct observer *observer = observer_get(local_player_index);
+
+	*focus = observer->focus_position;
+
+	return observer->last_command.parameter_timers[_observer_command_parameter_focus_position] > 0.f;
+}
+
 #endif
 
 /* port: where the camera looks from before its offset and distance: the

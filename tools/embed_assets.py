@@ -12,13 +12,17 @@ game as C data:
 
     python tools/embed_assets.py OUTPUT.c
     python tools/embed_assets.py --fonts OUTPUT.c
+    python tools/embed_assets.py --fonts --prompt-fonts steam_deck,wiiu OUTPUT.c
 
 writes OUTPUT.c with each PNG and the bitmap it stands for (its tag, index
 and the checksum of its pixels, from port/assets/hud/layout.json and
 port/assets/titles/titles.json), as port/linux/src/hud_hires.h declares
 them, and the text's fonts, as port/linux/src/text_hires.h does; with
 --fonts, the overlay's fonts (port/linux/ui/fonts, the game browser's), as
-port/linux/src/posix_ui_font.c declares them. The builds generate them
+port/linux/src/posix_ui_font.c declares them. Some of the controllers'
+prompt fonts are for a few devices (PROMPT_FONTS); --prompt-fonts names the
+ones a build embeds (none: "none"), and the rest are left empty, their
+buttons drawn as pills. Without it, a build embeds them all. The builds generate them
 (hud_assets_build, called by tools/linux_build.py, windows_build.py and
 android_build.py), so the assets are the committed source and Android needs
 no files beside its guest image.
@@ -33,7 +37,7 @@ import struct
 import zlib
 import sys
 from pathlib import Path
-from typing import Any, List
+from typing import Any, List, Optional
 
 ROOT = Path(__file__).resolve().parent.parent
 HUD_ASSETS = Path("port/assets/hud")
@@ -49,6 +53,13 @@ BUTTON_ASSETS = Path("port/assets/buttons")
 BUTTON_LIST = BUTTON_ASSETS / "buttons.json"
 CONTROLLER_ASSETS = Path("port/assets/controller_buttons")
 CONTROLLER_LIST = CONTROLLER_ASSETS / "buttons.json"
+# the other set of titles, display.title_font = "cyborg" (tools/title_assets.py
+# --set cyborg), with the menus' files of that set (ce/port_cyborg): only in
+# the builds with HALO_TITLE_CHOICE (halo_console_features.h), so not on the
+# consoles
+TITLE_CYBORG_ASSETS = Path("port/assets/titles_cyborg")
+TITLE_CYBORG_LIST = TITLE_CYBORG_ASSETS / "titles.json"
+MENU_CYBORG_PREFIX = "ce/port_cyborg/"
 FONT_ASSETS = Path("port/assets/fonts")
 FONT_LIST = FONT_ASSETS / "fonts.json"
 MENU_ASSETS = Path("port/assets/menus")
@@ -87,11 +98,20 @@ def role_font(role: str) -> str:
 
 
 # (then the menus' faces, which the text's fonts are too, by their roles in
-# fonts.json: Online Games is drawn in them)
+# fonts.json: Online Games is drawn in them; then the titles' in each of
+# display.title_font's sets, as the menus' title pictures are set:
+# Chupathingy Titles, and the large role's font)
 UI_FONT_FILES += [FONT_ASSETS / role_font("large"), FONT_ASSETS / role_font("small"),
-                  FONT_ASSETS / "OpenCE-Regular.ttf"]
+                  FONT_ASSETS / "ChupathingyTitles-Regular.ttf", FONT_ASSETS / role_font("large")]
 # (then the scoreboard's platform logos)
 UI_FONT_FILES += [UI_FONTS / "platform_icons.ttf"]
+# (then the prompt fonts of a few devices, by the names --prompt-fonts takes:
+# the Steam Deck's, the Steam Controller's and the Wii U's, as ui_font.h has
+# them)
+PROMPT_FONTS = {"steam_deck": UI_FONTS / "input_steam_deck.ttf",
+                "steam_controller": UI_FONTS / "input_steam_controller.ttf",
+                "wiiu": UI_FONTS / "input_wiiu.ttf"}
+UI_FONT_FILES += list(PROMPT_FONTS.values())
 # the controller's button icons the overlay's prompts draw (port/assets/prompts,
 # tools/prompt_assets.py), in ui_overlay.c's order: A, B, X, Y, Start, LT, RT,
 # LB, RB, Back
@@ -115,13 +135,14 @@ def font_files() -> List[str]:
 
 def textures() -> List[tuple]:
     """The textures: each one's folder, its entry in its list, and whether
-    it is the menus' (a title or a button icon, drawn with the high-res
-    text)."""
+    it is the menus' (0: the HUD's, 1: a classic title or a button icon,
+    drawn with the high-res text, 2: a cyborg title)."""
     result = []
-    for folder, listing, title in ((HUD_ASSETS, LAYOUT, False), (TITLE_ASSETS, TITLE_LIST, True),
-                                   (BUTTON_ASSETS, BUTTON_LIST, True), (HUD_ASSETS, CE_LAYOUT, False),
-                                   (HUD_ASSETS, MCC_LAYOUT, False),
-                                   (CONTROLLER_ASSETS, CONTROLLER_LIST, True)):
+    for folder, listing, title in ((HUD_ASSETS, LAYOUT, 0), (TITLE_ASSETS, TITLE_LIST, 1),
+                                   (BUTTON_ASSETS, BUTTON_LIST, 1), (HUD_ASSETS, CE_LAYOUT, 0),
+                                   (HUD_ASSETS, MCC_LAYOUT, 0),
+                                   (CONTROLLER_ASSETS, CONTROLLER_LIST, 1),
+                                   (TITLE_CYBORG_ASSETS, TITLE_CYBORG_LIST, 2)):
         if (ROOT / listing).is_file():
             result += [(folder, asset, title) for asset in json.loads((ROOT / listing).read_text())["assets"]]
     return result
@@ -141,7 +162,8 @@ def smaa_files() -> List[tuple]:
 
 def hud_asset_inputs() -> List[Path]:
     """The files the generated source is made from."""
-    inputs = [listing for listing in (LAYOUT, CE_LAYOUT, MCC_LAYOUT, CE_STOCK, CUSTOM_EDITION_HUD, TITLE_LIST, BUTTON_LIST, CONTROLLER_LIST, FONT_LIST, MENU_LIST)
+    inputs = [listing for listing in (LAYOUT, CE_LAYOUT, MCC_LAYOUT, CE_STOCK, CUSTOM_EDITION_HUD, TITLE_LIST,
+                                      TITLE_CYBORG_LIST, BUTTON_LIST, CONTROLLER_LIST, FONT_LIST, MENU_LIST)
               if (ROOT / listing).is_file()]
     return [*inputs, *(folder / f"{asset['name']}.png" for folder, asset, _ in textures()),
             *(FONT_ASSETS / name for name in font_files()), *(MENU_ASSETS / name for name in menu_files()),
@@ -159,7 +181,7 @@ def hud_configure_inputs() -> List[Path]:
     list may rename or remove."""
     inputs = []
     for folder, listing in ((HUD_ASSETS, LAYOUT), (HUD_ASSETS, CE_LAYOUT), (HUD_ASSETS, MCC_LAYOUT), (TITLE_ASSETS, TITLE_LIST), (BUTTON_ASSETS, BUTTON_LIST),
-                            (CONTROLLER_ASSETS, CONTROLLER_LIST),
+                            (TITLE_CYBORG_ASSETS, TITLE_CYBORG_LIST), (CONTROLLER_ASSETS, CONTROLLER_LIST),
                             (FONT_ASSETS, FONT_LIST), (MENU_ASSETS, MENU_LIST)):
         if (ROOT / listing).is_file():
             inputs += [folder, listing]
@@ -208,14 +230,16 @@ def server_ui_build(n: Any, prefix: str, output: Path) -> List[Path]:
     return [output]
 
 
-def ui_fonts_build(n: Any, prefix: str, output: Path, sln: Any) -> List[Path]:
+def ui_fonts_build(n: Any, prefix: str, output: Path, sln: Any, prompt_fonts: Optional[str] = None) -> List[Path]:
     """Emits the rule that generates the overlay's fonts' source (with the
-    game browser); returns [output], or nothing"""
+    game browser); returns [output], or nothing. prompt_fonts: the few
+    devices' prompt fonts the build embeds (--prompt-fonts; None: all)"""
     if not getattr(sln, "game_browser", False):
         return []
     n.rule(
         name=f"{prefix}_embed_fonts",
-        command="$python tools/embed_assets.py --fonts $out",
+        command="$python tools/embed_assets.py --fonts "
+        + (f"--prompt-fonts {prompt_fonts} " if prompt_fonts is not None else "") + "$out",
         description=f"{prefix.upper()} EMBED $out",
     )
     n.build(outputs=output, rule=f"{prefix}_embed_fonts",
@@ -243,21 +267,37 @@ def write(output: Path, lines: List[str]) -> None:
         output.write_text(text)
 
 
-def overlay_fonts(output: Path) -> None:
+def prompt_fonts(names: str) -> List[Path]:
+    """The prompt fonts --prompt-fonts names (comma-separated; "none")."""
+    chosen = [] if names == "none" else [name for name in names.split(",") if name]
+    for name in chosen:
+        if name not in PROMPT_FONTS:
+            sys.exit(f"--prompt-fonts: no prompt font {name} (there are {', '.join(PROMPT_FONTS)})")
+    return [PROMPT_FONTS[name] for name in chosen]
+
+
+def overlay_fonts(output: Path, embedded: List[Path]) -> None:
     lines = [
         "/* generated by tools/embed_assets.py --fonts from port/linux/ui/fonts and port/assets/fonts: do not edit */",
         "",
         *WORD_MACRO,
     ]
-    for index, name in enumerate(UI_FONT_FILES):
+    # (each file once: one face can be several of the overlay's fonts)
+    unique = list(dict.fromkeys(UI_FONT_FILES))
+    for index, name in enumerate(unique):
         lines.append(f"static const unsigned int font{index}[] = {{")
-        lines.extend(words((ROOT / name).read_bytes()))
+        # (a prompt font the build leaves out: no font, which posix_ui_font.c
+        # finds it cannot read)
+        if name in PROMPT_FONTS.values() and name not in embedded:
+            lines.append("\t0,")
+        else:
+            lines.extend(words((ROOT / name).read_bytes()))
         lines.append("};")
         lines.append("")
     lines.append("/* (posix_ui_font.c's: each font's data, as words) */")
     lines.append(f"const unsigned int *const ui_font_files[{len(UI_FONT_FILES)}] =")
     lines.append("{")
-    lines.append("\t" + ", ".join(f"font{index}" for index in range(len(UI_FONT_FILES))) + ",")
+    lines.append("\t" + ", ".join(f"font{unique.index(name)}" for name in UI_FONT_FILES) + ",")
     lines.append("};")
     lines.append("")
     # the prompts' icons, as their pixels (RGBA, rows from the top), each
@@ -344,14 +384,17 @@ def png_size(data: bytes, name: str) -> tuple:
 
 def main() -> None:
     if len(sys.argv) == 3 and sys.argv[1] == "--fonts":
-        overlay_fonts(Path(sys.argv[2]))
+        overlay_fonts(Path(sys.argv[2]), list(PROMPT_FONTS.values()))
+        return
+    if len(sys.argv) == 5 and sys.argv[1] == "--fonts" and sys.argv[2] == "--prompt-fonts":
+        overlay_fonts(Path(sys.argv[4]), prompt_fonts(sys.argv[3]))
         return
     hud = True
     if len(sys.argv) == 3 and sys.argv[1] == "--no-hud":
         hud = False
         del sys.argv[1]
     if len(sys.argv) != 2:
-        sys.exit("usage: embed_assets.py [--fonts | --no-hud] OUTPUT.c")
+        sys.exit("usage: embed_assets.py [--fonts [--prompt-fonts NAMES] | --no-hud] OUTPUT.c")
     lines = [
         "/* generated by tools/embed_assets.py from port/assets: do not edit */",
         "",
@@ -372,9 +415,13 @@ def main() -> None:
         scale = asset["scale"]
         if (width, height) != (asset["width"] * scale, asset["height"] * scale):
             sys.exit(f"{name}: {width}x{height}, not {scale}x its bitmap's {asset['width']}x{asset['height']}")
+        # (the cyborg titles only with HALO_TITLE_CHOICE)
+        choice = ["#ifdef HALO_TITLE_CHOICE"] if title == 2 else []
+        lines.extend(choice)
         lines.append(f"static const unsigned int asset{index}[] = {{")
         lines.extend(words(data))
         lines.append("};")
+        lines.extend(["#endif"] if choice else [])
         lines.append("")
         tag = asset["tag"].replace("\\", "\\\\")
         coverage = int(asset.get("coverage", False) or any(cell.get("kind") == "meter" for cell in asset.get("cells", [])))
@@ -387,17 +434,21 @@ def main() -> None:
         ce = custom_edition.get((asset["tag"], asset["bitmap"]), {})
         if ce.get("replacement", asset["name"]) != asset["name"]:
             ce = {}
+        table.extend(choice)
         table.append(f'\t{{ "{tag}", {asset["bitmap"]}, {width}, {height}, 0x{asset["crc"]:08x}u, {coverage}, '
-                     f'{point_threshold}, {int(title)}, 0x{sprites:x}u, '
+                     f'{point_threshold}, {title}, 0x{sprites:x}u, '
                      f'{int(bool(ce))}, {int(asset.get("ce_only", False))}, {ce.get("width", 0)}, {ce.get("height", 0)}, '
                      f'{ce.get("size", 0)}, 0x{ce.get("crc", 0):08x}u, asset{index}, {len(data)} }},')
+        table.extend(["#endif"] if choice else [])
     lines.append("const struct hud_hires_embedded hud_hires_embedded[] =")
     lines.append("{")
     lines.extend(table)
     if not table:
         lines.append("\t{ 0 },")
     lines.append("};")
-    lines.append(f"const unsigned int hud_hires_embedded_count = {len(table)};")
+    # (counted, as entries are left out of some builds)
+    lines.append("const unsigned int hud_hires_embedded_count = " +
+                 ("sizeof(hud_hires_embedded) / sizeof(hud_hires_embedded[0]);" if table else "0;"))
     stock = json.loads((ROOT / CE_STOCK).read_text())["bitmaps"]
     lines.append("const struct hud_hires_ce_stock hud_hires_ce_stock[] = {")
     for item in stock:
@@ -439,19 +490,27 @@ def main() -> None:
         data = (ROOT / MENU_ASSETS / name).read_bytes()
         if name.endswith(".png"):
             png_size(data, name)
+        # (the cyborg titles only with HALO_TITLE_CHOICE)
+        choice = name.startswith(MENU_CYBORG_PREFIX)
+        lines.extend(["#ifdef HALO_TITLE_CHOICE"] if choice else [])
         lines.append(f"static const unsigned int menu{index}[] = {{")
         lines.extend(words(data))
         lines.append("};")
+        lines.extend(["#endif"] if choice else [])
         lines.append("")
     lines.append("const struct menu_file_embedded menu_files_embedded[] =")
     lines.append("{")
     for index, name in enumerate(menus):
         size = (ROOT / MENU_ASSETS / name).stat().st_size
+        choice = name.startswith(MENU_CYBORG_PREFIX)
+        lines.extend(["#ifdef HALO_TITLE_CHOICE"] if choice else [])
         lines.append(f'\t{{ "{name}", menu{index}, {size} }},')
+        lines.extend(["#endif"] if choice else [])
     if not menus:
         lines.append("\t{ 0 },")
     lines.append("};")
-    lines.append(f"const unsigned int menu_files_embedded_count = {len(menus)};")
+    lines.append("const unsigned int menu_files_embedded_count = " +
+                 ("sizeof(menu_files_embedded) / sizeof(menu_files_embedded[0]);" if menus else "0;"))
     lines.append("")
     # SMAA's shader, as text a GLSL compiler takes (ASCII, ending in a NUL),
     # and its lookup textures (xgpu_post.c); each of size 0 that the

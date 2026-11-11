@@ -30,6 +30,15 @@ HALO_CONSOLE_LIGHT_LIMITS
 	specular highlights (display.dynamic_light_limit and
 	display.specular_light_limit, source/objects/object_lights.c). The
 	desktop builds default both to 0, every light lit as before, and opt in
+HALO_CONSOLE_MATCH_LIGHT_LIMITS
+	the Xbox's rule for what a multiplayer match draws, as retail: no
+	dynamic lights with 13 or more players (or 9 or more with two or more
+	vehicles), no flashlight beams with 5 or more players or 4 or more
+	vehicles, decided at the match's start (port/linux/game/
+	match_light_limits.h, game_engine_build_lighting). Drawing only: the
+	flashlight's toggle, battery and effect run as on every other machine
+	in the game. For a GPU of the original Xbox's size: the desktop builds
+	draw every light
 HALO_CONSOLE_WIDGET_POOL_SIZE
 	the menus' widget memory, in bytes, for a console that shows only the
 	Xbox's menus: the desktop's 256 KB is for the PC menus' screens
@@ -287,6 +296,12 @@ HALO_CONSOLE_NO_LOADING_PICTURE
 	instead of Chupathingy's picture (port/linux/game/loading_picture.c,
 	display.xbox_loading_picture): every console, whose packaging has no
 	step for the picture
+HALO_CONSOLE_NO_TITLE_CHOICE
+	only the classic titles (port/assets/titles, Chupathingy Titles), not
+	the second set display.title_font = "cyborg" draws (port/assets/
+	titles_cyborg and the menus' ce/port_cyborg, about 2.5 MB of pictures):
+	every console, for its memory; the desktop builds and the phones have
+	both (HALO_TITLE_CHOICE)
 HALO_CONSOLE_ANAMORPHIC_SCREEN
 	a console that draws 640x480 and can show it on a 16:9 television,
 	which stretches the picture to fit (display.widescreen). The port says
@@ -304,6 +319,12 @@ HALO_PORT_WIDE_INTERFACE
 	columns: every native build, and a console with
 	HALO_CONSOLE_ANAMORPHIC_SCREEN. The HUD's zoomed view and the menus'
 	full-screen fades have code for it (hud_draw.c, ui_widget.c)
+HALO_CONSOLE_HOST_PLAYERS
+	the most players a game this console hosts takes, whatever its network
+	tables hold (HALO_CONSOLE_PLAYERS) and whatever Delta says: the original
+	Xbox hosts 16, on LAN or online, and joins games of up to 32 in its
+	builds of 32 (network_server_manager.c's hosted maximum; docs/delta.md,
+	"Platform policy"). Without it a host takes as many as its tables hold
 HALO_CONSOLE_SERVER_CLOSE_GRACE
 	the original game's one-second wait when a hosted game ends, before the
 	host's transport closes (network_game_server_dispose, source/
@@ -395,8 +416,10 @@ compile lines: source/cseries/xbox_address.h).
 #define HALO_CONSOLE_OVERSIZED_MAPS 1
 #define HALO_CONSOLE_LIGHT_LIMITS 1
 #define HALO_CONSOLE_XBOX_MAP_SIZES 1
+#define HALO_CONSOLE_MATCH_LIGHT_LIMITS 1
 #define HALO_CONSOLE_NO_HALOMD_MAPS "the Xbox"
 #define HALO_CONSOLE_SERVER_CLOSE_GRACE 1
+#define HALO_CONSOLE_HOST_PLAYERS 16
 #define HALO_CONSOLE_ANAMORPHIC_SCREEN 1
 #define HALO_CONSOLE_FRAME_RATE 1
 #define HALO_CONSOLE_VIEW_INTERPOLATION 1
@@ -528,6 +551,17 @@ leave it out with the rest of HALO_CONSOLE_NO_DELTA_IDENTITY */
 #if (defined(HALO_CONSOLE) || defined(HALO_SWITCH_CONSOLE) || defined(HALO_WIIU_CONSOLE) || \
 	defined(HALO_XBOX_CONSOLE) || defined(HALO_XBOX360_CONSOLE)) && !defined(HALO_CONSOLE_NO_LOADING_PICTURE)
 #define HALO_CONSOLE_NO_LOADING_PICTURE 1
+#endif
+
+/* the titles' second set, display.title_font = "cyborg" (the generated
+hud_hires_assets.c's titles and menus' files, hud_hires.c, menu_files.c):
+not on the consoles, HALO_CONSOLE_NO_TITLE_CHOICE */
+#if (defined(HALO_CONSOLE) || defined(HALO_SWITCH_CONSOLE) || defined(HALO_WIIU_CONSOLE) || \
+	defined(HALO_XBOX_CONSOLE) || defined(HALO_XBOX360_CONSOLE)) && !defined(HALO_CONSOLE_NO_TITLE_CHOICE)
+#define HALO_CONSOLE_NO_TITLE_CHOICE 1
+#endif
+#if !defined(HALO_CONSOLE_NO_TITLE_CHOICE) && !defined(HALO_SERVER)
+#define HALO_TITLE_CHOICE 1
 #endif
 
 /* a map's shaders made while its loading screen is up, from its shader key

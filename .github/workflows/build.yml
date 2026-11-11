@@ -356,6 +356,7 @@ jobs:
           python3 tools/test_bitmap_byte_order.py
           python3 -m pytest -q tools/test_console_link.py
           python3 -m pytest -q tools/test_console_claims.py
+          python3 -m pytest -q tools/test_console_gates.py
           python3 tools/test_console_https.py
 
       # (Delta's wire on a big-endian machine, as the Xbox 360 and Wii U are:
