@@ -539,7 +539,9 @@ def generate_android_build(n: Writer, sln: Any) -> None:
     guest_host_only = {"memory_watch.c"}  # replaced by guest_memory_watch.c
     # (the overlay's fonts are plain C, drawn in the guest with the overlay:
     # stb_truetype; the fonts, tools/embed_assets.py --fonts)
-    guest_posix = {"posix_ui_font.c": f"-I{STB_DIR}"}
+    guest_posix = {"posix_ui_font.c": f"-I{STB_DIR}",
+                   # (ChupathingyCE's voice chat: its <opus.h>, port/third_party/opus)
+                   "voice.c": "-Iport/third_party/opus/include"}
     for source in sorted((LINUX_DIR / "src").glob("*.c")):
         if source.name in guest_posix:
             objects.append(guest_object(source, f"{platform_cflags} {guest_posix[source.name]}"))
