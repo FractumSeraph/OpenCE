@@ -692,12 +692,11 @@ TEAMPLAY_GAMETYPE_ROWS = [
     ]),
 ]
 TEAMPLAY_ROWS = [
-    ("voice_mode", "VOICE CHAT:", ["OFF", "TEAM NEAR", "ANYONE NEAR", "TEAM", "TEAM, ENEMIES NEAR"], [
+    # (port, this fork: ChupathingyCE's voice chat on or off, network.voice; the
+    # browser build's OpenCE's, network.voice_mode: menu_functions.c)
+    ("voice_mode", "VOICE CHAT:", ["ON", "OFF"], [
+        "Players may talk in the game, on the channels\\nthey choose: party, team or near.",
         "No voice chat during the game.",
-        "Players hear their teammates who are near them.",
-        "Players hear everyone who is near them.",
-        "Players hear all their teammates, wherever they\\nare.",
-        "Players hear all their teammates, and the enemies\\nwho are near them.",
     ]),
     ("voice_lobby", "LOBBY VOICE CHAT:", ["ON", "OFF"], [
         "Everyone hears everyone in the lobby, before and\\nafter the game.",

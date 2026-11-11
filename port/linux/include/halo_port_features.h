@@ -160,12 +160,11 @@ and Android's (HALO_GAME_BROWSER), as host and client, and the dedicated
 server's as a relay alone; HALO_PORT_VOICE_AUDIO is the microphone, Opus
 and playback, which a dedicated server (HALO_SERVER) leaves out: it relays
 frames without decoding them */
-/* (port, this fork: not built. The fork's voice chat is OpenCE's,
-network_voice.c, over the game's own connection, which every machine of a
-game has; ChupathingyCE's settings of the same names mean other things
-(network.voice_proximity is a distance there, on or off here), and two
-would open the microphone twice. Its code stays merged, off) */
-#if 0 && defined(HALO_GAME_BROWSER) && !defined(HALO_CONSOLE_NO_VOICE)
+/* (port, this fork, since 2026-11-11: the voice chat of the desktop and
+Android, as the user chose; OpenCE's, network_voice.c, answers its calls
+from this one there, and is the browser build's alone, which has no Delta
+Peer: network_voice.h) */
+#if defined(HALO_GAME_BROWSER) && !defined(HALO_CONSOLE_NO_VOICE)
 #define HALO_PORT_VOICE
 #if !defined(HALO_SERVER)
 #define HALO_PORT_VOICE_AUDIO

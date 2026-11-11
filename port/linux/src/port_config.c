@@ -892,6 +892,10 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"How sounds are converted to the output's rate: \"sinc\" with a\n"
 		"band-limited low pass; \"linear\" between neighbouring samples,\n"
 		"brighter for the aliasing it lets through." },
+#ifndef HALO_PORT_VOICE
+	/* (OpenCE's voice chat's, network_voice.c: the browser build's alone, which
+	has no Delta Peer; the desktop's and Android's voice chat is
+	ChupathingyCE's, voice_game.c, whose settings these names are there) */
 	{ "audio.voice_chat", _config_string, "\"push_to_talk\"", "HALO_VOICE_CHAT", _environment_value, _platform_all,
 		"Talking in network games' voice chat: \"push_to_talk\" (while\n"
 		"controls.push_to_talk is held; the microphone opens the first time),\n"
@@ -899,6 +903,7 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"voices play whatever this is (audio.voice_volume 0 silences them)." },
 	{ "audio.voice_volume", _config_real, "1.0", "HALO_VOICE_VOLUME", _environment_value, _platform_all,
 		"The volume of the other players' voices (0 to 2)." },
+#endif
 	{ "audio.output_device", _config_string, "\"default\"", "HALO_AUDIO_OUTPUT_DEVICE", _environment_value,
 		_platform_desktop,
 		"Where the game's sound and the voices play: a device's name as Settings >\n"
@@ -1340,6 +1345,10 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 	{ "network.host_public", _config_boolean, "true", "HALO_NET_HOST_PUBLIC", _environment_value, _platform_all,
 		"New internet games you host start as PUBLIC. false starts them as\n"
 		"PRIVATE." },
+#ifndef HALO_PORT_VOICE
+	/* (OpenCE's voice chat's, network_voice.c: the browser build's alone, which
+	has no Delta Peer; the desktop's and Android's voice chat is
+	ChupathingyCE's, voice_game.c, whose settings these names are there) */
 	{ "network.voice_lobby", _config_boolean, "true", "HALO_NET_VOICE_LOBBY", _environment_value, _platform_all,
 		"Hosting: voice chat in the lobby, before and after a game, where every\n"
 		"player hears every other." },
@@ -1357,6 +1366,7 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		_platform_all,
 		"Hosting: how near (world units: 1 is about 3 metres) a player must be\n"
 		"to be heard by proximity voice chat (5 to 100)." },
+#endif
 	{ "network.text_chat", _config_string, "\"on\"", "HALO_NET_TEXT_CHAT", _environment_value, _platform_all,
 		"Hosting: the text chat: \"on\" (links in lines are refused), \"links\"\n"
 		"(links allowed) or \"off\", in either case. Always off in a game a\n"
@@ -2522,9 +2532,14 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"the first frame); 0 never." },
 	{ "debug.hidden_window", _config_boolean, "false", "HALO_HIDDEN_WINDOW", _environment_set_is_true, _platform_desktop,
 		"Keep the window hidden, and never fullscreen." },
+#ifndef HALO_PORT_VOICE
+	/* (OpenCE's voice chat's, network_voice.c: the browser build's alone, which
+	has no Delta Peer; the desktop's and Android's voice chat is
+	ChupathingyCE's, voice_game.c, whose settings these names are there) */
 	{ "debug.voice_test", _config_boolean, "false", "HALO_VOICE_TEST", _environment_set_is_true, _platform_all,
 		"Voice chat's automated tests: a tone instead of the microphone, and\n"
 		"each voice heard logged once a second." },
+#endif
 	{ "debug.null_renderer", _config_boolean, "false", "HALO_NULL_RENDERER", _environment_set_is_true, _platform_all,
 		"Run without a window, and draw nothing." },
 	{ "debug.gl_debug", _config_boolean, "false", "HALO_GL_DEBUG", _environment_set_is_true, _platform_all,
@@ -5157,8 +5172,10 @@ static const struct
 	{ "server.chat_filter_slurs", { "off", "severe", "strong", "mild", NULL }, NULL },
 	{ "server.chat_filter_swearing", { "off", "severe", "strong", "mild", NULL }, NULL },
 	{ "server.chat_filter_insults", { "off", "severe", "strong", "mild", NULL }, NULL },
+#ifndef HALO_PORT_VOICE
 	{ "network.voice_mode", { "off", "team_proximity", "team_enemy_proximity", "team_global",
 		"team_global_enemy_proximity", NULL }, NULL },
+#endif
 	{ "streamer.slurs", { "off", "severe", "strong", "mild", NULL }, NULL },
 	{ "streamer.swearing", { "off", "severe", "strong", "mild", NULL }, NULL },
 	{ "streamer.insults", { "off", "severe", "strong", "mild", NULL }, NULL },

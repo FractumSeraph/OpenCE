@@ -478,11 +478,8 @@
 		<on event="left_mouse" run="mouse spinner 1wide click"/>
 	</widget>
 	<strings name="main_menu/multiplayer_type_select/server_settings/voice_options/var_voice_mode">
+		<string text="ON"/>
 		<string text="OFF"/>
-		<string text="TEAM NEAR"/>
-		<string text="ANYONE NEAR"/>
-		<string text="TEAM"/>
-		<string text="TEAM, ENEMIES NEAR"/>
 	</strings>
 	<widget name="main_menu/multiplayer_type_select/server_settings/voice_options/op_voice_lobby" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF">
 		<child widget="main_menu/multiplayer_type_select/server_settings/voice_options/voice_lobby_label"/>
@@ -568,11 +565,8 @@
 		<string text="TEXT CHAT:"/>
 	</strings>
 	<strings name="main_menu/multiplayer_type_select/server_settings/voice_options/cap_voice_options">
+		<string text="Players may talk in the game, on the channels\nthey choose: party, team or near."/>
 		<string text="No voice chat during the game."/>
-		<string text="Players hear their teammates who are near them."/>
-		<string text="Players hear everyone who is near them."/>
-		<string text="Players hear all their teammates, wherever they\nare."/>
-		<string text="Players hear all their teammates, and the enemies\nwho are near them."/>
 		<string text="Everyone hears everyone in the lobby, before and\nafter the game."/>
 		<string text="No voice chat in the lobby."/>
 		<string text="Voices at 8 kilobits a second, in the lobby\nand in the game."/>

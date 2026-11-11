@@ -108,6 +108,111 @@ enum
 /* the speaker's bitmap (network_voice_draw_icon): the menus' voice/speaker,
 as their bitmaps are named (menu_tags.c) */
 #define VOICE_ICON_BITMAP "pc\\voice\\speaker"
+
+#ifdef HALO_PORT_VOICE
+/* ---------- (port, this fork, since 2026-11-11) ChupathingyCE's voice chat
+
+The desktop's and Android's voice chat is ChupathingyCE's (voice_game.c,
+over Delta Peer: party, team, near and everyone channels), as the user
+chose; this file's, OpenCE's, is the browser build's alone. The lobby, the
+scoreboard and the HUD still ask here: who is talking is voice_game.c's,
+and a mute is the text chat's local mute (chat.c), which voice_game.c
+obeys. OpenCE's voice messages are not taken (a machine of OpenCE's sends
+none to a host that never says it hears them). */
+#include "voice_game.h"
+#include "chat.h"
+
+/* the name of the machine's first player in the game, for chat.c's mutes
+(which are by machine and name); FALSE if it has none */
+static boolean voice_machine_player_name(
+	long machine_index,
+	wchar_t *name)
+{
+	struct data_iterator iterator;
+	struct player_datum *player;
+
+	if (machine_index < 0 || machine_index >= HALO_PORT_MAXIMUM_NETWORK_MACHINES || !player_data)
+		return FALSE;
+	data_iterator_new(&iterator, player_data);
+	while ((player = data_iterator_next(&iterator)) != NULL)
+	{
+		if (player->network_player_data.machine_index == machine_index)
+		{
+			memcpy(name, player->name, sizeof(player->name));
+			return TRUE;
+		}
+	}
+	return FALSE;
+}
+
+void network_voice_update(
+	void)
+{
+	return;
+}
+
+boolean network_voice_handles_message(
+	word const *message,
+	word size)
+{
+	(void)message;
+	(void)size;
+	return FALSE;
+}
+
+void network_voice_handle_message(
+	long machine_index,
+	word const *message,
+	word size)
+{
+	(void)machine_index;
+	(void)message;
+	(void)size;
+}
+
+void network_voice_machine_joined(
+	long machine_index)
+{
+	(void)machine_index;
+}
+
+boolean network_voice_available(
+	void)
+{
+	return strcmp(config_string("audio.voice_chat"), "off") != 0;
+}
+
+boolean network_voice_machine_speaking(
+	long machine_index)
+{
+	if (machine_index < 0 || machine_index >= HALO_PORT_MAXIMUM_NETWORK_MACHINES)
+		return FALSE;
+	if (machine_index == network_game_client_get_local_machine_index())
+		return voice_game_talking();
+	return voice_game_machine_talking((short)machine_index) && !network_voice_machine_muted(machine_index);
+}
+
+boolean network_voice_machine_muted(
+	long machine_index)
+{
+	wchar_t name[sizeof(((struct player_datum *)0)->name) / sizeof(wchar_t)];
+
+	return voice_machine_player_name(machine_index, name) && chat_local_muted((short)machine_index, name);
+}
+
+void network_voice_mute_machine(
+	long machine_index,
+	boolean mute)
+{
+	wchar_t name[sizeof(((struct player_datum *)0)->name) / sizeof(wchar_t)];
+
+	if (machine_index == network_game_client_get_local_machine_index())
+		return;
+	if (voice_machine_player_name(machine_index, name))
+		chat_local_mute((short)machine_index, name, mute);
+}
+
+#else
 #define VOICE_OPEN_MIC_LEVEL 0.01f
 /* proximity: full volume this near, quieter further (world units) */
 #define VOICE_NEAR_DISTANCE 3.0f
@@ -1020,6 +1125,8 @@ boolean network_voice_available(
 {
 	return voice_session && voice_settings_heard;
 }
+
+#endif
 
 /* a speaker drawn in the rectangle (a square of its height, at its left;
 muted: struck through, in red), fading with alpha: Lucide's icons

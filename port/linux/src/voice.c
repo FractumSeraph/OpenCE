@@ -208,6 +208,10 @@ static void read_settings(void)
 	voice.open_mic_level = clamped(config_real("audio.voice_open_mic_level"), 0.0001f, 1.0f);
 	voice.positional = config_boolean("audio.voice_positional");
 	snprintf(voice.input_device, sizeof(voice.input_device), "%s", config_string("audio.voice_input_device"));
+	/* (port, this fork: else Audio Setup's INPUT DEVICE, audio.input_device,
+	"default" being the system's) */
+	if (!voice.input_device[0] && strcmp(config_string("audio.input_device"), "default"))
+		snprintf(voice.input_device, sizeof(voice.input_device), "%s", config_string("audio.input_device"));
 	/* (the test feed: talks all the time, push to talk or not) */
 	if (test && test[0] && !voice.test)
 	{

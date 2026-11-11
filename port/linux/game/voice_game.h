@@ -94,12 +94,4 @@ player's) */
 boolean voice_game_talking(void);
 boolean voice_game_machine_talking(short machine_index);
 
-/* (port, this fork: not built, halo_port_features.h: the calls of DELTA's
-screens, guide.c, as with no voice) */
-#if !defined(HALO_PORT_VOICE)
-#define voice_game_talking() FALSE
-#define voice_game_machine_talking(machine_index) FALSE
-#define voice_game_set_party(tag) ((void)(tag))
-#endif
-
 #endif

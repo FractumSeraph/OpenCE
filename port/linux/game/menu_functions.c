@@ -9743,13 +9743,25 @@ static struct gametype_option const gametype_options[] =
 	{ "force_team_spawns_spinner", _option_option_byte, OPTIONS_FIELD(force_team_spawns), 0, 2, { 0, 1 } },
 	/* (the host's voice chat, below them: port/linux/game/network_voice.c;
 	tools/port_settings.py's TEAMPLAY_ROWS) */
-	{ "voice_mode_spinner", _option_setting, 0, 0, 5, { 0 }, "network.voice_mode",
-		{ "off", "team_proximity", "team_enemy_proximity", "team_global", "team_global_enemy_proximity" } },
+	/* (port, this fork: ChupathingyCE's voice chat's on the desktop and Android,
+	voice_game.c: VOICE CHAT turns it on, VOICE NEAR DISTANCE is its range; the
+	browser build's OpenCE's: its whole voice chat, or none) */
+#ifdef HALO_PORT_VOICE
+	{ "voice_mode_spinner", _option_setting, 0, 0, 2, { 0 }, "network.voice", { "true", "false" } },
+#else
+	{ "voice_mode_spinner", _option_setting, 0, 0, 2, { 0 }, "network.voice_mode",
+		{ "team_global_enemy_proximity", "off" } },
+#endif
 	{ "voice_lobby_spinner", _option_setting, 0, 0, 2, { 0 }, "network.voice_lobby", { "true", "false" } },
 	{ "voice_kbps_spinner", _option_setting, 0, 0, 7, { 0 }, "network.voice_kbps",
 		{ "8", "12", "16", "24", "32", "48", "64" } },
+#ifdef HALO_PORT_VOICE
+	{ "voice_proximity_spinner", _option_setting, 0, 0, 6, { 0 }, "network.voice_range",
+		{ "5", "10", "15", "20", "30", "50" } },
+#else
 	{ "voice_proximity_spinner", _option_setting, 0, 0, 6, { 0 }, "network.voice_proximity",
 		{ "5", "10", "15", "20", "30", "50" } },
+#endif
 	/* (and the players' votes to kick: port/linux/game/network_votekick.c) */
 	{ "votekick_spinner", _option_setting, 0, 0, 2, { 0 }, "network.votekick", { "true", "false" } },
 	/* (and the text chat: port/linux/game/network_chat.c) */
