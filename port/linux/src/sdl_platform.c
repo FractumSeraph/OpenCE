@@ -2877,7 +2877,9 @@ BOOL platform_video_initialize(unsigned long width, unsigned long height)
 		glGetIntegerv(GL_MINOR_VERSION, &minor);
 		if (major < 3 || (major == 3 && minor < 3))
 		{
+#ifndef HALO_ANDROID
 			platform_gl_missing("no OpenGL 3.3 context");
+#endif
 			return FALSE;
 		}
 		/* (the shaders in the newest language the context has, of the
@@ -3414,7 +3416,13 @@ the process's end, as its device still draws into it. */
 void platform_exit_window_closed(void)
 {
 	platform_log("window closed");
+#ifdef HALO_ANDROID
+	/* (port, this fork: the Android app's guest has no SDL_GL_DestroyContext
+	nor SDL_DestroyWindow, and its process goes as the activity does) */
+	if (0)
+#else
 	if (platform_gl_context)
+#endif
 	{
 		SDL_GL_MakeCurrent(platform_window, NULL);
 		SDL_GL_DestroyContext(platform_gl_context);

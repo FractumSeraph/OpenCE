@@ -4134,6 +4134,14 @@ int browser_clip_upload(const char *path, const unsigned char *token)
 
 int browser_clips_list(char paths[][512], char names[][48], int most)
 {
+#ifndef HALO_CAPTURE
+	/* (port, this fork: no clips without ChupathingyCE's capture, which is
+	not built: halo_console_features.h) */
+	(void)paths;
+	(void)names;
+	(void)most;
+	return 0;
+#else
 	char folder[1024];
 	char **found;
 	long long times[16];
@@ -4172,6 +4180,7 @@ int browser_clips_list(char paths[][512], char names[][48], int most)
 	}
 	SDL_free(found);
 	return count;
+#endif
 }
 
 int browser_clip_state(void)

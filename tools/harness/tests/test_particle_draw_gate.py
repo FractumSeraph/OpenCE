@@ -29,6 +29,8 @@ def generated(fault=None):
         enum_with(read("source/effects/particles.h"), "_particle_datum_animates_backwards_bit"),
         enum_with(source, "_particle_state_next_sequence_initial"),
         f"#define PARTICLE_DRAW_TICK_TOLERANCE {tolerance}",
+        # (the native builds draw frames between ticks: halo_console_features.h)
+        "#define HALO_PORT_FRAMES_BETWEEN_TICKS 1",
     ))
     return (("config.inc", config + "\n"), ("under_test.inc", code + "\n"))
 

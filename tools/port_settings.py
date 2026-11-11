@@ -382,10 +382,11 @@ SCREENS = {
             # (update.channel's help is update.h's UPDATE_CHANNEL_HELP, as
             # the setup screen shows it)
             ("updates", "UPDATES", "Update checks, and which builds you get.", [
+                # (port, this fork: not the browser build's, which has no updater)
                 ("CHECK FOR UPDATES:", "update.auto", ON_OFF,
-                 "Check for a new version at startup.", NOT_CONSOLE),
+                 "Check for a new version at startup.", "desktop android"),
                 ("CHANNEL:", "update.channel", [("RELEASE", "release"), ("TESTING", "testing"), ("NIGHTLY", "nightly")],
-                 UPDATE_CHANNEL_HELP, NOT_CONSOLE),
+                 UPDATE_CHANNEL_HELP, "desktop android"),
                 # (shown once a newer version is found; how the install
                 # goes is its value and the help line: menu_functions.c)
                 INSTALL_UPDATE,
