@@ -288,6 +288,11 @@ void SDL_CloseGamepad(SDL_Gamepad *gamepad)
 	host_sdl_close_gamepad((unsigned int)gamepad);
 }
 
+void SDL_DestroyWindow(SDL_Window *window)
+{
+	host_sdl_destroy_window((unsigned int)window);
+}
+
 /* ---------- audio */
 
 /* the 32-bit build plays on the system's output alone: it lists no

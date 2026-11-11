@@ -271,6 +271,14 @@ uint32_t host_sdl_gamepad_from_id(uint32_t id)
 
 /* (the game's thread, as it handles the controller's going:
 SDL_EVENT_GAMEPAD_REMOVED in sdl_platform.c) */
+void host_sdl_destroy_window(uint32_t window)
+{
+	SDL_Window *object = handle_release(window, _handle_window, NULL);
+
+	if (object)
+		SDL_DestroyWindow(object);
+}
+
 void host_sdl_close_gamepad(uint32_t gamepad)
 {
 	SDL_Gamepad *object = handle_release(gamepad, _handle_gamepad, NULL);
