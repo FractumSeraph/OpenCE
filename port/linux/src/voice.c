@@ -44,12 +44,15 @@ copy hears is written to, for the tests' own checks. A release's build
 #include "build_identity.h"
 #include "delta_wire.h"
 
-#include <SDL3/SDL.h>
-#include <opus.h>
+/* (the C library's first: SDL_stdinc.h defines alloca as __builtin_alloca,
+which the Android guest's musl alloca.h, read after it, declares again with
+its 32-bit size_t) */
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <SDL3/SDL.h>
+#include <opus.h>
 
 void platform_log(const char *format, ...);
 /* dsound_sdl.c's */
