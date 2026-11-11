@@ -24,7 +24,7 @@ def generated(fault=False):
     config += '\nenum {' + ','.join(names) + ', TEST_SCANCODE_COUNT};\n'
     start = vk.index('static char const virtual_keyboard_layout_table')
     config += vk[start:vk.index('\n};', start)+3] + '\n'
-    names = ['text_typing_update', 'platform_text_typing', 'platform_text_field',
+    names = ['capture_scancode', 'text_typing_update', 'platform_text_typing', 'platform_text_field',
              'analog', 'typing_gamepad', 'keyboard_gamepad', 'keys_held_over_switch']
     # (keyboard_gamepad's join keys: xinput_sdl.c's own globals, the 4-way ADD PLAYER screen's)
     code = re.search(r'^static BOOL keyboard_join_down[^\n]*\n', inputs, re.M).group(0)

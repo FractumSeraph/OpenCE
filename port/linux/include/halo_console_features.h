@@ -40,10 +40,27 @@ HALO_CONSOLE_NO_GUIDE
 	sent to the site (browser.c, network.share_presence), their settings
 	left out of config.toml: every console for now, until the Guide is
 	sized to each one's memory and input
+HALO_CONSOLE_NO_CAPTURE
+	no screenshots or clips (port/linux/src/capture.c and capture_clips.c,
+	controls.screenshot and controls.clip): every console; the desktop
+	builds have them
+HALO_CONSOLE_NO_MEDAL_ICONS
+	no medal icons (port/assets/medals, ui_overlay_medal): the HUD's medals
+	are lines of its messages. The original Xbox sets it (its 64 MB); every
+	console is without them anyway for now, as the icons need the game list
+	(HALO_GAME_BROWSER), which no console build has
 HALO_CONSOLE_NO_DELTA_IDENTITY
 	no device key, device certificate or site token (port/linux/src/
-	identity.c, browser.c; docs/delta.md, "Device identity"): every console
-	for now, until their own endpoints come; the player key alone, as before
+	identity.c, browser.c; docs/delta.md, "Device identity"), and no
+	verified names in games (Delta Peer's identity capability, never
+	offered: "Verified names"): every console for now, until their own
+	endpoints come; the player key alone, and game names, as before
+HALO_CONSOLE_NO_HOST_MAP_DOWNLOADS
+	no Custom Edition map downloaded from a game's host, peer to peer
+	(network.map_downloads_from_host, port/linux/src/map_download.c "From
+	the host"): every console, which has no game list (HALO_GAME_BROWSER)
+	anyway; the desktops and Android have it, off until the player turns
+	it on
 HALO_CONSOLE_NO_WRITE_WATCH
 	a console that will not write-protect guest memory, so the renderer's
 	write watch cannot see the game write a resource: locks and file reads
@@ -293,6 +310,43 @@ HALO_CONSOLE_SERVER_CLOSE_GRACE
 	networking/network_server_manager.c): for a console on the XDK's XNet,
 	whose sockets need it. The native transports flush before they close
 	and need no wait
+HALO_CONSOLE_FRAME_RATE
+	a console that draws one frame a tick, as the Xbox did, and can draw
+	60 frames a second over its 30 Hz ticks instead (display.frame_rate,
+	off by default). The port says the refresh rate the device is made for
+	(halo_console_frame_rate: 30 or 60, read once, before
+	rasterizer_initialize makes it) and whether frames are drawn between
+	the ticks (halo_interpolation_enabled, the same answer for the whole
+	run). At 60 the frame pacer steps down to 30 while a scene can't hold
+	60 and back up when it can (main_update_time's stabilization)
+HALO_CONSOLE_VIEW_INTERPOLATION
+	the frames between ticks move the view only, with no memory of their
+	own (port/linux/game/render_interpolation.c): on foot in first person
+	the camera turns with the stick every frame and eases into each tick's
+	place, and the first-person weapon eases with it; the objects are drawn
+	where the tick left them, as the H1 Performance Build drew them. The
+	native builds' blend of every object between ticks (about 0.5 MB more
+	on a busy map) is not made
+HALO_CONSOLE_FLICKER_FILTER
+	a console on a television whose flicker filter is a setting
+	(display.flicker_filter): the port gives the level, 0 to 5
+	(halo_console_flicker_filter), set once the device is made. The Xbox
+	game asked for 5
+HALO_CONSOLE_WAITED_VISIBILITY_TESTS
+	a console whose Direct3D waits for a visibility test's count, as the
+	Xbox's does: a lens flare reads its test from the slot of its index in
+	the frame's list, as the Xbox game did. Every other build's counts come
+	back frames later, so each flare keeps a slot of its own and reads only
+	counts of its own tests (rasterizer_lights.c)
+HALO_PORT_FRAMES_BETWEEN_TICKS
+	(not set by a port) a build that can draw several frames a tick: every
+	native build, and a console with HALO_CONSOLE_FRAME_RATE. What the Xbox
+	counted in frames, a frame being a tick there, is counted in ticks
+	(the HUD's timers, effects, particles, contrails, lighting refreshes);
+	where that would change play or sound at one frame a tick (a held
+	button's count, the listener's velocity, the pause lock), the build
+	asks halo_port_frames_between_ticks() and keeps the Xbox's counting
+	when the answer is no
 
 A big-endian console (HALO_BIG_ENDIAN, its prefix header) reads the maps,
 which are the Xbox's, little-endian, through port/console/game's byte swap
@@ -344,10 +398,31 @@ compile lines: source/cseries/xbox_address.h).
 #define HALO_CONSOLE_NO_HALOMD_MAPS "the Xbox"
 #define HALO_CONSOLE_SERVER_CLOSE_GRACE 1
 #define HALO_CONSOLE_ANAMORPHIC_SCREEN 1
+#define HALO_CONSOLE_FRAME_RATE 1
+#define HALO_CONSOLE_VIEW_INTERPOLATION 1
+#define HALO_CONSOLE_FLICKER_FILTER 1
+#define HALO_CONSOLE_WAITED_VISIBILITY_TESTS 1
 #endif
 
 #if !defined(HALO_XBOX_CONSOLE) || defined(HALO_CONSOLE_ANAMORPHIC_SCREEN)
 #define HALO_PORT_WIDE_INTERFACE 1
+#endif
+
+#if !defined(HALO_XBOX_CONSOLE) || defined(HALO_CONSOLE_FRAME_RATE)
+#define HALO_PORT_FRAMES_BETWEEN_TICKS 1
+#endif
+#ifdef HALO_CONSOLE_FRAME_RATE
+/* (defined by the port) */
+short halo_console_frame_rate(void);
+int halo_interpolation_enabled(void);
+/* (a console draws its ticks only, unless its setting asks for more) */
+#define halo_port_frames_between_ticks() (halo_interpolation_enabled() != 0)
+#else
+#define halo_port_frames_between_ticks() 1
+#endif
+#ifdef HALO_CONSOLE_FLICKER_FILTER
+/* (defined by the port) */
+long halo_console_flicker_filter(void);
 #endif
 
 /* (the desktop builds copy maps to the Xbox's cache files too: a map pack's
@@ -388,6 +463,49 @@ server's, which has no player) */
 #define HALO_GUIDE 1
 #endif
 
+/* a missing Custom Edition map downloaded from the game's host, peer to
+peer, when the player allows it (network.map_downloads_from_host,
+port/linux/src/map_download.c "From the host", map_share_client.c): the
+game list's builds with a player (the desktops and Android), not the
+consoles nor the dedicated server, which downloads nothing */
+#if (defined(HALO_CONSOLE) || defined(HALO_SWITCH_CONSOLE) || defined(HALO_WIIU_CONSOLE) || \
+	defined(HALO_XBOX_CONSOLE) || defined(HALO_XBOX360_CONSOLE)) && !defined(HALO_CONSOLE_NO_HOST_MAP_DOWNLOADS)
+#define HALO_CONSOLE_NO_HOST_MAP_DOWNLOADS 1
+#endif
+/* (port, this fork: never. The fork's own map sharing, OpenCE's, downloads a
+missing map from the host and the other players first, map_download.c;
+ChupathingyCE's map_share_client.c is left out: map_share.h) */
+#if 0 && defined(HALO_GAME_BROWSER) && !defined(HALO_CONSOLE_NO_HOST_MAP_DOWNLOADS) && !defined(HALO_SERVER)
+#define HALO_HOST_MAP_DOWNLOADS 1
+#endif
+
+/* the medals' icons (port/assets/medals, tools/medal_assets.py: the site's
+medals), in the kill feed (display.medals) and DELTA's SERVICE RECORD: the
+game list's builds with a player (HALO_GAME_BROWSER: the desktops and the
+phones), so no console build and not the dedicated server. Those keep the
+HUD's text lines. (The 32-pixel atlas is there for a console that draws
+them one day; the builds embed the 64-pixel one) */
+#if defined(HALO_XBOX_CONSOLE) && !defined(HALO_CONSOLE_NO_MEDAL_ICONS)
+#define HALO_CONSOLE_NO_MEDAL_ICONS 1
+#endif
+#if defined(HALO_GAME_BROWSER) && !defined(HALO_CONSOLE_NO_MEDAL_ICONS) && !defined(HALO_SERVER)
+#define HALO_MEDAL_ICONS 1
+#endif
+
+/* screenshots and clips (port/linux/src/capture.c): the desktop builds'
+alone, with DELTA's toasts; not the consoles, the phones or the
+dedicated server */
+#if (defined(HALO_CONSOLE) || defined(HALO_SWITCH_CONSOLE) || defined(HALO_WIIU_CONSOLE) || \
+	defined(HALO_XBOX_CONSOLE) || defined(HALO_XBOX360_CONSOLE)) && !defined(HALO_CONSOLE_NO_CAPTURE)
+#define HALO_CONSOLE_NO_CAPTURE 1
+#endif
+/* (port, this fork: not built yet. Its controls.screenshot is the fork's
+(OpenCE's) screenshot key too, F10, which ChupathingyCE's clips also take:
+one press would do both) */
+#if 0 && defined(HALO_GUIDE) && !defined(HALO_CONSOLE_NO_CAPTURE) && !defined(HALO_ANDROID) && !defined(HALO_IOS)
+#define HALO_CAPTURE 1
+#endif
+
 /* Delta's device identity (port/linux/src/identity.c, browser.c): desktop and
 Android; consoles get it with their own endpoints later */
 #if (defined(HALO_CONSOLE) || defined(HALO_SWITCH_CONSOLE) || defined(HALO_WIIU_CONSOLE) || \
@@ -399,10 +517,36 @@ server's, which has no player) */
 #if defined(HALO_GAME_BROWSER) && !defined(HALO_CONSOLE_NO_DELTA_IDENTITY) && !defined(HALO_SERVER)
 #define HALO_DELTA_IDENTITY 1
 #endif
+/* verified names in games (Delta Peer's identity capability: delta_peer.c,
+delta_peer_game.c): the game list's builds, and the dedicated server, which
+checks its players' proofs and keeps the revocation list; the consoles
+leave it out with the rest of HALO_CONSOLE_NO_DELTA_IDENTITY */
+#if defined(HALO_GAME_BROWSER) && !defined(HALO_CONSOLE_NO_DELTA_IDENTITY)
+#define HALO_DELTA_PEER_IDENTITY 1
+#endif
 
 #if (defined(HALO_CONSOLE) || defined(HALO_SWITCH_CONSOLE) || defined(HALO_WIIU_CONSOLE) || \
 	defined(HALO_XBOX_CONSOLE) || defined(HALO_XBOX360_CONSOLE)) && !defined(HALO_CONSOLE_NO_LOADING_PICTURE)
 #define HALO_CONSOLE_NO_LOADING_PICTURE 1
+#endif
+
+/* a map's shaders made while its loading screen is up, from its shader key
+list (port/linux/src/d3d8_shader_prep.inl, xgpu_shader_keys.c;
+display.prepare_shaders): the OpenGL and bgfx renderers of the desktop
+builds and Android. A console's renderer can take it later (the Switch's
+has its own, HALO_CONSOLE_MAP_LOAD_HOOKS); HALO_CONSOLE_NO_SHADER_PREP
+leaves it out */
+#if (defined(HALO_CONSOLE) || defined(HALO_SWITCH_CONSOLE) || defined(HALO_WIIU_CONSOLE) || \
+	defined(HALO_XBOX_CONSOLE) || defined(HALO_XBOX360_CONSOLE)) && !defined(HALO_CONSOLE_NO_SHADER_PREP)
+#define HALO_CONSOLE_NO_SHADER_PREP 1
+#endif
+#if !defined(HALO_CONSOLE_NO_SHADER_PREP) && !defined(HALO_SERVER)
+#define HALO_SHADER_PREP 1
+#endif
+/* (the game's calls into a renderer as a map loads: d3d8_gl_map_loading,
+d3d8_gl_map_progress, d3d8_gl_map_waiting, d3d8_gl_map_loaded) */
+#if defined(HALO_SHADER_PREP) || defined(HALO_CONSOLE_MAP_LOAD_HOOKS)
+#define HALO_MAP_LOAD_HOOKS 1
 #endif
 
 #ifdef HALO_CONSOLE_WAIT_POLL

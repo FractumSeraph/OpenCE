@@ -109,8 +109,10 @@ symbols in this file:
 #include "map_share.h" /* port: port/linux/game/map_share.c */
 #include "latency_meter.h" /* port: port/linux/game/latency_meter.c */
 #include "halo_perf_log.h" /* port: console.perf_log */
+#ifndef HALO_XBOX_CONSOLE
 #include "stats_log.h" /* port: port/linux/game/stats_log.c */
 #include "frame_rate_display.h" /* port: port/linux/game/frame_rate_display.c */
+#endif
 
 /* ---------- constants */
 
@@ -413,8 +415,10 @@ void interface_draw_fullscreen_overlays(
 	(port/linux/game/frame_rate_display.c) */
 	frame_rate_display_update();
 	terminal_draw();
+#ifndef HALO_XBOX_CONSOLE
 	/* port: display.stats_log, a line a second in the log (stats_log.c) */
 	stats_log_tick();
+#endif
 	main_framerate_render();
 	render_debug_profile();
 

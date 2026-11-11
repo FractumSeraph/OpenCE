@@ -32,6 +32,9 @@ MODS = "main_menu/mods"
 MOD_ROWS = 11
 MODS_ITEM_PLACE = (192, 391)
 QUIT_ITEM_PLACE = (192, 427)
+# update.channel's help line (port/linux/src/update.h's UPDATE_CHANNEL_HELP,
+# which the setup screen shows: tools/test_update_channels.py checks they agree)
+UPDATE_CHANNEL_HELP = "Testing gets new features first and may have bugs. Going back waits for the next release."
 YES_NO = [("YES", "true"), ("NO", "false")]
 ON_OFF = [("ON", "true"), ("OFF", "false")]
 # the multiplayer armor colors, in the profile's order (player_profile.c)
@@ -50,6 +53,21 @@ VOLUMES = [(str(step), f"{step / 10:g}") for step in range(11)]
 # consoles are ChupathingyCE's, packed by _layout's places as the others
 # (their _console_places is not used here)
 PLATFORMS = ("desktop", "android", "web", "switch", "console")
+
+# A row that does something rather than set a setting (A runs its function,
+# port/linux/game/menu_functions.c's), with a value its function shows in
+# place of a spinner: Network Setup's INSTALL UPDATE. It stands in a list of
+# rows as a setting's row does, (label, None, function, help, platform, key),
+# and menu_functions.c shows or hides it.
+class Action(tuple):
+    def __new__(cls, label, key, run, help_text, platform):
+        return super().__new__(cls, (label, None, run, help_text, platform, key))
+
+
+# update.h's UPDATER_GAMESCOPE_WHERE names the page: Settings > Online >
+# Updates (tools/test_update_install.py checks they agree)
+INSTALL_UPDATE = Action("INSTALL UPDATE:", "install_update", "port update install",
+                        "Download the new version. Chupathingy restarts.", "desktop")
 
 # A row's platform: None for every platform, else the names it is on,
 # separated by spaces (port/linux/src/menu_files.c): "desktop", "android",
@@ -183,6 +201,12 @@ SCREENS = {
                  None),
                 ("PER-PIXEL LIGHTING:", "display.per_pixel_lighting", ON_OFF,
                  "Light models per pixel instead of per vertex.", None),
+                ("LIGHT EFFECTS:", "display.light_effects",
+                 [("AUTO", "auto"), ("HIGH", "high"), ("LOW", "low"), ("OFF", "off")],
+                 "Light from shots, muzzle flashes and glowing things.\nOff looks like the Xbox. Auto turns it off when slow.",
+                 "desktop"),
+                ("DOORS BLOCK LIGHT:", "display.doors_block_light", ON_OFF,
+                 "A closed door stops light from the other side.\nOff lets it through, as on the Xbox.", None),
                 ("FULL MODEL DETAIL:", "display.full_model_detail", ON_OFF,
                  "Always draw models at their highest detail.", None),
                 ("MODEL DETAIL:", "display.model_detail",
@@ -269,8 +293,9 @@ SCREENS = {
                  "Draw a panel behind the scoreboard.", None),
                 ("POWERUP TIMERS:", "display.powerup_timers", ON_OFF,
                  "Show the time left on your powerups.", None),
-                ("MATCH TIMER:", "display.match_timer", ON_OFF,
-                 "Show the time left at the top of the screen.", None),
+                ("MATCH TIMER:", "display.match_timer",
+                 [("OFF", "off"), ("REMAINING", "remaining"), ("ELAPSED", "elapsed")],
+                 "Show the time left, or the time played, in multiplayer.", None),
                 ("FOLLOW CAMERA:", "display.follow_camera",
                  [("OFF", "off"), ("LONG WAITS", "long_waits"), ("ALWAYS", "always")],
                  "While dead, follow a player's view, if the host allows it.", None),
@@ -335,6 +360,9 @@ SCREENS = {
         "help_top": 368,
         # (the router, the map downloads, the clipboard, invite links and the
         # updates, which the web build has not)
+        # (ChupathingyCE: its help is its own text, which menu_functions.c reads
+        # from its help_strings, and sets to how INSTALL UPDATE's install goes)
+        "help_text": True,
         "rows": [
             ("INTERNET PLAY:", "network.online", ON_OFF,
              "Host and join games over the internet.", "desktop android web"),
@@ -347,12 +375,21 @@ SCREENS = {
              "Join a game from an invite link on the clipboard.", "desktop android switch"),
             ("COPY INVITE LINK:", "network.copy_to_clipboard", ON_OFF,
              "Copy your game's invite link when you host.", "desktop android switch"),
-            ("CHECK FOR UPDATES:", "update.auto", ON_OFF,
-             "Check for a new version at startup.", "desktop android switch"),
             ("START WITH ONE PLAYER:", "game.start_with_one_player", ON_OFF,
              "Let a game you host start with only you.", None),
         ],
         "views": [
+            # (update.channel's help is update.h's UPDATE_CHANNEL_HELP, as
+            # the setup screen shows it)
+            ("updates", "UPDATES", "Update checks, and which builds you get.", [
+                ("CHECK FOR UPDATES:", "update.auto", ON_OFF,
+                 "Check for a new version at startup.", NOT_CONSOLE),
+                ("CHANNEL:", "update.channel", [("RELEASE", "release"), ("TESTING", "testing"), ("NIGHTLY", "nightly")],
+                 UPDATE_CHANNEL_HELP, NOT_CONSOLE),
+                # (shown once a newer version is found; how the install
+                # goes is its value and the help line: menu_functions.c)
+                INSTALL_UPDATE,
+            ]),
             ("chat", "CHAT", "Text chat and the word filter.", [
                 ("CHAT:", "chat.enabled", ON_OFF, "Text chat with other players.", NOT_CONSOLE),
                 ("SHOW CHAT:", "chat.show", [("ALL", "all"), ("TEAM", "team"), ("OFF", "off")],
@@ -932,6 +969,27 @@ def _screen_link_row(base: str, row: tuple, key: str, label_index: int) -> list:
     return lines
 
 
+def _action_row(base: str, row: Action, key: str, label_index: int) -> list:
+    """an Action's row: its label, and its value (a text of its own, which
+    its function sets)"""
+    label, _, run, _, platform, *_ = row
+    lines = _widget(f"{base}/op_{key}", [("width", 512), ("height", 28), ("flags", "pass_unhandled_to_focused_child"),
+                                         ("bitmap", "bitmaps/option_bkds"), ("color", "#FF2896FF"),
+                                         ("platform", platform)],
+                    [f'<on event="a" run="{run}"/>', f'<on event="start" run="{run}"/>',
+                     '<on event="left_mouse" run="mouse emit accept event"/>',
+                     f'<child{attributes([("widget", f"{base}/{key}_label")])}/>',
+                     f'<child{attributes([("widget", f"{base}/{key}_value"), ("x", 320), ("y", 1)])}/>'])
+    lines += _widget(f"{base}/{key}_label",
+                     [("type", "text"), ("controller", 1), ("width", 300), ("height", 22),
+                      ("string_list", f"{base}/labels"), ("string_index", label_index), ("font", "ui\\large_ui"),
+                      ("color", "#FF2896FF"), ("text_x", 13), ("text_y", 4)], [])
+    lines += _widget(f"{base}/{key}_value",
+                     [("type", "text"), ("controller", 1), ("width", 170), ("height", 22), ("font", "ui\\large_ui"),
+                      ("color", "#FF2896FF"), ("align", "center"), ("text_y", 3), ("text_flags", "no_focus_test")], [])
+    return lines
+
+
 def _link_row(base: str, key: str, label_index: int, platform=None) -> list:
     """a row that opens a nested list (VIEWS): its label alone"""
     lines = _widget(f"{base}/op_{key}", [("width", 512), ("height", 28), ("flags", "pass_unhandled_to_focused_child"),
@@ -1020,7 +1078,10 @@ def _setting_rows(base: str, spec: dict) -> tuple:
         else:
             _, row, key, places, label_index = entry
             rows += [(f"{base}/op_{key}", platform, place) for platform, place in places]
-            extra += _setting_row(base, row, key, label_index)
+            if isinstance(row, Action):
+                extra += _action_row(base, row, key, label_index)
+            else:
+                extra += _setting_row(base, row, key, label_index)
     # (the help of the row whose label is string n is n + 1: the buttons' is 0)
     strings = _strings(f"{base}/labels", labels)
     strings += _strings(f"{base}/help_strings", [""] + [text.replace("\n", "\\n") for text in helps])
@@ -1318,6 +1379,8 @@ CHUPATHINGY_ONLY = {
         "consoles": False,
         "header": ("header_privacy", "chupathingy/delta_profile/header_privacy"),
         "spacing": 30,
+        # (the help line under the ten rows: the last, FRIENDS, ends at 371)
+        "help_top": 376,
         "rows": [
             ("SHARE MY PROFILE:", "network.share_profile", ON_OFF,
              "Show your Delta name to Chupathingy players.", None),
@@ -1337,6 +1400,23 @@ CHUPATHINGY_ONLY = {
              "What Discord shows while you play.", "desktop"),
             ("SHOW PROFILE NAMES:", "display.profile_names", ON_OFF,
              "Show players by their Delta names.", None),
+        ],
+        # (the friends' privacy, the site's friends.py: a list of its own,
+        # so every row keeps the page's spacing)
+        "views": [
+            ("friends", "FRIENDS", "Who can reach you and see you on DELTA.", [
+                ("APPEAR OFFLINE:", "site.appear_offline", [("NO", "false"), ("YES", "true")],
+                 "Show as offline to your friends.", None),
+                ("FRIEND REQUESTS FROM:", "site.friend_requests",
+                 [("EVERYONE", "everyone"), ("FRIENDS+", "friends_of_friends"), ("NOBODY", "nobody")],
+                 "FRIENDS+ means your friends' friends too.", None),
+                ("WHO CAN JOIN ME:", "site.who_can_join",
+                 [("FRIENDS", "friends"), ("ANYONE", "anyone"), ("INVITE ONLY", "invite")],
+                 "Who can join your game from DELTA.", None),
+                ("SHOW MY STATUS TO:", "site.clan_presence",
+                 [("FRIENDS", "friends"), ("FRIENDS+CLAN", "friends_and_clan")],
+                 "Who sees when you're on and what you play.", None),
+            ]),
         ],
     },
 }
@@ -1653,6 +1733,11 @@ WIDGET_PATCHES = {
     f"{PLAYLIST_EDIT}/edit_playlist_select_list": {
         "insert_before": {f"{PLAYLIST_EDIT}/playlist_edit_button_bar": [f'<child widget="{OPENCE_ITEM}"/>']},
         "inputs": ["port playlist edit desc"]},
+    # (SETUP beside OK and CANCEL: the way back to the setup screen, its
+    # widget port/assets/menus/chupathingy/setup_entry.xml's)
+    f"{PE}/profile_edit_button_bar": {"insert_before": {
+        f"{PE}/profile_edit_button_ok": ['<child widget="gearbox/setup_entry" x="250" y="1"/>'],
+    }},
     f"{PE}/controller_setup_profile_item": {"set": {"string_index": 12}, "handlers": [
         f'<on event="a" open="{PE}/{CONTROLS_SCREEN}/{CONTROLS_SPEC["screen"]}"/>',
         f'<on event="start" open="{PE}/{CONTROLS_SCREEN}/{CONTROLS_SPEC["screen"]}"/>',
@@ -1665,6 +1750,12 @@ WIDGET_PATCHES = {
         f'<on event="start" open="{PE}/{CONTROLS_SCREEN}/{CONTROLS_SPEC["screen"]}"/>',
         '<on event="left_mouse" run="mouse emit accept event"/>',
     ]} for row in ("gamepads", "mouse_settings")},
+    # (ABOUT: the About screen, in the Guide: menu_functions.c's about_open)
+    f"{PE}/about_item": {"handlers": [
+        '<on event="a" run="port about open"/>',
+        '<on event="start" run="port about open"/>',
+        '<on event="left_mouse" run="mouse emit accept event"/>',
+    ]},
     f"{PE}/audio_settings_profile_item": {"set": {"string_index": 14}},
     # (the profile settings' picture: on CONTROLS' row, the profile's
     # button settings, BITMAP_FRAMES; menu_functions.c's

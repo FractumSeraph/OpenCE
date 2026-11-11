@@ -106,10 +106,14 @@ their handlers open opens.
 /* (internet play's server browser: the platform layer's) */
 #include "../src/p2p.h"
 #include "../src/controller_layout.h"
+/* (Network Setup's INSTALL UPDATE: the self-updater's) */
+#include "../src/update.h"
 #include "networking/network_connection.h"
 /* (the game list's filter and the campaign levels: every build) */
 #include "../src/browser.h"
+#include "../src/launcher.h"
 #include "delta.h"
+#include "../src/server_badge.h"
 #ifdef HALO_GAME_BROWSER
 #include "halo_port_limits.h"
 #endif
@@ -1782,8 +1786,144 @@ static boolean setting_default_show(struct widget_instance *spinner, struct pc_m
 	return TRUE;
 }
 
+/* ---------- Network Setup's INSTALL UPDATE (tools/port_settings.py's
+INSTALL_UPDATE, in its UPDATES list): shown once a newer version is found
+(updater_ready) or while it installs, A installing it as the setup screen's
+UPDATE does (updater_install_begin): on a thread of its own, with no window
+or dialog, so under gamescope (the Steam Deck's Game Mode) too, where a
+dialog crashes the game. Its value says how far it has got, the help line
+what is happening or why it failed, and the game restarts into the new
+version once it is in place. For that the screen's help is its own text
+(port_settings.py's help_text): the rows' helps are read from its
+help_strings here */
+
+/* (the builds with the self-updater: not a console's, nor the dedicated
+server, which has no updater.c) */
+#if !defined(HALO_CONSOLE_NO_UPDATER) && !defined(HALO_SERVER)
+#define MENU_INSTALL_UPDATE 1
+#endif
+
+#define NETWORK_HELP_STRINGS \
+	"pc\\main_menu\\settings_select\\player_setup\\player_profile_edit\\network_setup\\help_strings"
+#define NETWORK_HELP_LENGTH 192
+/* (the help line's characters on one line, about: its widest helps') */
+#define NETWORK_HELP_LINE 50
+
+/* the screen's list whose help is its own text: Network Setup's (its
+UPDATES mark is on every platform) */
+static boolean network_help_list(struct widget_instance *list)
+{
+	return named(list, "view_updates", 0) != NULL;
+}
+
+/* ascii in wide, broken into lines of about NETWORK_HELP_LINE at its
+spaces, three at most */
+static void help_wrapped(wchar_t *wide, char const *ascii, size_t count)
+{
+	size_t length = 0, line = 0, lines = 1;
+
+	for (; *ascii && length + 3 < count; ascii++)
+	{
+		if (*ascii == ' ' && line >= NETWORK_HELP_LINE - 12)
+		{
+			/* (a break at this space when the next word does not fit) */
+			size_t word = strcspn(ascii + 1, " ");
+
+			if (line + 1 + word > NETWORK_HELP_LINE)
+			{
+				if (++lines > 3)
+					break;
+				wide[length++] = '\r';
+				wide[length++] = '\n';
+				line = 0;
+				continue;
+			}
+		}
+		wide[length++] = (wchar_t)(unsigned char)*ascii;
+		line++;
+	}
+	wide[length] = 0;
+}
+
+#ifdef MENU_INSTALL_UPDATE
+/* the install's state, and its line (updater_install_status) */
+static int install_update_state(char *line, int size)
+{
+	return updater_install_status(line, size);
+}
+
+/* INSTALL UPDATE shown, in the UPDATES list, when there is a version to
+install or one installing (and its value), else hidden */
+static void install_update_show(struct widget_instance *list, char const *view)
+{
+	struct widget_instance *row = named(list, "op_install_update", 0);
+	char latest[48] = "", line[256], value[32];
+	wchar_t text[32];
+	int state;
+	size_t index;
+
+	if (!row)
+		return;
+	state = install_update_state(line, sizeof(line));
+	row->visible = !strcmp(view, "updates") && (state != UPDATER_INSTALL_IDLE || updater_ready(latest, sizeof(latest)));
+	if (!row->visible)
+		return;
+	if (state == UPDATER_INSTALL_DOWNLOADING)
+		updater_install_amount(value, sizeof(value));
+	else if (state == UPDATER_INSTALL_INSTALLING)
+		snprintf(value, sizeof(value), "RESTARTING");
+	else if (state == UPDATER_INSTALL_WAITING)
+		snprintf(value, sizeof(value), "AFTER THIS GAME");
+	else if (state == UPDATER_INSTALL_FAILED)
+		snprintf(value, sizeof(value), "TRY AGAIN");
+	else
+		snprintf(value, sizeof(value), "%s", latest);
+	/* (in the menus' capitals) */
+	for (index = 0; value[index]; index++)
+	{
+		if (value[index] >= 'a' && value[index] <= 'z')
+			value[index] = (char)(value[index] - 'a' + 'A');
+	}
+	help_wrapped(text, value, NUMBEROF(text));
+	text_set(named(row, "install_update_value", 0), text);
+}
+
+/* (network_game_globals.c's, as declared below for the lobby) */
+void *global_network_game_server_get(void);
+void *global_network_game_client_get(void);
+
+/* whether the game may restart into an update now (updater.c): at the main
+menu with no network game, hosted or joined. The pregame lobby and the
+post-game carnage report are main menu screens too, with the game's server
+or client still up: a host restarting there would drop everyone. (Only
+plain flags and pointers, safe before the game is up. A Delta party is the
+site's, with no connection of its own to drop) */
+int updater_restart_allowed(void)
+{
+	return main_menu_is_active() && !global_network_game_server_get() && !global_network_game_client_get();
+}
+
+/* "port update install" (A on INSTALL UPDATE): the screen's changes
+written first (the game restarts), and the install begun */
+static boolean install_update_begin(struct widget_instance *widget)
+{
+	settings_each(screen_of(widget), setting_changed_save);
+	if (install_update_state(NULL, 0) == UPDATER_INSTALL_DOWNLOADING ||
+		install_update_state(NULL, 0) == UPDATER_INSTALL_INSTALLING ||
+		install_update_state(NULL, 0) == UPDATER_INSTALL_WAITING || !updater_install_begin())
+	{
+		ui_play_audio_feedback_sound(SOUND_ERROR);
+		return TRUE;
+	}
+	platform_log("menus: installing the update (Settings > Online > Updates)");
+	ui_play_audio_feedback_sound(SOUND_FORWARD);
+	return TRUE;
+}
+#endif
+
 /* "port settings help": the line of the row chosen (by its label's string:
-the buttons' is the first) */
+the buttons' is the first); Network Setup's as its own text, and INSTALL
+UPDATE's how its install goes */
 static void settings_help(struct widget_instance *list)
 {
 	struct widget_instance *help = list->parameters.list.extended_description;
@@ -1798,6 +1938,26 @@ static void settings_help(struct widget_instance *list)
 
 		if (label != NONE)
 			index = label + 1;
+	}
+	if (network_help_list(list))
+	{
+		long tag_index = tag_loaded('ustr', NETWORK_HELP_STRINGS);
+		wchar_t const *string = tag_index != NONE ? unicode_string_list_get_string(tag_index, index) : NULL;
+		wchar_t text[NETWORK_HELP_LENGTH];
+
+		ustrncpy(text, string ? string : L"", NETWORK_HELP_LENGTH - 1);
+		text[NETWORK_HELP_LENGTH - 1] = 0;
+#ifdef MENU_INSTALL_UPDATE
+		if (row && !strcmp(row->name, "op_install_update"))
+		{
+			char line[256];
+
+			if (install_update_state(line, sizeof(line)) != UPDATER_INSTALL_IDLE && line[0])
+				help_wrapped(text, line, NETWORK_HELP_LENGTH);
+		}
+#endif
+		text_set_length(help, text, NETWORK_HELP_LENGTH);
+		return;
 	}
 	help->parameters.text_box.string_list_index = index;
 }
@@ -1965,6 +2125,18 @@ static void views_show(struct widget_instance *list, char const *view)
 		visible_set(named(screen, "cancel", 0), !strcmp(view, "main"));
 		visible_set(named(screen, "back", 0), strcmp(view, "main") != 0);
 	}
+#ifdef MENU_INSTALL_UPDATE
+	/* (INSTALL UPDATE, in UPDATES, only with a version to install) */
+	install_update_show(list, view);
+	if (list->focused_child && !list->focused_child->visible)
+	{
+		short index;
+		struct widget_instance *first = first_row_shown(list, &index);
+
+		if (first)
+			focus_widget(list, first);
+	}
+#endif
 }
 
 /* "port settings views init" (the list's created): the screen's own rows */
@@ -2062,6 +2234,11 @@ static boolean settings_accept(struct widget_instance *list, short controller, b
 		ui_widget_port_dispatch_event(list->focused_child, BUTTON_A, controller, widget_deleted);
 		return TRUE;
 	}
+#ifdef MENU_INSTALL_UPDATE
+	/* (INSTALL UPDATE installs, and the screen stays: it shows how) */
+	if (list->focused_child && !strcmp(list->focused_child->name, "op_install_update"))
+		return install_update_begin(list->focused_child);
+#endif
 	settings_each(screen_of(list), setting_changed_save);
 	platform_display_apply();
 	ui_play_audio_feedback_sound(SOUND_FORWARD);
@@ -2472,9 +2649,12 @@ static void profile_gamepad_layout(struct widget_instance *picture)
 }
 
 /* the Chupathingy menus' settings picture (port/assets/menus/chupathingy):
-a frame for each of its eight rows, then the Xbox's five button settings,
+a frame for each of its nine rows (SETUP's last), then the Xbox's five button settings,
 which CONTROLS' row shows for the edited profile */
-#define CHUPATHINGY_FIRST_LAYOUT_FRAME 8
+#define CHUPATHINGY_FIRST_LAYOUT_FRAME 9
+/* SETUP's frame, and its words in the descriptions (after ABOUT's) */
+#define CHUPATHINGY_SETUP_FRAME 7
+#define CHUPATHINGY_SETUP_DESCRIPTION 7
 
 /* ABOUT's row (the picture's frame for it is blank): this build and the
 project, in the picture's place (its about_text) */
@@ -2523,6 +2703,8 @@ static void chupathingy_settings_about(struct widget_instance *picture)
 		"Fractum Halo %s\r\n"
 		"%s\r\n"
 		"\r\n"
+		"By Milenko and contributors.\r\n"
+		"\r\n"
 		"A fan-made port of the Halo: Combat\r\n"
 		"Evolved decompilation. Not affiliated\r\n"
 		"with Microsoft or Bungie.\r\n"
@@ -2541,7 +2723,19 @@ static void chupathingy_settings_about(struct widget_instance *picture)
 /* "chupathingy settings picture" (the picture's own) */
 static void chupathingy_settings_picture(struct widget_instance *picture)
 {
+	extern boolean pc_menu_setup_shown(void);
 	struct player_profile *profile = player_ui_get_edit_player_profile();
+
+	/* (without SETUP, SAVE CHANGES is in its place: its words and picture,
+	the next ones) */
+	if (!pc_menu_setup_shown() && picture->animation.current_frame_index == CHUPATHINGY_SETUP_FRAME)
+	{
+		struct widget_instance *text = named(picture->parent, "description_text", 0);
+
+		picture->animation.current_frame_index = CHUPATHINGY_SETUP_FRAME + 1;
+		if (text)
+			text->parameters.text_box.string_list_index = CHUPATHINGY_SETUP_DESCRIPTION + 1;
+	}
 
 	chupathingy_settings_about(picture);
 	if (picture->animation.current_frame_index == PROFILE_GAMEPAD_FRAME)
@@ -2908,6 +3102,8 @@ static struct
 	{ "controls.team_chat", L"NETWORK TEAM CHAT", 3 },
 	{ "controls.vote_yes", L"VOTE YES", 3 },
 	{ "controls.vote_no", L"VOTE NO", 3 },
+	/* (ChupathingyCE's voice chat, port/linux/game/voice_game.c) */
+	{ "controls.voice_channel", L"VOICE CHANNEL", 3 },
 };
 
 static struct
@@ -5285,14 +5481,15 @@ static boolean server_name_edit(struct widget_instance *row)
 	return TRUE;
 }
 
-/* "ss copy invite" */
+/* "ss copy invite": the site's join page (p2p_invite_share_link), which chat
+programs make a link of */
 static boolean invite_copy(void)
 {
-	char link[TEXT_FIELD_LENGTH];
+	char link[TEXT_FIELD_LENGTH], shared[TEXT_FIELD_LENGTH];
 
 	if (!p2p_invite_link(link, sizeof(link)))
 		return campaign_fail();
-	platform_clipboard_set(link);
+	platform_clipboard_set(p2p_invite_share_link(link, shared, sizeof(shared)) ? shared : link);
 	ui_play_audio_feedback_sound(SOUND_FORWARD);
 	return TRUE;
 }
@@ -6769,6 +6966,9 @@ static void lobby_browser_host_text(struct p2p_listing const *game, wchar_t *tex
 	dedicated = listed->hosting == BROWSER_HOSTING_DEDICATED || listed->hosting == BROWSER_HOSTING_OFFICIAL;
 	platform = listed->has_platform && listed->host_platform < NUMBEROF(platforms) ? platforms[listed->host_platform] : L"";
 	usnprintf(text, size - 1, L"%s%s%s%s%s%s%s",
+		listed->badge == _server_badge_tier_official ? L"OFFICIAL SERVER" :
+		listed->badge == _server_badge_tier_developer ? L"DEVELOPER SERVER" :
+		listed->badge == _server_badge_tier_community ? L"COMMUNITY SERVER" :
 		dedicated ? (listed->hosting == BROWSER_HOSTING_OFFICIAL ? L"OFFICIAL SERVER" : L"DEDICATED") : L"",
 		dedicated && platform[0] ? L", " : L"", platform, !dedicated && platform[0] ? L" HOST" : L"",
 		(dedicated || platform[0]) && listed->protocol ? L", " : L"",
@@ -8085,7 +8285,31 @@ static boolean pause_moderation(void)
 #endif
 }
 
-/* "port pause guide" (the pause menu's GUIDE: menu_tags.c): the Guide over
+/* ---------- SETUP (port/assets/menus/chupathingy/setup_entry.xml): back to
+the setup screen, by starting Chupathingy again on it (launcher.c); in the
+menus' settings of every menu set, unless launcher.menu_entry is false (the
+builds without the setup screen have none) */
+
+boolean pc_menu_setup_offered(void)
+{
+#ifdef HALO_LAUNCHER
+	return config_boolean("launcher.menu_entry") != 0;
+#else
+	return FALSE;
+#endif
+}
+
+/* "port setup open" (its A) */
+boolean pc_menu_setup_open(void)
+{
+#ifdef HALO_LAUNCHER
+	return launcher_restart_to_setup() != 0;
+#else
+	return FALSE;
+#endif
+}
+
+/* "port pause guide" (the pause menu's DELTA: menu_tags.c): the Guide over
 the pause menu (guide.c), which B closes back to it */
 static boolean pause_guide(struct widget_instance *widget)
 {
@@ -8096,6 +8320,45 @@ static boolean pause_guide(struct widget_instance *widget)
 	if (widget->local_player_index != 0)
 		return FALSE;
 	guide_open();
+	return TRUE;
+#else
+	(void)widget;
+	return FALSE;
+#endif
+}
+
+/* "port delta open" (the main menus' DELTA, menu_tags.c and
+chupathingy/main_menu.xml): DELTA over the menu, on PARTY, which B closes
+back to it */
+static boolean delta_open(struct widget_instance *widget)
+{
+#ifdef HALO_GUIDE
+	extern void guide_open_party(void);
+
+	/* (the main menu is any controller's: NONE there; a split screen
+	player's own screen, the first player's alone) */
+	if (widget->local_player_index > 0)
+		return FALSE;
+	guide_open_party();
+	return TRUE;
+#else
+	(void)widget;
+	return FALSE;
+#endif
+}
+
+/* "port about open" (Settings' ABOUT, in the Gearbox and Chupathingy
+menus): the About screen, in the Guide (guide.c), which B closes back to
+Settings. Without the Guide (the consoles), the Chupathingy menus' picture
+shows the build instead */
+static boolean about_open(struct widget_instance *widget)
+{
+#ifdef HALO_GUIDE
+	extern void guide_about_open(void);
+
+	if (widget->local_player_index != 0)
+		return FALSE;
+	guide_about_open();
 	return TRUE;
 #else
 	(void)widget;
@@ -12341,9 +12604,21 @@ boolean pc_menu_event_function_invoke(
 		{
 			return pause_moderation();
 		}
+		else if (!strcmp(name, "port setup open"))
+		{
+			return pc_menu_setup_open();
+		}
 		else if (!strcmp(name, "port pause guide"))
 		{
 			return pause_guide(widget);
+		}
+		else if (!strcmp(name, "port about open"))
+		{
+			return about_open(widget);
+		}
+		else if (!strcmp(name, "port delta open"))
+		{
+			return delta_open(widget);
 		}
 		else if (!strcmp(name, "port pause controls"))
 		{
@@ -12500,6 +12775,12 @@ boolean pc_menu_event_function_invoke(
 		{
 			return settings_accept(widget, controller, widget_deleted);
 		}
+#ifdef MENU_INSTALL_UPDATE
+		else if (!strcmp(name, "port update install"))
+		{
+			return install_update_begin(widget);
+		}
+#endif
 		else if (!strcmp(name, "port controls init"))
 		{
 			return controls_page_init(widget);

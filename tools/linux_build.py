@@ -278,9 +278,13 @@ PROFILE_USE_FLAGS = [
 ]
 
 
-# voice chat's codec (port/third_party/opus; network_voice.c, voice_audio.c):
+# voice chat's codec (port/third_party/opus; network_voice.c, voice_audio.c, ChupathingyCE's
+# voice.c):
 # the floating-point library in plain C, its files as sources.txt lists them
+# (A build without voice.c, the dedicated server, which relays voice without
+# decoding it, leaves it out too)
 OPUS_DIR = Path("port/third_party/opus")
+VOICE_SOURCE = "port/linux/src/voice.c"
 OPUS_DEFINES = ("-DOPUS_BUILD", "-DVAR_ARRAYS", "-DHAVE_LRINTF", "-DHAVE_LRINT")
 
 
@@ -769,6 +773,7 @@ def linux32_objects(n: Writer, units: Linux32Units, obj_dir: Path, extra_cflags:
         f"-I{MONOCYPHER_DIR}",
         f"-I{ZLIB_DIR}",
         f"-I{ZSTD_DIR / 'lib'}",
+        f"-I{OPUS_DIR / 'include'}",
         "-Isource -Isource/cseries",
         sdk_flags,
         *units.include_flags,
@@ -838,6 +843,7 @@ def linux32_objects(n: Writer, units: Linux32Units, obj_dir: Path, extra_cflags:
     # Zstandard's decoder, for compressed Halo PC maps (map_compressed.c)
     for name in ZSTD_SOURCES:
         add_object(ZSTD_DIR / name, " ".join([abi, "-std=gnu11", *ZSTD_DEFINES, "-w"]))
+    # (ChupathingyCE's voice.c's codec: (port, this fork: built above for every build, OpenCE's voice chat's too))
     # the game's sin, pow and the rest, the same on every port
     # (port/include/halo_math.h)
     for source in musl_math_sources():

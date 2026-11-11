@@ -12,7 +12,9 @@ def generated(fault=None):
     # policy, network_aim_assist_blocked, which the same message 90 sets as it
     # sets network_aim_assist.c's; here it is network_aim_assist.c's, and the
     # mouse's device test is network_rules.c's)
-    inp='#include <stdint.h>\n'+function(read('port/linux/game/network_rules.c'),'network_rules_mouse_is_aim_device')
+    # (ChupathingyCE's: a controller connected keeps a pad player's magnetism
+    # until anything aims; none here, as before it)
+    inp='#include <stdint.h>\nstatic int SDL_HasGamepad(void){return 0;}\n'+function(read('port/linux/game/network_rules.c'),'network_rules_mouse_is_aim_device')
     inp+='\nstatic unsigned char network_aim_assist_blocked(void){return network_aim_assist_block_mouse();}\n'
     inp+=function(input_source,'halo_linux_mouse_aiming')
     if fault=='authority': policy=mutated(policy,'machine_index != NONE ||','FALSE ||')

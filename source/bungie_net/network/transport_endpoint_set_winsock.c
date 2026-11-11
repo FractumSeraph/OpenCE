@@ -286,6 +286,18 @@ typedef struct
 long __stdcall XNetGetConfigStatus(XNetConfigStatus *status);
 /* (D:\config.toml's, port/linux/src/port_config.h) */
 int config_boolean(char const *name);
+#ifdef HALO_XBOX_CONSOLE
+long config_integer(char const *name);
+unsigned long xbox_memory_free(void);
+
+/* port: XNet's own pool with its security bypassed, in 4 KB pages
+(console.xnet_pages): the retail game's secure System Link used 24, a
+dashboard 64; DHCP, DNS and the TCP of internet play need more than 24,
+and every page is a 64 MB console's memory */
+#define XNET_BYPASS_PAGES_DEFAULT 40
+#define XNET_BYPASS_PAGES_MINIMUM 24
+#define XNET_BYPASS_PAGES_MAXIMUM 128
+#endif
 #endif
 
 long transport_initialize(
@@ -341,10 +353,17 @@ long transport_initialize(
 			fclose(bypass_file);
 #else
 			/* port: internet play over plain IP needs room for DHCP, DNS and
-			TCP that secure system link never did: the pool and queues a
-			dashboard uses, and XNet's own security tables left at their
-			defaults */
-			startup_params.cfgPrivatePoolSizeInPages = 64;
+			TCP that secure system link never did: a larger pool
+			(console.xnet_pages, 40 by default; a dashboard uses 64), the
+			queues a dashboard uses, and XNet's own security tables left at
+			their defaults */
+			{
+				long pages = config_integer("console.xnet_pages");
+
+				if (pages < XNET_BYPASS_PAGES_MINIMUM || pages > XNET_BYPASS_PAGES_MAXIMUM)
+					pages = XNET_BYPASS_PAGES_DEFAULT;
+				startup_params.cfgPrivatePoolSizeInPages = (BYTE)pages;
+			}
 			startup_params.cfgEnetReceiveQueueLength = 16;
 			startup_params.cfgIpFragMaxSimultaneous = 16;
 			startup_params.cfgIpFragMaxPacketDiv256 = 32;
@@ -362,6 +381,14 @@ long transport_initialize(
 		{
 			short wsa_error = WSAStartup(MAKEWORD(2, 0), &info);
 
+#ifdef HALO_XBOX_CONSOLE
+			/* port: what XNet took, for sizing console.xnet_pages on a 64 MB
+			console (debug.txt's later "memory: ... (a new low)" lines show a
+			join's) */
+			error(_error_log, "network: XNet started with a %d KB pool (%d pages), %lu KB free",
+				startup_params.cfgPrivatePoolSizeInPages * 4, startup_params.cfgPrivatePoolSizeInPages,
+				xbox_memory_free() >> 10);
+#endif
 			if (wsa_error != 0)
 			{
 				XNetCleanup();

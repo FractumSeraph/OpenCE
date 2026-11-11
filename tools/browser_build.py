@@ -144,7 +144,7 @@ WEB_EXCLUDED_PLATFORM_SOURCES = {
     # out and port/web/src/web_map_torrents.c stands in for map_torrents.h.
     "map_torrents.c",
     # (and the approved map list's signature, which only it reads)
-    "map_index.c",
+    "map_list_index.c",
     "torrent.c",
     "torrent_peer.c",
     "torrent_tracker.c",

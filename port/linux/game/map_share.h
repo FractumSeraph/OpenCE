@@ -253,4 +253,25 @@ boolean map_share_pieces_hashed(
 void map_share_files_update(
 	void);
 
+/* ---------- ChupathingyCE's map sharing, left out (port, this fork)
+
+ChupathingyCE 0.9.1 has a map sharing of its own (map_share_host.c,
+map_share_client.c, map_share_wire.c: OpenCE's protocol, messages 83 to 86 and
+port 5153, a host's side and a client's that downloads from the host alone,
+with its map bot's fetch). This fork has OpenCE's whole map sharing (this
+file's), which does both ends, downloads from every player who has the map,
+and is the first source a missing map is looked for in (map_download.c), so
+ChupathingyCE's is not built: two would answer the same messages and listen
+on the same port. Its calls in the shared code are these. */
+#define map_share_fetching() FALSE
+#define map_share_fetch_update(main_menu_loaded, seconds) ((void)0)
+#define map_share_fetch_game_record(wire_level, version, player_count) FALSE
+#define map_share_fetch_machine_name() ((char const *)0)
+#define map_share_host_message(machine_index, message, size) FALSE
+#define map_share_host_downloading(machine_index) map_share_machine_downloading(machine_index)
+#define map_share_player_start(host, file, version) FALSE
+#define map_share_player_busy() FALSE
+#define map_share_player_update() ((void)0)
+#define map_share_client_message(message, size, reliable) FALSE
+
 #endif

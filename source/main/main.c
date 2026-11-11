@@ -420,6 +420,7 @@ void platform_log(const char *format, ...);
 #endif
 #include "view_fov.h" /* port: display.fov, before the projection and culling */
 #include "halo_perf_log.h" /* port: console.perf_log */
+#include "plasma_lighting.h" /* port: port/linux/game/plasma_lighting.c */
 
 /* port: the main loop's stage, for the console's bring-up watchdog
 (port/xbox/src/xbox_port.c); nothing elsewhere */
@@ -719,6 +720,11 @@ void team_change_update(void);
 #endif
 #ifdef HALO_GAME_BROWSER
 void host_rules_update(void);
+void party_teams_update(void);
+void map_share_update(void);
+#ifdef HALO_HOST_MAP_DOWNLOADS
+void browser_screen_host_download_update(void);
+#endif
 #endif
 #ifdef HALO_PORT_CHAT
 void chat_update(void);
@@ -729,6 +735,9 @@ have one: not the Xbox's */
 #define main_server_mode() 0
 #else
 #define main_server_mode() halo_server_mode()
+#endif
+#ifdef HALO_PORT_VOICE
+void voice_game_update(void);
 #endif
 
 /* ---------- prototypes */
@@ -3590,7 +3599,7 @@ static void main_game_render(
 			MAIN_STAGE("render: observer_get_camera");
 			observer = observer_get_camera(window->local_player_index);
 			MAIN_STAGE("render: render_interpolation_camera");
-#ifndef HALO_XBOX_CONSOLE
+#ifdef HALO_PORT_FRAMES_BETWEEN_TICKS
 			observer = render_interpolation_camera(window->local_player_index, observer);
 #endif
 		}
@@ -3858,6 +3867,18 @@ static boolean main_loop_iteration(
 #ifdef HALO_GAME_BROWSER
 			/* the host's rules for its players' extras (port/linux/game/host_rules.c) */
 			host_rules_update();
+			/* a party kept on one team in games this machine hosts
+			(port/linux/game/party_teams.c) */
+			party_teams_update();
+			/* map sharing's host (port/linux/game/map_share_host.c) */
+			MAIN_STAGE("map_share_update");
+			map_share_update();
+#endif
+#ifdef HALO_HOST_MAP_DOWNLOADS
+			/* a player's download of a map from the host, whatever screen is
+			up (port/linux/game/browser_screen.c) */
+			MAIN_STAGE("browser_screen_host_download_update");
+			browser_screen_host_download_update();
 #endif
 #ifdef HALO_PORT_CHAT
 			/* text chat (port/linux/game/chat.c; on a console, its client's
@@ -3868,6 +3889,12 @@ static boolean main_loop_iteration(
 			/* port: a build without chat.c: network games' text chat as OpenCE
 			has it (port/linux/game/network_chat.c) */
 			network_chat_update();
+#endif
+#ifdef HALO_PORT_VOICE
+			/* voice chat (port/linux/game/voice_game.c; a dedicated server
+			relays it) */
+			MAIN_STAGE("voice_update");
+			voice_game_update();
 #endif
 			/* the audio probe's scripted recording (port/linux/game/audio_probe.c),
 			on the consoles too */
@@ -4033,7 +4060,7 @@ static boolean main_loop_iteration(
 					render_frame = main_globals.main_menu_scenario_loaded ||
 						(main_globals.halt_time_scale &&
 							(game_time_get_paused() || game_time_get_elapsed()>0 || game_time_get_speed()<1.0f));
-#ifndef HALO_XBOX_CONSOLE
+#ifdef HALO_PORT_FRAMES_BETWEEN_TICKS
 					/* frames between ticks too (render_interpolation.c) */
 					if (halo_interpolation_enabled())
 						render_frame = main_globals.main_menu_scenario_loaded || main_globals.halt_time_scale;
@@ -4065,7 +4092,7 @@ static boolean main_loop_iteration(
 					MAIN_STAGE("profile_render_start");
 					profile_render_start();
 					MAIN_STAGE("render_interpolation_frame_begin");
-#ifndef HALO_XBOX_CONSOLE
+#ifdef HALO_PORT_FRAMES_BETWEEN_TICKS
 					render_interpolation_frame_begin();
 					MAIN_STAGE("main_game_render");
 					HALO_PERF_BEGIN(_halo_perf_render);
@@ -4079,6 +4106,10 @@ static boolean main_loop_iteration(
 					main_game_render((double)main_globals.seconds_elapsed);
 					HALO_PERF_END(_halo_perf_render);
 #endif
+					/* port: the lights the Light effects changed for the
+					frame put back before the next tick reads them
+					(port/linux/game/plasma_lighting.c) */
+					plasma_lighting_frame_end();
 					profile_render_end();
 				}
 			}

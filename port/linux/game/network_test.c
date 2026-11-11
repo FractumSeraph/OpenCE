@@ -16,7 +16,8 @@ Automated system link sessions for testing the netcode without the menus
   may also be named as the menus name it (putput@ce). Maps joined by
   "+" (bloodgulch+putput@ce) are the games' maps in turn, the
   last for the games past them, as a dedicated server's playlist moves its
-  players to the next map;
+  players to the next map; a map the menus refuse a hosted game (one on
+  Chupathingy maps' blacklist) ends the test with exit code 2;
 - "local:<map>[:<variant>...]" the same with a local (split screen) game of
   one player, as Multiplayer > Split Screen of the Xbox's menus sets one up
   (no other machine joins it: the bots' games, bots.count);
@@ -40,6 +41,11 @@ Automated system link sessions for testing the netcode without the menus
 - "offer:<name>[:<checksum>]" shows the Online Games screen's offer of that
   map over the main menu, as a join left for want of it does
   (browser_screen_map_missing), for its panel to be seen and driven;
+- "fetch:<host>" is the map bot's fetch (map_share_client.c): it joins the
+  game of the host at that system link address (a.b.c.d[:port]) or of that
+  internet invite as a machine with no player, asks the host for its
+  current Custom Edition map, downloads it, writes it and a result
+  (debug.map_fetch_*), leaves and quits;
 - "browse" opens the Online Games screen once the main menu is up, as the
   Multiplayer menu's ONLINE GAMES does, and logs each listed game's ping
   every few seconds (measured or estimated, never an address) with its
@@ -140,6 +146,9 @@ network_test_update, which does nothing there */
 #include "halo_map_families.h"
 #include "../src/map_download.h"
 #ifdef HALO_GAME_BROWSER
+#include "map_share.h"
+#endif
+#ifdef HALO_GAME_BROWSER
 #include "../src/browser.h"
 #endif
 #include "hs/hs.h"
@@ -209,6 +218,8 @@ enum
 	_network_test_watch,
 	_network_test_log,
 	_network_test_probe,
+	/* the map bot's fetch (map_share_client.c) */
+	_network_test_fetch,
 };
 
 static struct
@@ -384,6 +395,12 @@ static void network_test_read_settings(
 	{
 		network_test.mode = _network_test_watch;
 	}
+#ifdef HALO_GAME_BROWSER
+	else if (!strncmp(setting, "fetch:", 6) && setting[6])
+	{
+		network_test.mode = _network_test_fetch;
+	}
+#endif
 	else if (!strncmp(setting, "find:", 5) && setting[5])
 	{
 		network_test.mode = _network_test_find;
@@ -1841,6 +1858,19 @@ void network_test_update(
 		network_test_download(main_menu_loaded);
 		return;
 	}
+#ifdef HALO_GAME_BROWSER
+	if (network_test.mode == _network_test_fetch)
+	{
+		/* (the intro movie skipped first, as a button press does) */
+		if (bink_playback_in_progress())
+		{
+			bink_playback_stop();
+			return;
+		}
+		map_share_fetch_update(main_menu_loaded, seconds);
+		return;
+	}
+#endif
 	if (network_test.mode == _network_test_find)
 	{
 		if (main_menu_loaded)
@@ -2537,6 +2567,22 @@ void network_test_update(
 					/* (one of OpenCE's gametypes by its name: game_modes.c) */
 					boolean opence = game_modes_gametype_by_name(variant_name, &variant, &options);
 
+					/* (a map the menus refuse a hosted game, one on Chupathingy
+					maps' blacklist: said, and the game quit, as the menus' list
+					would stay) */
+					{
+						extern boolean cache_files_map_host_refused(char const *map_name, char *message, long size);
+						extern void map_repo_game_refresh_wait(int milliseconds);
+						char refused[320];
+
+						/* (the repository's answer in, or ten seconds given it) */
+						map_repo_game_refresh_wait(10000);
+						if (cache_files_map_host_refused(path, refused, sizeof(refused)))
+						{
+							platform_log("network test: not hosted: %s", refused);
+							exit(2);
+						}
+					}
 					network_game_server_change_map_name(global_network_game_server_get(), path);
 					/* the variant, as picking the game settings does */
 					if (!opence)

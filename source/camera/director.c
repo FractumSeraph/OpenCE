@@ -125,6 +125,7 @@ symbols in this file:
 #include "coop_spectate.h" /* port: port/linux/game/coop_spectate.c */
 #include "sightjack.h" /* port (this fork): port/linux/game/sightjack.c */
 #include "follow_camera.h" /* port: port/linux/game/follow_camera.c */
+#include "late_join.h" /* port: port/linux/game/late_join.c */
 #include "editor_flying_camera.h"
 #include "first_person_camera.h"
 #include "flying_camera.h"
@@ -777,7 +778,8 @@ static void director_choose_camera_game(
 		/* port: and a network co-op player who hasn't spawned yet, waiting for
 		the level's first checkpoint, watches too */
 		boolean use_dead_camera = player->unit_index == NONE &&
-			(player->statistics.deaths > 0 || players_coop_waiting_to_start(player_index));
+			(player->statistics.deaths > 0 || players_coop_waiting_to_start(player_index) ||
+				late_join_waiting(player_index));
 
 		/* port (this fork): a moderator watching a player sees through their
 		eyes (port/linux/game/sightjack.c), their own player held still and

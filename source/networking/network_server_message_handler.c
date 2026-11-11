@@ -264,6 +264,9 @@ symbols in this file:
 #include "networking/network_messages.h"
 #include "networking/network_server_manager_internal.h"
 #include "networking/network_server_message_handler.h"
+#ifdef HALO_GAME_BROWSER
+#include "map_share.h" /* port: map sharing's requests (port/linux/game/map_share_host.c) */
+#endif
 #include "text/unicode.h"
 /* system_milliseconds(), for the settings update interval */
 #include "cseries/cseries_windows.h"

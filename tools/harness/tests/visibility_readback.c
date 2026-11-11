@@ -49,6 +49,8 @@ static struct
 	GLuint visibility_known[VISIBILITY_TEST_SLOTS];
 	ULONGLONG visibility_ended[VISIBILITY_TEST_SLOTS];
 	ULONGLONG visibility_counted[VISIBILITY_TEST_SLOTS];
+	/* (ChupathingyCE's: the last test's number, for bgfx and the consoles) */
+	unsigned long visibility_test_number;
 	struct visibility_batch visibility_batches[VISIBILITY_BATCH_COUNT];
 	unsigned long visibility_batch;
 	ULONGLONG visibility_serial;

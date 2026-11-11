@@ -80,7 +80,7 @@ path, size and modification time, so a rerun hashes only new files.
 The index's second line is its serial ("# serial <n>": the time it changed,
 in unix seconds, and always more than the one before), which every command
 here raises when it changes the entries. The games fetch the index as
-published between releases (port/linux/src/map_index.h, maps.index_url):
+published between releases (port/linux/src/map_list_index.h, maps.index_url):
 signed with the fork's release key over "fractum-halo-map-index 1\n" and
 the index's bytes, and taken in place of a build's own when its serial is
 newer. .github/workflows/map-index.yml publishes it on every change:
@@ -113,7 +113,7 @@ from pathlib import Path
 
 INDEX_FORMAT = "halo map torrents v1"
 # the published index's signature covers this, then the index's bytes
-# (port/linux/src/map_index.h)
+# (port/linux/src/map_list_index.h)
 INDEX_SIGNATURE_CONTEXT = b"fractum-halo-map-index 1\n"
 INDEX_KEY_HEADER = Path(__file__).resolve().parent.parent / "port/linux/src/map_index_key.h"
 SERIAL_PATTERN = re.compile(r"^# serial (\d{1,19})\s*$")
@@ -414,7 +414,7 @@ def read_index(path):
 
 def index_serial(text):
     """the serial of an index's text: its "# serial <n>" line among the
-    comment lines it opens with, 0 for none (map_index_serial's reading)"""
+    comment lines it opens with, 0 for none (map_list_index_serial's reading)"""
     for line in text.splitlines():
         if not line.startswith("#"):
             break
@@ -443,7 +443,7 @@ def write_index(path, entries):
         "# A map's single-file torrent has info = {length, name, piece length, pieces}: a",
         "# download is checked against its info hash (port/linux/src/map_archives.c).",
         "# The serial (the time the entries changed, in unix seconds) is the published",
-        "# list's (port/linux/src/map_index.h): a newer one is fetched in place of a build's.",
+        "# list's (port/linux/src/map_list_index.h): a newer one is fetched in place of a build's.",
     ]
     for entry in sorted(entries.values(), key=lambda e: (e.file_name.lower(), e.checksum)):
         lines.append(entry.line())
@@ -853,7 +853,7 @@ def check(args):
     return 1 if failures else 0
 
 
-# ---------- the published list (port/linux/src/map_index.h)
+# ---------- the published list (port/linux/src/map_list_index.h)
 
 def index_key_header_keys():
     text = INDEX_KEY_HEADER.read_text()

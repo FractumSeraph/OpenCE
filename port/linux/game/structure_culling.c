@@ -15,6 +15,7 @@ Six-plane rejection and conservative facing summaries for structure buckets.
 #include "structures/structure_bsp_definitions.h"
 #include "shaders/shader_definitions.h"
 #include "rasterizer/rasterizer_geometry_environment.h"
+#include "rasterizer/rasterizer_vertex_byte_order.h"
 #include "rasterizer/rasterizer.h"
 #include "render/render.h"
 #include "render/render_cameras_internal.h"
@@ -151,6 +152,7 @@ static unsigned long structure_culling_recorded[2][BIT_VECTOR_SIZE_IN_LONGS(MAXI
 
 boolean tag_index_is_group(long tag_index, long group_tag);
 long config_integer(char const *name); /* port/linux/src/port_config.c */
+int config_boolean(char const *name);
 static void structure_culling_pairing_points(
 	struct structure_bsp *structure, struct structure_culling_pairing const *pairing, real_point3d *points);
 
@@ -325,8 +327,9 @@ static void structure_culling_pairing_points(
 
 	for (i = 0; i < 3; ++i)
 	{
-		points[i] =
-			*(real_point3d const *)(material->vertices + surface->vertex_indices[i] * COMPRESSED_STRUCTURE_VERTEX_SIZE);
+		/* the map's little-endian bytes on any machine (rasterizer_vertex_byte_order.h) */
+		vertex_data_read_point(
+			material->vertices + surface->vertex_indices[i] * COMPRESSED_STRUCTURE_VERTEX_SIZE, &points[i].x);
 	}
 }
 
@@ -971,6 +974,19 @@ void structure_culling_set_tests(long tests)
 	}
 }
 
+void structure_culling_load_settings(void)
+{
+	static long enabled_tests = NONE;
+
+	/* (debug.structure_culling off: the original walk draws every surface it
+	picks, to check a missing wall against it; read as each map loads) */
+	if (enabled_tests == NONE)
+	{
+		enabled_tests = structure_culling_tests;
+	}
+	structure_culling_tests = config_boolean("debug.structure_culling") ? enabled_tests : 0;
+}
+
 boolean structure_culling_traverse(struct structure_bsp *structure)
 {
 	short order[MAXIMUM_RENDERED_CLUSTERS];
@@ -986,13 +1002,6 @@ boolean structure_culling_traverse(struct structure_bsp *structure)
 	{
 		memset(structure_culling_recorded, 0, sizeof(structure_culling_recorded));
 	}
-#ifdef HALO_BIG_ENDIAN
-	/* a big-endian console reads the bsp's vertices and normals in the
-	Xbox's byte order here, so the facing tests drop visible triangles:
-	the original walk until they're read the console's way */
-	(void)structure;
-	return FALSE;
-#endif
 	if (!structure_culling_tests || !structure_culling_data_matches(structure))
 	{
 		return FALSE;

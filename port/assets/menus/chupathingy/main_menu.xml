@@ -4,7 +4,10 @@ Xbox's, in its own look, with the PC version's PROFILES and QUIT added as
 rows like the others. CAMPAIGN and MULTIPLAYER open the Xbox's screens;
 PROFILES, SETTINGS and QUIT the PC version's, which the Xbox has not. MODS
 (this fork's, from OpenCE) opens OpenCE's Mods screen, as the PC menus' main
-menu does (ce/main_menu.mods.xml, tools/port_settings.py). -->
+menu does (ce/main_menu.mods.xml, tools/port_settings.py). DELTA opens DELTA on
+PARTY (its picture: tools/delta_menu_art.py; the Gearbox and Xbox main menus get
+the same row, menu_tags.c). (Port, this fork: seven rows on the desktop and
+Android, 32 apart, not 36, to stay above the screen's bottom.) -->
 <menus>
 	<widget name="chupathingy/main_menu" width="640" height="480" flags="pass_unhandled_to_focused_child">
 		<on event="created" run="main menu intialize" label="ring_loop"/>
@@ -17,11 +20,13 @@ menu does (ce/main_menu.mods.xml, tools/port_settings.py). -->
 	<widget name="chupathingy/main_menu_list" type="column_list" width="640" height="480" flags="pass_unhandled_to_focused_child up_down_tabs_items" description="main_menu/main_menu_list_ext_desc">
 		<data input="main menu fake animate"/>
 		<child widget="chupathingy/main_menu_campaign" x="194" y="247"/>
-		<child widget="chupathingy/main_menu_multiplayer" x="192" y="283"/>
-		<child widget="chupathingy/main_menu_profiles" x="192" y="319"/>
-		<child widget="chupathingy/main_menu_settings" x="192" y="355"/>
-		<child widget="main_menu/main_menu_item_mods" x="192" y="391"/>
-		<child widget="chupathingy/main_menu_quit" x="192" y="427"/>
+		<child widget="chupathingy/main_menu_multiplayer" x="192" y="279"/>
+		<child widget="chupathingy/main_menu_profiles" x="192" y="311"/>
+		<child widget="chupathingy/main_menu_settings" x="192" y="343"/>
+		<child widget="main_menu/main_menu_item_mods" x="192" y="375"/>
+		<child widget="chupathingy/main_menu_delta" x="192" y="407" platform="desktop android"/>
+		<child widget="chupathingy/main_menu_quit" x="192" y="439" platform="desktop android"/>
+		<child widget="chupathingy/main_menu_quit" x="192" y="407" platform="switch console"/>
 	</widget>
 	<!-- (the Xbox's CAMPAIGN and MULTIPLAYER, as ui.map has them) -->
 	<widget name="chupathingy/main_menu_campaign" type="text" width="256" height="33" bitmap="main_menu/menu_load_campaign" string_list="main_menu/main_menu_options" string_index="1" font="ui\small_ui" color="#000080FF">
@@ -47,6 +52,23 @@ menu does (ce/main_menu.mods.xml, tools/port_settings.py). -->
 		<on event="a" open="chupathingy/quit_screen"/>
 		<on event="start" open="chupathingy/quit_screen"/>
 		<on event="left_mouse" run="mouse emit accept event"/>
+	</widget>
+	<!-- (DELTA: start a party, invite friends, bring them to your game) -->
+	<bitmap name="chupathingy/main_menu/menu_delta" platform="desktop android">
+		<frame png="chupathingy/main_menu/menu_delta__0.png" width="256" height="64"/>
+		<frame png="chupathingy/main_menu/menu_delta__1.png" width="256" height="64"/>
+	</bitmap>
+	<widget name="chupathingy/main_menu_delta" type="text" width="256" height="33" bitmap="chupathingy/main_menu/menu_delta" platform="desktop android">
+		<on event="a" run="port delta open"/>
+		<on event="start" run="port delta open"/>
+		<on event="left_mouse" run="mouse emit accept event"/>
+	</widget>
+	<!-- (and DELTA as a button of a button bar, beside BACK: Gearbox's
+	Multiplayer menu's, menu_tags.c) -->
+	<widget name="chupathingy/button_delta" type="text" width="128" height="24" bitmap="bitmaps/text_button_background" text="DELTA" font="ui\small_ui" color="#FFFFFFFF" align="center" text_y="2" platform="desktop android">
+		<on event="a" run="port delta open"/>
+		<on event="start" run="port delta open"/>
+		<on event="left_mouse" run="port delta open"/>
 	</widget>
 	<!-- (the PC version's SETTINGS, its screen in the Xbox's look) -->
 	<widget name="chupathingy/main_menu_settings" type="text" width="256" height="33" bitmap="main_menu/menu_settings" string_list="main_menu/main_menu_options" string_index="3" font="ui\small_ui" color="#000080FF">

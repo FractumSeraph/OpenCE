@@ -39,7 +39,7 @@ web seeds and DHT of the [maps] settings, and stopped with the game.
 #include "port_config.h"
 #include "map_torrents.h"
 #include "map_archives.h"
-#include "map_index.h"
+#include "map_list_index.h"
 #include "torrent.h"
 #ifdef HALO_GAME_BROWSER
 #include "browser_http.h"
@@ -70,8 +70,8 @@ void map_downloaded_remember(char const *map_name);
 #define PATH_SEPARATOR "/"
 #endif
 
-#define INDEX_FORMAT MAP_INDEX_FORMAT
-/* the fetched list as cached (map_index.h), in the save root */
+#define INDEX_FORMAT MAP_LIST_INDEX_FORMAT
+/* the fetched list as cached (map_list_index.h), in the save root */
 #define INDEX_CACHE_NAME "map_torrents.signed"
 /* (ChupathingyCE's folder of Custom Edition maps: halo_map_families.h) */
 #define CUSTOM_MAPS_XBOX_PATH "d:\\maps_ce\\"
@@ -119,7 +119,7 @@ struct torrent_index
 	/* where it was read from, for the log: the file, or the fetched list's
 	source */
 	char path[1024];
-	/* port (this fork): its serial (map_index.h; 0 for none) */
+	/* port (this fork): its serial (map_list_index.h; 0 for none) */
 	unsigned long long serial;
 };
 
@@ -203,13 +203,13 @@ static int index_parse(struct torrent_index *index, char *file, size_t file_size
 	int capacity = 0;
 	int number = 0;
 
-	if (!map_index_format(file, file_size))
+	if (!map_list_index_format(file, file_size))
 	{
 		platform_log("map torrents: %s is not a map torrent index (its first line is not \"%s\")", index->path,
 			INDEX_FORMAT);
 		return 0;
 	}
-	index->serial = map_index_serial(file, file_size);
+	index->serial = map_list_index_serial(file, file_size);
 	index->names = malloc(file_size + 1);
 	if (!index->names)
 		return 0;
@@ -319,33 +319,33 @@ static void index_cache_path(char *path, size_t size)
 
 static void index_known(unsigned long long serial, const unsigned char *signature);
 
-/* port (this fork): a signed list (map_index.h: the signature's digits, a
+/* port (this fork): a signed list (map_list_index.h: the signature's digits, a
 line feed, the index), fetched or cached, in place of the one in use when
 its serial is newer; checked first when check (the cache's: a fetched one
 was checked as it came). 1 when it is the one in use now */
 static int index_take_signed(char *text, size_t size, const char *source, int check)
 {
-	unsigned char signature[MAP_INDEX_SIGNATURE_SIZE];
+	unsigned char signature[MAP_LIST_INDEX_SIGNATURE_SIZE];
 	size_t offset;
 	struct torrent_index taken;
 	unsigned long long serial;
 	char *document;
 	size_t document_size;
 
-	if (!map_index_split(text, size, signature, &offset))
+	if (!map_list_index_split(text, size, signature, &offset))
 	{
 		platform_log("map torrents: the approved map list from %s is not a signed list: not taken", source);
 		return 0;
 	}
 	document = text + offset;
 	document_size = size - offset;
-	if (check && (!map_index_format(document, document_size) ||
-		!map_index_signature_check(signature, document, document_size)))
+	if (check && (!map_list_index_format(document, document_size) ||
+		!map_list_index_signature_check(signature, document, document_size)))
 	{
 		platform_log("map torrents: the approved map list from %s is not signed by the fork's key: not taken", source);
 		return 0;
 	}
-	serial = map_index_serial(document, document_size);
+	serial = map_list_index_serial(document, document_size);
 	if (serial <= torrent_maps_index.serial)
 	{
 		/* (the list in use as signed: its signature known, so that the
@@ -412,7 +412,7 @@ static void index_load(void)
 
 /* ---------- the approved map list, fetched (port, this fork) */
 
-/* maps.index_url's lists (map_index.h), the newest serial taken: looked at
+/* maps.index_url's lists (map_list_index.h), the newest serial taken: looked at
 on a thread of this file's when the game starts and every
 INDEX_REFRESH_SECONDS, sooner (INDEX_ASKED_SECONDS at the least) when a map
 is turned away as not approved; a list taken is cached (INDEX_CACHE_NAME)
@@ -440,7 +440,7 @@ static struct
 	/* the newest serial known (in use, or taken and on its way to the
 	game's thread), and the last signature seen */
 	unsigned long long serial;
-	unsigned char signature[MAP_INDEX_SIGNATURE_SIZE];
+	unsigned char signature[MAP_LIST_INDEX_SIGNATURE_SIZE];
 	int has_signature;
 	/* a signed list for the game's thread (malloc'd, NUL terminated), and
 	its source */
@@ -497,7 +497,7 @@ static void index_cache_write(const char *text, size_t size)
 
 const char *build_identity_user_agent(void);
 
-/* the document at url, at most MAP_INDEX_MAXIMUM_SIZE bytes, after room
+/* the document at url, at most MAP_LIST_INDEX_MAXIMUM_SIZE bytes, after room
 for the signature's line (offset bytes) before it, NUL terminated: malloc'd,
 or NULL and why in error */
 static char *index_download(const char *url, size_t offset, size_t *size, char *error, int error_size)
@@ -513,7 +513,7 @@ static char *index_download(const char *url, size_t offset, size_t *size, char *
 			snprintf(error, (size_t)error_size, "HTTP %d", status);
 		return NULL;
 	}
-	if (length > 0 && (unsigned long)length > MAP_INDEX_MAXIMUM_SIZE)
+	if (length > 0 && (unsigned long)length > MAP_LIST_INDEX_MAXIMUM_SIZE)
 	{
 		posix_browser_download_close(download);
 		snprintf(error, (size_t)error_size, "it is %d bytes, more than a list may be", length);
@@ -525,7 +525,7 @@ static char *index_download(const char *url, size_t offset, size_t *size, char *
 	{
 		if (capacity - offset - used - 1 < 65536)
 		{
-			if (used >= MAP_INDEX_MAXIMUM_SIZE)
+			if (used >= MAP_LIST_INDEX_MAXIMUM_SIZE)
 			{
 				snprintf(error, (size_t)error_size, "it is more than a list may be");
 				break;
@@ -567,8 +567,8 @@ static int index_fetch_from(const char *url, int *absent)
 {
 	static const char digits[] = "0123456789abcdef";
 	char signature_url[1100], answer[300], error[256];
-	unsigned char signature[MAP_INDEX_SIGNATURE_SIZE];
-	size_t line = MAP_INDEX_SIGNATURE_SIZE * 2 + 1, size = 0, index;
+	unsigned char signature[MAP_LIST_INDEX_SIGNATURE_SIZE];
+	size_t line = MAP_LIST_INDEX_SIGNATURE_SIZE * 2 + 1, size = 0, index;
 	unsigned long long serial;
 	char *text;
 	int status, known, newer, same;
@@ -587,7 +587,7 @@ static int index_fetch_from(const char *url, int *absent)
 		platform_log("map torrents: no approved map list from %s (%s)", url, status ? "the server refused" : error);
 		return 0;
 	}
-	if (!map_index_signature_parse(answer, strlen(answer), signature))
+	if (!map_list_index_signature_parse(answer, strlen(answer), signature))
 	{
 		platform_log("map torrents: %s is not a signature: the approved map list there is not taken", signature_url);
 		return 0;
@@ -603,15 +603,15 @@ static int index_fetch_from(const char *url, int *absent)
 		platform_log("map torrents: no approved map list from %s (%s)", url, error);
 		return 0;
 	}
-	if (!map_index_format(text + line, size) || !map_index_signature_check(signature, text + line, size))
+	if (!map_list_index_format(text + line, size) || !map_list_index_signature_check(signature, text + line, size))
 	{
 		platform_log("map torrents: the approved map list from %s is not signed by the fork's key: not taken", url);
 		free(text);
 		return 0;
 	}
-	serial = map_index_serial(text + line, size);
+	serial = map_list_index_serial(text + line, size);
 	/* (the cache's form: the signature's digits and a line feed first) */
-	for (index = 0; index < MAP_INDEX_SIGNATURE_SIZE; index++)
+	for (index = 0; index < MAP_LIST_INDEX_SIGNATURE_SIZE; index++)
 	{
 		text[index * 2] = digits[signature[index] >> 4];
 		text[index * 2 + 1] = digits[signature[index] & 15];

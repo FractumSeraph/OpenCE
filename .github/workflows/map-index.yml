@@ -1,6 +1,6 @@
 name: Map list
 
-# The approved map list published between releases (port/linux/src/map_index.h;
+# The approved map list published between releases (port/linux/src/map_list_index.h;
 # docs/map_torrents.md, "The list, fetched"): on every change to
 # port/assets/network/map_torrents.txt on main, the index is signed with the
 # fork's release key (the UPDATE_SIGNING_KEY secret, as the releases are;

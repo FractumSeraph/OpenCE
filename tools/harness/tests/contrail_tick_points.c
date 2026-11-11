@@ -29,6 +29,8 @@ struct location { long cluster_reference; short leaf_index; short cluster_index;
 #define SET_FLAG(flags, bit, value) ((value) ? ((flags) |= FLAG(bit)) : ((flags) &= ~FLAG(bit)))
 #define NUMBEROF(a) (sizeof(a) / sizeof((a)[0]))
 #define TICKS_PER_SECOND 30
+/* (the native builds draw frames between ticks: halo_console_features.h) */
+#define HALO_PORT_FRAMES_BETWEEN_TICKS 1
 #define csmemcmp memcmp
 #define match_assert_valid_real(file, line, value) ((void)0)
 

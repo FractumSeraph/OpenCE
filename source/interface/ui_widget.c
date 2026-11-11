@@ -739,7 +739,7 @@ void guide_update(boolean menu_open);
 void guide_process(void);
 void guide_pointer(struct halo_ui_pointer const *pointer);
 void guide_render(void);
-/* the pause menu's GUIDE with what waits in the Guide ("GUIDE 2"), for
+/* the pause menu's DELTA with what waits in it ("DELTA 2"), for
 its text's string list; NULL to leave it */
 wchar_t const *guide_pause_label(long string_list_tag);
 #endif
@@ -1473,6 +1473,17 @@ boolean pc_menu_button_key_cap(
 	short x1,
 	short y1,
 	float alpha);
+#ifdef HALO_GAME_BROWSER
+/* port: the keyboard's key in a menu text's prompt ("[Enter]") drawn as a
+key cap at x on the line from y0 to y1 (port/linux/game/menu_tags.c): its
+width, or 0 when none is drawn (it is written as text then) */
+short pc_menu_text_key_cap(
+	wchar_t const *key_text,
+	short x,
+	short y0,
+	short y1,
+	float alpha);
+#endif
 /* port: the left edge of the key cap pc_menu_button_key_cap draws in
 these bounds, or x0 when it draws none */
 short pc_menu_button_key_cap_left(
@@ -1654,6 +1665,9 @@ short local_player_index_for_draw_string_and_hack_in_icons;
 /* port: draw_string_and_hack_in_icons draws a widget's text (the menus'
 keys for the buttons, not the game's: input_abstraction_port_icon_key) */
 static boolean draw_string_icons_for_menus = FALSE;
+/* port: and the keyboard's keys in them drawn as key caps (a menu text
+box's text: widget_instance_render_text_box) */
+static boolean draw_string_key_caps = FALSE;
 short draw_string_and_hack_in_icons_end_x = 0;
 
 /* port: draw_string_and_hack_in_icons draws the menus' keys for the buttons
@@ -3646,10 +3660,19 @@ enum
 	/* MAP BROWSER, a second copy of System Link's, under ONLINE GAMES
 	(port/xbox/game/xbox_maps_screen.c) */
 	MAP_BROWSER_POSITION = ONLINE_GAMES_POSITION + 1,
-	ONLINE_GAMES_ITEMS_ADDED = 2,
+	ONLINE_GAMES_MAP_BROWSER_ADDED = 1,
 #else
-	ONLINE_GAMES_ITEMS_ADDED = 1,
+	ONLINE_GAMES_MAP_BROWSER_ADDED = 0,
 #endif
+#ifdef HALO_GUIDE
+	/* DELTA (port/linux/game/guide.c), another copy, last: a party
+	started and friends invited from the menus */
+	DELTA_ITEM_POSITION = ONLINE_GAMES_POSITION + 1 + ONLINE_GAMES_MAP_BROWSER_ADDED,
+	ONLINE_GAMES_DELTA_ADDED = 1,
+#else
+	ONLINE_GAMES_DELTA_ADDED = 0,
+#endif
+	ONLINE_GAMES_ITEMS_ADDED = 1 + ONLINE_GAMES_MAP_BROWSER_ADDED + ONLINE_GAMES_DELTA_ADDED,
 	/* the items' spacing (their vertical offset, -33) */
 	ONLINE_GAMES_ROW = 33,
 };
@@ -3663,7 +3686,14 @@ static struct
 #ifdef HALO_CONSOLE_MAP_BROWSER
 	boolean map_browser_described;
 #endif
+#ifdef HALO_GUIDE
+	boolean delta_described;
+#endif
 } online_games = { NONE, NONE, NULL, FALSE };
+
+#ifdef HALO_GAME_BROWSER
+static void ui_widget_setup_entry_tags_loaded(void);
+#endif
 
 void ui_widget_online_games_tags_loaded(
 	void)
@@ -3678,6 +3708,10 @@ void ui_widget_online_games_tags_loaded(
 
 	online_games.list_tag = NONE;
 	online_games.description_text_tag = tag_loaded(UI_WIDGET_DEFINITION_TAG, ONLINE_GAMES_DESCRIPTION_TEXT);
+#ifdef HALO_GAME_BROWSER
+	/* (and the Xbox's EDIT PROFILE SETTINGS' SETUP, below) */
+	ui_widget_setup_entry_tags_loaded();
+#endif
 	if (list_tag == NONE)
 		return;
 	list = tag_get(UI_WIDGET_DEFINITION_TAG, list_tag);
@@ -3696,6 +3730,9 @@ void ui_widget_online_games_tags_loaded(
 	children[ONLINE_GAMES_POSITION] = old_children[ONLINE_GAMES_SYSTEM_LINK];
 #ifdef HALO_CONSOLE_MAP_BROWSER
 	children[MAP_BROWSER_POSITION] = old_children[ONLINE_GAMES_SYSTEM_LINK];
+#endif
+#ifdef HALO_GUIDE
+	children[DELTA_ITEM_POSITION] = old_children[ONLINE_GAMES_SYSTEM_LINK];
 #endif
 	csmemcpy(&children[ONLINE_GAMES_POSITION + ONLINE_GAMES_ITEMS_ADDED], &old_children[ONLINE_GAMES_POSITION],
 		(ONLINE_GAMES_MENU_ITEMS - ONLINE_GAMES_POSITION) * sizeof(*children));
@@ -3733,9 +3770,157 @@ static short ui_widget_list_position(
 	return child ? position : NONE;
 }
 
+#ifdef HALO_GAME_BROWSER
+/* ---------- SETUP (the Xbox's menus)
+
+A row of the Xbox's EDIT PROFILE SETTINGS, after CHANGE COLOR: back to the
+setup screen (port/linux/src/launcher.c), as the Gearbox and Chupathingy
+menus have it (port/assets/menus/chupathingy/setup_entry.xml). When the
+menus' tags load, the list gets a copy of CHANGE COLOR's row a row under
+it, and SAVE CHANGES and the line over it move down a row; the copy's text,
+its A and its description are this code's, told apart by its place.
+Not in a game's tags, nor with launcher.menu_entry false
+(pc_menu_setup_offered). */
+
+#define SETUP_ENTRY_LIST "ui\\shell\\main_menu\\settings_select\\player_setup\\player_profile_edit\\profile_edit_select_list"
+#define SETUP_ENTRY_MAIN_MENU "ui\\shell\\main_menu\\main_menu"
+#define SETUP_ENTRY_SCREEN "ui\\shell\\main_menu\\settings_select\\player_setup\\player_profile_edit\\player_profile_edit_screen"
+#define SETUP_ENTRY_LINE "ui\\shell\\main_menu\\blueline"
+
+enum
+{
+	/* the Xbox's rows: CHANGE NAME, CONTROLLER SETTINGS, ADVANCED
+	CONTROLS, CHANGE COLOR, SAVE CHANGES */
+	SETUP_ENTRY_ROWS = 5,
+	SETUP_ENTRY_COPIED = 3,
+	SETUP_ENTRY_SAVE = 4,
+	SETUP_ENTRY_POSITION = 4,
+};
+
+static struct
+{
+	long list_tag;
+	long description_text_tag;
+	struct ui_widget_child_reference *children;
+	boolean described;
+} setup_entry = { NONE, NONE, NULL, FALSE };
+
+static void ui_widget_setup_entry_tags_loaded(
+	void)
+{
+	extern short pc_menus_set(void);
+	extern boolean pc_menu_setup_offered(void);
+	long list_tag = tag_loaded(UI_WIDGET_DEFINITION_TAG, SETUP_ENTRY_LIST);
+	struct ui_widget_definition *list;
+	struct ui_widget_child_reference *old_children;
+	struct ui_widget_child_reference *children;
+	long screen_tag = tag_loaded(UI_WIDGET_DEFINITION_TAG, SETUP_ENTRY_SCREEN);
+	long line_tag = tag_loaded(UI_WIDGET_DEFINITION_TAG, SETUP_ENTRY_LINE);
+	short row;
+	long index;
+
+	setup_entry.list_tag = NONE;
+	setup_entry.description_text_tag = NONE;
+	/* (the Xbox's menus' alone, at the main menu's) */
+	if (pc_menus_set() != 0 || !pc_menu_setup_offered() || list_tag == NONE ||
+		tag_loaded(UI_WIDGET_DEFINITION_TAG, SETUP_ENTRY_MAIN_MENU) == NONE)
+	{
+		return;
+	}
+	list = tag_get(UI_WIDGET_DEFINITION_TAG, list_tag);
+	if (list->child_widgets.count != SETUP_ENTRY_ROWS)
+		return;
+	if (setup_entry.children)
+		system_free(setup_entry.children);
+	setup_entry.children = NULL;
+	old_children = (struct ui_widget_child_reference *)xbox_pointer(list->child_widgets.address);
+	/* (a row: as far as CHANGE COLOR's is under the row before it) */
+	row = (short)(ui_widget_definition_get(old_children[SETUP_ENTRY_COPIED].widget_tag.index)->bounds.y0 -
+		ui_widget_definition_get(old_children[SETUP_ENTRY_COPIED - 1].widget_tag.index)->bounds.y0);
+	if (row <= 0 || row > 60)
+		return;
+	children = system_malloc((SETUP_ENTRY_ROWS + 1) * sizeof(*children));
+	setup_entry.children = children;
+	if (!children)
+		return;
+	csmemcpy(children, old_children, SETUP_ENTRY_POSITION * sizeof(*children));
+	children[SETUP_ENTRY_POSITION] = old_children[SETUP_ENTRY_COPIED];
+	children[SETUP_ENTRY_POSITION].vertical_offset += row;
+	children[SETUP_ENTRY_POSITION + 1] = old_children[SETUP_ENTRY_SAVE];
+	children[SETUP_ENTRY_POSITION + 1].vertical_offset += row;
+	list->child_widgets.address = XBOX_ADDRESS(children);
+	list->child_widgets.count = SETUP_ENTRY_ROWS + 1;
+	setup_entry.list_tag = list_tag;
+	/* the line over SAVE CHANGES, a row lower */
+	if (screen_tag != NONE && line_tag != NONE)
+	{
+		struct ui_widget_definition *screen = tag_get(UI_WIDGET_DEFINITION_TAG, screen_tag);
+		struct ui_widget_child_reference *screen_children =
+			(struct ui_widget_child_reference *)xbox_pointer(screen->child_widgets.address);
+
+		for (index = 0; index < screen->child_widgets.count; index++)
+		{
+			if (screen_children[index].widget_tag.index == line_tag)
+				screen_children[index].vertical_offset += row;
+		}
+	}
+}
+
+static boolean ui_widget_setup_entry_list(
+	struct widget_instance *widget)
+{
+	return setup_entry.list_tag != NONE && widget && widget->definition_tag_index == setup_entry.list_tag;
+}
+
+static boolean ui_widget_setup_entry_item(
+	struct widget_instance *widget)
+{
+	short position = 0;
+	struct widget_instance *child;
+
+	if (setup_entry.list_tag == NONE || !widget || !widget->parent ||
+		widget->parent->definition_tag_index != setup_entry.list_tag)
+	{
+		return FALSE;
+	}
+	for (child = widget->parent->child; child && child != widget; child = child->next)
+		position++;
+	return child && position == SETUP_ENTRY_POSITION;
+}
+
+/* the list's description for its focused item (ui_widget_game_data_input_
+functions.c): SETUP's words, the picture left as it was; SAVE CHANGES' own
+after it */
+short ui_widget_setup_entry_description(
+	struct widget_instance *list_widget,
+	short index)
+{
+	setup_entry.described = FALSE;
+	if (!ui_widget_setup_entry_list(list_widget) || index < SETUP_ENTRY_POSITION)
+		return index;
+	if (index > SETUP_ENTRY_POSITION)
+		return (short)(index - 1);
+	if (list_widget->parameters.list.extended_description && list_widget->parameters.list.extended_description->child &&
+		list_widget->parameters.list.extended_description->child->next)
+	{
+		/* (its text, then its picture: player_profile_edit_select_menu_update_
+		extended_description's) */
+		setup_entry.description_text_tag =
+			list_widget->parameters.list.extended_description->child->definition_tag_index;
+	}
+	setup_entry.described = TRUE;
+	return NONE;
+}
+#endif
+
 boolean ui_widget_online_games_list(
 	struct widget_instance *widget)
 {
+#ifdef HALO_GAME_BROWSER
+	/* (SETUP's list too: a copied row, the same) */
+	if (ui_widget_setup_entry_list(widget))
+		return TRUE;
+#endif
 	return online_games.list_tag != NONE && widget && widget->definition_tag_index == online_games.list_tag;
 }
 
@@ -3746,6 +3931,17 @@ boolean ui_widget_online_games_item(
 		widget->parent->definition_tag_index == online_games.list_tag &&
 		ui_widget_list_position(widget) == ONLINE_GAMES_POSITION;
 }
+
+#ifdef HALO_GUIDE
+/* the Multiplayer menu's DELTA (a copy of System Link's item) */
+boolean ui_widget_delta_item(
+	struct widget_instance *widget)
+{
+	return online_games.list_tag != NONE && widget && widget->parent &&
+		widget->parent->definition_tag_index == online_games.list_tag &&
+		ui_widget_list_position(widget) == DELTA_ITEM_POSITION;
+}
+#endif
 
 #ifdef HALO_CONSOLE_ONLINE_GAMES
 #ifdef HALO_CONSOLE_MAP_BROWSER
@@ -3818,6 +4014,9 @@ short ui_widget_online_games_description(
 #ifdef HALO_CONSOLE_MAP_BROWSER
 	online_games.map_browser_described = FALSE;
 #endif
+#ifdef HALO_GUIDE
+	online_games.delta_described = FALSE;
+#endif
 	if (online_games.list_tag == NONE || list_widget->definition_tag_index != online_games.list_tag)
 		return index;
 	if (index == ONLINE_GAMES_POSITION)
@@ -3829,6 +4028,13 @@ short ui_widget_online_games_description(
 	if (index == MAP_BROWSER_POSITION)
 	{
 		online_games.map_browser_described = TRUE;
+		return ONLINE_GAMES_SYSTEM_LINK;
+	}
+#endif
+#ifdef HALO_GUIDE
+	if (index == DELTA_ITEM_POSITION)
+	{
+		online_games.delta_described = TRUE;
 		return ONLINE_GAMES_SYSTEM_LINK;
 	}
 #endif
@@ -3864,6 +4070,33 @@ static void event_handler_dispatch(
 		browser_screen_open();
 		return;
 	}
+#ifdef HALO_GUIDE
+	/* DELTA (System Link's item copied): DELTA over the menu, on PARTY */
+	if (ui_widget_delta_item(widget) &&
+		(handler->event_type == _gamepad_analog_button_a || handler->event_type == _gamepad_binary_button_start))
+	{
+		extern void guide_open_party(void);
+
+		ui_play_audio_feedback_sound(_ui_audio_feedback_forward);
+		guide_open_party();
+		return;
+	}
+#endif
+#ifdef HALO_GAME_BROWSER
+	/* SETUP (CHANGE COLOR's row copied): the setup screen, none of CHANGE
+	COLOR's */
+	if (ui_widget_setup_entry_item(widget))
+	{
+		if (handler->event_type == _gamepad_analog_button_a || handler->event_type == _gamepad_binary_button_start)
+		{
+			extern boolean pc_menu_setup_open(void);
+
+			ui_play_audio_feedback_sound(_ui_audio_feedback_forward);
+			pc_menu_setup_open();
+		}
+		return;
+	}
+#endif
 #ifdef HALO_CONSOLE_MAP_BROWSER
 	/* MAP BROWSER (the same copy): its own screen, and none of System Link's
 	other buttons */
@@ -4817,7 +5050,28 @@ void draw_string_and_hack_in_icons(
 						key_text,
 						NUMBEROF(key_text)))
 				{
-					render_state_text(bounds, &cursor_bounds, key_text);
+					short cap_width = 0;
+
+#ifdef HALO_GAME_BROWSER
+					/* (a menu's text: the key as a key cap, as the menus'
+					footers draw theirs) */
+					if (draw_string_key_caps)
+					{
+						real_argb_color text_color;
+
+						draw_string_get_color(&text_color);
+						cap_width = pc_menu_text_key_cap(
+							key_text,
+							(short)(cursor_bounds.x0 + 2),
+							cursor_bounds.y0,
+							cursor_bounds.y1,
+							text_color.alpha);
+					}
+#endif
+					if (cap_width > 0)
+						cursor_bounds.x0 = (short)(cursor_bounds.x0 + 2 + cap_width - 4);
+					else
+						render_state_text(bounds, &cursor_bounds, key_text);
 					continue;
 				}
 			}
@@ -5980,6 +6234,18 @@ static void widget_instance_render_text_box(
 		/* (ONLINE GAMES' item and description share System Link's tags) */
 		if (ui_widget_online_games_item(widget))
 			string = L"ONLINE GAMES";
+#ifdef HALO_GUIDE
+		else if (ui_widget_delta_item(widget))
+			string = L"DELTA";
+		else if (online_games.delta_described && widget->definition_tag_index == online_games.description_text_tag)
+			string = L"Start a party, invite your \r\nfriends and bring them to \r\nyour game.";
+#endif
+#ifdef HALO_GAME_BROWSER
+		else if (ui_widget_setup_entry_item(widget))
+			string = L"SETUP";
+		else if (setup_entry.described && widget->definition_tag_index == setup_entry.description_text_tag)
+			string = L"Opens the setup screen.\r\nChupathingy restarts.";
+#endif
 #ifdef HALO_CONSOLE_MAP_BROWSER
 		else if (ui_widget_map_browser_item(widget))
 			string = L"MAP BROWSER";
@@ -6001,7 +6267,7 @@ static void widget_instance_render_text_box(
 #endif
 #ifdef HALO_GUIDE
 		{
-			/* port: the pause menu's GUIDE, with a count ("GUIDE 2") */
+			/* port: the pause menu's DELTA, with a count ("DELTA 2") */
 			wchar_t const *guide_label = guide_pause_label(definition->text_label_string_list.index);
 
 			if (guide_label)
@@ -6165,7 +6431,9 @@ static void widget_instance_render_text_box(
 	if (string_has_icons_to_draw(*text))
 	{
 		draw_string_icons_for_menus = TRUE;
+		draw_string_key_caps = TRUE;
 		draw_string_and_hack_in_icons(&bounds, &clip, NULL, 0, *text, FALSE);
+		draw_string_key_caps = FALSE;
 		draw_string_icons_for_menus = FALSE;
 	}
 	else
@@ -9772,10 +10040,12 @@ static boolean ui_check_for_pause_game(
 			}
 		}
 	}
-#ifndef HALO_XBOX_CONSOLE
+#ifdef HALO_PORT_FRAMES_BETWEEN_TICKS
 	/* This runs once a frame, several frames per tick on the native builds
 	(port/linux/game/render_interpolation.c): count the lock down in 30 Hz
-	ticks of real time, not in frames. */
+	ticks of real time, not in frames. (A console at one frame a tick counts
+	frames, as the Xbox did.) */
+	if (halo_port_frames_between_ticks())
 	{
 		static real leftover_ticks = 0.f;
 		long ticks;
@@ -9786,10 +10056,12 @@ static boolean ui_check_for_pause_game(
 		widget_globals.pause_disabled_ticks =
 			FLOOR(widget_globals.pause_disabled_ticks - ticks, 0);
 	}
-#else
-	widget_globals.pause_disabled_ticks =
-		FLOOR(widget_globals.pause_disabled_ticks - 1, 0);
+	else
 #endif
+	{
+		widget_globals.pause_disabled_ticks =
+			FLOOR(widget_globals.pause_disabled_ticks - 1, 0);
+	}
 
 	return pause_pressed;
 }

@@ -1,7 +1,7 @@
 /*
 MAP_INDEX_KEY.H
 
-The public keys a fetched approved map list (map_index.h) is taken from:
+The public keys a fetched approved map list (map_list_index.h) is taken from:
 Ed25519, 32 bytes each. They are the fork's release keys (update_key.h's
 last two, which sign its releases): the list's workflow
 (.github/workflows/map-index.yml) signs with the same secret,

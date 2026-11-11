@@ -56,6 +56,8 @@ struct network_game *network_game_server_get_game(struct network_game_server *se
 /* (port/linux/game/network_distributed.c's: bans.txt; port (this fork): with
 OpenCE's verified Discord id, none here) */
 boolean network_distributed_banned(unsigned long address, char const *hardware_id, char const *discord_id);
+/* (the host's rules', port/linux/game/host_rules.h: sv_lock) */
+boolean host_rules_joins_locked(void);
 /* (and its limit on the machines of one address: max_machines_per_address) */
 boolean network_distributed_address_full(unsigned long address, unsigned long const *others, short count);
 long network_distributed_address_limit(void);
@@ -533,6 +535,14 @@ static boolean join(
 			client->peer = event->peer;
 			return rejoin(client, index);
 		}
+	}
+	/* (none new while joins are locked, sv_lock: as a Chupathingy machine
+	is kept out; a client back for the next game, above, was in already) */
+	if (host_rules_joins_locked())
+	{
+		ce_transport_refuse(event->peer, CE_REJECT_FULL);
+		error(_error_silent, "ce: a Custom Edition player was turned away: joins are locked (sv_lock)");
+		return TRUE;
 	}
 	if (network_distributed_banned(event->address, NULL, NULL))
 	{

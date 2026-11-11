@@ -160,6 +160,7 @@ symbols in this file:
 #include "interface/first_person_weapons.h"
 #include "math/periodic_functions.h"
 #include "memory/data.h"
+#include "objects/door_portals.h" /* port: closed doors shut their portals to the lights */
 #include "objects/light_definitions.h"
 #include "objects/object_lights.h"
 #include "objects/object_lights_rendering.h"
@@ -183,12 +184,17 @@ symbols in this file:
 #include "structures/structure_vector_tests.h"
 #include "structures/structure_visibility.h"
 #include "tag_files/tag_groups.h"
+#include "cache/cache_files.h" /* port: tag_iterator (light_port_glow_definition_get) */
 #include "units/units.h"
 #include "cache/cache_files.h" /* port: (tag_iterator: light_port_glow_definition_get) */
 void shield_glow_update(void); /* port: port/linux/game/shield_glow.c */
+#include "plasma_lighting.h" /* port: port/linux/game/plasma_lighting.c (Light effects) */
 
 /* port: port/linux/src (halo.log) */
 void platform_log(const char *format, ...);
+
+/* port: the light definition the Light effects' glows borrow (below) */
+static long light_port_glow_definition;
 
 /* ---------- constants */
 
@@ -208,7 +214,7 @@ enum
 	_point_light_connects_to_map_bit = 1,
 	_point_light_connected_to_map_bit = 2,
 	_point_light_attached_to_first_person_weapon_bit = 3,
-	/* port: a glow the port colors and sizes itself (light_port_glow_set) */
+	/* port: a glow the Light effects made (light_port_glow_new) */
 	_point_light_port_glow_bit = 4,
 };
 
@@ -718,77 +724,20 @@ void lights_initialize(
 void lights_dispose(
 	void)
 {
+	plasma_lighting_forget(); /* port: the Light effects' lights go with the array */
 	cluster_partition_delete(&light_cluster_partition);
 
 	return;
 }
 
-/* port: glows the port lights itself (port/linux/game/shield_glow.c): an
-unattached light (light_new_unattached) on an object's node, kept alive and
-colored and sized each frame by its maker, gone a moment after its maker
-stops. Drawn with a light definition the map has (one without a lens flare
-or a flashlight's flags, a plasma one where there is one), so no new tags;
-NONE if it has none */
-static long light_port_glow_definition = NONE - 1;
-
-long light_port_glow_definition_get(
-	void)
-{
-	if (light_port_glow_definition == NONE - 1)
-	{
-		struct tag_iterator iterator;
-		long tag_index;
-		long found = NONE;
-
-		tag_iterator_new(&iterator, LIGHT_DEFINITION_TAG);
-		for (tag_index = tag_iterator_next(&iterator); tag_index != NONE; tag_index = tag_iterator_next(&iterator))
-		{
-			struct point_light_definition *definition = light_definition_get(tag_index);
-
-			if (!definition || definition->lens_flare.index != NONE ||
-				TEST_FLAG(definition->flags, _light_definition_is_first_person_flashlight_bit))
-			{
-				continue;
-			}
-			found = tag_index;
-			if (strstr(tag_get_name(tag_index), "plasma"))
-				break;
-		}
-		light_port_glow_definition = found;
-	}
-	return light_port_glow_definition;
-}
-
-/* port: a glow's light (one made with that definition, on that object) its
-color and radius for now; FALSE if it is gone */
-boolean light_port_glow_set(
-	long light_index,
-	long object_index,
-	real_rgb_color const *color,
-	real radius)
-{
-	struct light_datum *light;
-
-	if (light_index == NONE || !light_data->valid)
-		return FALSE;
-	light = (struct light_datum *)datum_try_and_get(light_data, light_index);
-	if (!light || light->definition_index != light_port_glow_definition || light->object_index != object_index)
-		return FALSE;
-	SET_FLAG(light->flags, _point_light_port_glow_bit, TRUE);
-	light->parent_light_index = game_time_get(); /* (alive another moment) */
-	light->color.red = PIN(color->red, 0.0f, 1.0f);
-	light->color.green = PIN(color->green, 0.0f, 1.0f);
-	light->color.blue = PIN(color->blue, 0.0f, 1.0f);
-	light->intensity_scale = radius;
-	return TRUE;
-}
-
 void lights_initialize_for_new_map(
 	void)
 {
-	light_port_glow_definition = NONE - 1; /* port: (looked for again) */
+	plasma_lighting_forget(); /* port: no light of the Light effects crosses maps */
+	light_port_glow_definition = NONE - 1;
 	data_make_valid(light_data);
 	lights_game_globals->render_lights = TRUE;
+	door_portals_new_map(); /* port: (door_portals.c) */
 	cluster_partition_make_valid(&light_cluster_partition);
 
 	return;
@@ -797,6 +746,8 @@ void lights_initialize_for_new_map(
 void lights_dispose_from_old_map(
 	void)
 {
+	plasma_lighting_forget();
+	light_port_glow_definition = NONE - 1;
 	data_make_invalid(light_data);
 	cluster_partition_make_invalid(&light_cluster_partition);
 
@@ -1005,6 +956,219 @@ static void lights_port_first_person_flare_positions(
 	return;
 }
 
+/* ---------- the Light effects (port/linux/game/plasma_lighting.c)
+
+The Light effects (display.light_effects) light the level from projectiles,
+muzzle flashes, glowing emitters and held weapons, for the frame drawn only.
+The bridges below keep the light datums private to this file. A light they
+change for a frame (its radius, its dynamic bit, its clusters) is put back
+by plasma_lighting_frame_end before the next tick, so what the ticks read
+(a unit's illumination, the AI's sight) is the game's own. Based on
+chester's dynamic lighting in GulchCE. */
+
+/* a light definition the glows borrow: one the map has, without a lens
+flare, not a flashlight and lighting all around (no cone), a plasma one where
+there is one; NONE if the map has none. The glow's color and radius are its
+own (light_port_glow_set). */
+static long light_port_glow_definition = NONE - 1;
+
+long light_port_glow_definition_get(
+	void)
+{
+	if (light_port_glow_definition == NONE - 1)
+	{
+		struct tag_iterator iterator;
+		long tag_index;
+		long found = NONE;
+
+		tag_iterator_new(&iterator, LIGHT_DEFINITION_TAG);
+		for (tag_index = tag_iterator_next(&iterator); tag_index != NONE; tag_index = tag_iterator_next(&iterator))
+		{
+			struct point_light_definition *definition = light_definition_get(tag_index);
+			char const *name = tag_get_name(tag_index);
+
+			if (!definition || definition->lens_flare.index != NONE || definition->cutoff_angle < _pi / 2 ||
+				TEST_FLAG(definition->flags, _light_definition_is_first_person_flashlight_bit))
+			{
+				continue;
+			}
+			found = tag_index;
+			if (name && strstr(name, "plasma"))
+				break;
+		}
+		light_port_glow_definition = found;
+		platform_log("lights: the Light effects' glows borrow %s", found != NONE ? tag_get_name(found) : "no light (none fits)");
+	}
+
+	return light_port_glow_definition;
+}
+
+/* a new glow, on an object's node (object_index) or at a point (NONE). Not
+made when the lights array is nearly full: the game's own lights come first */
+long light_port_glow_new(
+	long object_index,
+	real_point3d const *position)
+{
+	long definition = light_port_glow_definition_get();
+	long light_index;
+
+	if (definition == NONE || !light_data->valid || light_data->actual_count > MAXIMUM_LIGHTS_PER_MAP - 128)
+		return NONE;
+	light_index = light_new_unattached(definition, object_index, 0, position, global_forward3d, 0.0f);
+	if (light_index != NONE)
+		SET_FLAG(light_get(light_index)->flags, _point_light_port_glow_bit, TRUE);
+	return light_index;
+}
+
+static struct light_datum *light_port_glow_get(
+	long light_index)
+{
+	struct light_datum *light;
+
+	if (light_index == NONE || !light_data->valid)
+		return NULL;
+	light = (struct light_datum *)datum_try_and_get(light_data, light_index);
+	if (!light || light->definition_index != light_port_glow_definition ||
+		!TEST_FLAG(light->flags, _point_light_port_glow_bit))
+	{
+		return NULL;
+	}
+	return light;
+}
+
+/* a glow's color and radius for this frame, kept alive another moment;
+FALSE if it is gone (or is not that object's) */
+boolean light_port_glow_set(
+	long light_index,
+	long object_index,
+	real_rgb_color const *color,
+	real radius)
+{
+	struct light_datum *light = light_port_glow_get(light_index);
+
+	if (!light || light->object_index != object_index)
+		return FALSE;
+	light->parent_light_index = game_time_get();
+	light->color.red = PIN(color->red, 0.0f, 1.0f);
+	light->color.green = PIN(color->green, 0.0f, 1.0f);
+	light->color.blue = PIN(color->blue, 0.0f, 1.0f);
+	light->intensity_scale = radius;
+	return TRUE;
+}
+
+/* moves a glow at a point (no object) to where it is drawn this frame */
+boolean light_port_glow_move(
+	long light_index,
+	real_point3d const *position)
+{
+	struct light_datum *light = light_port_glow_get(light_index);
+
+	if (!light || light->object_index != NONE)
+		return FALSE;
+	if (TEST_FLAG(light->flags, _point_light_connected_to_map_bit))
+		light_disconnect_from_map(light_index);
+	light->position = *position;
+	light_reconnect_to_map(light_index);
+	return TRUE;
+}
+
+/* a light's specular radius multiplier, for its occlusion field */
+float plasma_occlusion_specular_scale(
+	long rasterizer_index)
+{
+	real scale;
+
+	if (rasterizer_index < 0 || rasterizer_index >= rasterizer_lights.light_count)
+		return 1.0f;
+	scale = rasterizer_lights.lights[rasterizer_index].definition->specular_radius_multiplier;
+	return scale > 0.0f ? scale : 1.0f;
+}
+
+/* an object's attached light (not a glow) */
+static struct light_datum *light_port_attachment_get(
+	long light_index,
+	long object_index)
+{
+	struct light_datum *light;
+
+	if (!light_data->valid || light_index == NONE || object_index == NONE)
+		return NULL;
+	light = (struct light_datum *)datum_try_and_get(light_data, light_index);
+	if (!light || light->object_index != object_index || light->parent_light_index != NONE ||
+		!object_try_and_get(object_index))
+	{
+		return NULL;
+	}
+	return light;
+}
+
+/* an attached light joins the clusters again where it is now. Not one the
+game keeps out of the map while its object is (chester's GulchCE 9ddd5e05) */
+int light_port_refresh_attachment(
+	long light_index,
+	long object_index)
+{
+	struct light_datum *light = light_port_attachment_get(light_index, object_index);
+
+	if (!light)
+		return FALSE;
+	if (TEST_FLAG(light->flags, _point_light_connects_to_map_bit) &&
+		!TEST_FLAG(light->flags, _point_light_connected_to_map_bit))
+	{
+		return FALSE;
+	}
+	light_disconnect_from_map(light_index);
+	light_reconnect_to_map(light_index);
+	return TRUE;
+}
+
+/* an attached light's radius, saved (restore FALSE) or put back */
+int light_port_attachment_radius(
+	long light_index,
+	long object_index,
+	float *radius,
+	int restore)
+{
+	struct light_datum *light = light_port_attachment_get(light_index, object_index);
+
+	if (!light)
+		return FALSE;
+	if (restore)
+		light->radius = *radius;
+	else
+		*radius = light->radius;
+	return TRUE;
+}
+
+/* an attached light made dynamic (or not) for the frame: whether it was */
+int light_port_dynamic_set(
+	long light_index,
+	long object_index,
+	int enabled)
+{
+	struct light_datum *light;
+	int previous;
+
+	if (!light_data->valid || light_index == NONE || object_index == NONE)
+		return FALSE;
+	light = (struct light_datum *)datum_try_and_get(light_data, light_index);
+	if (!light || light->object_index != object_index || light->parent_light_index != NONE)
+		return FALSE;
+	previous = TEST_FLAG(light->flags, _point_light_dynamic_bit);
+	SET_FLAG(light->flags, _point_light_dynamic_bit, enabled);
+	return previous;
+}
+
+/* port: how far a let-go light is through its transition. A light with no
+transition (the Scorpion's cannon's) is at its end as soon as it is made: the
+Xbox divided 0 by 0 there and gave the light a color that is not a number */
+static real light_port_transition_fraction(
+	real elapsed,
+	real duration)
+{
+	return duration > 0.0f ? MAX(elapsed, 0.0f) / duration : 1.0f;
+}
+
 void lights_preprocess_scene(
 	void)
 {
@@ -1020,6 +1184,8 @@ void lights_preprocess_scene(
 	between ticks: lights_port_recover) */
 	lights_port_recover();
 	shield_glow_update(); /* port: port/linux/game/shield_glow.c */
+	/* port: the Light effects' glows, where they are drawn this frame */
+	plasma_lighting_update();
 	for (light_index = data_next_index(light_data, NONE);
 		light_index != NONE;
 		light_index = data_next_index(light_data, light_index))
@@ -1032,6 +1198,10 @@ void lights_preprocess_scene(
 			FALSE);
 		light->rasterizer_light_index = NONE;
 		lights_port.radius_writes++;
+		/* port: an attached light the Light effects light from, taken for
+		the frame (plasma_lighting.c) */
+		if (light->parent_light_index == NONE)
+			plasma_lighting_prepare(light_index, light->object_index, light->definition_index);
 		if (light->parent_light_index != NONE)
 		{
 			struct point_light_definition *definition = light_definition_get(
@@ -1054,6 +1224,8 @@ void lights_preprocess_scene(
 		}
 	}
 
+	/* port: (the portals the closed doors shut: door_portals.c) */
+	door_portals_update();
 	light_marker_begin();
 	lights_globals.scene_point_light_count = structure_visibility_find_objects(
 		lights_globals.scene_point_lights,
@@ -1065,6 +1237,7 @@ void lights_preprocess_scene(
 		light_mark);
 	light_marker_end();
 	rasterizer_lights_begin();
+	plasma_lighting_window_begin(); /* port: the rasterizer lights are this view's */
 	for (rendered_cluster_index = 0;
 		rendered_cluster_index < render.rendered_cluster_count;
 		rendered_cluster_index++)
@@ -1124,8 +1297,9 @@ void lights_preprocess_scene(
 			(port/linux/game/render_interpolation.c) */
 			intensity = (1.0f - transition_function_evaluate(
 				definition->falloff_function,
-				render_interpolation_ticks_since(current_time, light->parent_light_index)
-					/ definition->transition_duration))
+				light_port_transition_fraction(
+					render_interpolation_ticks_since(current_time, light->parent_light_index),
+					definition->transition_duration)))
 				* light->intensity_scale;
 			rgb_colors_interpolate(
 				&light->color,
@@ -1194,9 +1368,11 @@ void lights_preprocess_scene(
 				light->radius = (definition->radius_modifier_lower_bound * inverse_intensity
 					+ definition->radius_modifier_upper_bound * intensity)
 					* definition->radius;
-				/* port: a glow's radius is as set (light_port_glow_set) */
+				/* port: a glow's radius is as set (light_port_glow_set); the
+				Light effects' lights reach further (plasma_lighting.c) */
 				if (TEST_FLAG(light->flags, _point_light_port_glow_bit))
 					light->radius = light->intensity_scale;
+				light->radius = plasma_lighting_radius(scene_light_handle, light->object_index, light->radius);
 				lights_port.radius_writes++;
 				if (light->radius != 0.0f)
 				{
@@ -1209,6 +1385,9 @@ void lights_preprocess_scene(
 					light_parameters.up = light->up;
 					light_parameters.radius = light->radius;
 					light_parameters.color = light->color;
+					/* port: the fuel rod's flight light greener, in this copy only */
+					if (light->parent_light_index == NONE)
+						covenant_lighting_color(light->object_index, light->definition_index, &light_parameters.color);
 					match_assert(
 						"c:\\halo\\SOURCE\\objects\\object_lights.c",
 						0x1EE,
@@ -1310,13 +1489,34 @@ void lights_preprocess_scene(
 
 					light->rasterizer_light_index = rasterizer_light_submit(
 						&light_parameters);
-					/* (port: the lights submitted so far: not a light the
-					window had no room for (MAXIMUM_LIGHTS_PER_WINDOW), whose
-					index is NONE: that made the count 0, and every object
-					lit by the ones before it failed render_objects.c's
-					check of their indices against it) */
-					if (light->rasterizer_light_index != NONE)
-						debug_rasterizer_light_count = (short)(light->rasterizer_light_index + 1);
+					debug_rasterizer_light_count = light->rasterizer_light_index + 1;
+					/* port: the clusters it reaches only through a closed
+					door, from its light partition's sphere, which its passes
+					over the level and the objects there then leave out
+					(door_portals.c). Not a first-person weapon's supersized
+					light, which lights everything in view */
+					if (light->rasterizer_light_index != NONE &&
+						!(TEST_FLAG(light->flags, _point_light_attached_to_first_person_weapon_bit) &&
+							TEST_FLAG(definition->flags, _light_definition_supersize_in_first_person_bit)))
+					{
+						real_point3d partition_center;
+						real partition_radius;
+						struct location emitter_location;
+
+						/* (from its object's cluster when it has one: a
+						light at a marker on a door's or a wall's face can
+						be a hair into the next cluster) */
+						if (object)
+							object_get_location(light->object_index, &emitter_location);
+						else
+							scenario_location_from_point(&emitter_location, &light->position);
+						light_get_bounding_sphere(scene_light_handle, &partition_center, &partition_radius);
+						door_portals_light(light->rasterizer_light_index, emitter_location.cluster_index,
+							&partition_center, partition_radius);
+					}
+					/* port: the Light effects' own of the rasterizer lights */
+					plasma_lighting_submitted(scene_light_handle, light->rasterizer_light_index);
+					debug_rasterizer_light_count = rasterizer_lights.light_count;
 				}
 			}
 			else
@@ -1787,6 +1987,15 @@ static void brighten_real_rgb_color(
 	real scale = fraction + 1.0f;
 	real scaled_maximum = scale * maximum;
 
+	/* port: a black color (a weapon or grenade the game lights extra bright,
+	lying where the lightmap is black) goes to the least it is brightened to,
+	grey. Scaling it by fraction / 0 made 0 times infinity, not a number, and
+	the object kept that lighting for as long as it lay there */
+	if (!(maximum > 0.0f))
+	{
+		color->red = color->green = color->blue = fraction;
+		return;
+	}
 	if (scaled_maximum > 1.0f)
 	{
 		scale = 1.0f / maximum;
@@ -1834,6 +2043,15 @@ static void light_compute_bounding_sphere(
 	real light_radius = maximum
 		? definition->radius_modifier_upper_bound * definition->radius
 		: light->radius;
+
+	/* port: the clusters a light of the Light effects reaches, as far as it
+	lights (a glow's radius is its own) */
+	if (maximum)
+	{
+		if (TEST_FLAG(light->flags, _point_light_port_glow_bit))
+			light_radius = MAX(light_radius, light->intensity_scale);
+		light_radius = plasma_lighting_radius(light_index, light->object_index, light_radius);
+	}
 
 	if (!TEST_FLAG(definition->flags, _light_definition_no_specular_bit)
 		&& (specular || maximum))
@@ -2070,6 +2288,15 @@ void lights_render_diffuse(
 						lights_globals.scene_point_lights[light_index],
 						MAXIMUM_CLUSTERS_PER_LIGHT,
 						cluster_indices);
+					/* port: not the clusters behind a closed door
+					(door_portals.c); none left, no pass */
+					if (cluster_count > 0)
+					{
+						cluster_count = door_portals_light_filter(light->rasterizer_light_index, cluster_count,
+							cluster_indices);
+						if (!cluster_count)
+							continue;
+					}
 				}
 				light_compute_bounding_sphere(
 					lights_globals.scene_point_lights[light_index],
@@ -2130,6 +2357,15 @@ void lights_render_specular(
 						lights_globals.scene_point_lights[light_index],
 						MAXIMUM_CLUSTERS_PER_LIGHT,
 						cluster_indices);
+					/* port: not the clusters behind a closed door
+					(door_portals.c); none left, no pass */
+					if (cluster_count > 0)
+					{
+						cluster_count = door_portals_light_filter(light->rasterizer_light_index, cluster_count,
+							cluster_indices);
+						if (!cluster_count)
+							continue;
+					}
 				}
 				light_compute_bounding_sphere(
 					lights_globals.scene_point_lights[light_index],
@@ -2231,6 +2467,12 @@ void light_reconnect_to_map(
 	return;
 }
 
+/* port: the cluster lights_prepare_for_object_dynamic is finding an object's
+lights in, whose lights behind a closed door are passed over (door_portals.c);
+NONE otherwise (the units' illumination, which the AI sees by, keeps the
+game's clusters) */
+static short lights_port_door_cluster = NONE;
+
 /* a light of a cluster, for find_point_lights_for_object_in_cluster: as
 the Xbox's loop does each, marking it (so its other clusters pass it over) */
 static void find_point_light_for_object(
@@ -2248,6 +2490,14 @@ static void find_point_light_for_object(
 	{
 		struct light_datum *light = light_get(light_index);
 
+		/* port: a light behind a closed door from this cluster is passed
+		over, and left unmarked: the object's other clusters may see it
+		(door_portals.c) */
+		if (lights_port_door_cluster != NONE &&
+			door_portals_light_blocked(light->rasterizer_light_index, lights_port_door_cluster))
+		{
+			return;
+		}
 		if (light->rasterizer_light_index != NONE
 			&& (light->object_index != object_index
 				|| !TEST_FLAG(light_definition_get(light->definition_index)->flags,
@@ -2531,6 +2781,36 @@ void lights_illumination_at_point(
 	return;
 }
 
+#ifndef HALO_CONSOLE_NO_LIGHT_EFFECTS
+/* port: whether a biped rides the object, or rides what rides it: drawn
+with the object's lighting (render_objects.c) */
+static boolean light_port_carries_biped(
+	long object_index)
+{
+	struct object_datum *object = object_try_and_get(object_index);
+	long child_index;
+	short count = 0;
+
+	if (!object)
+		return FALSE;
+	for (child_index = object->object.first_child_object_index;
+		child_index != NONE && count < 64;
+		child_index = object_get(child_index)->object.next_object_index, count++)
+	{
+		struct object_datum *child = object_try_and_get(child_index);
+
+		if (!child)
+			break;
+		if (TEST_FLAG(_object_mask_biped, child->object.type) ||
+			(child->object.first_child_object_index != NONE && light_port_carries_biped(child_index)))
+		{
+			return TRUE;
+		}
+	}
+	return FALSE;
+}
+#endif
+
 void lights_prepare_for_object_dynamic(
 	long object_index,
 	struct render_lighting *lighting)
@@ -2550,6 +2830,7 @@ void lights_prepare_for_object_dynamic(
 		cluster_index != NONE;
 		cluster_index = object_get_next_cluster(&iterator, object_index))
 	{
+		lights_port_door_cluster = cluster_index;
 		find_point_lights_for_object_in_cluster(
 			object_index,
 			cluster_index,
@@ -2561,6 +2842,7 @@ void lights_prepare_for_object_dynamic(
 			&lighting->point_light_count,
 			MAXIMUM_RENDERED_POINT_LIGHTS);
 	}
+	lights_port_door_cluster = NONE;
 	light_marker_end();
 	/* (port: and a light the window had no room for, with no rasterizer
 	index, lights nothing: left out) */
@@ -2577,6 +2859,26 @@ void lights_prepare_for_object_dynamic(
 		}
 		lighting->point_light_count = kept;
 	}
+#ifndef HALO_CONSOLE_NO_LIGHT_EFFECTS
+	/* port: a unit (a player, an AI, a vehicle and who rides it, drawn with
+	its lighting) is lit by the Light effects no more than a little, and not
+	through a wall (plasma_lighting_unit_light); so is anything a biped rides */
+	if (TEST_FLAG(_object_mask_unit, object_get(object_index)->object.type) ||
+		light_port_carries_biped(object_index))
+	{
+		short kept = 0;
+
+		for (light_index = 0; light_index < lighting->point_light_count; light_index++)
+		{
+			long rasterizer_index = plasma_lighting_unit_light(
+				lighting->point_light_indices[light_index], &center);
+
+			if (rasterizer_index != NONE)
+				lighting->point_light_indices[kept++] = rasterizer_index;
+		}
+		lighting->point_light_count = kept;
+	}
+#endif
 
 	return;
 }

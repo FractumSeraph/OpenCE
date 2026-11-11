@@ -70,6 +70,9 @@ symbols in this file:
 #include "structure_bsp_definitions.h"
 #include "effects/player_effects.h"
 #include "structures/structure_visibility.h"
+#ifdef HALO_SHADER_PREP
+#include "render_enumerate.h" /* port: port/linux/game/render_enumerate.c */
+#endif
 #include "rasterizer.h"
 #include "rasterizer/rasterizer_lights.h"
 #include "profile.h"
@@ -193,6 +196,11 @@ void render_initialize_for_new_map(
 	/* port: preserve retail's energy-then-two-sided-glass compositing. */
 	models_fix_transparent_part_links();
 	render_objects_initialize_for_new_map();
+#ifdef HALO_SHADER_PREP
+	/* port: the new map's first frame drawn through every shader (debug.draw_every_shader:
+	port/linux/game/render_enumerate.c) */
+	render_enumerate_new_map();
+#endif
 }
 
 void render_dispose_from_old_map(
@@ -431,6 +439,11 @@ static void render_window(
 
 	HALO_PERF_RENDER_PART(_halo_perf_render_world);
 	structure_visibility_compute();
+#ifdef HALO_SHADER_PREP
+	/* port: a map's first frame drawn through every material's surfaces
+	(port/linux/game/render_enumerate.c) */
+	render_enumerate_structure();
+#endif
 	player_effect_get_screen_flash(local_player_index, &parameters.screen_flash);
 	rasterizer_window_begin(&parameters);
 
@@ -444,6 +457,10 @@ static void render_window(
 		lights_preprocess_scene();
 		HALO_PERF_RENDER_PART(_halo_perf_render_objects);
 		render_objects();
+#ifdef HALO_SHADER_PREP
+		/* port: and through every model's parts */
+		render_enumerate_models();
+#endif
 		HALO_PERF_RENDER_PART(_halo_perf_render_world);
 		structure_render_preprocess();
 		structure_render_lightmaps();
@@ -508,6 +525,10 @@ static void render_window(
 		render_particles();
 		particle_systems_render();
 		render_contrails_normal();
+#ifdef HALO_SHADER_PREP
+		/* port: and every effect's (port/linux/game/render_enumerate.c) */
+		render_enumerate_effects();
+#endif
 		HALO_PERF_RENDER_PART(_halo_perf_render_transparent);
 		rasterizer_transparent_geometry_draw(TRUE);
 		HALO_PERF_RENDER_PART(_halo_perf_render_world);
@@ -797,6 +818,27 @@ static void render_player_frame(
 		}
 	}
 
+#ifdef HALO_SHADER_PREP
+	/* port: a map's (or a structure's) first frame drawn first, unseen,
+	through every shader its tags hold, in each fog (debug.draw_every_shader:
+	port/linux/game/render_enumerate.c) */
+	if (render_enumerate_begin())
+	{
+		do
+		{
+			render_window(
+				window->local_player_index,
+				camera,
+				&frustum,
+				&window->rasterizer_camera,
+				&rasterizer_frustum,
+				_render_target_primary,
+				FALSE);
+		}
+		while (render_enumerate_next());
+	}
+#endif
+
 	render_window(
 		window->local_player_index,
 		camera,
@@ -826,7 +868,7 @@ void render_frame(
 	render.time_delta_since_tick_sec = time_delta_since_tick_sec;
 	memset(&parameters, 0, sizeof(parameters));
 	HALO_PERF_RENDER_PART(_halo_perf_render_begin);
-#ifndef HALO_XBOX_CONSOLE
+#ifdef HALO_PORT_FRAMES_BETWEEN_TICKS
 	/* continuous between ticks (render_interpolation.c) */
 	parameters.game_time_sec = render_interpolation_game_time_sec(game_time_get());
 #else

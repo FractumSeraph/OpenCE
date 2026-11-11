@@ -48,7 +48,7 @@ def generated(fault=None):
         '%s;\n' % (constant(source, 'VISIBILITY_TEST_SLOTS'), constant(source, 'VISIBILITY_BATCH_COUNT'),
                    constant(source, 'VISIBILITY_ALL_SAMPLES'), structure(source, 'visibility_batch'))
     code = '\n'.join(function(source, name) for name in (
-        'visibility_readback_gl_ok', 'visibility_fall_back_to_queries', 'visibility_send_batch',
+        'visibility_next_number', 'visibility_readback_gl_ok', 'visibility_fall_back_to_queries', 'visibility_send_batch',
         'visibility_read_batch', 'D3DDevice_BeginVisibilityTest', 'D3DDevice_EndVisibilityTest',
         'D3DDevice_GetVisibilityTestResult', 'xgpu_visibility_tests_ended', 'xgpu_visibility_test_counted'))
     if fault:

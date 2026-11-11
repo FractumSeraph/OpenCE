@@ -48,6 +48,7 @@ unsigned long config_changes(void);
 /* object_lights.c (port) */
 long light_port_glow_definition_get(void);
 boolean light_port_glow_set(long light_index, long object_index, real_rgb_color const *color, real radius);
+long light_port_glow_new(long object_index, real_point3d const *position);
 /* port/linux/game/overshield_effect.c */
 real overshield_effect_flare(long unit_index);
 real_rgb_color const *overshield_effect_glow_color(void);
@@ -125,12 +126,9 @@ light definition to draw it with) */
 static long shield_glow_light_new(
 	long unit_index)
 {
-	long definition_index = light_port_glow_definition_get();
-
-	if (definition_index == NONE)
-		return NONE;
-	return light_new_unattached(definition_index, unit_index, 0, (real_point3d const *)global_zero_vector3d,
-		global_forward3d, 0.0f);
+	/* (object_lights.c's glow light: ChupathingyCE's light_port_glow_new, which
+	marks it the port's, as light_port_glow_set wants it since 0.9.1) */
+	return light_port_glow_new(unit_index, (real_point3d const *)global_zero_vector3d);
 }
 
 /* how far a point is from the nearest local player's camera */

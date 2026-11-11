@@ -45,7 +45,7 @@ from types import SimpleNamespace
 from typing import Any, Dict, List, Optional, Sequence
 
 from .version import VERSION_SOURCES, identity_defines, release_build, resource_version, version
-from .linux_build import (COMPRESSED_MAP_DEFINES, CUSTOM_EDITION_DEFINES, ZSTD_DEFINES, ZSTD_DIR, ZSTD_SOURCES, LINUX_PROFILE, MBEDTLS_DIR, MINIUPNPC_DIR, OPTIMISATION, STB_DIR, WINDOWS_PROFILE,
+from .linux_build import (OPUS_DIR, VOICE_SOURCE, COMPRESSED_MAP_DEFINES, CUSTOM_EDITION_DEFINES, ZSTD_DEFINES, ZSTD_DIR, ZSTD_SOURCES, LINUX_PROFILE, MBEDTLS_DIR, MINIUPNPC_DIR, OPTIMISATION, STB_DIR, WINDOWS_PROFILE,
                           XDK_INCLUDE, build_info_defines, configuration_defines, ffmpeg_build, game_browser_defines, lto_mode,
                           march_flag, miniupnpc_sources,
                           pgo_mode, compile_launcher, game_defines_and_includes,
@@ -711,6 +711,7 @@ def generate_windows_target(n: Writer, sln: Any, target: WindowsTarget) -> None:
             f"-I{MONOCYPHER_DIR}",
             f"-I{ZLIB_DIR}",
             f"-I{ZSTD_DIR / 'lib'}",
+            f"-I{OPUS_DIR / 'include'}",
             # halo_linux_winsock_names.h, but not the Linux build's C runtime
             # wrappers next to it
             f"-iquote {LINUX_DIR / 'include'}",
@@ -742,7 +743,7 @@ def generate_windows_target(n: Writer, sln: Any, target: WindowsTarget) -> None:
                 # (the game list's requests: on Winsock, with Mbed TLS, as
                 # on Linux)
                 add_object(source, f"{win32_cflags} {mbedtls_include}")
-            elif source.name in ("bink_ffmpeg.c", "bink_null.c"):
+            elif source.name in ("bink_ffmpeg.c", "bink_null.c", "capture_clips.c"):
                 add_object(source, " ".join([platform_cflags, *ffmpeg_cflags]), ffmpeg_inputs)
             elif source.name == "posix_ui_font.c":
                 # (the overlay's fonts: stb_truetype; their data, tools/embed_assets.py --fonts)
@@ -810,6 +811,7 @@ def generate_windows_target(n: Writer, sln: Any, target: WindowsTarget) -> None:
         # Zstandard's decoder, for compressed Halo PC maps (map_compressed.c)
         for name in ZSTD_SOURCES:
             add_object(ZSTD_DIR / name, " ".join([abi, "-std=gnu11", *ZSTD_DEFINES, "-w"]))
+        # (ChupathingyCE's voice.c's codec: (port, this fork: built above for every build, OpenCE's voice chat's too))
         # the game's sin, pow and the rest, the same on every port
         # (port/include/halo_math.h)
         for source in musl_math_sources():

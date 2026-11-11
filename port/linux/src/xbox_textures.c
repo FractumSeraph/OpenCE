@@ -1985,6 +1985,93 @@ GLuint xgpu_texture_get(const DWORD *resource, const D3DCOLOR *palette, GLenum *
 	return texture_entry_result(entry, target, description);
 }
 
+/* drops the entries not used since 'frame' */
+static unsigned long texture_cache_drop_unused_since(unsigned long frame)
+{
+	unsigned long index, dropped = 0;
+
+	for (index = 0; index < TEXTURE_BUCKET_COUNT; index++)
+	{
+		struct texture_entry **link = &texture_buckets[index];
+
+		while (*link)
+		{
+			struct texture_entry *entry = *link;
+
+			if (texture_frame - entry->last_used_frame > texture_frame - frame)
+			{
+				*link = entry->next;
+				glDeleteTextures(1, &entry->texture);
+				/* (port, this fork: and its HUD upscale's, hud_hires) */
+				if (entry->hud_upscale)
+					glDeleteTextures(1, &entry->hud_upscale);
+				xgpu_gl_state_invalidate();
+				texture_drop_serial++;
+				free(entry);
+				dropped++;
+			}
+			else
+			{
+				link = &entry->next;
+			}
+		}
+	}
+	return dropped;
+}
+
+unsigned long xgpu_texture_cache_drop_idle(unsigned long frames)
+{
+	if (frames < 1)
+		frames = 1;
+	if (frames > texture_frame)
+		return 0;
+	return texture_cache_drop_unused_since(texture_frame - frames);
+}
+
+void xgpu_texture_cache_reload(GLuint texture)
+{
+	unsigned long index;
+
+	for (index = 0; index < TEXTURE_BUCKET_COUNT; index++)
+	{
+		struct texture_entry *entry;
+
+		for (entry = texture_buckets[index]; entry; entry = entry->next)
+		{
+			if (entry->texture == texture)
+			{
+				entry->generation = 0;
+				/* (and not found again by a recent lookup, which skips the
+				generation check) */
+				texture_drop_serial++;
+				return;
+			}
+		}
+	}
+}
+
+unsigned long xgpu_texture_cache_reload_missing(int (*missing)(GLuint texture))
+{
+	unsigned long index, reloaded = 0;
+
+	for (index = 0; index < TEXTURE_BUCKET_COUNT; index++)
+	{
+		struct texture_entry *entry;
+
+		for (entry = texture_buckets[index]; entry; entry = entry->next)
+		{
+			if (missing(entry->texture))
+			{
+				entry->generation = 0;
+				reloaded++;
+			}
+		}
+	}
+	if (reloaded)
+		texture_drop_serial++;
+	return reloaded;
+}
+
 void xgpu_texture_cache_begin_frame(void)
 {
 	unsigned long index, idle_since;
@@ -2022,28 +2109,5 @@ void xgpu_texture_cache_begin_frame(void)
 	idle_since = texture_sweep_frames[texture_sweep_count % TEXTURE_SWEEP_COUNT];
 	texture_sweep_frames[texture_sweep_count % TEXTURE_SWEEP_COUNT] = texture_frame;
 	texture_sweep_count++;
-	for (index = 0; index < TEXTURE_BUCKET_COUNT; index++)
-	{
-		struct texture_entry **link = &texture_buckets[index];
-
-		while (*link)
-		{
-			struct texture_entry *entry = *link;
-
-			if (texture_frame - entry->last_used_frame > texture_frame - idle_since)
-			{
-				*link = entry->next;
-				glDeleteTextures(1, &entry->texture);
-				if (entry->hud_upscale)
-					glDeleteTextures(1, &entry->hud_upscale);
-				xgpu_gl_state_invalidate();
-				texture_drop_serial++;
-				free(entry);
-			}
-			else
-			{
-				link = &entry->next;
-			}
-		}
-	}
+	texture_cache_drop_unused_since(idle_since);
 }

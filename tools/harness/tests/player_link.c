@@ -40,6 +40,13 @@ void platform_log(const char *format, ...)
 	(void)format;
 }
 
+/* (p2p.h's, ChupathingyCE's: the site join pages an invite may be) */
+#ifndef P2P_INVITE_PAGE
+#define P2P_INVITE_PAGE "https://chupathingy.org/join/"
+#endif
+#ifndef P2P_INVITE_PAGE_HOSTS
+#define P2P_INVITE_PAGE_HOSTS "chupathingy.org", "halo.milenko.org"
+#endif
 #include "p2p_crypto.inc"
 
 void posix_random_bytes(void *buffer, posix_ulong size)

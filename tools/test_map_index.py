@@ -1,7 +1,7 @@
-"""The approved map list as published between releases (port/linux/src/map_index.h):
+"""The approved map list as published between releases (port/linux/src/map_list_index.h):
 the index's serial as tools/map_torrents.py writes it, its signature as
 "map_torrents.py sign" makes it (the fork's key: a test key here), and the
-game's checks (port/linux/src/map_index.c), built by themselves with that key
+game's checks (port/linux/src/map_list_index.c), built by themselves with that key
 and held to the same files."""
 import shutil
 import subprocess
@@ -20,7 +20,7 @@ MONOCYPHER = ROOT / "port" / "third_party" / "monocypher"
 TOOL = ROOT / "tools" / "map_torrents.py"
 
 DRIVER = r"""
-#include "map_index.h"
+#include "map_list_index.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -46,7 +46,7 @@ static char *slurp(const char *path, size_t *size)
 /* index <file> <sig>: format, serial, check; cache <file>: split, check */
 int main(int argc, char **argv)
 {
-	unsigned char signature[MAP_INDEX_SIGNATURE_SIZE];
+	unsigned char signature[MAP_LIST_INDEX_SIGNATURE_SIZE];
 	size_t size = 0, signature_size = 0, offset = 0;
 	char *document, *text;
 
@@ -56,14 +56,14 @@ int main(int argc, char **argv)
 		text = slurp(argv[3], &signature_size);
 		if (!document || !text)
 			return 2;
-		if (!map_index_signature_parse(text, signature_size, signature))
+		if (!map_list_index_signature_parse(text, signature_size, signature))
 		{
-			printf("format=%d serial=%llu signature=bad\n", map_index_format(document, size),
-				map_index_serial(document, size));
+			printf("format=%d serial=%llu signature=bad\n", map_list_index_format(document, size),
+				map_list_index_serial(document, size));
 			return 0;
 		}
-		printf("format=%d serial=%llu check=%d\n", map_index_format(document, size),
-			map_index_serial(document, size), map_index_signature_check(signature, document, size));
+		printf("format=%d serial=%llu check=%d\n", map_list_index_format(document, size),
+			map_list_index_serial(document, size), map_list_index_signature_check(signature, document, size));
 		return 0;
 	}
 	if (argc == 3 && !strcmp(argv[1], "cache"))
@@ -71,13 +71,13 @@ int main(int argc, char **argv)
 		text = slurp(argv[2], &size);
 		if (!text)
 			return 2;
-		if (!map_index_split(text, size, signature, &offset))
+		if (!map_list_index_split(text, size, signature, &offset))
 		{
 			printf("split=0\n");
 			return 0;
 		}
-		printf("split=1 serial=%llu check=%d\n", map_index_serial(text + offset, size - offset),
-			map_index_signature_check(signature, text + offset, size - offset));
+		printf("split=1 serial=%llu check=%d\n", map_list_index_serial(text + offset, size - offset),
+			map_list_index_signature_check(signature, text + offset, size - offset));
 		return 0;
 	}
 	return 2;
@@ -119,7 +119,7 @@ def checker(keys, tmp_path_factory):
     driver.write_text(DRIVER)
     key = ",".join(f"0x{byte:02x}" for byte in keys[0][1])
     program = folder / "checker"
-    # (Monocypher by itself, as C99; map_index.c as the port's C: gnu89)
+    # (Monocypher by itself, as C99; map_list_index.c as the port's C: gnu89)
     objects = []
     for source in (MONOCYPHER / "monocypher.c", MONOCYPHER / "monocypher-ed25519.c"):
         objects.append(folder / (source.stem + ".o"))
@@ -128,7 +128,7 @@ def checker(keys, tmp_path_factory):
         assert built.returncode == 0, built.stderr[-4000:]
     built = subprocess.run([cc, "-std=gnu89", "-Wall", "-Wextra", "-Werror", "-Wdeclaration-after-statement", "-O1",
                             "-g", f"-DHALO_MAP_INDEX_TEST_KEY={key}", "-I", str(SRC), "-I", str(MONOCYPHER),
-                            str(driver), str(SRC / "map_index.c"), *map(str, objects), "-o", str(program)],
+                            str(driver), str(SRC / "map_list_index.c"), *map(str, objects), "-o", str(program)],
                            capture_output=True, text=True)
     assert built.returncode == 0, built.stderr[-4000:]
     return program

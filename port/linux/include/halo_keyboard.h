@@ -51,6 +51,8 @@ enum halo_keyboard_action
 	network_votekick.c, read with the chat's keys) */
 	HALO_KEYBOARD_VOTE_YES,
 	HALO_KEYBOARD_VOTE_NO,
+	/* (ChupathingyCE's voice chat: the next channel; port/linux/game/voice_game.c) */
+	HALO_KEYBOARD_VOICE_CHANNEL,
 	NUMBER_OF_HALO_KEYBOARD_ACTIONS
 };
 
