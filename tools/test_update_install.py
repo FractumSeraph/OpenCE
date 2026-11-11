@@ -423,7 +423,7 @@ def test_packaged_install_not_updated(keys, builds, server, tmp_path, mark):
     server.release(NEW, release, [ASSET, "updates.json", "updates.json.sig"])
     lines = run(tmp_path, folder, server, f"{OLD} halo", environment)
     assert has(lines, f"{OLD} halo update: version {NEW} is available")
-    assert has(lines, "update Chupathingy with your package manager")
+    assert has(lines, "update Fractum Halo with your package manager")
     assert not has(lines, "downloading") and not any(line.startswith(NEW) for line in lines)
     assert not any(path.startswith("/files/") or path.endswith("updates.json") for path in server.requests)
     assert snapshot(folder) == before and not (folder / "update.partial").exists()
@@ -546,7 +546,7 @@ def test_packaged_appimage_not_updated(keys, builds, server, tmp_path):
     name = appimage.name
     lines = run_appimage(tmp_path, appimage, server, f"{OLD} {name}", {"HALO_PACKAGED": "1"})
     assert has(lines, f"{OLD} {name} update: version {NEW} is available")
-    assert has(lines, "update Chupathingy with your package manager")
+    assert has(lines, "update Fractum Halo with your package manager")
     assert not has(lines, "downloading") and not any(line.startswith(NEW) for line in lines)
     assert not any(path.startswith("/files/") or path.endswith("updates.json") for path in server.requests)
     assert snapshot(folder) == before
