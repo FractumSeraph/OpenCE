@@ -47,8 +47,9 @@ def build_big_endian(tmp_path, parts):
         (tmp_path / name).write_text(text)
     binary = tmp_path / "structure_culling_byte_order"
     # (the console's define: the culling's own big-endian path, if it has one)
+    # (port, this fork: harness.h includes source/cseries/xbox_address.h, as harness.build passes it)
     command = [cc, "-std=gnu99", "-O1", "-static", "-DHALO_BIG_ENDIAN", "-w", "-I", str(HARNESS / "include"),
-               "-I", str(tmp_path), str(HARNESS / "tests" / "structure_culling_byte_order.c"), "-o", str(binary), "-lm"]
+               "-I", str(HARNESS.parent.parent / "source" / "cseries"), "-I", str(tmp_path), str(HARNESS / "tests" / "structure_culling_byte_order.c"), "-o", str(binary), "-lm"]
     result = subprocess.run(command, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr[-4000:]
     probe = tmp_path / "probe.c"
