@@ -985,7 +985,9 @@ static int delta_announce_target(int *refused)
 	*refused = 0;
 	if (!delta.pin)
 		return delta.hosting_newest;
-	if (delta.pin < delta.minimum || delta.pin > delta.hosting_newest)
+	/* (port, this fork: nor one older than its hosts play, 42's header) */
+	if (delta.pin < delta.minimum || delta.pin < HALO_PORT_HOST_NETWORK_VERSION_MINIMUM ||
+		delta.pin > delta.hosting_newest)
 	{
 		*refused = delta.pin;
 		return delta.hosting_newest;

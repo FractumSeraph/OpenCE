@@ -91,7 +91,7 @@ static const char *const renderer_names[] = { "OPENGL", "VULKAN", NULL };
 #endif
 static const char *const menus_choices[] = { "xbox", "gearbox", "chupathingy", NULL };
 static const char *const channels_choices[] = { "auto", "stereo", "5.1", "7.1", NULL };
-static const char *const hrtf_choices[] = { "on", "off", "auto", NULL };
+static const char *const hrtf_choices[] = { "on", "off", "auto", "xbox", NULL };
 static const char *const buffer_choices[] = { "256", "512", "1024", "2048", "4096", NULL };
 /* controls.delta's: the F keys the game leaves free (F1 is Back, F2 Start,
 F11 full screen, F12 the mouse) */

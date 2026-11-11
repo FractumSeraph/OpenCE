@@ -631,7 +631,9 @@ def generate_windows_target(n: Writer, sln: Any, target: WindowsTarget) -> None:
     )
     # (the linker's map beside the program, halo.map: its functions'
     # addresses, kept with the symbols, tools/ci_build.py)
-    base_ldflags = list(target.ldflags) + ["-Wl,/MAP"]
+    # (SDL3.dll loaded at its first call, after the MCC tag window is
+    # reserved, so that its ASLR placement cannot take that window)
+    base_ldflags = list(target.ldflags) + ["-Wl,/MAP", "-Wl,/DELAYLOAD:SDL3.dll", "-ldelayimp"]
     if target.server:
         # (a console program: its log, console and Ctrl+C, server_platform.c)
         base_ldflags += ["-Wl,/SUBSYSTEM:CONSOLE"]
@@ -732,7 +734,9 @@ def generate_windows_target(n: Writer, sln: Any, target: WindowsTarget) -> None:
         for source in sorted(linux_platform.glob("*.c")):
             if source.name in replaced or source.as_posix() in excluded:
                 continue
-            if source.name == "posix_dtls.c":
+            if source.name in ("posix_mcc_preview.c", "posix_mcc_share.c"):
+                add_object(source, win32_cflags)
+            elif source.name == "posix_dtls.c":
                 # (internet play's DTLS with browsers: Mbed TLS sees the
                 # Windows SDK, as the win32_*.c do)
                 add_object(source, f"{win32_cflags} {mbedtls_include}")

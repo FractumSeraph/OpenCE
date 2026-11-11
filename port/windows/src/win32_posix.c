@@ -134,6 +134,9 @@ static void power_throttling_opt_out(void)
 	fprintf(stderr, "power throttling: left to Windows (error %lu)\n", (unsigned long)GetLastError());
 }
 
+/* mcc_memory.c retains failures from before the log was available. */
+void mcc_memory_log_startup(void);
+
 __attribute__((constructor))
 static void windows_startup(void)
 {
@@ -176,6 +179,8 @@ static void windows_startup(void)
 	}
 	/* (after the log is open, so its line lands in halo.log) */
 	power_throttling_opt_out();
+	if (!crash_reporter_process())
+		mcc_memory_log_startup();
 }
 
 #ifdef HALO_64BIT

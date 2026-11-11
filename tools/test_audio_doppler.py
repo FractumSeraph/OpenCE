@@ -6,8 +6,10 @@
   the listener that speed at 30 to 240 frames a second (and at 20, two ticks
   in some frames), as the Xbox did at 30. The negative control is the
   observer's own velocity, the last frame's, which jumps about at 144.
-- dsound_sdl.c's doppler_glide: a new Doppler shift is reached over a tick,
-  in even steps, a voice starting over taking it at once.
+- (dsound_sdl.c's Doppler shift is OpenCE's measured Xbox one since the
+  merge of its 176b10c58, its step ramped over PARAMETER_RAMP_FRAMES:
+  tools/harness/tests/test_xbox_mixer.py's "doppler" and "doppler-step"
+  check it, as ChupathingyCE's glide over a tick was checked here.)
 - dsound_sdl.c's resampler (its tables and its tap sum at the output rate or
   slower): a 22.05 kHz voice resampled to 48 kHz keeps a 10 kHz tone, and the
   images of a 10 kHz and a 5 kHz tone are far down.
@@ -180,24 +182,6 @@ int main(void)
         CHECK(average.velocity.i == 3.f && average.velocity.j == -2.f && average.velocity.k == 1.f);
     }
 
-    /* the Doppler shift's glide: a tick, in even steps; a start, at once */
-    {
-        float current = 1.f, target = 1.f, previous = 1.f, value = 1.f;
-        unsigned long left = 0, frames = 0;
-        int mixes;
-
-        for (mixes = 0; value != 1.25f && mixes < 100; mixes++)
-        {
-            value = doppler_glide(&current, &target, &left, 1.25f, 256, FALSE);
-            CHECK(value >= previous && value - previous <= 0.25f * 256 / DOPPLER_GLIDE_FRAMES + 1e-5f);
-            previous = value;
-            frames += 256;
-        }
-        printf("Doppler 1.00 to 1.25: %lu frames (a tick is %d)\n", frames, DOPPLER_GLIDE_FRAMES);
-        CHECK(value == 1.25f && frames >= DOPPLER_GLIDE_FRAMES && frames < DOPPLER_GLIDE_FRAMES + 256);
-        CHECK(doppler_glide(&current, &target, &left, 0.8f, 256, TRUE) == 0.8f);
-    }
-
     /* the resampler */
     resampler_initialize();
     resampler_phases_initialize();
@@ -224,25 +208,23 @@ def main():
     args = parser.parse_args()
     observer = (ROOT / "source/camera/observer.c").read_text()
     mixer = (ROOT / "port/linux/src/dsound_sdl.c").read_text()
+    # (the resampler's constants are OpenCE's dsound_xbox_types.h's; its
+    # tables and their set-up, the mixer's resampling section up to the end
+    # of resampler_phases_initialize, which reads audio.resampler)
+    types = (ROOT / "port/linux/src/dsound_xbox_types.h").read_text()
+    setup = function(mixer, "resampler_phases_initialize")
+    start = mixer.index("/* ---------- resampling")
+    end = mixer.index(setup) + len(setup)
     unit_source = (
         PRELUDE
+        + "#include <string.h>\n"
+        + "static const char *config_string(const char *name) { (void)name; return NULL; }\n"
+        + types
         + structure(observer, "observer_tick_velocity")
         + function(observer, "observer_tick_velocity_add")
-        + defines(mixer, "RESAMPLER_")
-        + "#define DOPPLER_GLIDE_FRAMES (OUTPUT_RATE / 30)\n"
-        + function(mixer, "doppler_glide")
-        + "static float resampler_table[RESAMPLER_ZERO_CROSSINGS * RESAMPLER_TABLE_STEPS + 2];\n"
-        + "static float resampler_phases[RESAMPLER_TABLE_STEPS + 1][2 * RESAMPLER_ZERO_CROSSINGS];\n"
-        # (port, this fork: each row's step to the next, which its resampler_phases_initialize fills)
-        + "static float resampler_deltas[RESAMPLER_TABLE_STEPS][2 * RESAMPLER_ZERO_CROSSINGS];\n"
-        + function(mixer, "bessel_i0")
-        + function(mixer, "resampler_initialize")
-        + function(mixer, "resampler_weight")
-        + function(mixer, "resampler_phases_initialize")
+        + mixer[start:end]
         + TESTS
     )
-    if "#define DOPPLER_GLIDE_FRAMES (OUTPUT_RATE / 30)" not in mixer:
-        raise ValueError("DOPPLER_GLIDE_FRAMES changed: update this test")
     compiler = [args.cc, "-std=gnu11", "-O2"]
     if sys.platform != "win32":
         compiler.append("-lm")

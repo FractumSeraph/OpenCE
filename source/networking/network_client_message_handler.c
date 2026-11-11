@@ -209,6 +209,30 @@ symbols in this file:
 
 /* port/linux/game/network_distributed.c's */
 void network_distributed_handle_message(long machine_index, word const *message, word size);
+/* port/linux/game/network_distributed.c's and network_rules.c's */
+boolean network_distributed_host_epochs(void);
+int network_rules_header_widen(unsigned char const *message, int size, unsigned char *out, int out_size);
+
+/* port (this fork): a distributed message from the host, of OpenCE's network
+version 42's header (with the checkpoint epoch), or an older host's made one
+of it (network_rules_header_widen), as every message the game reads is */
+static void network_game_client_handle_distributed(
+	word const *message,
+	word size)
+{
+	static word widened[(0x2000 + 1) / sizeof(word)];
+	int widened_size;
+
+	if (network_distributed_host_epochs())
+	{
+		network_distributed_handle_message(NONE, message, size);
+		return;
+	}
+	widened_size = network_rules_header_widen((unsigned char const *)message, size, (unsigned char *)widened,
+		(int)sizeof(widened));
+	if (widened_size)
+		network_distributed_handle_message(NONE, widened, (word)widened_size);
+}
 
 /* ---------- constants */
 
@@ -752,7 +776,7 @@ boolean network_game_client_handle_message(
 					if (!map_share_client_message(message, message_size,
 						!network_connection_last_read_was_unreliable()))
 #endif
-					network_distributed_handle_message(NONE, message, message_size);
+					network_game_client_handle_distributed(message, message_size);
 				}
 				else
 				{
@@ -1077,7 +1101,7 @@ typedef char network_game_layout_from_version_assert[
 	HALO_PORT_NETWORK_GAME_LOCAL_DATA_OFFSET - HALO_PORT_NETWORK_GAME_VARIANT_OPTIONS_OFFSET == 0x2C &&
 	sizeof(struct game_variant_options) == 0x2C &&
 	offsetof(struct network_game, cooperative_flags) == 0x10C &&
-	HALO_PORT_NETWORK_GAME_SIZE - HALO_PORT_NETWORK_GAME_VARIANT_OPTIONS_OFFSET == 0x3A - 0xA ? 1 : -1];
+	HALO_PORT_NETWORK_GAME_SIZE - HALO_PORT_NETWORK_GAME_VARIANT_OPTIONS_OFFSET == 0x3A - 0xA + 64 ? 1 : -1];
 
 /* the game settings record as its pieces arrive; it is applied once the last
 piece is in */
@@ -1102,7 +1126,7 @@ typedef char network_game_layout_header_assert[
 typedef char network_game_layout_size_assert[
 	sizeof(struct network_game) == 0x114 + MAXIMUM_NETWORK_MACHINE_COUNT * 0x44 + 2 +
 		MAXIMUM_NUMBER_OF_PLAYERS * 0x20 + 0x3A ? 1 : -1];
-typedef char network_game_layout_wire_assert[HALO_PORT_WIRE_NETWORK_GAME_SIZE == 13136 ? 1 : -1];
+typedef char network_game_layout_wire_assert[HALO_PORT_WIRE_NETWORK_GAME_SIZE == 13200 ? 1 : -1];
 static boolean network_game_client_settings_told_clamped = FALSE;
 #else
 /* (and room for the most a signed table's layouts may add past this build's
@@ -1114,6 +1138,15 @@ static struct
 } network_game_client_settings_staging;
 #endif
 static long network_game_client_settings_staging_size = 0;
+static long network_game_client_settings_staging_total = 0; /* port: pin a fragmented layout */
+
+/* port: the record may be incomplete when its connection is disposed. */
+void network_game_client_reset_settings_staging(void)
+{
+	csmemset(&network_game_client_settings_staging, 0, sizeof(network_game_client_settings_staging));
+	network_game_client_settings_staging_size = 0;
+	network_game_client_settings_staging_total = 0;
+}
 
 /* port: OpenCE's network versions 35 on (port/linux/game/network_rules.c):
 the gametype's options grow from 0x1C to 0x2C bytes (OpenCE's SWAT,
@@ -1138,13 +1171,19 @@ enum
 	_EXTENDED_OPTIONS_VERSION) */
 	NETWORK_GAME_CLIENT_SETTINGS_SIZE = 13120,
 	NETWORK_GAME_CLIENT_SETTINGS_EXTENDED_SIZE = 13120 + 16,
-	NETWORK_GAME_CLIENT_SETTINGS_MAXIMUM = 13120 + 16 + 64,
+	/* (network_rules.h's NETWORK_RULES_SETTINGS_MCC_SIZE: 42 on, the MCC
+	digests after the local data, this build's record) */
+	NETWORK_GAME_CLIENT_SETTINGS_MCC_SIZE = 13120 + 16 + 64,
+	NETWORK_GAME_CLIENT_SETTINGS_MAXIMUM = 13120 + 16 + 128,
+	NETWORK_GAME_CLIENT_MCC_VERSION = 42,
 	NETWORK_GAME_CLIENT_OPTIONS_SIZE = 0x1C,
 	NETWORK_GAME_CLIENT_EXTENDED_OPTIONS_VERSION = 35,
 };
 
 typedef char network_game_client_settings_size_assert[
-	HALO_PORT_WIRE_NETWORK_GAME_SIZE == NETWORK_GAME_CLIENT_SETTINGS_EXTENDED_SIZE &&
+	HALO_PORT_WIRE_NETWORK_GAME_SIZE == NETWORK_GAME_CLIENT_SETTINGS_MCC_SIZE &&
+	NETWORK_GAME_CLIENT_SETTINGS_MCC_SIZE - NETWORK_GAME_CLIENT_SETTINGS_EXTENDED_SIZE == HALO_PORT_LEGACY_MCC_SHORTFALL &&
+	NETWORK_GAME_CLIENT_MCC_VERSION == HALO_PORT_MCC_NETWORK_VERSION &&
 	sizeof(network_game_client_settings_staging) == NETWORK_GAME_CLIENT_SETTINGS_MAXIMUM &&
 	NETWORK_GAME_CLIENT_SETTINGS_EXTENDED_SIZE - NETWORK_GAME_CLIENT_SETTINGS_SIZE == HALO_PORT_LEGACY_OPTIONS_SHORTFALL &&
 	NETWORK_GAME_CLIENT_EXTENDED_OPTIONS_VERSION == HALO_PORT_GAME_MODES_NETWORK_VERSION ? 1 : -1];
@@ -1162,6 +1201,7 @@ static boolean network_game_client_receive_game_settings_piece(
 	(network_game_layout_from_version), a newer one folded */
 	if (!network_rules_settings_size_taken(network_game_client_host_network_version(), piece->total_size) ||
 		piece->total_size > NETWORK_GAME_CLIENT_SETTINGS_MAXIMUM ||
+		!piece->length ||
 		piece->length > sizeof(piece->data) ||
 		piece->offset + piece->length > piece->total_size)
 	{
@@ -1174,9 +1214,13 @@ static boolean network_game_client_receive_game_settings_piece(
 		/* each record is sent in order from its start, over a stream */
 		if (piece->offset == 0)
 		{
+			/* port: never retain bytes from the preceding settings record. */
+			csmemset(&network_game_client_settings_staging, 0, sizeof(network_game_client_settings_staging));
+			network_game_client_settings_staging_total = piece->total_size;
 			network_game_client_settings_staging_size = 0;
 		}
-		if (piece->offset != network_game_client_settings_staging_size)
+		if (piece->offset != network_game_client_settings_staging_size ||
+			piece->total_size != network_game_client_settings_staging_total)
 		{
 			network_event("got a message_server_game_settings_update piece out of order; waiting for the next record");
 			network_game_client_settings_staging_size = 0;
@@ -1198,7 +1242,7 @@ static boolean network_game_client_receive_game_settings_piece(
 				network_rules.h), this version's: its options past 35's and
 				the bytes after its local data left out */
 				received = piece->total_size;
-				if (piece->total_size > NETWORK_GAME_CLIENT_SETTINGS_EXTENDED_SIZE)
+				if (piece->total_size > NETWORK_GAME_CLIENT_SETTINGS_MCC_SIZE)
 				{
 					static long logged = 0;
 
@@ -1217,8 +1261,15 @@ static boolean network_game_client_receive_game_settings_piece(
 				is taken for one of 35 on (network_rules_of_version) */
 				if (piece->total_size == NETWORK_GAME_CLIENT_SETTINGS_EXTENDED_SIZE)
 					network_game_client_note_host_network_version(NETWORK_GAME_CLIENT_EXTENDED_OPTIONS_VERSION);
+				/* ... and one with the MCC digests for one of 42 on */
+				if (piece->total_size == NETWORK_GAME_CLIENT_SETTINGS_MCC_SIZE)
+					network_game_client_note_host_network_version(NETWORK_GAME_CLIENT_MCC_VERSION);
 				/* port (this fork): an older host's, this version's (by its size
-				and the host's version: network_client_manager.c) */
+				and the host's version: network_client_manager.c); the MCC digests
+				after 35's layout, a host of 42 on's, kept as they came, an older
+				host's zeros (the staging is cleared at each record's start) */
+				if (received == NETWORK_GAME_CLIENT_SETTINGS_MCC_SIZE)
+					received = NETWORK_GAME_CLIENT_SETTINGS_EXTENDED_SIZE;
 				if (network_game_layout_from_version((unsigned char *)&network_game_client_settings_staging,
 					(unsigned long)received, NETWORK_GAME_CLIENT_SETTINGS_EXTENDED_SIZE,
 					network_game_client_host_network_version()) != 0)
@@ -1295,12 +1346,18 @@ static boolean network_game_client_receive_game_settings_piece(
 					return TRUE;
 				}
 #endif
-				result = network_game_client_game_settings_updated(client, &network_game_client_settings_folded);
+				/* (the bounded name validated before any string consumers) */
+				result = memchr(network_game_client_settings_folded.map.name, 0,
+					sizeof(network_game_client_settings_folded.map.name)) != NULL &&
+					network_game_client_game_settings_updated(client, &network_game_client_settings_folded);
 #else
 #ifdef HALO_BIG_ENDIAN
 				network_game_byte_swap(&network_game_client_settings_staging.game, TRUE);
 #endif
-				result = network_game_client_game_settings_updated(client, &network_game_client_settings_staging.game);
+				/* (the bounded name validated before any string consumers) */
+				result = memchr(network_game_client_settings_staging.game.map.name, 0,
+					sizeof(network_game_client_settings_staging.game.map.name)) != NULL &&
+					network_game_client_game_settings_updated(client, &network_game_client_settings_staging.game);
 #endif
 				if (!result)
 				{

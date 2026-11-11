@@ -52,6 +52,7 @@ struct xgpu_texture_description {
 #define D3DCOMMON_PORT_PC_MULTIPURPOSE 0x4
 #define xbox_pointer(a) ((void *)(uintptr_t)(a))
 static unsigned long hud_hires_settings(void) { return 0; }
+static BOOL xgpu_mcc_texture_get(const DWORD *r,const D3DCOLOR *p,GLuint *t,GLenum *g,struct xgpu_texture_description *d) { return FALSE; }
 static int android_texture_fixes=1;
 static unsigned long serial=1, generation=1, uploads, next_texture;
 static unsigned long memory_watch_serial(void) { return serial; }
@@ -116,12 +117,11 @@ static void read_pixels(struct bitmap_data *b,void *h) {
 
 
 def gpu_lookup(source):
-    # Exercise the common texture lookup; other owners dispatch before it.
-    lookup = function(source, 'xgpu_texture_get')
+    # Exercise the complete lookup with MCC ownership inactive.
     # (a new texture's name: texture_name_new, ChupathingyCE's c42ff76ef, gives
     # them 64 at a time from glGenTextures; one at a time here)
     names = 'static GLuint texture_name_new(void) { GLuint texture = 0; glGenTextures(1, &texture); return texture; }\n'
-    return names + lookup[:lookup.index('{') + 1] + '\n' + lookup[lookup.index('\tDWORD data ='):]
+    return names + function(source, 'xgpu_texture_get')
 
 
 

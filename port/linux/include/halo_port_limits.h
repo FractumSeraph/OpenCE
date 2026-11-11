@@ -88,17 +88,21 @@ machines, 16 players) are 0x226 and 0x434. */
 /* (then the gametype's PC options, struct game_variant_options: 0x2C bytes) */
 #define HALO_PORT_NETWORK_GAME_VARIANT_OPTIONS_OFFSET (HALO_PORT_NETWORK_GAME_PLAYERS_END + 0xA)
 #define HALO_PORT_NETWORK_GAME_LOCAL_DATA_OFFSET (HALO_PORT_NETWORK_GAME_PLAYERS_END + 0x36)
-#define HALO_PORT_NETWORK_GAME_SIZE (HALO_PORT_NETWORK_GAME_PLAYERS_END + 0x3A)
-/* ... at the network's slots (13,136 bytes) */
+#define HALO_PORT_NETWORK_GAME_SIZE (HALO_PORT_NETWORK_GAME_PLAYERS_END + 0x3A + 64) /* MCC content and metadata SHA-256 */
+/* ... at the network's slots (13,200 bytes) */
 #define HALO_PORT_WIRE_NETWORK_GAME_SIZE (HALO_PORT_NETWORK_GAME_MACHINES_OFFSET + \
 	HALO_PORT_WIRE_NETWORK_MACHINES * HALO_PORT_NETWORK_MACHINE_SIZE + 2 + \
-	HALO_PORT_WIRE_NETWORK_PLAYERS * HALO_PORT_NETWORK_PLAYER_SIZE + 0x3A)
+	HALO_PORT_WIRE_NETWORK_PLAYERS * HALO_PORT_NETWORK_PLAYER_SIZE + 0x3A + 64)
 /* ... and a host's of network versions 11 to 34, whose PC options were their
 first 0x1C bytes (game_engine.h's GAME_VARIANT_OPTIONS_V1_SIZE): its record
-is 16 bytes shorter (13,120 at the network's slots), which a client of such a
-host widens to this one as it arrives (network_game_layout_from_version,
-network_client_message_handler.c) */
+is 16 bytes shorter, which a client of such a host widens to this one as it
+arrives (network_game_layout_from_version, network_client_message_handler.c) */
 #define HALO_PORT_LEGACY_OPTIONS_SHORTFALL 0x10
+/* ... and a host's of network versions before 42, which had no MCC digests
+(the record's last 64 bytes, zero for Xbox and Custom Edition maps): its
+record is 64 bytes shorter, widened with zeros the same way, and a host sends
+the shorter record to a machine of such a version (port: this fork) */
+#define HALO_PORT_LEGACY_MCC_SHORTFALL 64
 
 /* ---------- system link protocol
 
@@ -115,16 +119,24 @@ is newer (network_client_manager.c). A host advertises it, with its netcode,
 in its game's advertisement's reserved bytes (network_server_message_handler.c),
 which hosts built before there was a version send as zeros: version 0.
 Raise it with any change to what the machines send each other.
-port (this fork): 41, OpenCE's newest, which its hosts announce (OpenCE's
-clients join only their own number), its join request 40's (a pass and a
-proof after the hardware id) and its votes 41's (network_votekick.c,
-network_map_vote.c), speaking ChupathingyCE's wire chupa-41a,
+Version 42 integrates MCC admission/sharing and shared checkpoint, boat,
+clock and scripted-pose agreement. Every map family uses the same version.
+Version 43: an MCC map's damage impulses follow the damage's direction, a
+vehicle on its side throws its riders, chat marks the host's lines, a co-op
+cutscene's sound carries how far the host has played it, and a machine's
+MCC conversion holds a round's start out of an allowance; a player standing
+on a vehicle rides it (a unit's state carries the deck it stands on, the map's
+riding choice has its own message: port/linux/NETCODE.md).
+port (this fork): 43, OpenCE's newest, which its hosts announce (OpenCE's
+clients join only their own number), its join request 42's (40's pass and
+proof after the hardware id, then the version) and its votes 41's
+(network_votekick.c, network_map_vote.c), speaking the wire chupa-43a,
 its game settings record of 35's layout (OpenCE's game types); ChupathingyCE's
 hosts announce 32. Delta clients (ChupathingyCE's 0.8.0e to 0.8.0h, this
 fork's) join a host whose wire plays with theirs (chupa-38a, from chupa-28a,
 delta.h) whatever number it announces, and are sent the record of the older
 of their HELLO's version and this one (network_server_message_handler.c). */
-#define HALO_PORT_NETWORK_VERSION 41
+#define HALO_PORT_NETWORK_VERSION 43
 /* ... the versions whose hosts a client joins: its own, and those that differ
 from it only in what the other machines leave out (a message a machine of
 the other version does not know it drops). Which are which is delta.h's
@@ -136,7 +148,7 @@ here, which the command repository reads). A host
 never checks a client's version: the client does (network_client_manager.c),
 so the range is the client's. */
 #define HALO_PORT_NETWORK_VERSION_MINIMUM 11
-#define HALO_PORT_NETWORK_VERSION_MAXIMUM 42
+#define HALO_PORT_NETWORK_VERSION_MAXIMUM 44
 /* ... the numbers in use (port/linux/src/delta.c): the three above, until a
 legacy table (docs/delta.md) widens them; code asks these, not the numbers */
 int delta_legacy_announce(void);
@@ -173,6 +185,23 @@ first byte the player's index, not the vote's kind (network_votekick.c): this
 fork, of 41, reads none from a host of an older version, nor a client whose
 Delta HELLO says one (network_distributed.c), rather than misread them */
 #define HALO_PORT_VOTES_NETWORK_VERSION 41
+/* ... and before 42 (OpenCE's first breaking raise this fork plays both
+sides of, as a client): a distributed message's header without the
+checkpoint epoch (8 bytes, not 12), the game settings record without the MCC
+digests (HALO_PORT_LEGACY_MCC_SHORTFALL), the join request without its last
+two bytes (the version), no MCC maps or messages (96 to 106); and before 43,
+no deck or scripted pose parts in a unit's state, no riding message (107),
+a vehicle throws its riders only upside down, chat lines and settings without
+the host's bits, and a co-op cutscene sound's target as before. A host of
+this fork plays 43 alone and refuses a Delta client whose HELLO says an
+older version (network_rules_session_version, network_rules.h) */
+#define HALO_PORT_MCC_NETWORK_VERSION 42
+/* ... the oldest version this build's hosts play (42's header, with the
+checkpoint epoch, to every machine): network.announce may not pin an older
+one (delta.c), and a Delta machine whose HELLO says an older one is refused
+(network_server_message_handler.c, network_game_server_settings_refused) */
+#define HALO_PORT_HOST_NETWORK_VERSION_MINIMUM 42
+#define HALO_PORT_RIDING_NETWORK_VERSION 43
 /* ... and whether a game this machine hosts is under way, which holds the
 number announced until its end (delta.h, auto-announce) */
 void delta_legacy_hold(int hold);
@@ -206,7 +235,7 @@ header included; the per-tick update of 128 players is 3,857 */
 update of 128 players decodes to 0x1010 bytes */
 #define HALO_PORT_NETWORK_PACKET_SIZE 0x1100
 
-/* the game settings record (HALO_PORT_NETWORK_GAME_SIZE, 13,136 bytes at 128
+/* the game settings record (HALO_PORT_NETWORK_GAME_SIZE, 13,200 bytes at 128
 machines and players) does not fit one message; it is sent in pieces of
 this many bytes (4 pieces), each 3,594 bytes on the wire */
 #define HALO_PORT_NETWORK_GAME_SETTINGS_FRAGMENT_SIZE 0xE00

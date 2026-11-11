@@ -25,6 +25,7 @@ Conventions carried over from the Xbox:
 #include "plasma_occlusion.h"
 #include "xgpu.h"
 #include "xgpu_shader_keys.h"
+#include "mcc_environment_shader.h"
 #include "sdl_platform.h"
 #include "halo_ui_pointer.h"
 #include "ui_point.h"
@@ -32,6 +33,7 @@ Conventions carried over from the Xbox:
 #include "thread_stop.h"
 /* (HALO_ANDROID_CE_TEXTURES: OpenCE's Android Custom Edition textures) */
 #include "../game/android_ce_texture_cache.h"
+#include "loading_widescreen.h"
 #include "posix.h"
 #ifdef HALO_ANDROID
 #include "../../android/include/android_render_policy.h"
@@ -169,6 +171,23 @@ void console_render_time(int entering);
 #define RENDER_TIME_BEGIN() ((void)0)
 #define RENDER_TIME_END() ((void)0)
 #endif
+
+/* A record of the device's own (a vertex array, a render target, a
+framebuffer, a program): the renderer cannot go on without it. The web
+build's malloc gives NULL when the heap is full, rather than aborting
+(-sABORTING_MALLOC=0, tools/web_build.py), and WebAssembly does not trap a
+write through it (address 0 is memory), so stop here instead. */
+static void *device_record_new(size_t size)
+{
+	void *record = calloc(1, size);
+
+	if (!record)
+	{
+		fprintf(stderr, "d3d8: out of memory for a %lu byte record\n", (unsigned long)size);
+		abort();
+	}
+	return record;
+}
 
 /* ---------- the screen's width
 
@@ -2009,7 +2028,7 @@ static struct vertex_array_entry *vertex_array_get(const struct vertex_layout *l
 		if (entry->hash == hash && !memcmp(&entry->layout, layout, sizeof(*layout)))
 			return entry;
 	}
-	entry = calloc(1, sizeof(*entry));
+	entry = device_record_new(sizeof(*entry));
 	entry->hash = hash;
 	entry->layout = *layout;
 	memset(entry->bindings, 0xff, sizeof(entry->bindings));
@@ -2478,7 +2497,7 @@ static struct render_target_entry *render_target_get(const D3DSurface *surface)
 			return render_target_remember(surface, screen, entry);
 		}
 	}
-	entry = calloc(1, sizeof(*entry));
+	entry = device_record_new(sizeof(*entry));
 	entry->target.data = surface->Data;
 	entry->target.width = width;
 	entry->target.height = height;
@@ -2495,6 +2514,9 @@ static struct render_target_entry *render_target_get(const D3DSurface *surface)
 	entry->screen_buffer = surface->Data == (depth ? device.depth_buffer.Data : device.back_buffer.Data);
 	entry->target.format = depth ? (xgpu_reversed_depth ? GL_DEPTH32F_STENCIL8 : GL_DEPTH24_STENCIL8) :
 		entry->screen_buffer && hdr.active ? GL_RGBA16F : GL_RGBA8;
+	/* Textures may already be selected for this draw. Allocating its target
+	 * must not replace the active sampler's input with the output image. */
+	glGetIntegerv(GL_TEXTURE_BINDING_2D, &previous_texture);
 	glGenTextures(1, &entry->target.texture);
 	gl_check_errors("target texture create");
 	glBindTexture(GL_TEXTURE_2D, entry->target.texture);
@@ -2557,7 +2579,7 @@ static GLuint framebuffer_find(GLuint color, GLuint depth, BOOL renderbuffers)
 			return entry->framebuffer;
 		}
 	}
-	entry = calloc(1, sizeof(*entry));
+	entry = device_record_new(sizeof(*entry));
 	entry->color = color;
 	entry->depth = depth;
 	entry->renderbuffers = renderbuffers;
@@ -4427,6 +4449,15 @@ void android_ce_texture_unbind(const void *resource)
 }
 #endif
 
+/* Unload can happen before a later draw replaces every texture stage. */
+void xgpu_mcc_texture_unbind(DWORD const *resource)
+{
+	unsigned long stage;
+	for (stage = 0; stage < D3DTSS_MAXSTAGES; stage++)
+		if ((DWORD const *)device.textures[stage] == resource)
+			device.textures[stage] = NULL;
+}
+
 void WINAPI D3DDevice_SetPalette(DWORD stage, D3DPalette *palette)
 {
 	if (stage < D3DTSS_MAXSTAGES)
@@ -4577,6 +4608,11 @@ HRESULT WINAPI D3DDevice_CreateVertexShader(CONST DWORD *declaration, CONST DWOR
 		/* header: program type in the low word, instruction count in the high */
 		object->instruction_count = function[0] >> 16;
 		object->instructions = malloc(object->instruction_count * 4 * sizeof(DWORD));
+		if (!object->instructions && object->instruction_count)
+		{
+			free(object);
+			return E_OUTOFMEMORY;
+		}
 		memcpy(object->instructions, function + 1, object->instruction_count * 4 * sizeof(DWORD));
 #ifdef HALO_SHADER_PREP
 		object->code_hash = xgpu_vertex_code_hash(object->instructions, object->instruction_count * 4);
@@ -4897,7 +4933,7 @@ static GLuint fragment_shader_make(const struct nv2a_pixel_shader_key *key, BOOL
 			return entry->shader;
 		}
 	}
-	entry = calloc(1, sizeof(*entry));
+	entry = device_record_new(sizeof(*entry));
 	entry->hash = hash;
 	entry->key = *key;
 	source = nv2a_pixel_shader_to_glsl(key);
@@ -5436,7 +5472,7 @@ static GLuint mip_composite_get(const struct xgpu_texture_description *descripti
 	}
 	if (!composite)
 	{
-		composite = calloc(1, sizeof(*composite));
+		composite = device_record_new(sizeof(*composite));
 		composite->data = data;
 		composite->width = description->width;
 		composite->height = description->height;
@@ -6133,6 +6169,7 @@ static struct program_entry *prepare_draw(BOOL immediate)
 	key.combiner_state[D3DRS_PSFINALCOMBINERCONSTANT0] = 0;
 	key.combiner_state[D3DRS_PSFINALCOMBINERCONSTANT1] = 0;
 	key.texture_modes = D3D__RenderState[D3DRS_PSTEXTUREMODES];
+	key.mcc_bump_attenuation = mcc_environment_shader_active();
 	/* the textures before the targets: a render target the draw samples
 	has its multisampled pixels resolved by a blit (render_target_resolve),
 	which binds framebuffers of its own, and the back buffer can be both
@@ -7402,6 +7439,12 @@ static unsigned long stream_upload_swizzled(const struct vertex_shader_object *d
 		free(scratch);
 		scratch_size = size + 65536;
 		scratch = malloc(scratch_size);
+		/* (out of memory: the colours go up unswapped) */
+		if (!scratch)
+		{
+			scratch_size = 0;
+			return stream_upload(data, size);
+		}
 	}
 	memcpy(scratch, data, size);
 	for (vertex = 0; vertex + stride <= size; vertex += stride)
@@ -8100,6 +8143,10 @@ static WORD *quad_indices(const WORD *indices, unsigned long count, unsigned lon
 	WORD *result = malloc(quads * 6 * sizeof(WORD) + 2);
 	unsigned long quad;
 
+	/* (out of memory: none, and the draw is dropped) */
+	*out_count = 0;
+	if (!result)
+		return NULL;
 	for (quad = 0; quad < quads; quad++)
 	{
 		WORD v0 = indices ? indices[quad * 4] : (WORD)(quad * 4);
@@ -8162,9 +8209,12 @@ static void draw_vertices_untimed(D3DPRIMITIVETYPE primitive_type, UINT start_ve
 		unsigned long count;
 		WORD *indices = quad_indices(NULL, vertex_count, &count);
 
-		glDrawElements(GL_TRIANGLES, (GLsizei)count, GL_UNSIGNED_SHORT,
-			(const void *)(uintptr_t)index_upload(indices, count * sizeof(WORD)));
-		free(indices);
+		if (indices)
+		{
+			glDrawElements(GL_TRIANGLES, (GLsizei)count, GL_UNSIGNED_SHORT,
+				(const void *)(uintptr_t)index_upload(indices, count * sizeof(WORD)));
+			free(indices);
+		}
 	}
 	else
 	{
@@ -8455,6 +8505,8 @@ static void draw_indexed_vertices_untimed(D3DPRIMITIVETYPE primitive_type, UINT 
 	if (primitive_type == D3DPT_QUADLIST)
 	{
 		indices = quad_indices(index_data, vertex_count, &count);
+		if (!indices)
+			return;
 		source = indices;
 	}
 	#ifdef HALO_GLES
@@ -8463,6 +8515,11 @@ static void draw_indexed_vertices_untimed(D3DPRIMITIVETYPE primitive_type, UINT 
 		/* the indices are copied anyway: rebase them */
 		WORD *rebased = malloc(count * sizeof(WORD) + 2);
 
+		if (!rebased)
+		{
+			free(indices);
+			return;
+		}
 		for (index = 0; index < count; index++)
 			rebased[index] = (WORD)(source[index] - minimum);
 		glDrawElements(primitive_mode(primitive_type), (GLsizei)count, GL_UNSIGNED_SHORT,
@@ -8793,9 +8850,12 @@ static void end_untimed(void)
 		{
 			WORD *indices = quad_indices(NULL, count, &index_count);
 
-			glDrawElements(GL_TRIANGLES, (GLsizei)index_count, GL_UNSIGNED_SHORT,
-				(const void *)(uintptr_t)index_upload(indices, index_count * sizeof(WORD)));
-			free(indices);
+			if (indices)
+			{
+				glDrawElements(GL_TRIANGLES, (GLsizei)index_count, GL_UNSIGNED_SHORT,
+					(const void *)(uintptr_t)index_upload(indices, index_count * sizeof(WORD)));
+				free(indices);
+			}
 		}
 	}
 	else
@@ -9168,9 +9228,13 @@ static void write_screenshot_from(const char *name, unsigned long width, unsigne
 	{
 		float *texels = malloc(image_size * sizeof(float));
 
-		if (texels)
-			glReadPixels(0, 0, (GLsizei)width, (GLsizei)height, GL_RGBA, GL_FLOAT, texels);
-		for (row = 0; texels && row < image_size; row++)
+		if (!texels)
+		{
+			free(pixels);
+			return;
+		}
+		glReadPixels(0, 0, (GLsizei)width, (GLsizei)height, GL_RGBA, GL_FLOAT, texels);
+		for (row = 0; row < image_size; row++)
 		{
 			float texel = texels[row] < 0.0f ? 0.0f : texels[row] > 1.0f ? 1.0f : texels[row];
 
@@ -9548,6 +9612,13 @@ static void front_buffer_take(void)
 	width = (GLint)(FRONT_BUFFER_WIDTH * back_buffer->target.scale[0] + 0.5f);
 	left = ((GLint)back_buffer->target.gl_width - width) / 2;
 	if (left < 0)
+	{
+		left = 0;
+		width = (GLint)back_buffer->target.gl_width;
+	}
+	/* The loading feature expands the original effect across this width.
+	Capture all of it back into the stock feedback texture, not its centre. */
+	if (loading_widescreen_active())
 	{
 		left = 0;
 		width = (GLint)back_buffer->target.gl_width;
@@ -10090,6 +10161,9 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 				hdr.float_window ? hdr.sdr_white : 0.0f)))
 		{
 			glBindFramebuffer(GL_READ_FRAMEBUFFER, read_framebuffer);
+			/* Creating the source framebuffer binds both targets. A cached
+			map can reach this first blit without a loading-screen draw. */
+			glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
 			/* row 0 of the render target is the top of the picture */
 #ifdef HALO_BROWSER
 			/* WebGL rejects a framebuffer blit whose destination rectangle is

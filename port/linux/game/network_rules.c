@@ -95,8 +95,10 @@ void network_rules_aim_assist_write(uint8_t *message, int block, int32_t game_ti
 	message[2] = NETWORK_RULES_AIM_ASSIST_KIND;
 	message[3] = 1;
 	put32(message + 4, (uint32_t)game_time);
-	put16(message + 8, block ? 1 : 0);
-	put16(message + 10, 0);
+	/* (the epoch: the sender's header fills it) */
+	put32(message + NETWORK_RULES_EPOCH_OFFSET, 0);
+	put16(message + NETWORK_RULES_HEADER_SIZE, block ? 1 : 0);
+	put16(message + NETWORK_RULES_HEADER_SIZE + 2, 0);
 }
 
 int network_rules_aim_assist_read(uint8_t const *message, int size, int from_datagram, int *block)
@@ -111,9 +113,9 @@ int network_rules_aim_assist_read(uint8_t const *message, int size, int from_dat
 	{
 		return 0;
 	}
-	if (get16(message + 8) > 1 || get16(message + 10) != 0)
+	if (get16(message + NETWORK_RULES_HEADER_SIZE) > 1 || get16(message + NETWORK_RULES_HEADER_SIZE + 2) != 0)
 		return 0;
-	*block = (int)get16(message + 8);
+	*block = (int)get16(message + NETWORK_RULES_HEADER_SIZE);
 	return 1;
 }
 
@@ -177,7 +179,84 @@ int network_rules_settings_size_taken(unsigned version, unsigned total_size)
 
 	if (size)
 		return total_size == (unsigned)size;
-	return total_size == NETWORK_RULES_SETTINGS_SIZE || total_size == NETWORK_RULES_SETTINGS_EXTENDED_SIZE;
+	return total_size == NETWORK_RULES_SETTINGS_SIZE || total_size == NETWORK_RULES_SETTINGS_EXTENDED_SIZE ||
+		total_size == NETWORK_RULES_SETTINGS_MCC_SIZE;
+}
+
+int network_rules_header_widen(uint8_t const *message, int size, uint8_t *out, int out_size)
+{
+	int at, written;
+
+	if (size < NETWORK_RULES_LEGACY_HEADER_SIZE || size + NETWORK_RULES_EPOCH_SIZE > out_size)
+		return 0;
+	memcpy(out, message, NETWORK_RULES_EPOCH_OFFSET);
+	memset(out + NETWORK_RULES_EPOCH_OFFSET, 0, NETWORK_RULES_EPOCH_SIZE);
+	written = NETWORK_RULES_HEADER_SIZE;
+	if (message[2] != NETWORK_RULES_BATCH_KIND)
+	{
+		memcpy(out + written, message + NETWORK_RULES_LEGACY_HEADER_SIZE, (size_t)(size - NETWORK_RULES_LEGACY_HEADER_SIZE));
+		written += size - NETWORK_RULES_LEGACY_HEADER_SIZE;
+	}
+	else
+	{
+		/* (each of its messages: a length, then the message without its header
+		word, an epoch after its tick too) */
+		at = NETWORK_RULES_LEGACY_HEADER_SIZE;
+		while (at + 2 <= size)
+		{
+			int length = get16(message + at);
+			int inner = NETWORK_RULES_EPOCH_OFFSET - 2;
+
+			if (length > size - at - 2 || length < inner)
+				break;
+			if (written + 2 + length + NETWORK_RULES_EPOCH_SIZE > out_size)
+				return 0;
+			put16(out + written, (uint16_t)(length + NETWORK_RULES_EPOCH_SIZE));
+			memcpy(out + written + 2, message + at + 2, (size_t)inner);
+			memset(out + written + 2 + inner, 0, NETWORK_RULES_EPOCH_SIZE);
+			memcpy(out + written + 2 + inner + NETWORK_RULES_EPOCH_SIZE, message + at + 2 + inner, (size_t)(length - inner));
+			written += 2 + length + NETWORK_RULES_EPOCH_SIZE;
+			at += 2 + length;
+		}
+	}
+	if (written > 0xFFF)
+		return 0;
+	put16(out, (uint16_t)((get16(out) & 0xF) | (written << 4)));
+	return written;
+}
+
+int network_rules_header_narrow(uint8_t *message, int size)
+{
+	int at, written;
+
+	if (size < NETWORK_RULES_HEADER_SIZE)
+		return 0;
+	written = NETWORK_RULES_LEGACY_HEADER_SIZE;
+	if (message[2] != NETWORK_RULES_BATCH_KIND)
+	{
+		memmove(message + written, message + NETWORK_RULES_HEADER_SIZE, (size_t)(size - NETWORK_RULES_HEADER_SIZE));
+		written += size - NETWORK_RULES_HEADER_SIZE;
+	}
+	else
+	{
+		at = NETWORK_RULES_HEADER_SIZE;
+		while (at + 2 <= size)
+		{
+			int length = get16(message + at);
+			int inner = NETWORK_RULES_EPOCH_OFFSET - 2;
+
+			if (length > size - at - 2 || length < inner + NETWORK_RULES_EPOCH_SIZE)
+				break;
+			put16(message + written, (uint16_t)(length - NETWORK_RULES_EPOCH_SIZE));
+			memmove(message + written + 2, message + at + 2, (size_t)inner);
+			memmove(message + written + 2 + inner, message + at + 2 + inner + NETWORK_RULES_EPOCH_SIZE,
+				(size_t)(length - inner - NETWORK_RULES_EPOCH_SIZE));
+			written += 2 + length - NETWORK_RULES_EPOCH_SIZE;
+			at += 2 + length;
+		}
+	}
+	put16(message, (uint16_t)((get16(message) & 0xF) | (written << 4)));
+	return written;
 }
 
 void network_rules_settings_fold_options(uint8_t *record, uint8_t *extended)
@@ -439,6 +518,9 @@ void network_rules_settings_record_copy(uint8_t const *record, int options_size,
 			out[index] = 0;
 		else if (at < options + options_size + 4)
 			out[index] = record[at - options_size + NETWORK_RULES_OPTIONS_EXTENDED_SIZE];
+		/* (then the MCC digests, 42's, after the local data as in this build's) */
+		else if (at - options_size + NETWORK_RULES_OPTIONS_EXTENDED_SIZE < NETWORK_RULES_SETTINGS_MCC_SIZE)
+			out[index] = record[at - options_size + NETWORK_RULES_OPTIONS_EXTENDED_SIZE];
 		else
 			out[index] = 0;
 	}
@@ -511,6 +593,19 @@ void network_rules_layout_built_in(unsigned version, struct network_rules_layout
 		layout_drop(layout, NETWORK_RULES_MAP_VOTE_STATUS_KIND);
 		layout_drop(layout, NETWORK_RULES_MAP_VOTE_CHOICE_KIND);
 	}
+	/* (42: the MCC digests after the local data, the join request's version,
+	the checkpoint boundary and MCC's messages) */
+	if (rules >= NETWORK_RULES_MCC_VERSION)
+	{
+		unsigned kind;
+
+		layout->settings_size = NETWORK_RULES_SETTINGS_MCC_SIZE;
+		layout->join_request_extra = NETWORK_RULES_JOIN_REQUEST_EXTRA + NETWORK_RULES_JOIN_REQUEST_VERSION_SIZE;
+		for (kind = NETWORK_RULES_CHECKPOINT_KIND; kind <= NETWORK_RULES_MCC_LAST_KIND; kind++)
+			layout_drop(layout, kind);
+	}
+	if (rules >= NETWORK_RULES_RIDING_VERSION)
+		layout_drop(layout, NETWORK_RULES_RIDING_MAP_KIND);
 }
 
 int network_rules_join_request_extra(unsigned version)

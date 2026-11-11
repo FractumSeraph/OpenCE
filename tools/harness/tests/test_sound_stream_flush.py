@@ -20,6 +20,8 @@ NEGATIVE_CONTROLS = {
     "never-waits": (("if (++missed < 5)", "if (++missed < 6)"), "mixer-busy"),
     "missed-frames-kept": (("missed = 0;", ""), "mixer-busy"),
     "take-not-wanted": (("__atomic_add_fetch(&mixer_lock_wanted, 1, __ATOMIC_RELAXED);", ""), "mixer-busy"),
+    "mixed-while-flushed": (("stream->flushing = TRUE;", ""), "mixed-head"),
+    "left-flushing": (("stream->flushing = FALSE;", ""), "mixed-head"),
 }
 
 

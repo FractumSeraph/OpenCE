@@ -58,16 +58,17 @@ enum
 	_slot_alpha_test_samples,
 	_slot_point_threshold,
 	_slot_plasma_model,
-	/* (port, this fork: OpenCE's CE meters and blend factor) */
+	/* (port, this fork: OpenCE's CE meters, blend factor and MCC bump attenuation) */
 	_slot_ce_meter_channels,
 	_slot_source_blend,
-	_slot_last = _slot_source_blend
+	_slot_mcc_bump_attenuation,
+	_slot_last = _slot_mcc_bump_attenuation
 };
 
 /* (a field added to nv2a_pixel_shader_key needs a slot here: the key's last
-field is source_blend, with no more than padding after it) */
+field is mcc_bump_attenuation, with no more than padding after it) */
 typedef char pixel_key_slots_assert[sizeof(struct nv2a_pixel_shader_key) -
-	offsetof(struct nv2a_pixel_shader_key, source_blend) <= sizeof(unsigned long) ? 1 : -1];
+	offsetof(struct nv2a_pixel_shader_key, mcc_bump_attenuation) <= sizeof(unsigned long) ? 1 : -1];
 
 static unsigned char *slot_byte(struct nv2a_pixel_shader_key *key, unsigned long slot)
 {
@@ -89,6 +90,7 @@ static unsigned char *slot_byte(struct nv2a_pixel_shader_key *key, unsigned long
 	case _slot_plasma_model: return &key->plasma_model;
 	case _slot_ce_meter_channels: return &key->ce_meter_channels;
 	case _slot_source_blend: return &key->source_blend;
+	case _slot_mcc_bump_attenuation: return &key->mcc_bump_attenuation;
 	}
 	return NULL;
 }

@@ -54,6 +54,10 @@ int update_request(const char *url, const char *form, const char *agent, const v
 	return 0;
 }
 
+void posix_upnp_cancel(void)
+{
+}
+
 /* ---------- MSVC (scenario.c): a compiler barrier, an intrinsic clang knows
 only on x86 and ARM */
 

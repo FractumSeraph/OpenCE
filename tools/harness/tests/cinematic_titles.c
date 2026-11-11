@@ -84,6 +84,9 @@ static void rasterizer_text_set_shadow_color(pixel32 color) { shadow = color; }
 static short halo_screen_width(void) { return 640; }
 #define rasterizer_draw_unicode_string(bounds, style, color, flags, string) (draws++, drawn_shadow = shadow)
 
+/* MCC title adaptation is inactive for these Xbox/CE cases. */
+static boolean mcc_cache_tags_loaded(void) { return FALSE; }
+static void mcc_hud_title_bounds(rectangle2d *bounds, short justification, unsigned long flags) { }
 #include "under_test.inc"
 
 /* the title in its slot, at its start: up for up_time ticks, then fading out for fade_out_time */

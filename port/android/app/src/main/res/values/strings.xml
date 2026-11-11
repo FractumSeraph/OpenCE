@@ -2,4 +2,5 @@
 <resources>
     <!-- this fork's (FractumSeraph/OpenCE): told apart from ChupathingyCE's app beside it -->
     <string name="app_name">Fractum Halo</string>
+    <string name="mcc_import_label">Import MCC maps</string>
 </resources>

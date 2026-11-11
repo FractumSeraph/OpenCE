@@ -137,6 +137,12 @@ VOTES_VERSION, VOTE_KINDS = 41, (78, 79, 94, 95)
 # version 40's join request: the bytes after its first 0x70 (network_rules.h),
 # and the one fill builds write
 JOIN_REQUEST_VERSION, JOIN_REQUEST_EXTRA, JOIN_REQUEST_FILL = 40, 234, "zeros"
+# version 42 (port, this fork, OpenCE's): the MCC digests after the record's
+# local data, the join request's version (2 bytes), the checkpoint boundary
+# and MCC's messages; 43: the map's riding choice (network_rules.h)
+MCC_VERSION, MCC_DIGESTS_SIZE, JOIN_REQUEST_VERSION_SIZE = 42, 64, 2
+MCC_KINDS = tuple(range(96, 107))
+RIDING_VERSION, RIDING_KIND = 43, 107
 # (an Ed25519 public key's DER: this prefix, then its 32 bytes)
 ED25519_SPKI_PREFIX = bytes.fromhex("302a300506032b6570032100")
 
@@ -233,12 +239,19 @@ def reads_layouts(name: str) -> bool:
 def built_in_layout(version: int, own_newest: int = None) -> dict:
     """a version's built-in layout (network_rules_layout_built_in)"""
     rules = min(version, newest() if own_newest is None else own_newest)
-    return {"settings_size": SETTINGS_EXTENDED_SIZE if rules >= EXTENDED_OPTIONS_VERSION else SETTINGS_SIZE,
+    settings = SETTINGS_EXTENDED_SIZE if rules >= EXTENDED_OPTIONS_VERSION else SETTINGS_SIZE
+    join = JOIN_REQUEST_EXTRA if rules >= JOIN_REQUEST_VERSION else 0
+    if rules >= MCC_VERSION:
+        settings += MCC_DIGESTS_SIZE
+        join += JOIN_REQUEST_VERSION_SIZE
+    return {"settings_size": settings,
             "options_size": OPTIONS_EXTENDED_SIZE if rules >= EXTENDED_OPTIONS_VERSION else OPTIONS_SIZE,
             "shield_effects_maximum": limits()["shield_built_in"],
             "dropped_messages": sorted(([SHIELD_EFFECTS_KIND] if rules >= SHIELD_EFFECTS_VERSION else []) +
-                                       (list(VOTE_KINDS) if rules >= VOTES_VERSION else [])),
-            "join_request_extra": JOIN_REQUEST_EXTRA if rules >= JOIN_REQUEST_VERSION else 0}
+                                       (list(VOTE_KINDS) if rules >= VOTES_VERSION else []) +
+                                       (list(MCC_KINDS) if rules >= MCC_VERSION else []) +
+                                       ([RIDING_KIND] if rules >= RIDING_VERSION else [])),
+            "join_request_extra": join}
 
 
 def apply_layouts(version: int, facts: dict, own_newest: int) -> tuple:

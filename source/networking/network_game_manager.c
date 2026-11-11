@@ -99,6 +99,7 @@ symbols in this file:
 /* port: port/linux/game/profile_names.c's */
 boolean profile_names_local_game_name(long local_player, wchar_t *name, long size);
 #endif
+#include "mcc_main.h" /* port: port/linux/game/mcc_main.c */
 
 #include <xtl.h>
 #ifdef HALO_GAME_BROWSER
@@ -870,6 +871,12 @@ boolean network_game_create_game_objects(
 	}
 	else
 	{
+		/* port: MCC refusals unwind through the network session lifecycle. */
+		if (mcc_main_network_load_failed(options.map_name))
+		{
+			game->local_data.game_objects_loaded = FALSE;
+			return FALSE;
+		}
 		error(0, "game_load() failed.");
 	}
 

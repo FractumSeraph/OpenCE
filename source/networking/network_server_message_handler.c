@@ -260,6 +260,7 @@ symbols in this file:
 #include "networking/network_connection.h"
 #include "networking/network_game_globals.h"
 #include "networking/network_game_manager.h"
+#include "mcc_identity.h" /* port: attach MCC content identity to host settings */
 #include "networking/network_game_protocol.h"
 #include "networking/network_messages.h"
 #include "networking/network_server_manager_internal.h"
@@ -278,6 +279,12 @@ boolean network_voice_handles_message(word const *message, word size);
 void network_voice_handle_message(long machine_index, word const *message, word size);
 /* port/linux/game/map_share.c's: map sharing, in the lobby too */
 boolean map_share_handles_message(word const *message, word size);
+/* port/linux/game/mcc_share.c's: MCC package sharing, in the lobby too */
+boolean mcc_share_game_handles_message(word const *message, word size);
+void mcc_share_game_handle_message(long machine_index, word const *message, word size, boolean from_stream);
+#include "mcc_load_network.h" /* port: MCC send-only loading progress */
+#include "mcc_admission.h" /* port: MCC validation before players and precaching */
+#include "mcc_ui_teams.h" /* port: port/linux/game/mcc_ui_teams.c */
 boolean network_map_vote_handles_message(word const *message, word size);
 void network_map_vote_handle_message(long machine_index, word const *message, word size, boolean from_stream);
 void map_share_handle_message(long machine_index, word const *message, word size, boolean from_stream);
@@ -458,6 +465,7 @@ struct message_client_join_game_request
 	refused the machine for its VPN asks for it) */
 	byte link_pass[170];
 	byte link_proof[64];
+	word network_version; /* port: shared agreement before host admission */
 };
 
 struct message_client_settings_request
@@ -921,6 +929,9 @@ enum
 	/* (network_rules.h's NETWORK_RULES_SETTINGS_SIZE and _EXTENDED_SIZE) */
 	NETWORK_GAME_SERVER_SETTINGS_SIZE = 13120,
 	NETWORK_GAME_SERVER_SETTINGS_EXTENDED_SIZE = 13120 + 16,
+	/* (network_rules.h's NETWORK_RULES_SETTINGS_MCC_SIZE: 42's, with the MCC
+	digests after the local data, this build's) */
+	NETWORK_GAME_SERVER_SETTINGS_MCC_SIZE = 13120 + 16 + 64,
 	/* (and its options' bytes, network_rules.h's NETWORK_RULES_OPTIONS_EXTENDED_SIZE) */
 	NETWORK_GAME_SERVER_OPTIONS_EXTENDED_SIZE = 0x2C,
 	/* how long a machine's record waits for its HELLO (delta_peer.h's
@@ -928,9 +939,11 @@ enum
 	NETWORK_GAME_SERVER_SETTINGS_HELLO_WAIT = 4000,
 };
 
-/* (port, this fork: the network's record is 35's layout) */
+/* (port, this fork: the network's record is 42's layout, 35's with the MCC
+digests) */
 typedef char network_game_server_settings_size_assert[
-	HALO_PORT_WIRE_NETWORK_GAME_SIZE == NETWORK_GAME_SERVER_SETTINGS_EXTENDED_SIZE &&
+	HALO_PORT_WIRE_NETWORK_GAME_SIZE == NETWORK_GAME_SERVER_SETTINGS_MCC_SIZE &&
+	NETWORK_GAME_SERVER_SETTINGS_MCC_SIZE - NETWORK_GAME_SERVER_SETTINGS_EXTENDED_SIZE == HALO_PORT_LEGACY_MCC_SHORTFALL &&
 	NETWORK_GAME_SERVER_SETTINGS_EXTENDED_SIZE - NETWORK_GAME_SERVER_SETTINGS_SIZE == HALO_PORT_LEGACY_OPTIONS_SHORTFALL ? 1 : -1];
 
 /* each client machine's record: the connection it is for, since when it is
@@ -1034,10 +1047,10 @@ static long network_game_server_settings_layout(
 	if (!entry->since)
 		entry->since = now ? now : 1;
 	/* (the host's own machine takes either: it joined by no advertisement;
-	port, this fork: it is this build, whose record is 35's layout) */
+	port, this fork: it is this build, whose record is 42's layout) */
 	if (network_game_server_client_machine_is_local(server, machine))
 	{
-		entry->size = NETWORK_GAME_SERVER_SETTINGS_EXTENDED_SIZE;
+		entry->size = NETWORK_GAME_SERVER_SETTINGS_MCC_SIZE;
 		entry->options = NETWORK_GAME_SERVER_OPTIONS_EXTENDED_SIZE;
 		if (options)
 			*options = entry->options;
@@ -1084,6 +1097,19 @@ static boolean network_game_server_settings_refused(
 	struct network_game const *game = network_game_server_get_game(server);
 	long slot;
 
+	/* (port, this fork: a Delta machine of an older network version than 42,
+	its record shorter than 42's, cannot play this build's games at all: its
+	messages have no checkpoint epoch, HALO_PORT_HOST_NETWORK_VERSION_MINIMUM) */
+	if (size && size < NETWORK_GAME_SERVER_SETTINGS_MCC_SIZE)
+	{
+		slot = network_game_server_settings_slot(server, machine);
+		if (slot != NONE && !network_game_server_settings_machines[slot].refused)
+		{
+			network_game_server_settings_machines[slot].refused = TRUE;
+			network_game_server_refuse_network_version(slot);
+		}
+		return TRUE;
+	}
 	if (!size || !game ||
 		network_rules_host_takes_game_type((int)size, game_modes_variant_is_opence(&game->variant, &game->variant_options)))
 	{
@@ -1122,7 +1148,7 @@ static boolean network_game_server_send_settings_pieces(
 	long offset;
 
 	/* (a record of another layout goes as it is) */
-	if (wire_size != NETWORK_GAME_SERVER_SETTINGS_EXTENDED_SIZE)
+	if (wire_size != NETWORK_GAME_SERVER_SETTINGS_MCC_SIZE)
 		size = wire_size;
 	for (offset = 0; offset < size; offset += sizeof(message.data))
 	{
@@ -1133,7 +1159,7 @@ static boolean network_game_server_send_settings_pieces(
 		message.length = (word)MIN((long)sizeof(message.data), size - offset);
 		message.pad = 0;
 		csmemset(message.data, 0, sizeof(message.data));
-		if (size == wire_size && (wire_size != NETWORK_GAME_SERVER_SETTINGS_EXTENDED_SIZE ||
+		if (size == wire_size && (wire_size != NETWORK_GAME_SERVER_SETTINGS_MCC_SIZE ||
 			options == NETWORK_GAME_SERVER_OPTIONS_EXTENDED_SIZE))
 		{
 			csmemcpy(message.data, (byte const *)wire + offset, message.length);
@@ -1157,6 +1183,7 @@ boolean network_game_server_send_game_settings_to_client_machine(
 	long options = 0;
 	long size = network_game_server_settings_layout(server, machine, &options);
 	long slot;
+	struct network_game mcc_settings; /* port: fingerprint extension, no host record mutation */
 
 	/* (waited for: sent once its size is known) */
 	if (!size)
@@ -1169,6 +1196,10 @@ boolean network_game_server_send_game_settings_to_client_machine(
 	/* (port, this fork: refused a game of OpenCE's game types, and dropped) */
 	if (network_game_server_settings_refused(server, machine, size))
 		return TRUE;
+	game = mcc_identity_host_settings(game, game_size, &mcc_settings); /* port: MCC admission */
+	if (!game)
+		return FALSE;
+	game_size = sizeof(mcc_settings); /* port: one versioned record for every map family */
 	game = network_game_server_wire_game(game, &game_size);
 	if (game_size <= 0)
 		return FALSE;
@@ -1548,13 +1579,19 @@ boolean network_game_server_send_game_settings_to_all_machines(
 	long machine_index;
 	long wire_size = game_size;
 	void const *wire;
+	struct network_game mcc_settings; /* port: fingerprint extension, no host record mutation */
 	boolean result = TRUE;
+
+	game = mcc_identity_host_settings(game, game_size, &mcc_settings); /* port: MCC admission */
+	if (!game) return FALSE;
+	game_size = sizeof(mcc_settings); /* port: one versioned record for every map family */
 
 	match_assert(
 		"c:\\halo\\SOURCE\\networking\\network_server_message_handler.c",
 		0x1C8,
 		server);
 
+	wire_size = game_size;
 	wire = network_game_server_wire_game(game, &wire_size);
 	if (wire_size <= 0)
 		return FALSE;
@@ -1893,6 +1930,43 @@ boolean network_game_server_handle_client_message(
 						network_game_server_get_client_machine(server, machine, &machine_index))
 					{
 						network_voice_handle_message(machine_index, message, message_buffer_size);
+					}
+					break;
+				}
+				/* port: receive MCC loading work on the joined reliable stream,
+				 * including while the loaded host still waits in pregame. */
+				if (mcc_load_network_handles_message(message, message_buffer_size))
+				{
+					long machine_index;
+					if (network_game_server_client_machine_is_joined_to_game(server, machine) &&
+						network_game_server_get_client_machine(server, machine, &machine_index))
+						mcc_load_network_handle_message(machine_index, message, message_buffer_size, TRUE);
+					break;
+				}
+				/* port: MCC validation must precede player addition and loading;
+				 * only an already joined machine's reliable stream can hold it. */
+				if (mcc_admission_handles_message(message, message_buffer_size))
+				{
+					long machine_index;
+
+					if (network_game_server_client_machine_is_joined_to_game(server, machine) &&
+						network_game_server_get_client_machine(server, machine, &machine_index))
+					{
+						network_game_server_client_machine_heard(server, machine);
+						mcc_admission_handle_message(machine_index, message, message_buffer_size, TRUE);
+					}
+					break;
+				}
+				/* (port: MCC package sharing's, the same way: mcc_share.c) */
+				if (mcc_share_game_handles_message(message, message_buffer_size))
+				{
+					long machine_index;
+
+					if (network_game_server_client_machine_is_joined_to_game(server, machine) &&
+						network_game_server_get_client_machine(server, machine, &machine_index))
+					{
+						network_game_server_client_machine_heard(server, machine);
+						mcc_share_game_handle_message(machine_index, message, message_buffer_size, TRUE);
 					}
 					break;
 				}
@@ -2501,18 +2575,19 @@ static boolean network_game_server_handle_message_client_join_game_request(
 
 		/* (port: the request of 0x70 bytes, or OpenCE's of 40 on, 234 bytes
 		longer: a pass and a proof for OpenCE's own servers, which this host
-		takes (network_game_server_set_machine_link). The decoder reads
-		OpenCE's longer one; a short one, a ChupathingyCE or older client's,
-		is padded with zeros before its type byte, the encoded message's last,
-		to read as one with no pass) */
-		byte padded[1 + 0x70 + 170 + 64 + 1];
+		takes (network_game_server_set_machine_link), and of 42 on 2 more, the
+		client's network version. The decoder reads 42's; a shorter one, a
+		ChupathingyCE or older client's, is padded with zeros before its type
+		byte, the encoded message's last, to read as one with no pass and a
+		version of 0, which is refused as too old below) */
+		byte padded[1 + 0x70 + 170 + 64 + 2 + 1];
 		const void *encoded = message + 1;
 
 		message_size -= sizeof(word);
-		if (message_size == 1 + 0x70 + 1)
+		if (message_size == 1 + 0x70 + 1 || message_size == 1 + 0x70 + 170 + 64 + 1)
 		{
 			csmemcpy(padded, message + 1, message_size - 1);
-			csmemset(padded + message_size - 1, 0, 170 + 64);
+			csmemset(padded + message_size - 1, 0, sizeof(padded) - message_size);
 			padded[sizeof(padded) - 1] = ((const byte *)(message + 1))[message_size - 1];
 			message_size = (short)sizeof(padded);
 			encoded = padded;
@@ -2536,6 +2611,28 @@ static boolean network_game_server_handle_message_client_join_game_request(
 			the countdown for ever */
 			boolean full = network_game_server_get_state(server, NULL) == _network_game_server_state_pregame &&
 				!network_game_has_free_player_slot(network_game_server_get_game(server));
+
+			/* port: discovery is advisory; direct joins must prove the same
+			shared recovery agreement before ordinary admission. */
+			if (join_game_request.network_version != HALO_PORT_NETWORK_VERSION)
+			{
+				/* (port, this fork: told so, as OpenCE's clients are by the
+				advertisement, rather than left to time out) */
+				struct message_server_machine_rejected rejection;
+				struct network_message *reply;
+
+				network_event("join requires OpenCE network version %u (client %u)",
+					HALO_PORT_NETWORK_VERSION, join_game_request.network_version);
+				rejection.reason = join_game_request.network_version > HALO_PORT_NETWORK_VERSION ?
+					_rejection_code_version_too_new : _rejection_code_version_too_old;
+				reply = create_network_game_message(_message_server_machine_rejected, &rejection, sizeof(rejection));
+				if (reply)
+				{
+					network_game_server_write(network_game_server_get_client_connection(server_client_machine), reply,
+						GET_MESSAGE_SIZE(reply->header), NULL, 1);
+				}
+				return FALSE;
+			}
 
 			/* port: its hardware id, as it tells it: hex only (anything else
 			left out), no more than its field; the host logs it, and refuses
@@ -3021,6 +3118,9 @@ static boolean network_game_server_handle_message_client_player_settings_request
 	word *message,
 	short message_size)
 {
+	/* port: MCC's in-game picker admits only an authenticated, team-only change */
+	if (mcc_ui_team_request(server, client_machine, message, message_size))
+		return TRUE;
 	/* (port: not once the game has started: every machine loads it from
 	the settings sent with the start) */
 	if (network_game_server_lobby_is_open(server))

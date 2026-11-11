@@ -59,6 +59,8 @@ struct nv2a_pixel_shader_key
 	refuses a blend of a constant color factor with a constant alpha one, as
 	the meters' (shader_transparent_meter) */
 	unsigned char source_blend;
+	/* MCC environment lightmap pass only; part of the compiled shader key. */
+	unsigned char mcc_bump_attenuation;
 };
 
 #endif

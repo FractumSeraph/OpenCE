@@ -14,7 +14,8 @@ from harness import CHECK_FAILED, build, function, mutated, read, run, structure
 
 SOURCE = "port/linux/game/network_distributed.c"
 CASES = ["riding-up", "elevator-at-rest", "stopped-elevator-standing", "stopped-elevator-left", "on-foot"]
-FUNCTIONS = ("distributed_floor_elevator", "distributed_riding_elevator", "distributed_take_prediction")
+FUNCTIONS = ("distributed_floor_elevator", "distributed_riding_elevator", "distributed_air_part_vehicle",
+             "distributed_take_prediction")
 
 # a fault in network_distributed.c, the function it is in, and the case that must catch it
 NEGATIVE_CONTROLS = {

@@ -896,15 +896,15 @@ def test_make_layouts(tmp_path):
     old = tmp_path / "old.json"
     old.write_bytes(delta_table.make(4, issued=1))
     result = make_table(tmp_path, "--serial", "5", "--from", str(old),
-                        "--layout", f"{own}=42:options_size=48,dropped_messages=92+93",
-                        "--layout", f"{own}=43:shield_effects_maximum=7",
-                        "--layout", f"{own}=44:join_request_extra=0")
+                        "--layout", f"{own}=44:options_size=48,dropped_messages=92+93",
+                        "--layout", f"{own}=45:shield_effects_maximum=7",
+                        "--layout", f"{own}=46:join_request_extra=0")
     assert result.returncode == 0, result.stderr
     (tmp_path / "new.json").write_text(result.stdout)
     row = json.loads(result.stdout)["wires"][own]
-    assert row["layouts"]["42"] == {"options_size": 48, "dropped_messages": [92, 93]}
-    assert row["layouts"]["43"] == {"shield_effects_maximum": 7}
-    assert row["layouts"]["44"] == {"join_request_extra": 0, "join_request_fill": "zeros"}
+    assert row["layouts"]["44"] == {"options_size": 48, "dropped_messages": [92, 93]}
+    assert row["layouts"]["45"] == {"shield_effects_maximum": 7}
+    assert row["layouts"]["46"] == {"join_request_extra": 0, "join_request_fill": "zeros"}
     # (this build's own facts say its join request too; port, this fork: its
     # builds announce 41, OpenCE's newest, so its row has no facts of its own)
     if floor()["announce"] < 40:
@@ -915,17 +915,17 @@ def test_make_layouts(tmp_path):
     result = make_table(tmp_path, "--serial", "6", "--from", str(tmp_path / "new.json"), "--row", f"{own}={wide}")
     assert result.returncode == 0, result.stderr
     row = json.loads(result.stdout)["wires"][own]
-    assert row["announce"] == floor()["announce"] + 6 and row["layouts"]["42"]["options_size"] == 48
+    assert row["announce"] == floor()["announce"] + 6 and row["layouts"]["44"]["options_size"] == 48
     # (ChupathingyCE's builds, announcing 32, keep 33's facts; this fork's announce 41)
     if floor()["announce"] < 33:
         assert "33" in row["layouts"]
     # (port, this fork: the layouts between its announce and the table's newest)
     assert all(str(version) in row["layouts"] for version in range(floor()["announce"] + 1, delta_table.newest() + 1))
-    for bad in (f"{own}=41:options_size=48", f"{own}=42:options_size=40", f"{own}=42:settings_size=13300",
-                f"{own}=42:shield_effects_maximum=16", f"{own}=42:shield_effects_maximum=5",
-                f"{own}=42:dropped_messages=0", f"{own}=42:dropped_messages=256", f"{own}=42:colour=1",
-                f"{own}=42:options_size=48,options_size=52", f"{own}=42", "chupa-32a=42:options_size=48",
-                f"{own}=42:join_request_extra=1025", "chupa-39a=42:join_request_extra=234",
+    for bad in (f"{own}=43:options_size=48", f"{own}=44:options_size=40", f"{own}=44:settings_size=13300",
+                f"{own}=44:shield_effects_maximum=16", f"{own}=44:shield_effects_maximum=5",
+                f"{own}=44:dropped_messages=0", f"{own}=44:dropped_messages=256", f"{own}=44:colour=1",
+                f"{own}=44:options_size=48,options_size=52", f"{own}=44", "chupa-32a=44:options_size=48",
+                f"{own}=44:join_request_extra=1025", "chupa-39a=44:join_request_extra=234",
                 "chupa-99z=100:options_size=48"):
         assert make_table(tmp_path, "--serial", "6", "--from", str(old), "--layout", bad).returncode == 1, bad
 
@@ -950,28 +950,29 @@ def layout_line(output, version):
 def test_loader_reads_layouts(keys, checker, tmp_path):
     """this wire's row's layouts: read, and used past the build's own
     versions within the limits; the built-in facts for its own versions"""
-    row = dict(floor(), layouts={"35": {"options_size": 60}, "42": {"options_size": 48, "dropped_messages": [92, 93],
+    row = dict(floor(), layouts={"35": {"options_size": 60}, "44": {"options_size": 48, "dropped_messages": [92, 93],
                                                                     "shield_effects_maximum": 7, "later": {"a": [1]}},
-                                  "44": {"settings_size": 13146, "join_request_extra": 300, "join_request_fill": "zeros"},
-                                  "45": {"options_size": 20, "join_request_extra": 64, "join_request_fill": "pass"}})
+                                  "46": {"settings_size": 13210, "join_request_extra": 300, "join_request_fill": "zeros"},
+                                  "47": {"options_size": 20, "join_request_extra": 64, "join_request_fill": "pass"}})
     table = write_signed(keys, tmp_path / "t10", document(serial=10, row=row))
-    output = run_checker(checker, tmp_path, "layout", 42, "offer", table, "layout", 35, "layout", 41, "layout", 42,
-                         "layout", 44, "layout", 45, "state")
+    output = run_checker(checker, tmp_path, "layout", 44, "offer", table, "layout", 35, "layout", 41, "layout", 44,
+                         "layout", 46, "layout", 47, "state")
     assert "offer 1" in output and "4 layout facts" in output
-    assert layout_line(output, 42).startswith("layout 42 settings 13136 options 44 shield 6 dropped 78,79,91,94,95 ")
+    assert layout_line(output, 44).startswith("layout 44 settings 13200 options 44 shield 6 dropped 78,79,91,94,95,96,97,98,99,100,101,102,103,104,105,106,107 ")
     lines = [line for line in output.splitlines() if line.startswith("layout ")][1:]
     assert lines[0] == "layout 35 settings 13136 options 44 shield 6 dropped - learned 0 refused 0 facts 4 join 0"
     assert lines[1].startswith("layout 41 settings 13136 options 44 shield 6 dropped 78,79,91,94,95 learned 0 refused 0")
-    assert lines[2].startswith("layout 42 settings 13140 options 48 shield 7 dropped 78,79,91,92,93,94,95 ")
-    assert lines[3].startswith("layout 44 settings 13146 options 48 shield 7 ")
-    assert lines[4].startswith("layout 45 settings 13146 options 48 shield 7 ") and " refused 2 " in lines[4]
-    # (the join request: 234 zero bytes from 40, the table's 300 from 44; a
-    # fill this build does not write is not taken)
-    assert lines[1].endswith(" join 234") and lines[2].endswith(" join 234")
+    assert lines[2].startswith("layout 44 settings 13204 options 48 shield 7 dropped 78,79,91,92,93,94,95,96,97,98,99,100,101,102,103,104,105,106,107 ")
+    assert lines[3].startswith("layout 46 settings 13210 options 48 shield 7 ")
+    assert lines[4].startswith("layout 47 settings 13210 options 48 shield 7 ") and " refused 2 " in lines[4]
+    # (the join request: 234 zero bytes from 40, 236 from 42 (its version
+    # after them), the table's 300 from 46; a fill this build does not write
+    # is not taken)
+    assert lines[1].endswith(" join 234") and lines[2].endswith(" join 236")
     assert lines[3].endswith(" join 300") and lines[4].endswith(" join 300")
     # (the cached table, read again at the next start)
-    output = run_checker(checker, tmp_path, "layout", 42)
-    assert layout_line(output, 42).startswith("layout 42 settings 13140 options 48 ")
+    output = run_checker(checker, tmp_path, "layout", 44)
+    assert layout_line(output, 44).startswith("layout 44 settings 13204 options 48 ")
 
 
 def test_loader_skips_other_wires_layouts(keys, checker, tmp_path):
@@ -1010,12 +1011,12 @@ def test_loader_override_layouts(checker, tmp_path):
     """network.legacy_table: a server announces a number of its own, with
     layouts, unsigned and never passed on"""
     local = tmp_path / "local.json"
-    local.write_bytes(document(serial=1, row={"announce": 38, "minimum": 11, "maximum": 42,
-                                              "layouts": {"42": {"options_size": 48}}}))
-    output = run_checker(checker, tmp_path, "state", "layout", 42, override=local)
-    assert state_line(output)[0] == "state 38 11 42 serial 0 override 1 disabled 0 signed 0"
+    local.write_bytes(document(serial=1, row={"announce": 38, "minimum": 11, "maximum": 46,
+                                              "layouts": {"44": {"options_size": 48}}}))
+    output = run_checker(checker, tmp_path, "state", "layout", 44, override=local)
+    assert state_line(output)[0] == "state 38 11 46 serial 0 override 1 disabled 0 signed 0"
     assert "1 layout facts" in output
-    assert layout_line(output, 42).startswith("layout 42 settings 13140 options 48 ")
+    assert layout_line(output, 44).startswith("layout 44 settings 13204 options 48 ")
 
 
 # ---------- auto-announce: the "hosting" list, network.announce, the hold

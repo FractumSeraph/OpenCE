@@ -31,8 +31,16 @@ symbols in this file:
 /* ---------- NTSC maps' missing multiplayer strings */
 
 #include "tag_files/tag_files.h"
+#include "mcc_maps.h" /* port: port/linux/game/mcc_maps.h */
 
 #define MULTIPLAYER_GAME_TEXT_TAG_NAME "ui\\multiplayer_game_text"
+/* port: the multiplayer level list's level names and descriptions, and the
+PC menus' copies of them (port/linux/game/menu_tags.c): an MCC map's, by
+its display index (port/linux/game/mcc_maps.c) */
+#define LEVEL_NAMES_TAG_NAME "ui\\shell\\main_menu\\mp_map_list"
+#define LEVEL_DESCRIPTIONS_TAG_NAME "ui\\shell\\main_menu\\multiplayer_type_select\\mp_map_select\\map_data"
+#define PC_LEVEL_NAMES_TAG_NAME "pc\\main_menu\\mp_map_list"
+#define PC_LEVEL_DESCRIPTIONS_TAG_NAME "pc\\main_menu\\multiplayer_type_select\\mp_map_select\\map_data"
 #define FIRST_FALLBACK_MULTIPLAYER_GAME_TEXT_STRING 36
 
 /* ui\multiplayer_game_text holds 184 strings in the PAL release's maps
@@ -201,7 +209,20 @@ typedef char fallback_multiplayer_game_text_string_count_check[
 or NULL */
 static wchar_t *fallback_string(long tag_index, short string_index)
 {
+	char const *tag_name = tag_get_name(tag_index);
 	short fallback_index = string_index - FIRST_FALLBACK_MULTIPLAYER_GAME_TEXT_STRING;
+	/* port: MCC's maps have display indices of their own; those of the Xbox's
+	and Custom Edition's maps are looked up as before */
+	if (string_index >= MCC_MAPS_FIRST_DISPLAY_INDEX &&
+		string_index < MCC_MAPS_FIRST_DISPLAY_INDEX + MCC_MAPS_MAXIMUM)
+	{
+		short mcc_index = string_index - MCC_MAPS_FIRST_DISPLAY_INDEX;
+
+		if (!csstrcasecmp(tag_name, LEVEL_NAMES_TAG_NAME) || !csstrcasecmp(tag_name, PC_LEVEL_NAMES_TAG_NAME))
+			return (wchar_t *)mcc_maps_name(mcc_index);
+		if (!csstrcasecmp(tag_name, LEVEL_DESCRIPTIONS_TAG_NAME) || !csstrcasecmp(tag_name, PC_LEVEL_DESCRIPTIONS_TAG_NAME))
+			return (wchar_t *)mcc_maps_description(mcc_index);
+	}
 
 	if (fallback_index < 0 ||
 		fallback_index >= (short)NUMBEROF(fallback_multiplayer_game_text_strings) ||

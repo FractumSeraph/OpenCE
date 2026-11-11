@@ -76,6 +76,7 @@ symbols in this file:
 /* ---------- headers */
 
 #include "cseries/cseries.h"
+#include "mcc_grenades.h" /* port: port/linux/game/mcc_grenades.h */
 #include "bitmaps/bitmap_group.h"
 #include "camera/director.h"
 #include "cache/texture_cache.h"
@@ -85,6 +86,8 @@ symbols in this file:
 #include "game/game_globals.h"
 #include "game/players.h"
 #include "interface/hud.h"
+#include "mcc_hud_draw.h" /* port: port/linux/game/mcc_hud_draw.c */
+#include "mcc_cache.h" /* port: port/linux/game/mcc_cache.h */
 #include "interface/hud_definitions.h"
 #ifdef HALO_CUSTOM_EDITION
 #include "interface/hud_draw.h" /* port: hud_bitmap_group_scale */
@@ -967,9 +970,10 @@ static void hud_draw_friendly_indicator(
 				&clip,
 #ifdef HALO_CUSTOM_EDITION
 				/* port: at its bitmap's HUD scale */
-				hud_bitmap_group_scale(interface_get_tag_index(_interface_bitmap_multiplayer_hud)),
+				mcc_cache_tags_loaded() ? mcc_hud_bitmap_scale(interface_get_tag_index(_interface_bitmap_multiplayer_hud)) :
+					hud_bitmap_group_scale(interface_get_tag_index(_interface_bitmap_multiplayer_hud)),
 #else
-				1.0f,
+				mcc_hud_bitmap_scale(interface_get_tag_index(_interface_bitmap_multiplayer_hud)), /* port: MCC bitmap units */
 #endif
 				0.0f,
 				1.0f);
@@ -1251,10 +1255,12 @@ static void hud_draw_player_name(
 		{
 #ifdef HALO_CUSTOM_EDITION
 			/* (the triangle drawn at its bitmap's HUD scale) */
-			y -= (short)(bitmap->registration_point.y *
-				hud_bitmap_group_scale(interface_get_tag_index(_interface_bitmap_multiplayer_hud)));
+			y -= (short)(bitmap->registration_point.y * (mcc_cache_tags_loaded() ?
+				mcc_hud_bitmap_scale(interface_get_tag_index(_interface_bitmap_multiplayer_hud)) :
+				hud_bitmap_group_scale(interface_get_tag_index(_interface_bitmap_multiplayer_hud))));
 #else
-			y -= bitmap->registration_point.y;
+			y -= (short)(bitmap->registration_point.y *
+				mcc_hud_bitmap_scale(interface_get_tag_index(_interface_bitmap_multiplayer_hud))); /* port: match the MCC arrow's scale */
 #endif
 		}
 	}
@@ -1392,6 +1398,12 @@ static void temporary_hud_draw(
 			&scenario_get_game_globals()->grenades,
 			unit->unit.current_grenade_index,
 			struct game_globals_grenade);
+		/* port: retain MCC inventory counts with bounded tag-name formatting. */
+		if (mcc_grenades_active())
+			snprintf(temporary + csstrlen(temporary), sizeof(temporary) - csstrlen(temporary), "%d %s|n",
+				mcc_grenades_get(player->unit_index, unit->unit.current_grenade_index),
+				tag_name_strip_path(tag_get_name(grenade->projectile.index)));
+		else
 		snprintf(
 			temporary + csstrlen(temporary),
 			sizeof(temporary) - csstrlen(temporary),
@@ -1554,6 +1566,8 @@ void hud_draw_screen(
 	if (player_index != NONE)
 	{
 		struct player_datum *player = player_get(player_index);
+		/* port: related MCC HUD elements share this player's unit safe frame. */
+		mcc_hud_view_begin(player->unit_index);
 
 		if ((!game_engine_running() || game_engine_display_team_indicators()) &&
 			!cinematic_in_progress())
@@ -1627,6 +1641,7 @@ void hud_draw_screen(
 		network_chat_draw(render.local_player_index);
 		/* port: the players' vote running, its box (F1 yes, F2 no) */
 		network_votekick_draw(render.local_player_index);
+		mcc_hud_view_end(); /* port: no frame choice leaks to another view */
 	}
 
 	rasterizer_hud_end();

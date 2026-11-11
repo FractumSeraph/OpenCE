@@ -67,6 +67,7 @@ takes the address as a hint, which every caller here checks it got) */
 #include <string.h>
 
 #ifdef HALO_WEB
+#include "../../web/src/web_memory.h"
 /* the memory's size: whether it covers the window */
 #define web_memory_bytes() ((unsigned long long)__builtin_wasm_memory_size(0) << 16)
 #endif

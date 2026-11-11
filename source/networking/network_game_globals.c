@@ -273,6 +273,19 @@ struct player_action_collection_definition player_action_collection_definition =
 
 /* ---------- public code */
 
+/* port/linux/game/network_distributed.c's and network_rules.c's (this fork):
+to a host of OpenCE's network version 41 or older, a message of 42's header
+(the checkpoint epoch) is sent without it, a batch's messages' too */
+boolean network_distributed_host_epochs(void);
+int network_rules_header_narrow(unsigned char *message, int size);
+
+static word network_distributed_client_message_size(
+	byte *buffer,
+	word size)
+{
+	return network_distributed_host_epochs() ? size : (word)network_rules_header_narrow(buffer, size);
+}
+
 /* the distributed netcode's per-tick state (port/linux/game/network_distributed.c),
 unreliably to the host, as the game update is */
 boolean network_distributed_client_send(
@@ -285,6 +298,9 @@ boolean network_distributed_client_send(
 		return FALSE;
 	/* (the write swaps the header in place) */
 	csmemcpy(buffer, message, size);
+	size = network_distributed_client_message_size(buffer, size);
+	if (!size)
+		return FALSE;
 	/* (no address: the client's datagram socket is connected to the host,
 	network_connection_connect, and sends there) */
 	return network_game_client_write(network_game_client_get_connection(global_network_game_client),
@@ -302,6 +318,9 @@ boolean network_distributed_client_send_reliably(
 		return FALSE;
 	/* (the write swaps the header in place) */
 	csmemcpy(buffer, message, size);
+	size = network_distributed_client_message_size(buffer, size);
+	if (!size)
+		return FALSE;
 	return network_game_client_write(network_game_client_get_connection(global_network_game_client),
 		(message_header *)buffer, size, NULL, 1);
 }

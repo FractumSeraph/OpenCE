@@ -33,6 +33,7 @@ back until mods_enable true, or until the map changes.
 #include "main/console.h"
 #include "halo_map_families.h"
 #include "mods.h"
+#include "mcc_cache.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -285,6 +286,10 @@ void mods_tags_loaded(
 	goes, and nothing of it is written over the new map's tags) */
 	if (mods_globals.map_loaded)
 		mods_let_go(FALSE);
+	/* MCC owns its converted tags. Leave mods inactive, including console
+	and menu reapplication, until an Xbox or Custom Edition map loads. */
+	if (mcc_level_name(map_name))
+		return;
 	mods_globals.map_loaded = TRUE;
 	mods_globals.enabled = TRUE;
 	/* (port, this fork: the map's file's name, a Halo PC map's without the

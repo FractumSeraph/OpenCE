@@ -35,15 +35,18 @@ static int failures;
 static void test_aim_assist_message(void)
 {
 	uint8_t message[NETWORK_RULES_AIM_ASSIST_SIZE];
-	static const uint8_t blocked[12] = { 0xC8, 0x00, 90, 1, 0x04, 0x03, 0x02, 0x01, 0x01, 0x00, 0x00, 0x00 };
-	static const uint8_t allowed[12] = { 0xC8, 0x00, 90, 1, 0x04, 0x03, 0x02, 0x01, 0x00, 0x00, 0x00, 0x00 };
-	uint8_t bad[12];
+	static const uint8_t blocked[16] = { 0x08, 0x01, 90, 1, 0x04, 0x03, 0x02, 0x01, 0, 0, 0, 0,
+		0x01, 0x00, 0x00, 0x00 };
+	static const uint8_t allowed[16] = { 0x08, 0x01, 90, 1, 0x04, 0x03, 0x02, 0x01, 0, 0, 0, 0,
+		0x00, 0x00, 0x00, 0x00 };
+	uint8_t bad[16];
 	int block = -1;
 
-	/* twelve bytes: the header word (size 12 in bits 4 to 15, the data type
-	2 in bits 2 and 3), the kind 90, one entry, the sender's tick, then 01 00
-	00 00 for blocked and 00 00 00 00 for allowed */
-	CHECK(NETWORK_RULES_AIM_ASSIST_SIZE == 12 && NETWORK_RULES_AIM_ASSIST_KIND == 90);
+	/* sixteen bytes: the header word (size 16 in bits 4 to 15, the data type
+	2 in bits 2 and 3), the kind 90, one entry, the sender's tick, the
+	checkpoint epoch (network version 42; the sender's header fills it), then
+	01 00 00 00 for blocked and 00 00 00 00 for allowed */
+	CHECK(NETWORK_RULES_AIM_ASSIST_SIZE == 16 && NETWORK_RULES_AIM_ASSIST_KIND == 90);
 	network_rules_aim_assist_write(message, 1, 0x01020304);
 	CHECK(!memcmp(message, blocked, sizeof(message)));
 	network_rules_aim_assist_write(message, 0, 0x01020304);
@@ -52,59 +55,97 @@ static void test_aim_assist_message(void)
 	network_rules_aim_assist_write(message, 7, 0x01020304);
 	CHECK(!memcmp(message, blocked, sizeof(message)));
 
-	/* a client takes what it wrote, from the stream */
-	CHECK(network_rules_aim_assist_read(blocked, 12, 0, &block) && block == 1);
-	CHECK(network_rules_aim_assist_read(allowed, 12, 0, &block) && block == 0);
+	/* a client takes what it wrote, from the stream, whatever the epoch */
+	CHECK(network_rules_aim_assist_read(blocked, 16, 0, &block) && block == 1);
+	CHECK(network_rules_aim_assist_read(allowed, 16, 0, &block) && block == 0);
+	memcpy(bad, blocked, 16);
+	bad[8] = 7;
+	CHECK(network_rules_aim_assist_read(bad, 16, 0, &block) && block == 1);
 
 	/* and drops, with the policy unchanged: a value of 2 */
 	block = -1;
-	memcpy(bad, allowed, 12);
-	bad[8] = 2;
-	CHECK(!network_rules_aim_assist_read(bad, 12, 0, &block) && block == -1);
-	bad[8] = 0;
-	bad[9] = 1;
-	CHECK(!network_rules_aim_assist_read(bad, 12, 0, &block));
+	memcpy(bad, allowed, 16);
+	bad[12] = 2;
+	CHECK(!network_rules_aim_assist_read(bad, 16, 0, &block) && block == -1);
+	bad[12] = 0;
+	bad[13] = 1;
+	CHECK(!network_rules_aim_assist_read(bad, 16, 0, &block));
 	/* ... the reserved bits not 0 */
-	memcpy(bad, allowed, 12);
-	bad[10] = 1;
-	CHECK(!network_rules_aim_assist_read(bad, 12, 0, &block));
-	memcpy(bad, allowed, 12);
-	bad[11] = 0x80;
-	CHECK(!network_rules_aim_assist_read(bad, 12, 0, &block));
+	memcpy(bad, allowed, 16);
+	bad[14] = 1;
+	CHECK(!network_rules_aim_assist_read(bad, 16, 0, &block));
+	memcpy(bad, allowed, 16);
+	bad[15] = 0x80;
+	CHECK(!network_rules_aim_assist_read(bad, 16, 0, &block));
 	/* ... a count of 0 or 2 */
-	memcpy(bad, allowed, 12);
+	memcpy(bad, allowed, 16);
 	bad[3] = 0;
-	CHECK(!network_rules_aim_assist_read(bad, 12, 0, &block));
+	CHECK(!network_rules_aim_assist_read(bad, 16, 0, &block));
 	bad[3] = 2;
-	CHECK(!network_rules_aim_assist_read(bad, 12, 0, &block));
-	/* ... a size of 11 or 13, by the bytes and by the header */
-	CHECK(!network_rules_aim_assist_read(allowed, 11, 0, &block));
+	CHECK(!network_rules_aim_assist_read(bad, 16, 0, &block));
+	/* ... a size of 15 or 17, by the bytes and by the header */
+	CHECK(!network_rules_aim_assist_read(allowed, 15, 0, &block));
 	{
-		uint8_t longer[13];
+		uint8_t longer[17];
 
-		memcpy(longer, allowed, 12);
-		longer[12] = 0;
-		CHECK(!network_rules_aim_assist_read(longer, 13, 0, &block));
-		longer[0] = 0xD8;
-		CHECK(!network_rules_aim_assist_read(longer, 13, 0, &block));
+		memcpy(longer, allowed, 16);
+		longer[16] = 0;
+		CHECK(!network_rules_aim_assist_read(longer, 17, 0, &block));
+		longer[0] = 0x18;
+		CHECK(!network_rules_aim_assist_read(longer, 17, 0, &block));
 	}
-	memcpy(bad, allowed, 12);
-	bad[0] = 0xB8;
-	CHECK(!network_rules_aim_assist_read(bad, 12, 0, &block));
+	memcpy(bad, allowed, 16);
+	bad[0] = 0xF8;
+	CHECK(!network_rules_aim_assist_read(bad, 16, 0, &block));
 	/* ... a datagram (the unreliable kind) */
-	CHECK(!network_rules_aim_assist_read(allowed, 12, 1, &block));
+	CHECK(!network_rules_aim_assist_read(allowed, 16, 1, &block));
 	/* ... another message type (packet 3, error 0) or kind */
-	memcpy(bad, allowed, 12);
-	bad[0] = 0xCC;
-	CHECK(!network_rules_aim_assist_read(bad, 12, 0, &block));
-	bad[0] = 0xC0;
-	CHECK(!network_rules_aim_assist_read(bad, 12, 0, &block));
-	memcpy(bad, allowed, 12);
+	memcpy(bad, allowed, 16);
+	bad[0] = 0x0C;
+	CHECK(!network_rules_aim_assist_read(bad, 16, 0, &block));
+	bad[0] = 0x00;
+	CHECK(!network_rules_aim_assist_read(bad, 16, 0, &block));
+	memcpy(bad, allowed, 16);
 	bad[2] = 89;
-	CHECK(!network_rules_aim_assist_read(bad, 12, 0, &block));
+	CHECK(!network_rules_aim_assist_read(bad, 16, 0, &block));
 	bad[2] = 91;
-	CHECK(!network_rules_aim_assist_read(bad, 12, 0, &block));
+	CHECK(!network_rules_aim_assist_read(bad, 16, 0, &block));
 	CHECK(block == -1);
+}
+
+/* network version 42's epoch: an older host's messages widened, ours narrowed
+for it, a batch's messages each */
+static void test_header_epoch(void)
+{
+	/* (a message of kind 5, 2 entries of 3 bytes, tick 0x01020304: 14 bytes
+	in the older layout) */
+	static const uint8_t old_single[14] = { 0xE8, 0x00, 5, 2, 4, 3, 2, 1, 'a', 'b', 'c', 'd', 'e', 'f' };
+	static const uint8_t new_single[18] = { 0x28, 0x01, 5, 2, 4, 3, 2, 1, 0, 0, 0, 0, 'a', 'b', 'c', 'd', 'e', 'f' };
+	/* (a batch of two: kind 6 with "xy", and kind 7 with none) */
+	static const uint8_t old_batch[8 + 2 + 8 + 2 + 6] = { 0xA8, 0x01, 16, 0, 9, 0, 0, 0,
+		8, 0, 6, 1, 1, 0, 0, 0, 'x', 'y',
+		6, 0, 7, 1, 2, 0, 0, 0 };
+	static const uint8_t new_batch[12 + 2 + 12 + 2 + 10] = { 0x68, 0x02, 16, 0, 9, 0, 0, 0, 0, 0, 0, 0,
+		12, 0, 6, 1, 1, 0, 0, 0, 0, 0, 0, 0, 'x', 'y',
+		10, 0, 7, 1, 2, 0, 0, 0, 0, 0, 0, 0 };
+	uint8_t out[64];
+	int size;
+
+	CHECK(NETWORK_RULES_HEADER_SIZE == 12 && NETWORK_RULES_LEGACY_HEADER_SIZE == 8);
+	size = network_rules_header_widen(old_single, sizeof(old_single), out, sizeof(out));
+	CHECK(size == (int)sizeof(new_single) && !memcmp(out, new_single, sizeof(new_single)));
+	size = network_rules_header_narrow(out, size);
+	CHECK(size == (int)sizeof(old_single) && !memcmp(out, old_single, sizeof(old_single)));
+
+	size = network_rules_header_widen(old_batch, sizeof(old_batch), out, sizeof(out));
+	CHECK(size == (int)sizeof(new_batch) && !memcmp(out, new_batch, sizeof(new_batch)));
+	size = network_rules_header_narrow(out, size);
+	CHECK(size == (int)sizeof(old_batch) && !memcmp(out, old_batch, sizeof(old_batch)));
+
+	/* (too little room, or a message shorter than a header: none) */
+	CHECK(network_rules_header_widen(old_single, sizeof(old_single), out, 17) == 0);
+	CHECK(network_rules_header_widen(old_single, 7, out, sizeof(out)) == 0);
+	CHECK(network_rules_header_narrow(out, 11) == 0);
 }
 
 static void test_input_entry(void)
@@ -961,6 +1002,7 @@ static void test_fork_layout_record(void)
 int main(void)
 {
 	test_aim_assist_message();
+	test_header_epoch();
 	test_input_entry();
 	test_stamp_window();
 	test_report_stamp();

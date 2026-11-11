@@ -133,6 +133,14 @@ at `0x00400000` and the system libraries are near the top of the lower
 Edition maps' tag cache` in the log), the game does not open those maps,
 and the Xbox maps play as usual.
 
+`SDL3.dll` is delay-loaded with the MSVC `delayimp` helper. This lets
+`mcc_window_initialize` reserve MCC's `0x50000000` tag window before the
+first SDL call, including the early settings read for Custom Edition.
+The shipped SDL DLL keeps ASLR enabled. A reservation failure is reported
+once logging is connected, and map loading retries without replacing other
+allocations. See [MCC map limits](../../docs/mcc_maps.md) for the remaining
+address-space constraints.
+
 ### Headers
 
 - The game and the platform layer use the Xbox SDK declarations of

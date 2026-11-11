@@ -418,6 +418,7 @@ symbols in this file:
 #include "rasterizer/xbox/rasterizer_xbox_pixel_shader.h"
 #include "rasterizer_xbox_internal.h"
 #include "rasterizer_xbox_vertex_shaders.h"
+#include "mcc_cache.h" /* port: port/linux/game/mcc_cache.c */
 
 #include "plasma_model_shader.h" /* port: port/linux/game/plasma_lighting.c */
 

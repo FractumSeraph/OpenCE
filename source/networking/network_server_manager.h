@@ -94,6 +94,10 @@ _rejection_code_version_too_old), the host told; FALSE if it is none that
 joined */
 boolean network_game_server_refuse_game_type(
 	long machine_index);
+/* port (this fork): ... and a Delta machine of a network version older than
+this build's hosts play (HALO_PORT_HOST_NETWORK_VERSION_MINIMUM) */
+boolean network_game_server_refuse_network_version(
+	long machine_index);
 /* the host's ban command (console.c, hs.c) */
 enum
 {

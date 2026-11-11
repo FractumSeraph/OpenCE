@@ -356,8 +356,12 @@ no longer OpenCE's flag 0x04 and byte 3), hosts' message 91, co-op's ally
 switch honored, and 39's dedicated flag on dedicated servers that announce
 it. chupa-41a: the join request 234 bytes longer to hosts of 40 and later
 (network_rules_join_request_extra), the refusals 8 to 13 said plainly, and
-41's vote messages (78, 79, 94, 95) dropped quietly. */
-#define DELTA_WIRE "chupa-41a"
+41's vote messages (78, 79, 94, 95) dropped quietly. chupa-43a (this fork,
+FractumSeraph/OpenCE, ahead of ChupathingyCE): OpenCE's 42 and 43, its hosts
+playing 43 alone (a Delta machine of an older version refused), its clients
+joining hosts of 42 and 43 and of the versions before them (42's header
+and record converted at the client's connection, network_rules.h). */
+#define DELTA_WIRE "chupa-43a"
 
 /* Wire compatibility ranges: the oldest wire each one plays the game with,
 without a desync and without losing what the older wire has (a feature the
@@ -381,7 +385,8 @@ has shipped a newer wire. */
 	X("chupa-32a", "chupa-28a") /* 30 to 32 are additive; a host of 32 plays with 28 to 31 (docs/delta.md) */ \
 	X("chupa-38a", "chupa-28a") /* 33 to 38 played by the host's number; a host announcing 32 plays as chupa-32a's */ \
 	X("chupa-39a", "chupa-28a") /* the tagged advertisement and 39's dedicated flag; the game's messages as chupa-38a's, a host announcing 32 plays as chupa-32a's */ \
-	X("chupa-41a", "chupa-28a") /* the longer join request to hosts of 40 on; the game's messages as chupa-39a's */
+	X("chupa-41a", "chupa-28a") /* the longer join request to hosts of 40 on; the game's messages as chupa-39a's */ \
+	X("chupa-43a", "chupa-28a") /* (this fork) OpenCE's 42 and 43 as a client of their hosts, older hosts' game as chupa-41a's; its own hosts refuse machines before 42 */
 
 /* Each wire's newest OpenCE network version that every build of it plays by
 its own rules (DELTA_LEGACY_NEWEST when it was made): the most a signed
@@ -395,7 +400,8 @@ version's rules has a new wire. */
 	X("chupa-32a", 33) \
 	X("chupa-38a", 38) \
 	X("chupa-39a", 39) \
-	X("chupa-41a", 41)
+	X("chupa-41a", 41) \
+	X("chupa-43a", 43)
 
 /* the oldest network version a build that reads the tagged advertisement
 says in its HELLO: chupa-39a's row above, the first such wire. A host whose
@@ -426,7 +432,7 @@ HALO_PORT_NETWORK_VERSION there, 32 or older (port: this fork's builds
 have said 36, 38 and then 39 since they followed them, their record 35's
 layout too). A build that reads a signed legacy table's layouts says the
 newest of them past this one (network_rules_layout_newest). */
-#define DELTA_LEGACY_NEWEST 41
+#define DELTA_LEGACY_NEWEST 43
 
 /* OpenCE's network versions (HALO_PORT_NETWORK_VERSION in its builds), the
 first of its releases with each, and whether the version's change is one the
@@ -475,7 +481,9 @@ first; the command repository's watch adds a row when it follows OpenCE's raise
 	X(38, "build-268", additive) /* the shield effects "players" (each player's own, not synced): a value of message 91 a machine of 37 does not know, and draws the stock ones */ \
 	X(39, "build-294", additive) /* a dedicated server's game: the advertisement's flag 0x04 and the internet listing's flag 32; no message or record changed (first build: the oldest published release whose commit has the change, by git ancestry, 2026-10-27; older releases were removed, so an earlier one may have had it) */ \
 	X(40, "build-334", additive) /* the join request 234 bytes longer (a pass and a proof for OpenCE's own servers, sent as zeros), which a host of 40 needs and an older one ignores; a dedicated server's refusals 8 to 12; in no release of OpenCE's alone */ \
-	X(41, "build-334", additive) /* a refusal 13 (too many machines from one address), messages 78 and 79 laid out anew and 94 and 95 (map votes) new, all dropped by this build; co-op's flags bit 2 (a dedicated host) ignored (port: this fork plays OpenCE's votes, 78, 79, 94 and 95, and its hosts send refusal 13) */
+	X(41, "build-334", additive) /* a refusal 13 (too many machines from one address), messages 78 and 79 laid out anew and 94 and 95 (map votes) new, all dropped by this build; co-op's flags bit 2 (a dedicated host) ignored (port: this fork plays OpenCE's votes, 78, 79, 94 and 95, and its hosts send refusal 13) */ \
+	X(42, "build-344", additive) /* MCC maps (their digests the settings record's last 64 bytes, messages 97 to 106 and the join request's version, 2 bytes), the checkpoint epoch in every message's header (4 bytes) and its boundary (96): breaking in OpenCE, whose clients join only their own number; port: this fork's clients play an older host's header and record, converted at their connection, and its hosts refuse machines before it */ \
+	X(43, "build-344", additive) /* a vehicle on its side throws its riders, chat's host bits, a co-op cutscene sound's place, players riding vehicles (a unit state's deck part, message 107), MCC's impulses and conversion allowance; port: this fork's clients play an older host's rules for the first and leave riding off */
 
 /* ---------- the legacy table (port/linux/src/delta.c)
 

@@ -182,9 +182,11 @@ def test_stock_list_whole():
 def test_slots_match_the_game():
     """the tool's and the README's slots are the game's (xgpu_shader_keys.c)."""
     source = SOURCE.read_text()
-    # (port, this fork: OpenCE's CE meters and blend factor after the Light effects, 122 and 123)
+    # (port, this fork: OpenCE's CE meters, blend factor and MCC bump attenuation after the Light
+    # effects, 122 to 124)
     assert "_slot_texture_modes = 100," in source and \
-        "_slot_ce_meter_channels,\n\t_slot_source_blend,\n\t_slot_last = _slot_source_blend" in source
+        "_slot_ce_meter_channels,\n\t_slot_source_blend,\n\t_slot_mcc_bump_attenuation,\n" \
+        "\t_slot_last = _slot_mcc_bump_attenuation" in source
     readme = (ROOT / "port" / "assets" / "shaders" / "README.md").read_text()
     assert "121 the Light effects" in readme.replace("\n  ", " ")
 

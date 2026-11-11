@@ -101,7 +101,7 @@ symbols in this file:
 #include "console.h"
 #include "game_state.h"
 #include "coop_vehicles.h" /* port: preserve replacement-vehicle homes across reverts */
-#include "network_coop.h" /* port: checkpoint membership for host team-wipe reverts */
+#include "network_coop.h" /* port: checkpoint roster restoration and host team-wipe policy */
 #include "game.h"
 #include "tag_files.h"
 #include "cache_files.h"
@@ -109,6 +109,7 @@ symbols in this file:
 #include "scenario_definitions.h"
 #include "main.h"
 #include "objects.h"
+#include "objects/object_types.h" /* port: object_type_definitions (the saved game's layout checksum) */
 #include "game_sound.h"
 #include "sound_manager.h"
 #include "observer.h"
@@ -125,11 +126,20 @@ symbols in this file:
 #include "lruv_cache.h"
 #include "memory_pool.h"
 #include "cluster_partitions.h"
+#include "mcc_cache.h" /* port: port/linux/game/mcc_cache.h */
+#include "mcc_checkpoint.h" /* port: port/linux/game/mcc_checkpoint.h */
+#include "hs_console_state.h" /* port: port/linux/game/hs_console_state.inl */
 /* port: object_bounds_cache.c's */
 void object_bounds_cache_invalidate(void);
 /* port: hs_runtime.c's and hs_globals_external.c's (game_state_image_accept) */
 extern struct data_array *hs_global_data;
 extern short const hs_external_global_count;
+
+/* port: riding taken from the settings after every load (bipeds.c) */
+void bipeds_riding_latch(void);
+
+/* port: (object_types.c) */
+extern struct object_type_definition *object_type_definitions[NUMBER_OF_OBJECT_TYPES];
 
 void platform_log(const char *format, ...);
 
@@ -212,6 +222,8 @@ static game_state_before_load_proc before_load_procs[] =
 static game_state_after_load_proc after_load_procs[] =
 {
 	scenario_reload_structure_bsp_if_necessary,
+	/* port: the session roster is not part of a gameplay checkpoint. */
+	network_coop_restore_players,
 	sound_stop_all,
 	game_sound_restore,
 	observer_initialize_for_new_map,
@@ -225,7 +237,9 @@ static game_state_after_load_proc after_load_procs[] =
 	director_initialize_for_saved_game,
 	scripted_hud_messages_clear,
 	/* port: restore matching homes or forget an unrelated disk/core load. */
-	coop_vehicles_after_load
+	coop_vehicles_after_load,
+	/* port: (vehicle_riding.c: also for a revert in the same structure) */
+	bipeds_riding_latch
 };
 
 /* ---------- public code */
@@ -344,6 +358,16 @@ void game_state_save(
 	void)
 {
 	game_state_call_before_save_procs();
+	/* port: syntax outside the CPU image must accompany saved threads, and
+	MCC's extra slots occupy only proven-unused CPU bytes in this image. A
+	state that cannot be taken is not saved: the previous checkpoint, if
+	there is one, stays the one a revert goes back to */
+	if (!hs_console_state_capture() ||
+		(mcc_cache_tags_loaded() && !mcc_checkpoint_capture(game_state_globals.base_address,
+		GAME_STATE_SIZE, game_state_globals.cpu_allocation_size, GAME_STATE_CPU_SIZE)))
+	{
+		return;
+	}
 
 	main_stop_time();
 	game_state_globals.saved_game_valid = (game_state_write_to_file()!=FALSE);
@@ -436,7 +460,10 @@ boolean game_state_test_persistent_storage(
 #else
 		0x345000,
 #endif
-		corrupted))
+		corrupted) &&
+		/* port: a saved game of another build's layout is not offered (the
+		level would refuse it and start from its beginning) */
+		header.allocation_size_checksum == (unsigned long)game_state_globals.allocation_size_checksum)
 	{
 		*difficulty = header.difficulty;
 		csstrncpy(map_name, header.map_name, sizeof(header.map_name));
@@ -459,6 +486,12 @@ void game_state_save_core(
 	const char *name)
 {
 #ifndef HALO_XBOX_CONSOLE
+	/* port: cores share the checkpoint's console syntax ownership. */
+	if (!hs_console_state_capture())
+		return;
+	if (mcc_cache_tags_loaded() && !mcc_checkpoint_capture(game_state_globals.base_address,
+		GAME_STATE_SIZE, game_state_globals.cpu_allocation_size, GAME_STATE_CPU_SIZE))
+		return;
 	/* the whole of the native builds' larger game state */
 	if (game_state_write_core(name, game_state_globals.base_address, GAME_STATE_SIZE))
 #else
@@ -518,14 +551,8 @@ static boolean game_state_header_valid(
 	}
 	else if (header->allocation_size_checksum != game_state_globals.allocation_size_checksum)
 	{
-		if (halt_on_error)
-		{
-			match_vassert(
-				"c:\\halo\\SOURCE\\saved games\\game_state.c",
-				413,
-				FALSE,
-				csprintf(temporary, "allocation checksum mismatch"));
-		}
+		/* port: a different build's saved allocation layout is an expected
+		refusal (including images without saved console syntax), not a crash. */
 	}
 	else if (header->player_count != player_spawn_count)
 	{
@@ -603,6 +630,14 @@ static void game_state_set_revert_time(
 	game_time_set_paused(FALSE);
 
 	return;
+}
+
+/* port: read-only arena bounds for MCC-owned state; no allocator changes. */
+void *game_state_port_cpu_region(unsigned long *used, unsigned long *capacity)
+{
+	*used=game_state_globals.cpu_allocation_size;
+	*capacity=GAME_STATE_CPU_SIZE;
+	return game_state_globals.base_address;
 }
 
 void *game_state_malloc(
@@ -951,6 +986,12 @@ boolean game_state_image_accept(
 		if (!valid)
 			return FALSE;
 	}
+	if (mcc_cache_tags_loaded() && !mcc_checkpoint_validate(image, size,
+		game_state_globals.cpu_allocation_size, GAME_STATE_CPU_SIZE, game_state_globals.base_address))
+		return FALSE;
+	/* port: validate console references before publishing any saved state. */
+	if (!hs_console_state_validate(image, game_state_globals.base_address, size))
+		return FALSE;
 	if (global_scenario_index != NONE && hs_global_data && hs_global_data->valid)
 	{
 		struct data_array const *globals = game_state_image_pointer(image, hs_global_data);
@@ -969,6 +1010,10 @@ boolean game_state_image_accept(
 	/* (the console reads straight into the game state: nothing to copy) */
 	if (image != game_state_globals.base_address)
 		csmemcpy(game_state_globals.base_address, image, size);
+	hs_console_state_restore(); /* port: restore the syntax before threads run. */
+	if (mcc_cache_tags_loaded() && !mcc_checkpoint_restore(game_state_globals.base_address, size,
+		game_state_globals.cpu_allocation_size, GAME_STATE_CPU_SIZE))
+		return FALSE;
 	error(_error_silent, "the saved game is taken");
 
 	return TRUE;
@@ -1161,7 +1206,22 @@ void game_state_load_core(
 void game_state_initialize(
 	void)
 {
+	short object_type;
+
 	crc_new(&game_state_globals.allocation_size_checksum);
+	/* port: a saved game holds each object's datum in the layout of the
+	build that wrote it: one of another layout is refused, never read into
+	this one's (vehicle_riding.c grew the biped's) */
+	for (object_type = 0; object_type < NUMBER_OF_OBJECT_TYPES; object_type++)
+	{
+		if (object_type_definitions[object_type])
+		{
+			long datum_size = object_type_definitions[object_type]->game_datum_size;
+
+			crc_checksum_buffer((unsigned long *)&game_state_globals.allocation_size_checksum, &datum_size,
+				sizeof(datum_size));
+		}
+	}
 #ifndef HALO_XBOX_CONSOLE
 	/* the native builds place their larger game state above the tag cache
 	(halo_port_capacity.h, cache/physical_memory_map.c) */

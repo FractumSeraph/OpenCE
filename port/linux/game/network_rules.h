@@ -45,15 +45,24 @@ its sender, either way: 15 seconds of the game's 30 ticks a second */
 
 /* a distributed message's header: the message header word (size in bits
 4 to 15, type in bits 2 and 3, flags in bits 0 and 1), the kind, the number
-of entries and the sender's tick */
-#define NETWORK_RULES_HEADER_SIZE 8
+of entries and the sender's tick, and from network version 42 the host's
+checkpoint epoch (4 bytes): 12 bytes, 8 before 42 (a client of an older
+host converts at its connection, network_rules_header_widen and _narrow) */
+#define NETWORK_RULES_HEADER_SIZE 12
+#define NETWORK_RULES_LEGACY_HEADER_SIZE 8
+#define NETWORK_RULES_EPOCH_OFFSET 8
+#define NETWORK_RULES_EPOCH_SIZE 4
+#define NETWORK_RULES_EPOCH_VERSION 42
+/* the batch kind (a tick's messages in one: each a length word, then the
+message without its header word) */
+#define NETWORK_RULES_BATCH_KIND 16
 #define NETWORK_RULES_MESSAGE_TYPE_DATA 2
 
 /* the host's policy on aiming assist for mouse and keyboard (message 90,
 reliable, to a client): the header, then whether to block (0 or 1) as a
 16-bit value and 16 bits that are 0 */
 #define NETWORK_RULES_AIM_ASSIST_KIND 90
-#define NETWORK_RULES_AIM_ASSIST_SIZE 12
+#define NETWORK_RULES_AIM_ASSIST_SIZE (NETWORK_RULES_HEADER_SIZE + 4)
 
 /* a player's input entry in the host-bound message: its first 12 bytes, then
 the 32-byte action and the buttons of four ticks (52 bytes in all) */
@@ -156,6 +165,11 @@ front of the record's last 4, its local data) */
 #define NETWORK_RULES_SETTINGS_SIZE 13120
 #define NETWORK_RULES_EXTENDED_OPTIONS_SIZE 16
 #define NETWORK_RULES_SETTINGS_EXTENDED_SIZE (NETWORK_RULES_SETTINGS_SIZE + NETWORK_RULES_EXTENDED_OPTIONS_SIZE)
+/* ... and 42 on: the MCC map's content and metadata SHA-256 (64 bytes, zero
+for an Xbox or Custom Edition map) after the local data, the record's last */
+#define NETWORK_RULES_MCC_VERSION 42
+#define NETWORK_RULES_MCC_DIGESTS_SIZE 64
+#define NETWORK_RULES_SETTINGS_MCC_SIZE (NETWORK_RULES_SETTINGS_EXTENDED_SIZE + NETWORK_RULES_MCC_DIGESTS_SIZE)
 
 /* the further options' bytes (0x1C to 0x2B of the gametype's options) */
 enum
@@ -353,7 +367,7 @@ buffers every build has room for); a fact's field past them is not taken. */
 #define NETWORK_RULES_SETTINGS_HEAD_SIZE (NETWORK_RULES_SETTINGS_SIZE - 4 - NETWORK_RULES_OPTIONS_SIZE)
 /* how many bytes a table may add past 35's record (the options and the
 bytes after the local data together) */
-#define NETWORK_RULES_LAYOUT_GROWTH_MAXIMUM 64
+#define NETWORK_RULES_LAYOUT_GROWTH_MAXIMUM 128
 #define NETWORK_RULES_SETTINGS_MAXIMUM (NETWORK_RULES_SETTINGS_EXTENDED_SIZE + NETWORK_RULES_LAYOUT_GROWTH_MAXIMUM)
 /* the most the shield effects message's largest value may be raised to (a
 value this build has no look for is drawn as stock) */
@@ -366,6 +380,10 @@ bytes and ignores the rest). This build never has a pass and sends zeros. */
 #define NETWORK_RULES_JOIN_REQUEST_VERSION 40
 #define NETWORK_RULES_JOIN_REQUEST_SIZE 0x70
 #define NETWORK_RULES_JOIN_REQUEST_EXTRA 234
+/* network version 42: and the client's network version after them (a
+little-endian word), which a host of 42 or later checks */
+#define NETWORK_RULES_JOIN_REQUEST_VERSIONED 42
+#define NETWORK_RULES_JOIN_REQUEST_VERSION_SIZE 2
 /* the most a table's fact may make it: the request, its version and type
 bytes well within a message (HALO_PORT_MAXIMUM_NETWORK_MESSAGE_SIZE) */
 #define NETWORK_RULES_JOIN_REQUEST_EXTRA_LIMIT 1024
@@ -376,6 +394,12 @@ laid out anew, 94 and 95 the map vote), none of which this build plays */
 #define NETWORK_RULES_VOTE_STATUS_KIND 79
 #define NETWORK_RULES_MAP_VOTE_STATUS_KIND 94
 #define NETWORK_RULES_MAP_VOTE_CHOICE_KIND 95
+/* network versions 42 and 43: the checkpoint boundary (96), MCC's messages
+(97 to 106; 101 and 102 never used), and the map's riding choice (107) */
+#define NETWORK_RULES_CHECKPOINT_KIND 96
+#define NETWORK_RULES_MCC_LAST_KIND 106
+#define NETWORK_RULES_RIDING_VERSION 43
+#define NETWORK_RULES_RIDING_MAP_KIND 107
 
 struct network_rules_layout
 {
@@ -396,6 +420,17 @@ struct network_rules_layout
 	int learned;
 	int refused;
 };
+
+/* a distributed message (size bytes, its header word first) from a host of a
+version before NETWORK_RULES_EPOCH_VERSION made this build's, with an epoch
+of 0 after each header, a batch's messages' too, into out (out_size bytes):
+its size, or 0 when it does not fit or is not whole (a batch's message past
+its end is left out, as the batch's reader leaves it). The header word's
+size is made the new size */
+int network_rules_header_widen(uint8_t const *message, int size, uint8_t *out, int out_size);
+/* ... and one of this build's made an older host's in place, the epochs
+taken out: its new size (0 for a message too short to have the header) */
+int network_rules_header_narrow(uint8_t *message, int size);
 
 /* the built-in facts of a version */
 void network_rules_layout_built_in(unsigned version, struct network_rules_layout *layout);

@@ -52,6 +52,9 @@ FIRE too.
 #endif
 #endif
 #include "ce_locale.h" /* (ce_resources.c) */
+#include "mcc_ui.h"
+#include "mcc_cache.h"
+#include "mcc_menu_preview.h"
 
 #include <math.h>
 #include <stdlib.h>
@@ -391,6 +394,9 @@ static char const *const port_function_names[] =
 	"port setup edit",
 	"port setup options init", "port setup options save",
 	"port map list back",
+	"port mcc solo folder back", "port mcc host folder back",
+	"port mcc share download", "port mcc share workshop", "port mcc share cancel", "port mcc share closed",
+	"port mcc downloads open", "port mcc downloads previous", "port mcc downloads next", "port mcc downloads remove",
 	"port pause end game", "port coop friendly fire",
 	"port pause change teams",
 	"port pause moderation",
@@ -470,6 +476,8 @@ static char const *const port_game_data_input_names[] =
 	"chupathingy settings picture",
 	/* (the main menu's Mods) */
 	"port mods update",
+	"port mcc share update", "port mcc share text",
+	"port mcc downloads update", "port mcc downloads text",
 	/* (network co-op's pause menu's FRIENDLY FIRE: its text, ON or OFF) */
 	"port coop friendly fire text",
 	/* (its GAME SETUP's and game type editor's rows) */
@@ -2675,6 +2683,14 @@ void menu_tags_loaded(
 	boolean game_map = strcmp(map_name, "ui") != 0;
 	boolean coop = game_map && network_coop_campaign_map();
 
+	/* MCC owns its pause menus and uses these native Settings screens.
+	Do not patch embedded MCC campaign widgets. */
+	if (mcc_cache_tags_loaded())
+	{
+		if (mcc_ui_settings_needed(map_name))
+			goto mcc_settings;
+		return;
+	}
 	pause_guide_label = NONE;
 #ifdef HALO_GAME_BROWSER
 	/* (the save folder's game type files, in every menus' gametype lists:
@@ -2703,6 +2719,7 @@ void menu_tags_loaded(
 		}
 		return;
 	}
+mcc_settings:
 	menus = halo_menus_load();
 	if (!menus)
 		return;
@@ -2711,6 +2728,9 @@ void menu_tags_loaded(
 	build.game_map = game_map;
 	build.campaign_map = game_map && tag_loaded(UI_WIDGET_DEFINITION_TAG, SOLO_PAUSE_SCREEN) != NONE &&
 		game_connection() == _game_connection_local && !network_game_is_active();
+	/* MCC owns this decision; only its local campaign Settings pause time. */
+	if (mcc_cache_tags_loaded())
+		build.campaign_map = mcc_ui_settings_pause_game();
 	build.coop = coop;
 	widget_count = menus->widget_count;
 	build.widget_tags = malloc((widget_count + 1) * sizeof(long));
@@ -2861,6 +2881,7 @@ done:
 void menu_tags_unloaded(
 	void)
 {
+	mcc_menu_preview_clear();
 	if (menu_tags.loaded || menu_tags.block_count)
 		menu_tags_release();
 }
@@ -2900,6 +2921,11 @@ char const *pc_menus_root_name(
 boolean pc_menu_tag(
 	long tag_index)
 {
+	/* MCC's independently generated pause widgets use stock widget behavior. */
+	{
+		extern boolean mcc_pause_owns(long);
+		if (mcc_pause_owns(tag_index)) return FALSE;
+	}
 	return (menu_tags.loaded || menu_tags.pause_buttons) && tag_index != NONE &&
 		DATUM_INDEX_TO_ABSOLUTE_INDEX(tag_index) >= menu_tags.original_count;
 }
@@ -3218,4 +3244,13 @@ short pc_menu_button_key_cap_left(
 	(void)y1;
 #endif
 	return x0;
+}
+
+/* Menu layout readers use this module's existing tag definition, not a second
+ * private structure or hard-coded field offsets in the glyph feature. */
+void pc_menu_widget_text_bounds(long tag, rectangle2d *bounds, short *text_offset)
+{
+    struct ui_widget_definition const *definition = tag_get(UI_WIDGET_DEFINITION_TAG, tag);
+    *bounds = definition->bounds;
+    *text_offset = definition->horizontal_offset;
 }

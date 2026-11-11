@@ -176,6 +176,8 @@ SCREENS = {
              "android", "max_fps_android"),
             ("SMOOTH MOTION:", "display.interpolation", ON_OFF,
              "Draw a frame for every display refresh.", "android"),
+            ("WIDESCREEN LOADING:", "display.widescreen_loading", ON_OFF,
+             "Widen the original loading screen, keeping its\nstock sweep and glow trails.", None),
             ("ANTI-ALIASING:", "display.anti_aliasing",
              [("OFF", "off"), ("FXAA", "fxaa"), ("SMAA", "smaa"), ("SSAA 2X", "ssaa2x"), ("MSAA 2X", "msaa2x"),
               ("MSAA 4X", "msaa4x"), ("MSAA 8X", "msaa8x")],
@@ -326,15 +328,17 @@ SCREENS = {
             # (read when the game starts: dsound_sdl.c)
             ("SPEAKERS:", "audio.channels", [("AUTO", "auto"), ("STEREO", "stereo"), ("5.1", "5.1"), ("7.1", "7.1")],
              "Stereo or surround. Takes effect on restart.", "desktop"),
-            ("HEADPHONE 3D:", "audio.hrtf", [("OFF", "off"), ("ON", "on"), ("AUTO", "auto")],
+            ("HEADPHONE 3D:", "audio.hrtf", [("OFF", "off"), ("ON", "on"), ("AUTO", "auto"), ("XBOX", "xbox")],
              "3D sound as on the Xbox. Turn off for speakers.", None),
             ("REVERB:", "audio.reverb", ON_OFF,
              "Room echo, and muffled sound behind walls.", None),
             ("DOPPLER:", "audio.doppler", ON_OFF,
              "Pitch shift of moving sounds, as on the Xbox.", None),
+            ("STEREO DOPPLER:", "audio.stereo_doppler", ON_OFF,
+             "Shift stereo sounds' pitch as they come and go,\nas 3D sounds' is. The Xbox played them flat.", None),
             # (port/linux/src/dsound_sdl.c)
-            ("RESAMPLER:", "audio.resampler", [("SINC", "sinc"), ("LINEAR", "linear")],
-             "How sounds are converted to the output's rate:\nsinc is clean; linear is brighter, with aliasing.",
+            ("RESAMPLER:", "audio.resampler", [("XBOX", "xbox"), ("SINC", "sinc"), ("LINEAR", "linear")],
+             "Xbox models the original sound. Sinc reduces\naliasing; linear gives a brighter sound.",
              None),
             ("SOUND:", "audio.enabled", ON_OFF,
              "Turn all sound on or off. Takes effect on restart.", None),
@@ -409,10 +413,19 @@ SCREENS = {
             # (this machine's part in another's game: port/linux/game/map_share.c;
             # the browser's maps come from the site)
             ("map_sharing", "MAP SHARING",
-             "Downloading Custom Edition maps you do not have,\nand helping send them to other players.", [
+             "Downloading Custom Edition maps and MCC packages\nyou do not have, and helping send them.", [
                 ("DOWNLOAD MAPS:", "network.map_download", ON_OFF,
-                 "Joining a game on a Custom Edition map you do not\nhave: download it from the players (if shared).",
+                 "Allow shared map downloads. CE uses players; MCC\nuses the host and asks before downloading.",
                  None),
+                # (OpenCE's MCC packages: port/linux/game/mcc_share.c, mcc_maps.c)
+                ("SHARE MCC PACKAGES:", "network.mcc_map_share", ON_OFF,
+                 "Host only: offer explicitly approved MCC packages.\nOff by default; configure mcc_share.txt first.", None),
+                ("STEAM DISCOVERY:", "game.workshop_maps", ON_OFF,
+                 "Find installed Halo CE Workshop maps on this PC.\nLocal MCC packages take precedence.", "desktop"),
+                ("CAMPAIGN MISSIONS:", "game.mcc_campaigns", ON_OFF,
+                 "Use MCC campaign metadata for mission order and\nprogression. Online, the host chooses the next map.", None),
+                ("COLLECTION FOLDERS:", "game.mcc_collections", ON_OFF,
+                 "Group installed MCC packages using the bundled\ncollection list. Works without Steam.", None),
                 ("HELP SEND MAPS:", "network.map_seed", ON_OFF,
                  "In another's game, send its map to players who\njoin without it, as a torrent's peers do.", None),
                 ("UPLOAD LIMIT:", "network.map_seed_upload",
@@ -487,18 +500,24 @@ SCREENS = {
     "controller_appearance": {
         "screen": "controller_appearance_screen", "spacing": 30,
         "header": ("header_profile_controller_setting", f"{PE}/controller_edit/header_profile_controller_setting"),
-        "same_place": ["hud_button_style_xbox", "hud_button_style_ps", "hud_button_style_switch"],
+        "same_place": ["hud_button_style_xbox", "hud_button_style_ps", "hud_button_style_switch", "detected_button_style"],
         "rows": [
+            ("MENU GLYPHS:", "display.menu_button_glyphs", ON_OFF,
+             "Use the selected keyboard/controller style in\nexisting PC-menu face-button legends.", None),
+            ("KEYBOARD GLYPHS:", "display.keyboard_glyphs", ON_OFF,
+             "Opt in to automatic keyboard/mouse keycaps.\nRequires Auto Button Detection.", None),
             ("AUTO BUTTON DETECTION:", "input.auto_button_detection", ON_OFF,
-             "Show styles for your controller's family.\nRequires High-Res HUD in Interface.", None),
-            ("BUTTON STYLE:", "display.hud_button_style", XBOX_BUTTON_STYLES + PS_BUTTON_STYLES + SWITCH_BUTTON_STYLES,
-             "Manual gameplay button artwork, kept when auto\ndetection is on. Requires High-Res HUD.", None),
+             "Detect controller artwork and, with Keyboard\nGlyphs enabled, follow keyboard/mouse activity.", None),
+            ("BUTTON STYLE:", "display.hud_button_style", XBOX_BUTTON_STYLES + PS_BUTTON_STYLES + SWITCH_BUTTON_STYLES + [("KEYBOARD", "keyboard")],
+             "Manual style when auto detection is off. Keyboard\nuses current bindings; controllers need High-Res HUD.", None),
             ("BUTTON STYLE:", "display.hud_button_style_xbox", XBOX_BUTTON_STYLES,
              "Preferred Xbox artwork for automatic detection.\nRequires High-Res HUD in Interface.", None),
             ("BUTTON STYLE:", "display.hud_button_style_ps", PS_BUTTON_STYLES,
              "Preferred PlayStation artwork for auto detection.\nRequires High-Res HUD in Interface.", None),
             ("BUTTON STYLE:", "display.hud_button_style_switch", SWITCH_BUTTON_STYLES,
              "Preferred Switch artwork for automatic detection.\nRequires High-Res HUD in Interface.", None),
+            ("BUTTON STYLE:", "display.detected_button_style", None,
+             "Keyboard/mouse is active. Prompts use your current\nbindings. Turn detection off to choose a fixed style.", None),
             ("BUMPER STYLE:", "display.hud_bumper_style",
              [("ORIGINAL XBOX", "original"), ("MODERN XBOX", "modern")],
              "Original: black/white buttons. Modern: LB/RB.\nKept when automatic detection is on.", None),
@@ -776,7 +795,7 @@ def _screen(folder: str, spec: dict, rows: list, list_inputs: list, list_handler
                                       ("height", spec.get("help_height", 60)),
                                       ("string_list", None if spec.get("help_text") or spec.get("dynamic_help")
                                        else f"{base}/help_strings"),
-                                      ("font", "ui\\large_ui"), ("color", "#FFFFFFFF")], [])
+                                      ("font", spec.get("help_font", "ui\\large_ui")), ("color", "#FFFFFFFF")], [])
     children = [f'<data input="{name}"/>' for name in list_inputs] + list_handlers
     # (each row: its widget, platform, and the place it is in, else the next)
     for index, (row, platform, *place) in enumerate(rows):
@@ -1340,6 +1359,8 @@ def _controller_screen() -> list:
             for line in lines]
 
 
+
+
 def settings_files() -> dict:
     """the files of the port's screens, by their names in ce/"""
     files = {}
@@ -1349,6 +1370,10 @@ def settings_files() -> dict:
     for name, (_, _, folder) in PROFILE_ROWS.items():
         files[f"{PE}/{folder}".replace("/", ".") + ".xml"] += _profile_row(name)
     files[f"{PE}/{CONTROLS_SCREEN}".replace("/", ".") + ".xml"] = _controls_screen()
+    # (OpenCE's MCC package downloads: the host download's consent, which
+    # mcc_share.c opens, and the downloaded copies' list)
+    files[f"{PE}/network_setup/mcc_download".replace("/", ".") + ".xml"] = _mcc_download()
+    files[f"{PE}/network_setup/mcc_downloads".replace("/", ".") + ".xml"] = _mcc_downloads()
     return {name: ['<?xml version="1.0" encoding="UTF-8"?>',
                    "<!-- The port's settings screen, in the PC version's style (tools/port_settings.py) -->",
                    "<menus>", *lines, "</menus>", ""] for name, lines in files.items()}
@@ -1517,6 +1542,7 @@ PLAYER_OPTIONS_ROWS = ['number_of_lives', 'maximum_health', 'shields', 'respawn_
 # GUN TURRETS and CUSTOM (menu_functions.c's VEHICLE_PRESET_PC), and its help
 # among the sets' (its rows' values' in turn: gametype_option_help)
 VEHICLE_EDIT = "main_menu/settings_select/multiplayer_setup/vehicle_options_edit"
+VEHICLE_RIDING_HELP = "Players standing on a vehicle are carried by it.\\nOff: as the original game, riders slide off."
 AIM_ASSIST_HELP = [
     "Players keep their current mouse aim assist setting.",
     "Disable mouse aim assist for mouse/keyboard players.\\nController and touch aim assist are unchanged.",
@@ -1591,9 +1617,10 @@ STRING_INSERTS = {
     f"{PE}/profile_edit_options": [(10, ["PRIVACY", "INTERFACE", "CONTROLS", "DISPLAY", "AUDIO", "ONLINE"])],
     f"{SLAYER_EDIT}/var_kills_to_win": [(5, ["75", "100", "150", "200", "250", "500"])],
     f"{VEHICLE_EDIT}/var_vehicle_set": [(8, ["PC"])],
+    f"{VEHICLE_EDIT}/vehicle_options_labels": [(9, ["VEHICLE RIDING:"])],
     f"{VEHICLE_EDIT}/cap_vehicle_options": [(17, [
         "Every vehicle the map places will spawn, as in\\nHalo PC.",
-    ])],
+    ]), (7, [VEHICLE_RIDING_HELP] * 2)],
     f"{SLAYER_EDIT}/cap_slayer": [(11, [
         "Seventy-five kills to win.",
         "A hundred kills to win.",
@@ -1719,6 +1746,9 @@ WIDGET_PATCHES = {
         "offsets": {f"{PE}/controller_setup_profile_item": (0, -166), f"{PE}/gamepads_profile_item": (0, 33),
                     f"{PE}/network_settings_profile_item": (0, -34)},
     },
+    f"{VEHICLE_EDIT}/vehicle_options_menu": {"insert_before": {
+        f"{VEHICLE_EDIT}/op_team": [
+            f'<child widget="{VEHICLE_EDIT}/op_vehicle_riding" x="54" y="100"/>']}},
     # (the main menu's MODS, before Quit: _mods)
     "main_menu/main_menu_select_list": {"insert_before": {"main_menu/main_menu_item_quit_game": [
         f'<child widget="main_menu/main_menu_item_mods" x="{MODS_ITEM_PLACE[0]}" y="{MODS_ITEM_PLACE[1]}"/>']}},
@@ -1794,16 +1824,44 @@ WIDGET_PATCHES = {
         '<on event="b" run="port map list back"/>',
         '<on event="back" run="port map list back"/>',
     ]},
-    "main_menu/solo_level_select/solo_level_select_list": {"swap": {"main_menu/new_select/list_item_0": MAP_KIND_CHOOSER}},
+    "main_menu/solo_level_select/solo_level_select_list": {"swap": {"main_menu/new_select/list_item_0": MAP_KIND_CHOOSER},
+                                                          "handlers": [
+        '<on event="created" run="initialize sp level list solo"/>',
+        '<on event="deleted" run="dispose sp level list"/>',
+        '<on event="custom_activation" run="solo level set map" open="main_menu/difficulty_select/difficulty_select_list_screen"/>',
+        '<on event="b" run="port mcc solo folder back"/>',
+        '<on event="back" run="port mcc solo folder back"/>',
+    ]},
+    "main_menu/solo_level_select/solo_level_select_screen": {"handlers": [
+        '<on event="b" run="port mcc solo folder back"/>',
+        '<on event="back" run="port mcc solo folder back"/>',
+    ]},
+    f"{MT}/mp_map_select/mp_map_select_screen": {"handlers": [
+        '<on event="created" run="net server defer start"/>',
+        '<on event="b" run="port mcc host folder back"/>',
+        '<on event="back" run="port mcc host folder back"/>',
+    ]},
+    # The host returns here after a round with no menu history. Back must
+    # reopen the main menu when it closes the last screen, as the lobby does.
+    f"{MT}/connected/connected_map_select_wrapper": {"set": {
+        "flags": "pass_unhandled_to_focused_child pause_game main_menu_if_no_history tag_controller_index force_handle_mouse",
+    }, "handlers": [
+        '<on event="b" run="port mcc host folder back"/>',
+        '<on event="back" run="port mcc host folder back"/>',
+    ]},
     # (each description shows the other kind's maps too: a campaign level's
     # picture, name and words on the Map screen, a multiplayer map's on New
     # Game's)
     f"{MT}/mp_map_select/mp_map_right_item": {"children": [
+        '<child widget="main_menu/new_select/mcc_folder_name"/>',
+        '<child widget="main_menu/new_select/mcc_folder_help"/>',
         '<child widget="main_menu/solo_level_select/replay_level_right_name"/>',
         '<child widget="main_menu/solo_level_select/replay_level_right_pic"/>',
         '<child widget="main_menu/solo_level_select/replay_level_right_data"/>',
     ]},
     "main_menu/solo_level_select/replay_level_right_item": {"children": [
+        '<child widget="main_menu/new_select/mcc_folder_name"/>',
+        '<child widget="main_menu/new_select/mcc_folder_help"/>',
         f'<child widget="{MT}/mp_map_select/mp_map_right_name"/>',
         f'<child widget="{MT}/mp_map_select/mp_map_right_pic"/>',
         f'<child widget="{MT}/mp_map_select/mp_map_right_data"/>',
@@ -2078,8 +2136,10 @@ def _server_settings() -> list:
     whether the server browser lists it (PUBLIC or PRIVATE: an internet
     game's)"""
     base = f"{MT}/server_settings"
-    # (thirteen rows: closer together, the help lower)
+    # (thirteen places: the main rows 22 high and as far apart, as their
+    # spinners and values already are, the help lower and smaller)
     spec = {"screen": "server_settings_screen", "spacing": 22, "help_top": 366,
+            "help_height": 48, "help_font": "ui\\small_ui",
             "header": ("header_server_settings", f"{base}/header_server_settings")}
     rows, extra = [], []
     extra += _value_row(base, "server_name", 0, "ss edit server name")
@@ -2231,6 +2291,12 @@ def _server_settings() -> list:
         # server_settings_update; last, its SERVER_LISTING_PUBLISHER_HELP)
         "Listed for everyone through the brokers, and on\\nthe master servers with your publisher key.",
     ])
+    # (the main rows 22 high, their containers only: their spinners and
+    # values are 22 or less already, and the other screens' rows stay 28)
+    main_rows = {row for row, *_ in rows}
+    extra = [line.replace('height="28"', 'height="22"', 1)
+             if any(line.startswith(f'\t<widget name="{row}" ') for row in main_rows) else line
+             for line in extra]
     lines = _screen(base, spec, rows, ["server settings update"],
                     ['<on event="created" run="server settings init"/>'], extra)
     # (co-op's options' screens, and map sharing's)
@@ -2325,6 +2391,7 @@ COOP_SETUP_SCREENS = [
             "Revert the checkpoint after everyone dies. A changed\\nteam or missing save uses respawn only.",
             "Respawn at checkpoint positions after everyone dies.\\nThe world keeps its progress.",
         ]),
+        ("coop_vehicle_riding", "VEHICLE RIDING:", ["ON", "OFF"], [VEHICLE_RIDING_HELP] * 2),
     ]),
     ("voice_options", "VOICE AND VOTING", "Voice chat, text chat and votes to kick a player,\\nfor this game.",
      TEAMPLAY_ROWS),
@@ -2370,8 +2437,8 @@ def _setup_option_screen(base: str, key: str, rows: list, fit: bool = False) -> 
                                            ("font", "ui\\large_ui"), ("color", "#FFFFFFFF")], [])
     children = ['<data input="game settings lists text update"/>',
                 '<on event="created" run="port setup options init"/>']
-    # (30 apart; with fit, closer for more rows than eight, the last 28 tall
-    # clear of the help at 341: Server Setup's, whose rows are all shown, as
+    # (30 apart; with fit, closer for more rows than eight, the last clear of the help at 341
+    # and the rows no taller than their spacing: Server Setup's, whose rows are all shown, as
     # OpenCE Options' are not)
     places = len([row_key for row_key, *_ in rows if row_key not in SETUP_OPTION_SAME_PLACE])
     spacing = min(30, (341 - 1 - 73 - 28) // max(1, places - 1)) if fit else 30
@@ -2391,7 +2458,7 @@ def _setup_option_screen(base: str, key: str, rows: list, fit: bool = False) -> 
     lines += _button(f"{base}/{key}_button_ok", 1, ['<on event="a" run="port setup options save" back="true"/>',
                                                      '<on event="start" run="port setup options save" back="true"/>'])
     for index, (row_key, label, strings, _) in enumerate(rows):
-        lines += _widget(f"{base}/op_{row_key}", [("width", 512), ("height", 28),
+        lines += _widget(f"{base}/op_{row_key}", [("width", 512), ("height", min(28, spacing)),
                                                  ("flags", "pass_unhandled_to_focused_child"),
                                                  ("bitmap", "bitmaps/option_bkds"), ("color", "#FF2896FF")],
                          [f'<child widget="{base}/{row_key}_label"/>',
@@ -2805,6 +2872,30 @@ def _item_options_extras() -> list:
     return lines
 
 
+def _vehicle_options_extras() -> list:
+    """the gametype's riding rule, a row of the vehicle options"""
+    base = VEHICLE_EDIT
+    lines = []
+    key, label_index, words = "vehicle_riding", 9, ["ON", "OFF"]
+    lines += _widget(f"{base}/op_{key}", [("width", 512), ("height", 28),
+        ("flags", "pass_unhandled_to_focused_child"), ("bitmap", "bitmaps/option_bkds"),
+        ("color", "#FF2896FF")], [f'<child widget="{base}/{key}_label"/>',
+        f'<child widget="{base}/{key}_spinner" x="286" y="1"/>'])
+    lines += _widget(f"{base}/{key}_label", [("type", "text"), ("controller", 1),
+        ("width", 280), ("height", 22), ("string_list", f"{base}/vehicle_options_labels"),
+        ("string_index", label_index), ("font", "ui\\large_ui"), ("color", "#FF2896FF"),
+        ("text_x", 13), ("text_y", 4)], [])
+    lines += _widget(f"{base}/{key}_spinner", [("type", "spinner"), ("top", 2),
+        ("width", 206), ("height", 20), ("flags", "pass_unhandled_to_focused_child left_right_tabs_items"),
+        ("string_list", f"{base}/var_{key}"), ("font", "ui\\large_ui"),
+        ("color", "#FF2896FF"), ("align", "center"), ("text_y", 4),
+        ("list_flags", "items_from_strings"), ("header_bitmap", "bitmaps/arrow_sm_left"),
+        ("footer_bitmap", "bitmaps/arrow_sm_right"), ("header_bounds", "7 -13 19 -7"),
+        ("footer_bounds", "7 208 19 214")], ['<on event="left_mouse" run="mouse spinner 1wide click"/>'])
+    lines += _strings(f"{base}/var_{key}", words)
+    return lines
+
+
 def _player_options_extras() -> list:
     """The host's aim-assist policy and shield effects, hidden while editing
     saved gametypes."""
@@ -2902,7 +2993,12 @@ def _map_kind() -> list:
                       ("header_bounds", "7 -6 19 0"), ("footer_bounds", "7 238 19 244")],
                      ['<on event="left_mouse" run="mouse spinner 1wide click"/>'])
     lines += _strings("main_menu/new_select/var_map_kinds",
-                      ["SINGLEPLAYER", "MULTIPLAYER", "CUSTOM SINGLEPLAYER", "CUSTOM MULTIPLAYER"])
+                      ["SINGLEPLAYER", "MULTIPLAYER", "CUSTOM SINGLEPLAYER", "CUSTOM MULTIPLAYER", "MCC SINGLEPLAYER", "MCC MULTIPLAYER"])
+    for name, top, height in (("name", 204, 54), ("help", 270, 124)):
+        lines += _widget(f"main_menu/new_select/mcc_folder_{name}",
+                         [("type", "text"), ("controller", 1), ("left", 417), ("top", top),
+                          ("width", 146), ("height", height), ("font", "ui\\small_ui"),
+                          ("color", "#FF2896FF")], [])
     return lines
 
 
@@ -2920,6 +3016,7 @@ def multiplayer_files() -> dict:
         "main_menu/new_select".replace("/", ".") + ".port.xml": head + _map_kind() + ["</menus>", ""],
         "main_menu/settings_select/multiplayer_setup/item_options_edit".replace("/", ".") + ".port.xml": head + _item_options_extras() + ["</menus>", ""],
         PLAYER_EDIT.replace("/", ".") + ".port.xml": head + _player_options_extras() + ["</menus>", ""],
+        VEHICLE_EDIT.replace("/", ".") + ".port.xml": head + _vehicle_options_extras() + ["</menus>", ""],
         TEAMPLAY_EDIT.replace("/", ".") + ".port.xml": head + _teamplay_options_extras() + ["</menus>", ""],
         OPENCE_EDIT.replace("/", ".") + ".port.xml": head + _opence_options() + ["</menus>", ""],
         MODS.replace("/", ".") + ".xml": [head[0], "<!-- The port's Mods screen, in the PC version's style "
@@ -3089,4 +3186,67 @@ def _mods() -> list:
                                                               '<on event="start" run="port mods move down"/>'])
     lines += _button(f"{base}/button_ok", 1, ['<on event="a" run="port mods save" back="true"/>',
                                               '<on event="start" run="port mods save" back="true"/>'])
+    return lines
+
+
+def _mcc_download() -> list:
+    """MCC-owned nonblocking consent screen: network updates continue behind it."""
+    base = f"{PE}/network_setup/mcc_download"
+    lines = _widget(f"{base}/screen", [("type", "column_list"), ("width", 640), ("height", 480),
+                    ("bitmap", "bitmaps/gradient"),
+                    ("flags", "pass_unhandled_to_focused_child up_down_tabs_children")],
+                    ['<on event="b" run="port mcc share cancel"/>',
+                     '<on event="back" run="port mcc share cancel"/>',
+                     '<on event="deleted" run="port mcc share closed"/>',
+                     '<data input="port mcc share update"/>',
+                     f'<child widget="{base}/description" x="40" y="80"/>',
+                     f'<child widget="{base}/download" x="150" y="300"/>',
+                     f'<child widget="{base}/workshop" x="150" y="340"/>',
+                     f'<child widget="{base}/cancel" x="150" y="380"/>',
+                     f'<child widget="{base}/title" x="40" y="24"/>'])
+    lines += _widget(f"{base}/title", [("type", "text"), ("width", 560), ("height", 40),
+                     ("text", "MCC HOST DOWNLOAD"), ("font", "ui\\large_ui"), ("color", "#FF2896FF")], [])
+    lines += _widget(f"{base}/description", [("type", "text"), ("controller", 1),
+                     ("width", 560), ("height", 200), ("font", "ui\\small_ui"),
+                     ("color", "#FFFFFFFF")], ['<data input="port mcc share text"/>'])
+    for name, text, action in [("download", "DOWNLOAD FROM HOST", "download"),
+                               ("workshop", "VISIT WORKSHOP PAGE", "workshop"),
+                               ("cancel", "CANCEL", "cancel")]:
+        lines += _widget(f"{base}/{name}", [("type", "text"), ("width", 340), ("height", 32),
+                         ("text", text), ("font", "ui\\large_ui"), ("color", "#FF2896FF"),
+                         ("align", "center")],
+                         [f'<on event="a" run="port mcc share {action}"/>',
+                          f'<on event="start" run="port mcc share {action}"/>',
+                          '<on event="left_mouse" run="mouse emit accept event"/>'])
+    return lines
+
+
+def _mcc_downloads() -> list:
+    base = f"{PE}/network_setup/mcc_downloads"
+    lines = _widget(f"{base}/screen", [("type", "column_list"), ("width", 640), ("height", 480),
+                    ("bitmap", "bitmaps/gradient"),
+                    ("flags", "pass_unhandled_to_focused_child up_down_tabs_children")],
+                    ['<on event="created" run="port mcc downloads open"/>',
+                     '<on event="b" back="true"/>', '<on event="back" back="true"/>',
+                     '<data input="port mcc downloads update"/>',
+                     f'<child widget="{base}/description" x="40" y="80"/>',
+                     f'<child widget="{base}/previous" x="40" y="300"/>',
+                     f'<child widget="{base}/next" x="340" y="300"/>',
+                     f'<child widget="{base}/remove" x="195" y="340"/>',
+                     f'<child widget="{base}/back" x="195" y="390"/>',
+                     f'<child widget="{base}/title" x="40" y="24"/>'])
+    lines += _widget(f"{base}/title", [("type", "text"), ("width", 560), ("height", 40),
+                     ("text", "MCC DOWNLOADS"), ("font", "ui\\large_ui"), ("color", "#FF2896FF")], [])
+    lines += _widget(f"{base}/description", [("type", "text"), ("controller", 1),
+                     ("width", 560), ("height", 210), ("font", "ui\\small_ui"),
+                     ("color", "#FFFFFFFF")], ['<data input="port mcc downloads text"/>'])
+    for name, text in [("previous", "PREVIOUS"), ("next", "NEXT"), ("remove", "REMOVE SELECTED"), ("back", "BACK")]:
+        action = 'back="true"' if name == "back" else f'run="port mcc downloads {name}"'
+        # The parent supplies the removal/confirmation label. Static text would
+        # replace and shrink its owned buffer again in the renderer.
+        label = [] if name == "remove" else [("text", text)]
+        lines += _widget(f"{base}/{name}", [("type", "text"), ("width", 250), ("height", 32),
+                         *label, ("font", "ui\\large_ui"), ("color", "#FF2896FF"), ("align", "center")],
+                         [f'<on event="a" {action}/>', f'<on event="start" {action}/>',
+                          '<on event="left_mouse" run="mouse emit accept event"/>'])
     return lines
