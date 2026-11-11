@@ -571,4 +571,22 @@ void voice_game_update(void)
 {
 }
 
+/* (port, this fork: a build without this voice chat, the Android app's 32-bit
+guest, which has OpenCE's: DELTA's screens, guide.c, as with no voice) */
+boolean voice_game_machine_talking(short machine_index)
+{
+	(void)machine_index;
+	return FALSE;
+}
+
+boolean voice_game_talking(void)
+{
+	return FALSE;
+}
+
+void voice_game_set_party(unsigned char const *tag)
+{
+	(void)tag;
+}
+
 #endif
