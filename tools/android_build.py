@@ -540,7 +540,8 @@ def generate_android_build(n: Writer, sln: Any) -> None:
     # (the overlay's fonts are plain C, drawn in the guest with the overlay:
     # stb_truetype; the fonts, tools/embed_assets.py --fonts)
     guest_posix = {"posix_ui_font.c": f"-I{STB_DIR}",
-                   # (ChupathingyCE's voice chat: its <opus.h>, port/third_party/opus)
+                   # (ChupathingyCE's voice chat: its <opus.h>, port/third_party/opus;
+                   # empty in this guest, which has OpenCE's: halo_port_features.h)
                    "voice.c": "-Iport/third_party/opus/include"}
     for source in sorted((LINUX_DIR / "src").glob("*.c")):
         if source.name in guest_posix:

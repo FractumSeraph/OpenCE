@@ -163,8 +163,10 @@ frames without decoding them */
 /* (port, this fork, since 2026-11-11: the voice chat of the desktop and
 Android, as the user chose; OpenCE's, network_voice.c, answers its calls
 from this one there, and is the browser build's alone, which has no Delta
-Peer: network_voice.h) */
-#if defined(HALO_GAME_BROWSER) && !defined(HALO_CONSOLE_NO_VOICE)
+Peer: network_voice.h), and the Android app's 32-bit guest's
+(HALO_ARM64_GUEST), whose SDL bridge has no microphone or timers of
+ChupathingyCE's kind) */
+#if defined(HALO_GAME_BROWSER) && !defined(HALO_CONSOLE_NO_VOICE) && !defined(HALO_ARM64_GUEST)
 #define HALO_PORT_VOICE
 #if !defined(HALO_SERVER)
 #define HALO_PORT_VOICE_AUDIO
