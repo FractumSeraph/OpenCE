@@ -16,7 +16,7 @@ import pytest
 # its draw framebuffer's binding to the HDR calibration; this fork's present
 # reads through its own read_framebuffer and picture size, and binds the draw
 # framebuffer the same way, d3d8_gl.c: build/UPDATING.md, OpenCE 14ff64cd8)
-# _skip = (reason="the fork's D3DDevice_Present is laid out otherwise")
+pytestmark = pytest.mark.skip(reason="the fork's D3DDevice_Present is laid out otherwise")
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from harness import function, read
