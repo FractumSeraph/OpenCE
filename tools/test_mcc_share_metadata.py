@@ -13,6 +13,10 @@ from mcc_test_support import png
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "port/linux/src"
 ZLIB = ROOT / "port/third_party/zlib"
+# (this fork, since the merge of ChupathingyCE 38aae92ee: its mcc_json reader
+# takes no \u escape past ASCII, so metadata with one is refused whole, a
+# picture's name too, rather than the name alone: build/UPDATING.md)
+NO_WIDE_ESCAPES = "ChupathingyCE's mcc_json refuses a \\u escape past ASCII"
 
 DRIVER = r'''
 #include "mcc_share_metadata.h"
@@ -27,6 +31,9 @@ DRIVER = r'''
 void platform_translate_path(const char *in,char *out,unsigned long size) {
  (void)in; if(size) out[0]=0;
 }
+/* (ChupathingyCE's steam_workshop.c, since the merge of its 38aae92ee: the
+   Steam download folder beside the data folder) */
+const char *platform_data_root(void) { return ""; }
 static const char *test_library = "";
 static int test_campaigns;
 int config_boolean(const char *name) {
@@ -207,7 +214,8 @@ def test_nonportable_required_json_refused(metadata_tool, tmp_path, name):
     assert run(metadata_tool, "digest", tmp_path, -1)[0] == "0"
 
 
-@pytest.mark.parametrize("name", ["caf\u00e9", "NUL", "CON ", "conin$", "COM0", "LPT9"])
+@pytest.mark.parametrize("name", [pytest.param("caf\u00e9", marks=pytest.mark.xfail(reason=NO_WIDE_ESCAPES, strict=False)),
+                                  "NUL", "CON ", "conin$", "COM0", "LPT9"])
 def test_nonportable_optional_png_uses_placeholder(metadata_tool, tmp_path, name):
     package(tmp_path, True)
     path = f"assets/{name}.png"
@@ -394,7 +402,7 @@ def test_campaign_kind_across_native_metadata_paths(metadata_tool, tmp_path, mon
 
 
 @pytest.mark.parametrize("kind", ["Hub", "hub", "Flashback", "Cutscene", "", " Default", "Default ",
-                                   "Default/", "defau\u0131t", 0, True, None, [], {}])
+                                   "Default/", pytest.param("defau\u0131t", marks=pytest.mark.xfail(reason=NO_WIDE_ESCAPES, strict=False)), 0, True, None, [], {}])
 def test_unsupported_campaign_kind_stays_refused(metadata_tool, tmp_path, kind):
     root = tmp_path / "steamapps/workshop/content/976730/111"
     package(root, True)
