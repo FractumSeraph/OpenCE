@@ -1395,6 +1395,10 @@ void ce_hud_tags_loaded(
 		case 'wphi': size = WEAPON_HUD_OVERLAYS_OFFSET + TAG_BLOCK_SIZE; break;
 		case 'grhi': size = GRENADE_HUD_OVERLAY_ITEMS_OFFSET + TAG_BLOCK_SIZE; break;
 		case 'hudg': size = HUD_GLOBALS_MESSAGING_PLACEMENT_OFFSET + PLACEMENT_SIZE; break;
+		/* (port, this fork: OpenCE's model shader flip below, merged into
+		ChupathingyCE's guarded loop; without its size here it never ran:
+		tools/harness/tests/test_ce_hud_scale.py) */
+		case 'soso': size = MODEL_SHADER_FLAGS_OFFSET + sizeof(unsigned short); break;
 		default: continue;
 		}
 		if (!instance->base_address)
@@ -1426,8 +1430,12 @@ void ce_hud_tags_loaded(
 			flag: invert_detail_after_reflection) */
 			if (ce_hud_behaviours & BEHAVIOUR_FLAG(_ce_behaviour_invert_detail_after_reflection))
 			{
-				*(unsigned short *)(hud + MODEL_SHADER_FLAGS_OFFSET) ^= MODEL_SHADER_DETAIL_AFTER_REFLECTION_FLAG;
-				model_shaders_inverted++;
+				/* (not over the tag header or tag index: ce_map_checks.h) */
+				if (ce_tags_writable(hud + MODEL_SHADER_FLAGS_OFFSET, sizeof(unsigned short)))
+				{
+					*(unsigned short *)(hud + MODEL_SHADER_FLAGS_OFFSET) ^= MODEL_SHADER_DETAIL_AFTER_REFLECTION_FLAG;
+					model_shaders_inverted++;
+				}
 			}
 			break;
 		}
