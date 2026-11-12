@@ -1889,11 +1889,12 @@ long scenario_tags_load(
 			global_tag_instances = xbox_pointer(cache_file_globals.tag_header->tag_instances);
 			cache_file_globals.tags_loaded = TRUE;
 			menu_tags_loaded(scenario_name);
+			/* (port, this fork: a map whose MCC pause menus cannot be built
+			from this build's menus, ChupathingyCE's, plays with those menus'
+			own pause screens instead of being refused:
+			mcc_pause_runtime_active) */
 			if (!mcc_pause_runtime_load())
-			{
-				scenario_tags_unload();
-				return NONE;
-			}
+				error(_error_silent, "mcc: %s plays with this build's own pause menus", scenario_name);
 			/* port: clear prior mods; MCC resources remain authored. */
 			mods_tags_loaded(scenario_name);
 			result = cache_file_globals.tag_header->scenario_tag_index;

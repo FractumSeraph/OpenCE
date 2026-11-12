@@ -304,7 +304,9 @@ failed:
     return FALSE;
 }
 
-boolean mcc_pause_runtime_active(void) {return mcc_cache_tags_loaded();}
+/* (port, this fork: only once its menus were built; else the pause button
+opens the build's own pause screens, cache_files.c) */
+boolean mcc_pause_runtime_active(void) {return mcc_cache_tags_loaded() && pause_runtime.table;}
 
 long mcc_pause_runtime_screen(short local_count, boolean first_player)
 {
