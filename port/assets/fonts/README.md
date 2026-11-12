@@ -81,3 +81,8 @@ The builds no longer embed the Overpass files: they draw nothing since
 0.8.0, and the builds embed only the fonts `fonts.json` names
 (`tools/embed_assets.py`). The release packages still carry
 `Overpass-OFL.txt`, for the glyphs Cyborg Interface Gothic takes from it.
+
+(Port, this fork: `OpenCE-Regular.ttf` and `OpenCE-OFL.txt`, which
+ChupathingyCE took out with its title font change (#1093), stay for the web
+build's page: `port/web/site/style.css` and `tools/web_build.py`'s
+`SITE_FONTS`.)

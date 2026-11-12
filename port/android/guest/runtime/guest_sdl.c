@@ -278,6 +278,27 @@ SDL_GamepadType SDL_GetGamepadType(SDL_Gamepad *gamepad)
 	return (SDL_GamepadType)host_sdl_gamepad_type((unsigned int)gamepad);
 }
 
+/* (port, this fork: a pad's USB ids, not bridged: unknown, so its prompts
+go by its type alone, xinput_sdl.c's prompt_scheme_of_pad) */
+Uint16 SDL_GetGamepadVendor(SDL_Gamepad *gamepad)
+{
+	(void)gamepad;
+	return 0;
+}
+
+Uint16 SDL_GetGamepadProduct(SDL_Gamepad *gamepad)
+{
+	(void)gamepad;
+	return 0;
+}
+
+/* (an Android app has no environment of its own to read) */
+const char *SDL_getenv(const char *name)
+{
+	(void)name;
+	return NULL;
+}
+
 bool SDL_RumbleGamepad(SDL_Gamepad *gamepad, Uint16 low, Uint16 high, Uint32 milliseconds)
 {
 	return host_sdl_rumble_gamepad((unsigned int)gamepad, low, high, milliseconds) != 0;

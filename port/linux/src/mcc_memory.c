@@ -16,7 +16,13 @@ build's pointers, which this build's Xbox addresses are not) */
 #include <errno.h>
 #include <string.h>
 
-#ifdef HALO_ANDROID
+/* (port, this fork: a system without it, macOS: the address is a hint,
+and a window placed elsewhere is given back below) */
+#ifndef MAP_FIXED_NOREPLACE
+#define MAP_FIXED_NOREPLACE 0
+#endif
+
+#if defined(HALO_ANDROID) && defined(HALO_ARM64_GUEST)
 #include "guest_host.h"
 #endif
 
@@ -78,7 +84,7 @@ static void mcc_window_dispose(void)
 
 void *mcc_memory_reserve(uint32_t address, uint32_t size)
 {
-#ifdef HALO_ANDROID
+#if defined(HALO_ANDROID) && defined(HALO_ARM64_GUEST)
     long long result = host_mcc_memory_reserve(address, size);
     if (result < 0) {
         errno = (int)-result;
@@ -150,7 +156,7 @@ void *mcc_memory_reserve(uint32_t address, uint32_t size)
 
 void mcc_memory_release(void *allocation, uint32_t size)
 {
-#ifdef HALO_ANDROID
+#if defined(HALO_ANDROID) && defined(HALO_ARM64_GUEST)
     if (allocation) {
         int error = host_mcc_memory_release((unsigned int)(uintptr_t)allocation, size);
         if (error)

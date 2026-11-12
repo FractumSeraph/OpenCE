@@ -165,6 +165,16 @@ int halo_keyboard_action_shown(int action, char *shown, unsigned long size)
 	return 0;
 }
 
+/* (OpenCE's keyboard glyphs, keyboard_glyphs.c: a server binds no key) */
+int halo_keyboard_binding_label(int action, int slot, char *shown, unsigned int size)
+{
+	(void)action;
+	(void)slot;
+	if (size)
+		shown[0] = 0;
+	return 0;
+}
+
 void test_input_hold_action(int hold)
 {
 	(void)hold;
