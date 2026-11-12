@@ -154,6 +154,9 @@ game's carnage report, <name>.json beside the copy gives its address:
 #include "network_recording.h"
 #include "map_share.h"
 #include "halo_map_families.h"
+#ifdef HALO_PORT_CHAT
+#include "chat.h"
+#endif
 
 #include <math.h>
 #include <stdio.h>
@@ -260,6 +263,9 @@ static struct
 	public copy), and one a client makes */
 	boolean own;
 	boolean client;
+	/* the file's name, and whether the player was told where to watch it */
+	char name[MAX_PATH];
+	boolean noted;
 	/* the local players told (record 19), by slot: their DATUM_INDEX_NEW */
 	long locals[MAXIMUM_TRACKED_PLAYERS];
 	long started_time;
@@ -1346,6 +1352,8 @@ static void recording_start(
 		file_name[length + 1] = 0;
 	}
 	strncat(file_name, ".hrec", sizeof(file_name) - strlen(file_name) - 1);
+	snprintf(recording.name, sizeof(recording.name), "%s", file_name);
+	recording.noted = FALSE;
 	recording.file = fopen(file_name, "wb");
 	if (!recording.file)
 	{
@@ -1402,6 +1410,29 @@ static void recording_start(
 	recording_marks();
 }
 
+/* a player's own recording: where to watch it, in the chat, once it has run
+a few seconds (a client's game begins anew once or twice as it loads, each
+time a recording) */
+static void recording_note_where(
+	void)
+{
+	if (!recording.own || recording.noted || !recording.file ||
+		game_time_get() - recording.started_time < 3 * TICKS_PER_SECOND)
+	{
+		return;
+	}
+	recording.noted = TRUE;
+#ifdef HALO_PORT_CHAT
+#ifdef HALO_BROWSER
+	chat_note("Recording this game (RECORD MY GAMES): watch it at halo.fractumseraph.net/watch/, or download it "
+		"from the page's Game settings.");
+#else
+	chat_note("Recording this game (RECORD MY GAMES) to the recordings folder beside your maps: watch it at "
+		"halo.fractumseraph.net/watch/ with Open a recording.");
+#endif
+#endif
+}
+
 /* the recording ended: its end written, the file closed */
 static void recording_end(
 	void)
@@ -1416,6 +1447,13 @@ static void recording_end(
 		recording_flush();
 		if (recording.file)
 			fclose(recording.file);
+		/* (a player's own that ended within its first second: a client's
+		game beginning anew as it loads, not a game to watch) */
+		if (recording.file && recording.own && recording.last_tick - recording.started_time < TICKS_PER_SECOND)
+		{
+			DeleteFileA(recording.name);
+			error(_error_silent, "recording: %s ended at once; not kept", recording.name);
+		}
 	}
 	/* (the public copy whole: the game is over, nothing held back is a
 	help to its players any more) */
@@ -1543,6 +1581,7 @@ static void recording_tick(
 	if (!recording.file)
 		return;
 	recording.last_tick = game_time_get();
+	recording_note_where();
 	for (player_index = 0; player_index < MAXIMUM_TRACKED_PLAYERS; player_index++)
 	{
 		struct player_datum *player = distributed_player(player_index);

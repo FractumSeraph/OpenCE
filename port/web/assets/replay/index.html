@@ -48,6 +48,7 @@ body{display:grid;grid-template-columns:1fr 320px;grid-template-rows:1fr auto;he
   text-align:center;padding:24px;background:radial-gradient(circle at 50% 30%,rgba(78,126,104,.25),transparent 55%)}
 #drop h1{margin:0;font-size:24px}
 #drop p{margin:0;color:var(--muted);max-width:34rem;line-height:1.5}
+#drop p.mine-help{font-size:13px;margin-top:-4px}
 #drop.hover{outline:2px dashed var(--accent);outline-offset:-12px}
 button,select,label.button{font:inherit;color:var(--text);background:rgba(127,211,164,.12);border:1px solid var(--line);
   border-radius:6px;padding:5px 10px;cursor:pointer}
@@ -201,6 +202,10 @@ smaller) */
     <p>Watch a game a server recorded, live or again: through any player's eyes, behind them, or from
       anywhere. Pick a game below (a server's tab, a player's name, a map...), or open a recording (<code>recordings\*.hrec</code>: an admin's
       shows the hits the fair play checks refused or doubted; yours, with RECORD MY GAMES on, the games you played). A file you open stays on this computer.</p>
+    <p class="mine-help">Your own games: turn on RECORD MY GAMES (the game's Settings, Network Setup) and play online.
+      Played in this browser on this site, they are listed here. From the Windows, Mac or Linux game, open a <code>.hrec</code>
+      from the <code>recordings</code> folder in the game's data folder (the one with <code>maps</code>); on Android,
+      <code>Android/data/net.fractumseraph.halo/files/recordings</code>. A downloaded <code>.hrec</code> opens the same way.</p>
     <div id="mine" style="display:none"></div>
     <div id="games" style="display:none"></div>
     <label class="button">Open a recording<input id="file" type="file" accept=".hrec" hidden></label>

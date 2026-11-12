@@ -77,9 +77,16 @@ are [ChupathingyCE's](#chupathingyce) and [OpenCE's](#opence) own pages.
 - **Record your own games.** With RECORD MY GAMES on (Network Setup;
   `network.record_my_games`), the network games you play, joined or hosted,
   are recorded on your machine as you saw them, without anyone's address,
-  to watch again in the same viewer (Open a recording). The browser build
-  keeps them in the browser on your device, never on the server: the viewer
-  lists them, and they download as `.hrec` files. In a game you joined,
+  to watch again in the same viewer. The browser build keeps them in the
+  browser on your device, never on the server: the viewer lists them, and
+  they download as `.hrec` files. To watch one, open
+  [halo.fractumseraph.net/watch](https://halo.fractumseraph.net/watch/)
+  and press **Open a recording** (or drop the file on the page): Windows,
+  Mac and Linux keep them in `recordings` in the game's data folder (the
+  one with `maps`), Android in
+  `Android/data/net.fractumseraph.halo/files/recordings`; a game played in
+  the browser is already listed there. The game says where in its chat as
+  each recording starts. In a game you joined,
   players far from you or out of sight move less exactly than in a host's
   recording, as the host sends them less often.
 - **Tools against cheaters.** A host checks each hit and move for shots
