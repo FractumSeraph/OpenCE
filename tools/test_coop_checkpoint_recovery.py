@@ -54,6 +54,12 @@ def generated(fault=None):
     ):
         config.extend(define_value(source, name) for name in names)
     config.append(define_value(distributed_h, 'DISTRIBUTED_UNIT_SCALE'))
+    # (port, this fork: static shields' version and the desktop's object count, which the
+    # fork's damage events take an unknown index's nearest static target by)
+    config.append(define_value(read("port/linux/game/network_rules.h"), "NETWORK_RULES_STATIC_SHIELDS_VERSION"))
+    capacity = re.findall(r"^#define HALO_PORT_MAXIMUM_OBJECTS_PER_MAP (\d+)", read("port/linux/include/halo_port_capacity.h"),
+                          re.M)
+    config.append(f"#define MAXIMUM_OBJECTS_PER_MAP {capacity[-1]}")
     types = "\n".join([
         enum_with(distributed_h, "_distributed_message_player_prediction ="),
         enum_with(distributed_h, "_network_vehicle_write_change,"),
@@ -70,6 +76,8 @@ def generated(fault=None):
         enum_with(damage_h, "NUMBER_OF_DAMAGE_DATA_FLAGS,"),
         enum_with(damage_h, "_object_being_damaged_body_depleted_bit ="),
         enum_with(read("source/game/game_globals.h"), "NUMBER_OF_MATERIAL_TYPES,"),
+        # (port, this fork: ChupathingyCE's data arrays hold their elements by XPTR)
+        "#define DATA_ARRAY_OWN_ELEMENTS(array) ((void *)((array) + 1))",
         structure(read("source/memory/data.h"), "data_array"),
         structure(read("source/memory/data.h"), "datum_header"),
         structure(read("source/memory/data.h"), "data_iterator"),
@@ -99,7 +107,11 @@ def generated(fault=None):
         "data_initialize", "data_verify", "data_usable", "datum_initialize",
         "datum_try_and_get", "datum_get", "datum_new_at_index", "datum_delete",
         "data_iterator_new", "data_iterator_next"))
-    code = "\n".join(function(distributed, name) for name in (
+    # (port, this fork: the players whose unit state was heard, and network_rules.c's
+    # rule for a machine's full snapshot)
+    code = re.search(r"^static boolean distributed_unit_heard\[.*$", distributed, re.M).group(0) + "\n"
+    code += "#include <stdint.h>\n" + function(read("port/linux/game/network_rules.c"), "network_rules_snapshot_due") + "\n"
+    code += "\n".join(function(distributed, name) for name in (
         "distributed_object_index_valid", "distributed_real_valid", "distributed_point_valid",
         "distributed_axes_make_valid", "distributed_player", "distributed_player_from_byte",
         "distributed_player_is_local", "distributed_living_unit"))
@@ -128,7 +140,7 @@ def generated(fault=None):
         "distributed_client_apply_inventory", "distributed_client_apply_retried_inventories"))
     code += "\n" + "\n".join(function(damage, name) for name in (
         "distributed_damage_to_data", "distributed_damage_indices_valid",
-        "distributed_damage_numbers_valid", "network_damage_handle_events",
+        "distributed_damage_numbers_valid", "network_damage_handle_events", "damage_host_tables_reset",
         "network_damage_new_game", "network_damage_client_tick"))
     code += "\n" + function(distributed, "distributed_message_epoch_valid")
     code += "\n" + "\n".join(function(objects, name) for name in (
