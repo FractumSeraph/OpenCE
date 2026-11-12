@@ -1897,7 +1897,19 @@ jobs:
     # RELEASE_SIGNING_KEY secret is set, its Ed25519 signature
     # (SHA256SUMS.sig, tools/release_sign.sh); the newest five are kept.
     # ChupathingyCE's own releases come from its release workflows instead.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository != 'ChupathingyCE/chupathingyce'
+    # (macOS's build is waited for but not required: GitHub's macOS runners
+    # are often not to be had, and a release without it is published all the
+    # same; a Mac's self-updater finds no file of its own in that release's
+    # updates.json and stays on its version until one that has it. Every
+    # other build must succeed, and a run cancelled by hand publishes nothing.)
+    if: >-
+      !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      github.repository != 'ChupathingyCE/chupathingyce' &&
+      needs.linux.result == 'success' && needs.linux64.result == 'success' &&
+      needs.server.result == 'success' && needs.server-windows.result == 'success' &&
+      needs.android.result == 'success' && needs.android64.result == 'success' &&
+      needs.android32.result == 'success' && needs.windows.result == 'success' &&
+      needs.windows64.result == 'success'
     needs: [linux, linux64, server, server-windows, android, android64, android32, windows, windows64, macos]
     runs-on: ubuntu-24.04
     permissions:
@@ -1998,6 +2010,10 @@ jobs:
             echo "Built from $GITHUB_SHA on $GITHUB_REF_NAME (version $version)."
             echo
             echo "The release builds are for playing; the debug builds stop at the first failed assertion."
+            if ! ls release/fractum-halo-macos-*.zip >/dev/null 2>&1; then
+              echo
+              echo "No macOS build in this release (GitHub's macOS runner was not to be had): the previous release's is the newest."
+            fi
           } > notes.txt
           gh release create "v$version" "${files[@]}" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
             --title "$version" --notes-file notes.txt --latest
