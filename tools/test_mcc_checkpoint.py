@@ -116,7 +116,10 @@ def checkpoint_tool(tmp_path_factory):
         "char map_name[256],build_number[32];short player_count,difficulty;"
         "uint32_t cache_file_checksum,unused[7],checksum;};\n")
     data_header = (ROOT / "source/memory/data.h").read_text()
-    (work / "memory/data.h").write_text("#pragma once\n#define TAG_STRING_LENGTH 31\n" + "\n".join(
+    # (port, this fork: ChupathingyCE's data arrays hold their elements by XPTR,
+    # cseries/xbox_address.h, as a build without HALO_64BIT has it)
+    (work / "memory/data.h").write_text("#pragma once\n#define TAG_STRING_LENGTH 31\n#include \"xbox_address.h\"\n"
+        "#define DATA_ARRAY_OWN_ELEMENTS(array) ((void *)((array) + 1))\n" + "\n".join(
         re.search(r"struct " + name + r"\s*\{.*?\n\};", data_header, re.S).group()
         for name in ("data_array", "datum_header")) + "\n")
     (work / "objects/objects.h").write_text(
@@ -126,7 +129,8 @@ def checkpoint_tool(tmp_path_factory):
         "extern struct data_array *object_header_data;\n")
     native = (ROOT / "source/saved games/game_state.c").read_text()
     funcs = "\n".join(function(native, name) for name in
-                      ("game_state_save", "game_state_save_core", "game_state_image_accept"))
+                      ("game_state_save", "game_state_save_core", "game_state_image_hs_globals_valid",
+                       "game_state_image_accept"))
     data_source = (ROOT / "source/memory/data.c").read_text()
     objects = (ROOT / "source/objects/objects.c").read_text()
     grenades = (ROOT / "port/linux/game/mcc_grenades.c").read_text()
@@ -176,6 +180,13 @@ static int hs_console_state_capture(void) {return console_captured;}
 static int hs_console_state_validate(void const *image,void const *base,unsigned long bytes)
 {(void)image;(void)base;(void)bytes;return console_valid;}
 static void hs_console_state_restore(void) {console_restores++;if(live[4095]!=saved[4095])abort();}
+/* (port, this fork: a saved game's script globals counted against the build's
+and the map's, ChupathingyCE's game_state_image_accept: no scenario here) */
+static long global_scenario_index=NONE;
+static struct data_array *hs_global_data;
+static short hs_external_global_count;
+struct test_scenario {struct {long count;} hs_globals;};
+static struct test_scenario *global_scenario_get(void) {static struct test_scenario scenario;return &scenario;}
 ''' + '#include "' + (ROOT / "port/linux/game/mcc_checkpoint.c").as_posix() + '"\n' + r'''
 boolean mcc_cache_tags_loaded(void) {return loaded;}
 int mcc_script_threads_capture(void) {return 1;}
@@ -488,7 +499,7 @@ int main(int argc,char **argv) {
     output = work / ("checkpoint.exe" if sys.platform == "win32" else "checkpoint")
     zlib_dir = ROOT / "port/third_party/zlib"
     command = [compiler, "-std=c99", "-Wall", "-Wextra", "-Werror", "-DZ_PREFIX",
-               "-Dz_errmsg=z_port_errmsg", "-I", str(work), "-I", str(zlib_dir),
+               "-Dz_errmsg=z_port_errmsg", "-I", str(work), "-I", str(zlib_dir), "-I", str(ROOT / "source/cseries"),
                str(path), str(zlib_dir / "crc32.c"), "-o", str(output)]
     if sys.platform == "win32":
         command[1:1] = ["--target=i686-pc-windows-msvc", "-fuse-ld=lld", "-D_CRT_SECURE_NO_WARNINGS"]
