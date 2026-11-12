@@ -1075,12 +1075,15 @@ def test_loader_holds_the_number_through_a_hosted_game(keys, checker, tmp_path):
 
 
 @pytest.mark.parametrize("pin,expect", [
-    ("latest", "newest"), ("", "newest"), ("announce", "announce"), ("minimum", "minimum"),
+    # (port, this fork: its hosts play 42's header alone, so the minimum, 11,
+    # is refused as a pin, HALO_PORT_HOST_NETWORK_VERSION_MINIMUM)
+    ("latest", "newest"), ("", "newest"), ("announce", "announce"), ("minimum", "newest"),
     ("below", "newest"), ("above", "newest"), ("words", "newest"),
 ])
 def test_loader_pin(keys, checker, tmp_path, pin, expect):
-    """network.announce: a number from the minimum to the newest proved for
-    hosting is announced; anything else follows the table"""
+    """network.announce: a number from the minimum (this fork: 42, the oldest
+    its hosts play) to the newest proved for hosting is announced; anything
+    else follows the table"""
     base = floor()
     newest = base["maximum"] + 1
     values = {"latest": "latest", "": "", "announce": str(base["announce"]), "minimum": str(base["minimum"]),
@@ -1091,7 +1094,7 @@ def test_loader_pin(keys, checker, tmp_path, pin, expect):
     number = {"newest": newest, "announce": base["announce"], "minimum": base["minimum"]}[expect]
     assert state_line(output)[0].startswith(f"state {number} "), output
     assert f"hosting {newest} pinned {number if expect != 'newest' else 0}" in output
-    if pin in ("below", "above", "words"):
+    if pin in ("below", "above", "words", "minimum"):
         assert "network.announce" in output
 
 
