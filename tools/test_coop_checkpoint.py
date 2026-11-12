@@ -223,6 +223,8 @@ static int objects_client_checkpoint_pending[3];
 static long objects_host_told_count=3,objects_host_resting_cursor=2;
 static int objects_host_state_moving[3]={1,1,1};
 static long objects_host_rest_times[3]={99,99,99};
+/* (port, this fork: the object each tracked slot last told of, ChupathingyCE's) */
+static long objects_host_last_objects[3]={10,11,12};
 static struct {long checksum,weapons_checksum,time,carried_time,ammunition_time;} objects_host_inventories[3];
 static struct {int count;} objects_host_viewers={2};
 static struct {long time;} objects_host_machines[2]={{99},{88}};
@@ -256,7 +258,7 @@ int main(void){
   assert(objects_client_checkpoint_pending[i]);
   assert(!objects_host_inventories[i].checksum && !objects_host_inventories[i].weapons_checksum);
   assert(objects_host_inventories[i].carried_time==NONE && objects_host_inventories[i].ammunition_time==NONE);
-  assert(!objects_host_state_moving[i] && objects_host_rest_times[i]==NONE);
+  assert(!objects_host_state_moving[i] && objects_host_rest_times[i]==NONE && objects_host_last_objects[i]==NONE);
   assert(!objects_host_vehicle_predictions[i].valid && objects_host_vehicle_predictions[i].accepted_vehicle_index==NONE);
   assert(objects_host_vehicle_predictions[i].ground_vehicle_index==NONE && objects_host_vehicle_predictions[i].rest_vehicle_index==NONE);
   assert(objects_client_dead[i].object_index==NONE && objects_client_unsteered_path[i].object_index==NONE);
