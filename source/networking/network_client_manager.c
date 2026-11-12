@@ -3454,14 +3454,20 @@ static boolean network_game_client_idle_joining(
 				/* (port: to an OpenCE host of 40 or later, the 234 bytes
 				after the hardware id, which such a host needs to read the
 				request: the Discord pass and proof above, OpenCE's, zeros
-				when the host asked for none. A host of an older or unknown
-				version takes the request as the Xbox's was, 0x70 bytes: the
+				when the host asked for none. A host of an older version
+				takes the request as the Xbox's was, 0x70 bytes: the
 				encoded message's tail cut off, ChupathingyCE's chupa-41a way,
 				network_rules_join_request_extra; a legacy table's longer one
 				padded with zeros) */
 				{
-					int extra = network_rules_join_request_extra(network_game_client_joined_version);
 					int native = (int)sizeof(join_game_request) - 0x70;
+					/* (port, this fork: a host of a version not known, the
+					player's own game through 127.0.0.1 or one joined by an
+					invitation, takes the whole request: since network 42 its
+					version is in the part cut off, which a host of 42 or later
+					reads as 0 and refuses as too old) */
+					int extra = network_game_client_joined_version == 0xFFFF ?
+						native : network_rules_join_request_extra(network_game_client_joined_version);
 
 					if (extra)
 					{
