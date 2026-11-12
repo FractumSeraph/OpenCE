@@ -36,6 +36,18 @@ static boolean distributed_scripted_pose_valid(struct distributed_unit_state con
 as a little-endian build has them) */
 #define distributed_put_parts(cursor, data, size, part) distributed_put(cursor, data, size)
 #define distributed_take_parts(cursor, end, data, size, part) distributed_take(cursor, end, data, size)
+/* (port, this fork: ChupathingyCE's wire layout, network_rules.h, whose
+further unit state parts are chupa-43a's facts: a game of the fork's own 43
+has none, so a state's length is never walked by network_rules.c) */
+#define csmemcmp memcmp
+static struct network_rules_layout const test_wire_layout;
+static struct network_rules_layout const *distributed_wire_layout(void) { return &test_wire_layout; }
+static int network_rules_unit_state_length(struct network_rules_layout const *layout, uint8_t const *record, int size,
+	int powerups)
+{
+	(void)layout; (void)record; (void)size; (void)powerups;
+	return -1;
+}
 #include "under_test.inc"
 
 #define NEAR(a, b) CHECK(fabs((double)(a) - (double)(b)) < .001, "%s: %g, not %g", #a, (double)(a), (double)(b))
