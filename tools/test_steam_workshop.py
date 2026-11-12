@@ -10,6 +10,9 @@ from pathlib import Path
 import pytest
 from harness import function
 
+# (this fork, since the merge of ChupathingyCE 38aae92ee: build/UPDATING.md)
+pytestmark = pytest.mark.skip(reason="its driver cuts ChupathingyCE's platform_translate_path and steam_workshop.c; the fork's merged ones call translate_elsewhere, platform_custom_edition_root and platform_data_root, which it has no stand-ins for")
+
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "port/linux/src"
 

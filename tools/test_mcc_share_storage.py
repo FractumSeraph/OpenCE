@@ -17,6 +17,7 @@ FOLDER = "dl_0123456789abcdef0123"
 
 DRIVER = r'''
 #include "mcc_share_storage.h"
+char const *mcc_maps_folder(void) { return "mcc_maps"; }
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

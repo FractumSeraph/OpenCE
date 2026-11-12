@@ -1711,12 +1711,6 @@ int delta_legacy_host_game_at(int version); /* (port/linux/src/delta.c) */
 boolean dedicated_server_active(void); /* (server/src/dedicated.c) */
 long dedicated_playlist_count(void);
 char const *dedicated_playlist_map(long entry);
-#ifndef HALO_GAME_BROWSER
-/* (this fork: the browser build has no dedicated server, server/src) */
-#define dedicated_server_active() FALSE
-#define dedicated_playlist_count() 0L
-#define dedicated_playlist_map(entry) ((void)(entry), "")
-#endif
 static int network_game_server_mcc_asked = -1;
 /* (when the number changed: the record is sent again a little later, which
 the Delta machines that follow it read at the new number; 0 for none) */
@@ -1844,11 +1838,6 @@ static boolean network_game_server_mcc_confirm(
 
 	if (network_game_server_mcc_confirmed || !(count = network_game_server_mcc_would_drop(server, map_name)))
 		return FALSE;
-#ifndef HALO_GAME_BROWSER
-	/* (this fork: the browser build has no invite_prompt.c to ask with; its
-	host switches as it chose) */
-	return FALSE;
-#else
 	network_game_server_mcc_confirm_server = server;
 	network_game_server_mcc_confirm_session = network_game_server_mcc_session;
 	csstrncpy(network_game_server_mcc_confirm_map, map_name, sizeof(network_game_server_mcc_confirm_map) - 1);
@@ -1858,7 +1847,6 @@ static boolean network_game_server_mcc_confirm(
 		detail, network_game_server_mcc_confirm_answer);
 	network_event("asking the host before the lobby's map changes to %s (%ld would leave)", map_name, count);
 	return TRUE;
-#endif
 }
 #else
 /* (no MCC maps in this build: HALO_MCC) */
@@ -1877,9 +1865,7 @@ void network_game_server_dispose(
 	{
 		extern void invite_prompt_ask_cancel(void (*answer_function)(boolean yes));
 
-#ifdef HALO_GAME_BROWSER
 		invite_prompt_ask_cancel(network_game_server_mcc_confirm_answer);
-#endif
 		network_game_server_mcc_session++;
 		network_game_server_mcc_confirm_map[0] = 0;
 	}

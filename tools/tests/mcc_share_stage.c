@@ -12,6 +12,8 @@
 #else
 #include <unistd.h>
 #endif
+/* (mcc_maps.c's, which mcc_package.c names its folder with) */
+char const *mcc_maps_folder(void) { return "mcc_maps"; }
 int posix_mcc_share_path_safe(char const *path);
 int posix_mcc_share_publish(char const *from,char const *to);
 static int make(char const *p) { return mkdir(p,0700)==0; }

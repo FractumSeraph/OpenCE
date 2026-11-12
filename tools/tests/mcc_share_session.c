@@ -22,6 +22,8 @@
 #else
 #include <unistd.h>
 #endif
+/* (mcc_maps.c's, which mcc_package.c names its folder with) */
+char const *mcc_maps_folder(void) { return "mcc_maps"; }
 
 #define CHECK(x) do { if (!(x)) { fprintf(stderr,"line %d: %s\n",__LINE__,#x); return 1; } } while (0)
 #define CASE(x) if (!strcmp(argv[1],x))

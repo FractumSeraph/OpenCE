@@ -130,6 +130,10 @@ BROWSER_SOURCES = (
     "web_upnp.c",
     "web_webrtc_none.c",
 )
+# (and one OpenCE's browser build takes as well, which is not in
+# BROWSER_SOURCES so that tools/web_build.py's glob keeps it: the stand-ins for
+# ChupathingyCE's MCC lobby switch, port/web/src/web_server_stubs.c)
+BROWSER_SHARED_SOURCES = ("web_server_stubs.c",)
 
 WEB_EXCLUDED_PLATFORM_SOURCES = {
     # internet play's WebRTC with browsers: none here (port/web/src/web_webrtc_none.c)
@@ -360,7 +364,7 @@ def generate_browser_build(n: Writer, sln: Any) -> None:
     # Browser-only adapters live beside the shell and use the same platform
     # ABI. Named one by one: OpenCE's own browser build (tools/web_build.py,
     # HALO_WEB) keeps its sources in the same folder.
-    for source in (WEB_DIR / "src" / name for name in BROWSER_SOURCES):
+    for source in (WEB_DIR / "src" / name for name in BROWSER_SOURCES + BROWSER_SHARED_SOURCES):
         # The loopback socket backend is part of the libc boundary and needs
         # the host sockaddr ABI, just like posix_net.c.
         add_object(

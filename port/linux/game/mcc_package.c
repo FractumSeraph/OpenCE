@@ -13,9 +13,11 @@ build's pointers, which this build's Xbox addresses are not) */
 #include "../include/halo_port_features.h"
 #endif
 #if !defined(HALO_MCC) || HALO_MCC /* Halo MCC maps (halo_port_features.h, above): a console builds this to nothing */
-#include "cseries.h"
 #include "mcc_package.h"
-#include "mcc_maps.h"
+/* (mcc_maps.c's: maps_mcc, or mcc_maps where only that folder is; declared
+here so that the sharing tests build this file alone, as before the merge
+of ChupathingyCE 38aae92ee) */
+char const *mcc_maps_folder(void);
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>

@@ -72,6 +72,7 @@ def test_fuzzed_rules(tmp_path):
     source.write_text(r'''
 #include "mcc_share_rules.h"
 #include <stdint.h>
+char const *mcc_maps_folder(void) { return "mcc_maps"; }
 #include <stdlib.h>
 #include <string.h>
 int LLVMFuzzerTestOneInput(uint8_t const *data,size_t size) {
