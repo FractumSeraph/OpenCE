@@ -86,6 +86,9 @@ def items(root=None):
     paths = sorted((ROOT / "port/linux/game").glob("network_*.[ch]"))
     paths += sorted((ROOT / "port/linux/game").glob("map_share*.[ch]"))
     paths += [ROOT / "port/linux/game/vehicle_riding.h"]
+    # (ChupathingyCE's MCC message kinds, 97 to 100, since its 38aae92ee
+    # merge only there; older trees have none)
+    paths += [path for path in [ROOT / "port/linux/game/mcc_network_messages.h"] if path.exists()]
     paths += [ROOT / "source/networking/network_messages.c", ROOT / "source/networking/network_messages.h"]
     texts = [re.sub(r"/\*.*?\*/|//[^\n]*", " ", path.read_text(encoding="latin-1"), flags=re.S) for path in paths]
     everything = "\n".join(texts)
@@ -106,7 +109,9 @@ def items(root=None):
             for member in filter(None, map(str.strip, block[block.index("{") + 1:block.rindex("}")].split(","))):
                 name, _, expression = (part.strip() for part in member.partition("="))
                 value = int(expression, 0) if expression else value + 1
-                if not name.startswith("NUMBER_OF_"):
+                # (nor a range's ends, ChupathingyCE's _distributed_message_mcc_first
+                # and _last: the numbers of kinds already counted)
+                if not name.startswith("NUMBER_OF_") and not re.search(r"_(first|last)$", name):
                     add(f"enum {name}", value)
         for name, value in re.findall(r"^#define (DISTRIBUTED_\w+)\s+(.*?)\s*$", text, re.M):
             add(f"define {name}", value)

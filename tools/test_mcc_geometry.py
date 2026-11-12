@@ -87,6 +87,12 @@ def geometry_tool(tmp_path_factory):
 #include "models/model_definitions.h"
 #include "tag_schema.h"
 #include <string.h>
+#include <stdlib.h>
+/* (the game's heap, which ChupathingyCE's mcc_geometry.c takes a model's
+   compressed copy from since the merge of its 38aae92ee: the C library's
+   here) */
+void *system_malloc(long size) { return malloc((size_t)size); }
+void system_free(void *pointer) { free(pointer); }
 static byte vertex_data[96];
 static word index_data[70945];
 static int corrections;

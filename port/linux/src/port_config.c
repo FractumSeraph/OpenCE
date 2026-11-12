@@ -1341,6 +1341,21 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 	{ "game.defaults_answered", _config_integer, "0", "HALO_DEFAULTS_ANSWERED", _environment_value, _platform_all,
 		"Fractum Halo sets this after it asks about changed defaults.\n"
 		"Don't edit it." },
+	{ "game.workshop_steam", _config_boolean, "false", "HALO_WORKSHOP_STEAM", _environment_value, _platform_desktop,
+		"Let the Delta Guide's Workshop get MCC Workshop items itself: through the Steam\n"
+		"client where it downloads them (Windows), else with the game's own Steam\n"
+		"download, signed in once by scanning a QR code with the Steam app. Only while\n"
+		"the Workshop tab is open. Off opens each item's page in Steam." },
+	{ "game.steamcmd_account", _config_string, "\"\"", "HALO_STEAMCMD_ACCOUNT", _environment_value, _platform_desktop,
+		"The Steam account steamcmd signs in with for the Workshop. Empty uses the one\n"
+		"steamcmd saved. Never a password: steamcmd keeps its own sign-in." },
+	{ "game.workshop_item_limit_mb", _config_integer, "8192", "HALO_WORKSHOP_ITEM_LIMIT_MB", _environment_value,
+		_platform_desktop,
+		"The largest Workshop item, in MB, the game's own Steam download takes." },
+	{ "game.workshop_file_limit_mb", _config_integer, "4096", "HALO_WORKSHOP_FILE_LIMIT_MB", _environment_value,
+		_platform_desktop,
+		"The largest single file, in MB, the game's own Steam download takes." },
+	/* ---- network */
 
 	/* ---- bots */
 	{ "bots.count", _config_integer, "0", "HALO_BOTS", _environment_value, _platform_all,
@@ -1355,7 +1370,6 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"In team games: \"even\" puts the bots on both teams, evening them with\n"
 		"the players; \"against\" puts them all on the team the players are not on." },
 
-	/* ---- network */
 	{ "network.online", _config_boolean, "true", "HALO_NET_ONLINE", _environment_value,
 		_platform_all | _platform_xbox | _platform_server, ONLINE_HELP },
 	{ "network.lasting_invite", _config_boolean, "false", "HALO_NET_LASTING_INVITE", _environment_value,
@@ -2324,23 +2338,9 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"Workshop items. Empty uses automatic discovery: Windows registry, Linux\n"
 		"Steam/XDG hints, macOS's Steam folder, usual folders and their libraries. Windows paths use single\n"
 		"quotes: 'D:\\Steam'." },
-	{ "game.workshop_steam", _config_boolean, "false", "HALO_WORKSHOP_STEAM", _environment_value, _platform_desktop,
-		"Let the Delta Guide's Workshop get MCC Workshop items itself: through the Steam\n"
-		"client where it downloads them (Windows), else with the game's own Steam\n"
-		"download, signed in once by scanning a QR code with the Steam app. Only while\n"
-		"the Workshop tab is open. Off opens each item's page in Steam." },
-	{ "game.steamcmd_account", _config_string, "\"\"", "HALO_STEAMCMD_ACCOUNT", _environment_value, _platform_desktop,
-		"The Steam account steamcmd signs in with for the Workshop. Empty uses the one\n"
-		"steamcmd saved. Never a password: steamcmd keeps its own sign-in." },
 	{ "paths.steamcmd", _config_string, "\"\"", "HALO_STEAMCMD", _environment_value, _platform_desktop,
 		"steamcmd, for the Workshop on macOS and Linux. Empty looks in the PATH and the\n"
 		"usual places." },
-	{ "game.workshop_item_limit_mb", _config_integer, "8192", "HALO_WORKSHOP_ITEM_LIMIT_MB", _environment_value,
-		_platform_desktop,
-		"The largest Workshop item, in MB, the game's own Steam download takes." },
-	{ "game.workshop_file_limit_mb", _config_integer, "4096", "HALO_WORKSHOP_FILE_LIMIT_MB", _environment_value,
-		_platform_desktop,
-		"The largest single file, in MB, the game's own Steam download takes." },
 	{ "paths.steam_downloads", _config_string, "\"\"", "HALO_STEAM_DOWNLOADS", _environment_value, _platform_desktop,
 		"Where the game puts the Workshop items it downloads, and MCC's Halo CE files.\n"
 		"Empty is steam/ in the data folder. Use a big drive for MCC's files." },

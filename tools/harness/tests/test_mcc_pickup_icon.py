@@ -2,6 +2,9 @@
 import pytest
 from tools.harness import build, function, mutated, read, run, structure
 
+# (this fork, since the merge of ChupathingyCE 38aae92ee: build/UPDATING.md)
+pytestmark = pytest.mark.skip(reason="ChupathingyCE's mcc_hud_draw.c icon placement (mcc_hud_capital_middle); the fork keeps OpenCE's")
+
 
 def code():
     source = read("port/linux/game/mcc_hud_draw.c")

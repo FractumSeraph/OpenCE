@@ -31,7 +31,9 @@ def test_votes_played_never_noted():
     assert "_distributed_message_map_vote_choice + 1 == _distributed_message_checkpoint" in text
     assert "_distributed_message_vehicle_riding_map + 1 == NUMBER_OF_DISTRIBUTED_MESSAGES" in text
     assert "_distributed_message_votekick == _distributed_message_coop_device_states + 1" in text
-    handle = text[text.index("void network_distributed_handle_message("):]
+    # (ChupathingyCE's static distributed_handle_message, which the public one
+    # calls, since the merge of its 38aae92ee)
+    handle = text[text.index("static void distributed_handle_message("):]
     unknown_call = handle.index("if (!distributed_kind_known(header.type))\n\t{\n\t\tdistributed_unknown_kind(machine_index, header.type);")
     # (the map vote's messages are network_map_vote.c's, taken before the kind check)
     assert handle.index("if (network_map_vote_handles_message(message, size))") < unknown_call

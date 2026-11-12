@@ -3839,10 +3839,6 @@ static void distributed_take_prediction(
 		position.z -= base.z - object->object.position.z;
 	}
 
-	/* MCC movement effects stay host-simulated, rather than widening the
-	 * security bounds on client-supplied positions and velocities. */
-	if (mcc_script_effects_host_movement())
-		return;
 	if (distributed_riding_elevator(unit_index))
 		position.z = object->object.position.z;
 	dx = position.x - object->object.position.x;

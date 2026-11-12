@@ -46,6 +46,9 @@ static boolean cache_files_map_installed(const char *map_name)
 }
 static unsigned long system_milliseconds(void) { return now_milliseconds; }
 static unsigned long cache_files_map_choose(char *map_name, long size) { (void)map_name; (void)size; return 0; }
+/* (this fork's: the map's shared name and its version, map sharing's) */
+static void map_share_level_name_choose(char *map_name, long size) { (void)map_name; (void)size; }
+static unsigned long cache_files_map_version(const char *map_name) { (void)map_name; return 0; }
 static void main_set_multiplayer_map_name(const char *map_name) { snprintf(host_map, sizeof(host_map), "%s", map_name); }
 static void game_engine_override_map_name(const char *map_name) { (void)map_name; }
 static boolean network_game_server_send_game_data_pregame(struct network_game_server *server) { (void)server; sends++; return TRUE; }

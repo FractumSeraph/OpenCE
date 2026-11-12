@@ -1173,14 +1173,14 @@ static void test_layouts_43_hostile(void)
 
 /* a message header word as the transport gives it (this machine's order):
 the size in bits 4 to 15, the data type (2) in bits 2 and 3 */
-static void test_header_word(uint8_t *message, int size)
+static void __attribute__((unused)) test_header_word(uint8_t *message, int size)
 {
 	uint16_t word = (uint16_t)((size << 4) | (2 << 2));
 
 	memcpy(message, &word, sizeof(word));
 }
 
-static int test_header_size(uint8_t const *message)
+static int __attribute__((unused)) test_header_size(uint8_t const *message) /* (test_header_extension's alone) */
 {
 	uint16_t word;
 
@@ -1188,6 +1188,7 @@ static int test_header_size(uint8_t const *message)
 	return word >> 4;
 }
 
+#ifdef NETWORK_RULES_TEST_CHUPA_BUILT_IN_43
 static void test_header_extension(void)
 {
 	/* the shield effects message (12 bytes) to 16, its epoch at 8 */
@@ -1286,6 +1287,7 @@ static void test_header_extension(void)
 	CHECK(network_rules_header_strip(batch_wide, size, narrow, 2, 0, 0, 0, &epoch) == at && epoch == 0);
 	CHECK(!memcmp(narrow, batch, (size_t)at));
 }
+#endif
 
 /* (port, this fork: ChupathingyCE's tests of 43 taken by chupa-43a's facts,
 its 41 game's way: built in, or from a table's row of 43. This fork's game
@@ -1366,6 +1368,10 @@ static void test_host_own_machine_43(void)
 
 #endif
 
+#ifdef NETWORK_RULES_TEST_CHUPA_BUILT_IN_43
+/* (ChupathingyCE's 41 game across 43's boundary reverts, and its reliable
+messages 4 bytes longer: the fork's game speaks 43 itself, with 43's
+header, so these expectations are ChupathingyCE's) */
 /* a co-op client present across two reverts of a 43 host: at each revert
 the host's epoch moves on and the boundary goes to the client; the client
 takes it (newer), asks again with its ready, and the host's next ready
@@ -1463,6 +1469,7 @@ static void test_reliable_split(void)
 	/* (two halves too long still: not split) */
 	CHECK(network_rules_reliable_split(4095, 2, 4087 / 2, 4, 0xFFF) == -1);
 }
+#endif
 
 /* (port, this fork: ChupathingyCE's tests of 43 taken by chupa-43a's facts,
 its 41 game's way: built in, or from a table's row of 43. This fork's game
@@ -1583,15 +1590,24 @@ int main(void)
 #ifdef NETWORK_RULES_TEST_CHUPA_BUILT_IN_43
 	test_layouts_43_hostile();
 #endif
+#ifdef NETWORK_RULES_TEST_CHUPA_BUILT_IN_43
+	/* (ChupathingyCE's 41 game's messages widened to 43's header: the
+	fork's game speaks 43 itself, so its built-in layouts have no header
+	facts and these expectations are ChupathingyCE's) */
 	test_header_extension();
+#endif
 #ifdef NETWORK_RULES_TEST_CHUPA_BUILT_IN_43
 	test_unit_parts();
 #endif
 #ifdef NETWORK_RULES_TEST_CHUPA_BUILT_IN_43
 	test_host_own_machine_43();
 #endif
+#ifdef NETWORK_RULES_TEST_CHUPA_BUILT_IN_43
 	test_client_across_reverts();
+#endif
+#ifdef NETWORK_RULES_TEST_CHUPA_BUILT_IN_43
 	test_reliable_split();
+#endif
 #ifdef NETWORK_RULES_TEST_CHUPA_BUILT_IN_43
 	test_unit_state_length();
 #endif

@@ -89,9 +89,6 @@ static boolean mcc_cache_tags_loaded(void) { return mcc_loaded; }
 static rectangle2d drawn_bounds;
 #define rasterizer_draw_unicode_string(bounds, style, color, flags, string) (draws++, drawn_shadow = shadow, drawn_bounds = *(bounds))
 
-/* MCC title adaptation is inactive for these Xbox/CE cases. */
-static boolean mcc_cache_tags_loaded(void) { return FALSE; }
-static void mcc_hud_title_bounds(rectangle2d *bounds, short justification, unsigned long flags) { }
 #include "under_test.inc"
 
 /* the title in its slot, at its start: up for up_time ticks, then fading out for fade_out_time */
