@@ -22,13 +22,18 @@ and a window placed elsewhere is given back below) */
 #define MAP_FIXED_NOREPLACE 0
 #endif
 
-#if defined(HALO_ANDROID) && defined(HALO_ARM64_GUEST)
+#if defined(HALO_ANDROID) && defined(HALO_ARM64_GUEST) && !defined(HALO_BROWSER)
 #include "guest_host.h"
 #endif
 
-/* (port, this fork: the browser build plays no MCC map, as it plays no
-Custom Edition map: its memory has no window for one, web_memory.c being
-OpenCE's, which this fork's page does not build) */
+#ifdef HALO_BROWSER
+/* (port, this fork: the browser build, which also says HALO_ANDROID) Its
+WebAssembly memory has no mmap: xbox_memory.c keeps every window a map may
+ask for out of the C heap at start-up (PLATFORM_MCC_WINDOWS_BASE, platform.h),
+and one loaded cache owns one of them at a time, as in OpenCE's web build
+(HALO_WEB below; its web_memory.c is not this build's) */
+static void *mcc_browser_window;
+#endif
 
 #ifdef HALO_WINDOWS
 /* Keep the linked MCC window out of the Windows heap/driver allocator's
@@ -81,7 +86,26 @@ static void mcc_window_dispose(void)
 
 void *mcc_memory_reserve(uint32_t address, uint32_t size)
 {
-#if defined(HALO_ANDROID) && defined(HALO_ARM64_GUEST)
+#if defined(HALO_BROWSER)
+    void *wanted = (void *)(uintptr_t)address;
+    if ((address & 0xFFFFu) || size != 0x04000000u ||
+        address < PLATFORM_MCC_WINDOWS_BASE || address > PLATFORM_MCC_WINDOWS_END - size) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!platform_mcc_windows_ready) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    if (mcc_browser_window) {
+        errno = EBUSY;
+        return NULL;
+    }
+    /* (cleared, as fresh pages would be) */
+    memset(wanted, 0, size);
+    mcc_browser_window = wanted;
+    return wanted;
+#elif defined(HALO_ANDROID) && defined(HALO_ARM64_GUEST)
     long long result = host_mcc_memory_reserve(address, size);
     if (result < 0) {
         errno = (int)-result;
@@ -139,7 +163,11 @@ void *mcc_memory_reserve(uint32_t address, uint32_t size)
 
 void mcc_memory_release(void *allocation, uint32_t size)
 {
-#if defined(HALO_ANDROID) && defined(HALO_ARM64_GUEST)
+#if defined(HALO_BROWSER)
+    (void)size;
+    if (allocation && allocation == mcc_browser_window)
+        mcc_browser_window = NULL;
+#elif defined(HALO_ANDROID) && defined(HALO_ARM64_GUEST)
     if (allocation) {
         int error = host_mcc_memory_release((unsigned int)(uintptr_t)allocation, size);
         if (error)

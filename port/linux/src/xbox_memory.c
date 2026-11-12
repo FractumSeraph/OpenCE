@@ -90,6 +90,9 @@ int platform_ce_tag_cache_ready = FALSE;
 char platform_ce_tag_cache_error[160];
 unsigned int platform_ce_conversion_room = 0;
 #endif
+#ifdef HALO_BROWSER
+int platform_mcc_windows_ready = FALSE;
+#endif
 #ifdef HALO_WINDOW_REBASE
 /* where the window is and how large (cseries/xbox_address.h): the linked
 address until the guest's runtime is told the host's, before any
@@ -137,19 +140,28 @@ as 0x803a6000 are usable at once. Custom Edition maps' tag cache
 has no mmap: dlmalloc takes the linear memory from the bottom up with sbrk,
 so the break is moved past the cache, after one allocation that fills what
 lies below and is freed again (the memory below stays the allocator's). Its
-pages are touched only when a Custom Edition map loads. */
+pages are touched only when a Custom Edition map loads.
+
+(port, this fork) The break goes on past the cache's conversion room
+(PLATFORM_CE_CONVERSION_ROOM_SIZE, as a native 32-bit build maps it) and
+MCC maps' tag windows (PLATFORM_MCC_WINDOWS_BASE to _END, mcc_memory.c), which
+follow it without a gap: 0x40440000 to 0x74000000 is kept, and the C heap is
+what lies below it and above it up to the Xbox window, about 1.2 GB (OpenCE's
+browser build keeps 1 GB). */
 __attribute__((constructor(101)))
 static void contiguous_arena_reserve(void)
 {
 	uintptr_t start = PLATFORM_CE_TAG_CACHE_BASE;
-	uintptr_t end = start + PLATFORM_CE_TAG_CACHE_SIZE;
+	uintptr_t end = PLATFORM_MCC_WINDOWS_END;
 	uintptr_t brk;
 	void *below = NULL;
 
 	arena_reserved = emscripten_get_heap_size() >= PLATFORM_CONTIGUOUS_BASE + PLATFORM_CONTIGUOUS_SIZE;
 	if (!arena_reserved)
 		platform_log("WebAssembly memory does not cover the Xbox contiguous window");
-#ifdef HALO_CUSTOM_EDITION
+	/* (the windows follow the cache and its room exactly) */
+	_Static_assert(PLATFORM_CE_TAG_CACHE_BASE + PLATFORM_CE_TAG_CACHE_SIZE + PLATFORM_CE_CONVERSION_ROOM_SIZE
+		<= PLATFORM_MCC_WINDOWS_BASE, "the MCC windows overlap the Custom Edition tag cache");
 	brk = (uintptr_t)sbrk(0);
 	/* (room for the allocator's own rounding up) */
 	if (brk + 0x200000 < start)
@@ -157,22 +169,22 @@ static void contiguous_arena_reserve(void)
 	brk = (uintptr_t)sbrk(0);
 	if (brk <= start && sbrk((intptr_t)(end - brk)) != (void *)-1)
 	{
+#ifdef HALO_CUSTOM_EDITION
 		platform_ce_tag_cache_ready = TRUE;
+		platform_ce_conversion_room = PLATFORM_CE_CONVERSION_ROOM_SIZE;
+#endif
+		platform_mcc_windows_ready = TRUE;
 	}
 	else
 	{
+#ifdef HALO_CUSTOM_EDITION
 		snprintf(platform_ce_tag_cache_error, sizeof(platform_ce_tag_cache_error),
 			"the heap is at %p already, over the cache at %p", (void *)brk, (void *)start);
-		platform_log("cannot keep Custom Edition maps' tag cache at %p free (the heap is at %p): they will not load",
+#endif
+		platform_log("cannot keep Custom Edition and MCC maps' memory at %p free (the heap is at %p): they will not load",
 			(void *)start, (void *)brk);
 	}
 	free(below);
-#else
-	(void)start;
-	(void)end;
-	(void)brk;
-	(void)below;
-#endif
 }
 #elif defined(HALO_WEB)
 /* OpenCE's web build: its WebAssembly memory is made large enough that the

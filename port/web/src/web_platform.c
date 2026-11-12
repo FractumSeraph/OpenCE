@@ -402,6 +402,20 @@ void platform_web_initialize(void)
 	storage = wasmfs_create_opfs_backend();
 	if (wasmfs_create_directory("/storage", 0777, storage) != 0 && errno != EEXIST)
 		platform_log("web: cannot mount persistent storage");
+	/* (port, this fork) MCC maps (d:\mcc_maps, mcc_maps.c): the data root
+	is the site's, read-only, so its mcc_maps is the persistent storage's.
+	There the page's "Add MCC maps" puts a package (OpenCE's importer,
+	port/web/site/mcc-import-worker.js, which writes OPFS's mcc_maps as
+	OpenCE's web build has it) and map sharing its downloads (mcc_share.c) */
+	/* (wasmfs_create_directory returns the error, -EEXIST once it is there) */
+	{
+		int made = wasmfs_create_directory("/storage/mcc_maps", 0777, storage);
+
+		if (made != 0 && made != -EEXIST)
+			platform_log("web: cannot make the MCC maps' folder (%d)", made);
+		else if (symlink("/storage/mcc_maps", "/assets/mcc_maps") != 0 && errno != EEXIST)
+			platform_log("web: cannot link the MCC maps' folder (%s)", strerror(errno));
+	}
 	setenv("HALO_DATA_ROOT", "/assets", 1);
 	setenv("HALO_SAVE_ROOT", "/storage", 1);
 	/* (internet play's own machinery stays off here whatever network.online

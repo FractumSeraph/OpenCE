@@ -322,6 +322,17 @@ extern char platform_ce_tag_cache_error[160];
 extern unsigned int platform_ce_conversion_room;
 #endif
 
+#ifdef HALO_BROWSER
+/* (port, this fork: the browser build) MCC maps' tag windows: a map asks for
+64 MiB at the address it was linked to, anywhere from 0x42000000 to
+0x70000000 (mcc_memory.c). WebAssembly has no mmap, so xbox_memory.c keeps
+the whole range, right above the Custom Edition tag cache and its conversion
+room, out of the C heap at start-up; nonzero once it has */
+#define PLATFORM_MCC_WINDOWS_BASE 0x42000000U
+#define PLATFORM_MCC_WINDOWS_END 0x74000000U
+extern int platform_mcc_windows_ready;
+#endif
+
 /* the host's page size, which protection works in (4 KB or more) */
 extern unsigned int platform_host_page_size;
 

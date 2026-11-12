@@ -4,7 +4,8 @@ overlay, which reads the host's events and is left out of the web build:
 WEB_EXCLUDED_PLATFORM_SOURCES in tools/browser_build.py). The page has touch
 controls of its own (port/web/assets/touch), which press keys and move the
 mouse; so these do nothing, as on a desktop with no touchscreen. And the updater's version,
-which the window's title asks for (updater.c, also left out). */
+which the window's title asks for, and its install from the menus (updater.c,
+also left out). */
 
 #include "platform.h"
 #include "touch_input.h"
@@ -83,4 +84,33 @@ touch controls have none, so its A and B prompt shows */
 int touch_input_screen_buttons(void)
 {
 	return 0;
+}
+
+/* ChupathingyCE's install from the game's own pages (update.h; the menus'
+Settings > Online > Updates, menu_functions.c): a page is always the current
+build, so there is never anything to install */
+int updater_ready(char *latest, int size)
+{
+	if (latest && size > 0)
+		latest[0] = '\0';
+	return 0;
+}
+
+int updater_install_begin(void)
+{
+	return 0;
+}
+
+int updater_install_status(char *line, int size)
+{
+	if (line && size > 0)
+		line[0] = '\0';
+	return 0;
+}
+
+const char *updater_install_amount(char *text, int size)
+{
+	if (text && size > 0)
+		text[0] = '\0';
+	return text;
 }

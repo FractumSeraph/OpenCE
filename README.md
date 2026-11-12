@@ -252,6 +252,14 @@ steam = 'C:\Steam'
 
 Steam is not needed on Android. See the [Android import guide](port/android/README.md#importing-mcc-packages).
 
+### In the browser (this fork's)
+
+1. Open **Game settings** under the game and press **Add** beside *MCC maps on this device*.
+2. Choose the package's folder (a Workshop item's `976730/<workshop ID>` folder, or one with its `.map` files). It is checked and copied into the browser's own storage; nothing is uploaded.
+3. Reload the page to play its maps.
+
+Maps that need MCC's [shared resources](#shared-mcc-resources) cannot be added in the browser yet; self-contained packages, and those carrying their own resources, can. MCC maps a host shares are downloaded into the same storage.
+
 ### Manual installation
 
 Create a folder such as `mcc_maps/MercuryRising` beside your existing `maps` and `custom_maps` folders.
@@ -320,7 +328,9 @@ The page needs cross-origin isolation (COOP/COEP headers) and the maps
 beside it in `assets/maps/` (served with byte ranges), or the player chooses
 an Xbox disc image in the browser. Custom Edition maps come from
 `assets/custom_maps/` (listed in its `index.json`) and are kept in the
-browser once read (Cache Storage). The first time a map is played, the page
+browser once read (Cache Storage). MCC map packages the player adds (Game
+settings, [MCC maps](#in-the-browser-this-forks)) and those a host shares are
+kept in the browser's own storage (OPFS), the game's `d:\mcc_maps`. The first time a map is played, the page
 fetches it and `bitmaps.map`, `sounds.map` and `loc.map` whole, a few large
 ranges at a time (`port/web/fetch_path_normalization.js`); joining from the
 Server Browser waits for that before connecting, the status line showing
