@@ -11,7 +11,8 @@
 #   3. only while both servers have no players (the public game list, asked
 #      twice a minute apart): never in the middle of a game. `--force`, run
 #      by hand, skips this (a server whose count is stuck above 0 would
-#      otherwise never be updated);
+#      otherwise never be updated). A server off the list that keeps
+#      starting its game again (restarting()) counts as empty;
 #   4. the zip checked against GitHub's SHA-256 digest, the program run once
 #      (--version), the one running until now kept as chupathingyce-server.previous;
 #   5. both servers restarted, and if either is not running a minute later,
@@ -39,6 +40,10 @@ PROGRAM = os.path.join(BIN, "chupathingyce-server")
 UNITS = ["halo-dedicated", "halo-fractumslayer"]
 SERVERS = ["FractumFFA", "FractumKing"]
 GAME_LIST = "https://halo.milenko.org/v1/games"
+# a server that started its game this many times in these minutes is in a
+# loop (normally it is once or twice a day: restarting())
+RESTART_HOSTINGS = 6
+RESTART_MINUTES = 5
 
 
 def log(text):
@@ -64,6 +69,21 @@ def running_version():
     return ""
 
 
+def restarting(unit):
+    """whether the server keeps starting its game again (its journal's
+    "Internet play: hosting." RESTART_HOSTINGS times or more in the last
+    RESTART_MINUTES): then nobody can stay in it, and it is listed only for
+    moments, so it is taken as empty. Without this a release that fixes such
+    a loop never got in: fs.00253's servers refused their own join through
+    127.0.0.1 (2026-11-12), so were never on the list, so never updated."""
+    try:
+        out = subprocess.run(["journalctl", "-u", unit, "--since", f"-{RESTART_MINUTES}min", "--no-pager",
+                              "--output", "cat"], capture_output=True, text=True, timeout=60).stdout
+    except Exception:
+        return False
+    return out.count("Internet play: hosting.") >= RESTART_HOSTINGS
+
+
 def players():
     """the players on the servers, or None when the list does not say"""
     try:
@@ -73,6 +93,10 @@ def players():
         return None
     games = data.get("games", data) if isinstance(data, dict) else data
     found = {game.get("name"): int(game.get("players") or 0) for game in games if game.get("name") in SERVERS}
+    for unit, server in zip(UNITS, SERVERS):
+        if server not in found and restarting(unit):
+            log(f"{server} is not on the game list and keeps starting its game again: taken as empty")
+            found[server] = 0
     if len(found) != len(SERVERS):
         log(f"not every server is on the game list ({sorted(found)})")
         return None

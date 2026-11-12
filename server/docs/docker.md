@@ -236,8 +236,10 @@ at the top of each):
   GitHub's SHA-256 digest, runs the new program once (`--version`), keeps
   the old one as `chupathingyce-server.previous` and restarts both servers;
   if either is not running a minute later, it puts the previous program
-  back. Never in the middle of a game. Its log is
-  `journalctl -u halo-gameservers-update`.
+  back. Never in the middle of a game. A server off the game list that
+  keeps starting its game again (six times in five minutes: nobody can
+  stay in it) counts as empty, so a release that fixes such a loop gets
+  in. Its log is `journalctl -u halo-gameservers-update`.
 - `halo-backup`, run nightly by `halo-backup.service` and `.timer`: a
   `.tar.gz` of the servers' settings (env files, admin settings, playlists,
   control panel accounts and audit log, Delta Control links, lasting invite
@@ -253,7 +255,8 @@ at the top of each):
   game's recording: no address or hardware id), when a game server
   crashes (systemd starts it again within seconds), and when a game server,
   the web services, Caddy, the tracker or MQTT is not running, the site or
-  the lobby does not answer, a server is off the game list for ten
+  the lobby does not answer, a server keeps starting its game again
+  (six times in five minutes), a server is off the game list for ten
   minutes, the disk has under 2 GB left, or a server update, backup or ban
   list run failed; and again when it is back. The webhook's URL goes in
   `/etc/halo-alerts/webhook`, readable by root alone (anyone with it can

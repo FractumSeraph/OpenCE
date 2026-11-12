@@ -11,6 +11,9 @@
 #   - a game server that crashed (systemd: its process dumped core or was
 #     killed by a signal), which systemd starts again within seconds, too
 #     soon for the minute's checks to see;
+#   - a game server that keeps starting its game again (its process stays
+#     up, but nobody can stay in the game), rather than the game list's
+#     "not on the list" and "back" every few minutes;
 #   - something down: a game server, the web services, Caddy, the tracker or
 #     MQTT not running; the site, the lobby or a server's place on the game
 #     list not answering; little disk left; a server update, backup or ban
@@ -63,6 +66,10 @@ DISK_MINIMUM = 2 * 1024 ** 3
 # a check's failures in a row (a minute apart) before it is said, and the game list's
 FAILURES_TO_ALERT = 3
 GAME_LIST_FAILURES_TO_ALERT = 10
+# a game server that started its game this many times in these minutes is in
+# a loop: nobody can stay in it (fs.00253 refused its own join, 2026-11-12)
+RESTART_HOSTINGS = 6
+RESTART_MINUTES = 5
 # the same player's suspicion said once in this long
 SUSPECT_REPEAT_SECONDS = 15 * 60
 
@@ -224,6 +231,17 @@ def unit_failed(unit):
     return subprocess.run(["systemctl", "is-failed", "--quiet", unit]).returncode == 0
 
 
+def hostings(unit):
+    """how often the server started its game (its "Internet play: hosting."
+    line) in the last RESTART_MINUTES: once or twice a day normally"""
+    try:
+        out = subprocess.run(["journalctl", "-u", unit, "--since", f"-{RESTART_MINUTES}min", "--no-pager",
+                              "--output", "cat"], capture_output=True, text=True, timeout=60).stdout
+    except Exception:
+        return 0
+    return out.count("Internet play: hosting.")
+
+
 def url_ok(url):
     try:
         request = urllib.request.Request(url, headers={"User-Agent": "halo-alerts"})
@@ -256,9 +274,23 @@ def checks():
                         f"`{unit}` failed its last run: `journalctl -u {unit}`", 1))
     results.append(("site", url_ok(SITE), f"the site {SITE} does not answer", FAILURES_TO_ALERT))
     results.append(("lobby", url_ok(LOBBY), "the lobby (the `halo` web services) does not answer", FAILURES_TO_ALERT))
+    looping = set()
+    for unit, (server, _) in SERVERS.items():
+        count = hostings(unit)
+        if count >= RESTART_HOSTINGS:
+            looping.add(server)
+        results.append((f"restarting {server}", count < RESTART_HOSTINGS,
+                        f"{server} keeps starting its game again ({count} times in {RESTART_MINUTES} minutes): "
+                        f"nobody can stay in it, and the game list sees it only now and then: `journalctl -u {unit}`",
+                        FAILURES_TO_ALERT))
     listed = listed_servers()
     if listed is not None:
         for server, _ in SERVERS.values():
+            # (one starting its game again and again is said above: on the
+            # list for moments, it said "not on the game list" and "back"
+            # every few minutes, 2026-11-12)
+            if server in looping:
+                continue
             results.append((f"listed {server}", server in listed, f"{server} is not on the game list (halo.milenko.org)",
                             GAME_LIST_FAILURES_TO_ALERT))
     try:
