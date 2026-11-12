@@ -244,13 +244,16 @@ enum
 	XBOX_UNKNOWN_LEVEL_PICTURE = 13,
 
 	/* the campaign maps found, at most; their string list indices from
-	here, as the multiplayer rows' (row times four, plus the kind) */
+	here, after the multiplayer rows' and as theirs (row times the kinds,
+	plus the kind; this fork: right after them since ChupathingyCE's 2,560
+	rows, below ui_widget.c's SPINNER_EXTRA_DESCRIPTION_BASE, 0x7C00) */
 	MAXIMUM_CAMPAIGN_LIST = 256,
-	UI_MAP_LIST_CAMPAIGN_STRING_BASE = 0x5000,
+	UI_MAP_LIST_CAMPAIGN_STRING_BASE = UI_MAP_LIST_STRING_BASE + MAXIMUM_MAP_LIST * UI_MAP_LIST_STRINGS_PER_ROW,
 	/* bitmap frames from here are rows' own pictures (<name>.bmp): the
-	multiplayer rows', then the campaign rows' (below ui_widget.c's 0x7000) */
-	UI_MAP_LIST_ROW_PICTURE_BASE = 0x5800,
-	UI_MAP_LIST_CAMPAIGN_PICTURE_BASE = 0x5C00,
+	multiplayer rows', then the campaign rows' (after Halo PC's pictures,
+	below the levels' at UI_MAP_LIST_LEVEL_PICTURE_BASE) */
+	UI_MAP_LIST_ROW_PICTURE_BASE = 0x4100,
+	UI_MAP_LIST_CAMPAIGN_PICTURE_BASE = UI_MAP_LIST_ROW_PICTURE_BASE + MAXIMUM_MAP_LIST,
 	MAP_PATH_LENGTH = 256,
 	/* and from here the campaign's levels' pictures (ui.map's sp_levels, a
 	frame for each level: add_campaign_entries) */
@@ -259,7 +262,7 @@ enum
 
 typedef char verify_ui_map_list_string_bases[
 	UI_MAP_LIST_STRING_BASE + MAXIMUM_MAP_LIST * UI_MAP_LIST_STRINGS_PER_ROW <= UI_MAP_LIST_CAMPAIGN_STRING_BASE &&
-	UI_MAP_LIST_CAMPAIGN_STRING_BASE + MAXIMUM_CAMPAIGN_LIST * UI_MAP_LIST_STRINGS_PER_ROW <= 0x7000 ? 1 : -1];
+	(long)UI_MAP_LIST_CAMPAIGN_STRING_BASE + MAXIMUM_CAMPAIGN_LIST * UI_MAP_LIST_STRINGS_PER_ROW <= 0x7C00 ? 1 : -1];
 
 /* (every row's strings have string list indices, shorts) */
 typedef char ui_map_list_string_indices_fit[

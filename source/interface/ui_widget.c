@@ -1585,8 +1585,9 @@ static wchar_t *spinner_string_list_get_string(
 /* port: text boxes' string list indices from here are the descriptions of
 spinners' extra items (spinner_extras' descriptions), above the Custom
 Edition maps' string list indices and bitmap frames (port/linux/game/ui_map_list.c
-keeps them below 0x7000) */
-#define SPINNER_EXTRA_DESCRIPTION_BASE 0x7000
+keeps them below 0x7C00: this fork, since ChupathingyCE's map list of 2,560
+rows, five strings each from 0x4000, reaches 0x7200) */
+#define SPINNER_EXTRA_DESCRIPTION_BASE 0x7C00
 /* ... and the pixels the kills to win spinner is wider (for three digits) */
 #define SPINNER_EXTRA_WIDTH 12
 

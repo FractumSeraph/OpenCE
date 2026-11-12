@@ -218,6 +218,12 @@ static char test_directory[512];
 struct mcc_workshop_item { char id[MCC_WORKSHOP_ID_SIZE]; };
 static int mcc_workshop_local_item(char const *level, struct mcc_workshop_item *item)
 { (void)level; (void)item; return 0; }
+/* (this fork's mcc_package.c: the package's .map, here in the test's folder
+   as ChupathingyCE's register names it) */
+static int mcc_package_map_path(char const *name, char path[128])
+{
+	return snprintf(path, 128, "%s%s.map", MCC_MAPS_DIRECTORY, name + sizeof(MCC_MAPS_LEVEL_PREFIX) - 1) < 128;
+}
 """
 
 REGISTER_DRIVER = r"""

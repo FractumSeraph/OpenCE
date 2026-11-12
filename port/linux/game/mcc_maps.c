@@ -155,7 +155,13 @@ static char const *mcc_map_register(char const *name, char const **detail)
 		*detail = "the MCC catalog is full";
 		return "Too many maps";
 	}
-	if (!mcc_package_map_path(canonical,path)) return;
+	/* (this fork: the package's own folder, or the browser's staged one,
+	mcc_package.c; ChupathingyCE's register returns why a map is not listed) */
+	if (!mcc_package_map_path(canonical,path))
+	{
+		*detail = "its .map file's path is too long";
+		return "Name too long";
+	}
 	file = fopen(path, "rb");
 	if (!file)
 	{
