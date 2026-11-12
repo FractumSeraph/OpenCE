@@ -156,6 +156,11 @@ unreadable, non-string or oversized registry values are ignored. The detected
 path is not written to the configuration: an empty setting continues to use
 automatic discovery on the next scan.
 
+A map an item names that can't be listed (its json or `.map` file missing or
+unreadable, not a Halo 1 MCC cache, a name too long) is never dropped silently:
+the log says which map and why, and the item's Workshop page shows a short
+status under its description.
+
 On Linux, after the manual override, discovery checks the literal absolute path
 in `STEAM_COMPAT_CLIENT_INSTALL_PATH` when the launch environment supplies it,
 then `$XDG_DATA_HOME/Steam`. It also keeps the home-folder fallbacks above and
