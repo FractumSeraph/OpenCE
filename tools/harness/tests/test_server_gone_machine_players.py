@@ -8,7 +8,7 @@ import pytest
 # (port, this fork: OpenCE's test of its server code, which in this fork keeps
 # datagram ports and kick codes of its own; build/UPDATING.md, OpenCE 14ff64cd8, has the
 # list of the harness tests left to adapt)
-pytestmark = pytest.mark.skip(reason="the fork's server code differs")
+# _skip = (reason="the fork's server code differs")
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from harness import CHECK_FAILED, build, constant, enum_with, function, mutated, read, run, structure, port_limits  # noqa: E402

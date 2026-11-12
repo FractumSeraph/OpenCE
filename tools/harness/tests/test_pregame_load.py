@@ -10,7 +10,7 @@ import pytest
 # (port, this fork: the host's lobby code is the fork's, with OpenCE's map download
 # holds (network_game_server_map_pending), which its stand-ins lack; build/UPDATING.md, OpenCE 14ff64cd8, has the
 # list of the harness tests left to adapt)
-pytestmark = pytest.mark.skip(reason="the fork's lobby code needs more stand-ins")
+# _skip = (reason="the fork's lobby code needs more stand-ins")
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from harness import CHECK_FAILED, ROOT, build, enum_with, function, mutated, read, run  # noqa: E402

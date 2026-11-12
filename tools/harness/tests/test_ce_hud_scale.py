@@ -16,7 +16,7 @@ import pytest
 # (port, this fork: ce_hud.c now reads its tags through ChupathingyCE's guarded
 # loader (ce_loaded_pointer, ce_tags_writable), which its stand-ins lack; build/UPDATING.md, OpenCE 14ff64cd8, has the
 # list of the harness tests left to adapt)
-pytestmark = pytest.mark.skip(reason="ce_hud.c's guarded loader needs stand-ins")
+# _skip = (reason="ce_hud.c's guarded loader needs stand-ins")
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from harness import CHECK_FAILED, build, enum_with, function, mutated, read, run, structure  # noqa: E402

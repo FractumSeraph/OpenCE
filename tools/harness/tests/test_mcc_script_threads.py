@@ -7,7 +7,7 @@ import pytest
 from tools.harness import build, read, run, structure, enum_with, function
 
 # (this fork, since the merge of ChupathingyCE 38aae92ee: build/UPDATING.md)
-pytestmark = pytest.mark.skip(reason="the fork's mcc_script_threads.inl checks its storage with zlib's crc32, which the harness has no stand-in for")
+# _skip = (reason="the fork's mcc_script_threads.inl checks its storage with zlib's crc32, which the harness has no stand-in for")
 
 
 @pytest.fixture(scope="module")

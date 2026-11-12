@@ -43,6 +43,11 @@ static void game_frame(real seconds) { (void)seconds; }
 /* port: chester's MCC game speed (mcc_game_speed.c): off without an MCC map */
 static real mcc_game_speed_client(real speed) { return speed; }
 static void mcc_game_speed_frame(void) {}
+/* (port, this fork: the profiler's sections (profile_sections.h), debug.fixed_step
+and the main menu's own clock, none of them in these cases) */
+#define profile_scope(variable, statement) { statement }
+static boolean halo_fixed_step(void) { return FALSE; }
+static boolean game_time_menu_scene(void) { return FALSE; }
 
 #include "under_test.inc"
 

@@ -11,7 +11,7 @@ import pytest
 # text, which in this fork is ChupathingyCE's, its data arrays and thread
 # stacks laid out otherwise: hs_console_state.inl is compiled in the game
 # itself; build/UPDATING.md, OpenCE 14ff64cd8, says what is left to do)
-pytestmark = pytest.mark.skip(reason="the fork's hs runtime and data arrays are ChupathingyCE's")
+# _skip = (reason="the fork's hs runtime and data arrays are ChupathingyCE's")
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from harness import ROOT, enum_with, function, mutated, read, structure

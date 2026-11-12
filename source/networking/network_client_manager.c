@@ -876,6 +876,10 @@ int network_rules_join_request_extra(unsigned version);
 /* ... and its bytes: zeros, and a version word where the host's layout has
 one (a table's chupa-43a facts) */
 int network_rules_join_request_tail(unsigned version, unsigned char *tail, int room);
+/* ... and the tail create_network_game_message_with_tail gives this build's
+request to it: the whole request to a host whose version is not known
+(network_rules.h) */
+int network_rules_join_request_tail_size(unsigned version, int native);
 unsigned network_rules_join_retry_version(unsigned joined, int hosting, unsigned long waited);
 /* port: when the join request went, and whether it went again (to a host
 whose number this client was not told: network_rules_join_retry_version) */
@@ -3502,7 +3506,8 @@ static void network_game_client_send_join_request(
 		ChupathingyCE's network_rules_join_request_tail, which writes it
 		into the bytes past 0x70 for its shorter request, is not used:
 		the fork's built-in 42 and 43 layouts say no further bytes) */
-		int extra = version == 0xFFFF ? native : network_rules_join_request_extra(version);
+		short tail = (short)network_rules_join_request_tail_size(version, native);
+		int extra = native + tail;
 
 		if (extra)
 		{
@@ -3513,7 +3518,7 @@ static void network_game_client_send_join_request(
 			_message_client_join_game_request,
 			&join_game_request,
 			sizeof(join_game_request),
-			(short)(extra - native));
+			tail);
 	}
 	if (message)
 	{

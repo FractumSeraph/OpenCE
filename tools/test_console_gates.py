@@ -58,6 +58,7 @@ XBOX_EXPECTED = {
     "HALO_CONSOLE_NO_TITLE_CHOICE",
     "HALO_CONSOLE_NO_GUIDE",
     "HALO_CONSOLE_NO_SHADER_PREP",
+    "HALO_CONSOLE_NO_STUBBS",
 }
 
 
@@ -120,8 +121,12 @@ WORKSHOP_HOOKS = {
     "port/linux/src/steam_client_bridge.h": ["steam_link_available", "steam_link_linked", "steam_link_start",
                                              "steam_link_poll", "steam_link_cancel", "steam_link_set_armed",
                                              "steam_link_armed", "steam_link_unlink", "steam_link_store_secure"],
-    "port/linux/game/guide_workshop.h": ["guide_workshop_shown", "guide_workshop_link_panel",
-                                         "guide_workshop_render", "guide_workshop_update"],
+    "port/linux/game/guide_workshop.h": ["guide_workshop_shown", "guide_workshop_link_modal",
+                                         "guide_workshop_link_modal_press", "guide_workshop_link_modal_back",
+                                         "guide_workshop_link_modal_render", "guide_workshop_link_note",
+                                         "guide_workshop_page_step", "guide_workshop_pages",
+                                         "guide_workshop_page_offered", "guide_workshop_render",
+                                         "guide_workshop_update"],
 }
 
 
@@ -214,3 +219,27 @@ def test_mcc_network_hooks_are_halo_mccs():
     peer = (ROOT / "port" / "linux" / "src" / "delta_peer_game.c").read_text()
     offer = peer.index("local.capabilities |= (delta_u32)1 << _delta_capability_mcc_maps;")
     assert peer.rfind("#if defined(HALO_MCC) && HALO_MCC", 0, offer) > peer.rfind("#endif", 0, offer)
+
+
+def test_workshop_play_hooks_are_the_guides():
+    """the Delta Guide's Workshop PLAY's hooks in the shared code (the
+    pause menu's QUIT, a lobby ended, a solo campaign, the screen it opened)
+    build only where the Guide and MCC maps are: no console builds them"""
+    gate = "#if defined(HALO_GUIDE) && (!defined(HALO_MCC) || HALO_MCC)"
+    for path, names in (("source/interface/ui_widget_event_handler_functions.c",
+                         ("void ui_widget_port_quit_to_main_menu(", "void ui_widget_port_end_network_game(",
+                          "void ui_widget_port_campaign_solo(")),
+                        ("source/interface/ui_widget.c",
+                         ("long ui_widget_port_active_screen_tag(", "boolean ui_widget_port_screen_shown_or_behind(")),
+                        ("port/linux/game/menu_functions.c",
+                         ("boolean pc_menu_workshop_play(", "void pc_menu_workshop_play_update("))):
+        text = (ROOT / path).read_text(encoding="latin-1")
+        for name in names:
+            at = text.index(name)
+            start = text.rfind(gate, 0, at)
+            assert start != -1, "{} in {} isn't gated".format(name, path)
+            # (the gate still open at the function: its own #if ... #endif inside it counted)
+            depth = 0
+            for directive in re.findall(r"^\s*#\s*(if|ifdef|ifndef|endif)\b", text[start:at], re.M):
+                depth += -1 if directive == "endif" else 1
+                assert depth > 0, "{} in {} isn't gated".format(name, path)

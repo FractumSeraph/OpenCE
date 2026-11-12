@@ -711,6 +711,12 @@ static void test_layouts_built_in(void)
 	CHECK(network_rules_join_request_extra(40) == 234 && network_rules_join_request_extra(41) == 234);
 	CHECK(network_rules_join_request_extra(42) == 236 && network_rules_join_request_extra(44) == 236);
 	CHECK(network_rules_join_request_extra(NETWORK_RULES_VERSION_UNKNOWN) == 0);
+	/* (this fork's request, 236 bytes past the 0x70: whole to a host of 42
+	on and to one whose version is not known, the server's own player
+	(fs.00253); cut to the 0x70 for 39, 2 short for 40) */
+	CHECK(network_rules_join_request_tail_size(NETWORK_RULES_VERSION_UNKNOWN, 236) == 0);
+	CHECK(network_rules_join_request_tail_size(43, 236) == 0 && network_rules_join_request_tail_size(42, 236) == 0);
+	CHECK(network_rules_join_request_tail_size(39, 236) == -236 && network_rules_join_request_tail_size(40, 236) == -2);
 	CHECK(network_rules_settings_options_size(36, 0x3350) == 0x2C && network_rules_settings_options_size(34, 0x3340) == 0x1C);
 	CHECK(network_rules_settings_options_size(NETWORK_RULES_VERSION_UNKNOWN, 0x3350) == 0x2C);
 	CHECK(network_rules_settings_options_size(NETWORK_RULES_VERSION_UNKNOWN, 0x3340) == 0x1C);
