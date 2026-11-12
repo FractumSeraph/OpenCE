@@ -88,7 +88,8 @@ are [ChupathingyCE's](#chupathingyce) and [OpenCE's](#opence) own pages.
   the browser is already listed there. The game says where in its chat as
   each recording starts. In a game you joined,
   players far from you or out of sight move less exactly than in a host's
-  recording, as the host sends them less often.
+  recording, as the host sends them less often; the replay viewer smooths
+  their path between the host's updates.
 - **Tools against cheaters.** A host checks each hit and move for shots
   through walls, off aim, teleports and flying, and refuses or logs them
   (`network.fair_play`; `sv_suspects` on a dedicated server); records every

@@ -304,6 +304,9 @@ void distributed_send_to_machine_reliably(long machine_index, void *message, byt
 version 42's header (the checkpoint epoch); and whether the game is played
 by the rules of a version (a client's by its host's) */
 boolean network_distributed_host_epochs(void);
+/* (a client) whether the host told where the player (by absolute index) is
+since this was last asked (a client's own recording, network_recording.c) */
+boolean network_distributed_unit_heard(short player_index);
 boolean network_distributed_rules_at_least(unsigned long version);
 /* The host's ordered world boundary, before a full object snapshot. */
 void distributed_checkpoint_to_machine(long machine_index);

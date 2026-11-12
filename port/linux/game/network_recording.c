@@ -49,7 +49,12 @@ a type a reader does not know it skips:
   3 player:   tick (4), player (1), team (1), name, hardware id, address
   4 frame:    tick (4), count (1), then each living player's: player (1),
               flags (1: crouching 1, primary trigger 2, secondary trigger
-              4, zoomed 8, riding 16), position (3 floats: their feet),
+              4, zoomed 8, riding 16, guessed 32: a client's own
+              recording, where the host had not told it where this other
+              player was since the frame before, so that the game had
+              carried them on as they went: the replay viewer draws them
+              between the frames the host's word came in), position (3
+              floats: their feet),
               eye height (2, millimetres), aim (yaw, pitch: 2 each,
               radians times 10000), health and shields (1 each, of 255;
               shields to 2.0), weapon and vehicle (2 each: a tag's number,
@@ -1640,6 +1645,16 @@ static void recording_tick(
 				flags |= 8;
 			if (unit->object.parent_object_index != NONE)
 				flags |= 16;
+			/* (a client: another player the host sent nothing new of
+			since the last frame, sent less often the further they are
+			from this machine's players; a rider goes with its vehicle's
+			word, which the host sends as an object's) */
+			if (recording.client && unit->object.parent_object_index == NONE &&
+				distributed_player(living[index].player_index)->local_player_index == NONE &&
+				!network_distributed_unit_heard(living[index].player_index))
+			{
+				flags |= 32;
+			}
 			at = put_u8(at, (unsigned long)living[index].player_index);
 			at = put_u8(at, flags);
 			at = put_real(at, unit->object.position.x);

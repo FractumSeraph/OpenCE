@@ -650,6 +650,13 @@ static struct distributed_death
 /* the host: a kill this tick, whose statistics the clients should have
 with it */
 static boolean distributed_statistics_due;
+/* a client: whether the host's word on where each player is (a unit state
+with its place) came since the last time network_distributed_unit_heard
+was asked, by absolute index: a client's own recording marks the other
+players' places the game only guessed between them (network_recording.c),
+which the host sends less often the further off they are (NETCODE.md, "The
+players each client needs") */
+static boolean distributed_unit_heard[MAXIMUM_TRACKED_PLAYERS];
 /* the host: what players on other machines picked up this tick */
 static struct distributed_pickup distributed_pickups[MAXIMUM_PICKUPS_PER_TICK];
 static short distributed_pickup_count;
@@ -4049,6 +4056,8 @@ static void distributed_handle_unit_state(
 		return;
 	player_index = DATUM_INDEX_NEW(state->player_index, player->identifier);
 	local = player->local_player_index != NONE;
+	if (state->player_index < MAXIMUM_TRACKED_PLAYERS && TEST_FLAG(state->flags, _distributed_unit_placed_bit))
+		distributed_unit_heard[state->player_index] = TRUE;
 	/* how it died, for when this machine's copy dies
 	(network_distributed_player_killed) */
 	if (state->player_index < MAXIMUM_TRACKED_PLAYERS)
@@ -4190,6 +4199,20 @@ static void distributed_handle_unit_states(
 		data += size;
 		distributed_handle_unit_state(host_time, &state);
 	}
+}
+
+/* (a client) whether the host told where the player (by absolute index) is
+since this was last asked: then no more till it tells again */
+boolean network_distributed_unit_heard(
+	short player_index)
+{
+	boolean heard;
+
+	if (player_index < 0 || player_index >= MAXIMUM_TRACKED_PLAYERS)
+		return TRUE;
+	heard = distributed_unit_heard[player_index];
+	distributed_unit_heard[player_index] = FALSE;
+	return heard;
 }
 
 /* ---------- input */

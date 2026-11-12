@@ -492,7 +492,50 @@ function addChunks(r, chunks) {
     r.last = r.frames[r.frames.length - 1].tick;
   }
   r.objectList = [...r.objects.values()];
+  smoothGuessed(r);
   indexTracks(r);
+}
+
+// (a client's own recording: where the host had not told it of another
+// player since the frame before, its game carried them on as they went
+// (frame flag 32, network_recording.c) and put them right when the host's
+// word came, a jump. Those places are drawn instead on the line between the
+// frames the host's word came in, at most this far apart and close enough
+// together not to be a respawn or a teleporter: the host sends players far
+// from the client's every 2nd to 6th tick)
+const SMOOTH_MAX_TICKS = 15;
+function smoothGuessed(r) {
+  const bySlot = new Map();
+  for (const frame of r.frames) {
+    for (const e of frame.entries) {
+      if (!bySlot.has(e.slot)) bySlot.set(e.slot, []);
+      bySlot.get(e.slot).push({ tick: frame.tick, e });
+    }
+  }
+  let guessed = 0, smoothed = 0;
+  for (const list of bySlot.values()) {
+    let a = -1;
+    for (let i = 0; i < list.length; i++) {
+      if (!(list[i].e.flags & 32)) { a = i; continue; }
+      guessed++;
+      let b = i + 1;
+      while (b < list.length && (list[b].e.flags & 32)) b++;
+      if (a < 0 || b >= list.length) continue;
+      const A = list[a], B = list[b], gap = B.tick - A.tick;
+      if (gap > SMOOTH_MAX_TICKS || b - a > gap) continue;
+      if (Math.hypot(B.e.x - A.e.x, B.e.y - A.e.y, B.e.z - A.e.z) > 2 + gap * 0.5) continue;
+      const f = (list[i].tick - A.tick) / gap, e = list[i].e;
+      e.x = A.e.x + (B.e.x - A.e.x) * f;
+      e.y = A.e.y + (B.e.y - A.e.y) * f;
+      e.z = A.e.z + (B.e.z - A.e.z) * f;
+      e.eye = A.e.eye + (B.e.eye - A.e.eye) * f;
+      e.yaw = lerpAngle(A.e.yaw, B.e.yaw, f);
+      e.pitch = A.e.pitch + (B.e.pitch - A.e.pitch) * f;
+      smoothed++;
+    }
+  }
+  r.guessedPlaces = guessed;
+  r.smoothedPlaces = smoothed;
 }
 
 // (the tracks seen in each 10 seconds of the game, so that a frame looks
@@ -2679,7 +2722,8 @@ function describeGame() {
   // (a client's recording: the host sent it the players far from its own, or
   // out of their sight, every 2nd to 6th tick, and its game moved them between)
   if (rec.recordedByClient)
-    gameLine("Recorded by a player who joined: players far from them or out of their sight move less exactly");
+    gameLine("Recorded by a player who joined: players far from them or out of their sight move less exactly" +
+      (rec.smoothedPlaces ? " (smoothed between the host's updates)" : ""));
   if (mapStatusText) mapStatus(mapStatusText);
   return map;
 }
