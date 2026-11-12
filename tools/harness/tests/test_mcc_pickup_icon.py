@@ -2,14 +2,15 @@
 import pytest
 from tools.harness import build, function, mutated, read, run, structure
 
-# (this fork, since the merge of ChupathingyCE 38aae92ee: build/UPDATING.md)
-pytestmark = pytest.mark.skip(reason="ChupathingyCE's mcc_hud_draw.c icon placement (mcc_hud_capital_middle); the fork keeps OpenCE's")
+# (port, this fork: its mcc_hud_draw.c is OpenCE's, which measures the
+# capitals' middle with draw_unicode_string_capital_middle itself (no
+# mcc_hud_capital_middle) and hands controller glyphs to their own service)
 
 
 def code():
     source = read("port/linux/game/mcc_hud_draw.c")
     return "\n".join(function(source, name) for name in
-                     ("mcc_hud_capital_middle", "mcc_hud_bitmap_scale", "mcc_hud_icon_draw"))
+                     ("mcc_hud_bitmap_scale", "mcc_hud_icon_draw"))
 
 
 def execute(source, case):
@@ -19,13 +20,7 @@ def execute(source, case):
 
 
 @pytest.mark.parametrize("case", ["plain", "half", "highres", "split", "signed",
-                                  "clip", "absolute",
-                                  # port: our draw_string has no capitals' middle
-                                  # (draw_unicode_string_capital_middle); mcc_hud_draw.c
-                                  # takes the line's middle, a few pixels off
-                                  pytest.param("menu", marks=pytest.mark.xfail(
-                                      reason="no draw_unicode_string_capital_middle here", strict=False)),
-                                  "legacy", "transition", "button"])
+                                  "clip", "absolute", "menu", "legacy", "transition", "button"])
 def test_icon_layout(case):
     status, output = execute(code(), case)
     assert status == 0, output
