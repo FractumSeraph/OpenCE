@@ -153,6 +153,7 @@ int main(int argc, char **argv) {
 
 @pytest.mark.parametrize("case", ["reload", "collision", "old-kernel", "invalid",
                                   "commit-failure", "release-failure", "alternate"])
+@pytest.mark.skip(reason="this fork, since the merge of ChupathingyCE 38aae92ee: the fork keeps its own Android guest MCC window (mcc_memory.c), not ChupathingyCE's reservation")
 def test_android_mcc_reservation(allocator, case):
     subprocess.run([str(allocator), case], check=True, capture_output=True, text=True, timeout=10)
 

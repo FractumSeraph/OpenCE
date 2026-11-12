@@ -36,7 +36,9 @@ def test_settled_before_each_fullscreen_change():
 	assert toggle.index("if (!platform_window_space_settle())") < toggle.index("SDL_SetWindowFullscreen(")
 	# (every other fullscreen change goes through those two)
 	assert source.count("SDL_SetWindowFullscreenMode(") == 1
-	assert source.count("SDL_SetWindowFullscreen(platform_window") == 1
+	# (this fork: and the browser build's F11, which has no macOS space)
+	browser = "#ifdef HALO_BROWSER\n\t\t\t\tSDL_SetWindowFullscreen(platform_window,"
+	assert source.count("SDL_SetWindowFullscreen(platform_window") == 1 + source.count(browser)
 
 
 def test_only_a_space_sdl_takes_for_exclusive():

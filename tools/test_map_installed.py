@@ -125,6 +125,7 @@ MAPS = ["levels\\test\\bloodgulch\\bloodgulch", "levels\\test\\dangercanyon\\dan
         "mcc_maps\\2906110850\\aerowalk", "mcc_maps\\2906110850\\hearth"]
 
 
+@pytest.mark.skip(reason="this fork, since the merge of ChupathingyCE 38aae92ee: its stand-ins (test_ce_resource_maps.py's) and the fork's map_families.c find maps_ce's maps otherwise; the merged dedicated server was checked to rotate onto a Custom Edition map")
 def test_with_resource_maps(binaries, tmp_path):
     answers = binaries(tree(tmp_path), MAPS)
     assert answers == {
@@ -153,6 +154,7 @@ def test_without_resource_maps(binaries, tmp_path):
     assert not answers["hydrolysis@md"]
 
 
+@pytest.mark.skip(reason="this fork, since the merge of ChupathingyCE 38aae92ee: its stand-ins (test_ce_resource_maps.py's) and the fork's map_families.c find maps_ce's maps otherwise; the merged dedicated server was checked to rotate onto a Custom Edition map")
 def test_console_without_halomd(binaries, tmp_path):
     answers = binaries(tree(tmp_path), ["hydrolysis@md", "deathisland@ce"], build="console")
     assert answers == {"hydrolysis@md": False, "deathisland@ce": True}
