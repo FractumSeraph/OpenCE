@@ -76,6 +76,12 @@ static struct network_game_server *server_pointer = &server;
 static struct network_connection connection;
 static unsigned long network_game_server_client_machine_addresses[MAXIMUM_NETWORK_MACHINE_COUNT];
 static boolean network_game_server_map_pending[MAXIMUM_NETWORK_MACHINE_COUNT];
+/* (port, this fork: a machine's datagram port, its kick's rejection code,
+and the distributed netcode told of a machine gone) */
+static unsigned short network_game_server_client_machine_datagram_ports[MAXIMUM_NETWORK_MACHINE_COUNT];
+static short network_game_server_kick_rejection_codes[MAXIMUM_NETWORK_MACHINE_COUNT];
+static int distributed_gone = NONE;
+static void network_distributed_machine_gone(long machine_index) { distributed_gone = (int)machine_index; }
 static struct network_player network_game_server_held_players[MAXIMUM_NETWORK_PLAYER_COUNT];
 static long network_game_server_held_player_count;
 
@@ -327,6 +333,7 @@ int main(int argc, char **argv)
 		machine_gone();
 		CHECK(network_game_server_held_player_count == 0, "its held player outlived the machine");
 		CHECK(!network_game_server_map_pending[GONE], "its pending download outlived the machine");
+		CHECK(distributed_gone == GONE, "the distributed netcode was not told the machine had gone");
 		back_to_lobby();
 		CHECK(players_of(GONE) == 0, "a player of a machine that had gone was put back in the lobby");
 		CHECK(players_of(0) == 1 && players_of(OTHER) == 1, "the others' players were lost");
@@ -402,6 +409,8 @@ int main(int argc, char **argv)
 		/* a machine in the game is kicked as before, its player left to its leaving */
 		CHECK(network_game_server_kick_machine_of_player(GONE, FALSE), "refused: %s", warning);
 		CHECK(kicked == GONE && players_of(GONE) == 1 && quit_count == 0, "not kicked as a machine in the game is");
+		CHECK(network_game_server_kick_rejection_codes[GONE] == _rejection_code_blacklisted_machine,
+			"a kicked machine's rejoin is not refused (%d)", network_game_server_kick_rejection_codes[GONE]);
 	}
 	else if (!strcmp(name, "kick-nobody"))
 	{

@@ -5,10 +5,10 @@ from pathlib import Path
 
 import pytest
 
-# (port, this fork: OpenCE's test of its server code, which in this fork keeps
-# datagram ports and kick codes of its own; build/UPDATING.md, OpenCE 14ff64cd8, has the
-# list of the harness tests left to adapt)
-pytestmark = pytest.mark.skip(reason="the fork's server code differs")
+# (port, this fork: the server code keeps a datagram port and a kick's
+# rejection code per machine, and tells the distributed netcode of a machine
+# gone: server_gone_machine_players.c stands in for them and checks the two
+# it can see)
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from harness import CHECK_FAILED, build, constant, enum_with, function, mutated, read, run, structure, port_limits  # noqa: E402
@@ -61,6 +61,8 @@ def generated(fault=None, faulty_function=None):
     for member in ('_network_client_machine_validated_bit', '_network_game_server_state_pregame'):
         config += enum_with(server, member) + '\n'
     config += enum_with(read('source/networking/network_messages.h'), '_message_server_remove_player_ingame') + '\n'
+    # (port, this fork: a kicked machine's rejection code)
+    config += enum_with(read('source/networking/network_game_protocol.h'), '_rejection_code_blacklisted_machine') + '\n'
     messages = structure(server, 'message_server_remove_player_ingame') + '\n'
     code = ''
     for name in FUNCTIONS:
