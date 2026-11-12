@@ -32,6 +32,23 @@ static void data_initialize(struct data_array *a,char const *name,short count,sh
     a->size=stride;a->signature='d@t@';a->data=a+1;
 }
 static void data_make_invalid(struct data_array *a) {a->valid=0;}
+/* (port, this fork: the storage's checksum is zlib's crc32, here bit by bit:
+the same CRC-32, initial and final value ~0, reflected 0xEDB88320) */
+typedef unsigned int uInt;
+static unsigned long crc32(unsigned long crc, void const *data, uInt length)
+{
+    byte const *bytes = (byte const *)data;
+    unsigned long value = ~crc & 0xFFFFFFFFUL;
+    int bit;
+
+    while (length--)
+    {
+        value ^= *bytes++;
+        for (bit = 0; bit < 8; bit++)
+            value = (value >> 1) ^ (0xEDB88320UL & (0UL - (value & 1)));
+    }
+    return ~value & 0xFFFFFFFFUL;
+}
 #include "under_test.inc"
 
 /* A real stack shape: root result, a large parent and an odd-aligned leaf.
