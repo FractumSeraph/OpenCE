@@ -26,12 +26,9 @@ and a window placed elsewhere is given back below) */
 #include "guest_host.h"
 #endif
 
-#ifdef HALO_WEB
-#include "../../web/src/web_memory.h"
-/* One loaded MCC cache owns one fixed window. The browser heap ends below
- * the entire accepted range; no mmap can reserve addresses in Wasm memory. */
-static void *mcc_web_window;
-#endif
+/* (port, this fork: the browser build plays no MCC map, as it plays no
+Custom Edition map: its memory has no window for one, web_memory.c being
+OpenCE's, which this fork's page does not build) */
 
 #ifdef HALO_WINDOWS
 /* Keep the linked MCC window out of the Windows heap/driver allocator's
@@ -92,24 +89,10 @@ void *mcc_memory_reserve(uint32_t address, uint32_t size)
     }
     return (void *)(uintptr_t)result;
 #elif defined(HALO_WEB)
-    void *wanted = (void *)(uintptr_t)address;
-    size_t bytes = web_memory_bytes();
-    if ((address & 0xFFFFu) || size != 0x04000000u ||
-        address < 0x42000000u || address > 0x70000000u) {
-        errno = EINVAL;
-        return NULL;
-    }
-    if (mcc_web_window) {
-        errno = EBUSY;
-        return NULL;
-    }
-    if (address > bytes || size > bytes - address) {
-        errno = ENOMEM;
-        return NULL;
-    }
-    memset(wanted, 0, size);
-    mcc_web_window = wanted;
-    return wanted;
+    (void)address;
+    (void)size;
+    errno = ENOSYS;
+    return NULL;
 #else
     void *wanted = (void *)(uintptr_t)address;
     void *allocation;
@@ -163,8 +146,8 @@ void mcc_memory_release(void *allocation, uint32_t size)
             platform_log("mcc memory: could not decommit tag window (%s)", strerror(-error));
     }
 #elif defined(HALO_WEB)
-    if (allocation && allocation == mcc_web_window && size == 0x04000000u)
-        mcc_web_window = NULL;
+    (void)allocation;
+    (void)size;
 #elif defined(HALO_WINDOWS)
     if (allocation && allocation == mcc_window && size == 0x04000000u && mcc_window_active) {
         if (mmap(allocation, size, PROT_NONE,

@@ -61,6 +61,17 @@ extern unsigned long long xbox_address_space_base;
 #endif
 extern char platform_xbox_address_space_error[];
 
+/* (host.h's, as host_main.c has it for the guest app: host_gl.c, shared,
+logs through it) */
+void host_logf(int priority, const char *format, ...)
+{
+	va_list arguments;
+
+	va_start(arguments, format);
+	__android_log_vprint(priority, HOST_LOG_TAG, format, arguments);
+	va_end(arguments);
+}
+
 static void fatal(const char *format, ...) __attribute__((format(printf, 1, 2), noreturn));
 
 static void fatal(const char *format, ...)
