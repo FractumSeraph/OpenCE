@@ -65,7 +65,7 @@ void mcc_script_finished_evaluate(short function, long thread_index, boolean ini
     long target=NONE;
     short script;
     if (!args) return;
-    script=args[0] ? hs_find_script_by_name((char const *)args[0]) : NONE;
+    script=args[0] ? hs_find_script_by_name((char const *)xbox_pointer((unsigned int)args[0])) : NONE;
     if (script!=NONE) target=hs_find_thread_by_script(script);
     /* Dormant and sleep_forever threads use -2. Only -1 means that the
      * native script thread has terminated; sleeping is not completion. */
@@ -228,6 +228,10 @@ static boolean mcc_hs_parameter_evaluate(long thread_index, struct hs_syntax_nod
      * parameters here, preserving the native table for Xbox and CE scripts. */
     else if (type == _hs_type_short_integer && node->type == _hs_type_long_integer)
         *destination = (short)*value;
+    /* A parameter the compiler skipped (mcc_parameter_compile_skipped) may
+     * still name a type with no cast: stop the script, as a syntax error
+     * does, rather than reach hs_cast's assert. */
+    else if (mcc_parameter_compile(node) <= 0) hs_syntax_error(thread_index);
     else *destination = hs_cast(thread_index, type, node->type, *value);
     return TRUE;
 }

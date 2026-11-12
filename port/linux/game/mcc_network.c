@@ -8,6 +8,10 @@ build's pointers, which this build's Xbox addresses are not) */
 #pragma clang diagnostic ignored "-Wpointer-integer-compare"
 #pragma clang diagnostic ignored "-Wincompatible-pointer-types"
 #endif
+#ifndef HALO_MCC
+#include "../include/halo_port_features.h"
+#endif
+#if !defined(HALO_MCC) || HALO_MCC /* Halo MCC maps (halo_port_features.h, above): a console builds this to nothing */
 #include "cseries.h"
 #include "mcc_network.h"
 #include "mcc_object_names_network.h"
@@ -19,6 +23,7 @@ build's pointers, which this build's Xbox addresses are not) */
 #include "objects/objects.h"
 #include "units/units.h"
 #include "network_distributed.h"
+#include "mcc_network_messages.h"
 #include <math.h>
 
 struct mcc_network_inventory {
@@ -64,6 +69,8 @@ word mcc_network_campaign_entry_size(void) { return MCC_CAMPAIGN_SNAPSHOT_BYTES;
 
 static void mcc_network_campaign_tick(long now)
 {
+    /* port: (mcc_network_messages.h) */
+    if (!network_distributed_mcc_session()) return;
     struct {
         struct distributed_message_header header;
         byte state[MCC_CAMPAIGN_SNAPSHOT_BYTES];
@@ -73,6 +80,7 @@ static void mcc_network_campaign_tick(long now)
      * OpenCE's normal host-only transport and stale-tick checks apply. */
     mcc_campaign_snapshot(message.state);
     distributed_send(&message,_distributed_message_mcc_campaign,1,sizeof(message),_distributed_to_clients);
+
 }
 
 void mcc_network_handle_campaign(void const *entries, short count)
@@ -83,6 +91,8 @@ void mcc_network_handle_campaign(void const *entries, short count)
 
 void mcc_network_host_tick(void)
 {
+    /* port: (mcc_network_messages.h) */
+    if (!network_distributed_mcc_session()) return;
     struct {
         struct distributed_message_header header;
         struct mcc_network_inventory entries[64];
@@ -183,3 +193,4 @@ void mcc_network_handle_inventories(void const *entries, short count)
         if (own) mcc_network_note_own(inventory.unit, FALSE);
     }
 }
+#endif /* HALO_MCC */

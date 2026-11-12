@@ -283,6 +283,10 @@ symbols in this file:
 /* port: port/linux/game/network_objects.c's (a client deletes the host's
 objects on the host's word alone) */
 boolean network_objects_may_delete(long object_index);
+/* port: port/linux/game/network_distributed.c's (riders leave a vehicle on
+the ground whose up is below it: 0 but in a network game whose version's
+layout says another) */
+real network_distributed_rider_ejection_up(void);
 
 /* port: an unarmed player's melee's length, in ticks (a weapon's is about
 this: its first person melee animation, sped up a quarter); a Bomb game

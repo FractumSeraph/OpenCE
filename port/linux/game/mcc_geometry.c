@@ -10,7 +10,12 @@ build's pointers, which this build's Xbox addresses are not) */
 #endif
 /* Geometry adapter for MCC caches. Wire model and BSP streams are read only;
  * Xbox render descriptors are constructed in MCC-owned allocations. */
+#ifndef HALO_MCC
+#include "../include/halo_port_features.h"
+#endif
+#if !defined(HALO_MCC) || HALO_MCC /* Halo MCC maps (halo_port_features.h, above): a console builds this to nothing */
 #include "cseries.h"
+#include "cseries_windows.h"
 #include "errors.h"
 #include "tag_files/tag_groups.h"
 #include "models/model_definitions.h"
@@ -19,6 +24,15 @@ build's pointers, which this build's Xbox addresses are not) */
 #include "rasterizer/rasterizer_model_types.h"
 #include "structures/structure_bsp_definitions.h"
 #include "mcc_runtime.h"
+#include "mcc_loading.h"
+
+/* (rasterizer_xbox_hardware_geometry.c's) */
+boolean rasterizer_vertex_buffer_new(struct vertex_buffer *vertex_buffer, long vertex_type, long count,
+    void const *vertices, long buffer_size);
+void rasterizer_vertex_buffer_delete(struct vertex_buffer *vertex_buffer);
+boolean rasterizer_triangle_buffer_new(struct triangle_buffer *triangle_buffer, short triangle_type, long count,
+    void const *triangles);
+void rasterizer_triangle_buffer_delete(struct triangle_buffer *triangle_buffer);
 #include "mcc_loading.h"
 
 #include <math.h>
@@ -88,6 +102,17 @@ static void *mg_block(struct mcc_runtime *r, struct tag_block const *b, uint32_t
     return mcc_runtime_pointer(r,(uint32_t)(uintptr_t)b->address,(uint32_t)b->count*stride);
 }
 
+/* port: a BSP's compressed vertices, which its tag's data names by a 32-bit
+address, in memory such an address reaches: the game's heap (the Xbox
+address space's in a 64-bit build, cseries/xbox_address.h). A model's
+buffers are copied by the rasterizer and stay host memory. */
+static void mg_allocation_free(void *allocation,int bsp) {
+    if (!allocation) return;
+    if (bsp) system_free(allocation); else free(allocation);
+}
+/* (this unit's malloc is the game's heap, cseries.h's: a triangle buffer
+keeps its indices where the rasterizer reads them, by a 32-bit address) */
+
 static struct mcc_geometry_buffer *mg_record(struct mcc_runtime *r,void *descriptor,
     void *payload,uint32_t bytes,void *allocation,uint32_t allocation_bytes,int index,int bsp) {
     struct mcc_geometry_state *state=r->geometry;
@@ -105,7 +130,7 @@ static struct mcc_geometry_buffer *mg_vertices(struct mcc_runtime *r,
     struct vertex_buffer *descriptor,short type,uint32_t count,void *payload,uint32_t bytes,
     void *allocation,uint32_t allocation_bytes,int bsp) {
     struct mcc_geometry_buffer *b=mg_record(r,descriptor,payload,bytes,allocation,allocation_bytes,0,bsp);
-    if (!b) { if (allocation) free(allocation); return NULL; }
+    if (!b) { mg_allocation_free(allocation,bsp); return NULL; }
     if (!rasterizer_vertex_buffer_new(descriptor,type,(long)count,payload,(long)bytes)) return NULL;
     return b;
 }
@@ -324,7 +349,7 @@ int mcc_geometry_part_valid(struct mcc_runtime *r,void const *address) {
     if (!vertices || !indices || vertices->bytes!=count*32 || indices->bytes!=(triangles+2)*2 ||
         vertices->payload!=vertices->allocation || indices->payload!=indices->allocation ||
         vertices->allocation_bytes!=vertices->bytes || indices->allocation_bytes!=indices->bytes ||
-        part->vertices.base_address!=vertices->payload || part->indices.base_address!=indices->payload)
+        xbox_pointer(part->vertices.base_address)!=vertices->payload || xbox_pointer(part->indices.base_address)!=indices->payload)
         return 0;
     stream=indices->payload;
     for (i=0;i<triangles+2;i++) if (stream[i]>=count) return 0;
@@ -375,11 +400,11 @@ int mcc_geometry_prepare(struct mcc_runtime *r) {
                     error(_error_silent,"MCC geometry: tag #%lu, geometry %ld, part %ld: missing material %u; using material 0 (appearance may differ)",
                         (unsigned long)i,g,p,(unsigned)mg_u16(parts+p*0x84+4));
             }
-            destination->address=new_parts;
-            destination->definition=NULL;
+            destination->address=xbox_address(new_parts);
+            destination->definition=XBOX_NULL;
         }
-        model->geometries.address=new_geometries;
-        model->geometries.definition=NULL;
+        model->geometries.address=xbox_address(new_geometries);
+        model->geometries.definition=XBOX_NULL;
         model->flags&=~2u;
         known=malloc(sizeof(*known));
         if (!known) return 0;
@@ -390,7 +415,7 @@ int mcc_geometry_prepare(struct mcc_runtime *r) {
 }
 
 static void *mg_bsp_pointer(void *base,uint32_t size,uint32_t address,uint32_t bytes) {
-    uintptr_t start=(uintptr_t)base;
+    uint32_t start=MCC_ADDRESS(base);
     if (address<start || !mg_range((uint32_t)(address-start),bytes,size)) return NULL;
     return (unsigned char *)base+(address-start);
 }
@@ -413,17 +438,17 @@ static int mg_bsp_material(struct mcc_runtime *r,struct mcc_cache_bsp const *b,
     if (!count) return 1;
     raw_bytes=count*56+lit*20;
     compressed_bytes=count*32+lit*8;
-    raw=malloc(raw_bytes); compressed=malloc(compressed_bytes);
+    raw=malloc(raw_bytes); compressed=system_malloc(compressed_bytes);
     if (!raw || !compressed) {
         if (raw) free(raw);
-        if (compressed) free(compressed);
+        if (compressed) system_free(compressed);
         return 0;
     }
     if (!mcc_runtime_read(r,b->vertex_file_offset+vo,count*56,raw) ||
         (lit && !mcc_runtime_read(r,b->vertex_file_offset+lo,lit*20,raw+count*56)) ||
         !mg_float_vertices(raw,count,56,14,3,9) ||
         !mg_float_vertices(raw+count*56,lit,20,5,0,3)) {
-        free(raw); free(compressed); return mg_error("invalid BSP vertex payload");
+        free(raw); system_free(compressed); return mg_error("invalid BSP vertex payload");
     }
     rasterizer_geometry_compress_vertices(_rasterizer_vertex_type_environment_uncompressed,
         (long)count,compressed,(long)(count*32),raw,(long)(count*56));
@@ -437,7 +462,7 @@ static int mg_bsp_material(struct mcc_runtime *r,struct mcc_cache_bsp const *b,
     if (lit && !mg_vertices(r,&m->lightmap_vertices,_rasterizer_vertex_type_environment_lightmap_compressed,
         lit,compressed+count*32,lit*8,NULL,0,1)) return 0;
     m->compressed_vertex_data.size=(long)compressed_bytes;
-    m->compressed_vertex_data.address=compressed;
+    m->compressed_vertex_data.address=xbox_address(compressed);
     return 1;
 }
 
@@ -465,7 +490,7 @@ int mcc_geometry_bsp_load(struct mcc_runtime *r,uint32_t handle,uint32_t offset,
     for (i=0;i<r->report.bsp_count;i++) {
         struct mcc_cache_bsp const *candidate=&r->report.bsps[i];
         if (candidate->tag_handle==handle && candidate->file_offset==offset && candidate->size==size &&
-            candidate->address==(uint32_t)(uintptr_t)address) { b=candidate; break; }
+            candidate->address==MCC_ADDRESS(address)) { b=candidate; break; }
     }
     if (!b || !mcc_runtime_read(r,offset,size,address)) return mg_error("BSP request differs from validated reference");
     structure=mg_bsp_pointer(address,size,b->structure_address,sizeof(*structure));
@@ -509,7 +534,7 @@ fail:
 static void mg_release(struct mcc_geometry_buffer *b) {
     if (b->is_index) rasterizer_triangle_buffer_delete((struct triangle_buffer *)b->descriptor);
     else rasterizer_vertex_buffer_delete((struct vertex_buffer *)b->descriptor);
-    if (b->allocation) free(b->allocation);
+    mg_allocation_free(b->allocation,b->is_bsp);
     free(b);
 }
 
@@ -546,8 +571,8 @@ void *mcc_geometry_buffer_data(struct mcc_runtime *r,void const *hardware,
     if (bytes) *bytes=0;
     if (!state || !hardware) return NULL;
     for (b=state->buffers;b;b=b->next) {
-        void *current=b->is_index ? ((struct triangle_buffer *)b->descriptor)->hardware_format :
-            ((struct vertex_buffer *)b->descriptor)->hardware_format;
+        void *current=xbox_pointer(b->is_index ? ((struct triangle_buffer *)b->descriptor)->hardware_format :
+            ((struct vertex_buffer *)b->descriptor)->hardware_format);
         if (b->is_index==index_buffer && current==hardware) {
             if (bytes) *bytes=b->bytes;
             return b->payload;
@@ -580,3 +605,4 @@ short mcc_geometry_part_palette(struct mcc_runtime *r,void const *vertex_buffer,
     }
     return 0;
 }
+#endif /* HALO_MCC */

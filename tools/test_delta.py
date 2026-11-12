@@ -218,6 +218,12 @@ def floor():
     return delta_table.built_in()
 
 
+def hosted():
+    """what a desktop build hosts with no row for its wire (delta.h's
+    DELTA_BUILT_IN_HOSTING, the last release's row's): the checker is one"""
+    return define(DELTA.read_text(encoding="utf-8"), "DELTA_BUILT_IN_HOSTING")
+
+
 def document(serial=10, row=None, wire=None, extra=None, **fields):
     table = {"delta_legacy": 1, "serial": serial, "issued": 1791331200,
              "wires": {wire or delta_table.wire(): row or dict(floor(), announce=floor()["announce"] + 1,
@@ -487,7 +493,7 @@ def test_loader_takes_newer_and_caches(keys, checker, tmp_path):
     base = floor()
     table = write_signed(keys, tmp_path / "t10", document(serial=10))
     output = run_checker(checker, tmp_path, "state", "offer", table, "state")
-    assert state_line(output)[0].startswith(f"state {base['announce']} {base['minimum']} {base['maximum']} serial 0 ")
+    assert state_line(output)[0].startswith(f"state {hosted()} {base['minimum']} {base['maximum']} serial 0 ")
     assert "offer 1" in output
     size = len(table.read_bytes())
     assert state_line(output)[1] == (f"state {base['announce'] + 1} {base['minimum']} {base['maximum'] + 1} "
@@ -571,7 +577,7 @@ def test_loader_drops_bad_tables(keys, checker, tmp_path, name, make):
 def test_follows(keys, checker, tmp_path):
     row = dict(floor(), announce=floor()["announce"] + 1, maximum=floor()["maximum"] + 1)
     assert run_checker(checker, tmp_path, "following").strip().endswith(
-        f"following Following OpenCE network version {floor()['announce']} (built in)")
+        f"following Following OpenCE network version {hosted()} (built in)")
     table = write_signed(keys, tmp_path / "t11", document(serial=11, row=dict(row, follows="build-145")))
     output = run_checker(checker, tmp_path, "offer", table, "following")
     assert "offer 1" in output and "following OpenCE build-145" in output
@@ -642,7 +648,7 @@ def test_loader_reads_known_rows_and_kill_switch(keys, checker, tmp_path):
     output = run_checker(checker, tmp_path, "offer", write_signed(keys, tmp_path / "t12", data), "state")
     assert "offer 1" in output and "no row for" in output
     assert state_line(output)[0].startswith(
-        f"state {floor()['announce']} {floor()['minimum']} {floor()['maximum']} serial 12 override 0 disabled 9 ")
+        f"state {hosted()} {floor()['minimum']} {floor()['maximum']} serial 12 override 0 disabled 9 ")
 
 
 def test_loader_override(keys, checker, tmp_path):
@@ -658,7 +664,7 @@ def test_loader_override(keys, checker, tmp_path):
     # (a file that cannot be used: the built-in numbers, still no signed table)
     output = run_checker(checker, tmp_path, "offer", table, "state", override=tmp_path / "missing.json")
     assert "is not used" in output and "offer 0" in output
-    assert state_line(output)[0].startswith(f"state {floor()['announce']} {floor()['minimum']} ")
+    assert state_line(output)[0].startswith(f"state {hosted()} {floor()['minimum']} ")
 
 
 def serve(root, url, data):
@@ -717,7 +723,8 @@ def test_loader_says_once_that_no_table_is_published(checker, tmp_path):
 # each released wire's newest version (DELTA_WIRE_LEGACY_NEWEST): never
 # changed once released, a build that learns a newer version's rules has a
 # new wire (docs/delta.md, "When the wire changes")
-RELEASED_WIRE_NEWEST = {"chupa-28a": 28, "chupa-29a": 29, "chupa-32a": 33, "chupa-38a": 38, "chupa-39a": 39}
+RELEASED_WIRE_NEWEST = {"chupa-28a": 28, "chupa-29a": 29, "chupa-32a": 33, "chupa-38a": 38, "chupa-39a": 39,
+                       "chupa-41a": 41}
 
 
 def test_wire_changes_with_the_rules():
@@ -1007,6 +1014,96 @@ def test_loader_drops_bad_layouts(keys, checker, tmp_path, name, layouts):
     assert " serial 0 " in state_line(output)[0], name
 
 
+# OpenCE's 43 as a row of the table (chupa-43a's facts; docs/delta.md, "Layouts")
+FACT_43 = {"settings_size": 13200, "join_request_extra": 236, "join_request_fill": "zeros",
+           "join_request_version_at": 234, "header_extra": 4, "epoch_kind": 96,
+           "unit_state_parts": [{"bit": 7, "size": 28, "at": "after_up"}, {"bit": 6, "size": 30, "at": "last"}],
+           "rider_ejection_up": 200, "dropped_messages": [97, 98, 99, 100, 103, 104, 105, 106, 107]}
+
+
+def test_loader_reads_generic_layouts(keys, checker, tmp_path):
+    """chupa-43a's facts: read from this wire's row, a part of a later
+    build's place and keys it does not know passed over"""
+    later = dict(FACT_43, unit_state_parts=FACT_43["unit_state_parts"] + [{"bit": 5, "size": 2, "at": "x"}])
+    row = dict(floor(), layouts={"44": dict(FACT_43, settings_size=13210), "45": {"later": [1], "header_extra": 6},
+                                  "46": {"unit_state_parts": [{"bit": 6, "size": 30, "at": "middle"}]}})
+    table = write_signed(keys, tmp_path / "t12", document(serial=12, row=row))
+    output = run_checker(checker, tmp_path, "layout43", 43, "offer", table, "layout43", 41, "layout43", 44,
+                         "layout", 44, "layout43", 45, "layout43", 46, "state")
+    assert "offer 1" in output
+    lines = [line for line in output.splitlines() if line.startswith("layout43 ")]
+    # (43 built in, before any table. Port, this fork: its game plays 43
+    # natively, OpenCE's way, so its built-in 43 has none of chupa-43a's
+    # facts, which ChupathingyCE's 41 game takes for it)
+    assert lines[0] == "layout43 43 version_at -1 header 0 epoch 0 ejection 0 parts refused 0"
+    assert lines[1] == "layout43 41 version_at -1 header 0 epoch 0 ejection 0 parts refused 0"
+    assert lines[2] == "layout43 44 version_at 234 header 4 epoch 96 ejection 200 parts 6:30@2 7:28@1 refused 0"
+    # (this fork's built-in 43 drops 96 to 107, 101 and 102 too: network_rules.c)
+    assert layout_line(output, 44).startswith("layout 44 settings 13210 options 44 shield 6 "
+                                              "dropped 78,79,91,94,95,96,97,98,99,100,101,102,103,104,105,106,107 ")
+    assert layout_line(output, 44).endswith(" join 236")
+    assert lines[3].startswith("layout43 45 version_at 234 header 6 epoch 96 ")
+    # (a place this build does not know: that part not taken, the rest kept)
+    assert " 6:30@2 " in lines[4] and lines[4].endswith(" refused 1")
+    # (a part of a later build's place, in a list this build otherwise reads)
+    table = write_signed(keys, tmp_path / "t13", document(serial=13, row=dict(floor(), layouts={"44": later})))
+    output = run_checker(checker, tmp_path, "offer", table, "layout43", 44)
+    assert "offer 1" in output and " 5:2@255 " not in output and "refused 1" in output
+
+
+@pytest.mark.parametrize("fact", [
+    {"header_extra": 9}, {"header_extra": 4, "epoch_kind": 91}, {"epoch_kind": 96},
+    {"rider_ejection_up": 1000}, {"join_request_version_at": 233},
+    {"unit_state_parts": [{"bit": 2, "size": 4, "at": "last"}]},
+    {"unit_state_parts": [{"bit": 7, "size": 65, "at": "after_up"}]},
+    {"unit_state_parts": [{"bit": 7, "size": 28, "at": "middle"}]},
+    {"unit_state_parts": [{"bit": 7, "size": 28}]},
+    {"unit_state_parts": [{"bit": 7, "size": 28, "at": "last"}, {"bit": 7, "size": 2, "at": "last"}]},
+])
+def test_bad_generic_layouts(fact):
+    with pytest.raises(delta_table.TableError):
+        delta_table.parse(document(extra={"chupa-43a": {"announce": 32, "minimum": 11, "maximum": 43,
+                                                         "layouts": {"43": fact}}}))
+
+
+def test_generic_layouts_row():
+    """the 43 row is a valid table row; --layout makes it field by field"""
+    delta_table.parse(document(extra={"chupa-43a": {"announce": 32, "minimum": 11, "maximum": 44,
+                                                     "layouts": {"43": FACT_43}}}))
+    wire, version, fact = delta_table.parse_layout(
+        "chupa-43a=43:settings_size=13200,join_request_extra=236,join_request_version_at=234,header_extra=4,"
+        "epoch_kind=96,unit_part_after_up=7+28,unit_part_last=6+30,rider_ejection_up=200,"
+        "dropped_messages=97+98+99+100+103+104+105+106+107")
+    assert (wire, version) == ("chupa-43a", "43") and fact == FACT_43
+    for bad in ("chupa-41a=43:header_extra=4", "chupa-43a=43:header_extra=9", "chupa-43a=43:epoch_kind=96",
+                "chupa-43a=43:unit_part_last=1+4"):
+        with pytest.raises(delta_table.TableError):
+            delta_table.parse_layout(bad)
+
+
+def test_host_game_at_43(keys, checker, tmp_path):
+    """delta_legacy_host_game_at: a game hosted at 43 (an MCC map's) without
+    any table, 43 built in; normal games still announce the usual number (the
+    41 built in as the last release row, or a table); a number this build doesn't play
+    is refused"""
+    output = run_checker(checker, tmp_path, "state", "host_at", 43, "state", "host_at", 0, "state",
+                         "host_at", 99, "state", "host_at", 10, "state")
+    states = state_line(output)
+    usual = str(hosted())
+    assert [line.split()[1] for line in states] == [usual, "43", usual, usual, usual]
+    assert output.count("host_at 1") == 2 and output.count("host_at 0") == 2
+    row = dict(floor(), maximum=44, hosting=[41])
+    table = write_signed(keys, tmp_path / "t20", document(serial=20, row=row))
+    output = run_checker(checker, tmp_path, "offer", table, "state", "host_at", 43, "state", "host_at", 0, "state")
+    # (port, this fork: a table's row never lowers its own number, 43, which
+    # its hosts alone announce: delta_keep_built_in_newest)
+    table_hosted = str(max(41, hosted()))
+    assert [line.split()[1] for line in state_line(output)] == [table_hosted, "43", table_hosted]
+    # (held while a game is under way: the next game takes it)
+    output = run_checker(checker, tmp_path, "hold", 1, "host_at", 43, "state", "hold", 0, "state", "host_at", 0)
+    assert [line.split()[1] for line in state_line(output)] == [usual, "43"]
+
+
 def test_loader_override_layouts(checker, tmp_path):
     """network.legacy_table: a server announces a number of its own, with
     layouts, unsigned and never passed on"""
@@ -1068,10 +1165,10 @@ def test_loader_holds_the_number_through_a_hosted_game(keys, checker, tmp_path):
     table = write_signed(keys, tmp_path / "t10", document(serial=10, row=dict(base, hosting=[newest])))
     output = run_checker(checker, tmp_path, "state", "hold", "1", "offer", table, "state", "hold", "0", "state")
     states = state_line(output)
-    assert states[0].startswith(f"state {base['announce']} ")
-    assert states[1].startswith(f"state {base['announce']} ") and " serial 10 " in states[1]
+    assert states[0].startswith(f"state {hosted()} ")
+    assert states[1].startswith(f"state {hosted()} ") and " serial 10 " in states[1]
     assert states[2].startswith(f"state {newest} ")
-    assert f"now announcing OpenCE network version {newest} (was {base['announce']})" in output
+    assert f"now announcing OpenCE network version {newest} (was {hosted()})" in output
 
 
 @pytest.mark.parametrize("pin,expect", [

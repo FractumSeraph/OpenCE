@@ -11,6 +11,10 @@ build's pointers, which this build's Xbox addresses are not) */
 /* MCC pixels already live in immutable, independently owned storage. Keep
  * their GPU copies here rather than staging them through the Xbox LRU heap.
  * A header's exact registered identity, never its Data word, grants access. */
+#ifndef HALO_MCC
+#include "../include/halo_port_features.h"
+#endif
+#if !defined(HALO_MCC) || HALO_MCC /* Halo MCC maps (halo_port_features.h, above): a console builds this to nothing */
 #include "xgpu.h"
 #include "mcc_texture_bridge.h"
 #include "hud_hires.h"
@@ -69,7 +73,7 @@ static long mcc_hud_texture_asset(struct xgpu_texture_description const *descrip
 
 static unsigned long mcc_texture_bucket(void const *bitmap)
 {
-    return (((unsigned long)bitmap >> 4) * 2654435761UL) % MCC_TEXTURE_BUCKETS;
+    return (((unsigned long)(uintptr_t)bitmap >> 4) * 2654435761UL) % MCC_TEXTURE_BUCKETS;
 }
 
 void *mcc_texture_bridge_find(void const *bitmap)
@@ -189,7 +193,7 @@ BOOL xgpu_mcc_texture_get(DWORD const *resource,D3DCOLOR const *palette,
         }
         if (!entry->texture) {
             GLuint created=0;
-            glGenTextures(1,&created);
+            glGenTextures(1,&created); /* port: (GulchCE's xgpu_texture_name_new) */
             if (created && xgpu_mcc_texture_upload(created,entry->target,
                 &entry->description,entry->pixels,entry->bytes,palette)) {
                 entry->texture=created;
@@ -248,7 +252,7 @@ unsigned long mcc_texture_bridge_prepare(void const *bitmap, unsigned long budge
             }
         }
         if (estimate<256*1024 || estimate>budget) return 0;
-        glGenTextures(1,&created);
+        glGenTextures(1,&created); /* port: (GulchCE's xgpu_texture_name_new) */
         if (created && xgpu_mcc_texture_upload(created,entry->target,description,entry->pixels,entry->bytes,NULL)) {
             entry->texture=created;entry->palette_present=FALSE;
             return (unsigned long)estimate;
@@ -262,3 +266,4 @@ unsigned long mcc_texture_bridge_prepare(void const *bitmap, unsigned long budge
 #endif
     return 0;
 }
+#endif /* HALO_MCC */

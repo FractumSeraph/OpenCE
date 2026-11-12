@@ -10,6 +10,10 @@ build's pointers, which this build's Xbox addresses are not) */
 #endif
 /* Streaming SHA-256 for MCC content identity. Adapted from this repository's
  * CC0 p2p_crypto.c (FIPS 180-4); no changes to the transport crypto. */
+#ifndef HALO_MCC
+#include "../include/halo_port_features.h"
+#endif
+#if !defined(HALO_MCC) || HALO_MCC /* Halo MCC maps (halo_port_features.h, above): a console builds this to nothing */
 #include "mcc_sha256.h"
 #include <string.h>
 
@@ -118,3 +122,5 @@ void mcc_sha256_end(struct mcc_sha256 *context, unsigned char *digest)
 		digest[index * 4 + 3] = (unsigned char)context->state[index];
 	}
 }
+
+#endif /* HALO_MCC */

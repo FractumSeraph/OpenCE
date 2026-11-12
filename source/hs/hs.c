@@ -13798,7 +13798,6 @@ static short hs_syntax_node_check(
 	if (function_index == _hs_function_set)
 	{
 		short designator = (short)first_argument->data;
-
 		/* port: a set of an MCC script's parameter (mcc_script_parameters.c) */
 		{
 			int mcc_parameter = mcc_parameter_set_valid(first_argument,

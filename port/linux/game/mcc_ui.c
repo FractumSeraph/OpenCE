@@ -12,6 +12,10 @@ build's pointers, which this build's Xbox addresses are not) */
  * values from the public UIEventHandlerReferenceFunction definition:
  * https://github.com/SnowyMouse/invader/blob/master/src/tag/hek/definition/ui_widget_definition.json
  * No Xbox/CE tag, callback table or settings implementation is rewritten. */
+#ifndef HALO_MCC
+#include "../include/halo_port_features.h"
+#endif
+#if !defined(HALO_MCC) || HALO_MCC /* Halo MCC maps (halo_port_features.h, above): a console builds this to nothing */
 #include "cseries.h"
 #include "game/game.h"
 #include "game/game_engine.h"
@@ -40,14 +44,11 @@ build's pointers, which this build's Xbox addresses are not) */
 
 /* Only the public prefix shared by every widget is needed here. */
 struct mcc_ui_widget_prefix {
-    long definition;
+    int definition; /* port: widget_instance's definition_tag_index (ui_widget_instance.h) */
     char const *name;
     short controller;
 };
-/* (port, this fork: a 32-bit build's layout; a 64-bit build plays no MCC map) */
-#ifndef HALO_64BIT
-typedef char mcc_ui_controller_offset[offsetof(struct mcc_ui_widget_prefix, controller) == 8 ? 1 : -1];
-#endif
+typedef char mcc_ui_controller_offset[offsetof(struct mcc_ui_widget_prefix, controller) == 2 * sizeof(void *) ? 1 : -1];
 
 char const *config_string(char const *name);
 int config_boolean(char const *name);
@@ -391,3 +392,4 @@ boolean mcc_ui_event_function(struct widget_instance *widget,
     }
     return TRUE;
 }
+#endif /* HALO_MCC */

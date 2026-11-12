@@ -10,6 +10,10 @@ build's pointers, which this build's Xbox addresses are not) */
 #endif
 /* MCC script linking and MCC-only native functions. Unknown functions cause
  * a load failure; silently removing campaign logic would hide broken maps. */
+#ifndef HALO_MCC
+#include "../include/halo_port_features.h"
+#endif
+#if !defined(HALO_MCC) || HALO_MCC /* Halo MCC maps (halo_port_features.h, above): a console builds this to nothing */
 #include "cseries.h"
 #include "errors.h"
 #include "ai/ai_script.h"
@@ -311,7 +315,7 @@ static short mcc_local_global(struct mcc_runtime *runtime, struct scenario *scen
     if (slot>=syntax->count) syntax->count=(short)(slot+1);
     syntax->actual_count++;
     syntax->first_free_absolute_index=(short)(slot+1);
-    scenario->hs_globals.address=globals;scenario->hs_globals.count=count+1;
+    scenario->hs_globals.address=xbox_address(globals);scenario->hs_globals.count=count+1;
     return (short)count;
 }
 
@@ -366,7 +370,7 @@ int mcc_scripts_prepare(struct mcc_runtime *runtime)
         return FALSE;
     }
     nodes = (struct hs_syntax_node *)(syntax + 1);
-    syntax->data = nodes;
+    syntax->data = xbox_address(nodes);
     for (i = 0; i < syntax->count; ++i) {
         struct hs_syntax_node *node = &nodes[i];
         char const *name = NULL;
@@ -476,7 +480,7 @@ int mcc_scripts_prepare(struct mcc_runtime *runtime)
                     memcpy(expanded,strings,(unsigned long)scratch_strings);
                     memcpy(expanded+scratch_strings,scratch_names,sizeof(scratch_names));
                     memset(expanded+scratch_strings+sizeof(scratch_names),0,1024);
-                    strings=expanded;scenario->hs_string_constants.address=expanded;
+                    strings=expanded;scenario->hs_string_constants.address=xbox_address(expanded);
                     scenario->hs_string_constants.size+=sizeof(scratch_names);
                 }
                 if (scratch[slot]==NONE) scratch[slot]=mcc_local_global(runtime,scenario,syntax,scratch_names[slot],_hs_type_real);
@@ -497,6 +501,7 @@ int mcc_scripts_prepare(struct mcc_runtime *runtime)
     }
     /* Retain the MCC arena, including free slots for console expressions.
      * Its separate validator owns the larger traversal workspace. */
-    syntax->data = nodes;
+    syntax->data = xbox_address(nodes);
     return missing == 0 && mcc_parameters_prepare(runtime, scenario, syntax);
 }
+#endif /* HALO_MCC */

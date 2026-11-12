@@ -10,11 +10,59 @@ build's pointers, which this build's Xbox addresses are not) */
 #endif
 /* MCC cache address reservations. A file can request a free 64 MiB window;
  * MAP_FIXED_NOREPLACE never replaces an Xbox, CE or host allocation. */
+#ifndef HALO_MCC
+#include "../include/halo_port_features.h"
+#endif
+#if !defined(HALO_MCC) || HALO_MCC /* Halo MCC maps (halo_port_features.h, above): a console builds this to nothing */
 #include "platform.h"
 #include <sys/mman.h>
 #include <stdint.h>
 #include <errno.h>
 #include <string.h>
+
+#ifdef HALO_64BIT
+/* port: a 64-bit build has the Xbox address space reserved already
+(xbox_memory.c), and the window MCC maps are linked to lies in its heap's
+range (xbox_heap.c): the tags go at their Xbox address, xbox_pointer's,
+and the heap steps over that window from the first MCC map on */
+BOOL xbox_heap_reserve_window(unsigned int address, unsigned int size);
+
+void *mcc_memory_reserve(uint32_t address, uint32_t size)
+{
+    void *wanted = xbox_pointer(address);
+
+    if ((address & 0xFFFFu) || size != 0x04000000u ||
+        address < 0x42000000u || address > 0x70000000u) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!xbox_heap_reserve_window(address, size)) {
+        errno = EBUSY;
+        return NULL;
+    }
+    /* (fresh pages: the heap's, never used, or a map's before) */
+    if (mmap(wanted, size, PROT_READ | PROT_WRITE,
+        MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE | MAP_FIXED, -1, 0) != wanted)
+        return NULL;
+    return wanted;
+}
+
+void mcc_memory_release(void *allocation, uint32_t size)
+{
+    if (!allocation)
+        return;
+    mmap(allocation, size, PROT_READ | PROT_WRITE,
+        MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE | MAP_FIXED, -1, 0);
+}
+
+/* (the Windows build logs a failed early reservation, which this one never
+makes) */
+#ifdef HALO_WINDOWS
+void mcc_memory_log_startup(void)
+{
+}
+#endif
+#else
 
 /* (port, this fork: a system without it, macOS: the address is a hint,
 and a window placed elsewhere is given back below) */
@@ -189,3 +237,5 @@ void mcc_memory_release(void *allocation, uint32_t size)
         munmap(allocation, size);
 #endif
 }
+#endif
+#endif /* HALO_MCC */

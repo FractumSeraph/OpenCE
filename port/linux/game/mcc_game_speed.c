@@ -11,6 +11,10 @@ build's pointers, which this build's Xbox addresses are not) */
 /* MCC's game_speed_value uses the native host clock, which already belongs
  * to checkpoints. Clients keep a separate, host-only clock multiplier:
  * cheats_network_client_enforce still resets their native speed to one. */
+#ifndef HALO_MCC
+#include "../include/halo_port_features.h"
+#endif
+#if !defined(HALO_MCC) || HALO_MCC /* Halo MCC maps (halo_port_features.h, above): a console builds this to nothing */
 #include "mcc_game_speed.h"
 #include "cseries_windows.h"
 #include "mcc_cache.h"
@@ -20,6 +24,7 @@ build's pointers, which this build's Xbox addresses are not) */
 #include "scenario/scenario.h"
 #include "scenario/scenario_definitions.h"
 #include "network_distributed.h"
+#include "mcc_network_messages.h"
 #include "errors.h"
 #include <stdint.h>
 #include <string.h>
@@ -45,7 +50,7 @@ boolean mcc_game_speed_global(word designator)
     if (!mcc_cache_tags_loaded() || (designator&0x8000)) return FALSE;
     scenario=global_scenario_get();
     if (!scenario || designator>=scenario->hs_globals.count) return FALSE;
-    global=(struct hs_global const *)scenario->hs_globals.address+designator;
+    global=(struct hs_global const *)xbox_pointer(scenario->hs_globals.address)+designator;
     return global->type==_hs_type_real && memchr(global->name,0,sizeof(global->name)) &&
         !csstrcasecmp(global->name,"game_speed_value");
 }
@@ -90,6 +95,8 @@ real mcc_game_speed_client(real original)
 
 void mcc_game_speed_frame(void)
 {
+    /* port: (mcc_network_messages.h) */
+    if (!network_distributed_mcc_session()) return;
     struct {
         struct distributed_message_header header;
         real speed;
@@ -106,6 +113,7 @@ void mcc_game_speed_frame(void)
      * speed and for late joiners. Never queue these in the tick-only batch. */
     distributed_send(&message,_distributed_message_mcc_game_speed,1,sizeof(message),
         _distributed_to_clients_reliably);
+
 }
 
 void mcc_game_speed_receive(void const *entries, short count)
@@ -115,3 +123,4 @@ void mcc_game_speed_receive(void const *entries, short count)
     memcpy(&value,entries,sizeof(value));
     if (value>=0.0f && value<=100.0f) mcc_remote_speed=value;
 }
+#endif /* HALO_MCC */

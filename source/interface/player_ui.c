@@ -163,6 +163,7 @@ symbols in this file:
 #include "main/main.h"
 #include "tag_files/tag_groups.h"
 #include "player_ui.h"
+#include "mcc_ui.h"
 #ifndef HALO_CONSOLE_NO_CONTROLS
 #include "../../port/linux/src/controller_layout.h"
 

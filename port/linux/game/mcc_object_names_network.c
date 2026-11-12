@@ -10,6 +10,10 @@ build's pointers, which this build's Xbox addresses are not) */
 #endif
 /* MCC-only bounded name snapshots. Moving units/items retain native replication;
  * this supplies named scenery/devices that scripts create or destroy. */
+#ifndef HALO_MCC
+#include "../include/halo_port_features.h"
+#endif
+#if !defined(HALO_MCC) || HALO_MCC /* Halo MCC maps (halo_port_features.h, above): a console builds this to nothing */
 #include "cseries.h"
 #include "mcc_object_names.h"
 #include "mcc_object_names_network.h"
@@ -19,6 +23,7 @@ build's pointers, which this build's Xbox addresses are not) */
 #include "scenario/scenario.h"
 #include "scenario/scenario_definitions.h"
 #include "network_distributed.h"
+#include "mcc_network_messages.h"
 #include <string.h>
 
 #define MCC_NAME_CHUNK 512
@@ -43,6 +48,8 @@ word mcc_object_names_entry_size(void) { return sizeof(struct mcc_name_chunk); }
 
 void mcc_object_names_host_tick(void)
 {
+    /* port: (mcc_network_messages.h) */
+    if (!network_distributed_mcc_session()) return;
     struct {
         struct distributed_message_header header;
         struct mcc_name_chunk chunk;
@@ -115,3 +122,4 @@ void mcc_object_names_receive(void const *entries, short count, long host_time)
         else if (!mcc_names_holds_player(object)) object_delete(object);
     }
 }
+#endif /* HALO_MCC */

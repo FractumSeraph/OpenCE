@@ -235,6 +235,7 @@ symbols in this file:
 #include "units/unit_definitions.h"
 #include "units/units.h"
 #include "mcc_projectiles.h" /* port: port/linux/game/mcc_projectiles.c */
+#include "mcc_objects.h" /* port: mcc_first_person_weapon_deleted */
 
 #ifdef HALO_PORT_MAXIMUM_NETWORK_PLAYERS
 #include "bitmaps/bitmap_group.h"
@@ -2572,7 +2573,6 @@ static void trigger_create_projectiles(
 		long target_object_index= NONE;
 		long projectile_definition_index;
 		short projectile_count;
-
 		/* port: MCC owns camera-relative placement and the pre-creation cover check. */
 		boolean mcc_ray = mcc_projectile_ray(weapon_index, owner_object_index, trigger_index, TRUE,
 			&origin, &forward, &velocity, &target_object_index);

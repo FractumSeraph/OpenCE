@@ -3,10 +3,14 @@ STEAM_WORKSHOP.C
 
 The subscribed Steam Workshop items' Halo CE maps, found in place (steam_workshop.h).
 */
+#ifndef HALO_MCC
+#include "../include/halo_port_features.h"
+#endif
+#if !defined(HALO_MCC) || HALO_MCC /* Halo MCC maps (halo_port_features.h, above): a console builds this to nothing */
 
 #include "steam_workshop.h"
 #include "mcc_manifest.h"
-#include "server_json.h"
+#include "mcc_json.h" /* port: our own JSON lookups, json_reader.h */
 #include "port_config.h"
 #include "posix.h"
 
@@ -52,18 +56,19 @@ static void copy_text(char *out, unsigned size, const char *text)
 	out[length] = 0;
 }
 
-static int parse(struct server_json_document *document, const char *text, int length)
+/* port: (mcc_json.h) a document of a size read, and one JSON object */
+static int parse(const char *text, int length)
 {
-	if (!text || length <= 0 || length > STEAM_WORKSHOP_MAXIMUM_JSON ||
-		!server_json_parse(document, text, length, 16))
-		return 0;
-	if (document->count < 1 || document->tokens[0].type != _server_json_object)
-	{
-		server_json_document_free(document);
-		return 0;
-	}
-	return 1;
+	return text && length > 0 && length <= STEAM_WORKSHOP_MAXIMUM_JSON && mcc_json_valid(text, length);
 }
+
+static const char *const title_path[] = { "Title", "Neutral", NULL };
+static const char *const engine_path[] = { "Engine", NULL };
+static const char *const campaign_path[] = { "GameModContents", "HasCampaign", NULL };
+static const char *const maps_path[] = { "GameModContents", "MultiplayerMaps", NULL };
+static const char *const scenario_path[] = { "ScenarioFile", NULL };
+static const char *const thumbnail_path[] = { "Images", "Thumbnail", NULL };
+static const char *const large_path[] = { "Images", "Large", NULL };
 
 /* a plain item-relative path: not empty, not absolute or drive-lettered, no "..", no control characters */
 static int path_is_plain(const char *path)
@@ -89,50 +94,46 @@ static void slashes(char *path)
 	}
 }
 
-static void neutral_title(struct server_json_document const *document, char *out)
+static void neutral_title(const char *document, int length, char *out)
 {
 	char text[256];
 
 	out[0] = 0;
-	if (server_json_get_string(document, server_json_member(document, server_json_member(document, 0, "Title"),
-		"Neutral"), text, (int)sizeof(text)))
+	if (mcc_json_string(document, length, title_path, text, sizeof(text)))
 		copy_text(out, STEAM_WORKSHOP_TITLE_SIZE, text);
 }
 
 int steam_workshop_read_item(const char *text, int length, struct steam_workshop_item_text *item)
 {
-	struct server_json_document document;
 	char engine[32];
-	int maps, index, count;
+	struct json found;
+	int index, count;
 
 	memset(item, 0, sizeof(*item));
-	if (!parse(&document, text, length))
+	if (!parse(text, length))
 		return 0;
-	neutral_title(&document, item->title);
-	if (server_json_get_string(&document, server_json_member(&document, 0, "Engine"), engine, (int)sizeof(engine)))
+	neutral_title(text, length, item->title);
+	if (mcc_json_string(text, length, engine_path, engine, sizeof(engine)))
 		item->halo1 = !strcmp(engine, "Halo1");
-	server_json_get_boolean(&document, server_json_member(&document,
-		server_json_member(&document, 0, "GameModContents"), "HasCampaign"), &item->has_campaign);
-	maps = server_json_member(&document, server_json_member(&document, 0, "GameModContents"), "MultiplayerMaps");
-	if (maps >= 0)
+	mcc_json_boolean(text, length, campaign_path, &item->has_campaign);
+	if (mcc_json_find(text, length, maps_path, &found))
 	{
-		if (document.tokens[maps].type != _server_json_array || document.tokens[maps].size > STEAM_WORKSHOP_MAXIMUM_ITEM_MAPS)
+		count = mcc_json_strings(text, length, maps_path, item->map_json[0], sizeof(item->map_json[0]),
+			sizeof(item->map_json[0]), STEAM_WORKSHOP_MAXIMUM_ITEM_MAPS);
+		if (count == -2 && item->halo1)
+			fprintf(stderr, "MCC package '%s': MultiplayerMaps has %d entries; the supported limit is %d. Split the collection into smaller packages.\n",
+				item->title, mcc_json_count(text, length, maps_path), STEAM_WORKSHOP_MAXIMUM_ITEM_MAPS);
+		if (count < 0)
 		{
-			if (item->halo1 && document.tokens[maps].type == _server_json_array)
-				fprintf(stderr, "MCC package '%s': MultiplayerMaps has %d entries; the supported limit is %d. Split the collection into smaller packages.\n",
-					item->title, document.tokens[maps].size, STEAM_WORKSHOP_MAXIMUM_ITEM_MAPS);
-			server_json_document_free(&document);
+			memset(item, 0, sizeof(*item));
 			return 0;
 		}
-		count = document.tokens[maps].size;
 		for (index = 0; index < count; index++)
 		{
 			char *path = item->map_json[index];
 
-			if (!server_json_get_string(&document, server_json_element(&document, maps, index), path,
-				(int)sizeof(item->map_json[0])) || !path_is_plain(path))
+			if (!path_is_plain(path))
 			{
-				server_json_document_free(&document);
 				memset(item, 0, sizeof(*item));
 				return 0;
 			}
@@ -140,26 +141,20 @@ int steam_workshop_read_item(const char *text, int length, struct steam_workshop
 		}
 		item->map_count = count;
 	}
-	server_json_document_free(&document);
 	return 1;
 }
 
 int steam_workshop_read_map(const char *text, int length, struct steam_workshop_map_text *map)
 {
-	struct server_json_document document;
 	char scenario[256], thumbnail[128];
 	const char *name, *c;
 	unsigned name_length;
 
 	memset(map, 0, sizeof(*map));
-	if (!parse(&document, text, length))
+	if (!parse(text, length))
 		return 0;
-	if (!server_json_get_string(&document, server_json_member(&document, 0, "ScenarioFile"), scenario,
-		(int)sizeof(scenario)))
-	{
-		server_json_document_free(&document);
+	if (!mcc_json_string(text, length, scenario_path, scenario, sizeof(scenario)))
 		return 0;
-	}
 	name = scenario;
 	for (c = scenario; *c; c++)
 	{
@@ -174,7 +169,6 @@ int steam_workshop_read_map(const char *text, int length, struct steam_workshop_
 	}
 	if (!name[0] || *c || strlen(name) >= sizeof(map->name) || !strcmp(name, ".") || !strcmp(name, ".."))
 	{
-		server_json_document_free(&document);
 		memset(map, 0, sizeof(*map));
 		return 0;
 	}
@@ -183,20 +177,17 @@ int steam_workshop_read_map(const char *text, int length, struct steam_workshop_
 	name_length = (unsigned)strlen(map->name);
 	if (name_length > 4 && !strcmp(map->name + name_length - 4, ".map"))
 		map->name[name_length - 4] = 0;
-	neutral_title(&document, map->title);
-	if (server_json_get_string(&document, server_json_member(&document, server_json_member(&document, 0, "Images"),
-		"Thumbnail"), thumbnail, (int)sizeof(thumbnail)) && path_is_plain(thumbnail))
+	neutral_title(text, length, map->title);
+	if (mcc_json_string(text, length, thumbnail_path, thumbnail, sizeof(thumbnail)) && path_is_plain(thumbnail))
 	{
 		slashes(thumbnail);
 		strcpy(map->thumbnail, thumbnail);
 	}
-	if (server_json_get_string(&document, server_json_member(&document, server_json_member(&document, 0, "Images"),
-		"Large"), thumbnail, (int)sizeof(thumbnail)) && path_is_plain(thumbnail))
+	if (mcc_json_string(text, length, large_path, thumbnail, sizeof(thumbnail)) && path_is_plain(thumbnail))
 	{
 		slashes(thumbnail);
 		strcpy(map->large, thumbnail);
 	}
-	server_json_document_free(&document);
 	return 1;
 }
 
@@ -244,19 +235,19 @@ static char *read_file(const char *path, int *length)
 
 	*length = 0;
 	if (!file)
-		return NULL;
+		return (void *)0;
 	text = malloc(STEAM_WORKSHOP_MAXIMUM_JSON + 2);
 	if (!text)
 	{
 		fclose(file);
-		return NULL;
+		return (void *)0;
 	}
 	got = fread(text, 1, STEAM_WORKSHOP_MAXIMUM_JSON + 1, file);
 	fclose(file);
 	if (!got)
 	{
 		free(text);
-		return NULL;
+		return (void *)0;
 	}
 	text[got] = 0;
 	/* one byte past the limit is "too large": the parser refuses it */
@@ -464,7 +455,18 @@ static int linux_roots(char (*paths)[STEAM_WORKSHOP_PATH_SIZE], int maximum)
 }
 #endif
 
+const char *platform_data_root(void);
+
 /* the Steam folders to look in, then the libraries those name: library paths, each once */
+static char own_library[STEAM_WORKSHOP_PATH_SIZE];
+/* MCC's shared files were asked for, and not found */
+static int shared_missing;
+
+void steam_workshop_set_own_library(const char *path)
+{
+	snprintf(own_library, sizeof(own_library), "%s", path ? path : "");
+}
+
 static int libraries(char (*paths)[STEAM_WORKSHOP_PATH_SIZE], int maximum)
 {
 	char roots[MAXIMUM_STEAM_ROOTS][STEAM_WORKSHOP_PATH_SIZE];
@@ -473,6 +475,18 @@ static int libraries(char (*paths)[STEAM_WORKSHOP_PATH_SIZE], int maximum)
 
 	if (setting && setting[0])
 		snprintf(roots[root_count++], STEAM_WORKSHOP_PATH_SIZE, "%s", setting);
+	/* (the game's own library: its downloads, read before the Workshop tab has opened this run) */
+	if (!own_library[0])
+	{
+		const char *downloads = config_string("paths.steam_downloads"), *data = platform_data_root();
+
+		if (downloads && downloads[0])
+			snprintf(own_library, sizeof(own_library), "%s", downloads);
+		else if (data && data[0] && snprintf(own_library, sizeof(own_library), "%s/steam", data) >= (int)sizeof(own_library))
+			own_library[0] = 0;
+	}
+	if (own_library[0])
+		snprintf(roots[root_count++], STEAM_WORKSHOP_PATH_SIZE, "%s", own_library);
 #ifdef _WIN32
 	{
 		const char *program_files[] = { getenv("ProgramFiles(x86)"), getenv("ProgramFiles") };
@@ -489,6 +503,14 @@ static int libraries(char (*paths)[STEAM_WORKSHOP_PATH_SIZE], int maximum)
 	}
 #else
 	root_count += linux_roots(roots + root_count, MAXIMUM_STEAM_ROOTS - root_count);
+#ifdef __APPLE__
+	/* (macOS's Steam, after the Linux places a Mac never has) */
+	if (root_count < MAXIMUM_STEAM_ROOTS &&
+		linux_root(roots[root_count], getenv("HOME"), "Library/Application Support/Steam"))
+	{
+		root_count++;
+	}
+#endif
 #endif
 	for (root = 0; root < root_count && count < maximum; root++)
 	{
@@ -522,6 +544,11 @@ static int libraries(char (*paths)[STEAM_WORKSHOP_PATH_SIZE], int maximum)
 	return count;
 }
 
+int steam_workshop_libraries(char (*paths)[STEAM_WORKSHOP_PATH_SIZE], int maximum)
+{
+	return libraries(paths, maximum);
+}
+
 int steam_workshop_scan(void)
 {
 	char (*paths)[STEAM_WORKSHOP_PATH_SIZE];
@@ -540,6 +567,39 @@ int steam_workshop_scan(void)
 		scan_library(paths[index]);
 	free(paths);
 	return catalog.count;
+}
+
+/* the maps folders of the Workshop items found (steam_workshop_scan's,
+scanned now if not yet), each once, with its item's id: their count, at
+most maximum; 0 when game.workshop_maps is off. For the map lists and their
+folder watcher: these are the folders to watch */
+int steam_workshop_map_folders(char (*folders)[STEAM_WORKSHOP_PATH_SIZE],
+	char (*item_ids)[STEAM_WORKSHOP_ID_SIZE], int maximum)
+{
+	int index, count = 0, other;
+
+	if (!catalog.scanned)
+		steam_workshop_scan();
+	for (index = 0; index < catalog.count && count < maximum; index++)
+	{
+		char folder[STEAM_WORKSHOP_PATH_SIZE], *separator;
+
+		snprintf(folder, sizeof(folder), "%s", catalog.maps[index].path);
+		slashes(folder);
+		separator = strrchr(folder, '/');
+		if (!separator)
+			continue;
+		*separator = 0;
+		for (other = 0; other < count && strcmp(folders[other], folder); other++)
+			;
+		if (other < count)
+			continue;
+		snprintf(folders[count], STEAM_WORKSHOP_PATH_SIZE, "%s", folder);
+		if (item_ids)
+			snprintf(item_ids[count], STEAM_WORKSHOP_ID_SIZE, "%s", catalog.maps[index].item_id);
+		count++;
+	}
+	return count;
 }
 
 int steam_workshop_count(void)
@@ -563,7 +623,7 @@ static const struct steam_workshop_map *item_map(const char *item_id)
 		if (!strcmp(catalog.maps[index].item_id, item_id))
 			return &catalog.maps[index];
 	}
-	return NULL;
+	return (void *)0;
 }
 
 int steam_workshop_package_folder(const char *item_id, char *folder, unsigned long size)
@@ -585,6 +645,97 @@ int steam_workshop_package_folder(const char *item_id, char *folder, unsigned lo
 
 /* Only the two resource names in MCC package/shared namespaces are redirected.
  * Keep validation, complete-reference matching and fingerprints in mcc_resources.c. */
+/* port: the data root's own copy of relative (and resource in it, when
+named) in maps_mcc or GulchCE's mcc_maps (mcc_maps.h) */
+static int local_mcc(const char *data_root, const char *relative, const char *resource, char *found, unsigned size)
+{
+	static const char *const folders[] = { "maps_mcc", "mcc_maps" };
+	char local[200];
+	int index;
+
+	for (index = 0; index < 2; index++)
+	{
+		if (resource)
+			snprintf(local, sizeof(local), "%s/%s/%s", folders[index], relative, resource);
+		else
+			snprintf(local, sizeof(local), "%s/%s", folders[index], relative);
+		if (resolve(data_root, local, found, size))
+			return 1;
+	}
+	return 0;
+}
+
+/* MCC's install folder in a Steam library: its app manifest's installdir
+(steamapps/appmanifest_976730.acf: any name, "Halo-MCC" too), else Steam's
+default, "Halo The Master Chief Collection" */
+static int mcc_install_folder(const char *library, char *out, unsigned size)
+{
+	char manifest[STEAM_WORKSHOP_PATH_SIZE], folder[256], common[STEAM_WORKSHOP_PATH_SIZE];
+	char *text, *at;
+	int length;
+
+	snprintf(folder, sizeof(folder), "%s", "Halo The Master Chief Collection");
+	if (join(manifest, sizeof(manifest), library, "steamapps/appmanifest_" STEAM_APP ".acf") &&
+		(text = read_file(manifest, &length)))
+	{
+		/* "installdir"<white space>"<name>": a plain folder name, no
+		separators, dots alone or control characters */
+		at = strstr(text, "\"installdir\"");
+		if (at)
+		{
+			unsigned used = 0;
+
+			at += 12;
+			while (*at == ' ' || *at == '\t')
+				at++;
+			if (*at == '"')
+			{
+				for (at++; *at && *at != '"' && *at != '\n' && used + 1 < sizeof(folder); at++)
+				{
+					if ((unsigned char)*at < 0x20 || *at == '/' || *at == '\\' || *at == ':')
+						break;
+					folder[used++] = *at;
+				}
+				if (*at == '"' && used && strspn(folder, ".") != used)
+					folder[used] = 0;
+				else
+					snprintf(folder, sizeof(folder), "%s", "Halo The Master Chief Collection");
+			}
+		}
+		free(text);
+	}
+	if (join(common, sizeof(common), library, "steamapps/common") && resolve(common, folder, out, size) &&
+		is_directory(out))
+		return 1;
+	/* (steamcmd's force_install_dir: an install folder holding its own
+	steamapps/appmanifest_976730.acf, the library itself or a folder in its
+	steamapps/common, whatever its name) */
+	if (join(manifest, sizeof(manifest), library, "halo1/maps") && is_directory(manifest) &&
+		join(manifest, sizeof(manifest), library, "steamapps/appmanifest_" STEAM_APP ".acf") && is_file(manifest))
+	{
+		snprintf(out, size, "%s", library);
+		return strlen(library) < size;
+	}
+	{
+		void *directory = join(common, sizeof(common), library, "steamapps/common") ? posix_directory_open(common) : NULL;
+		char name[256], candidate[STEAM_WORKSHOP_PATH_SIZE];
+		int found = 0;
+
+		while (directory && !found && posix_directory_next(directory, name, sizeof(name)))
+		{
+			if (name[0] == '.' || !join(candidate, sizeof(candidate), common, name) ||
+				!join(manifest, sizeof(manifest), candidate, "steamapps/appmanifest_" STEAM_APP ".acf") ||
+				!is_file(manifest) || strlen(candidate) >= size)
+				continue;
+			snprintf(out, size, "%s", candidate);
+			found = 1;
+		}
+		if (directory)
+			posix_directory_close(directory);
+		return found;
+	}
+}
+
 int steam_workshop_resource_path(const char *request, const char *data_root, char *path, unsigned long size)
 {
 	char relative[128], local[160], package[STEAM_WORKSHOP_PATH_SIZE];
@@ -612,8 +763,7 @@ int steam_workshop_resource_path(const char *request, const char *data_root, cha
 	{
 		/* A manually installed package, or any beside-level resource entry,
 		 * stays authoritative even when incomplete, invalid or unreadable. */
-		snprintf(local, sizeof(local), "mcc_maps/%s", relative);
-		if (resolve(data_root, local, found, sizeof(found)) ||
+		if (local_mcc(data_root, relative, NULL, found, sizeof(found)) ||
 			!steam_workshop_package_folder(relative, package, sizeof(package)) ||
 			resolve(package, resource, found, sizeof(found)))
 			return 0;
@@ -625,13 +775,12 @@ int steam_workshop_resource_path(const char *request, const char *data_root, cha
 		return resolve(package, local, path, size);
 	}
 	if (!strcmp(relative, "_shared/singleplayer"))
-		installed = "steamapps/common/Halo The Master Chief Collection/halo1/maps";
+		installed = "halo1/maps";
 	else if (!strcmp(relative, "_shared/multiplayer"))
-		installed = "steamapps/common/Halo The Master Chief Collection/halo1/maps/custom_edition";
+		installed = "halo1/maps/custom_edition";
 	else
 		return 0;
-	snprintf(local, sizeof(local), "mcc_maps/%s/%s", relative, resource);
-	if (resolve(data_root, local, found, sizeof(found)))
+	if (local_mcc(data_root, relative, resource, found, sizeof(found)))
 		return 0;
 	/* The same ordered Steam libraries as map discovery. An explicit local
 	 * shared file wins; no other Workshop item's resources are searched. */
@@ -640,7 +789,10 @@ int steam_workshop_resource_path(const char *request, const char *data_root, cha
 	count = libraries(paths, 2 * STEAM_WORKSHOP_MAXIMUM_LIBRARIES);
 	for (library = 0; library < count; library++)
 	{
-		if (resolve(paths[library], installed, package, sizeof(package)) &&
+		char install[STEAM_WORKSHOP_PATH_SIZE];
+
+		if (mcc_install_folder(paths[library], install, sizeof(install)) &&
+			resolve(install, installed, package, sizeof(package)) &&
 			resolve(package, resource, path, size))
 		{
 			result = 1;
@@ -648,7 +800,15 @@ int steam_workshop_resource_path(const char *request, const char *data_root, cha
 		}
 	}
 	free(paths);
+	/* (an item that needs MCC's own shared files, and they aren't here) */
+	if (!result)
+		shared_missing = 1;
 	return result;
+}
+
+int steam_workshop_shared_missing(void)
+{
+	return shared_missing;
 }
 
 int steam_workshop_item_title(const char *item_id, char *title, unsigned long size)
@@ -660,3 +820,4 @@ int steam_workshop_item_title(const char *item_id, char *title, unsigned long si
 	copy_text(title, (unsigned)size, map->item_title);
 	return 1;
 }
+#endif /* HALO_MCC */

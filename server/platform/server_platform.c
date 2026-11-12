@@ -100,6 +100,8 @@ static void print_usage(FILE *stream)
 		"  --keygen        makes the publisher key for OpenCE's master servers (publisher.key\n"
 		"                  beside config.toml) and prints its public key\n"
 		"  --sign <text>   prints the publisher key's signature of the text (an application's nonce)\n"
+		"  --workshop-get <id>  downloads an MCC Workshop item once the server runs\n"
+		"                  (link Steam first: sv_steam_link)\n"
 #ifdef _WIN32
 		"  --install-service [name]    makes a Windows service of this server, with the\n"
 		"                              HALO_* settings set now (ChupathingyServer unless named)\n"
@@ -304,6 +306,22 @@ static void server_arguments(void)
 			continue;
 		}
 #endif
+		/* (a Workshop item fetched once the server runs: sv_workshop_get's, by
+		the environment the game's side reads, HALO_WORKSHOP_GET) */
+		if (!strcmp(argument, "--workshop-get"))
+		{
+			char id[64] = "", list[1024];
+			const char *before = getenv("HALO_WORKSHOP_GET");
+
+			posix_command_line_argument(++index, id, sizeof(id));
+			snprintf(list, sizeof(list), "%s%s%s", before ? before : "", before && before[0] ? "," : "", id);
+#ifdef _WIN32
+			_putenv_s("HALO_WORKSHOP_GET", list);
+#else
+			setenv("HALO_WORKSHOP_GET", list, 1);
+#endif
+			continue;
+		}
 		if (!strcmp(argument, "--version") || !strcmp(argument, "-v"))
 		{
 			print_version();

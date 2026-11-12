@@ -491,18 +491,39 @@ static BOOL names_match(const char *a, const char *b, unsigned long length)
 	return TRUE;
 }
 
-/* mcc_maps\<Workshop item id>\... where the data root has no such package folder: the item's maps folder in the
-player's Steam library (steam_workshop.h). The rest of the path after the id in rest */
+/* MCC maps' folder in a path: maps_mcc, or GulchCE's mcc_maps (mcc_maps.h),
+its length when cursor starts with one and a separator follows; else 0 */
+static unsigned long mcc_folder_prefix(const char *cursor)
+{
+	static const char *const names[] = { "maps_mcc", "mcc_maps" };
+	unsigned long name, index;
+
+	for (name = 0; name < 2; name++)
+	{
+		for (index = 0; index < 8 && tolower((unsigned char)cursor[index]) == names[name][index]; index++)
+			;
+		if (index == 8 && (cursor[8] == '\\' || cursor[8] == '/'))
+			return 8;
+	}
+	return 0;
+}
+
+/* maps_mcc\<Workshop item id>\... where the data root has no such package folder: the item's maps folder in the
+player's Steam library (steam_workshop.h). The rest of the path after the id in rest (PeterRichardsonGolf's and
+chester's, from GulchCE, on our path translation) */
 static int translate_workshop(const char *cursor, char *resolved, unsigned long size, const char **rest)
 {
-	char id[STEAM_WORKSHOP_ID_SIZE], package[1024], data_folder[1100], local_name[256];
-	unsigned long length = 0;
+	char id[STEAM_WORKSHOP_ID_SIZE], package[1024], data_folder[1100], local_name[256], folder[16];
+	unsigned long length = 0, prefix;
 
 	while (*cursor == '\\' || *cursor == '/')
 		cursor++;
-	if (!names_match(cursor, "mcc_maps", 8) || (cursor[8] != '\\' && cursor[8] != '/'))
+	prefix = mcc_folder_prefix(cursor);
+	if (!prefix)
 		return 0;
-	cursor += 9;
+	memcpy(folder, cursor, prefix);
+	folder[prefix] = 0;
+	cursor += prefix + 1;
 	/* MCC-owned resource discovery also serves the virtual fopen path. */
 	if (steam_workshop_resource_path(cursor, platform_data_root(), resolved, size))
 	{
@@ -518,7 +539,7 @@ static int translate_workshop(const char *cursor, char *resolved, unsigned long 
 	if (!length || (cursor[length] && cursor[length] != '\\' && cursor[length] != '/'))
 		return 0;
 	/* a package folder of that name in the data root wins */
-	if (posix_find_entry_case_insensitive(platform_data_root(), "mcc_maps", local_name, sizeof(local_name)))
+	if (posix_find_entry_case_insensitive(platform_data_root(), folder, local_name, sizeof(local_name)))
 	{
 		snprintf(data_folder, sizeof(data_folder), "%s/%s", platform_data_root(), local_name);
 		if (posix_find_entry_case_insensitive(data_folder, id, local_name, sizeof(local_name)))
@@ -610,6 +631,8 @@ void platform_translate_path(const char *xbox_path, char *host_path, unsigned lo
 			if (posix_stat(resolved, &information) != 0)
 				posix_make_directory(resolved);
 		}
+		/* (a d:\ path's MCC Workshop item, in place: translate_elsewhere's
+		translate_workshop, steam_workshop.c) */
 		cursor += 2;
 	}
 	else

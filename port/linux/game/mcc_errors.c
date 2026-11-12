@@ -8,6 +8,10 @@ build's pointers, which this build's Xbox addresses are not) */
 #pragma clang diagnostic ignored "-Wpointer-integer-compare"
 #pragma clang diagnostic ignored "-Wincompatible-pointer-types"
 #endif
+#ifndef HALO_MCC
+#include "../include/halo_port_features.h"
+#endif
+#if !defined(HALO_MCC) || HALO_MCC /* Halo MCC maps (halo_port_features.h, above): a console builds this to nothing */
 #include "mcc_errors.h"
 #include <stdio.h>
 #include <string.h>
@@ -73,3 +77,4 @@ void mcc_error_text(char const *name, char const *reason, wchar_t *out, size_t s
     for (i = 0; message[i] && i < size - 1; i++) out[i] = (unsigned char)message[i];
     out[i] = 0;
 }
+#endif /* HALO_MCC */

@@ -9,6 +9,10 @@ build's pointers, which this build's Xbox addresses are not) */
 #pragma clang diagnostic ignored "-Wincompatible-pointer-types"
 #endif
 /* Content-matched local MCC paths; the host's name stays on the wire. */
+#ifndef HALO_MCC
+#include "../include/halo_port_features.h"
+#endif
+#if !defined(HALO_MCC) || HALO_MCC /* Halo MCC maps (halo_port_features.h, above): a console builds this to nothing */
 #include "cseries.h"
 #include "errors.h"
 #include "game/game.h"
@@ -225,6 +229,34 @@ void const *mcc_identity_host_settings(void const *settings,long bytes,struct ne
     return copy;
 }
 
+/* port: the host's MCC part of a 43-layout settings record (13,200 bytes:
+docs/delta.md's chupa-43a), over the bytes of it at offset (length of them)
+in data: the map name's Workshop tail (bytes 64 to 127 of the name, at
+name_offset), and the two digests after the local data, its last 64 bytes:
+the content's (chester's fingerprint), then the package metadata's. (This
+fork: OpenCE's 43 record carries both natively, and
+mcc_identity_host_settings has already written the same bytes into it, so
+this only repeats them; the metadata's is the host's, never zeros, which
+OpenCE's clients would refuse.) Nothing for another map, record or a host not
+prepared */
+void mcc_identity_host_overlay(char const *map, long record_size, long name_offset, long offset, long length,
+    unsigned char *data)
+{
+    char canonical[64], name[128];
+    long index;
+    if (record_size != 13200 || !mcc_level_name(map) || !mcc_host_identity.valid ||
+        !mcc_package_name(map,canonical) || strcmp(canonical,mcc_host_identity.name)) return;
+    memset(name,0,sizeof(name));
+    strncpy(name,map,63);
+    mcc_workshop_wire_pack(name,&mcc_host_identity.item);
+    for (index=0;index<length;index++) {
+        long at=offset+index;
+        if (at>=name_offset+64 && at<name_offset+128) data[index]=(unsigned char)name[at-name_offset];
+        else if (at>=record_size-64 && at<record_size-32) data[index]=mcc_host_identity.digest[at-(record_size-64)];
+        else if (at>=record_size-32 && at<record_size) data[index]=mcc_host_identity.metadata[at-(record_size-32)];
+    }
+}
+
 static int mcc_identity_matches(char const *name,unsigned char const digest[32],
     unsigned char const metadata[32],struct mcc_precache_snapshot *validated)
 {
@@ -250,6 +282,17 @@ static int mcc_identity_matches(char const *name,unsigned char const digest[32],
     return ok;
 }
 
+/* port: ChupathingyCE reads the host's content digest from the end of a
+43-layout record here (its game speaks 41 and converts). This fork speaks 43
+natively: the record decodes into game->mcc_content_sha256 and
+mcc_metadata_sha256, which the identity rules below read, so this keeps
+nothing (network_client_message_handler.c still calls it) */
+void mcc_identity_wire_record(unsigned char const *record, long size)
+{
+    (void)record;
+    (void)size;
+}
+
 /* Only a known item ID establishes presence. Its older package may not yet
  * contain the requested level, so search independently of the filename. */
 static int mcc_identity_refusal(char const name[128],char const *session)
@@ -268,6 +311,14 @@ static int mcc_identity_refusal(char const name[128],char const *session)
         }
     }
     mcc_workshop_refusal_text(kind,&host,leaf,text,sizeof(text));
+#if defined(HALO_GAME_BROWSER) && !defined(HALO_SERVER)
+    /* port: a Workshop item this player lacks: offered over the main menu,
+     * through their own Steam, then the game joined again (browser_screen.c) */
+    if (kind==MCC_WORKSHOP_MISSING) {
+        void browser_screen_workshop_missing(char const *id, char const *title);
+        browser_screen_workshop_missing(host.id,host.title);
+    }
+#endif
     return mcc_identity_error(text);
 }
 
@@ -430,6 +481,7 @@ int mcc_identity_accept_installed(char const name[128],unsigned char const diges
     return 1;
 }
 
+
 int mcc_identity_check(char const *name)
 {
     unsigned char const *expected=mcc_identity_expected(name);
@@ -454,3 +506,4 @@ int mcc_identity_loaded(char const *name,struct mcc_runtime *runtime)
         !memcmp(actual,mcc_client_identity.metadata,32) &&
         mcc_resources_fingerprint(runtime,actual) && !memcmp(actual,expected,32);
 }
+#endif /* HALO_MCC */

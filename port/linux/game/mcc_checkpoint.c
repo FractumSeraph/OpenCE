@@ -12,6 +12,10 @@ build's pointers, which this build's Xbox addresses are not) */
  * The CPU allocator's high-water mark proves this fixed tail is unused;
  * no game_state_malloc call, pool size, or allocation checksum is changed.
  * Original tail bytes are retained and restored when MCC ownership ends. */
+#ifndef HALO_MCC
+#include "../include/halo_port_features.h"
+#endif
+#if !defined(HALO_MCC) || HALO_MCC /* Halo MCC maps (halo_port_features.h, above): a console builds this to nothing */
 #include "cseries.h"
 #include "errors.h"
 #include "saved games/game_state.h"
@@ -27,6 +31,7 @@ build's pointers, which this build's Xbox addresses are not) */
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include "mcc_host_memory.h"
 
 #define MCC_CHECKPOINT_PAYLOAD_LIMIT (8u + 8192u * 8u)
 #define MCC_CHECKPOINT_CAMPAIGN_BYTES MCC_CAMPAIGN_SNAPSHOT_V5_BYTES
@@ -117,7 +122,7 @@ static int mcc_checkpoint_units(void const *image, void const *current,
     array = mcc_checkpoint_incoming(image, current, used, object_header_data, sizeof(*array));
     if (!array || !array->valid || array->size != sizeof(*headers) || array->count < 0 ||
         array->count > 8192 || array->count > array->maximum_count) return 0;
-    headers = mcc_checkpoint_incoming(image, current, used, array->data,
+    headers = mcc_checkpoint_incoming(image, current, used, xbox_pointer(array->data),
         (unsigned long)array->count * sizeof(*headers));
     if (!headers) return 0;
     for (i = 0; i < count; ++i) {
@@ -190,7 +195,7 @@ static int mcc_checkpoint_names_validate(void const *image, void const *current,
     array = mcc_checkpoint_incoming(image, current, used, object_header_data, sizeof(*array));
     if (!array || !array->valid || array->size != sizeof(*headers) || array->count < 0 ||
         array->count > 8192 || array->count > array->maximum_count) return 0;
-    headers = mcc_checkpoint_incoming(image, current, used, array->data,
+    headers = mcc_checkpoint_incoming(image, current, used, xbox_pointer(array->data),
         (unsigned long)array->count * sizeof(*headers));
     if (!headers) return 0;
     for (i = 0; i < bytes; i += 4) {
@@ -349,3 +354,4 @@ void mcc_checkpoint_dispose(void)
     }
     memset(&mcc_checkpoint_owner, 0, sizeof(mcc_checkpoint_owner));
 }
+#endif /* HALO_MCC */

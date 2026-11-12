@@ -23,8 +23,8 @@ unit there.
 #define HARNESS_FORK_ELEVATOR
 #include "harness.h"
 
-/* Legacy movement: the MCC authority hook is inactive. */
-static boolean mcc_script_effects_host_movement(void) { return FALSE; }
+static boolean mcc_movement;
+static boolean mcc_script_effects_host_movement(void) { return mcc_movement; }
 
 /* ---------- the fake world */
 
@@ -263,6 +263,13 @@ static real taken_height(long elevator_index, real velocity, real client_z)
 int main(int argc, char **argv)
 {
 	char const *case_name = argc > 1 ? argv[1] : "";
+	CASE("mcc-host-movement")
+	{
+		mcc_movement = TRUE;
+		CHECK(taken_height(NONE, 0.0f, 10.4f) == 10.0f,
+			"MCC enhanced movement must not accept client positions");
+		return 0;
+	}
 
 	/* going up, the client's word a round trip (200 ms) behind: the host's
 	copy rides the host's elevator, and goes across as the client says */

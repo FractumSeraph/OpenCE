@@ -83,10 +83,21 @@ int steam_workshop_read_libraries(const char *text, int length, char (*paths)[ST
 int steam_workshop_windows_roots(char (*paths)[STEAM_WORKSHOP_PATH_SIZE], int maximum);
 #endif
 
+/* the game's own Steam library (steamcmd's downloads with
+game.workshop_steam: workshop_browser.c), looked at after paths.steam;
+"" none */
+void steam_workshop_set_own_library(const char *path);
+/* the Steam library folders (paths.steam first, then the Steam folders found and the libraries their
+libraryfolders.vdf names), each once, whether or not game.workshop_maps is on: how many were written */
+int steam_workshop_libraries(char (*paths)[STEAM_WORKSHOP_PATH_SIZE], int maximum);
 /* looks in the Steam libraries again (paths.steam first, Windows registry or Linux environment hints, usual folders,
 and the libraries their libraryfolders.vdf names). Returns how many maps were found. Each item once, by its id */
 int steam_workshop_scan(void);
 /* the same, the first time only; then the last scan's count */
+/* the Workshop items' maps folders, each once, with their item ids (item_ids
+may be NULL): their count, at most maximum; 0 with game.workshop_maps off */
+int steam_workshop_map_folders(char (*folders)[STEAM_WORKSHOP_PATH_SIZE],
+	char (*item_ids)[STEAM_WORKSHOP_ID_SIZE], int maximum);
 int steam_workshop_count(void);
 const struct steam_workshop_map *steam_workshop_map(int index);
 /* the folder holding the .map files of an item (the package folder of mcc_maps\<item id>); 1 and the path, or 0
@@ -95,7 +106,17 @@ int steam_workshop_package_folder(const char *item_id, char *folder, unsigned lo
 /* Resolve an MCC-relative package/shared resource in place; zero keeps the existing path.
  * Explicit data-root packages/files and beside-level resources retain precedence. */
 int steam_workshop_resource_path(const char *request, const char *data_root, char *path, unsigned long size);
+/* whether a map has needed MCC's own shared files (halo1/maps) and they
+weren't found this run: the Workshop tab then offers them */
+int steam_workshop_shared_missing(void);
 /* the item's title; 1 if some scanned map belongs to the id (the title may still be "") */
 int steam_workshop_item_title(const char *item_id, char *title, unsigned long size);
+
+#if defined(HALO_MCC) && !HALO_MCC
+/* no MCC maps in this build (HALO_MCC, halo_port_features.h): the hooks
+the shared code calls do nothing, their arguments unevaluated */
+#define steam_workshop_package_folder(a0, a1, a2) ((void)sizeof(a0), (void)sizeof(a1), (void)sizeof(a2), 0)
+#define steam_workshop_resource_path(a0, a1, a2, a3) ((void)sizeof(a0), (void)sizeof(a1), (void)sizeof(a2), (void)sizeof(a3), 0)
+#endif
 
 #endif

@@ -465,6 +465,22 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"The PC menus' language: \"maps\" for the language of the Custom Edition\n"
 		"whose loc.map is in custom_maps (as that edition shows them; English\n"
 		"without one), \"english\" for English. The port's own lines are English." },
+	{ "display.map_show_new_game", _config_string, "\"all\"", "HALO_MAP_SHOW_NEW_GAME", _environment_value,
+		_platform_all,
+		"Which maps New Game's multiplayer list shows: \"all\", \"xbox\", \"ce\",\n"
+		"\"md\" or \"mcc\". Show in the list changes it." },
+	{ "display.map_sort_new_game", _config_string, "\"default\"", "HALO_MAP_SORT_NEW_GAME", _environment_value,
+		_platform_all,
+		"The order of New Game's multiplayer list: \"default\", \"az\" or\n"
+		"\"recent\" (recently added first). Sort in the list changes it." },
+	{ "display.map_show_create_game", _config_string, "\"all\"", "HALO_MAP_SHOW_CREATE_GAME", _environment_value,
+		_platform_all,
+		"Which maps Create Game's map list shows: \"all\", \"xbox\", \"ce\",\n"
+		"\"md\" or \"mcc\". Show in the list changes it." },
+	{ "display.map_sort_create_game", _config_string, "\"default\"", "HALO_MAP_SORT_CREATE_GAME",
+		_environment_value, _platform_all,
+		"The order of Create Game's map list: \"default\", \"az\" or \"recent\"\n"
+		"(recently added first). Sort in the list changes it." },
 	{ "display.theme", _config_string, "\"blue\"", "HALO_THEME", _environment_value, _platform_all,
 		"The colors of the Delta Guide and the setup screen: \"blue\" (Halo\n"
 		"Blue) or \"red\" (Chupathingy Red). A change shows at once." },
@@ -1751,6 +1767,17 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"Count this install in Fractum Halo's usage numbers: twice a day the\n"
 		"game tells the fork's server that it is running, with a random ID made\n"
 		"for this install, the version and the platform. false sends nothing." },
+	{ "network.workshop_downloads", _config_string, "\"ask\"", "HALO_NET_WORKSHOP_DOWNLOADS", _environment_value,
+		_platform_desktop,
+		"Get a game's missing MCC Workshop map through your Steam when you join:\n"
+		"\"ask\", \"always\" or \"never\"." },
+	{ "network.workshop_downloads_limit_mb", _config_integer, "1024", "HALO_NET_WORKSHOP_DOWNLOADS_LIMIT_MB",
+		_environment_value, _platform_desktop,
+		"With network.workshop_downloads \"always\": the largest Workshop item, in MB,\n"
+		"got without asking. A bigger one asks first." },
+	{ "network.workshop_url", _config_string, "\"\"", "HALO_WORKSHOP_URL", _environment_value, _platform_desktop,
+		"The list of MCC Workshop items the Delta Guide's Workshop shows (with\n"
+		"MCC on this computer). Empty shows only the items Steam has installed." },
 	{ "network.list_hosted_games", _config_boolean, "true", "HALO_NET_LIST_GAMES", _environment_value,
 		_platform_all | _platform_server,
 		"List the public games you host without a password on the game list,\n"
@@ -2295,8 +2322,30 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 	{ "paths.steam", _config_string, "\"\"", "HALO_STEAM_ROOT", _environment_value, _platform_desktop,
 		"A Steam folder (or Steam library) to check first for subscribed Halo CE\n"
 		"Workshop items. Empty uses automatic discovery: Windows registry, Linux\n"
-		"Steam/XDG hints, usual folders and their libraries. Windows paths use single\n"
+		"Steam/XDG hints, macOS's Steam folder, usual folders and their libraries. Windows paths use single\n"
 		"quotes: 'D:\\Steam'." },
+	{ "game.workshop_steam", _config_boolean, "false", "HALO_WORKSHOP_STEAM", _environment_value, _platform_desktop,
+		"Let the Delta Guide's Workshop get MCC Workshop items itself: through the Steam\n"
+		"client where it downloads them (Windows), else with the game's own Steam\n"
+		"download, signed in once by scanning a QR code with the Steam app. Only while\n"
+		"the Workshop tab is open. Off opens each item's page in Steam." },
+	{ "game.steamcmd_account", _config_string, "\"\"", "HALO_STEAMCMD_ACCOUNT", _environment_value, _platform_desktop,
+		"The Steam account steamcmd signs in with for the Workshop. Empty uses the one\n"
+		"steamcmd saved. Never a password: steamcmd keeps its own sign-in." },
+	{ "paths.steamcmd", _config_string, "\"\"", "HALO_STEAMCMD", _environment_value, _platform_desktop,
+		"steamcmd, for the Workshop on macOS and Linux. Empty looks in the PATH and the\n"
+		"usual places." },
+	{ "game.workshop_item_limit_mb", _config_integer, "8192", "HALO_WORKSHOP_ITEM_LIMIT_MB", _environment_value,
+		_platform_desktop,
+		"The largest Workshop item, in MB, the game's own Steam download takes." },
+	{ "game.workshop_file_limit_mb", _config_integer, "4096", "HALO_WORKSHOP_FILE_LIMIT_MB", _environment_value,
+		_platform_desktop,
+		"The largest single file, in MB, the game's own Steam download takes." },
+	{ "paths.steam_downloads", _config_string, "\"\"", "HALO_STEAM_DOWNLOADS", _environment_value, _platform_desktop,
+		"Where the game puts the Workshop items it downloads, and MCC's Halo CE files.\n"
+		"Empty is steam/ in the data folder. Use a big drive for MCC's files." },
+	{ "paths.steam_api", _config_string, "\"\"", "HALO_STEAM_API", _environment_value, _platform_desktop,
+		"A steam_api library for the Workshop to use. Empty uses MCC's own on Windows." },
 
 	/* ---- data */
 	{ "data.download_url", _config_string, "\"https://halo.fractumseraph.net/assets/maps/\"", "HALO_DATA_DOWNLOAD_URL",
@@ -2365,6 +2414,8 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 	{ "debug.network_test_local_players", _config_integer, "1", "HALO_NETWORK_TEST_LOCAL_PLAYERS", _environment_value,
 		_platform_all,
 		"A test machine's players, from 1 to 4." },
+	{ "debug.network_test_lobby_map", _config_string, "\"\"", "HALO_NETWORK_TEST_LOBBY_MAP", _environment_value, _platform_all,
+		"A test host changes its lobby to this map once another machine has joined." },
 	{ "debug.network_test_score", _config_integer, "0", "HALO_NETWORK_TEST_SCORE", _environment_value, _platform_all,
 		"The score a test game plays to. 0 uses the game type's own." },
 	{ "debug.network_test_aim", _config_boolean, "false", "HALO_NETWORK_TEST_AIM", _environment_set_is_true,
@@ -2674,6 +2725,28 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"Run without a window, and draw nothing." },
 	{ "debug.gl_debug", _config_boolean, "false", "HALO_GL_DEBUG", _environment_set_is_true, _platform_all,
 		"Report OpenGL errors in the log." },
+	{ "debug.workshop_offer", _config_string, "\"\"", "HALO_WORKSHOP_OFFER", _environment_value, _platform_desktop,
+		"A join's missing Workshop map offered over the main menu once, as\n"
+		"\"<item id>:<title>\", for tests. Leave it empty for none." },
+	{ "debug.workshop_search", _config_string, "\"\"", "HALO_WORKSHOP_SEARCH", _environment_value, _platform_desktop,
+		"The Delta Guide Workshop's search box shown with these words, then\n"
+		"searched, for screenshots. Leave it empty for none." },
+	{ "debug.workshop_setup", _config_string, "\"\"", "HALO_WORKSHOP_SETUP", _environment_value, _platform_desktop,
+		"The Delta Guide Workshop's setup rows shown as given, for screenshots:\n"
+		"\"steam=1,signin=0\" (0 Ready, 1 To do, 2 Working, 3 Not available);\n"
+		"\"client\" shows the Steam client's rows." },
+	{ "debug.workshop_steamcmd", _config_boolean, "false", "HALO_WORKSHOP_STEAMCMD", _environment_set_is_true,
+		_platform_desktop,
+		"Workshop downloads with steamcmd (paths.steamcmd) instead of the game's own\n"
+		"Steam download, as before it had one. A fallback for tests." },
+	{ "debug.steam_link_file", _config_boolean, "false", "HALO_STEAM_LINK_FILE", _environment_set_is_true,
+		_platform_desktop,
+		"Keep the Steam link's token in its file in the data folder, never the\n"
+		"system's secret store (the Keychain), for tests." },
+	{ "debug.workshop_no_steam", _config_boolean, "false", "HALO_WORKSHOP_NO_STEAM", _environment_set_is_true,
+		_platform_desktop,
+		"The Delta Guide's Workshop marks an item subscribed without opening\n"
+		"Steam, for tests." },
 	{ "debug.menu_open", _config_string, "\"\"", "HALO_MENU_OPEN", _environment_value, _platform_all,
 		"Start on this menu screen instead of the main menu. Leave it empty for\n"
 		"the main menu." },
@@ -5392,6 +5465,7 @@ static const struct
 	{ "network.protocol", { "auto", "opence", "delta", NULL }, NULL },
 	{ "network.map_downloads", { "ask", "always", "never", NULL }, "\"ask\"" },
 	{ "network.fair_play", { "refuse", "log", "off", NULL }, "\"refuse\"" },
+	{ "network.workshop_downloads", { "ask", "always", "never", NULL }, "\"ask\"" },
 #ifdef HALO_HOST_MAP_DOWNLOADS
 	{ "network.map_downloads_from_host", { "off", "ask", "always", NULL }, "\"off\"" },
 #endif

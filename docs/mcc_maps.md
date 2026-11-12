@@ -2189,3 +2189,151 @@ The final Windows binary also completed a single-process sequence from Ruby
 C20 to Xbox `a10`, to Custom Edition `deathisland`, then back to Ruby C20,
 with console responses after each load and a normal timed exit. This checks
 bounded loading and activation transitions, not full legacy visual parity.
+
+## ChupathingyCE's additions
+
+From ChupathingyCE (merged 2026-11-12): its Delta Guide Workshop downloads.
+
+### Getting items from the Delta Guide
+
+The Delta Guide's Workshop tab lists MCC's Halo CE items (tag `Halo1`) from
+Steam's public Workshop page and Steam's public item details, the same on
+every computer, with no key and no sign-in (see [mcc.md](mcc.md) for players).
+Only installing differs:
+
+- Windows (64-bit), and Linux with MCC from Steam: with `game.workshop_steam`
+  on (USE STEAM on an item's page, after a note), the game loads the
+  `steam_api` library already on the computer (MCC's own `steam_api64.dll` on
+  Windows) while the tab is open and talks to the running Steam client as MCC
+  (the `SteamAppId` environment variable, never `steam_appid.txt`). Steam
+  shows MCC as running then. GET subscribes and REMOVE unsubscribes; each
+  call's own answer is waited on, and a Steam that isn't signed on shows as
+  "Steam offline". Without the setting, GET opens the item's page in Steam.
+- macOS, and Linux without MCC from Steam: the player's own `steamcmd`
+  (`paths.steamcmd`, or the `PATH` and usual places) downloads the item with
+  the sign-in it saved, into `steam/` in the data folder
+  (`paths.steam_downloads`); the game never sees a password. GET also opens
+  the item's page so Steam.app records the subscription, unless a
+  `steam_api` library on the Mac reached the signed-in client. PLAY, UPDATE
+  and REMOVE work on those downloads.
+
+Any failure (no Steam, Steam offline, MCC not owned, a missing function, a
+ten-second connect timeout) leaves the page and the folder watch as they
+were. Only items whose `ModInfo.json` says `"Engine": "Halo1"` are read from
+disk. Joining a host whose map is a Workshop item the player lacks offers it
+over the main menu (`network.workshop_downloads`: ask, always or never), then
+joins again once it is installed.
+
+With `game.workshop_maps = true` (`HALO_WORKSHOP_MAPS=1`), desktop builds list
+Halo CE maps from the Workshop items a player is subscribed to
+without copying anything into the data root. `steam_workshop.c` looks in Steam's
+libraries for `steamapps/workshop/content/976730/<item id>/`: the usual Steam
+folders (on Windows `%ProgramFiles(x86)%\Steam`; on Linux `~/.steam/steam`,
+`~/.local/share/Steam`, and the Flatpak and Snap places), the `paths.steam`
+setting (`HALO_STEAM_ROOT`), and every library their `libraryfolders.vdf`
+names. On Windows it also reads `SteamPath` from the current user's
+`Software\Valve\Steam` registry key and `InstallPath` from both the 32-bit and
+64-bit machine-wide views of that key. Thus an installation such as `C:\Steam`
+is discovered without editing the configuration or running Steam. The manual
+`paths.steam` root is checked first, followed by registered installations and
+standard folders; its copy of a duplicate item takes precedence. Missing,
+unreadable, non-string or oversized registry values are ignored. The detected
+path is not written to the configuration: an empty setting continues to use
+automatic discovery on the next scan.
+
+On Linux, after the manual override, discovery checks the literal absolute path
+in `STEAM_COMPAT_CLIENT_INSTALL_PATH` when the launch environment supplies it,
+then `$XDG_DATA_HOME/Steam`. It also keeps the home-folder fallbacks above and
+adds `~/.steam/debian-installation`. The existing `~/.steam/steam` and
+`~/.steam/root` links can point to an installation anywhere the user can read;
+each discovered root's library list can locate libraries on other drives.
+For example, `XDG_DATA_HOME=/mnt/data/player` finds
+`/mnt/data/player/Steam` with `paths.steam` empty. Missing, stale, relative,
+control-character or oversized environment hints do not prevent fallback
+discovery. Paths are not expanded as shell expressions or written to config.
+
+The location evidence is the [XDG base-directory specification](https://specifications.freedesktop.org/basedir/0.8/),
+Valve's use of the client-install hint in [Proton's launcher](https://github.com/ValveSoftware/Proton/blob/proton_10.0/proton),
+and the [Valve maintainer's description of Debian's installation folder](https://github.com/ValveSoftware/steam-for-linux/issues/9347).
+These are discovery hints, not an exhaustive drive search. An installation with
+no accessible hint, link or known location still needs `paths.steam`; sandbox
+filesystem permissions can also prevent discovery.
+
+An item is used when its `ModInfo.json` says `"Engine": "Halo1"`; each
+path in `GameModContents.MultiplayerMaps` is a map json whose `ScenarioFile`
+names the `.map` file in the item's `maps` folder, whose `Title.Neutral` is the
+map's title and whose `Images.Thumbnail` is its preview picture. Folder names
+inside an item are found without regard to case, as Steam's files are spelled
+by their makers. An item seen through two paths to one library is listed once.
+
+A multiplayer item may list up to 1,024 maps, matching the existing total
+Workshop catalog capacity. The former 64-entry item limit rejected whole
+collections, including an inspected 75-entry Halo 1 package; it was a reader
+capacity, not an MCC format restriction. The reader validates every listed
+path and retains the 256 KiB JSON limit. Larger lists are refused with a
+diagnostic naming the package title, entry count and supported limit. The
+combined catalog still holds at most 1,024 maps across all packages. Campaign
+progression retains its independent 64-mission limit.
+
+`tools/test_steam_workshop.py` exercises 64/65/75/1,024-entry manifests,
+unrelated package identities, late malformed paths, catalog saturation and
+disable/re-enable/rescan behavior through the real reader and discovery code.
+Local menu metadata and previews use the same multiplayer bound, including
+Android/web packages. Discovery does not establish that every
+map's gameplay content is supported.
+
+Discovery defaults to off. Android and web use installed `mcc_maps` packages;
+they do not search for Steam. Local package folders take precedence regardless
+of their letter case. The path translation hook is necessary because the shared
+file reader opens virtual Xbox paths; it handles only `mcc_maps` requests and
+leaves `maps` and `custom_maps` on their established paths.
+
+Each map is the level `mcc_maps\<item id>\<map name>`, so it is the same
+package identity as a folder named by the item id (above), and the host's item
+id and title and a joiner's refusal text work as for any such package. The path
+translation (`platform_translate_path`) opens `mcc_maps\<item id>\` as the
+item's `maps` folder in Steam's library. A package folder of that name in the
+data root's `mcc_maps` wins, so a player can still override an item by hand.
+The MCC menus show the map's Workshop title, and a package folder shows the
+item's title instead of its id. The resources a map needs (`bitmaps.map`,
+`sounds.map`) are selected independently. A Workshop resource beside the level
+in the item's `maps` folder takes precedence; when absent, the same item's
+`halo1/maps` file is used. An existing entry remains authoritative even if it
+is damaged or unreadable. Nothing borrows another Workshop item's resources.
+A local `mcc_maps/<item id>` package also prevents borrowing that item's files.
+
+If package and legacy root resources are absent, the existing shared-set
+selection checks both standard sets. A manually installed file under
+`mcc_maps/_shared` wins. Otherwise, with Workshop discovery enabled, each set
+resolves in the first discovered Steam library containing the corresponding
+MCC file, under `steamapps/common/Halo The Master Chief Collection/`:
+
+- `halo1/maps/bitmaps.map` for the singleplayer set;
+- `halo1/maps/custom_edition/bitmaps.map` and `sounds.map` for the multiplayer set.
+
+These are MCC installation directories, not the separate Custom Edition game
+or the data root's `custom_maps`. The setting's existing library order applies;
+`libraryfolders.vdf` includes installations on other drives. Disabling discovery
+keeps manually installed package/root/shared paths. Android and web retain
+installed/imported packages and do not search Steam.
+
+Discovery only supplies paths. `mcc_resources_select` still validates the file
+and every external reference, rejects partial matches and ambiguous different
+matching shared files, and fingerprints the selected bytes rather than their
+location. Self-contained maps open no unrelated resources. Selected streams
+are owned by the current MCC runtime and closed on unload or failed loading.
+No map names, checksums or Workshop-ID exceptions select this behavior.
+
+The layout evidence is the installed Halo 1 MCC shared directories and multiple
+Workshop items with authored resources under `halo1/maps`. Their metadata can
+say `HasSharedFiles: false` while those files are present, so discovery uses the
+bounded, conventional resource paths and the reader validates the contents;
+that metadata flag does not override an installed package resource. The synthetic
+regressions in `tools/test_steam_workshop.py` exercise unrelated item identities,
+case-insensitive paths, overrides, missing types, library roots and bounds.
+
+The catalog is read the first time MCC maps are needed, and again when a joiner
+cannot find the host's map (so an item subscribed just now is found). The json
+files are the item makers' text: one that is too large (256 KB), too deep, not
+an object, or that names a path leaving its item, refuses that item or map and
+nothing else.

@@ -10,6 +10,10 @@ build's pointers, which this build's Xbox addresses are not) */
 #endif
 /* The MCC canvas is 960p, while native UI/HUD coordinates are 480p.
  * Keep full-resolution texture samples and convert only screen geometry. */
+#ifndef HALO_MCC
+#include "../include/halo_port_features.h"
+#endif
+#if !defined(HALO_MCC) || HALO_MCC /* Halo MCC maps (halo_port_features.h, above): a console builds this to nothing */
 #include "cseries.h"
 #include "bitmaps/bitmap_group.h"
 #include "bitmaps/bitmaps.h"
@@ -114,7 +118,7 @@ void mcc_hud_glyphs_dispose(void)
     long i;
     for (i=0;i<14;i++) if (mcc_buttons[i].bitmap) {
         hud_hires_register_placeholder(mcc_buttons[i].asset,NULL);
-        xgpu_mcc_texture_unbind(mcc_buttons[i].bitmap->hardware_format);
+        xgpu_mcc_texture_unbind(xbox_pointer(mcc_buttons[i].bitmap->hardware_format));
         bitmap_delete(mcc_buttons[i].bitmap);
     }
     memset(mcc_buttons,0,sizeof(mcc_buttons));
@@ -127,7 +131,7 @@ static short mcc_hud_button_index(struct icon_hud_element_definition const *icon
     short i;
     struct icon_hud_element_definition const *buttons;
     if (!hud_globals) return NONE;
-    buttons=hud_globals->messaging.button_icons.address;
+    buttons=xbox_pointer(hud_globals->messaging.button_icons.address);
     if (!buttons) return NONE;
     for (i=0;i<18 && i<hud_globals->messaging.button_icons.count;i++)
         if (icon==buttons+i) return i<6 ? i :
@@ -168,7 +172,7 @@ static struct bitmap_data const *mcc_hud_button_bitmap(short index)
         bitmap=bitmap_2d_new(index>=6 ? 64 : 32,index>=6 ? 64 : 32,0,11);
         if (!bitmap) return NULL;
         if (!rasterizer_bitmap_new(bitmap)) {bitmap_delete(bitmap);return NULL;}
-        hud_hires_register_placeholder(asset,bitmap->hardware_format);
+        hud_hires_register_placeholder(asset,xbox_pointer(bitmap->hardware_format));
         mcc_buttons[index].asset=asset;
         mcc_buttons[index].bitmap=bitmap;
         return bitmap;
@@ -286,7 +290,7 @@ boolean mcc_hud_icon_draw(long bitmap_group_index, struct bitmap_data const *bit
         if (config_boolean("display.high_res_hud") && hud_globals &&
             hud_globals->messaging.button_icons.address) {
             short entry;
-            struct icon_hud_element_definition const *buttons=hud_globals->messaging.button_icons.address;
+            struct icon_hud_element_definition const *buttons=xbox_pointer(hud_globals->messaging.button_icons.address);
             for (entry=0;entry<18 && entry<hud_globals->messaging.button_icons.count;entry++)
                 if (icon==buttons+entry && controller_glyph_draw_with_release(controller_glyph_style(),entry,icon,cursor,color,xgpu_mcc_texture_unbind))
                     return TRUE;
@@ -433,3 +437,4 @@ void mcc_hud_title_bounds(rectangle2d *bounds, short justification, unsigned lon
         break;
     }
 }
+#endif /* HALO_MCC */

@@ -271,8 +271,11 @@ symbols in this file:
 #include "text/unicode.h"
 /* system_milliseconds(), for the settings update interval */
 #include "cseries/cseries_windows.h"
+#include "mcc_ui_teams.h"
 
 /* port/linux/game/network_distributed.c's */
+int network_rules_join_request_refused(unsigned version, unsigned char const *tail, int tail_size);
+int delta_legacy_announce(void);
 void network_distributed_handle_message(long machine_index, word const *message, word size);
 /* port/linux/game/network_voice.c's: voice chat, in the lobby too */
 boolean network_voice_handles_message(word const *message, word size);
@@ -961,6 +964,10 @@ static struct network_game_server_settings_machine
 	boolean owed;
 	boolean refused;
 	boolean marked;
+	/* port: the number this host announced when the size was decided, and
+	when the machine joined */
+	unsigned announce;
+	unsigned joined_number;
 } network_game_server_settings_machines[MAXIMUM_NETWORK_MACHINE_COUNT];
 
 /* the join mark of the join request being handled, for
@@ -995,6 +1002,12 @@ static unsigned network_game_server_machine_delta_version(
 #endif
 }
 
+/* port: the number this host announced when the machine joined (0: not
+known) */
+unsigned network_game_server_machine_joined_number(
+	struct network_game_server *server,
+	struct network_game_server_client_machine *machine);
+
 /* a machine has just been let into the game: its record is decided anew */
 static void network_game_server_settings_machine_joined(
 	struct network_game_server *server,
@@ -1007,6 +1020,7 @@ static void network_game_server_settings_machine_joined(
 		csmemset(&network_game_server_settings_machines[slot], 0, sizeof(network_game_server_settings_machines[slot]));
 		network_game_server_settings_machines[slot].connection = network_game_server_get_client_connection(machine);
 		network_game_server_settings_machines[slot].marked = network_game_server_join_marked;
+		network_game_server_settings_machines[slot].joined_number = (unsigned)delta_legacy_announce();
 	}
 }
 
@@ -1038,12 +1052,20 @@ static long network_game_server_settings_layout(
 		csmemset(entry, 0, sizeof(*entry));
 		entry->connection = connection;
 	}
+	/* (port: the host's own machine reads its server's number as it is now,
+	which a game on an MCC map changes in the lobby: delta_legacy_host_game_at) */
+	/* (and every machine its next record of that number: a Delta machine
+	with mcc_maps follows it, HOST_NUMBER; any other is dropped,
+	network_game_server_delta_refusals) */
+	if (entry->size && entry->announce != announce)
+		entry->size = 0;
 	if (entry->size)
 	{
 		if (options)
 			*options = entry->options;
 		return entry->size;
 	}
+	entry->announce = announce;
 	if (!entry->since)
 		entry->since = now ? now : 1;
 	/* (the host's own machine takes either: it joined by no advertisement;
@@ -1167,6 +1189,10 @@ static boolean network_game_server_send_settings_pieces(
 		else
 			network_rules_settings_record_copy((unsigned char const *)wire, (int)options, (int)offset,
 				(int)message.length, message.data);
+		/* port: an MCC map's Workshop tail and digests in 43's record
+		(mcc_identity.c) */
+		mcc_identity_host_overlay((char const *)wire + offsetof(struct network_game, map.name), size, (long)offsetof(struct network_game, map.name),
+			offset, (long)message.length, (unsigned char *)message.data);
 		encoded_message = create_network_game_message(_message_server_game_settings_update, &message, sizeof(message));
 		if (!encoded_message || !network_game_server_send_message_to_client_machine(server, machine, encoded_message))
 			return FALSE;
@@ -2596,6 +2622,18 @@ static boolean network_game_server_handle_message_client_join_game_request(
 		{
 			network_event("ignoring redundant join request from machine");
 		}
+		/* (port: where the layout of the number this host announces has a
+		version word, a request without it or of another number: dropped
+		without a reply, as such a host of OpenCE's does. The encoded request
+		is its version byte, the 0x70 bytes, the tail, its type byte) */
+		/* (the host's own machine joins at home with a request made for
+		the number it announces: network_game_client_initiate_join_game) */
+		else if (message_size >= 2 + 0x70 &&
+			network_rules_join_request_refused((unsigned)delta_legacy_announce(), (unsigned char const *)(message + 1) + 1 + 0x70,
+				message_size - 2 - 0x70))
+		{
+			network_event("ignoring a join request of another network version than this host's");
+		}
 		else if (decode_network_game_message(
 			&join_game_request,
 			encoded,
@@ -3682,3 +3720,12 @@ typedef char message_server_game_advertise_wire_assert[
 	offsetof(struct message_server_game_advertise, flags) ==
 		offsetof(struct message_server_game_advertise, engine_type) + 10 ? 1 : -1];
 #endif
+
+unsigned network_game_server_machine_joined_number(
+	struct network_game_server *server,
+	struct network_game_server_client_machine *machine)
+{
+	long slot = network_game_server_settings_slot(server, machine);
+
+	return slot == NONE ? 0 : network_game_server_settings_machines[slot].joined_number;
+}

@@ -16,6 +16,10 @@ build's pointers, which this build's Xbox addresses are not) */
  * Reference: https://github.com/xiph/vorbis/blob/v1.3.7/lib/codebook.c
  * (vorbis_book_decodevs_add, vorbis_book_decodev_add, vorbis_book_decodevv_add).
  */
+#ifndef HALO_MCC
+#include "../include/halo_port_features.h"
+#endif
+#if !defined(HALO_MCC) || HALO_MCC /* Halo MCC maps (halo_port_features.h, above): a console builds this to nothing */
 #include "mcc_vorbis.h"
 #include "mcc_loading.h"
 #include <limits.h>
@@ -44,7 +48,8 @@ build's pointers, which this build's Xbox addresses are not) */
 #define stb_vorbis_get_samples_float mcc_stb_get_samples_float
 #define stb_vorbis_get_samples_short_interleaved mcc_stb_get_samples_short_interleaved
 #define stb_vorbis_get_samples_short mcc_stb_get_samples_short
-#include "../../third_party/stb/stb_vorbis.c"
+#include "../../third_party/stb/stb_vorbis.c" /* port: (our copy of stb_vorbis) */
+#include "mcc_host_memory.h"
 
 static uint32_t mcc_ogg_u32(unsigned char const *p)
 {
@@ -254,3 +259,4 @@ void mcc_vorbis_free(short *samples)
 {
     free(samples);
 }
+#endif /* HALO_MCC */

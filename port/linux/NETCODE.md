@@ -569,6 +569,16 @@ stock shield effects. (ChupathingyCE's own builds play the same rules by the
 host's version, but keep the older record: they fold a record of 35's and
 leave a game of one of OpenCE's game types, telling the player which.)
 
+ChupathingyCE's builds, whose game is 41's, play 42 and 43 by layout facts
+of wire `chupa-43a` (`docs/delta.md`, "Layouts"; `network_rules.h`, "chupa-43a's
+facts"): a version word in the join request, more bytes in every distributed
+header (a checkpoint epoch, with the host's boundary message before its
+objects and at each co-op revert), unit state parts a reader passes over,
+and the height of a vehicle's up that throws its riders. This fork plays 42
+and 43 natively, OpenCE's way, so its built-in layouts of them have none of
+those facts (`network_rules_layout_built_in`); a signed table's facts apply
+to it only for versions past 43.
+
 A host plays by the number it announces (`delta_legacy_announce()`: the
 built-in one, 39 in this fork, or a legacy table's, which only raises it
 but for a local one), which is the number of every OpenCE machine in its

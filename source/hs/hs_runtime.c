@@ -288,6 +288,7 @@ symbols in this file:
 #ifdef HALO_64BIT
 #include "cseries/cseries_windows.h"
 #endif
+#include "mcc_scripts.h"
 
 /* port: bipeds.c's; cheats.c's (hs_evaluate_set) */
 extern boolean rider_ejection;
@@ -766,8 +767,22 @@ boolean debug_trigger_volumes;
 
 /* ---------- public code */
 
+#include "mcc_cache.h"
+#if !defined(HALO_MCC) || !HALO_MCC
+/* port: no MCC maps in this build (HALO_MCC): the native threads and
+evaluation, as before */
+#define mcc_hs_stack_end(thread) ((thread)->stack_data+HS_THREAD_STACK_SIZE)
+#define mcc_hs_threads_activate() ((void)0)
+#define mcc_hs_release_thread(thread_index) ((void)0)
+#define mcc_hs_if_tail(function, thread_index, initialize) FALSE
+#define mcc_hs_script_evaluate(script_index, thread_index, initialize) FALSE
+#define mcc_hs_parameter_evaluate(thread_index, node, destination) FALSE
+#define mcc_hs_parameter_set(thread_index, variable, initialize) FALSE
+#define mcc_hs_speed_reconcile(designator, write) ((void)0)
+#else
 #include "mcc_script_threads.inl" /* port: MCC-only bounded thread storage. */
 #include "mcc_script_runtime.inl" /* port: port/linux/game/mcc_script_runtime.inl */
+#endif
 #include "hs_console_state.inl" /* port: port/linux/game/hs_console_state.inl */
 
 void hs_runtime_initialize(

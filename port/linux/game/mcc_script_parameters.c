@@ -12,6 +12,10 @@ build's pointers, which this build's Xbox addresses are not) */
  * syntax primitive/global/local flags 0x15 and zero-based slot in data.
  * Public schema: Invader scenario.json and scenario/pre_compile.cpp.
  * Only signatures/scope are retained here; live values belong to HS stacks. */
+#ifndef HALO_MCC
+#include "../include/halo_port_features.h"
+#endif
+#if !defined(HALO_MCC) || HALO_MCC /* Halo MCC maps (halo_port_features.h, above): a console builds this to nothing */
 #include "cseries.h"
 #include "errors.h"
 #include "math/real_math.h"
@@ -25,6 +29,11 @@ build's pointers, which this build's Xbox addresses are not) */
 #include "mcc_syntax.h"
 #include <stdint.h>
 #include <string.h>
+
+#ifndef DATA_ARRAY_DATA
+/* (data.h has it on the 64-bit builds; a 32-bit build's array holds the pointer) */
+#define DATA_ARRAY_DATA(array) XBOX_POINTER(void, (array)->data)
+#endif
 
 #define MCC_PARAMETER_SCRIPTS 512
 #define MCC_PARAMETER_NODES MCC_SYNTAX_CAPACITY
@@ -62,8 +71,8 @@ int mcc_parameter_type(struct hs_syntax_node const *node, short *owner)
     uintptr_t offset;
     unsigned index;
     if (!mcc_cache_tags_loaded() || !node || !(node->flags & 0x10)) return -1;
-    if (!hs_syntax_data || !hs_syntax_data->data || (node->flags & 0x17) != 0x15) return -2;
-    offset = (uintptr_t)node - (uintptr_t)hs_syntax_data->data;
+    if (!hs_syntax_data || !DATA_ARRAY_DATA(hs_syntax_data) || (node->flags & 0x17) != 0x15) return -2;
+    offset = (uintptr_t)node - (uintptr_t)DATA_ARRAY_DATA(hs_syntax_data);
     index = (unsigned)(offset / sizeof(*node));
     if (offset % sizeof(*node) || offset / sizeof(*node) >= mcc_parameter_node_count ||
         mcc_parameter_owners[index] < 0 || node->data < 0 || node->data >= 16) return -2;
@@ -76,6 +85,20 @@ int mcc_parameter_compile(struct hs_syntax_node const *node)
     int type = mcc_parameter_type(node, NULL);
     if (type == -1) return -1;
     return hs_type_valid(type) && hs_type_valid(node->type) && mcc_parameter_cast((short)type, node->type);
+}
+
+/* (hs_compile.c) a parameter node compiling found invalid: the first said,
+ * the rest counted */
+void mcc_parameter_compile_skipped(struct hs_syntax_node const *node, long expression_index)
+{
+    static unsigned skipped;
+    uintptr_t offset = (uintptr_t)node - (uintptr_t)DATA_ARRAY_DATA(hs_syntax_data);
+    unsigned index = (unsigned)(offset / sizeof(*node));
+    if (skipped++) return;
+    error(_error_silent, "mcc: script parameter node #%u skipped (flags %x, type %d, slot %ld, owner %d of %u nodes): "
+        "a script that reaches it stops", (unsigned)((unsigned long)expression_index & 0xFFFFu),
+        (unsigned)node->flags, (int)node->type, (long)node->data,
+        index < mcc_parameter_node_count ? mcc_parameter_owners[index] : -2, mcc_parameter_node_count);
 }
 
 int mcc_parameter_set_valid(struct hs_syntax_node const *node, struct hs_syntax_node const *value)
@@ -210,3 +233,4 @@ fail:
     error(_error_silent, "mcc: invalid %s at entry #%u, argument #%u",stage,i,j);
     return 0;
 }
+#endif /* HALO_MCC */

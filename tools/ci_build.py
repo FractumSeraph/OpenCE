@@ -338,6 +338,18 @@ def main() -> int:
     # (port/assets/icons/lucide, drawn into the menus' bitmaps), whose ISC
     # license asks copies to carry its notice
     shutil.copy2(ROOT / "port/assets/icons/lucide/LICENSE", dist / "lucide-LICENSE.txt")
+    # the Steam content client's LZMA decoder (port/third_party/lzma), public
+    # domain: its statement carried as a credit
+    shutil.copy2(ROOT / "port/third_party/lzma/LICENSE", dist / "lzma-sdk-LICENSE.txt")
+    # the Steam content client's and compressed maps' Zstandard
+    # (port/third_party/zstd, BSD) and the Steam link's QR code
+    # (port/third_party/qrcodegen, MIT), whose licenses ask binaries to carry
+    # their notices
+    shutil.copy2(ROOT / "port/third_party/zstd/LICENSE", dist / "zstd-LICENSE.txt")
+    shutil.copy2(ROOT / "port/third_party/qrcodegen/LICENSE", dist / "qrcodegen-LICENSE.txt")
+    # the Steam link code (port/linux/src/steam_content, the Steam bridge),
+    # MIT: its notice carried with the binaries
+    shutil.copy2(ROOT / "LICENSES/MIT.txt", dist / "steam-link-MIT.txt")
     # the bgfx renderer of the 64-bit desktop builds (tools/bgfx_build.py):
     # bgfx's, bx's and bimg's BSD licenses ask binaries to carry their
     # notices, as do glslang's and, on macOS, SPIRV-Cross's

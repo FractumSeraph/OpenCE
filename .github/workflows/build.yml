@@ -338,6 +338,19 @@ jobs:
             tools/test_mcc_cache_format.py tools/test_mcc_projectiles.py \
             tools/test_mcc_share.py tools/test_mcc_share_rules.py tools/test_mcc_share_stage.py \
             tools/test_mcc_share_metadata.py tools/test_mcc_load_network.py
+          # (ChupathingyCE's tests of its MCC maps, Steam link and Workshop, map
+          # lists, lobby switch and network 43 hosting, merged 2026-11-12)
+          python3 -m pytest -q \
+            tools/test_map_installed.py tools/test_bgfx_present.py tools/test_android_mcc_memory.py \
+            tools/test_mcc_avoidance.py tools/test_mcc_cameras.py tools/test_mcc_chicago.py \
+            tools/test_mcc_damage_tags.py tools/test_mcc_effects_gain.py tools/test_mcc_environment_shader.py \
+            tools/test_mcc_identity.py tools/test_mcc_memory.py tools/test_mcc_movement.py \
+            tools/test_mcc_native_smoke.py tools/test_mcc_particles.py tools/test_mcc_progress.py \
+            tools/test_mcc_recordings.py tools/test_mcc_seats.py tools/test_mcc_validation.py \
+            tools/test_mcc_workshop.py tools/test_mcc_score_hint.py tools/test_network_test_startup.py \
+            tools/test_steam_workshop.py tools/test_steam_bridge.py tools/test_steam_content.py \
+            tools/test_workshop_list.py tools/test_map_list_view.py tools/test_lobby_switch_prompt.py \
+            tools/test_net43_host.py tools/test_server_mcc_playable.py tools/test_macos_fullscreen_space.py
           python3 -m pytest -q tools/test_menu_button_glyphs.py
           # OpenCE's dedicated server (halo --server): --version, and --server without maps refused (exit code 2);
           # its cases with clients need the retail maps, and are skipped

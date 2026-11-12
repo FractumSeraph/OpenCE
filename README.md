@@ -448,6 +448,27 @@ people find games, ask for help and report bugs, and
 [chupathingy.org](https://chupathingy.org) is the project site. Expect
 rough edges, and please report them.
 
+## New: Halo MCC maps
+
+Own Halo: The Master Chief Collection on Steam? Its Halo CE Workshop maps now play in Chupathingy, on Windows, Mac and Linux.
+
+- **Browse the Workshop** in the Delta Guide, with each item's picture and page.
+- **Link Steam once** by scanning a QR code with the Steam app. The game never sees your Steam password.
+- **Maps download straight from Steam**, with no Steam client needed. Once they're in, they play offline or online.
+- **MCC maps show in every map screen**, with search, next to your Xbox and PC maps.
+- **Host and join MCC games**, on your own machine or a dedicated server.
+
+How it works, and what you need: [docs/mcc.md](docs/mcc.md).
+
+<p align="center">
+<img src="docs/screenshots/mcc-workshop.jpg" width="49%" alt="The Workshop in the Delta Guide, listing MCC maps and campaigns">
+<img src="docs/screenshots/mcc-workshop-item.jpg" width="49%" alt="A Workshop item's page, ready to download">
+</p>
+<p align="center">
+<img src="docs/screenshots/mcc-workshop-map.jpg" width="49%" alt="Playing a multiplayer map from the Workshop">
+<img src="docs/screenshots/mcc-windfall.jpg" width="49%" alt="Windfall Island, a Workshop map, in game">
+</p>
+
 <p align="center"><img src="docs/screenshots/lobby.jpg" width="720" alt="A multiplayer lobby"></p>
 
 ## What Chupathingy is and isn't
@@ -613,6 +634,12 @@ still list them on the site (Host a Game).
 - Service records and leaderboards, with confirmed players (your games count toward you, whatever name you use)
 - Accounts, made on the site or from the game, with an encrypted backup of your player identity
 - Listing a game hosted from a build that can't list itself, by its invite link
+
+**Maps**
+- Every Xbox map from your disc
+- Halo PC, Custom Edition, HaloMD and MCC Workshop maps, side by side with the Xbox ones
+- Missing maps download when you join, and each one is checked before it's used
+- Community Xbox map packs, like Halo CE+
 
 **The game**
 - The campaign, split screen and System Link, running natively (no emulator)
@@ -1178,7 +1205,12 @@ with their authors credited in each commit.
   shaders and makes bgfx's pipelines before play.
 - chestahh (GulchCE): lens flares and light
   glows back on AMD graphics, less stutter the first time a texture is drawn
-  on Windows, and host cheat and shadow setup fixes.
+  on Windows, host cheat and shadow setup fixes, and the Halo MCC map
+  loader: MCC Workshop and MCC install maps, their scripts, HUDs, effects
+  and campaigns.
+- PeterRichardsonGolf and the other GulchCE contributors: the Steam
+  Workshop catalog with its items' titles and collections, and the MCC
+  sharing rules.
 - mOTA-lEV ([OpenCE-Faber](https://github.com/SutlabSol/OpenCE-Faber)):
   projectiles and damage that forget objects deleted under them.
 - [bitmoda](https://github.com/bitmoda) (mastercheese's OpenCE fork): the
@@ -1234,8 +1266,9 @@ with their authors credited in each commit.
 - Security reports: nickarcade, who reported the dedicated server's control
   panel permission gap fixed in #462.
 - Libraries: SDL3, stb, Mbed TLS, miniupnpc, KCP, tomlc17, musl's maths,
-  Expat, Monocypher, zlib, Zstandard, Opus, SMAA, and Project Nayuki's QR Code
-  generator. Their licenses are
+  Expat, Monocypher, zlib, Zstandard (BSD-3-Clause), the LZMA SDK's decoder
+  (Igor Pavlov, public domain), Opus, SMAA, and Project Nayuki's QR Code
+  generator (MIT). Their licenses are
   beside them in `port/third_party`. The 64-bit desktop builds' test
   renderer uses bgfx, bx and bimg by Branimir Karadžić (BSD-2-Clause), with
   glslang and SPIRV-Cross (Khronos, BSD-3-Clause and Apache-2.0), fetched

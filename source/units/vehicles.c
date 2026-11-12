@@ -165,6 +165,7 @@ symbols in this file:
 #include "structures/structure_bsp_definitions.h"
 #include "units/unit_definitions.h"
 #include "units/vehicle_definitions.h"
+#include "mcc_objects.h" /* port: port/linux/game/mcc_objects.c */
 
 
 /* ---------- constants */

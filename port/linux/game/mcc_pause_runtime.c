@@ -11,6 +11,10 @@ build's pointers, which this build's Xbox addresses are not) */
 /* MCC-owned stock-style pause resources. The map's widgets, HUD and objective
  * tags are never overwritten. A copied tag table is published only once the
  * complete menu and its independently allocated art are ready. */
+#ifndef HALO_MCC
+#include "../include/halo_port_features.h"
+#endif
+#if !defined(HALO_MCC) || HALO_MCC /* Halo MCC maps (halo_port_features.h, above): a console builds this to nothing */
 #include "cseries.h"
 #include "bitmaps/bitmap_group.h"
 #include "game/game.h"
@@ -27,6 +31,11 @@ build's pointers, which this build's Xbox addresses are not) */
 #include <stdlib.h>
 #include <string.h>
 
+/* port: chester's MCC pause menus build tag data in host memory, which a
+64-bit build's tags cannot name (cseries/xbox_address.h), and add to the
+GulchCE menus; Chupathingy's own pause menu stays with MCC maps until they
+are ported (HALO_MCC_PAUSE_MENUS, which no build defines) */
+#ifdef HALO_MCC_PAUSE_MENUS
 #define MCC_PAUSE_MAX_ART 64
 struct mcc_pause_instance {
     long group, parents[2], handle;
@@ -318,3 +327,25 @@ long mcc_pause_runtime_screen(short local_count, boolean first_player)
     mcc_pause_friendly_fire(config_boolean("network.coop_own_friendly_fire"));
     return mcc_pause_select(global_scenario->type==0,network,host,teams,local_count,first_player);
 }
+#else
+void mcc_pause_runtime_unload(void)
+{
+}
+
+boolean mcc_pause_runtime_load(void)
+{
+    return TRUE;
+}
+
+boolean mcc_pause_runtime_active(void)
+{
+    return FALSE;
+}
+
+long mcc_pause_runtime_screen(short local_count, boolean first_player)
+{
+    (void)local_count; (void)first_player;
+    return NONE;
+}
+#endif
+#endif /* HALO_MCC */

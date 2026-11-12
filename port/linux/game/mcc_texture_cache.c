@@ -10,6 +10,10 @@ build's pointers, which this build's Xbox addresses are not) */
 #endif
 /* MCC-only hardware descriptors over immutable converted pixel allocations.
  * Neither the Xbox/CE bitmap descriptors nor their LRU state are rewritten. */
+#ifndef HALO_MCC
+#include "../include/halo_port_features.h"
+#endif
+#if !defined(HALO_MCC) || HALO_MCC /* Halo MCC maps (halo_port_features.h, above): a console builds this to nothing */
 #include "cseries.h"
 #include "bitmaps/bitmaps.h"
 #include "bitmaps/bitmap_group.h"
@@ -18,6 +22,18 @@ build's pointers, which this build's Xbox addresses are not) */
 #include "mcc_texture_cache.h"
 #include "../src/mcc_texture_bridge.h"
 #include <xtl.h>
+
+/* port: the bitmap's pixels for the CPU's lighting samples, where its 32-bit
+base address can name them: a 64-bit build's (cseries/xbox_address.h) are
+host memory, so its CPU lighting of MCC maps goes without them */
+static void mcc_texture_base(struct bitmap_data const *bitmap,void const *pixels)
+{
+#ifdef HALO_ADDRESS_TRANSLATED
+    (void)bitmap; (void)pixels;
+#else
+    ((struct bitmap_data *)bitmap)->base_address=(void *)pixels;
+#endif
+}
 
 void *mcc_texture_cache_get(struct bitmap_data const *bitmap,boolean load)
 {
@@ -41,7 +57,7 @@ void *mcc_texture_cache_get(struct bitmap_data const *bitmap,boolean load)
         if (!bitmap->base_address) {
             pixels=mcc_cache_bitmap_pixels(bitmap,&bytes,NULL);
             if (!pixels) return NULL;
-            ((struct bitmap_data *)bitmap)->base_address=(void *)pixels;
+            mcc_texture_base(bitmap,pixels);
         }
         return registered;
     }
@@ -59,7 +75,7 @@ void *mcc_texture_cache_get(struct bitmap_data const *bitmap,boolean load)
             registered=mcc_texture_bridge_register_linear(bitmap,format,bitmap->width,bitmap->height,
                 (pitch+63)&~63UL,pixels,bytes);
             if (registered && coverage) mcc_texture_bridge_meter(bitmap);
-            if (registered) ((struct bitmap_data *)bitmap)->base_address=(void *)pixels;
+            if (registered) mcc_texture_base(bitmap,pixels);
             return registered;
         }
         pitch=(pitch+D3DTEXTURE_PITCH_ALIGNMENT-1)/D3DTEXTURE_PITCH_ALIGNMENT;
@@ -77,8 +93,9 @@ void *mcc_texture_cache_get(struct bitmap_data const *bitmap,boolean load)
     }
     registered=mcc_texture_bridge_register(bitmap,format,size,pixels,bytes);
     if (registered && coverage) mcc_texture_bridge_meter(bitmap);
-    if (registered) ((struct bitmap_data *)bitmap)->base_address=(void *)pixels;
+    if (registered) mcc_texture_base(bitmap,pixels);
     return registered;
 }
 
 void mcc_texture_cache_dispose(void) {mcc_texture_bridge_dispose();}
+#endif /* HALO_MCC */

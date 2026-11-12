@@ -10,6 +10,10 @@ build's pointers, which this build's Xbox addresses are not) */
 #endif
 /* MCC compatibility for camera-relative player rays. Animation bounds pose the body;
  * they must not turn these shots away from the player's requested view. */
+#ifndef HALO_MCC
+#include "../include/halo_port_features.h"
+#endif
+#if !defined(HALO_MCC) || HALO_MCC /* Halo MCC maps (halo_port_features.h, above): a console builds this to nothing */
 #include "cseries.h"
 #include "mcc_projectiles.h"
 #include "mcc_cache.h"
@@ -116,3 +120,4 @@ boolean mcc_projectile_ray(long weapon_index, long owner, short trigger_index, b
     }
     return TRUE;
 }
+#endif /* HALO_MCC */

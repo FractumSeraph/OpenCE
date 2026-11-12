@@ -636,6 +636,10 @@ boolean cache_file_tags_are_ce(void);
 #ifdef HALO_PORT_CONSOLE_LIMITS
 #include "../../port/linux/game/network_game_layout.h"
 #endif
+#include "mcc_cache.h"
+#include "mcc_objects.h"
+#include "mcc_player.h"
+#include "mcc_ui_teams.h"
 
 /* network_game_globals.c's */
 boolean network_game_distributed_client(void);

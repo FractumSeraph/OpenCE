@@ -11,6 +11,10 @@ build's pointers, which this build's Xbox addresses are not) */
 /* MCC bitmap resources. Convert and pack each resource in MCC-owned memory,
  * then stream its native hardware layout. The common rasterizer supplies
  * descriptor size limits; no CE bitmap state or conversion API is used. */
+#ifndef HALO_MCC
+#include "../include/halo_port_features.h"
+#endif
+#if !defined(HALO_MCC) || HALO_MCC /* Halo MCC maps (halo_port_features.h, above): a console builds this to nothing */
 #include "cseries.h"
 #include "errors.h"
 #include "bitmaps/bitmaps.h"
@@ -32,6 +36,14 @@ build's pointers, which this build's Xbox addresses are not) */
 #define BCDEC_STATIC
 #define BCDEC_IMPLEMENTATION
 #include "../../third_party/bcdec/bcdec.h"
+#include "mcc_host_memory.h"
+
+/* port: GulchCE's dedicated server switch (config_server_mode_enabled); ours
+is HALO_DEDICATED, which runs no renderer */
+static boolean mcc_bitmaps_server(void)
+{
+    return getenv("HALO_DEDICATED")!=NULL;
+}
 
 #define MCC_BITMAP_BASE 0x60000000u
 #define MCC_BITMAP_LIMIT 0x1FFFFFFFu
@@ -82,13 +94,13 @@ static int mcc_bitmap_clone_block(struct mcc_runtime *runtime,struct tag_block *
 {
     void *source,*copy;
     uint32_t bytes;
-    if (!block->count) {block->address=NULL;return 1;}
+    if (!block->count) {block->address=XBOX_NULL;return 1;}
     source=mcc_bitmap_block(runtime,block,stride);
     if (!source) return 0;
     bytes=(uint32_t)block->count*stride;
     copy=mcc_runtime_allocate(runtime,bytes);
     if (!copy) return 0;
-    memcpy(copy,source,bytes);block->address=copy;
+    memcpy(copy,source,bytes);block->address=xbox_address(copy);
     return 1;
 }
 
@@ -116,7 +128,7 @@ static int mcc_bitmap_specialize(struct mcc_runtime *runtime,struct mcc_textures
     *copy=*source;
     if (!mcc_bitmap_clone_block(runtime,&copy->sequences,sizeof(*sequences)) ||
         !mcc_bitmap_clone_block(runtime,&copy->bitmaps,sizeof(*bitmaps))) return 0;
-    sequences=copy->sequences.address;
+    sequences=xbox_pointer(copy->sequences.address);
     for (i=0;i<(uint32_t)copy->sequences.count;i++) {
         if (!mcc_bitmap_clone_block(runtime,&sequences[i].sprites,sizeof(struct bitmap_group_sprite))) return 0;
     }
@@ -130,8 +142,8 @@ static int mcc_bitmap_specialize(struct mcc_runtime *runtime,struct mcc_textures
     entry=(uint32_t *)(runtime->tag_index+runtime->report.tag_count*32);
     memcpy(entry,runtime->tag_index+(*handle&0xFFFF)*32,32);
     new_handle=(*handle&0xFFFF0000u)|runtime->report.tag_count;
-    entry[3]=new_handle;entry[4]=(uint32_t)name;entry[5]=(uint32_t)copy;
-    bitmaps=copy->bitmaps.address;
+    entry[3]=new_handle;entry[4]=MCC_ADDRESS(name);entry[5]=MCC_ADDRESS(copy);
+    bitmaps=xbox_pointer(copy->bitmaps.address);
     for (i=0;i<(uint32_t)copy->bitmaps.count;i++) {
         struct mcc_texture *texture;
         if (textures->count>=textures->capacity) return 0;
@@ -565,8 +577,8 @@ static int mcc_texture_prepare(struct mcc_runtime *runtime,struct mcc_textures *
     bitmap->pixels_size=allocation;
     bitmap->tag_index=texture->handle;
     bitmap->cache_block_index=NONE;
-    bitmap->hardware_format=NULL;
-    bitmap->base_address=NULL;
+    bitmap->hardware_format=XBOX_NULL;
+    bitmap->base_address=XBOX_NULL;
     texture->offset=bitmap->pixels_offset;texture->size=allocation;texture->pixels=pixels;
     textures->end+=allocation;
     textures->stream_end=MAX(textures->stream_end,stream_offset+allocation);
@@ -700,9 +712,9 @@ int mcc_bitmaps_group_valid(struct mcc_runtime *runtime,void *address)
     long i;
     if (group->pixel_data.file_offset!=0) return 0;
     for (i=0;i<group->bitmaps.count;i++)
-        if (!mcc_bitmaps_valid(runtime,(struct bitmap_data *)group->bitmaps.address+i)) return 0;
+        if (!mcc_bitmaps_valid(runtime,(struct bitmap_data *)xbox_pointer(group->bitmaps.address)+i)) return 0;
     for (i=0;i<group->sequences.count;i++) {
-        struct bitmap_group_sequence *sequence=(struct bitmap_group_sequence *)group->sequences.address+i;
+        struct bitmap_group_sequence *sequence=(struct bitmap_group_sequence *)xbox_pointer(group->sequences.address)+i;
         if (sequence->first_bitmap_index<0 || sequence->bitmap_count<0 ||
             sequence->first_bitmap_index>group->bitmaps.count ||
             sequence->bitmap_count>group->bitmaps.count-sequence->first_bitmap_index) {
@@ -749,7 +761,8 @@ void mcc_bitmaps_prepare_gpu(struct mcc_runtime *runtime)
     long megabytes=config_integer("display.mcc_texture_prepare_mb");
     unsigned long budget,spent=0,prepared=0;
     uint32_t index,count=0;
-    if (!textures || megabytes<=0 || config_boolean("debug.null_renderer") || config_server_mode_enabled()) return;
+    if (!textures || megabytes<=0 || config_boolean("debug.null_renderer") || config_server_mode_enabled() ||
+        mcc_bitmaps_server()) return;
     if (megabytes>512) megabytes=512;
     budget=(unsigned long)megabytes*1024*1024;
     if (textures->count>SIZE_MAX/sizeof(*ordered)) return;
@@ -782,11 +795,12 @@ void mcc_bitmaps_dispose(struct mcc_runtime *runtime)
     if (!textures) return;
     for (index=0;index<textures->count;index++) {
         struct mcc_texture *texture=&textures->items[index];
-        if (texture->bitmap && texture->bitmap->base_address==texture->pixels)
-            texture->bitmap->base_address=NULL;
+        if (texture->bitmap && xbox_pointer(texture->bitmap->base_address)==texture->pixels)
+            texture->bitmap->base_address=XBOX_NULL;
         if (texture->pixels) free(texture->pixels);
     }
     if (textures->items) free(textures->items);
     if (textures->clones) free(textures->clones);
     free(textures);runtime->bitmaps=NULL;
 }
+#endif /* HALO_MCC */

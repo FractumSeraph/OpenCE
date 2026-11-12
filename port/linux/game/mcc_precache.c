@@ -11,6 +11,10 @@ build's pointers, which this build's Xbox addresses are not) */
 /* MCC lobby readiness is polled every second. Keep its successful validation
  * while the map and every possible resource override remain unchanged.
  * Admission and actual loading still validate independently in mcc_cache.c. */
+#ifndef HALO_MCC
+#include "../include/halo_port_features.h"
+#endif
+#if !defined(HALO_MCC) || HALO_MCC /* Halo MCC maps (halo_port_features.h, above): a console builds this to nothing */
 #include "cseries.h"
 #include "mcc_cache.h"
 #include "mcc_package.h"
@@ -106,3 +110,4 @@ boolean mcc_cache_precache_ready(char const *name)
     }
     return TRUE;
 }
+#endif /* HALO_MCC */

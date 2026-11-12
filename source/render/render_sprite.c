@@ -114,6 +114,7 @@ static long build_sprite_big_limit(
 	return limit;
 }
 #endif
+#include "mcc_sprites.h" /* port: port/linux/game/mcc_sprites.c */
 
 /* ---------- constants */
 

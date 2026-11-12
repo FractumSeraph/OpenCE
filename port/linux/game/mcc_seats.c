@@ -10,6 +10,10 @@ build's pointers, which this build's Xbox addresses are not) */
 #endif
 /* MCC bipeds can carry authored seats. Keep their interaction separate from
    vehicle flipping, prediction and the Xbox/CE interaction rules. */
+#ifndef HALO_MCC
+#include "../include/halo_port_features.h"
+#endif
+#if !defined(HALO_MCC) || HALO_MCC /* Halo MCC maps (halo_port_features.h, above): a console builds this to nothing */
 #include "cseries.h"
 #include "game/game.h"
 #include "game/players.h"
@@ -117,3 +121,4 @@ void mcc_seat_camera(struct player_control_unit_camera_info *info)
     info->seat_index = rider->unit.parent_seat_index;
     info->camera = &seat->camera;
 }
+#endif /* HALO_MCC */

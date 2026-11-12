@@ -3091,6 +3091,15 @@ static boolean multiplayer_level_list_initialize(
 	short level_count;
 	char **level_names;
 
+#ifndef HALO_XBOX_CONSOLE
+	/* (all the maps, in the list's order: the Xbox menus' search starts
+	empty, ui_widget.c) */
+	{
+		extern void ui_widget_port_xbox_map_search_reset(void);
+
+		ui_widget_port_xbox_map_search_reset();
+	}
+#endif
 	ui_map_list_refresh(event_handler_functions.multiplayer_levels);
 	level_count = (short)ui_map_list_count();
 	level_names = ui_map_list_names();
@@ -3125,6 +3134,16 @@ static boolean multiplayer_level_list_initialize(
 		if (widget->parameters.list.selected_index == level_count)
 			widget->parameters.list.selected_index = 0;
 	}
+#if defined(HALO_MAP_LIST) && !defined(HALO_CONSOLE_NO_DEBUG_TOOLS)
+	/* port: debug.menu_open's "#multiplayer_last": on the last map, for
+	screenshots */
+	{
+		extern char const *config_string(char const *name);
+
+		if (strstr(config_string("debug.menu_open"), "#multiplayer_last") && level_count > 0)
+			widget->parameters.list.selected_index = (short)(level_count - 1);
+	}
+#endif
 	return TRUE;
 }
 
@@ -4486,6 +4505,25 @@ static boolean solo_level_set_next_map_name(
 
 	list_widget = widget;
 	result = FALSE;
+#ifdef HALO_MAP_LIST
+	/* port: an MCC campaign map's row, after the ten levels: always there */
+	if (list_widget->parameters.list.selected_index >= 10)
+	{
+		extern char const *ui_widget_port_mcc_campaign_level(short row);
+		char const *level = ui_widget_port_mcc_campaign_level((short)(list_widget->parameters.list.selected_index - 10));
+
+		if (!level)
+		{
+			ui_play_audio_feedback_sound(4);
+			return FALSE;
+		}
+		if (player_spawn_count == 1)
+			player_ui_remember_player1_profile(0);
+		main_set_map_name(level);
+		main_defer_map_map_change();
+		return TRUE;
+	}
+#endif
 	match_vassert("c:\\halo\\SOURCE\\interface\\ui_widget_event_handler_functions.c", 724, list_widget->parameters.list.selected_index >= 0 && list_widget->parameters.list.selected_index < 10, "I don't think this is the solo level list widget");
 	switch (player_spawn_count)
 	{
@@ -6127,6 +6165,21 @@ static boolean solo_level_initialize_list_single_player(
 	widget->parameters.list.list_items = single_player_level_data;
 	widget->parameters.list.number_of_items = 10;
 	widget->parameters.list.selected_index = PIN(player_ui_get_last_single_player_level_played(0), 0, 9);
+#ifdef HALO_MAP_LIST
+	/* port: the MCC catalog's campaign maps after the ten levels, as the
+	menus' map lists have them (their cards: ui_widget_game_data_input_functions.c) */
+	{
+		extern short ui_widget_port_mcc_campaign_count(void);
+		extern char const *config_string(char const *name);
+
+		widget->parameters.list.number_of_items = (short)(10 + ui_widget_port_mcc_campaign_count());
+#ifndef HALO_CONSOLE_NO_DEBUG_TOOLS
+		/* (debug.menu_open's "#singleplayer_last": on the last, for screenshots) */
+		if (strstr(config_string("debug.menu_open"), "#singleplayer_last"))
+			widget->parameters.list.selected_index = (short)(widget->parameters.list.number_of_items - 1);
+#endif
+	}
+#endif
 
 	if (persistant_game_data_info.valid == TRUE)
 	{
@@ -6242,6 +6295,16 @@ short ui_widget_port_multiplayer_maps(
 		}
 #endif
 	}
+#ifndef HALO_CONSOLE_NO_DEBUG_TOOLS
+	/* port: debug.menu_open's "#multiplayer_last": the list on its last
+	map, for screenshots */
+	{
+		extern char const *config_string(char const *name);
+
+		if (strstr(config_string("debug.menu_open"), "#multiplayer_last") && level_count > 0)
+			*last_used = (short)(level_count - 1);
+	}
+#endif
 	return level_count;
 }
 

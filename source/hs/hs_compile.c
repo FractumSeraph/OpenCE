@@ -421,6 +421,8 @@ symbols in this file:
 #include "memory/data.h"
 #include "scenario/scenario.h"
 #include "scenario/scenario_definitions.h"
+#include "mcc_script_parameters.h"
+#include "mcc_scripts.h"
 #ifdef HALO_CUSTOM_EDITION
 #include "cseries/errors.h"
 
@@ -2829,6 +2831,18 @@ boolean hs_compile_postprocess(
 		expression_index = data_next_index(hs_syntax_data, expression_index))
 	{
 		struct hs_syntax_node *expression = hs_syntax_get(expression_index);
+		{
+			int mcc_parameter = mcc_parameter_compile(expression);
+			if (mcc_parameter >= 0)
+			{
+				/* port: a script parameter no script owns, or of a type its
+				use can't take, is said once and left: a script that reaches it
+				is stopped (hs_syntax_error), never the map's load */
+				if (!mcc_parameter)
+					mcc_parameter_compile_skipped(expression, expression_index);
+				continue;
+			}
+		}
 
 #ifdef HALO_CUSTOM_EDITION
 		if (drop_failed)

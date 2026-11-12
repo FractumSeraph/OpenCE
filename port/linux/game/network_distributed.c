@@ -99,6 +99,7 @@ machine (their datum identifiers need not be).
 #include "network_map_vote.h"
 #include "latency_meter.h"
 #include "profile_sections.h"
+#include "mcc_network_messages.h"
 #include "network_rules.h"
 #include "../src/delta_chat_bridge.h"
 #ifdef HALO_GAME_BROWSER
@@ -546,6 +547,9 @@ past its message header */
 struct distributed_batch
 {
 	word size;
+	/* (the messages in it, for the header's further bytes each has on a
+	wire whose layout has them: distributed_batch_room) */
+	word messages;
 	byte data[DATAGRAM_MAXIMUM_SIZE];
 };
 
@@ -599,6 +603,35 @@ PROFILE_SECTION(distributed_tick_objects_client_tick_section, "network_distribut
 PROFILE_SECTION(distributed_tick_damage_client_tick_section, "network_distributed_tick.damage_client_tick")
 PROFILE_SECTION(distributed_tick_coop_client_tick_section, "network_distributed_tick.coop_client_tick")
 PROFILE_SECTION(distributed_tick_batches_flush_section, "network_distributed_tick.batches_flush")
+
+/* the layout of the network version this game is played by (the host's
+number, or the one this host announces: network_rules.h), for chupa-43a's
+facts, which a signed table's row gives a version past the build's own:
+the distributed header's further bytes and checkpoint epoch, a unit state's
+further parts, the riders' ejection. Taken at each game's start and each
+tick; a game of a version without them is played as it always was */
+static struct network_rules_layout distributed_layout;
+static boolean distributed_layout_valid = FALSE;
+typedef char distributed_layout_kinds_assert[NETWORK_RULES_BATCH_KIND == _distributed_message_batch &&
+	NETWORK_RULES_CLIENT_READY_KIND == _distributed_message_client_ready &&
+	NETWORK_RULES_INVENTORIES_KIND == _distributed_message_inventories &&
+	NETWORK_RULES_OBJECT_CHANGES_KIND == _distributed_message_object_changes &&
+	NETWORK_RULES_OBJECTS_SYNCHRONIZED_KIND == _distributed_message_objects_synchronized ? 1 : -1];
+static word distributed_kind_entry_size(byte type, boolean *uniform);
+/* (network_rules_unit_state_length walks a record by these bits) */
+typedef char distributed_unit_bits_assert[_distributed_unit_alive_bit == 0 && _distributed_unit_placed_bit == 1 &&
+	_distributed_unit_predicted_bit == 7 && _distributed_unit_part_riding_bit == 0 &&
+	_distributed_unit_part_up_bit == 1 && _distributed_unit_part_damage_bit == 2 &&
+	_distributed_unit_part_powerups_bit == 3 && _distributed_unit_part_camouflage_bit == 4 &&
+	_distributed_unit_part_killer_bit == 5 && NUMBER_OF_PLAYER_POWERUPS == 2 ? 1 : -1];
+static void distributed_send_boundary(long machine_index);
+static boolean distributed_held_back(byte type);
+static void distributed_checkpoint_reset(boolean keep_receive_times);
+/* the checkpoint epoch: a host's own (counted up at each map and co-op
+revert), a client's as the host's boundary message last said (0: none yet,
+when it takes nothing of the host's) */
+static uint32_t distributed_epoch = 0;
+static uint8_t const distributed_no_parts[sizeof(((struct network_rules_layout *)0)->unit_part_size)] = { 0 };
 
 /* how each player last died, by absolute index: the host's own, which it
 sends its clients, and a client's copy of the host's */
@@ -716,6 +749,9 @@ static real distributed_own_round_trip;
 /* the host: the players each machine had when it last told the host that it
 had loaded (a machine new at its index has none of the old one's state) */
 static long distributed_machine_players[HALO_PORT_MAXIMUM_NETWORK_MACHINES][MAXIMUM_LOCAL_PLAYERS];
+/* (the host) the client machines that have said their ready this game: a
+co-op revert's checkpoint boundary goes to each */
+static boolean distributed_machine_ready[HALO_PORT_MAXIMUM_NETWORK_MACHINES];
 /* the host: what each player's unit was last sent as (a change goes to
 every client at once) */
 static struct
@@ -1110,6 +1146,203 @@ real distributed_angle_unpack(
 	return angle;
 }
 
+static void distributed_layout_refresh(
+	void)
+{
+	short connection = game_connection();
+	unsigned int version = NETWORK_RULES_VERSION_UNKNOWN;
+
+	if (connection == _game_connection_network_client)
+		version = network_game_client_host_network_version();
+	else if (connection == _game_connection_network_server)
+		version = (unsigned int)delta_legacy_announce();
+	if (!distributed_layout_valid || distributed_layout.version != version)
+	{
+		network_rules_layout(version, &distributed_layout);
+		distributed_layout_valid = TRUE;
+		if (distributed_layout.header_extra)
+		{
+			error(_error_log, "network: version %u's layout: the header %d bytes longer%s, %s", version,
+				distributed_layout.header_extra, distributed_layout.epoch_kind ? " with a checkpoint epoch" : "",
+				connection == _game_connection_network_server ? "as this host" : "as the host's client");
+		}
+	}
+}
+
+static struct network_rules_layout const *distributed_wire_layout(
+	void)
+{
+	if (!distributed_layout_valid)
+		distributed_layout_refresh();
+	return &distributed_layout;
+}
+
+/* port: MCC maps' messages (mcc_network_messages.h): a network game whose
+layout has 43's settings record (two MCC digests after the local data) and
+its checkpoint epochs */
+boolean network_distributed_mcc_layout(
+	void)
+{
+	short connection = game_connection();
+
+	if (connection != _game_connection_network_client && connection != _game_connection_network_server)
+		return FALSE;
+	distributed_layout_refresh();
+	/* (43's record: 64 bytes past 35's, the MCC digests, and an epoch: in
+	this fork, whose game plays 42 and 43 natively, the epoch is no layout
+	fact but its own, as a host and as a client of a host of 42 or later,
+	network_distributed_host_epochs) */
+	return distributed_layout.settings_size >= NETWORK_RULES_SETTINGS_EXTENDED_SIZE + 64 &&
+		(distributed_layout.epoch_kind || connection == _game_connection_network_server ||
+			network_distributed_host_epochs());
+}
+
+boolean network_distributed_mcc_session(
+	void)
+{
+	return mcc_cache_tags_loaded() && network_distributed_mcc_layout();
+}
+
+/* (an MCC message in an MCC game: chester's handlers, their checks as 43's
+record says: mcc_network.c, mcc_object_names_network.c, mcc_game_speed.c) */
+static void distributed_mcc_message(
+	long machine_index,
+	struct distributed_message_header const *header,
+	void const *entries,
+	word size)
+{
+	word body = (word)(size - sizeof(*header));
+
+	/* (every one the host's, to its clients) */
+	if (machine_index != NONE || game_connection() != _game_connection_network_client)
+		return;
+	switch (header->type)
+	{
+	case _distributed_message_mcc_grenades:
+		if (header->count <= 64 && body >= header->count * mcc_network_inventory_entry_size())
+			mcc_network_handle_inventories(entries, header->count);
+		break;
+	case _distributed_message_mcc_campaign:
+		if (header->count == 1 && body >= mcc_network_campaign_entry_size())
+			mcc_network_handle_campaign(entries, header->count);
+		break;
+	case _distributed_message_mcc_object_names:
+		if (body >= header->count * mcc_object_names_entry_size())
+			mcc_object_names_receive(entries, header->count, header->game_time);
+		break;
+	case _distributed_message_mcc_game_speed:
+		/* (a clock command: the host's ordered stream alone, one entry) */
+		if (!network_connection_last_read_was_unreliable() && header->count == 1 && body == sizeof(real))
+			mcc_game_speed_receive(entries, header->count);
+		break;
+	default:
+		/* (103 to 106: none of them taken here yet) */
+		break;
+	}
+}
+
+/* where a message goes at the transport */
+enum
+{
+	_distributed_wire_to_host,
+	_distributed_wire_to_host_reliably,
+	_distributed_wire_to_machine,
+	_distributed_wire_to_machine_reliably,
+	_distributed_wire_to_all_reliably,
+};
+
+static void distributed_wire_write(
+	short route,
+	long machine_index,
+	void *message,
+	word size)
+{
+	switch (route)
+	{
+	case _distributed_wire_to_host: network_distributed_client_send(message, size); break;
+	case _distributed_wire_to_host_reliably: network_distributed_client_send_reliably(message, size); break;
+	case _distributed_wire_to_machine: network_distributed_server_send_to_machine(machine_index, message, size); break;
+	case _distributed_wire_to_machine_reliably:
+		network_distributed_server_send_to_machine_reliably(machine_index, message, size);
+		break;
+	case _distributed_wire_to_all_reliably: network_distributed_server_send_to_all_reliably(message, size); break;
+	}
+}
+
+/* a message (or a batch, in wire order but its message header) to the
+transport as the game's wire has it: with the header's further bytes (the
+epoch first) when the layout has them, else as it is. A reliable message
+of alike entries that the further bytes make too long goes as two */
+static void distributed_wire_send(
+	short route,
+	long machine_index,
+	void *message,
+	word size)
+{
+	static byte wide[sizeof(message_header) + MAXIMUM_MESSAGE_SIZE + NETWORK_RULES_HEADER_EXTRA_LIMIT];
+	struct network_rules_layout const *layout = distributed_wire_layout();
+	byte *bytes = (byte *)message;
+	int wide_size;
+
+	if (!layout->header_extra)
+	{
+		distributed_wire_write(route, machine_index, message, size);
+		return;
+	}
+	if (size + layout->header_extra > MAXIMUM_MESSAGE_SIZE && bytes[2] != _distributed_message_batch)
+	{
+		/* (in two on its entries' boundaries: a kind whose entries are all
+		one size, by the size its reader takes; any other is dropped) */
+		static byte half[sizeof(message_header) + MAXIMUM_MESSAGE_SIZE];
+		boolean uniform = FALSE;
+		word entry_size = distributed_kind_entry_size(bytes[2], &uniform);
+		int split = network_rules_reliable_split(size, bytes[3], uniform ? entry_size : 0, layout->header_extra,
+			MAXIMUM_MESSAGE_SIZE);
+		byte first;
+		byte rest;
+		word first_size;
+		word rest_size;
+
+		if (split <= 0)
+		{
+			error(_error_silent, "distributed message of type #%d (#%d bytes) has no room for the header's further "
+				"bytes and no entries to split on; dropped", bytes[2], size);
+			return;
+		}
+		first = (byte)split;
+		rest = (byte)(bytes[3] - first);
+		first_size = (word)(sizeof(struct distributed_message_header) + first * entry_size);
+		rest_size = (word)(sizeof(struct distributed_message_header) + rest * entry_size);
+
+		csmemcpy(half, bytes, first_size);
+		half[3] = first;
+		build_message_header((word *)half, first_size, 2, 0);
+		distributed_wire_send(route, machine_index, half, first_size);
+		csmemcpy(half, bytes, sizeof(struct distributed_message_header));
+		csmemcpy(half + sizeof(struct distributed_message_header), bytes + first_size, rest * entry_size);
+		half[3] = rest;
+		build_message_header((word *)half, rest_size, 2, 0);
+		distributed_wire_send(route, machine_index, half, rest_size);
+		return;
+	}
+	wide_size = network_rules_header_expand(bytes, size, wide, (int)sizeof(wide), layout->header_extra,
+		layout->epoch_kind != 0, distributed_epoch);
+	if (!wide_size || wide_size > MAXIMUM_MESSAGE_SIZE)
+	{
+		error(_error_silent, "distributed message of type #%d (#%d bytes) has no room for the header's further bytes; "
+			"dropped", bytes[2], size);
+		return;
+	}
+	distributed_wire_write(route, machine_index, wide, (word)wide_size);
+}
+
+/* the further header bytes each message of a batch has on the wire */
+static word distributed_header_extra(
+	void)
+{
+	return (word)distributed_wire_layout()->header_extra;
+}
+
 static void distributed_batch_flush(
 	short sender)
 {
@@ -1125,10 +1358,11 @@ static void distributed_batch_flush(
 	header->header = 0;
 	build_message_header(&header->header, batch->size, 2, 0); WIRE_HEADER_OUT(header);
 	if (sender == HOST_SENDER)
-		network_distributed_client_send(batch->data, batch->size);
+		distributed_wire_send(_distributed_wire_to_host, NONE, batch->data, batch->size);
 	else
-		network_distributed_server_send_to_machine(sender, batch->data, batch->size);
+		distributed_wire_send(_distributed_wire_to_machine, sender, batch->data, batch->size);
 	batch->size = 0;
+	batch->messages = 0;
 }
 
 /* the bytes a message's entries (past its header) have in the machine's
@@ -1139,12 +1373,16 @@ static word distributed_batch_room(
 	word minimum)
 {
 	struct distributed_batch *batch = &distributed_batches[sender];
-	word used = batch->size ? batch->size : (word)sizeof(struct distributed_message_header);
+	word extra = distributed_header_extra();
+	/* (on the wire: the batch's further header bytes, each message's, and
+	the next one's) */
+	word used = (word)((batch->size ? batch->size : (word)sizeof(struct distributed_message_header)) +
+		extra * (batch->messages + 2));
 
 	if (used + BATCH_MESSAGE_OVERHEAD + minimum > DATAGRAM_MAXIMUM_SIZE)
 	{
 		distributed_batch_flush(sender);
-		used = sizeof(struct distributed_message_header);
+		used = (word)(sizeof(struct distributed_message_header) + 2 * extra);
 	}
 	return (word)(DATAGRAM_MAXIMUM_SIZE - used - BATCH_MESSAGE_OVERHEAD);
 }
@@ -1167,6 +1405,7 @@ static void distributed_batch_append(
 		sizeof(*header) - sizeof(message_header));
 	csmemcpy(batch->data + batch->size + BATCH_MESSAGE_OVERHEAD, entries, entries_size);
 	batch->size += (word)(BATCH_MESSAGE_OVERHEAD + entries_size);
+	batch->messages++;
 }
 
 /* where a message's bytes past its message header go: a machine's batch,
@@ -1273,6 +1512,8 @@ void distributed_send(
 	word size,
 	short destination)
 {
+	if (distributed_held_back(type))
+		return;
 	if (!distributed_fill_header(message, type, count, size))
 		return;
 	WIRE_MESSAGE_OUT(message, size);
@@ -1288,11 +1529,11 @@ void distributed_send(
 			distributed_batch_add((short)machine_indices[index], message, size, distributed_entry_size(count, size));
 		break;
 	}
-	case _distributed_to_clients_reliably: network_distributed_server_send_to_all_reliably(message, size); break;
+	case _distributed_to_clients_reliably: distributed_wire_send(_distributed_wire_to_all_reliably, NONE, message, size); break;
 	case _distributed_to_host:
 		distributed_batch_add(HOST_SENDER, message, size, distributed_entry_size(count, size));
 		break;
-	case _distributed_to_host_reliably: network_distributed_client_send_reliably(message, size); break;
+	case _distributed_to_host_reliably: distributed_wire_send(_distributed_wire_to_host_reliably, NONE, message, size); break;
 	}
 }
 
@@ -1321,7 +1562,7 @@ void distributed_send_to_machine_reliably(
 	if (!distributed_fill_header(message, type, count, size))
 		return;
 	WIRE_MESSAGE_OUT(message, size);
-	network_distributed_server_send_to_machine_reliably(machine_index, message, size);
+	distributed_wire_send(_distributed_wire_to_machine_reliably, machine_index, message, size);
 }
 
 void distributed_checkpoint_to_machine(long machine_index)
@@ -1366,6 +1607,12 @@ static void distributed_packer_flush(
 
 	if (!packer->count)
 		return;
+	if (distributed_held_back(packer->type))
+	{
+		packer->count = 0;
+		packer->size = packer->prefix_size;
+		return;
+	}
 	if (distributed_fill_header(&packer->message, packer->type, packer->count, size))
 		distributed_batch_add(packer->sender, WIRE_MESSAGE(&packer->message, size), size, 0);
 	packer->count = 0;
@@ -1545,6 +1792,7 @@ static boolean distributed_machine_loaded(
 	}
 	csmemcpy(distributed_machine_players[machine_index], player_list,
 		sizeof(distributed_machine_players[machine_index]));
+	distributed_machine_ready[machine_index] = FALSE;
 	for (type = 0; type < NUMBER_OF_DISTRIBUTED_MESSAGES; type++)
 		distributed_received_times[machine_index][type] = NONE;
 	distributed_sender_times[machine_index] = NONE;
@@ -2211,6 +2459,18 @@ static word distributed_unit_state_read(
 		!distributed_take(&cursor, end, &state->killing_player_index, sizeof(state->killing_player_index)))
 	{
 		return 0;
+	}
+	/* (a layout with further parts: the record's length as network_rules.c
+	walks it, or none) */
+	{
+		struct network_rules_layout const *layout = distributed_wire_layout();
+
+		if (csmemcmp(layout->unit_part_size, distributed_no_parts, sizeof(distributed_no_parts)) &&
+			network_rules_unit_state_length(layout, buffer, (int)(end - buffer), NUMBER_OF_PLAYER_POWERUPS) !=
+				(int)(cursor - buffer))
+		{
+			return 0;
+		}
 	}
 	return (word)(cursor - buffer);
 }
@@ -3572,6 +3832,10 @@ static void distributed_take_prediction(
 		position.z -= base.z - object->object.position.z;
 	}
 
+	/* MCC movement effects stay host-simulated, rather than widening the
+	 * security bounds on client-supplied positions and velocities. */
+	if (mcc_script_effects_host_movement())
+		return;
 	if (distributed_riding_elevator(unit_index))
 		position.z = object->object.position.z;
 	dx = position.x - object->object.position.x;
@@ -5253,9 +5517,16 @@ static void distributed_reset_checkpoint_state(boolean reset_received_times)
 		distributed_divergence.taken_host_time[player_index] = NONE;
 		distributed_divergence.input_time[player_index] = NONE;
 	}
+	/* (the layout of this game's version; a host's next checkpoint epoch, a
+	client's none until the host's boundary) */
+	distributed_layout_valid = FALSE;
+	distributed_layout_refresh();
+	distributed_epoch = game_connection() == _game_connection_network_server ?
+		network_rules_epoch_next(distributed_epoch) : 0;
 	for (sender = 0; sender < MAXIMUM_SENDERS; sender++)
 	{
 		distributed_batches[sender].size = 0;
+		distributed_batches[sender].messages = 0;
 		if (reset_received_times)
 		{
 			distributed_sender_times[sender] = NONE;
@@ -5357,6 +5628,7 @@ void network_distributed_new_game(
 	for (type = 0; type < TICK_SENT_TIMES; type++)
 		distributed_tick_sent_times[type].time = NONE;
 	csmemset(distributed_machine_players, 0xFF, sizeof(distributed_machine_players));
+	csmemset(distributed_machine_ready, 0, sizeof(distributed_machine_ready));
 	distributed_machines.in_tick = FALSE;
 	distributed_host_time = NONE;
 	/* (a client: blocked until the host speaks, if the host is known to have
@@ -5436,6 +5708,7 @@ void network_distributed_tick(
 	if (game_time_get() == distributed_last_sent_time)
 		return;
 	distributed_last_sent_time = game_time_get();
+	distributed_layout_refresh();
 	if (connection == _game_connection_network_server || connection == _game_connection_network_client)
 		distributed_log_health();
 	distributed_machines.in_tick = TRUE;
@@ -6211,6 +6484,13 @@ static struct
 
 /* (the host: network_server_manager.c) a machine joined the game, or came
 back to its lobby from the carnage report: its budget full again */
+void network_distributed_machine_gone(
+	long machine_index)
+{
+	if (machine_index >= 0 && machine_index < HALO_PORT_MAXIMUM_NETWORK_MACHINES)
+		distributed_machine_ready[machine_index] = FALSE;
+}
+
 void network_distributed_lobby_budget_reset(
 	long machine_index)
 {
@@ -6953,7 +7233,65 @@ static boolean distributed_message_epoch_valid(
 
 /* a message of the distributed kind; machine_index is the sender's on the
 host, NONE on a client */
-void network_distributed_handle_message(
+/* a kind's entries' bytes as its reader takes them (the least, for those
+of sizes of their own), and in *uniform whether every entry is that size
+with nothing else after the header (a message of it splits on them) */
+static word distributed_kind_entry_size(
+	byte type,
+	boolean *uniform)
+{
+	word size;
+
+	switch (type)
+	{
+	case _distributed_message_player_prediction:
+	case _distributed_message_unit_states: size = DISTRIBUTED_UNIT_STATE_MINIMUM_SIZE; break;
+	case _distributed_message_player_statistics: size = sizeof(struct distributed_player_statistics); break;
+	case _distributed_message_pings: size = sizeof(struct distributed_player_ping); break;
+	case _distributed_message_mcc_grenades: size = mcc_network_inventory_entry_size(); break;
+	case _distributed_message_mcc_campaign: size = mcc_network_campaign_entry_size(); break;
+	case _distributed_message_mcc_game_speed: size = sizeof(real); break;
+	case _distributed_message_mcc_object_names: size = mcc_object_names_entry_size(); break;
+	case _distributed_message_actor_states: size = network_actors_entry_size(); break;
+	case _distributed_message_structure_bsp: size = sizeof(struct distributed_structure_bsp); break;
+	case _distributed_message_coop_presentation: size = network_coop_presentation_entry_size(); break;
+	case _distributed_message_coop_events: size = network_coop_event_entry_size(); break;
+	case _distributed_message_coop_skip_vote: size = network_coop_skip_vote_entry_size(); break;
+	case _distributed_message_coop_device_groups: size = network_coop_device_group_entry_size(); break;
+	case _distributed_message_coop_object_names: size = network_coop_object_names_entry_size(); break;
+	case _distributed_message_coop_object_transforms: size = network_coop_object_transform_entry_size(); break;
+	case _distributed_message_actor_damage: size = network_actors_damage_entry_size(); break;
+	case _distributed_message_coop_object_looks: size = network_coop_object_look_entry_size(); break;
+	case _distributed_message_damage_animations: size = network_objects_damage_animation_entry_size(); break;
+	case _distributed_message_coop_screen_effect: size = network_coop_screen_effect_entry_size(); break;
+	case _distributed_message_coop_device_states: size = network_coop_device_state_entry_size(); break;
+	case _distributed_message_pickups: size = sizeof(struct distributed_pickup); break;
+	case _distributed_message_aim_assist_policy: size = NETWORK_RULES_AIM_ASSIST_SIZE - sizeof(struct distributed_message_header); break;
+	case _distributed_message_shield_effects: size = NETWORK_RULES_SHIELD_EFFECTS_SIZE - sizeof(struct distributed_message_header); break;
+	case _distributed_message_chat_up:
+	case _distributed_message_chat_down: size = DELTA_CHAT_BRIDGE_LINE_SIZE; break;
+	case _distributed_message_chat_config: size = DELTA_CHAT_BRIDGE_CONFIG_SIZE; break;
+	case _distributed_message_player_inputs: size = sizeof(struct distributed_player_input); break;
+	case _distributed_message_relayed_actions: size = DISTRIBUTED_RELAYED_ACTION_MINIMUM_SIZE; break;
+	case _distributed_message_game_state:
+	case _distributed_message_objects_synchronized:
+	case _distributed_message_notice:
+	case _distributed_message_client_ready: size = 0; break;
+	case _distributed_message_client_identity: size = sizeof(struct distributed_client_identity); break;
+	case _distributed_message_damage_events:
+	case _distributed_message_hit_reports: size = network_damage_entry_size(type); break;
+	default: size = network_objects_entry_size(type); break;
+	}
+	if (uniform)
+	{
+		*uniform = size != 0 && type != _distributed_message_player_prediction &&
+			type != _distributed_message_unit_states && type != _distributed_message_relayed_actions &&
+			type != _distributed_message_game_state && type != _distributed_message_notice;
+	}
+	return size;
+}
+
+static void distributed_handle_message(
 	long machine_index,
 	word const *message,
 	word size)
@@ -7053,12 +7391,16 @@ void network_distributed_handle_message(
 			if (((struct distributed_message_header const *)buffer)->type != _distributed_message_batch)
 			{
 				distributed_handling_batch = TRUE;
-				network_distributed_handle_message(machine_index, buffer, (word)(sizeof(message_header) + length));
+				distributed_handle_message(machine_index, buffer, (word)(sizeof(message_header) + length));
 				distributed_handling_batch = FALSE;
 			}
 		}
 		return;
 	}
+	/* (port, this fork: MCC's kinds, 97 to 100 and 103 to 106, are handled
+	below with the others, OpenCE's way, after the filter above that drops
+	them outside MCC games; ChupathingyCE's distributed_mcc_message, which
+	takes 97 to 100 alone, is not used) */
 	/* (a kind this build does not know: dropped before anything reads it) */
 	if (!distributed_kind_known(header.type))
 	{
@@ -7223,6 +7565,17 @@ void network_distributed_handle_message(
 	}
 	/* (the host: a client's clock, by its messages' ticks; and its players'
 	predictions not taken while its game runs fast) */
+	/* (a client of a layout with a checkpoint epoch, without the host's
+	objects: their changes, their end, and what units carry over the
+	stream; nothing else until then. ChupathingyCE's chupa-43a facts: none
+	in this fork's built-in layouts, whose own epoch is OpenCE's) */
+	if (machine_index == NONE && distributed_wire_layout()->epoch_kind &&
+		game_connection() == _game_connection_network_client && !network_objects_client_synchronized() &&
+		!network_rules_client_takes_unsynchronized(header.type, !network_connection_last_read_was_unreliable(),
+			distributed_handling_batch))
+	{
+		return;
+	}
 	if (machine_index != NONE && header.type != _distributed_message_client_ready)
 	{
 		distributed_note_client_clock(machine_index, header.game_time);
@@ -7372,6 +7725,22 @@ void network_distributed_handle_message(
 		game_engine_read_network_state((byte const *)entries, size - sizeof(header));
 		break;
 	case _distributed_message_objects_synchronized:
+		/* (a layout with a checkpoint epoch: over the host's stream alone,
+		the header alone, no entries; projectiles, effects and the damage
+		netcode let go again, the checkpoint's state but the receive times,
+		then the identity again) */
+		if (distributed_wire_layout()->epoch_kind)
+		{
+			if (machine_index != NONE || network_connection_last_read_was_unreliable() || distributed_handling_batch ||
+				header.count != 0 || size != sizeof(header) || network_objects_client_synchronized())
+			{
+				break;
+			}
+			network_objects_checkpoint_reset(TRUE);
+			network_damage_new_game();
+			distributed_checkpoint_reset(TRUE);
+			distributed_identity_sent = FALSE;
+		}
 		network_objects_handle_synchronized();
 		break;
 	case _distributed_message_client_identity:
@@ -7488,6 +7857,11 @@ void network_distributed_handle_message(
 	{
 		boolean loaded = distributed_machine_loaded(machine_index);
 
+		/* (a layout with a checkpoint epoch: the boundary first, before the
+		host's objects; a revert's goes to it from now on) */
+		if (machine_index >= 0 && machine_index < HALO_PORT_MAXIMUM_NETWORK_MACHINES)
+			distributed_machine_ready[machine_index] = TRUE;
+		distributed_send_boundary(machine_index);
 		/* (its count 1: the client asks again, having failed to make one of
 		the host's objects) */
 		network_objects_client_asked(machine_index, header.count != 0);
@@ -7581,6 +7955,213 @@ void network_distributed_handle_message(
 		break;
 	}
 	}
+}
+
+/* (a client) its netcode's own state at the host's newer checkpoint epoch:
+what it sent and received when, its batches, its predictions and its own
+positions, deaths, seats, what it saw and the host's speeds, and the input
+queues; at the snapshot's end the same, the receive times kept */
+static void distributed_checkpoint_reset(
+	boolean keep_receive_times)
+{
+	short sender;
+	short type;
+	short player_index;
+
+	distributed_last_sent_time = NONE;
+	for (sender = 0; sender < MAXIMUM_SENDERS; sender++)
+	{
+		distributed_batches[sender].size = 0;
+		distributed_batches[sender].messages = 0;
+		if (keep_receive_times)
+			continue;
+		for (type = 0; type < NUMBER_OF_DISTRIBUTED_MESSAGES; type++)
+			distributed_received_times[sender][type] = NONE;
+		distributed_sender_times[sender] = NONE;
+	}
+	csmemset(distributed_deaths, 0, sizeof(distributed_deaths));
+	csmemset(distributed_seat_disagreements, 0, sizeof(distributed_seat_disagreements));
+	csmemset(distributed_predictions, 0, sizeof(distributed_predictions));
+	csmemset(distributed_accepted, 0, sizeof(distributed_accepted));
+	csmemset(distributed_host_speeds, 0, sizeof(distributed_host_speeds));
+	csmemset(distributed_seen, 0, sizeof(distributed_seen));
+	csmemset(distributed_viewers, 0, sizeof(distributed_viewers));
+	for (player_index = 0; player_index < MAXIMUM_TRACKED_PLAYERS; player_index++)
+	{
+		distributed_deaths[player_index].dead_since = NONE;
+		distributed_predictions[player_index].taken_host_time = NONE;
+		distributed_host_speeds[player_index].unit_index = NONE;
+	}
+	for (sender = 0; sender < MAXIMUM_LOCAL_PLAYERS; sender++)
+	{
+		for (type = 0; type < OWN_POSITION_TICKS; type++)
+		{
+			distributed_own_positions[sender][type].time = NONE;
+			distributed_own_positions[sender][type].unit_index = NONE;
+		}
+	}
+	update_queues_distributed_reset();
+}
+
+/* (a client of a layout with a checkpoint epoch) whether what it would send
+is held back: until it has the host's objects again, all but its ready */
+static boolean distributed_held_back(
+	byte type)
+{
+	return network_rules_client_held_back(distributed_wire_layout()->epoch_kind != 0,
+		game_connection() == _game_connection_network_client, network_objects_client_synchronized(), type);
+}
+
+/* (a host whose layout has a checkpoint epoch) its boundary to a client
+machine, over its stream: the header alone, of the layout's kind, before
+anything of the epoch it says */
+static void distributed_send_boundary(
+	long machine_index)
+{
+	struct network_rules_layout const *layout = distributed_wire_layout();
+	struct distributed_message_header message;
+
+	if (!layout->epoch_kind || game_connection() != _game_connection_network_server)
+		return;
+	distributed_send_to_machine_reliably(machine_index, &message, (byte)layout->epoch_kind, 0, (word)sizeof(message));
+	error(_error_log, "network: checkpoint boundary (message %d, epoch %lu) to machine %ld", layout->epoch_kind,
+		(unsigned long)distributed_epoch, machine_index);
+}
+
+void network_distributed_checkpoint_boundary(
+	void)
+{
+	long machine_indices[HALO_PORT_MAXIMUM_NETWORK_MACHINES];
+	short machine_count;
+	short index;
+
+	if (!distributed_wire_layout()->epoch_kind || game_connection() != _game_connection_network_server)
+		return;
+	/* (what is queued goes first, of the epoch it was made in) */
+	distributed_batches_flush();
+	distributed_epoch = network_rules_epoch_next(distributed_epoch);
+	error(_error_log, "network: the checkpoint epoch is now %lu (a co-op revert)", (unsigned long)distributed_epoch);
+	/* (every client machine in the game that has said its ready: one that
+	has not takes it at its ready) */
+	machine_count = distributed_client_machines(machine_indices, HALO_PORT_MAXIMUM_NETWORK_MACHINES);
+	for (index = 0; index < machine_count; index++)
+	{
+		long machine_index = machine_indices[index];
+
+		if (machine_index >= 0 && machine_index < HALO_PORT_MAXIMUM_NETWORK_MACHINES &&
+			network_rules_revert_boundary_to(TRUE, distributed_machine_is_local(machine_index),
+				distributed_machine_ready[machine_index]))
+		{
+			distributed_send_boundary(machine_index);
+		}
+	}
+}
+
+/* (a client) the host's checkpoint boundary: over its stream alone, not in a
+batch, the header alone, a newer epoch than the one it has. The client
+takes the epoch (and from then the host's messages of it alone, its own
+stamped with it) and tells the host its identity again, which the host
+dropped as of no epoch */
+static void distributed_handle_boundary(
+	long machine_index,
+	word const *message,
+	word size,
+	uint32_t epoch)
+{
+	uint32_t previous = distributed_epoch;
+
+	if (machine_index != NONE || game_connection() != _game_connection_network_client ||
+		!network_rules_boundary_taken(size, ((byte const *)message)[3], !network_connection_last_read_was_unreliable(),
+			distributed_handling_batch, epoch, distributed_epoch))
+	{
+		return;
+	}
+	distributed_epoch = epoch;
+	error(_error_log, "network: the host's checkpoint epoch %lu (was %lu)", (unsigned long)epoch,
+		(unsigned long)previous);
+	/* (not synchronized: everything replicated is let go and taken again
+	from the host's snapshot, which the client's next ready asks for; until
+	its end only that ready is sent. Its identity goes again after it; this
+	build never sends OpenCE's build report, 92) */
+	distributed_checkpoint_reset(FALSE);
+	network_objects_checkpoint_reset(FALSE);
+	network_damage_new_game();
+	network_actors_new_game();
+#ifndef HALO_XBOX_CONSOLE
+	/* (the original Xbox plays no network co-op: its port has co-op's stubs
+	alone, port/xbox/game/xbox_coop.c, and nothing of co-op to let go) */
+	network_coop_checkpoint_reset();
+#endif
+	distributed_identity_sent = FALSE;
+}
+
+void network_distributed_handle_message(
+	long machine_index,
+	word const *message,
+	word size)
+{
+	/* (a message of the game's wire made this build's: one with the header's
+	further bytes without them, its epoch checked) */
+	static word narrow[(sizeof(message_header) + MAXIMUM_MESSAGE_SIZE + NETWORK_RULES_HEADER_EXTRA_LIMIT + 1) /
+		sizeof(word)];
+	struct network_rules_layout const *layout;
+	boolean has_epoch;
+	uint32_t epoch;
+	int narrow_size;
+	byte type;
+
+	if (size < sizeof(struct distributed_message_header) || !game_in_progress())
+		return;
+	layout = distributed_wire_layout();
+	if (!layout->header_extra)
+	{
+		distributed_handle_message(machine_index, message, size);
+		return;
+	}
+	if (size > sizeof(narrow))
+		return;
+	has_epoch = layout->epoch_kind != 0;
+	type = ((byte const *)message)[2];
+	/* (in a batch, a message of another epoch is left out: a host keeps a
+	client's ready of any) */
+	narrow_size = network_rules_header_strip((uint8_t const *)message, size, (uint8_t *)narrow, layout->header_extra,
+		has_epoch, distributed_epoch, 0, &epoch);
+	if (!narrow_size)
+		return;
+	if (has_epoch && type != _distributed_message_batch)
+	{
+		if (type == layout->epoch_kind)
+		{
+			distributed_handle_boundary(machine_index, narrow, (word)narrow_size, epoch);
+			return;
+		}
+		/* (a client takes the host's messages of its epoch alone, none before
+		the first boundary; a host its clients' of its own, and a client's
+		ready of any: the header alone, its count 0 or 1) */
+		if (machine_index == NONE ? epoch != distributed_epoch || !distributed_epoch :
+			!network_rules_host_takes(epoch, distributed_epoch, type, narrow_size, ((byte const *)narrow)[3],
+				distributed_handling_stream_message, FALSE))
+		{
+			return;
+		}
+	}
+	distributed_handle_message(machine_index, narrow, (word)narrow_size);
+}
+
+unsigned int network_distributed_epoch(
+	void)
+{
+	return (unsigned int)distributed_epoch;
+}
+
+real network_distributed_rider_ejection_up(
+	void)
+{
+	short connection = game_connection();
+
+	if (connection != _game_connection_network_server && connection != _game_connection_network_client)
+		return 0.0f;
+	return network_rules_rider_ejection_up(distributed_wire_layout());
 }
 
 /* (the host: network_server_message_handler.c) a client machine's message

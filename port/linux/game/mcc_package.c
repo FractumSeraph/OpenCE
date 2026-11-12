@@ -9,7 +9,13 @@ build's pointers, which this build's Xbox addresses are not) */
 #pragma clang diagnostic ignored "-Wincompatible-pointer-types"
 #endif
 /* One optional package directory, with explicit MCC-root resource fallback. */
+#ifndef HALO_MCC
+#include "../include/halo_port_features.h"
+#endif
+#if !defined(HALO_MCC) || HALO_MCC /* Halo MCC maps (halo_port_features.h, above): a console builds this to nothing */
+#include "cseries.h"
 #include "mcc_package.h"
+#include "mcc_maps.h"
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
@@ -90,7 +96,8 @@ int mcc_package_map_path(char const *name, char path[128])
 #ifdef HALO_WEB
     if (!web_mcc_package_visible(canonical)) return 0;
 #endif
-    sprintf(path,"d:\\%s.map",canonical);
+    /* port: (in maps_mcc: mcc_maps_folder; the name keeps GulchCE's mcc_maps) */
+    sprintf(path,"d:\\%s%s.map",mcc_maps_folder(),canonical+8);
     return 1;
 }
 
@@ -107,7 +114,9 @@ int mcc_package_resource_path(char const *name, unsigned type, char path[128])
     separator=strrchr(canonical,'\\');
     *separator=0;
     for (i=0;canonical[i];i++) if (canonical[i]=='\\') canonical[i]='/';
-    length=snprintf(path,128,"%s/%s.map",staged ? mcc_package_staged_folder : canonical,type==1 ? "bitmaps" : "sounds");
+    /* port: (in maps_mcc: mcc_maps_folder; a staged package in its own folder) */
+    length=snprintf(path,128,"%s%s/%s.map",staged ? mcc_package_staged_folder : mcc_maps_folder(),
+        staged ? "" : canonical+8,type==1 ? "bitmaps" : "sounds");
     return length>0 && length<128;
 }
 
@@ -127,3 +136,4 @@ FILE *mcc_package_resource_open(char const *name,unsigned type,char path[128])
     }
     return file;
 }
+#endif /* HALO_MCC */
