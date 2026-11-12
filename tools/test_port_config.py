@@ -238,7 +238,7 @@ def build(cc, kind, directory):
 	(source / "posix.h").write_text(STUB_POSIX)
 	# (OpenCE's command line, --server: a key file's permissions, which no test here writes)
 	(source / "posix_server.h").write_text(
-		"static int posix_server_private_file(const char *path) { (void)path; return 1; }\n")
+		"static inline int posix_server_private_file(const char *path) { (void)path; return 1; }\n")
 	(source / "SDL3/SDL.h").write_text(STUB_SDL)
 	program = directory / f"port_config_test_{kind}"
 	subprocess.run([cc, "-std=c11", "-D_DEFAULT_SOURCE", "-D_DARWIN_C_SOURCE", "-Wall", "-Werror", "-g",
