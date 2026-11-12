@@ -365,8 +365,8 @@ SCREENS = {
     "network_setup": {
         "screen": "network_settings_screen",
         "header": ("header_profile_network_settings", f"{PE}/network_setup/header_profile_network_settings"),
-        # (eleven rows: closer together, the help lower)
-        "spacing": 24,
+        # (thirteen places on the desktop: closer together, the help lower)
+        "spacing": 22,
         "help_top": 368,
         # (the router, the map downloads, the clipboard, invite links and the
         # updates, which the web build has not)
@@ -387,6 +387,9 @@ SCREENS = {
              "Copy your game's invite link when you host.", "desktop android switch"),
             ("START WITH ONE PLAYER:", "game.start_with_one_player", ON_OFF,
              "Let a game you host start with only you.", None),
+            # (port, this fork: a player's own recordings, network_recording.c)
+            ("RECORD MY GAMES:", "network.record_my_games", ON_OFF,
+             "Record the games you play, to watch again at\nhalo.fractumseraph.net/watch/.", None),
         ],
         "views": [
             # (update.channel's help is update.h's UPDATE_CHANNEL_HELP, as

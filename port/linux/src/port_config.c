@@ -1374,10 +1374,21 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"the map's walls), about 40 MB an hour, to watch again through any\n"
 		"player's eyes at halo.fractumseraph.net/watch/. Keep the folder\n"
 		"private." },
+	{ "network.record_my_games", _config_boolean, "false", "HALO_NET_RECORD_MY_GAMES", _environment_value, _platform_all,
+		"Record the network games you play, joined or hosted, to recordings\\\n"
+		"in the data folder (in the browser, the site's storage), as you saw\n"
+		"them: every player's position, aim, health and weapon, the world's\n"
+		"vehicles, items and projectiles, the kills, scores and chat. No one's\n"
+		"address or hardware id is kept. A joined game's players far from\n"
+		"yours, or out of their sight, are less exact than a host's recording\n"
+		"has them: the host sends them less often (every 2nd to 6th tick), and\n"
+		"your game fills in between. Watch them again at\n"
+		"halo.fractumseraph.net/watch/ (Open a recording; the browser build's\n"
+		"are listed there)." },
 	{ "network.recordings_megabytes", _config_integer, "2048", "HALO_NET_RECORDINGS_MEGABYTES", _environment_value,
 		_platform_all | _platform_server,
-		"How many megabytes of recordings (network.record_games) to keep: the\n"
-		"oldest go first. 0 keeps them all." },
+		"How many megabytes of recordings (network.record_games,\n"
+		"network.record_my_games) to keep: the oldest go first. 0 keeps them all." },
 	{ "network.record_public", _config_boolean, "false", "HALO_NET_RECORD_PUBLIC", _environment_value, _platform_all | _platform_server,
 		"Hosting, with network.record_games: also write each game's public copy\n"
 		"to recordings\\public, for anyone to watch, live or again: no player's\n"

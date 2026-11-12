@@ -80,6 +80,7 @@ machine (their datum identifiers need not be).
 #include "host_evidence.h"
 #include "conduct_rules.h"
 #include "network_distributed.h"
+#include "network_recording.h"
 #include "network_link.h"
 #include "network_voice.h"
 #include "mcc_network.h"
@@ -4641,6 +4642,14 @@ void network_distributed_player_killed(
 		{
 			*killing_object_index = NONE;
 		}
+	}
+	/* (port, this fork: a client's own recording, network_recording.c, with
+	the host's killer; not a death that counts nothing,
+	network_distributed_death_silent's) */
+	if (game_connection() == _game_connection_network_client &&
+		!(death->valid && death->killing_player_index == dead_absolute_index && death->killed_by_vehicle))
+	{
+		network_recording_kill_seen(*killing_player_index, dead_player_index);
 	}
 }
 

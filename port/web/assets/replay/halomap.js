@@ -1,16 +1,18 @@
 /*
-  halomap.js: a Halo Custom Edition map (a cache file, engine version 609)
-  read in the browser, for the replay viewer (index.html): its structure
-  BSPs as meshes ready to draw, each with its shader's base map and its
-  lightmap, its placed scenery, its sky, and any of its models and
-  animations on request. Plain JavaScript, no dependencies; the files are
-  read through range fetchers, so only what is drawn is fetched.
+  halomap.js: a Halo map (a cache file) read in the browser, for the replay
+  viewer (index.html): a Custom Edition map (engine version 609), a Halo PC
+  retail one (7) or an Xbox one (5): its structure BSPs as meshes ready to
+  draw, each with its shader's base map and its lightmap, its placed
+  scenery, its sky, and any of its models and animations on request. Plain
+  JavaScript, no dependencies; a Halo PC map is read through range
+  fetchers, so only what is drawn is fetched.
 
-  readHaloMap({ map, bitmaps, onProgress }): map and bitmaps are each a
-  fetchRange(offset, length) => Promise<Uint8Array> (bitmaps: Custom
-  Edition's bitmaps.map, which holds most of a map's stock bitmaps; it may
-  be left out, and those bitmaps are then null). onProgress(fraction, text)
-  is told how far it has got. It returns
+  readHaloMap({ map, bitmaps, onProgress }): map is a fetchRange(offset,
+  length) => Promise<Uint8Array>, or the whole file (a Uint8Array or an
+  ArrayBuffer); bitmaps a fetchRange of Custom Edition's bitmaps.map, which
+  holds most of a Custom Edition map's stock bitmaps (it may be left out,
+  and those bitmaps are then null; an Xbox map has its own). onProgress(
+  fraction, text) is told how far it has got. It returns
     { name, version, scenario, bsps: [ { name, lightmaps, meshes } ], sky,
       scenery, warnings,
       readModel, readObjectModel, listAnimations, readAnimation, listTags }
@@ -81,13 +83,30 @@
   The layouts are the game's (port/linux/game/tag_schema_render.c,
   tag_schema_models.c, tag_schema_scenario.c, ce_bsp.c, ce_models.c,
   ce_resources.c, object_mesh.c, source/structures/structure_bsp_definitions.h,
-  source/models/, tools/ce_cache.py), and every count and pointer read is
-  checked against what holds it: a damaged map throws a HaloMapError (a
-  damaged bitmap, shader, model or list of placements is left out, null,
-  and named in warnings; a bitmap's read() and readAnimation may throw one
-  too), it never makes this read outside its file or allocate more than
-  the file could describe. A failed fetch is thrown as it is. Xbox maps
-  (version 5, compressed) are refused.
+  source/models/, source/cache/cache_files.c, source/rasterizer/
+  rasterizer_geometry.c, tools/ce_cache.py), and every count and pointer
+  read is checked against what holds it: a damaged map throws a
+  HaloMapError (a damaged bitmap, shader, model or list of placements is
+  left out, null, and named in warnings; a bitmap's read() and
+  readAnimation may throw one too), it never makes this read outside its
+  file or allocate more than the file could describe. A failed fetch is
+  thrown as it is.
+
+  An Xbox map is the game's own layout, which a Halo PC map is converted to
+  as it loads: its file after its header (0x800 bytes) is one zlib stream,
+  which is fetched whole and inflated (DecompressionStream), the file it
+  inflates to read as a Halo PC map's is, with these differences. Its tags
+  are at 0x803A6000 (cache_files.c), none indexed, its models are models
+  (mode) whose parts are 0x68 bytes, their vertices compressed and named by
+  a Direct3D vertex buffer in the tags (rasterizer_geometry.c's
+  model_vertex_compressed: normals 11:11:10, texture coordinates 16-bit
+  fractions of the base map scale, node indices times three, the first
+  node's weight a 16-bit fraction), their triangle strips in the tags; a
+  BSP's materials have their compressed vertices only (environment and
+  lightmap vertices, the lightmap's texture coordinates 16-bit fractions);
+  its bitmaps' pixels are in the map, those not compressed swizzled; its
+  shaders' types have no extended chicago shader. Its tags' layouts are
+  otherwise Halo PC's, its sky's colors too.
 
   An overlay animation (type 1) is added to the base pose, as
   model_animations.c adds it: rotation base times overlay (in this
@@ -110,13 +129,23 @@
 
 /* ---------- constants */
 
-// (where a Custom Edition map's tags are loaded: every pointer in them is
-// an address there)
-const TAG_BASE = 0x40440000;
+// (where a Custom Edition map's tags are loaded, and an Xbox map's: every
+// pointer in them is an address there)
+const TAG_BASE_CE = 0x40440000;
+const TAG_BASE_XBOX = 0x803a6000;
 const HEADER_SIZE = 0x800;
 const VERSION_CE = 609;
 // Halo PC retail's maps: the same format, without indexed tags
 const VERSION_PC = 7;
+// the Xbox's maps: compressed after their header
+const VERSION_XBOX = 5;
+// (the largest Xbox map read: its campaign's largest inflates to 267 MB; and
+// what the compressed file can be at most, deflate making at most about a
+// thousand bytes of each)
+const MAX_XBOX_MAP_SIZE = 0x14000000;
+const MAX_INFLATE_RATIO = 1100;
+const INFLATE_CHUNK = 0x100000;
+const WHOLE_FILE_CHUNK = 0x400000;
 
 // the most of each a map is read with: more would not fit in the game
 const MAX_TAG_DATA = 0x4000000;
@@ -152,6 +181,14 @@ const MATERIAL_UNCOMPRESSED_DATA = 0xd8; // a tag_data: size, pad, file offset, 
 const ENVIRONMENT_VERTEX_SIZE = 0x38;
 const LIGHTMAP_VERTEX_SIZE = 0x14;
 const VERTEX_TYPE_ENVIRONMENT_UNCOMPRESSED = 0;
+// (an Xbox material's: its compressed vertex data, a tag_data, holding its
+// compressed environment vertices (position, normal, binormal, tangent
+// 11:11:10, texture coordinates) then its compressed lightmap vertices
+// (incident radiosity 11:11:10, texture coordinates 16-bit fractions))
+const MATERIAL_COMPRESSED_DATA = 0xec;
+const ENVIRONMENT_COMPRESSED_VERTEX_SIZE = 0x20;
+const LIGHTMAP_COMPRESSED_VERTEX_SIZE = 0x8;
+const VERTEX_TYPE_ENVIRONMENT_COMPRESSED = 1;
 
 // a scenario (scenario_definitions.h)
 const SCENARIO_SKIES = 0x30;
@@ -197,6 +234,15 @@ const PART_LOCAL_NODE_COUNT = 0x6b;
 const PART_LOCAL_NODES = 0x6c;
 const MODEL_VERTEX_SIZE = 0x44;
 const MAX_MODEL_NODES = 64;
+// (an Xbox model's part: the same as far as its triangle and vertex
+// buffers, which name their data by address: the triangles' at 8, the
+// vertices' Direct3D vertex buffer at 0x10, whose data's address is its
+// second word; a compressed vertex: position, normal, binormal, tangent,
+// texture coordinates, two nodes times three, the first's weight)
+const XBOX_PART_SIZE = 0x68;
+const XBOX_MODEL_VERTEX_SIZE = 0x20;
+const D3D_BUFFER_SIZE = 12;
+const VERTEX_TYPE_MODEL_COMPRESSED = 5;
 
 // an object (object_definitions.h): its model and animation graph
 const OBJECT_SIZE = 0x17c;
@@ -241,6 +287,11 @@ const TRANSPARENT_MAPS = 0x54;
 const CHICAGO_EXTENDED_TWO_STAGE_MAPS = 0x60;
 const GENERIC_MAP_SIZE = 0x64;
 const CHICAGO_MAP_SIZE = 0xdc;
+// (the shaders' types: Halo PC's, with its extended chicago shader after
+// the chicago one's; the Xbox's, without it, tag_schema_render.c)
+const SHADER_TYPES_PC = { 3: "senv", 4: "soso", 5: "sotr", 6: "schi", 7: "scex", 8: "swat", 9: "sgla", 10: "smet",
+  11: "spla" };
+const SHADER_TYPES_XBOX = { 3: "senv", 4: "soso", 5: "sotr", 6: "schi", 7: "swat", 8: "sgla", 9: "smet", 10: "spla" };
 const BLENDS = ["alpha", "multiply", "double-multiply", "add", "subtract", "min", "max", "alpha-multiply-add"];
 
 /* ---------- reading the files */
@@ -328,7 +379,93 @@ function pagedFile(fetchRange, label, pageSize, keepBytes) {
   };
 }
 
-// (bytes that are at an address: the map's tags at TAG_BASE, a BSP at its
+// (a file held whole, read as pagedFile reads one)
+function memoryFile(bytes, label) {
+  return {
+    label,
+    async read(offset, length) {
+      if (!Number.isSafeInteger(offset) || !Number.isSafeInteger(length) || offset < 0 || length < 0)
+        fail(`${label}: a read of ${length} bytes at ${offset}`);
+      if (offset + length > bytes.length) fail(`${label}: ${length} bytes at ${offset} are past its end`);
+      return bytes.subarray(offset, offset + length);
+    },
+  };
+}
+
+// (a whole file through its range fetcher: a few megabytes at a time, until
+// a read comes back short, as one past the file's end does)
+async function readWholeFile(fetchRange, label, maxLength) {
+  const parts = [];
+  let total = 0;
+  for (;;) {
+    const bytes = await fetchRange(total, WHOLE_FILE_CHUNK);
+    if (!(bytes instanceof Uint8Array)) fail(`${label}: its reader gave no bytes`);
+    parts.push(bytes.length > WHOLE_FILE_CHUNK ? bytes.subarray(0, WHOLE_FILE_CHUNK) : bytes);
+    total += Math.min(bytes.length, WHOLE_FILE_CHUNK);
+    if (total > maxLength) fail(`${label} is larger than ${maxLength} bytes`);
+    if (bytes.length < WHOLE_FILE_CHUNK) break;
+  }
+  const whole = new Uint8Array(total);
+  let at = 0;
+  for (const part of parts) { whole.set(part, at); at += part.length; }
+  return whole;
+}
+
+// an Xbox map's file as the game reads it: its header, then the rest of
+// the file inflated (one zlib stream from HEADER_SIZE), length bytes in all.
+// (The stream is followed by zeros to the file's end, which the browsers'
+// inflaters refuse as data after its end: it is taken to end at the last
+// byte that is not zero, or up to three bytes later if its checksum ends in
+// zeros)
+async function inflateXboxMap(compressed, length, onFraction) {
+  if (typeof DecompressionStream !== "function") fail("this browser cannot inflate an Xbox map");
+  let end = compressed.length;
+  while (end > HEADER_SIZE && compressed[end - 1] === 0) end--;
+  let problem = "it has no data";
+  for (let extra = 0; extra < 4 && end + extra <= compressed.length; extra++) {
+    try {
+      return await inflateOnce(compressed, end + extra, length, onFraction);
+    } catch (error) {
+      if (error instanceof HaloMapError) throw error;
+      problem = error && error.message ? error.message : String(error);
+    }
+  }
+  fail(`its compressed data could not be inflated (${problem})`);
+}
+
+async function inflateOnce(compressed, end, length, onFraction) {
+  const image = new Uint8Array(length);
+  image.set(compressed.subarray(0, HEADER_SIZE));
+  const stream = new DecompressionStream("deflate");
+  const writer = stream.writable.getWriter(), reader = stream.readable.getReader();
+  const writing = (async () => {
+    for (let at = HEADER_SIZE; at < end; at += INFLATE_CHUNK)
+      await writer.write(compressed.subarray(at, Math.min(end, at + INFLATE_CHUNK)));
+    await writer.close();
+  })();
+  // (its failure is the reader's too, and thrown from there)
+  writing.catch(() => {});
+  let filled = HEADER_SIZE, told = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value.length > length - filled) fail(`it inflates to more than its header's ${length} bytes`);
+      image.set(value, filled);
+      filled += value.length;
+      if (filled - told >= 0x400000) { told = filled; onFraction(filled / length); }
+    }
+    await writing;
+  } catch (error) {
+    reader.cancel().catch(() => {});
+    writer.abort().catch(() => {});
+    throw error;
+  }
+  if (filled !== length) fail(`it inflates to ${filled} bytes, not its header's ${length}`);
+  return image;
+}
+
+// (bytes that are at an address: the map's tags at its tag base, a BSP at its
 // base address, a bitmaps.map resource at 0. Each read is checked to lie
 // in them)
 class Space {
@@ -389,8 +526,14 @@ function groupText(value) {
 /* ---------- the map */
 
 export async function readHaloMap({ map, bitmaps = null, onProgress = null }) {
-  if (typeof map !== "function") fail("no reader for the map");
-  const progress = (fraction, text) => { if (onProgress) try { onProgress(fraction, text); } catch { /* ignored */ } };
+  if (map instanceof ArrayBuffer) map = new Uint8Array(map);
+  if (typeof map !== "function" && !(map instanceof Uint8Array)) fail("no reader for the map");
+  // (an Xbox map's inflating takes the first part of the way, its reading
+  // the rest)
+  let progressStart = 0;
+  const progress = (fraction, text) => {
+    if (onProgress) try { onProgress(progressStart + (1 - progressStart) * fraction, text); } catch { /* ignored */ }
+  };
   // (a damaged bitmap or shader is left out, its base map or lightmap null,
   // and said here, rather than the map refused: what is wrong with the map's
   // structure, or a failed fetch, is thrown)
@@ -400,7 +543,8 @@ export async function readHaloMap({ map, bitmaps = null, onProgress = null }) {
     if (warnings.size < 100) warnings.add(error.message);
     return null;
   };
-  const mapFile = pagedFile(map, "the map", 0x10000, 0x2000000);
+  let mapFile = typeof map === "function" ? pagedFile(map, "the map", 0x10000, 0x2000000) :
+    memoryFile(map, "the map");
   const bitmapsFile = typeof bitmaps === "function" ? pagedFile(bitmaps, "bitmaps.map", 0x4000, 0x1000000) : null;
 
   // its header ("head", its version, its length, where its tags are)
@@ -409,10 +553,29 @@ export async function readHaloMap({ map, bitmaps = null, onProgress = null }) {
   // ("head" and "foot", which read backwards in the file)
   if (header.u32(0) !== 0x68656164 || header.u32(0x7fc) !== 0x666f6f74) fail("this is not a Halo map");
   const version = header.u32(4);
-  if (version === 5) fail("this is an Xbox map (compressed), which this reader does not read");
-  if (version !== VERSION_CE && version !== VERSION_PC)
-    fail(`version ${version} is not Custom Edition's (${VERSION_CE})`);
+  if (version !== VERSION_CE && version !== VERSION_PC && version !== VERSION_XBOX)
+    fail(`version ${version} is not Custom Edition's (${VERSION_CE}), Halo PC's (${VERSION_PC}) or the Xbox's (${VERSION_XBOX})`);
+  const xbox = version === VERSION_XBOX;
   const fileLength = header.u32(8);
+  const tagBase = xbox ? TAG_BASE_XBOX : TAG_BASE_CE;
+  if (xbox) {
+    // (its length is the file's inflated: the whole file is fetched and
+    // inflated, and read from memory)
+    if (fileLength <= HEADER_SIZE || fileLength > MAX_XBOX_MAP_SIZE)
+      fail(`it inflates to ${fileLength} bytes (at most ${MAX_XBOX_MAP_SIZE} are read)`);
+    // (deflate's stored blocks make data that does not compress a little
+    // larger, and the file is padded)
+    const maxCompressed = Math.min(MAX_XBOX_MAP_SIZE, fileLength + Math.floor(fileLength / 64) + 0x10000);
+    const compressed = typeof map === "function" ? await readWholeFile(map, "the map", maxCompressed) : map;
+    if (compressed.length > maxCompressed) fail(`its file is ${compressed.length} bytes, more than it inflates to`);
+    if ((compressed.length - HEADER_SIZE) * MAX_INFLATE_RATIO < fileLength - HEADER_SIZE)
+      fail(`its ${compressed.length} bytes cannot inflate to ${fileLength}`);
+    progress(0.01, "inflating the map");
+    const image = await inflateXboxMap(compressed, fileLength,
+      (fraction) => progress(0.01 + 0.49 * fraction, "inflating the map"));
+    mapFile = memoryFile(image, "the map");
+    progressStart = 0.5;
+  }
   const tagDataOffset = header.u32(0x10), tagDataSize = header.u32(0x14);
   if (tagDataSize < 0x28 || tagDataSize > MAX_TAG_DATA || tagDataOffset < HEADER_SIZE ||
     tagDataOffset + tagDataSize > fileLength)
@@ -421,9 +584,11 @@ export async function readHaloMap({ map, bitmaps = null, onProgress = null }) {
 
   // its tags, and their table
   progress(0.02, "tags");
-  const tags = new Space(await mapFile.read(tagDataOffset, tagDataSize), TAG_BASE, "the map's tags");
-  if (tags.u32(TAG_BASE + 0x24) !== 0x74616773) fail("its tags' header is damaged");
-  const tableAddress = tags.u32(TAG_BASE), scenarioId = tags.u32(TAG_BASE + 4), tagCount = tags.u32(TAG_BASE + 12);
+  const tags = new Space(await mapFile.read(tagDataOffset, tagDataSize), tagBase, "the map's tags");
+  // ('tags' ends the tags' header: an Xbox map's names its vertex and index
+  // buffers, a Custom Edition map's its model data, a word more)
+  if (tags.u32(tagBase + (xbox ? 0x20 : 0x24)) !== 0x74616773) fail("its tags' header is damaged");
+  const tableAddress = tags.u32(tagBase), scenarioId = tags.u32(tagBase + 4), tagCount = tags.u32(tagBase + 12);
   if (tagCount > MAX_TAGS) fail(`it has ${tagCount} tags`);
   tags.at(tableAddress, tagCount * 32);
   const instances = [];
@@ -433,7 +598,8 @@ export async function readHaloMap({ map, bitmaps = null, onProgress = null }) {
     instances.push({
       group: groupText(tags.u32(at)), id: tags.u32(at + 12),
       name: tags.has(nameAddress, 1) ? tags.string(nameAddress) : `tag ${index}`,
-      base: tags.u32(at + 20), indexed: tags.u32(at + 24) !== 0,
+      // (an Xbox map has no indexed tags: its resources are its own)
+      base: tags.u32(at + 20), indexed: !xbox && tags.u32(at + 24) !== 0,
     });
   }
 
@@ -504,8 +670,9 @@ export async function readHaloMap({ map, bitmaps = null, onProgress = null }) {
           offset: space.u32(at + 0x18), size: space.u32(at + 0x1c),
           // (an indexed tag's pixels, and an external bitmap's, are in
           // bitmaps.map; Halo PC retail's bitmaps.map is not Custom
-          // Edition's, so a retail map's external ones are not read)
-          external: tag.indexed || (flags & BITMAP_FLAG_EXTERNAL) !== 0,
+          // Edition's, so a retail map's external ones are not read. An
+          // Xbox map's are all its own, at offsets in the inflated file)
+          external: !xbox && (tag.indexed || (flags & BITMAP_FLAG_EXTERNAL) !== 0),
         });
       }
       return result;
@@ -560,12 +727,11 @@ export async function readHaloMap({ map, bitmaps = null, onProgress = null }) {
       shader: tag.name, shaderGroup: tag.group.trim(), baseMap: null, detailMap: null, detailScale: 1,
       uvScale: [1, 1], uvOffset: [0, 0], transparent: false, twoSided: false, alphaTest: false, blend: null,
     };
-    // (it is read as its type says, as Halo PC reads it, not as its group
+    // (it is read as its type says, as the game reads it, not as its group
     // does: a protected map may rename the group. Halo PC's types: the
     // Xbox's, with the extended chicago shader's after the chicago one's;
     // the port makes them the Xbox's when it loads them, tag_schema_render.c)
-    const types = { 3: "senv", 4: "soso", 5: "sotr", 6: "schi", 7: "scex", 8: "swat", 9: "sgla", 10: "smet",
-      11: "spla" };
+    const types = xbox ? SHADER_TYPES_XBOX : SHADER_TYPES_PC;
     const sizes = { senv: 0x344, soso: 0x1b8, sotr: 0x6c, schi: 0x6c, scex: 0x78, sgla: 0x1e0, smet: 0x104,
       swat: 0x140, spla: 0x14c };
     if (!tags.has(tag.base, 0x28) || tag.indexed) return info;
@@ -688,11 +854,12 @@ export async function readHaloMap({ map, bitmaps = null, onProgress = null }) {
   /* ---------- models */
 
   // the model data block (the tags' header: its file offset, its vertices'
-  // size, its size): every gbxmodel part's vertices, then their triangles
-  const modelDataOffset = tags.u32(TAG_BASE + 20), vertexDataSize = tags.u32(TAG_BASE + 28);
-  const modelDataSize = tags.u32(TAG_BASE + 32);
-  const modelDataGood = vertexDataSize <= modelDataSize && modelDataOffset >= HEADER_SIZE &&
-    modelDataOffset + modelDataSize <= fileLength;
+  // size, its size): every gbxmodel part's vertices, then their triangles.
+  // An Xbox map has none: its parts' vertices and triangles are in its tags
+  const modelDataOffset = xbox ? 0 : tags.u32(tagBase + 20), vertexDataSize = xbox ? 0 : tags.u32(tagBase + 28);
+  const modelDataSize = xbox ? 0 : tags.u32(tagBase + 32);
+  const modelDataGood = xbox || (vertexDataSize <= modelDataSize && modelDataOffset >= HEADER_SIZE &&
+    modelDataOffset + modelDataSize <= fileLength);
 
   // a model by its tag and the variant its object is placed with, read once
   const models = new Map();
@@ -732,10 +899,13 @@ export async function readHaloMap({ map, bitmaps = null, onProgress = null }) {
       const entry = { name: tags.string(region), permutation: tags.string(permutation), meshes: [] };
       regions.push(entry);
       if (geometry < 0) continue;
-      const parts = tags.block(geometries.address + geometry * MODEL_GEOMETRY_SIZE + GEOMETRY_PARTS, PART_SIZE, 32,
+      const partSize = xbox ? XBOX_PART_SIZE : PART_SIZE;
+      const parts = tags.block(geometries.address + geometry * MODEL_GEOMETRY_SIZE + GEOMETRY_PARTS, partSize, 32,
         `${tag.name}'s parts`);
       for (let p = 0; p < parts.count; p++) {
-        const mesh = await readPart(tag, parts.address + p * PART_SIZE, shaderBlock, nodes.length, mapScale);
+        const part = parts.address + p * partSize;
+        const mesh = xbox ? await readXboxPart(tag, part, shaderBlock, nodes.length, mapScale) :
+          await readPart(tag, part, shaderBlock, nodes.length, mapScale);
         if (!mesh) continue;
         mesh.region = entry.name;
         mesh.permutation = entry.permutation;
@@ -821,6 +991,58 @@ export async function readHaloMap({ map, bitmaps = null, onProgress = null }) {
       nodeWeights[v * 2] = weight; nodeWeights[v * 2 + 1] = 1 - weight;
     }
     const indices = stripIndices(strip, indexCount, stripType !== 0, vertexCount);
+    return {
+      shader: shader?.shader ?? null, shaderGroup: shader?.shaderGroup ?? null, baseMap: shader?.baseMap ?? null,
+      positions, normals, uvs, indices, nodeIndices, nodeWeights,
+      transparent: shader?.transparent ?? false, twoSided: shader?.twoSided ?? false,
+      alphaTest: shader?.alphaTest ?? false, blend: shader?.blend ?? null,
+    };
+  }
+
+  // an Xbox model's part: its compressed vertices, where its vertex buffer
+  // says, and its triangle strip, both in the tags
+  async function readXboxPart(tag, part, shaderBlock, nodeCount, mapScale) {
+    const shaderIndex = tags.i16(part + PART_SHADER_INDEX);
+    const stripType = tags.i16(part + PART_TRIANGLES);
+    const stripCount = tags.u32(part + PART_TRIANGLES + 4), strip = tags.u32(part + PART_TRIANGLES + 8);
+    const vertexType = tags.i16(part + PART_VERTICES);
+    const vertexCount = tags.u32(part + PART_VERTICES + 4), buffer = tags.u32(part + PART_VERTICES + 16);
+    if (!vertexCount || !stripCount) return null;
+    if (vertexType !== VERTEX_TYPE_MODEL_COMPRESSED) fail(`${tag.name}'s part's vertices are of type ${vertexType}`);
+    if (vertexCount > 0xffff || stripCount > 0x30000) fail(`${tag.name}'s part has ${vertexCount} vertices`);
+    const indexCount = stripType === 0 ? stripCount * 3 : stripCount + 2;
+    tags.at(buffer, D3D_BUFFER_SIZE);
+    const start = tags.at(tags.u32(buffer + 4), vertexCount * XBOX_MODEL_VERTEX_SIZE);
+    const stripStart = tags.at(strip, indexCount * 2);
+    const shaderTag = shaderIndex >= 0 && shaderIndex < shaderBlock.count ?
+      reference(tags, shaderBlock.address + shaderIndex * MODEL_SHADER_SIZE, null) : null;
+    const shader = await shaderInfo(shaderTag);
+    const view = tags.view;
+    const f32 = (at) => { const value = view.getFloat32(at, true); return Number.isFinite(value) ? value : 0; };
+    const [uScale, vScale] = shader?.uvScale ?? [1, 1];
+    const [uOffset, vOffset] = shader?.uvOffset ?? [0, 0];
+    const positions = new Float32Array(vertexCount * 3), normals = new Float32Array(vertexCount * 3);
+    const uvs = new Float32Array(vertexCount * 2);
+    const nodeIndices = new Uint16Array(vertexCount * 2), nodeWeights = new Float32Array(vertexCount * 2);
+    // (a node index is the node's times three; one that is not a node is -1)
+    const node = (value) => (value % 3 === 0 && value / 3 < nodeCount ? value / 3 : -1);
+    for (let v = 0; v < vertexCount; v++) {
+      const at = start + v * XBOX_MODEL_VERTEX_SIZE;
+      for (let k = 0; k < 3; k++) positions[v * 3 + k] = f32(at + k * 4);
+      unpackVector(view.getUint32(at + 12, true), normals, v * 3);
+      // (texture coordinates: fractions of the base map scale, as Halo PC's
+      // are, ce_models.c)
+      uvs[v * 2] = (view.getInt16(at + 0x18, true) / 32767) * mapScale[0] * uScale + uOffset;
+      uvs[v * 2 + 1] = (view.getInt16(at + 0x1a, true) / 32767) * mapScale[1] * vScale + vOffset;
+      let first = node(view.getUint8(at + 0x1c)), second = node(view.getUint8(at + 0x1d));
+      let weight = Math.min(1, Math.max(0, view.getInt16(at + 0x1e, true) / 32767));
+      if (first < 0) first = second < 0 ? 0 : second;
+      if (second < 0) { second = first; weight = 1; }
+      nodeIndices[v * 2] = first; nodeIndices[v * 2 + 1] = second;
+      nodeWeights[v * 2] = weight; nodeWeights[v * 2 + 1] = 1 - weight;
+    }
+    const indices = stripIndices(tags.bytes.subarray(stripStart, stripStart + indexCount * 2), indexCount,
+      stripType !== 0, vertexCount);
     return {
       shader: shader?.shader ?? null, shaderGroup: shader?.shaderGroup ?? null, baseMap: shader?.baseMap ?? null,
       positions, normals, uvs, indices, nodeIndices, nodeWeights,
@@ -1020,8 +1242,9 @@ export async function readHaloMap({ map, bitmaps = null, onProgress = null }) {
 
   async function readBsp(space, bspName) {
     const base = space.base;
-    // (its header: its structure's address, no Xbox vertex buffers, 'sbsp')
-    if (space.u32(base + 20) !== BSP_HEADER_SIGNATURE) fail(`${bspName}'s header is not a Custom Edition one`);
+    // (its header: its structure's address, its vertex buffers (a Custom
+    // Edition map's none), 'sbsp')
+    if (space.u32(base + 20) !== BSP_HEADER_SIGNATURE) fail(`${bspName}'s header is damaged`);
     const structure = space.u32(base);
     space.at(structure, 0x288);
     const lightmapGroup = reference(space, structure + BSP_LIGHTMAP_GROUP, ["bitm"]);
@@ -1044,7 +1267,9 @@ export async function readHaloMap({ map, bitmaps = null, onProgress = null }) {
         const lightmapVertexCount = space.u32(material + MATERIAL_LIGHTMAP_VERTICES + 4);
         const firstSurface = space.u32(material + MATERIAL_FIRST_SURFACE);
         const surfaceCount = space.u32(material + MATERIAL_SURFACE_COUNT);
-        if (!vertexCount || !surfaceCount || vertexType !== VERTEX_TYPE_ENVIRONMENT_UNCOMPRESSED) continue;
+        // (a Halo PC map's vertices are uncompressed, an Xbox map's compressed)
+        const vertexTypeWanted = xbox ? VERTEX_TYPE_ENVIRONMENT_COMPRESSED : VERTEX_TYPE_ENVIRONMENT_UNCOMPRESSED;
+        if (!vertexCount || !surfaceCount || vertexType !== vertexTypeWanted) continue;
         if (lightmapVertexCount && lightmapVertexCount !== vertexCount)
           fail(`${bspName}'s material has ${vertexCount} vertices and ${lightmapVertexCount} lightmap vertices`);
         if (firstSurface > surfaces.count || surfaceCount > surfaces.count - firstSurface)
@@ -1053,10 +1278,14 @@ export async function readHaloMap({ map, bitmaps = null, onProgress = null }) {
         triangleTotal += surfaceCount;
         if (vertexTotal > MAX_BSP_VERTICES || triangleTotal > MAX_BSP_TRIANGLES)
           fail(`${bspName} has more vertices or triangles than Halo can draw`);
-        // (its vertices, then its lightmap vertices, in its uncompressed data)
-        const dataSize = space.u32(material + MATERIAL_UNCOMPRESSED_DATA);
-        const data = space.u32(material + MATERIAL_UNCOMPRESSED_DATA + 12);
-        const needed = vertexCount * ENVIRONMENT_VERTEX_SIZE + lightmapVertexCount * LIGHTMAP_VERTEX_SIZE;
+        // (its vertices, then its lightmap vertices, in its uncompressed data;
+        // an Xbox map's in its compressed data)
+        const vertexSize = xbox ? ENVIRONMENT_COMPRESSED_VERTEX_SIZE : ENVIRONMENT_VERTEX_SIZE;
+        const lightmapVertexSize = xbox ? LIGHTMAP_COMPRESSED_VERTEX_SIZE : LIGHTMAP_VERTEX_SIZE;
+        const dataField = xbox ? MATERIAL_COMPRESSED_DATA : MATERIAL_UNCOMPRESSED_DATA;
+        const dataSize = space.u32(material + dataField);
+        const data = space.u32(material + dataField + 12);
+        const needed = vertexCount * vertexSize + lightmapVertexCount * lightmapVertexSize;
         if (dataSize < needed) fail(`${bspName}'s material's vertices are fewer than its counts`);
         const start = space.at(data, needed);
         const view = space.view;
@@ -1068,25 +1297,34 @@ export async function readHaloMap({ map, bitmaps = null, onProgress = null }) {
         const positions = new Float32Array(vertexCount * 3);
         const normals = new Float32Array(vertexCount * 3);
         const uvs = new Float32Array(vertexCount * 2);
+        // (the texture coordinates: after the position and three vectors,
+        // floats in both)
+        const uvField = xbox ? 0x18 : 0x30;
         for (let v = 0; v < vertexCount; v++) {
-          const p = start + v * ENVIRONMENT_VERTEX_SIZE;
-          for (let k = 0; k < 3; k++) {
-            positions[v * 3 + k] = finite(view.getFloat32(p + k * 4, true));
-            normals[v * 3 + k] = finite(view.getFloat32(p + 12 + k * 4, true));
-          }
+          const p = start + v * vertexSize;
+          for (let k = 0; k < 3; k++) positions[v * 3 + k] = finite(view.getFloat32(p + k * 4, true));
+          if (xbox) unpackVector(view.getUint32(p + 12, true), normals, v * 3);
+          else for (let k = 0; k < 3; k++) normals[v * 3 + k] = finite(view.getFloat32(p + 12 + k * 4, true));
           // (Halo's v runs down its bitmaps, as the rows are stored: three.js
           // textures uploaded with flipY false read them the same way)
-          uvs[v * 2] = finite(view.getFloat32(p + 48, true)) * uScale + uOffset;
-          uvs[v * 2 + 1] = finite(view.getFloat32(p + 52, true)) * vScale + vOffset;
+          uvs[v * 2] = finite(view.getFloat32(p + uvField, true)) * uScale + uOffset;
+          uvs[v * 2 + 1] = finite(view.getFloat32(p + uvField + 4, true)) * vScale + vOffset;
         }
         let lightmapUvs = null;
         if (lightmapVertexCount) {
           lightmapUvs = new Float32Array(vertexCount * 2);
-          const lightmapStart = start + vertexCount * ENVIRONMENT_VERTEX_SIZE;
+          const lightmapStart = start + vertexCount * vertexSize;
           for (let v = 0; v < vertexCount; v++) {
-            const p = lightmapStart + v * LIGHTMAP_VERTEX_SIZE;
-            lightmapUvs[v * 2] = finite(view.getFloat32(p + 12, true));
-            lightmapUvs[v * 2 + 1] = finite(view.getFloat32(p + 16, true));
+            const p = lightmapStart + v * lightmapVertexSize;
+            if (xbox) {
+              // (16-bit fractions, rasterizer_geometry.c's
+              // environment_lightmap_vertex_compressed_get_texcoord)
+              lightmapUvs[v * 2] = (view.getInt16(p + 4, true) * 2 + 1) / 65535;
+              lightmapUvs[v * 2 + 1] = (view.getInt16(p + 6, true) * 2 + 1) / 65535;
+            } else {
+              lightmapUvs[v * 2] = finite(view.getFloat32(p + 12, true));
+              lightmapUvs[v * 2 + 1] = finite(view.getFloat32(p + 16, true));
+            }
           }
         }
         // (its triangles, of its own vertices: Halo winds them clockwise
@@ -1132,6 +1370,15 @@ function setRotation(frames, out, x, y, z, w) {
   const length = Math.hypot(x, y, z, w) || 1;
   frames[out] = -x / length; frames[out + 1] = -y / length; frames[out + 2] = -z / length;
   frames[out + 3] = w / length;
+}
+
+// an Xbox vertex's unit vector, packed 11:11:10 (signed, i lowest), put at
+// out: rasterizer_geometry.c's uncompress_int32_to_real_vector3d
+function unpackVector(packed, out, at) {
+  const i = (packed << 21) >> 21, j = (packed << 10) >> 21, k = packed >> 22;
+  out[at] = (i * 2 + 1) / 2047;
+  out[at + 1] = (j * 2 + 1) / 2047;
+  out[at + 2] = (k * 2 + 1) / 1023;
 }
 
 // (a matrix of a translation, a rotation (x, y, z, w) and a scale)

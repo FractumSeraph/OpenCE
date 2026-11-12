@@ -88,6 +88,15 @@ button.on{background:rgba(127,211,164,.35);border-color:var(--accent)}
 the corner above the empty panel and buttons) */
 @media (max-width:820px){#drop.list{position:fixed;z-index:20;background:var(--bg);padding:16px 12px}}
 #games{display:flex;flex-direction:column;gap:10px;width:min(64rem,100%);text-align:left}
+/* (a player's own recordings, kept in this browser by the game: ?mine) */
+#mine{width:min(64rem,100%);text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:8px;
+  padding:10px 12px;margin-bottom:10px;box-sizing:border-box}
+#mine h2{font-size:15px;margin:0 0 6px}
+#mine ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;max-height:16rem;overflow-y:auto}
+#mine li{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+#mine a{color:var(--accent)}
+#mine .meta{color:var(--muted);font-size:12px}
+#mine button{font-size:12px;padding:2px 8px}
 #games a{color:var(--accent)}
 #games .button{color:var(--bg)}
 /* (the choice of games: pinned while the list scrolls under it) */
@@ -191,7 +200,8 @@ smaller) */
     <h1>Halo Replay Viewer</h1>
     <p>Watch a game a server recorded, live or again: through any player's eyes, behind them, or from
       anywhere. Pick a game below (a server's tab, a player's name, a map...), or open a recording (<code>recordings\*.hrec</code>: an admin's
-      shows the hits the fair play checks refused or doubted). A file you open stays on this computer.</p>
+      shows the hits the fair play checks refused or doubted; yours, with RECORD MY GAMES on, the games you played). A file you open stays on this computer.</p>
+    <div id="mine" style="display:none"></div>
     <div id="games" style="display:none"></div>
     <label class="button">Open a recording<input id="file" type="file" accept=".hrec" hidden></label>
     <p style="font-size:12px">or drop it here</p>
@@ -312,6 +322,9 @@ function newRecording() {
     objects: new Map(), poses: [], events: [], scores: [], chats: [], map: null,
     // (the map's netgame flags, and King of the Hill's hill as it stood)
     marks: [], hills: [],
+    // (a player's own recording: the recording machine's players, and
+    // whether it was a client, whose far players are less exact)
+    locals: [], recordedByClient: false,
   };
 }
 
@@ -449,6 +462,13 @@ function addChunks(r, chunks) {
             marks.push({ kind: u8(), number: u16(), x: f32(), y: f32(), z: f32(), facing: f32() });
           }
           r.marks = marks;
+          break;
+        }
+        case 19: {
+          u32();
+          const slot = u8();
+          if (q < end && u8() === 1) r.recordedByClient = true;
+          if (!r.locals.includes(slot)) r.locals.push(slot);
           break;
         }
         case 18: {
@@ -1650,15 +1670,23 @@ function killText(k) {
 
 /* ---------- the map as the game draws it (halomap.js): its level's
 geometry with its textures and baked lighting, read from the map file the
-site keeps (a Custom Edition map, and Halo PC's bitmaps.map for the stock
-textures), a part at a time by range requests; the walls stay for the
-minimap, and show again while it loads or if it cannot be had */
+site keeps: a Custom Edition map (and Halo PC's bitmaps.map for the stock
+textures) a part at a time by range requests, or an Xbox map, which is
+compressed, fetched whole and inflated; the walls stay for the minimap, and
+show again while it loads or if it cannot be had */
 
 const MAP_SOURCES = [
   name => new URL(`../custom_maps/${encodeURIComponent(name)}.map`, document.baseURI).href,
   name => `https://halomaps.fractumseraph.net/maps/${encodeURIComponent(name)}.map`,
 ];
+// (an Xbox map: the site's own maps, then a Custom Edition copy of it)
+const XBOX_MAP_SOURCES = [
+  name => new URL(`../maps/${encodeURIComponent(name)}.map`, document.baseURI).href,
+];
 const BITMAPS_URL = new URL("../custom_maps/bitmaps.map", document.baseURI).href;
+// (the largest Xbox map fetched to draw: its multiplayer maps are about
+// 22 MB, its campaign's 77 to 187 MB, which inflate to twice that)
+const XBOX_MAP_LARGEST = 64 << 20;
 const PAGE = 1 << 20;
 let realMap = null, realMapOn = true, realMapLoading = 0;
 
@@ -1708,15 +1736,61 @@ function rangeReader(url) {
   };
 }
 
-// (the first of the map's addresses that answers)
-async function findMap(name) {
-  for (const address of MAP_SOURCES.map(source => source(name))) {
+// (the first of the map's addresses that answers, and whether it is an
+// Xbox map (its header's version, 5 at 4): for an Xbox map, family 0, the
+// site's own first, then the Custom Edition ones; the Xbox ones last for a
+// recording that does not say. Only the first bytes are read, of a server
+// that sends the whole file too)
+async function findMap(name, family) {
+  const sources = family === 0 ? XBOX_MAP_SOURCES.concat(MAP_SOURCES) :
+    family === 1 ? MAP_SOURCES : MAP_SOURCES.concat(XBOX_MAP_SOURCES);
+  for (const address of sources.map(source => source(name))) {
     try {
-      const answer = await fetch(address, { headers: { Range: "bytes=0-3" } });
-      if (answer.ok) return address;
+      const answer = await fetch(address, { headers: { Range: "bytes=0-7" } });
+      if (!answer.ok) continue;
+      let head = new Uint8Array(0);
+      if (answer.body) {
+        const reader = answer.body.getReader();
+        while (head.length < 8) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const joined = new Uint8Array(head.length + value.length);
+          joined.set(head);
+          joined.set(value, head.length);
+          head = joined;
+        }
+        reader.cancel().catch(() => {});
+      }
+      const xbox = head.length >= 8 && head[4] === 5 && head[5] === 0 && head[6] === 0 && head[7] === 0;
+      return { address, xbox };
     } catch (error) { /* (the next) */ }
   }
   return null;
+}
+
+// (a whole file in one request, onProgress told the share of it come, as
+// its length says; more than largest bytes is refused)
+async function fetchWhole(url, largest, onProgress) {
+  const answer = await fetch(url);
+  if (!answer.ok) throw new Error(`${url}: ${answer.status}`);
+  const total = Number(answer.headers.get("Content-Length")) || 0;
+  const tooLarge = size => new Error(`its file is ${Math.round(size / 1048576)} MB, more than the ${largest >> 20} MB fetched here`);
+  if (total > largest) { answer.body?.cancel().catch(() => {}); throw tooLarge(total); }
+  if (!answer.body) return new Uint8Array(await answer.arrayBuffer());
+  const reader = answer.body.getReader(), parts = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.length;
+    if (size > largest) { reader.cancel().catch(() => {}); throw tooLarge(size); }
+    parts.push(value);
+    if (total) onProgress(Math.min(1, size / total));
+  }
+  const whole = new Uint8Array(size);
+  let at = 0;
+  for (const part of parts) { whole.set(part, at); at += part.length; }
+  return whole;
 }
 
 let mapStatusText = "";
@@ -1755,19 +1829,30 @@ async function loadRealMapAs(loading) {
   document.getElementById("realmap").style.display = "none";
   const name = rec.map ? rec.map.file : mapName(rec.game.map);
   if (!name || (rec.map && rec.map.family !== 1 && rec.map.family !== 0)) return;
-  const address = await findMap(name);
+  const found = await findMap(name, rec.map ? rec.map.family : null);
   if (loading !== realMapLoading) return;
-  if (!address) { mapStatus("The map's file is not on this site: its walls only."); return; }
-  mapStatus("Reading the map...");
-  loadingScreenShow({ title: `Loading ${name}`, status: "Reading the map...", progress: 0, ceiling: 0.9 });
+  if (!found) { mapStatus("The map's file is not on this site: its walls only."); return; }
+  mapStatus(found.xbox ? "Fetching the map..." : "Reading the map...");
+  loadingScreenShow({ title: `Loading ${name}`, status: found.xbox ? "Fetching the map..." : "Reading the map...",
+    progress: 0, ceiling: 0.9 });
   try {
-    const data = await readHaloMap({ map: rangeReader(address), bitmaps: rangeReader(BITMAPS_URL),
+    // (an Xbox map is fetched whole, its fetching the first part of the
+    // light's way, its inflating and reading the rest)
+    const fetchedShare = found.xbox ? 0.6 : 0;
+    const map = found.xbox ? await fetchWhole(found.address, XBOX_MAP_LARGEST, fraction => {
+      if (loading !== realMapLoading) return;
+      mapStatus(`Fetching the map (${Math.round(fraction * 100)}%)`);
+      loadingScreenShow({ status: "Fetching the map", progress: fraction * fetchedShare * 0.9 });
+    }) : rangeReader(found.address);
+    if (loading !== realMapLoading) return;
+    const data = await readHaloMap({ map, bitmaps: found.xbox ? null : rangeReader(BITMAPS_URL),
       onProgress: (fraction, text) => {
         if (loading !== realMapLoading) return;
         mapStatus(`${text || "Reading the map"} (${Math.round((fraction || 0) * 100)}%)`);
         // (the light goes across once: the reading's share, as far as it
         // goes, the light creeping on to most of the way between its jumps)
-        loadingScreenShow({ status: text || "Reading the map", progress: (fraction || 0) * 0.9 });
+        loadingScreenShow({ status: text || "Reading the map",
+          progress: (fetchedShare + (1 - fetchedShare) * (fraction || 0)) * 0.9 });
       } });
     if (loading !== realMapLoading) return;
     const group = new THREE.Group();
@@ -2586,6 +2671,10 @@ function describeGame() {
       ((rec.highlights || []).length ? ` · ${rec.highlights.length} highlights` : "")])
     gameLine(text);
   if (rec.report) gameLine("Carnage report and stats", rec.report);
+  // (a client's recording: the host sent it the players far from its own, or
+  // out of their sight, every 2nd to 6th tick, and its game moved them between)
+  if (rec.recordedByClient)
+    gameLine("Recorded by a player who joined: players far from them or out of their sight move less exactly");
   if (mapStatusText) mapStatus(mapStatusText);
   return map;
 }
@@ -2633,7 +2722,9 @@ function show(r) {
   scrub.max = String(rec.last);
   const worst = publicCopy ? null : [...rec.players.keys()].map(slot => [slot, suspicion(slot)]).sort((a, b) =>
     b[1].refused - a[1].refused || b[1].doubted - a[1].doubted)[0];
-  selected = worst ? worst[0] : rec.players.size ? [...rec.players.keys()].sort((a, b) => a - b)[0] : null;
+  // (a player's own recording: their own player first)
+  const own = rec.locals.find(slot => rec.players.has(slot));
+  selected = own != null ? own : worst ? worst[0] : rec.players.size ? [...rec.players.keys()].sort((a, b) => a - b)[0] : null;
   setCamera(selected != null ? "first" : "free");
   renderPlayers();
   renderEvents();
@@ -3067,6 +3158,73 @@ function gameCard(g, withServer) {
   return a;
 }
 
+/* ---------- a player's own recordings (network.record_my_games): the
+browser build of the game, on this site, keeps them in this browser's
+storage (OPFS's recordings folder, port/web/src/web_platform.c); listed
+above the servers' games, opened with ?mine=<name> */
+
+const MINE_NAME = /^[A-Za-z0-9_.-]{1,96}\.hrec$/;
+async function mineFolder() {
+  if (!navigator.storage || !navigator.storage.getDirectory) return null;
+  try { return await (await navigator.storage.getDirectory()).getDirectoryHandle("recordings"); }
+  catch (error) { return null; }
+}
+async function mineFile(name) {
+  const folder = MINE_NAME.test(name) ? await mineFolder() : null;
+  if (!folder) throw new Error(`${name}: not among this browser's recordings`);
+  // (the game's file being written is locked: its game is still being played)
+  try { return await (await folder.getFileHandle(name)).getFile(); }
+  catch (error) { throw new Error(`${name} cannot be read yet: its game may still be being played and recorded`); }
+}
+async function openMine(name) {
+  try { await open(await mineFile(name)); }
+  catch (error) { document.querySelector("#drop p").textContent = error.message; listMine(); }
+}
+async function listMine() {
+  const folder = await mineFolder();
+  if (!folder) return;
+  const names = [];
+  try {
+    for await (const [name, handle] of folder.entries()) if (handle.kind === "file" && MINE_NAME.test(name)) names.push(name);
+  } catch (error) { return; }
+  if (!names.length) return;
+  names.sort().reverse();
+  const box = document.getElementById("mine");
+  box.innerHTML = "<h2>Your recorded games (on this device)</h2><ul></ul>";
+  const list = box.querySelector("ul");
+  for (const name of names) {
+    // (<date>_<time>_<map>.hrec, the game's local time)
+    const m = /^(\d{4}-\d{2}-\d{2})_(\d{2})-(\d{2})-\d{2}_(.+)\.hrec$/.exec(name);
+    const item = document.createElement("li");
+    const a = document.createElement("a");
+    a.href = `${location.pathname}?mine=${encodeURIComponent(name)}`;
+    a.textContent = m ? `${m[4]} · ${m[1]} ${m[2]}:${m[3]}` : name;
+    const meta = document.createElement("span");
+    meta.className = "meta";
+    const save = document.createElement("button");
+    save.textContent = "Save";
+    save.title = "Save the recording as a file, to keep or share";
+    save.onclick = async () => {
+      try {
+        const file = await mineFile(name);
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(file);
+        link.download = name;
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(link.href), 60000);
+      } catch (error) { meta.textContent = error.message; }
+    };
+    const right = document.createElement("span");
+    right.append(meta, " ", save);
+    item.append(a, right);
+    list.append(item);
+    folder.getFileHandle(name).then(handle => handle.getFile())
+      .then(file => { meta.textContent = `${(file.size / 1048576).toFixed(1)} MB`; })
+      .catch(() => { meta.textContent = "being recorded"; });
+  }
+  box.style.display = "";
+}
+
 document.getElementById("file").onchange = e => { if (e.target.files[0]) open(e.target.files[0]); };
 // (?file=<address>: a recording at a link, a public copy or one an admin keeps
 // somewhere private; ?live=<a server's public folder>: its game as it is played;
@@ -3074,14 +3232,16 @@ document.getElementById("file").onchange = e => { if (e.target.files[0]) open(e.
 {
   const query = new URLSearchParams(location.search);
   const link = query.get("file"), liveBase = query.get("live");
+  const mine = query.get("mine");
   if (liveBase) watchLive(liveBase);
+  else if (mine) openMine(mine);
   else if (link) fetch(link).then(r => {
     if (!r.ok) throw new Error(`${link}: ${r.status}`);
     return r.blob();
   }).then(async blob => { await open(new File([blob], link.split("/").pop())); linkReport(link); }).catch(error => {
     document.querySelector("#drop p").textContent = error.message;
   });
-  else listGames();
+  else { listMine(); listGames(); }
 }
 view.addEventListener("dragover", e => { e.preventDefault(); document.getElementById("drop").classList.add("hover"); });
 view.addEventListener("dragleave", () => document.getElementById("drop").classList.remove("hover"));

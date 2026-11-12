@@ -3416,6 +3416,9 @@ void network_damage_client_tick(
 	short count = 0;
 
 	distributed_send_fire_origins();
+	/* (port, this fork: a player's own recording, network.record_my_games:
+	network_recording.c) */
+	network_recording_client_tick();
 
 	damage_sent_reports += damage_report_count;
 	for (index = 0; index < damage_report_count; index++)

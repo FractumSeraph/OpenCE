@@ -74,6 +74,13 @@ are [ChupathingyCE's](#chupathingyce) and [OpenCE's](#opence) own pages.
   end to save or share; heatmaps and kill lines, everyone's or
   one player's; frame stepping; each game and player linked to their stats
   on stats.chupathingy.org.
+- **Record your own games.** With RECORD MY GAMES on (Network Setup;
+  `network.record_my_games`), the network games you play, joined or hosted,
+  are recorded on your machine as you saw them, without anyone's address,
+  to watch again in the same viewer (Open a recording; the browser build's
+  recordings are listed there). In a game you joined, players far from you
+  or out of sight move less exactly than in a host's recording, as the host
+  sends them less often.
 - **Tools against cheaters.** A host checks each hit and move for shots
   through walls, off aim, teleports and flying, and refuses or logs them
   (`network.fair_play`; `sv_suspects` on a dedicated server); records every
@@ -330,7 +337,10 @@ an Xbox disc image in the browser. Custom Edition maps come from
 `assets/custom_maps/` (listed in its `index.json`) and are kept in the
 browser once read (Cache Storage). MCC map packages the player adds (Game
 settings, [MCC maps](#in-the-browser-this-forks)) and those a host shares are
-kept in the browser's own storage (OPFS), the game's `d:\mcc_maps`. The first time a map is played, the page
+kept in the browser's own storage (OPFS), the game's `d:\mcc_maps`, as are
+the player's own recordings (`network.record_my_games`, `d:\recordings`),
+which the replay viewer lists (`assets/replay/?mine`; Game settings, Watch).
+The first time a map is played, the page
 fetches it and `bitmaps.map`, `sounds.map` and `loc.map` whole, a few large
 ranges at a time (`port/web/fetch_path_normalization.js`); joining from the
 Server Browser waits for that before connecting, the status line showing

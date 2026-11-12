@@ -416,6 +416,18 @@ void platform_web_initialize(void)
 		else if (symlink("/storage/mcc_maps", "/assets/mcc_maps") != 0 && errno != EEXIST)
 			platform_log("web: cannot link the MCC maps' folder (%s)", strerror(errno));
 	}
+	/* (port, this fork) recordings (d:\recordings, network_recording.c: a
+	player's own, network.record_my_games) kept in the persistent storage
+	too, where the replay viewer (assets/replay, the same origin) lists
+	them */
+	{
+		int made = wasmfs_create_directory("/storage/recordings", 0777, storage);
+
+		if (made != 0 && made != -EEXIST)
+			platform_log("web: cannot make the recordings' folder (%d)", made);
+		else if (symlink("/storage/recordings", "/assets/recordings") != 0 && errno != EEXIST)
+			platform_log("web: cannot link the recordings' folder (%s)", strerror(errno));
+	}
 	setenv("HALO_DATA_ROOT", "/assets", 1);
 	setenv("HALO_SAVE_ROOT", "/storage", 1);
 	/* (internet play's own machinery stays off here whatever network.online

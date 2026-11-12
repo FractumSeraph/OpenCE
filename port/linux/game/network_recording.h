@@ -3,7 +3,8 @@ NETWORK_RECORDING.H
 
 Port (this fork): the host's recordings of its games (network_recording.c,
 network.record_games), for its admins to watch again in a browser
-(port/web/assets/replay).
+(port/web/assets/replay), and a player's own of the games they play, joined
+or hosted (network.record_my_games).
 */
 
 #ifndef __NETWORK_RECORDING_H
@@ -28,6 +29,11 @@ void network_recording_new_game(void);
 /* (the host, each tick, after the fair play checks note where each player
 looks from) */
 void network_recording_host_tick(void);
+/* (a client, each tick: a player's own recording, network.record_my_games) */
+void network_recording_client_tick(void);
+/* each frame (chat_update): a recording whose network game has gone
+(its player left it, or the host's game ended for good) ends */
+void network_recording_update(void);
 /* a bullet's hit on a player the fair play checks looked at: its shooter and
 target (player indices), where it hit, the verdict, how far off the
 shooter's aim it was (degrees) and how far it went */
@@ -35,6 +41,10 @@ void network_recording_hit(short shooter_index, short victim_index, real_point3d
 	real angle, real distance);
 /* a player killed another (or themself) */
 void network_recording_kill(short killer_index, short victim_index, boolean headshot);
+/* a client's copy of a player's death (network_distributed_player_killed:
+the host's killer, NONE for no player's), for a client's own recording,
+which has no fair play checks to tell it */
+void network_recording_kill_seen(long killing_player_index, long dead_player_index);
 /* the host refused where a player's game said they were, or saw them hover
 (network_fairplay.h's NETWORK_FAIRPLAY_MOVE_*), and by how much */
 void network_recording_move(short player_index, byte kind, real amount);
@@ -51,6 +61,10 @@ void network_recording_event(long tick, short type, short player_index, short ot
 who said it (the game's player list's index, NONE for the server or the
 game) and their name, and its text */
 void network_recording_chat(byte kind, byte scope, short speaker_index, char const *name, int name_length,
+	char const *text, int length);
+/* a chat line a client heard (chat.c), for a client's own recording: as
+network_recording_chat */
+void network_recording_chat_heard(byte kind, byte scope, short speaker_index, char const *name, int name_length,
 	char const *text, int length);
 
 /* the public copy (network.record_public) being written, or the last one:

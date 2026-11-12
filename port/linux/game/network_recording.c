@@ -16,6 +16,21 @@ each kill. The oldest recordings go once the folder holds more than
 network.recordings_megabytes. A recording is about 40 megabytes an hour of
 a full game. Keep the folder private: it holds players' addresses.
 
+With network.record_my_games on, a player's own game records the network
+games it plays, as a client too (network_recording_client_tick), to the same
+folder: the game as that machine saw it (a client hears of the others as the
+host sends them: those far from its players, or out of their sight, every
+second to sixth tick, NETCODE.md's "The players each client needs", its
+game moving them between from their last input; so they are less exact
+than in a host's recording, and so are the objects that move far off),
+each kill as its copy of the game counts it (the host's
+killer, no headshot; network_recording_kill_seen) and the chat lines it
+heard, but no one's hardware id or address, no hits (only the host checks
+them) and no public copy. A host with network.record_games on writes its
+admins' recording instead, as above. In the browser the folder is the
+site's storage (OPFS's recordings, web_platform.c), which the replay viewer
+lists.
+
 The file (little-endian): "HREC", a version (2; 1 before records 10 to 16
 and 'G' blocks, 4 bytes), then blocks: a kind, the records' size and the
 block's size (4 bytes each), and the block: 'G' the records as a gzip
@@ -90,6 +105,11 @@ a type a reader does not know it skips:
               contested 4), holder (1: free for all, the player on it; 255
               none), corner count (1), the corners (3 floats each); at the
               start, when it moves or changes hands, and every 5 seconds
+ 19 local:    tick (4), player (1), client (1: 1 the machine was a client, 0
+              the host): a player of the machine that recorded the game (a
+              player's own recording's player, whom the viewer follows
+              first), once each; a client's recording has the players far
+              from its own less exactly than a host's
 
 A block goes to the file every 10 seconds, or sooner when 192 kilobytes of
 records have come: a host that stops loses no more than that.
@@ -178,6 +198,7 @@ enum
 	_record_map,
 	_record_marks,
 	_record_hill,
+	_record_local,
 };
 
 /* event_log.h's EVENT_LOG_* the public copy leaves out: a moderator's
@@ -234,6 +255,12 @@ static struct
 	FILE *file;
 	boolean started;
 	boolean failed;
+	/* a player's own recording (network.record_my_games: no addresses, no
+	public copy), and one a client makes */
+	boolean own;
+	boolean client;
+	/* the local players told (record 19), by slot: their DATUM_INDEX_NEW */
+	long locals[MAXIMUM_TRACKED_PLAYERS];
 	long started_time;
 	long flushed_time;
 	unsigned long length;
@@ -1233,8 +1260,8 @@ static void recording_score(
 static void recording_start(
 	void)
 {
-	struct network_game_server *server = global_network_game_server_get();
-	struct network_game *network_game = server ? network_game_server_get_game(server) : NULL;
+	/* (the host's game, or the one a client joined) */
+	struct network_game *network_game = network_game_get_game();
 	struct game_variant *variant = game_engine_get_variant();
 	char map[64] = "";
 	char server_name[64] = "";
@@ -1256,7 +1283,10 @@ static void recording_start(
 	recording.tag_count = 0;
 	recording.tag_index_count = 0;
 	for (character = 0; character < MAXIMUM_TRACKED_PLAYERS; character++)
+	{
 		recording.players[character] = NONE;
+		recording.locals[character] = NONE;
+	}
 	{
 		long object;
 
@@ -1329,10 +1359,10 @@ static void recording_start(
 	}
 	error(_error_silent, "recording: %s", file_name);
 	/* (the public copy, network.record_public: the same name in the public
-	folder, its game told in live.json) */
+	folder, its game told in live.json; a host's admins' recording's alone) */
 	recording.public_file = NULL;
 	recording.public_name[0] = 0;
-	if (config_boolean("network.record_public"))
+	if (!recording.own && config_boolean("network.record_public"))
 	{
 		char public_path[MAX_PATH + 16];
 		char const *name = strrchr(file_name, '\\') + 1;
@@ -1406,6 +1436,8 @@ static void recording_end(
 	recording.file = NULL;
 	recording.started = FALSE;
 	recording.failed = FALSE;
+	recording.own = FALSE;
+	recording.client = FALSE;
 	recording.length = 0;
 }
 
@@ -1422,6 +1454,15 @@ static void recording_note_player(
 	short character;
 	byte *at;
 
+	/* (a player of this machine's, once: whom the viewer follows first) */
+	if (player->local_player_index != NONE && recording.locals[player_index] != player_id &&
+		(at = recording_begin(_record_local, 4 + 1 + 1)) != NULL)
+	{
+		recording.locals[player_index] = player_id;
+		at = put_u32(at, (unsigned long)game_time_get());
+		at = put_u8(at, (unsigned long)player_index);
+		put_u8(at, recording.client ? 1 : 0);
+	}
 	if (recording.players[player_index] == player_id && recording.player_teams[player_index] == player->team_index)
 		return;
 	recording.players[player_index] = player_id;
@@ -1432,7 +1473,8 @@ static void recording_note_player(
 		name[character] = player_name_character_ascii(player->name[character]);
 	}
 	name[character] = 0;
-	machine_index = distributed_player_machine(player_index);
+	/* (the host's admins' recording alone: a player's own keeps no one's) */
+	machine_index = recording.own ? NONE : distributed_player_machine(player_index);
 	if (machine_index != NONE)
 	{
 		char const *id = network_game_server_machine_hardware_id(machine_index);
@@ -1460,8 +1502,12 @@ void network_recording_new_game(
 	recording_end();
 }
 
-void network_recording_host_tick(
-	void)
+/* each tick of a network game, the host's (host TRUE) or a client's: the
+recording started if it is wanted (a host's admins' recording,
+network.record_games, before a player's own, network.record_my_games), and
+the tick written */
+static void recording_tick(
+	boolean host)
 {
 	struct
 	{
@@ -1473,14 +1519,26 @@ void network_recording_host_tick(
 	short index;
 	byte *at;
 
-	if (recording.failed || !config_boolean("network.record_games"))
+	if (recording.failed)
 		return;
 	if (!recording.started)
 	{
+		boolean admins = host && config_boolean("network.record_games");
+
+		if (!admins && !config_boolean("network.record_my_games"))
+			return;
 		if (!game_in_progress() || !global_collision_bsp_get())
 			return;
+		recording.own = !admins;
+		recording.client = !host;
 		recording_start();
 	}
+	/* (its setting turned off: the recording waits, as it was, for the next
+	game; a host's turns to a client's never within one) */
+	else if (recording.own ? !config_boolean("network.record_my_games") : !config_boolean("network.record_games"))
+		return;
+	if (recording.client == host)
+		return;
 	if (!recording.file)
 		return;
 	recording.last_tick = game_time_get();
@@ -1588,6 +1646,29 @@ void network_recording_host_tick(
 	public_write_due(FALSE);
 }
 
+void network_recording_host_tick(
+	void)
+{
+	recording_tick(TRUE);
+}
+
+void network_recording_client_tick(
+	void)
+{
+	recording_tick(FALSE);
+}
+
+void network_recording_update(
+	void)
+{
+	/* (no network game any more: the player left it, or it ended) */
+	if (recording.started && !global_network_game_server_get() && !global_network_game_client_get())
+	{
+		error(_error_silent, "recording: its network game has gone; it ends");
+		recording_end();
+	}
+}
+
 int network_recording_public_name(
 	char *name,
 	int size)
@@ -1672,6 +1753,21 @@ void network_recording_kill(
 	put_u8(at, headshot ? 1 : 0);
 }
 
+void network_recording_kill_seen(
+	long killing_player_index,
+	long dead_player_index)
+{
+	short dead;
+
+	/* (a host's recording has its kills from the fair play checks) */
+	if (!recording.file || !recording.client || dead_player_index == NONE)
+		return;
+	dead = (short)DATUM_INDEX_TO_ABSOLUTE_INDEX(dead_player_index);
+	/* (no player's kill: the player's own death, as the viewer shows one) */
+	network_recording_kill(killing_player_index != NONE ? (short)DATUM_INDEX_TO_ABSOLUTE_INDEX(killing_player_index) :
+		dead, dead, FALSE);
+}
+
 void network_recording_event(
 	long tick,
 	short type,
@@ -1745,4 +1841,18 @@ void network_recording_chat(
 	at = put_u8(at, speaker_index >= 0 && speaker_index < 255 ? (unsigned long)speaker_index : 255);
 	at = put_text(at, speaker);
 	put_text(at, line);
+}
+
+void network_recording_chat_heard(
+	byte kind,
+	byte scope,
+	short speaker_index,
+	char const *name,
+	int name_length,
+	char const *text,
+	int length)
+{
+	/* (a host's recording has the lines it sent on, route's) */
+	if (recording.client)
+		network_recording_chat(kind, scope, speaker_index, name, name_length, text, length);
 }

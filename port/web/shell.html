@@ -219,7 +219,9 @@
     .game-settings-select { justify-content: space-between; margin-top: .55rem; }
     .game-settings-panel #resolution-note,
     .game-settings-panel #map-cache-note,
-    .game-settings-panel #mcc-maps-note { margin-left: 0; }
+    .game-settings-panel #mcc-maps-note,
+    .game-settings-panel #recordings-note { margin-left: 0; }
+    a.map-cache-clear { display: inline-flex; align-items: center; text-decoration: none; }
     .game-settings-select select,
     .map-cache-clear {
       min-height: 1.8rem;
@@ -1645,6 +1647,11 @@
               </div>
               <input id="mcc-maps-folder" type="file" webkitdirectory multiple hidden aria-label="Choose an MCC map package's folder">
               <p id="mcc-maps-note">Add a Halo 1 MCC map package: its folder (a Steam Workshop item's, or one with its .map files). Reload the page to play maps added.</p>
+              <div class="game-settings-option game-settings-select">
+                <span id="recordings-count">Your recorded games</span>
+                <a id="recordings-watch" class="map-cache-clear" href="assets/replay/?mine" target="_blank" rel="noopener">Watch</a>
+              </div>
+              <p id="recordings-note">With RECORD MY GAMES on (the game's Settings, Network Setup), the online games you play are recorded on this device, to watch again in the replay viewer.</p>
             </div>
           </details>
         </div>
@@ -3081,6 +3088,27 @@
         showSize();
       });
     }
+    // A player's own recordings (network.record_my_games): the game writes
+    // d:\recordings into this browser's storage (port/web/src/web_platform.c),
+    // where the replay viewer (assets/replay, ?mine) lists them; counted here
+    // when the settings open.
+    {
+      const countText = document.getElementById("recordings-count");
+      const settingsMenu = document.getElementById("game-settings-menu");
+      const showCount = async () => {
+        let count = 0;
+        try {
+          const root = await navigator.storage.getDirectory();
+          const folder = await root.getDirectoryHandle("recordings");
+          for await (const [name, handle] of folder.entries()) {
+            if (handle.kind === "file" && name.endsWith(".hrec")) count++;
+          }
+        } catch (_error) { /* none yet, or storage blocked */ }
+        countText.textContent = count === 1 ? "1 recorded game on this device" :
+          count ? `${count} recorded games on this device` : "No recorded games on this device yet";
+      };
+      if (settingsMenu) settingsMenu.addEventListener("toggle", () => { if (settingsMenu.open) showCount(); });
+    }
     // MCC maps (Halo 1 MCC packages): added from a folder the player chooses
     // into this browser's storage, where the game reads d:\mcc_maps
     // (port/web/src/web_platform.c), with OpenCE's importer
@@ -3390,9 +3418,10 @@
 
     /* (the automated tests: ?halo-env=NAME=value,... sets the game's
        settings that have an environment variable, from a short list: voice
-       chat's test tone, and its mode; port/linux/src/port_config.c) */
+       chat's test tone, and its mode, and a player's own recordings
+       (network.record_my_games); port/linux/src/port_config.c) */
     function setTestEnvironment() {
-      const allowed = new Set(["HALO_VOICE_TEST", "HALO_VOICE_CHAT"]);
+      const allowed = new Set(["HALO_VOICE_TEST", "HALO_VOICE_CHAT", "HALO_NET_RECORD_MY_GAMES"]);
       const wanted = new URLSearchParams(location.search).get("halo-env") || "";
       for (const pair of wanted.split(",")) {
         const at = pair.indexOf("=");

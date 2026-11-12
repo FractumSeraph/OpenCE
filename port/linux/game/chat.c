@@ -497,6 +497,11 @@ static void line_heard(struct delta_wire_chat_line const *line)
 	short machine = line->speaker_machine == DELTA_WIRE_NO_MACHINE ? NONE : line->speaker_machine;
 	int blocked;
 
+	/* port (this fork): a client's own recording, as it was said
+	(network_recording.c) */
+	network_recording_chat_heard(line->kind, line->scope,
+		line->speaker_player == 255 ? NONE : (short)line->speaker_player, line->name, line->name_length, line->text,
+		line->length);
 	if (server)
 	{
 		if (!config_boolean("display.server_messages"))
@@ -1769,6 +1774,13 @@ static void test_step(void)
 void chat_update(void)
 {
 	int role = chat_role();
+
+#ifdef CHAT_HOST
+	/* port (this fork): a recording whose network game has gone ends
+	(network_recording.c; here as every frame of the desktop and browser
+	builds comes) */
+	network_recording_update();
+#endif
 
 	if (!chat.ready)
 	{
