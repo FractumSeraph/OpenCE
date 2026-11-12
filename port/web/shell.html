@@ -1651,7 +1651,11 @@
                 <span id="recordings-count">Your recorded games</span>
                 <a id="recordings-watch" class="map-cache-clear" href="assets/replay/?mine" target="_blank" rel="noopener">Watch</a>
               </div>
-              <p id="recordings-note">With RECORD MY GAMES on (the game's Settings, Network Setup), the online games you play are recorded on this device, to watch again in the replay viewer.</p>
+              <div id="recordings-download-row" class="game-settings-option game-settings-select" hidden>
+                <select id="recordings-pick" aria-label="A recorded game"></select>
+                <button id="recordings-download" type="button" class="map-cache-clear">Download</button>
+              </div>
+              <p id="recordings-note">With RECORD MY GAMES on (the game's Settings, Network Setup), the online games you play are recorded in this browser, on this device only (never on the server): watch them in the replay viewer, or download them as .hrec files.</p>
             </div>
           </details>
         </div>
@@ -3091,22 +3095,48 @@
     // A player's own recordings (network.record_my_games): the game writes
     // d:\recordings into this browser's storage (port/web/src/web_platform.c),
     // where the replay viewer (assets/replay, ?mine) lists them; counted here
-    // when the settings open.
+    // when the settings open, and each one downloaded as a file. They never
+    // leave the device otherwise: nothing sends them to the server.
     {
       const countText = document.getElementById("recordings-count");
       const settingsMenu = document.getElementById("game-settings-menu");
+      const downloadRow = document.getElementById("recordings-download-row");
+      const pick = document.getElementById("recordings-pick");
+      const download = document.getElementById("recordings-download");
+      const folder = async () => (await navigator.storage.getDirectory()).getDirectoryHandle("recordings");
       const showCount = async () => {
-        let count = 0;
+        const names = [];
         try {
-          const root = await navigator.storage.getDirectory();
-          const folder = await root.getDirectoryHandle("recordings");
-          for await (const [name, handle] of folder.entries()) {
-            if (handle.kind === "file" && name.endsWith(".hrec")) count++;
+          for await (const [name, handle] of (await folder()).entries()) {
+            if (handle.kind === "file" && /^[A-Za-z0-9_.-]{1,96}\.hrec$/.test(name)) names.push(name);
           }
         } catch (_error) { /* none yet, or storage blocked */ }
-        countText.textContent = count === 1 ? "1 recorded game on this device" :
-          count ? `${count} recorded games on this device` : "No recorded games on this device yet";
+        names.sort().reverse();
+        countText.textContent = names.length === 1 ? "1 recorded game on this device" :
+          names.length ? `${names.length} recorded games on this device` : "No recorded games on this device yet";
+        const chosen = pick.value;
+        pick.replaceChildren(...names.map(name => {
+          // (<date>_<time>_<map>.hrec, the game's local time)
+          const m = /^(\d{4}-\d\d-\d\d)_(\d\d)-(\d\d)-\d\d_(.+)\.hrec$/.exec(name);
+          return new Option(m ? `${m[4]}, ${m[1]} ${m[2]}:${m[3]}` : name, name, false, name === chosen);
+        }));
+        downloadRow.hidden = !names.length;
       };
+      download.addEventListener("click", async () => {
+        const name = pick.value;
+        if (!name) return;
+        try {
+          // (a game still being recorded is locked: it can be had once it ends)
+          const file = await (await (await folder()).getFileHandle(name)).getFile();
+          const link = document.createElement("a");
+          link.href = URL.createObjectURL(file);
+          link.download = name;
+          link.click();
+          setTimeout(() => URL.revokeObjectURL(link.href), 60000);
+        } catch (_error) {
+          countText.textContent = "That game is still being recorded: download it once it has ended";
+        }
+      });
       if (settingsMenu) settingsMenu.addEventListener("toggle", () => { if (settingsMenu.open) showCount(); });
     }
     // MCC maps (Halo 1 MCC packages): added from a folder the player chooses

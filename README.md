@@ -77,10 +77,11 @@ are [ChupathingyCE's](#chupathingyce) and [OpenCE's](#opence) own pages.
 - **Record your own games.** With RECORD MY GAMES on (Network Setup;
   `network.record_my_games`), the network games you play, joined or hosted,
   are recorded on your machine as you saw them, without anyone's address,
-  to watch again in the same viewer (Open a recording; the browser build's
-  recordings are listed there). In a game you joined, players far from you
-  or out of sight move less exactly than in a host's recording, as the host
-  sends them less often.
+  to watch again in the same viewer (Open a recording). The browser build
+  keeps them in the browser on your device, never on the server: the viewer
+  lists them, and they download as `.hrec` files. In a game you joined,
+  players far from you or out of sight move less exactly than in a host's
+  recording, as the host sends them less often.
 - **Tools against cheaters.** A host checks each hit and move for shots
   through walls, off aim, teleports and flying, and refuses or logs them
   (`network.fair_play`; `sv_suspects` on a dedicated server); records every
@@ -339,7 +340,9 @@ browser once read (Cache Storage). MCC map packages the player adds (Game
 settings, [MCC maps](#in-the-browser-this-forks)) and those a host shares are
 kept in the browser's own storage (OPFS), the game's `d:\mcc_maps`, as are
 the player's own recordings (`network.record_my_games`, `d:\recordings`),
-which the replay viewer lists (`assets/replay/?mine`; Game settings, Watch).
+which never leave the player's device: the replay viewer lists them
+(`assets/replay/?mine`; Game settings, Watch), and Game settings' Download
+and the viewer's Save give them as `.hrec` files.
 The first time a map is played, the page
 fetches it and `bitmaps.map`, `sounds.map` and `loc.map` whole, a few large
 ranges at a time (`port/web/fetch_path_normalization.js`); joining from the

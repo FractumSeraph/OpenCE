@@ -1376,7 +1376,9 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"private." },
 	{ "network.record_my_games", _config_boolean, "false", "HALO_NET_RECORD_MY_GAMES", _environment_value, _platform_all,
 		"Record the network games you play, joined or hosted, to recordings\\\n"
-		"in the data folder (in the browser, the site's storage), as you saw\n"
+		"in the data folder (in the browser, the browser's own storage on your\n"
+		"device: never sent to the server; download them from the page's Game\n"
+		"settings or the replay viewer), as you saw\n"
 		"them: every player's position, aim, health and weapon, the world's\n"
 		"vehicles, items and projectiles, the kills, scores and chat. No one's\n"
 		"address or hardware id is kept. A joined game's players far from\n"

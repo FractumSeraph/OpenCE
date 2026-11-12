@@ -28,8 +28,9 @@ killer, no headshot; network_recording_kill_seen) and the chat lines it
 heard, but no one's hardware id or address, no hits (only the host checks
 them) and no public copy. A host with network.record_games on writes its
 admins' recording instead, as above. In the browser the folder is the
-site's storage (OPFS's recordings, web_platform.c), which the replay viewer
-lists.
+browser's own storage on the player's device (OPFS's recordings,
+web_platform.c), never sent to the site's server: the replay viewer lists
+them, and it and the page's Game settings download them.
 
 The file (little-endian): "HREC", a version (2; 1 before records 10 to 16
 and 'G' blocks, 4 bytes), then blocks: a kind, the records' size and the
