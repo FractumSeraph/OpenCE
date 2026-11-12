@@ -1336,6 +1336,9 @@ from it first:
   games, a web admin page, RCON, and master servers that list it under the
   server browser's DEDICATED
   ([docs/master_protocol.md](docs/master_protocol.md)).
+  [Zenith Hosting](https://zenith.hosting/host/opence) is OpenCE's official
+  host for its dedicated servers (OpenCE Fleet): a server in one click,
+  managed from one dashboard.
 - **Updates itself** from its releases.
 
 Its own documents: [port/linux/README.md](port/linux/README.md) (controls,
