@@ -11,12 +11,15 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def compile_tool(work, sources):
+def compile_tool(work, sources, defines=()):
+    """(port, this fork: defines, -D for each, such as the _GNU_SOURCE the game's
+    Linux build compiles posix_files.c with)"""
     clang = shutil.which("clang")
     if not clang:
         pytest.skip("clang required")
     exe = work / ("test.exe" if sys.platform == "win32" else "test")
     flags = ["--target=i686-pc-windows-msvc", "-fuse-ld=lld", "-D_CRT_SECURE_NO_WARNINGS"] if sys.platform == "win32" else []
+    flags += ["-D" + define for define in defines]
     result = subprocess.run([clang, *flags, "-std=gnu89", "-Wall", "-Wextra", "-Werror",
                              "-I", str(work), "-I", str(ROOT / "port/linux/game"),
                              *map(str, sources), "-o", str(exe)], capture_output=True, text=True)
