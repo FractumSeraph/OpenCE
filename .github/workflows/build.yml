@@ -361,6 +361,12 @@ jobs:
           # OpenCE's dedicated server (halo --server): --version, and --server without maps refused (exit code 2);
           # its cases with clients need the retail maps, and are skipped
           python3 -m pytest -q tools/test_dedicated_server.py
+          # ChupathingyCE's dedicated server joins its own game through 127.0.0.1 (a host
+          # of a version not known): its join request whole, its network_version read back
+          # by the host's decoder, not cut to 0x70 and refused as version 0 (fs.00253).
+          # No retail maps here for a live server: the game's own encoder, decoder and
+          # rules, built from linux64's units with the sanitizers
+          python3 -m pytest -q -rs tools/test_join_request_version.py
           python3 tools/test_light_storage.py
           python3 -m pytest -q tools/test_controller_buttons.py tools/test_controller_remap.py tools/test_controller_remap_context.py tools/test_hud_button_style.py tools/test_hud_corrections.py
           python3 tools/test_saved_game_script_globals.py
