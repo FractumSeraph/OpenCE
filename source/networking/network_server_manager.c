@@ -5038,15 +5038,6 @@ static void network_game_server_dump(
 	return;
 }
 
-/* port: the host's game starts at once, with no lobby countdown (a game set
-up from the pause menu: ui_widget.c, network_game_reset_to_pregame_ui) */
-void network_game_server_start_now(
-	struct network_game_server *server)
-{
-	network_game_server_update_countdown(server,
-		_network_game_server_countdown_event_start_immediately);
-}
-
 /**
  * @brief Starts, adjusts or stops the pregame countdown on an event.
  * With game.start_with_one_player a lone machine starts the countdown
