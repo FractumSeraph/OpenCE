@@ -154,6 +154,9 @@ static int physics_instance_new(struct physics_instance *instance, long index)
 }
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-braces"
+/* (port, this fork: the console.perf_log timers in the vehicles' update, halo_perf_log.h) */
+#define HALO_PERF_BEGIN(part) ((void)0)
+#define HALO_PERF_END(part) ((void)0)
 #include "consumer.inc"
 #pragma clang diagnostic pop
 

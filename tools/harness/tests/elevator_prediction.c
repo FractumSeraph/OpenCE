@@ -16,13 +16,15 @@ they call besides is stubbed: the speed and height limits pass every move
 unit there.
 */
 
-/* Legacy movement: the MCC authority hook is inactive. */
-static boolean mcc_script_effects_host_movement(void) { return FALSE; }
-
 #include <limits.h>
 #include <math.h>
 
+/* (this test builds the fork's own elevator code, network_rules.c) */
+#define HARNESS_FORK_ELEVATOR
 #include "harness.h"
+
+/* Legacy movement: the MCC authority hook is inactive. */
+static boolean mcc_script_effects_host_movement(void) { return FALSE; }
 
 /* ---------- the fake world */
 

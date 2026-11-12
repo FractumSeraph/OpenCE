@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from harness import CHECK_FAILED, build, constant, enum_with, function, inline, mutated, read, run, structure  # noqa: E402
+from harness import CHECK_FAILED, build, constant, enum_with, function, inline, mutated, read, run, structure, port_limits  # noqa: E402
 
 CASES = ["carry", "dyaw-vertical", "node-carry", "stuck", "contact-point", "guards", "gate", "deferred",
          "look-carry", "two-local-players", "latch", "momentum", "no-double-count", "spans", "double-speed",
@@ -669,7 +669,7 @@ def generated(fault=None):
               f"{constant(read('port/linux/include/halo_port_capacity.h'), 'HALO_PORT_MAXIMUM_OBJECTS_PER_MAP')}\n")
     enums += f"#define MAXIMUM_LOCAL_PLAYERS {constant(read('source/game/players.h'), 'MAXIMUM_LOCAL_PLAYERS')}\n"
     enums += (f"#define HALO_PORT_MAXIMUM_NETWORK_PLAYERS "
-              f"{constant(read('port/linux/include/halo_port_limits.h'), 'HALO_PORT_MAXIMUM_NETWORK_PLAYERS')}\n")
+              f"{constant(port_limits(), 'HALO_PORT_MAXIMUM_NETWORK_PLAYERS')}\n")
     enums += enum_with(read("source/networking/network_game_manager.h"),
                        "_network_game_cooperative_no_player_collisions_bit") + "\n"
     enums += enum_with(read("source/game/game_engine.h"), "_game_variant_draw_object_in_motion_sensor_bit = 0") + "\n"

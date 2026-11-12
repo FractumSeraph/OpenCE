@@ -58,6 +58,8 @@ static void interface_draw_bitmap(struct bitmap_data const *b, point2d const *po
     drawn_origin_y=point->y-b->registration_point.y*scale;
 }
 
+/* (port, this fork: what the fork's code calls that OpenCE's does not) */
+#define hud_player_name_in_sight_this_tick(player_index, unit_index, head) TRUE
 #include "under_test.inc"
 
 static void check_family(int is_mcc, unsigned short flags, real expected)

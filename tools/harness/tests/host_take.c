@@ -173,6 +173,23 @@ static boolean network_objects_reconcile(long unit, real_point3d const *p, real_
 }
 /* (MCC movement effects: none in this fixture) */
 static boolean mcc_script_effects_host_movement(void) { return FALSE; }
+/* (port, this fork: its fair play checks and evidence, network_fairplay.c and
+host_evidence.c, as nothing here) */
+#define NETWORK_FAIRPLAY_MOVE_FAR 0
+#define NETWORK_FAIRPLAY_MOVE_FAST 1
+#define _host_evidence_movement 0
+#define network_fairplay_refused_move(...) ((void)0)
+#define network_fairplay_moved_by_host(...) ((void)0)
+#define host_evidence_note(...) ((void)0)
+/* (and ChupathingyCE's elevator rules, network_rules.c's, as they are there) */
+static int network_rules_floor_contact(int airborne, int has_support_surface, int elevator_ticks)
+{
+	return !airborne && has_support_surface && elevator_ticks == 60;
+}
+static int network_rules_riding_elevator(int elevator_is_machine, int elevator_moving, int floor_contact)
+{
+	return elevator_is_machine && (elevator_moving || floor_contact);
+}
 #include "under_test.inc"
 
 static boolean biped_riding_rebase(long unit)

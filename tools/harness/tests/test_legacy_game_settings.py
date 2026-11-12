@@ -30,7 +30,8 @@ def test_numbers_are_the_games():
     assert constant(layout, 'NETWORK_GAME_LAYOUT_LEGACY_OPTIONS_SIZE') == constant(engine, 'GAME_VARIANT_OPTIONS_V1_SIZE')
     assert constant(layout, 'NETWORK_GAME_LAYOUT_TAIL_SIZE') - constant(layout, 'NETWORK_GAME_LAYOUT_LEGACY_TAIL_SIZE') == \
         constant(limits, 'HALO_PORT_LEGACY_OPTIONS_SHORTFALL')
-    assert '(HALO_PORT_NETWORK_GAME_PLAYERS_END + 0x%X)' % constant(layout, 'NETWORK_GAME_LAYOUT_TAIL_SIZE') in limits
+    # (port, this fork: and the MCC digests after the tail, network version 42's)
+    assert '(HALO_PORT_NETWORK_GAME_PLAYERS_END + 0x%X + 64)' % constant(layout, 'NETWORK_GAME_LAYOUT_TAIL_SIZE') in limits
 
 
 @pytest.mark.parametrize('case', ['legacy', 'legacy_ally', 'legacy_unknown', 'console', 'current', 'bad_size'])

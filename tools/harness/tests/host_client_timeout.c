@@ -52,6 +52,8 @@ static boolean network_connection_idle(struct network_connection *connection, lo
 	return TRUE;
 }
 
+/* (port, this fork: what the fork's code calls that OpenCE's does not) */
+#define mcc_load_network_client_expired() 0
 #include "under_test.inc"
 
 int main(int argc, char **argv)

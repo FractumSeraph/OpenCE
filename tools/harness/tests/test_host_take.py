@@ -52,7 +52,7 @@ CASES = ["host-deck-lagging", "host-deck-relative-speed", "host-deck-advance-ref
          "host-landing-after-riding-leash-exact", "host-landing-leash-other-word-consumes", "host-landing-riding-leash-consumed-once"]
 NETWORK_FUNCTIONS = ("distributed_apply_state", "distributed_riding_transition", "distributed_on_foot_bound", "distributed_on_foot_fall_speed",
                      "distributed_on_foot_ceiling", "distributed_on_foot_move_valid",
-                      "distributed_supported_elevator", "distributed_riding_elevator", "distributed_air_part_vehicle", "distributed_take_riding", "distributed_take_prediction",
+                      "distributed_floor_elevator", "distributed_riding_elevator", "distributed_air_part_vehicle", "distributed_take_riding", "distributed_take_prediction",
                      "distributed_prediction_rides", "distributed_apply_predictions")
 RIDING_FUNCTIONS = ("riding_snapshot", "vehicle_riding_point_to_local", "vehicle_riding_point_to_world", "vehicle_riding_is_riding",
                      "vehicle_riding_rebase", "vehicle_riding_host_path", "vehicle_riding_host_target", "vehicle_riding_host_leash", "vehicle_riding_host_velocity", "vehicle_riding_host_unlifted",

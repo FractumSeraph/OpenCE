@@ -21,6 +21,8 @@ static void dsound_channel_fill(short index)
  CHECK(fills<4,"filled too often");
  filled_from[fills++]=dsound_globals.channels[index].sample_offset;
 }
+/* (port, this fork: what the fork's code calls that OpenCE's does not) */
+#define audio_probe_sound_started(...) ((void)0)
 #include "under_test.inc"
 
 static void setup(void)

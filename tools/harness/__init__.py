@@ -63,7 +63,10 @@ def configured(source, defined=(), names=("HALO_64BIT",)):
 
 def function(source, name):
     """A function's definition (static, inline or not), taken by matching braces; LookupError if not found."""
-    match = re.search(r"^(?:static |__inline )?[\w *]+?\b" + re.escape(name) + r"\(\s*[^;{]*\)\s*\{", source, re.M)
+    # (port, this fork: or with its name in brackets, which keeps a macro of
+    # the name from it: static byte *(distributed_put)(...))
+    match = re.search(r"^(?:static |__inline )?[\w *]+?(?:\b" + re.escape(name) + r"|\(" + re.escape(name) + r"\))"
+                      r"\(\s*[^;{]*\)\s*\{", source, re.M)
     if not match:
         raise LookupError(f"function not found in the sources: {name}")
     end = source.index("{", match.start()) + 1

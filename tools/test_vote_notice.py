@@ -27,7 +27,9 @@ def test_votes_played_never_noted():
         assert f"_distributed_message_{name} = {number}," in header, name
     known = _body(text, "static boolean distributed_kind_known(")
     assert "type < NUMBER_OF_DISTRIBUTED_MESSAGES" in known
-    assert "_distributed_message_map_vote_choice + 1 == NUMBER_OF_DISTRIBUTED_MESSAGES" in text
+    # (port, this fork: 42's checkpoint and MCC kinds and 43's riding map follow it)
+    assert "_distributed_message_map_vote_choice + 1 == _distributed_message_checkpoint" in text
+    assert "_distributed_message_vehicle_riding_map + 1 == NUMBER_OF_DISTRIBUTED_MESSAGES" in text
     assert "_distributed_message_votekick == _distributed_message_coop_device_states + 1" in text
     handle = text[text.index("void network_distributed_handle_message("):]
     unknown_call = handle.index("if (!distributed_kind_known(header.type))\n\t{\n\t\tdistributed_unknown_kind(machine_index, header.type);")

@@ -32,6 +32,10 @@ short biped_riding_vehicle_node_count(long vehicle_index)
 
 /* (the scripted pose validation: this fixture sends none) */
 static boolean distributed_scripted_pose_valid(struct distributed_unit_state const *state) { return TRUE; }
+/* (port, this fork: its put and take of a field in parts, network_distributed.h,
+as a little-endian build has them) */
+#define distributed_put_parts(cursor, data, size, part) distributed_put(cursor, data, size)
+#define distributed_take_parts(cursor, end, data, size, part) distributed_take(cursor, end, data, size)
 #include "under_test.inc"
 
 #define NEAR(a, b) CHECK(fabs((double)(a) - (double)(b)) < .001, "%s: %g, not %g", #a, (double)(a), (double)(b))

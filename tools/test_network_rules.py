@@ -162,7 +162,12 @@ def test_settings_record_by_the_hosts_version():
     assert "network_game_client_note_host_network_version(NETWORK_GAME_CLIENT_EXTENDED_OPTIONS_VERSION)" in piece
     assert "network_rules_settings_fold_options(" not in piece and "network_rules_settings_fold(" not in piece
     assert "leave_unsupported_game_type" not in source and "doesn't support yet" not in source
-    assert "HALO_PORT_WIRE_NETWORK_GAME_SIZE == NETWORK_GAME_CLIENT_SETTINGS_EXTENDED_SIZE" in source
+    # (port, this fork: the network's record is 42's, 35's with the MCC digests)
+    assert "HALO_PORT_WIRE_NETWORK_GAME_SIZE == NETWORK_GAME_CLIENT_SETTINGS_MCC_SIZE" in source
+    assert "NETWORK_GAME_CLIENT_SETTINGS_MCC_SIZE - NETWORK_GAME_CLIENT_SETTINGS_EXTENDED_SIZE == HALO_PORT_LEGACY_MCC_SHORTFALL" in source
+    # (a record of 42 on is taken with its digests, widened as 35's)
+    assert "network_game_client_note_host_network_version(NETWORK_GAME_CLIENT_MCC_VERSION)" in piece
+    assert "if (received == NETWORK_GAME_CLIENT_SETTINGS_MCC_SIZE)\n\t\t\t\t\treceived = NETWORK_GAME_CLIENT_SETTINGS_EXTENDED_SIZE;" in piece
     # (a newer version's layout from the table: the options' bytes by the
     # host's version, the record no larger than the staging's room, folded
     # into this build's, 35's, before it is widened or taken)
@@ -183,13 +188,15 @@ def test_host_sends_each_machine_the_record_of_its_version():
     pieces = pieces[:pieces.index("\n}\n")]
     assert "network_rules_settings_record_copy(" in pieces and "network_rules_settings_extended_copy(" not in pieces
     assert "network_rules_settings_layout_copy(" not in source
-    assert "wire_size != NETWORK_GAME_SERVER_SETTINGS_EXTENDED_SIZE" in pieces
+    assert "wire_size != NETWORK_GAME_SERVER_SETTINGS_MCC_SIZE" in pieces
     assert "options == NETWORK_GAME_SERVER_OPTIONS_EXTENDED_SIZE" in pieces
-    assert "HALO_PORT_WIRE_NETWORK_GAME_SIZE == NETWORK_GAME_SERVER_SETTINGS_EXTENDED_SIZE" in source
+    assert "HALO_PORT_WIRE_NETWORK_GAME_SIZE == NETWORK_GAME_SERVER_SETTINGS_MCC_SIZE" in source
+    # (a Delta machine older than 42 refused: its messages have no epoch)
+    assert "network_game_server_refuse_network_version(slot);" in source
     size = source[source.index("static long network_game_server_settings_layout("):]
     size = size[:size.index("\n}\n")]
     local = size[size.index("network_game_server_client_machine_is_local(server, machine)"):]
-    assert local.index("entry->size = NETWORK_GAME_SERVER_SETTINGS_EXTENDED_SIZE;") < local.index("return entry->size;")
+    assert local.index("entry->size = NETWORK_GAME_SERVER_SETTINGS_MCC_SIZE;") < local.index("return entry->size;")
     assert local.index("entry->options = NETWORK_GAME_SERVER_OPTIONS_EXTENDED_SIZE;") < local.index("return entry->size;")
     assert "entry->options = network_rules_host_settings_options(announce, delta_version);" in size
     refused = source[source.index("static boolean network_game_server_settings_refused("):]
@@ -217,16 +224,17 @@ def test_policy_setting_is_documented():
 def test_the_version_and_the_wire():
     limits = (ROOT / "port/linux/include/halo_port_limits.h").read_text(encoding="utf-8")
     delta = (ROOT / "port/linux/include/delta.h").read_text(encoding="utf-8")
-    # (port, this fork: its hosts announce 41, OpenCE's newest, and speak
-    # ChupathingyCE's wire of 0.8.1d, chupa-41a, its rows 40 and 41 too, which its
-    # clients of 0.8.0e on join by its range: tools/test_delta_compat.py)
-    assert "#define HALO_PORT_NETWORK_VERSION 41\n" in limits
-    assert '#define DELTA_WIRE "chupa-41a"' in delta
+    # (port, this fork: its hosts announce 43, OpenCE's newest, and speak its
+    # own wire, chupa-43a, ahead of ChupathingyCE's chupa-41a, rows 42 and 43;
+    # its clients still join hosts of 41 and before: tools/test_delta_compat.py)
+    assert "#define HALO_PORT_NETWORK_VERSION 43\n" in limits
+    assert "#define HALO_PORT_HOST_NETWORK_VERSION_MINIMUM 42\n" in limits
+    assert '#define DELTA_WIRE "chupa-43a"' in delta
     assert 'X("chupa-36a"' not in delta and "DELTA_WIRE_HOST_OLDEST" not in delta
-    assert "#define DELTA_LEGACY_NEWEST 41\n" in delta
-    for number in (30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41):
+    assert "#define DELTA_LEGACY_NEWEST 43\n" in delta
+    for number in (30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43):
         assert re.search(rf'X\({number}, "build-\d+", additive\)', delta)
-    assert "#define HALO_PORT_NETWORK_VERSION_MAXIMUM 42\n" in limits
+    assert "#define HALO_PORT_NETWORK_VERSION_MAXIMUM 44\n" in limits
 
 
 def test_game_kind_beside_the_delta_tag():

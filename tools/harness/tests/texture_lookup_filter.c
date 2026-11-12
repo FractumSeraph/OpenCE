@@ -33,6 +33,14 @@ static char *copy_of(const char *text)
 }
 #define strdup copy_of
 
+/* (port, this fork: what the fork's code calls that OpenCE's does not) */
+#define hud_hires_title_font_cyborg() 0
+static const char *cyborg_title(const char *png, char *variant, unsigned long size)
+{
+	(void)variant;
+	(void)size;
+	return png;
+}
 #include "under_test.inc"
 
 /* the model: what is registered */

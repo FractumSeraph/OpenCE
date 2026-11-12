@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from harness import CHECK_FAILED, build, constant, enum_with, function, mutated, read, run  # noqa: E402
+from harness import CHECK_FAILED, build, constant, enum_with, function, mutated, read, run, port_limits  # noqa: E402
 
 CASES = ["after-vehicle", "dies-between-loops", "deactivated-between-loops", "parented-between-loops", "double-speed",
          "counts", "capacity", "off-no-deferred-calls"]
@@ -48,7 +48,7 @@ def generated(fault=None):
     # (the object types and their masks are one enum)
     enums = "\n".join([enum_with(objects_h, "_object_header_active_bit"), enum_with(types, "_object_type_biped")])
     enums += f"\n#define MAXIMUM_OBJECTS_PER_MAP {constant(objects_h, 'MAXIMUM_OBJECTS_PER_MAP')}\n"
-    limits = read("port/linux/include/halo_port_limits.h")
+    limits = port_limits()
     enums += f"#define HALO_PORT_MAXIMUM_NETWORK_PLAYERS {constant(limits, 'HALO_PORT_MAXIMUM_NETWORK_PLAYERS')}\n"
     objects = read("port/linux/game/vehicle_riding_bipeds.c")
     text = "".join(function(objects, name) + "\n"

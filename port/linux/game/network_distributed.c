@@ -5216,8 +5216,6 @@ static void distributed_reset_checkpoint_state(boolean reset_received_times)
 	}
 	csmemset(distributed_host_speeds, 0, sizeof(distributed_host_speeds));
 	csmemset(distributed_input_facings, 0, sizeof(distributed_input_facings));
-	csmemset(distributed_coop_declined, 0, sizeof(distributed_coop_declined));
-	csmemset(distributed_input_activity, 0, sizeof(distributed_input_activity));
 	csmemset(distributed_seen, 0, sizeof(distributed_seen));
 	csmemset(distributed_viewers, 0, sizeof(distributed_viewers));
 	csmemset(distributed_sends, 0, sizeof(distributed_sends));
@@ -5320,6 +5318,10 @@ void network_distributed_new_game(
 	csmemset(&distributed_divergence, 0, sizeof(distributed_divergence));
 	distributed_reset_checkpoint_state(TRUE);
 	csmemset(distributed_round_trips, 0, sizeof(distributed_round_trips));
+	/* (port, this fork: who declined co-op's friendly fire, and when each
+	player last gave input, kept through a checkpoint's restore) */
+	csmemset(distributed_coop_declined, 0, sizeof(distributed_coop_declined));
+	csmemset(distributed_input_activity, 0, sizeof(distributed_input_activity));
 	csmemset(distributed_client_clocks, 0, sizeof(distributed_client_clocks));
 	csmemset(distributed_client_identities, 0, sizeof(distributed_client_identities));
 	host_evidence_reset();

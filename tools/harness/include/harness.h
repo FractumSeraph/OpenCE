@@ -92,4 +92,26 @@ static void datum_delete(struct data_array *array, long datum_index)
 /* the case named on the command line */
 #define CASE(name) if (!strcmp(case_name, name))
 
+/* port (this fork): what the fork's sources call that OpenCE's do not, for
+the tests that build them from OpenCE's pieces: ChupathingyCE's floor elevator as the
+supported elevator the tests stand in, and its elevator rule
+(network_rules.c's network_rules_elevator_correction, as it is there) */
+/* (a test that builds the fork's own elevator code says so first:
+HARNESS_FORK_ELEVATOR) */
+#ifndef HARNESS_FORK_ELEVATOR
+#define distributed_floor_elevator(unit_index) distributed_supported_elevator(unit_index)
+static int network_rules_elevator_correction(int recorded_elevator, int current_elevator, float *error)
+{
+	float across_squared = error[0] * error[0] + error[1] * error[1];
+	const float tolerance = 3.0f;
+
+	if (recorded_elevator != -1 && recorded_elevator == current_elevator &&
+		across_squared <= tolerance * tolerance && error[2] >= -4.0f && error[2] <= 4.0f)
+	{
+		error[2] = 0.0f;
+	}
+	return error[0] * error[0] + error[1] * error[1] + error[2] * error[2] > tolerance * tolerance;
+}
+#endif
+
 #endif
