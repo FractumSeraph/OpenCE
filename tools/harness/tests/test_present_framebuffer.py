@@ -12,14 +12,13 @@ import sys
 
 import pytest
 
-# (port, this fork: the test runs a slice of OpenCE's D3DDevice_Present, from
-# its draw framebuffer's binding to the HDR calibration; this fork's present
-# reads through its own read_framebuffer and picture size, and binds the draw
-# framebuffer the same way, d3d8_gl.c: build/UPDATING.md, OpenCE 14ff64cd8)
-pytestmark = pytest.mark.skip(reason="the fork's D3DDevice_Present is laid out otherwise")
+# (port, this fork: the slice of D3DDevice_Present starts where the source
+# framebuffer is looked up (read_framebuffer, before the window is bound),
+# and is taken as a desktop build has it: without the game browser's
+# console overlay screens or the browser build's blit, d3d8_gl.c)
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from harness import function, read
+from harness import configured, function, read
 
 
 @pytest.fixture(scope="module")
@@ -29,8 +28,9 @@ def present_framebuffer(tmp_path_factory):
         pytest.skip("clang required")
     renderer = read("port/linux/src/d3d8_gl.c")
     present = function(renderer, "D3DDevice_Present")
-    commands = present[present.index("\t\tglBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);"):
+    commands = present[present.index("\t\tread_framebuffer = framebuffer_get(back_buffer->target.texture, 0);"):
                        present.index("\t\t/* (the HDR calibration screen")]
+    commands = configured(commands, names=("HALO_GAME_BROWSER", "HALO_CONSOLE_GLES2", "HALO_BROWSER"))
     work = tmp_path_factory.mktemp("present-framebuffer")
     (work / "cache.inc").write_text("\n".join(
         function(renderer, name) for name in ("device_record_new", "framebuffer_find", "framebuffer_get")))
