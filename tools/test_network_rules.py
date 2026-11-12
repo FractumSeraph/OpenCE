@@ -121,7 +121,8 @@ def test_shield_effects_are_message_91():
     handler = source[source.index("case _distributed_message_shield_effects:\n"):]
     handler = handler[:handler.index("break;")]
     assert "network_shield_effects_handle_message(machine_index, message, size);" in handler
-    assert source.count("case _distributed_message_shield_effects:") == 3
+    # (and ChupathingyCE's message size by the host's layout)
+    assert source.count("case _distributed_message_shield_effects:") == 4
     assert "network_shield_effects_reset();" in source[source.index("void network_distributed_new_game("):]
     effects = (ROOT / "port/linux/game/network_shield_effects.c").read_text(encoding="utf-8")
     taken = effects[effects.index("void network_shield_effects_handle_message("):]
@@ -141,7 +142,9 @@ def test_unknown_kinds_leave_the_forks_own():
     known = known[:known.index("\n}\n")]
     assert "type >= _distributed_message_actor_states && type < NUMBER_OF_DISTRIBUTED_MESSAGES" in known
     assert "_distributed_message_votekick == _distributed_message_coop_device_states + 1" in source
-    handler = source[source.index("void network_distributed_handle_message("):]
+    # (ChupathingyCE's static distributed_handle_message, which the public
+    # one calls, reads them since the merge of its 38aae92ee)
+    handler = source[source.index("static void distributed_handle_message("):]
     assert handler.index("map_share_handles_message(") < handler.index("distributed_kind_known(header.type)")
     assert "csmemset(distributed_unknown_kinds_seen, 0, sizeof(distributed_unknown_kinds_seen));" in source
     # (the host's shield effects: up to the host's layout's largest, a value
