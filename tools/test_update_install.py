@@ -741,8 +741,9 @@ def test_install_row_wiring():
     # (the files are port_settings.py's, as written)
     assert gearbox == "\n".join(port_settings.settings_files()[gearbox_name])
     assert pages == "\n".join(port_settings.chupathingy_settings_pages())
-    # (port, this fork: Network Setup's rows 24 apart, not 30: y 121)
-    row = f'<child widget="{base}/op_install_update" x="54" y="121" platform="desktop"/>'
+    # (port, this fork: Network Setup's rows 22 apart, not 30, since RECORD
+    # MY GAMES made it thirteen places: y 117)
+    row = f'<child widget="{base}/op_install_update" x="54" y="117" platform="desktop"/>'
     for text in (gearbox, pages):
         updates = text.index(f'<child widget="{base}/view_updates"')
         assert text.index(row) > updates
