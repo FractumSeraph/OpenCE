@@ -216,10 +216,13 @@ enum
 	/* (the Xbox's thirteen, then the Custom Edition, HaloMD, Halo PC and
 	map packs' maps found, up to this many rows in all; on the original
 	Xbox, which has a pack's alone, its thirteen and as many again) */
-#ifdef HALO_XBOX_CONSOLE
-	MAXIMUM_MAP_LIST = 40,
+#ifdef HALO_CONSOLE_MAP_LIST_ROWS
+	MAXIMUM_MAP_LIST = HALO_CONSOLE_MAP_LIST_ROWS,
 #else
-	MAXIMUM_MAP_LIST = 256,
+	/* (a computer's: a large Custom Edition folder and the whole MCC
+	catalog, MCC_MAPS_MAXIMUM, together; 256 left the MCC maps, listed
+	last, out) */
+	MAXIMUM_MAP_LIST = 2560,
 #endif
 	MAP_NAME_LENGTH = 64,
 	DISPLAY_NAME_LENGTH = 48,
@@ -241,13 +244,16 @@ enum
 	XBOX_UNKNOWN_LEVEL_PICTURE = 13,
 
 	/* the campaign maps found, at most; their string list indices from
-	here, as the multiplayer rows' (row times four, plus the kind) */
+	here, after the multiplayer rows' and as theirs (row times the kinds,
+	plus the kind; this fork: right after them since ChupathingyCE's 2,560
+	rows, below ui_widget.c's SPINNER_EXTRA_DESCRIPTION_BASE, 0x7C00) */
 	MAXIMUM_CAMPAIGN_LIST = 256,
-	UI_MAP_LIST_CAMPAIGN_STRING_BASE = 0x5000,
+	UI_MAP_LIST_CAMPAIGN_STRING_BASE = UI_MAP_LIST_STRING_BASE + MAXIMUM_MAP_LIST * UI_MAP_LIST_STRINGS_PER_ROW,
 	/* bitmap frames from here are rows' own pictures (<name>.bmp): the
-	multiplayer rows', then the campaign rows' (below ui_widget.c's 0x7000) */
-	UI_MAP_LIST_ROW_PICTURE_BASE = 0x5800,
-	UI_MAP_LIST_CAMPAIGN_PICTURE_BASE = 0x5C00,
+	multiplayer rows', then the campaign rows' (after Halo PC's pictures,
+	below the levels' at UI_MAP_LIST_LEVEL_PICTURE_BASE) */
+	UI_MAP_LIST_ROW_PICTURE_BASE = 0x4100,
+	UI_MAP_LIST_CAMPAIGN_PICTURE_BASE = UI_MAP_LIST_ROW_PICTURE_BASE + MAXIMUM_MAP_LIST,
 	MAP_PATH_LENGTH = 256,
 	/* and from here the campaign's levels' pictures (ui.map's sp_levels, a
 	frame for each level: add_campaign_entries) */
@@ -256,7 +262,11 @@ enum
 
 typedef char verify_ui_map_list_string_bases[
 	UI_MAP_LIST_STRING_BASE + MAXIMUM_MAP_LIST * UI_MAP_LIST_STRINGS_PER_ROW <= UI_MAP_LIST_CAMPAIGN_STRING_BASE &&
-	UI_MAP_LIST_CAMPAIGN_STRING_BASE + MAXIMUM_CAMPAIGN_LIST * UI_MAP_LIST_STRINGS_PER_ROW <= 0x7000 ? 1 : -1];
+	(long)UI_MAP_LIST_CAMPAIGN_STRING_BASE + MAXIMUM_CAMPAIGN_LIST * UI_MAP_LIST_STRINGS_PER_ROW <= 0x7C00 ? 1 : -1];
+
+/* (every row's strings have string list indices, shorts) */
+typedef char ui_map_list_string_indices_fit[
+	UI_MAP_LIST_STRING_BASE + (long)MAXIMUM_MAP_LIST * UI_MAP_LIST_STRINGS_PER_ROW <= 0x7FFF ? 1 : -1];
 
 #ifdef HALO_CUSTOM_EDITION
 enum
@@ -344,6 +354,10 @@ co-op levels' end, as found */
 static long ui_map_list_found_multiplayer, ui_map_list_found_campaign_end;
 /* the source the entries being added come from */
 static short ui_map_list_adding_source;
+/* the maps found that the list had no room for, this refresh, and the
+first of them (logged: ui_map_list_refresh) */
+static long ui_map_list_left_out;
+static char ui_map_list_first_left_out[MAP_NAME_LENGTH];
 /* the rows that are multiplayer maps (the campaign's levels come after
 them, for hosting network co-op: ui_map_list_count_with_campaign) */
 static long ui_map_list_multiplayer_count;
@@ -719,7 +733,11 @@ static struct ui_map_entry *entry_add(
 	else
 	{
 		if (ui_map_list_count_value >= MAXIMUM_MAP_LIST)
+		{
+			if (!ui_map_list_left_out++)
+				snprintf(ui_map_list_first_left_out, sizeof(ui_map_list_first_left_out), "%s", map_name);
 			return NULL;
+		}
 		entry = &ui_map_list[ui_map_list_count_value];
 		ui_map_list_names_array[ui_map_list_count_value] = entry->map_name;
 		ui_map_list_count_value++;
@@ -1362,6 +1380,8 @@ static void file_found(
 
 	if (found->count < MAXIMUM_MAP_LIST && strlen(file) < MAP_NAME_LENGTH - 3)
 		snprintf(found->names[found->count++], MAP_NAME_LENGTH, "%s", file);
+	else if (found->count >= MAXIMUM_MAP_LIST && !ui_map_list_left_out++)
+		snprintf(ui_map_list_first_left_out, sizeof(ui_map_list_first_left_out), "%s", file);
 }
 
 /* a pack's map found: by its name, <file>@<pack> */
@@ -1442,7 +1462,7 @@ for each level: what a search is matched against besides the names) */
 #ifdef HALO_XBOX_CONSOLE
 enum { VIEW_PACKAGE_TEXT = 1, VIEW_PACKAGE_TEXTS = 1 };
 #else
-enum { VIEW_PACKAGE_TEXT = 2048, VIEW_PACKAGE_TEXTS = MAXIMUM_MAP_LIST };
+enum { VIEW_PACKAGE_TEXT = 2048, VIEW_PACKAGE_TEXTS = MIN(MAXIMUM_MAP_LIST, MCC_MAPS_MAXIMUM) };
 #endif
 
 static struct
@@ -1606,6 +1626,10 @@ static boolean view_matches(struct ui_map_entry const *entry)
 
 	if (entry->source == _ui_map_list_source_mcc && !ui_map_list_mcc_offered())
 		return FALSE;
+	/* (the Workshop item the Guide's PLAY handed over: shown whatever the
+	view, mcc_maps_set_first_item) */
+	if (entry->source == _ui_map_list_source_mcc && mcc_maps_level_first(entry->map_name))
+		return TRUE;
 	if (view.source != _ui_map_list_source_all && entry->source != view.source)
 		return FALSE;
 	if (!view.search[0])
@@ -1704,6 +1728,21 @@ static void view_apply(void)
 	shown = rows;
 	if (view.sort != _ui_map_list_sort_default)
 		qsort(ui_map_list_view, (size_t)shown, sizeof(ui_map_list_view[0]), view_compare);
+	/* (and first, in their order) */
+	{
+		long first = 0, row;
+
+		for (row = 0; row < shown; row++)
+		{
+			short kept = ui_map_list_view[row];
+
+			if (ui_map_list[kept].source == _ui_map_list_source_mcc && mcc_maps_level_first(ui_map_list[kept].map_name))
+			{
+				memmove(&ui_map_list_view[first + 1], &ui_map_list_view[first], (size_t)(row - first) * sizeof(ui_map_list_view[0]));
+				ui_map_list_view[first++] = kept;
+			}
+		}
+	}
 	/* (the campaign's rows, less MCC's while they aren't offered) */
 	for (entry = ui_map_list_found_multiplayer; entry < ui_map_list_found_campaign_end; entry++)
 	{
@@ -1828,6 +1867,7 @@ void ui_map_list_refresh(
 	/* (the counts last logged, to log each change once) */
 	static long logged_counts[NUMBER_OF_MAP_FAMILIES] = { -1, -1, -1, -1, -1 };
 	static long logged_campaign_count = -1;
+	static long logged_left_out;
 	long counts[NUMBER_OF_MAP_FAMILIES] = { XBOX_MAP_COUNT, 0, 0, 0, 0 };
 	/* (with a pack's own menus, its maps of the Xbox's names are those rows:
 	map_pack_menus) */
@@ -1840,6 +1880,7 @@ void ui_map_list_refresh(
 	entries_forget(ui_campaign_list, ui_campaign_list_count);
 	ui_map_list_count_value = 0;
 	ui_campaign_list_count = 0;
+	ui_map_list_left_out = 0;
 	ui_map_list_adding_source = _ui_map_list_source_xbox;
 	for (index = 0; index < XBOX_MAP_COUNT; index++)
 	{
@@ -1986,6 +2027,13 @@ void ui_map_list_refresh(
 			add_mcc_catalog_entry(index);
 	}
 	view_apply();
+	if (ui_map_list_left_out != logged_left_out)
+	{
+		logged_left_out = ui_map_list_left_out;
+		if (ui_map_list_left_out)
+			error(_error_silent, "the menus' map list is full (%d rows): %ld maps left out, from %s",
+				(int)MAXIMUM_MAP_LIST, ui_map_list_left_out, ui_map_list_first_left_out);
+	}
 	if (memcmp(counts, logged_counts, sizeof(counts)) || logged_campaign_count != ui_campaign_list_count)
 	{
 		memcpy(logged_counts, counts, sizeof(counts));

@@ -41,9 +41,23 @@ typedef float real;
 #define FLAG(n) (1UL << (n))
 #define TEST_FLAG(v,n) (((v) & FLAG(n)) != 0)
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
+/* (port, this fork: the tags' pointer fields, XPTR, as cseries.h has them) */
+#include "xbox_address.h"
 #endif
 """)
     (directory / "cache/physical_memory_map.h").write_text("#define TAG_CACHE_SIZE 0x01600000\n")
+    # (port, this fork: tag_validate.c leaves Stubbs mode's animation data to it, none here)
+    (directory / "stubbs_mode.h").write_text("""
+#ifndef TEST_STUBBS_MODE_H
+#define TEST_STUBBS_MODE_H
+static inline boolean stubbs_mode_owns_data(void const *address, long size)
+{
+    (void)address;
+    (void)size;
+    return FALSE;
+}
+#endif
+""")
     (directory / "tag_files/tag_groups.h").write_text("""
 #ifndef TEST_TAG_GROUPS_H
 #define TEST_TAG_GROUPS_H
@@ -80,7 +94,11 @@ void validation_free(void *p) {
               if sys.platform == "win32" else ["-m32"])
     command = [compiler, *target, "-std=gnu99", "-O1", "-g", "-Wall", "-Wextra", "-Werror",
                "-Wno-multichar", "-fsanitize=undefined", "-fsanitize-trap=undefined",
-               f"-I{directory}", f"-I{GAME}", str(GAME / "mcc_tag_validate.c"),
+               f"-I{directory}", f"-I{GAME}",
+               # (port, this fork: XBOX_POINTER and XPTR, and ChupathingyCE's tag_validate.c's errors.h,
+               # after the test's own cseries.h and tag_groups.h)
+               f"-I{ROOT / 'source/cseries'}", f"-I{ROOT / 'source'}",
+               str(GAME / "mcc_tag_validate.c"),
                str(GAME / "tag_validate.c"), str(ROOT / "tools/harness/tests/mcc_tag_validation.c"), str(allocator),
                "-o", str(binary)]
     if hud:

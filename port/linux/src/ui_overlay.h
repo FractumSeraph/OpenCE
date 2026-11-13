@@ -82,6 +82,15 @@ void ui_overlay_outline(float x, float y, float width, float height, float radiu
 top; its width */
 float ui_overlay_text(int font, float size, float x, float y, int align, unsigned int color, const char *text);
 float ui_overlay_text_width(int font, float size, const char *text);
+/* text as a font shows it: the characters neither it nor Noto Sans Bold
+has (Chinese, Japanese and Korean, among others) left out, as they are
+drawn (none, rather than empty boxes), and the spaces around them made
+one, none at either end (text_shown.h). Its length; 0 when it shows
+nothing, which ui_overlay_text draws as "?" */
+int ui_overlay_text_shown(int font, const char *text, char *out, int size);
+/* a player's name as a font shows it: as ui_overlay_text_shown, or its
+ASCII letters, or "Player" when nothing of it would show */
+void ui_overlay_name_shown(int font, const char *name, char *out, int size);
 /* text as the Xbox menus draw it: a soft glow of glow's color around it and
 a drop shadow under it */
 float ui_overlay_text_glow(int font, float size, float x, float y, int align, unsigned int color,
@@ -116,9 +125,10 @@ the theme's (ui_style_theme) */
 void ui_overlay_plasma_thread(unsigned int color);
 
 /* what is drawn from here on goes over what was drawn before at a lower
-layer (0 to 4; each frame starts at 0): text is drawn over the shapes of
+layer (0 to 5; each frame starts at 0): text is drawn over the shapes of
 its layer, and under those of the layers above, as a dialog over a list.
-The Guide alone draws on 4, over every other screen's dialogs */
+The Guide alone draws on 4, over every other screen's dialogs, and its own
+windows (Steam's sign-in) on 5, over the Guide */
 void ui_overlay_layer(int layer);
 
 /* a button's glyph, size high, at x (its left), y (its top); its width.
@@ -278,6 +288,8 @@ float ui_style_text(int kind, float x, float y, int align, const char *text);
 /* the same faded by share (0 to 1: a toast coming and going) */
 float ui_style_text_faded(int kind, float share, float x, float y, int align, const char *text);
 float ui_style_text_size(int kind);
+/* its font (UI_FONT_*), for measuring it with ui_overlay_text_width */
+int ui_style_text_font(int kind);
 /* the same at scale times its size (a larger screen's rows: the setup
 screen's) */
 float ui_style_text_scaled(int kind, float scale, float x, float y, int align, const char *text);

@@ -184,17 +184,20 @@ def storage_tool(tmp_path_factory):
     sources = [source, GAME / "mcc_share_storage.c", GAME / "mcc_share_stage.c",
                GAME / "mcc_share_rules.c", GAME / "mcc_package.c", GAME / "mcc_sha256.c",
                SRC / "posix_mcc_share.c", filesystem]
+    # (port, this fork: ChupathingyCE's posix_files.c describes code addresses
+    # with dladdr, which glibc declares with _GNU_SOURCE, as tools/linux_build.py has it)
+    defines = () if sys.platform == "win32" else ("_GNU_SOURCE",)
     if os.environ.get("MCC_SHARE_STORAGE_SANITIZE"):
         compiler = shutil.which("clang")
         assert compiler, "clang required for storage sanitizer coverage"
         exe = work / "storage"
-        result = subprocess.run([compiler, "-std=gnu89", "-Wall", "-Wextra", "-Werror",
+        result = subprocess.run([compiler, "-std=gnu89", "-Wall", "-Wextra", "-Werror", *("-D" + d for d in defines),
             "-fsanitize=address,undefined", "-fno-sanitize-recover=all", "-fno-omit-frame-pointer",
             "-I", str(work), "-I", str(GAME), *map(str, sources), "-o", str(exe)],
             capture_output=True, text=True)
         assert result.returncode == 0, result.stderr
         return exe
-    return compile_tool(work, sources)
+    return compile_tool(work, sources, defines)
 
 
 def run(tool, mode, root, *args):

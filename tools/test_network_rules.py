@@ -369,7 +369,12 @@ def test_join_paths_know_the_hosts_number():
     # (port, this fork: its request has the version word natively, the whole of
     # it to a host not known, 74558eff8; a table's tail is not used)
     assert "join_game_request.network_version = HALO_PORT_NETWORK_VERSION;" in request
-    assert "int extra = version == 0xFFFF ? native : network_rules_join_request_extra(version);" in request
+    # (network_rules_join_request_tail_size: the whole request to a host not
+    # known, tools/test_join_request_version.py runs it)
+    assert "short tail = (short)network_rules_join_request_tail_size(version, native);" in request
+    rules = (ROOT / "port/linux/game/network_rules.c").read_text(encoding="utf-8")
+    tail_size = rules[rules.index("int network_rules_join_request_tail_size("):]
+    assert "if (version == NETWORK_RULES_VERSION_UNKNOWN)\n\t\treturn 0;" in tail_size[:tail_size.index("\n}\n")]
     # (the host's own game, joined at home with no advertisement: its
     # request made for the number it announces, which tools/test_net43_host.py
     # runs for real)

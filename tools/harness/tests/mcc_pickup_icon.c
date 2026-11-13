@@ -17,6 +17,9 @@ static pixel32 drawn_color;
 #define local_player_count() players
 #define config_boolean(name) FALSE
 #define controller_glyph_draw(a,b,c,d,e,f) FALSE
+/* (port, this fork: OpenCE's glyph service, off without display.high_res_hud) */
+#define controller_glyph_draw_with_release(a,b,c,d,e,f) FALSE
+#define controller_glyph_style() 0
 #define mcc_hud_button_index(icon) 0
 #define mcc_hud_button_bitmap(index) (replacement ? &test_bitmap : NULL)
 #define draw_unicode_string_capital_middle(cursor,text) 80

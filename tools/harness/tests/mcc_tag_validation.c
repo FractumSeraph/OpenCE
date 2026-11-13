@@ -44,14 +44,31 @@ static void *valid_bitmap, *valid_model_part;
 static unsigned char external_vertices[32], external_indices[8];
 static int hardware;
 
+/* (port, this fork: its tag_validate.c is ChupathingyCE's, without OpenCE's
+tag_validate_root, _custom_edition and _file_contains: an MCC callback's
+root and file are asked of the MCC dispatch they would route to, and the
+Xbox checks' file by its length, tag_validate_file_length) */
+static void *test_root(struct tag_validation *validation, void *base)
+{
+    return mcc_validation_owns(validation) ? mcc_validation_callbacks->root(validation) : base;
+}
+static boolean test_file_contains(struct tag_validation *validation, long offset, long size)
+{
+    long length;
+    if (mcc_validation_owns(validation))
+        return mcc_validation_callbacks->file_contains(validation, offset, size);
+    length = tag_validate_file_length(validation);
+    return offset >= 0 && size >= 0 && offset <= length && size <= length - offset;
+}
+
 static boolean check_root(struct tag_validation *validation, void *base)
 {
     int mcc = mcc_validation_owns(validation);
     void *scenario = tag_validate_tag_get(validation, (long)0xe0000000UL, 'scnr');
     ++callback_calls;
-    if (tag_validate_root(validation) != base || !tag_validate_contains(validation, base, sizeof(struct test_root)) ||
-        tag_validate_custom_edition(validation) || !tag_validate_tag_get(validation, (long)0xe0000000UL, 'scnr') ||
-        !tag_validate_file_contains(validation, 100, 10) || tag_validate_file_contains(validation, 1020, 20)) ++callback_failures;
+    if (test_root(validation, base) != base || !tag_validate_contains(validation, base, sizeof(struct test_root)) ||
+        !tag_validate_tag_get(validation, (long)0xe0000000UL, 'scnr') ||
+        !test_file_contains(validation, 100, 10) || test_file_contains(validation, 1020, 20)) ++callback_failures;
     if (mcc && (!mcc_validation_callback_active() || !tag_validate_any_claimed(base, sizeof(struct test_root)) ||
         tag_validate_vertex_buffer_data(validation, &hardware) != external_vertices ||
         tag_validate_index_buffer_data(validation, &hardware) != (scenario == base ? external_indices : external_vertices) ||

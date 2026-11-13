@@ -108,7 +108,9 @@ static void mcc_map_description_read(struct mcc_menu_map *map)
 	}
 }
 
-static void mcc_map_register(char const *name)
+/* registers a map: NULL when it is listed (or already was), else why it can't be: a word or two for the
+Workshop page, and the log's detail */
+static char const *mcc_map_register(char const *name, char const **detail)
 {
 	char path[128], candidate[128], canonical[64];
 	char const *display;
@@ -121,29 +123,64 @@ static void mcc_map_register(char const *name)
 	size_t name_length = strlen(name), index;
 	boolean start_word = TRUE;
 
-	if (!name_length || name_length > MCC_MAP_FILENAME_MAXIMUM || mcc_menu_catalog.count == MCC_MAPS_MAXIMUM)
-        return;
-    snprintf(candidate, sizeof(candidate), "%s%s", MCC_MAPS_LEVEL_PREFIX, name);
-    if (!mcc_package_name(candidate, canonical)) return;
-    name = canonical + sizeof(MCC_MAPS_LEVEL_PREFIX) - 1;
+	if (!name_length || name_length > MCC_MAP_FILENAME_MAXIMUM)
+	{
+		*detail = "its file name is too long for a level name";
+		return "Name too long";
+	}
+	snprintf(candidate, sizeof(candidate), "%s%s", MCC_MAPS_LEVEL_PREFIX, name);
+	if (!mcc_package_name(candidate, canonical))
+	{
+		*detail = "its file name has characters a level name can't";
+		return "Name not usable";
+	}
+	name = canonical + sizeof(MCC_MAPS_LEVEL_PREFIX) - 1;
 	for (index = 0; index < (size_t)mcc_menu_catalog.count; index++)
 	{
 		if (!csstrcasecmp(mcc_menu_catalog.maps[index].file_name, name))
-			return;
+			return NULL;
 	}
-	if (!mcc_package_map_path(canonical,path)) return;
+	if (mcc_menu_catalog.count == MCC_MAPS_MAXIMUM)
+	{
+		*detail = "the MCC catalog is full";
+		return "Too many maps";
+	}
+	/* (this fork: the package's own folder, or the browser's staged one,
+	mcc_package.c; ChupathingyCE's register returns why a map is not listed) */
+	if (!mcc_package_map_path(canonical,path))
+	{
+		*detail = "its .map file's path is too long";
+		return "Name too long";
+	}
 	file = fopen(path, "rb");
 	if (!file)
-		return;
+	{
+		*detail = "its .map file can't be opened";
+		return "Map unreadable";
+	}
 	if (fseek(file, 0, SEEK_END) || (file_size = ftell(file)) < 0 || fseek(file, 0, SEEK_SET) ||
 		fread(header, 1, sizeof(header), file) != sizeof(header))
 	{
 		fclose(file);
-		return;
+		*detail = "its .map file is shorter than a cache header";
+		return "Map damaged";
 	}
 	fclose(file);
-	if (mcc_cache_identify(header, sizeof(header), (uint64_t)file_size, &identity) != MCC_CACHE_OK)
-		return;
+	switch (mcc_cache_identify(header, sizeof(header), (uint64_t)file_size, &identity))
+	{
+	case MCC_CACHE_OK:
+		break;
+	case MCC_CACHE_BAD_HEADER:
+	case MCC_CACHE_WRONG_VERSION:
+		*detail = "its .map file is not a Halo 1 MCC cache (version 13)";
+		return "Not an MCC map";
+	case MCC_CACHE_BAD_FILE_SIZE:
+		*detail = "its .map file is shorter than its header says";
+		return "Map incomplete";
+	default:
+		*detail = "its .map file's header is damaged";
+		return "Map damaged";
+	}
 	map = &mcc_menu_catalog.maps[mcc_menu_catalog.count++];
 	memset(map, 0, sizeof(*map));
 	memcpy(map->file_name, name, name_length + 1);
@@ -165,6 +202,7 @@ static void mcc_map_register(char const *name)
 		start_word = character == ' ';
 	}
 	mcc_map_description_read(map);
+	return NULL;
 }
 
 static int mcc_map_order(void const *left, void const *right)
@@ -279,6 +317,66 @@ static boolean mcc_map_package_is_item(char const *package)
 	return length > 0;
 }
 
+/* the item's title on the map cards, under "Steam Workshop": the cards'
+description lines don't wrap, so it is broken between words into lines of
+at most MCC_MAP_CARD_LINE characters (a longer word split), at most
+MCC_MAP_CARD_LINES of them, the last ending "..." if more is left. Into
+description from used; the new end */
+#define MCC_MAP_CARD_LINE 17
+#define MCC_MAP_CARD_LINES 3
+
+static short mcc_map_card_lines(char const *title, wchar_t *description, short used)
+{
+	short lines = 0, length = (short)strlen(title), start = 0;
+
+	while (start < length && lines < MCC_MAP_CARD_LINES)
+	{
+		short end = (short)MIN(start + MCC_MAP_CARD_LINE, length), index;
+
+		/* (between words: the last space that fits, else the whole line) */
+		if (end < length && title[end] != ' ')
+		{
+			short space = end;
+
+			while (space > start && title[space] != ' ')
+				space--;
+			if (space > start)
+				end = space;
+		}
+		if (lines)
+		{
+			if (used + 2 >= MCC_MAP_DESCRIPTION_MAXIMUM)
+				break;
+			description[used++] = '\r';
+			description[used++] = '\n';
+		}
+		lines++;
+		/* (the last line, more left: its end makes room for "...") */
+		if (lines == MCC_MAP_CARD_LINES && end < length)
+		{
+			while (end > start && end - start > MCC_MAP_CARD_LINE - 3)
+			{
+				short space = (short)(end - 1);
+
+				while (space > start && title[space] != ' ')
+					space--;
+				end = space > start ? space : (short)(start + MCC_MAP_CARD_LINE - 3);
+			}
+		}
+		for (index = start; index < end && used < MCC_MAP_DESCRIPTION_MAXIMUM; index++)
+			description[used++] = (unsigned char)title[index] >= 32 && (unsigned char)title[index] < 127 ? title[index] : '?';
+		if (lines == MCC_MAP_CARD_LINES && end < length)
+		{
+			for (index = 0; index < 3 && used < MCC_MAP_DESCRIPTION_MAXIMUM; index++)
+				description[used++] = '.';
+		}
+		start = end;
+		while (start < length && title[start] == ' ')
+			start++;
+	}
+	return used;
+}
+
 /* The Workshop title and description of a level in an item's package folder: TRUE if the catalog has it. */
 static boolean mcc_map_workshop_title(struct mcc_menu_map *map)
 {
@@ -310,9 +408,7 @@ static boolean mcc_map_workshop_title(struct mcc_menu_map *map)
 
 			for (used = 0; heading[used]; used++)
 				map->description[used] = heading[used];
-			for (index = 0; item_title[index] && used < MCC_MAP_DESCRIPTION_MAXIMUM; index++)
-				map->description[used++] = (unsigned char)item_title[index] >= 32 && (unsigned char)item_title[index] < 127 ?
-					item_title[index] : '?';
+			used = (size_t)mcc_map_card_lines(item_title, map->description, (short)used);
 			map->description[used] = 0;
 		}
 		map->titled = TRUE;
@@ -349,7 +445,10 @@ static void mcc_maps_scan_directory(char const *package)
         *extension=0;
         if (!csstrcasecmp(name,"sounds") || !csstrcasecmp(name,"bitmaps") || !csstrcasecmp(name,"loc")) continue;
         snprintf(relative,sizeof(relative),"%s%s%s",package,package[0] ? "\\" : "",name);
-        mcc_map_register(relative);
+        {
+            char const *detail=NULL,*reason=mcc_map_register(relative,&detail);
+            if (reason) error(_error_silent,"mcc maps: %s\\%s can't be listed: %s",mcc_maps_folder(),relative,detail);
+        }
     } while (FindNextFileA(find,&data));
     CloseHandle(find);
 }
@@ -370,9 +469,22 @@ static void mcc_maps_scan(void)
     /* The subscribed Steam Workshop items: each map is the level mcc_maps\<item id>\<map name>. */
     for (i=0;i<steam_workshop_count();i++) {
         struct steam_workshop_map const *item=steam_workshop_map(i);
-        char relative[64];
+        char relative[128];
+        char const *reason,*detail=NULL;
         snprintf(relative,sizeof(relative),"%s\\%s",item->item_id,item->name);
-        mcc_map_register(relative);
+        reason=mcc_map_register(relative,&detail);
+        /* (logged, and said on the item's Workshop page: guide_workshop.c) */
+        if (reason) steam_workshop_unlisted(item->item_id,item->name,reason,detail);
+    }
+    /* (the Workshop maps that can't be listed, the scan's and these: in the log, each once a scan) */
+    {
+        int which,unlisted=steam_workshop_item_unlisted(NULL,0,NULL,NULL,NULL,NULL);
+        for (which=0;which<unlisted;which++) {
+            char id[STEAM_WORKSHOP_ID_SIZE],map[64],reason[STEAM_WORKSHOP_REASON_SIZE],detail[STEAM_WORKSHOP_DETAIL_SIZE];
+            steam_workshop_item_unlisted(NULL,which,id,map,reason,detail);
+            if (map[0]) error(_error_silent,"mcc maps: Workshop item %s, map %s can't be listed: %s (%s)",id,map,detail,reason);
+            else error(_error_silent,"mcc maps: Workshop item %s: %s (%s)",id,detail,reason);
+        }
     }
     qsort(mcc_menu_catalog.maps,(size_t)mcc_menu_catalog.count,sizeof(mcc_menu_catalog.maps[0]),mcc_map_order);
     /* Read supplied titles independently of Steam (also for Android imports).
@@ -469,6 +581,37 @@ short mcc_maps_index(short row, boolean multiplayer_only)
 	return NONE;
 }
 
+/* the Workshop item the Guide's PLAY handed to the menus (pc_menu_workshop_play):
+its maps lead the type lists, and its campaign list opens on its first */
+static struct
+{
+	char prefix[80];
+	boolean focus;
+} mcc_maps_first;
+
+void mcc_maps_set_first_item(char const *item_id)
+{
+	if (item_id && *item_id)
+		snprintf(mcc_maps_first.prefix, sizeof(mcc_maps_first.prefix), MCC_MAPS_LEVEL_PREFIX "%s\\", item_id);
+	else
+		mcc_maps_first.prefix[0] = 0;
+	mcc_maps_first.focus = mcc_maps_first.prefix[0] != 0;
+}
+
+boolean mcc_maps_level_first(char const *level_name)
+{
+	return mcc_maps_first.prefix[0] && level_name &&
+		!_strnicmp(level_name, mcc_maps_first.prefix, strlen(mcc_maps_first.prefix));
+}
+
+boolean mcc_maps_take_first_focus(void)
+{
+	boolean focus = mcc_maps_first.focus;
+
+	mcc_maps_first.focus = FALSE;
+	return focus && mcc_maps_type_count(TRUE) && mcc_maps_level_first(mcc_maps_level_name(mcc_maps_type_index(0, TRUE)));
+}
+
 short mcc_maps_type_count(boolean campaign)
 {
 	short index, count = 0;
@@ -484,15 +627,24 @@ short mcc_maps_type_count(boolean campaign)
 
 short mcc_maps_type_index(short row, boolean campaign)
 {
-	short index;
+	short index, pass;
 
 	mcc_maps_scan();
 	if (row < 0)
 		return NONE;
-	for (index = 0; index < mcc_menu_catalog.count; index++)
+	/* (the item PLAY handed over first, then the rest in their order) */
+	for (pass = mcc_maps_first.prefix[0] ? 0 : 1; pass < 2; pass++)
 	{
-		if (mcc_menu_catalog.maps[index].campaign == campaign && row-- == 0)
-			return index;
+		for (index = 0; index < mcc_menu_catalog.count; index++)
+		{
+			struct mcc_menu_map const *map = &mcc_menu_catalog.maps[index];
+
+			if (map->campaign == campaign && (mcc_maps_first.prefix[0] == 0 || mcc_maps_level_first(map->level_name) == !pass) &&
+				row-- == 0)
+			{
+				return index;
+			}
+		}
 	}
 	return NONE;
 }

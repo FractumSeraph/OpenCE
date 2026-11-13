@@ -73,6 +73,24 @@ static byte fake_tags[FAKE_TAGS_SIZE];
 #undef xbox_pointer
 #define xbox_pointer(address) ((void *)(fake_tags + ((unsigned long)(address) - CE_IMAGE_TAG_CACHE_BASE)))
 
+/* (port, this fork: ce_hud.c reads its tags through ChupathingyCE's guarded
+loader, ce_map_checks.c's: an address is the loaded map's if all its bytes are
+in the fake tag cache; the tag header and index are not guarded here, and
+nothing passed over is logged) */
+static void *ce_loaded_pointer(unsigned long address, unsigned long size)
+{
+	if (address < CE_IMAGE_TAG_CACHE_BASE || address - CE_IMAGE_TAG_CACHE_BASE > FAKE_TAGS_SIZE ||
+		size > FAKE_TAGS_SIZE - (address - CE_IMAGE_TAG_CACHE_BASE))
+	{
+		return NULL;
+	}
+	return xbox_pointer(address);
+}
+static boolean ce_tags_writable(void const *field, unsigned long size) { (void)field; (void)size; return TRUE; }
+static void ce_tags_guard_begin_loaded(void const *instances, long tag_count) { (void)instances; (void)tag_count; }
+static void ce_tags_guard_end(void) {}
+static void ce_contained(char const *format, ...) { (void)format; }
+
 #include "under_test.inc"
 
 /* the tags' names: Bigass Open v1.1's ammunition sheet's, else none */

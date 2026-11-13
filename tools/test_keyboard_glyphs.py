@@ -65,7 +65,8 @@ int main(void){
 def test_semantic_actions_live_rebinds_secondary_unbound_and_custom_icons(tmp_path):
     source = (ROOT/'port/linux/game/keyboard_glyphs.c').read_text(encoding='utf-8')
     header = (ROOT/'port/linux/include/halo_keyboard.h').read_text(encoding='utf-8')
-    actions = re.search(r'enum halo_keyboard_action.*?;', header, re.S).group()
+    # (port, this fork: to the enum's end, past a comment's ';')
+    actions = re.search(r'enum halo_keyboard_action\s*\{.*?\n\};', header, re.S).group()
     run_c(tmp_path, r'''
 #include <assert.h>
 #include <string.h>
@@ -233,6 +234,8 @@ typedef float real;typedef int boolean;typedef unsigned char byte;typedef unsign
 typedef struct {short x0,y0,x1,y1;}rectangle2d;
 typedef struct {float x0,y0,x1,y1;}real_rectangle2d;
 struct parse_string_state{int dummy;};
+/* (port, this fork: a font's pixels by XPTR, a pointer in this 32-bit build) */
+#define xbox_pointer(address) ((void *)(address))
 struct font_header {struct {byte *address;} pixels;};
 struct font_character {short character,bitmap_origin_x,bitmap_origin_y,character_width,bitmap_width,pixels_offset;};
 struct text_hires_glyph {float left,top,right,bottom,u0,v0,u1,v1,advance;};

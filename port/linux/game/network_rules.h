@@ -610,6 +610,15 @@ in, and past DELTA_LEGACY_NEWEST a signed table's facts): 234 from 40 on, none
 before and none to a host whose version is not known (a game joined by an
 invitation: an older host, a console's or the Xbox's, takes the short one) */
 int network_rules_join_request_extra(unsigned version);
+/* (port, this fork) the tail create_network_game_message_with_tail gives a
+client's join request to a host of the version, native the bytes of this
+build's request past the first NETWORK_RULES_JOIN_REQUEST_SIZE (its pass,
+proof and version word): 0, the whole request, to a host whose version is not
+known (the host's own player through 127.0.0.1, a game joined by an
+invitation), since from 42 on its version word lies past the 0x70 and such a
+host reads a cut request as version 0 and refuses it; otherwise
+network_rules_join_request_extra's bytes less native (negative: cut) */
+int network_rules_join_request_tail_size(unsigned version, int native);
 /* a table's facts (count of them, oldest first) applied to a layout from
 network_rules_layout_built_in: each fact of a version past DELTA_LEGACY_NEWEST,
 up to the layout's, in order; a size may only grow (the bytes after the local

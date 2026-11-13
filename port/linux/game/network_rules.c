@@ -621,6 +621,16 @@ int network_rules_join_request_extra(unsigned version)
 	return layout.join_request_extra;
 }
 
+int network_rules_join_request_tail_size(unsigned version, int native)
+{
+	/* (fs.00253: the dedicated server, which joins its own game through
+	127.0.0.1, was sent a request cut to 0x70 bytes and refused itself as
+	version 0; tools/test_join_request_version.py) */
+	if (version == NETWORK_RULES_VERSION_UNKNOWN)
+		return 0;
+	return network_rules_join_request_extra(version) - native;
+}
+
 void network_rules_layout_apply(struct network_rules_layout *layout, struct delta_layout_fact const *facts,
 	int count)
 {

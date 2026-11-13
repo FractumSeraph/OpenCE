@@ -22,11 +22,20 @@ typedef unsigned char boolean; typedef unsigned short word;
 #define FALSE 0
 #define NONE -1
 #define MAX(a,b) ((a)>(b)?(a):(b))
-''')
+/* (port, this fork: the pause builder's arena from the system allocator) */
+#include <stdlib.h>
+#define system_malloc malloc
+#define system_free free
+''' + f'#include "{(ROOT/"source/cseries/xbox_address.h").as_posix()}" /* (port, this fork: the tags\' XPTR fields) */\n')
     # Include the complete production builder, retaining its ABI and ownership checks.
     source=(ROOT/'port/linux/game/mcc_pause.c').read_text()
     for header in ('mcc_pause.h','mcc_ui.h'):
         (tmp_path/header).write_text((ROOT/'port/linux/game'/header).read_text())
+    # (port, this fork: ChupathingyCE's mcc_pause.c asks halo_port_features.h whether
+    # the build has MCC maps, by a path from its own folder: a desktop's has; and it
+    # includes cseries_windows.h, nothing of which it uses here)
+    (tmp_path/'cseries_windows.h').write_text('')
+    source='#define HALO_MCC 1\n'+source
     run_c(tmp_path,source+r'''
 #include <assert.h>
 static long art(short w,short h,enum mcc_pause_art_kind kind){return 1000+kind;}

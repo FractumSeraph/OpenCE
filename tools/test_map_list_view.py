@@ -1,7 +1,9 @@
 """The map choosers' Search, Show and Sort (port/linux/game/ui_map_list.c's
 view): which maps a view shows and in what order, with the list's own
 functions compiled against a small stand-in list, no maps or game needed.
-MCC maps are left out of the rows while a network game is hosted."""
+MCC maps are left out of the rows while a network game is hosted. The
+Workshop item the Delta Guide's PLAY hands over (mcc_maps_set_first_item)
+leads the rows, whatever the view."""
 import shutil
 import subprocess
 from pathlib import Path
@@ -45,6 +47,9 @@ static void view_entry_name(struct ui_map_entry const *entry, char *name, long s
 static char const *view_package_text(char const *level)
 { return strstr(level, "sidewinder") ? "author: sarge" : ""; }
 static long long view_entry_added(struct ui_map_entry *entry) { return entry->added; }
+static char const *first_item = "";
+static boolean mcc_maps_level_first(char const *level)
+{ return *first_item && !strncasecmp(level, first_item, strlen(first_item)); }
 """
 
 DRIVER = r"""
@@ -98,6 +103,23 @@ int main(void)
 	hosting = TRUE;
 	set(_ui_map_list_source_all, _ui_map_list_sort_default, "");
 	show("hosting");
+	hosting = FALSE;
+	ui_map_list_count_value = 0;
+	add("bloodgulch", _ui_map_list_source_xbox, 1);
+	add("timberland", _ui_map_list_source_ce, 5);
+	add("mcc_maps\\7\\beta", _ui_map_list_source_mcc, 3);
+	add("mcc_maps\\7\\alpha", _ui_map_list_source_mcc, 4);
+	ui_map_list_found_multiplayer = ui_map_list_count_value;
+	add("a10", _ui_map_list_source_xbox, 0);
+	ui_map_list_found_campaign_end = ui_map_list_count_value;
+	first_item = "mcc_maps\\7\\";
+	set(_ui_map_list_source_all, _ui_map_list_sort_default, "");
+	show("first");
+	set(_ui_map_list_source_ce, _ui_map_list_sort_name, "timber");
+	show("first_narrowed");
+	first_item = "";
+	set(_ui_map_list_source_all, _ui_map_list_sort_default, "");
+	show("first_reset");
 	return 0;
 }
 """
@@ -145,3 +167,76 @@ def test_show_and_search_narrow_the_multiplayer_rows(output):
 
 def test_no_mcc_maps_while_hosting_a_network_game(output):
     assert rows(output, "hosting") == ["bloodgulch", "timberland", "Damnation", "|", "a10"]
+
+
+def test_the_item_play_handed_over_leads_the_rows(output):
+    # (its maps in their own order, before the rest of the view's)
+    assert rows(output, "first") == ["mcc_maps\\7\\beta", "mcc_maps\\7\\alpha", "bloodgulch", "timberland",
+                                     "|", "a10"]
+    # (shown whatever Show and Search say, in the view's order)
+    assert rows(output, "first_narrowed") == ["mcc_maps\\7\\alpha", "mcc_maps\\7\\beta", "timberland", "|", "a10"]
+
+
+def test_the_item_let_go_leaves_the_list_as_it_was(output):
+    assert rows(output, "first_reset") == ["bloodgulch", "timberland", "mcc_maps\\7\\beta", "mcc_maps\\7\\alpha",
+                                           "|", "a10"]
+
+
+def test_desktop_list_has_room_for_the_mcc_catalog():
+    """#1137: the MCC catalog's maps come after the Custom Edition, HaloMD and Halo PC ones, its campaign maps
+    last of all; a list of 256 rows left a large Workshop collection and every campaign map out. A computer's
+    list holds the whole catalog beside a large Custom Edition folder, and every row's string index fits"""
+    import re
+    block = SOURCE[SOURCE.index("#ifdef HALO_CONSOLE_MAP_LIST_ROWS\n\tMAXIMUM_MAP_LIST"):]
+    desktop = int(re.search(r"#else[^#]*MAXIMUM_MAP_LIST = (\d+),", block).group(1))
+    header = (ROOT / "port/linux/game/mcc_maps.h").read_text()
+    catalog = int(re.search(r"#define MCC_MAPS_MAXIMUM (\d+)", header).group(1))
+    assert desktop >= 13 + catalog + 1024
+    kinds = (ROOT / "port/linux/include/halo_ui_map_list.h").read_text()
+    per_row = len(re.findall(r"^\s*_ui_map_list_string_\w+,", kinds, re.M))
+    assert per_row == 5
+    assert 0x4000 + desktop * per_row <= 0x7FFF
+
+
+@pytest.mark.skip(reason="this fork: its add_entry goes through entry_add, with the fork's separate campaign list and names array, which this test's stand-ins lack")
+def test_maps_left_out_of_a_full_list_are_counted(tmp_path):
+    """a map with no room left is counted and named for the log (ui_map_list_refresh), never dropped in silence"""
+    compiler = shutil.which("cc") or shutil.which("clang") or shutil.which("gcc")
+    if not compiler:
+        pytest.skip("no C compiler")
+    prelude = r"""
+#include <stdio.h>
+#include <string.h>
+#include <wchar.h>
+typedef int boolean;
+#define FALSE 0
+#define MAXIMUM_MAP_LIST 3
+#define MAP_NAME_LENGTH 64
+#define DISPLAY_NAME_LENGTH 32
+#define DESCRIPTION_LENGTH 32
+struct ui_map_entry { char map_name[MAP_NAME_LENGTH]; wchar_t display_name[DISPLAY_NAME_LENGTH],
+	lobby_name[DISPLAY_NAME_LENGTH], pane_name[DISPLAY_NAME_LENGTH], description[DESCRIPTION_LENGTH];
+	short xbox_index, picture_index; wchar_t const *game_type; short source; boolean added_known; long long added; };
+static struct ui_map_entry ui_map_list[MAXIMUM_MAP_LIST];
+static long ui_map_list_count_value, ui_map_list_left_out;
+static short ui_map_list_adding_source;
+static char ui_map_list_first_left_out[MAP_NAME_LENGTH];
+static void wide_copy(wchar_t *out, long size, wchar_t const *text) { wcsncpy(out, text, (size_t)size - 1); }
+"""
+    driver = r"""
+int main(void)
+{
+	static char const *const names[] = { "a", "b", "c", "mcc_maps\\3477809506\\1", "mcc_maps\\2886943774\\a10" };
+	int index;
+	for (index = 0; index < 5; index++)
+		add_entry(names[index], L"n", L"n", L"d", -1, 0);
+	printf("%ld %ld %s\n", ui_map_list_count_value, ui_map_list_left_out, ui_map_list_first_left_out);
+	return 0;
+}
+"""
+    (tmp_path / "add.c").write_text(prelude + function(SOURCE, "add_entry") + driver)
+    build = subprocess.run([compiler, "-std=gnu99", "-w", str(tmp_path / "add.c"), "-o", str(tmp_path / "add")],
+                           capture_output=True, text=True)
+    assert build.returncode == 0, build.stderr
+    result = subprocess.run([str(tmp_path / "add")], capture_output=True, text=True, check=True)
+    assert result.stdout.split() == ["3", "2", "mcc_maps\\3477809506\\1"]

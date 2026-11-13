@@ -235,6 +235,23 @@ static boolean network_game_server_drop_client_machine(struct network_game_serve
 	return TRUE;
 }
 
+/* (port, this fork: the machines still downloading the map, whose players
+are held out of the game until it is done (map sharing: none here), and a
+dedicated server's own machine (not this host)) */
+static boolean network_game_server_map_pending[HALO_PORT_MAXIMUM_NETWORK_MACHINES];
+static int held_players_restored;
+static void network_game_server_restore_held_players(struct network_game_server *server)
+{
+	(void)server;
+	held_players_restored++;
+}
+static boolean halo_server_mode(void) { return FALSE; }
+static boolean map_share_machine_needs_map(short machine_index)
+{
+	(void)machine_index;
+	return FALSE;
+}
+
 #include "under_test.inc"
 
 /* ---------- the session */
@@ -342,6 +359,8 @@ int main(int argc, char **argv)
 		}
 		CHECK(!network_game_server_late_joiner_waiting[3] && !network_game_server_late_joiner_first_added[3],
 			"the late join's wait is left over");
+		CHECK(held_players_restored == 1, "players held for a map download were not put back (%d)",
+			held_players_restored);
 		return 0;
 	}
 	CASE("late-joiner-reports")

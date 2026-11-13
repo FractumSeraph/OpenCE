@@ -6,6 +6,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include "zlib_prefixed.h"
+#include "xbox_address.h" /* (port, this fork: XPTR fields, a pointer in this 32-bit build) */
 typedef unsigned char byte,boolean;
 typedef unsigned short word;
 typedef float real;
@@ -104,6 +105,16 @@ static struct {char const *name;} unused_global;
 /* The compiler and checker call the same variable bit by these names. */
 #define _hs_syntax_node_variable_bit _hs_syntax_node_global_bit
 #define _hs_syntax_node_permanent_bit 3
+/* (port, this fork: ChupathingyCE's script runtime: Stubbs mode's functions
+past Halo's (none here), the ui map's map_name (not this map), a Halo PC
+map's skipped nodes (none), and a type's default value (hs_runtime.c's,
+from hs.c's constants: void's 0, a string's empty text, the rest NONE)) */
+#define HS_FUNCTION_COUNT() hs_function_table_count
+static long hs_function_count(void) {return hs_function_table_count;}
+#define csstrcmp strcmp
+static boolean hs_scenario_pack_menus=FALSE;
+static boolean hs_scenario_node_skipped(long i) {(void)i;return FALSE;}
+static long hs_type_default_value(short type) {return type==_hs_type_void ? 0 : type==_hs_type_string ? (long)"" : NONE;}
 #include "policy.inc"
 #include "console.inc"
 #include "runtime.inc"

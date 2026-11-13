@@ -12,7 +12,7 @@ enum
     FALSE, GL_FRAMEBUFFER, GL_DRAW_FRAMEBUFFER, GL_READ_FRAMEBUFFER,
     GL_COLOR_ATTACHMENT0, GL_NONE, GL_RENDERBUFFER, GL_DEPTH_STENCIL_ATTACHMENT,
     GL_TEXTURE_2D, GL_FRAMEBUFFER_COMPLETE, GL_SCISSOR_TEST, GL_TRUE,
-    GL_COLOR_BUFFER_BIT, GL_RGBA16F, GL_LINEAR
+    GL_COLOR_BUFFER_BIT, GL_RGBA16F, GL_LINEAR, GL_NEAREST
 };
 
 struct framebuffer_entry
@@ -57,6 +57,7 @@ static GLenum glCheckFramebufferStatus(GLenum target) { return GL_FRAMEBUFFER_CO
 static void glDrawBuffers(int count, const GLenum *buffers) { }
 static void xgpu_gl_state_invalidate(void) { }
 #define platform_log(...) ((void)0)
+#define gl_check_errors(where) ((void)0)
 #include "cache.inc"
 
 static void glDisable(GLenum state) { }
@@ -80,6 +81,9 @@ static void glBlitFramebuffer(int sx0, int sy0, int sx1, int sy1,
     blits++;
 }
 
+/* (port, this fork: the window's framebuffer, 0 but on iOS) */
+static GLuint platform_window_framebuffer(void) { return 0; }
+
 static int xgpu_post_present(GLuint texture, int x, int y, int width, int height, float white)
 {
     assert(draw_binding == 0 && texture == expected_texture);
@@ -94,6 +98,9 @@ static void present(GLuint texture, int floating)
     struct test_buffer *back_buffer = &buffer;
     struct { int float_window; float sdr_white; } hdr = { 0, 1.0f };
     int x = 0, y = 0, width = 640, height = 480;
+    GLuint read_framebuffer;
+#define picture_width ((GLint)back_buffer->target.gl_width)
+#define picture_height ((GLint)back_buffer->target.gl_height)
 
     buffer.target.texture = expected_texture = texture;
     buffer.target.format = floating ? GL_RGBA16F : 0;

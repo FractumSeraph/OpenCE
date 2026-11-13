@@ -880,6 +880,17 @@ void update_client_local_ticks(
 		"c:\\halo\\SOURCE\\game\\player_queues_new.c",
 		0x20B,
 		game_connection()==_game_connection_local);
+	/* port: a network client's game left for the main menu (its client
+	disposed and the connection set local, as the browser's page does when
+	the host goes) still has its map ticked for the rest of that frame,
+	before the main menu loads. A network client only starts the client's
+	queues (game_time_start), so the server's were never made valid: there
+	is no local game to build updates for (datum_get asserted on the
+	client's players, then "failed to get an update") */
+	if (!update_server_globals.queues || !update_server_globals.queues->valid)
+	{
+		return;
+	}
 	update_client_build_client_update(&action_collection);
 	update_server_handle_client_update(machine_index, action_collection.actions);
 	while (ticks-->0)

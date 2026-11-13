@@ -13,7 +13,10 @@ def generated(checkpoint_reset=None):
     header = (ROOT / "port/linux/game/network_distributed.h").read_text()
     enum_start = header.index("enum\n{")
     kinds = header[enum_start:header.index("\n};", enum_start) + 3]
-    dispatch = function(source, "network_distributed_handle_message")
+    # (port, this fork: the dispatcher is ChupathingyCE's static distributed_handle_message,
+    # which network_distributed_handle_message calls as it is when the wire layout has no
+    # header bytes of its own, as a game of the fork's 43 has none)
+    dispatch = function(source, "distributed_handle_message")
     # Preserve all real framing, batch recursion, source, epoch and stale checks.
     # Only the final gameplay handlers are replaced by observable deliveries.
     dispatch = dispatch[:dispatch.rindex("\tswitch (header.type)")] + "\tdelivered[header.type]++;\n}\n"
@@ -95,11 +98,37 @@ static void error(int level,char const *fmt,...){(void)level;(void)fmt;}
 static long distributed_sender_times[MAXIMUM_SENDERS];
 static long distributed_received_times[MAXIMUM_SENDERS][NUMBER_OF_DISTRIBUTED_MESSAGES];
 '''
+    # (port, this fork: MCC's kinds in mcc_network_messages.h, the senders' tick
+    # window by network_rules.c, and ChupathingyCE's wire layout, whose epoch kind (its
+    # chupa-43a facts) a game of the fork's 43 has none of)
+    rules = (ROOT / "port/linux/game/network_rules.h").read_text()
+    code += enum_with((ROOT / "port/linux/game/mcc_network_messages.h").read_text(),
+                      "_distributed_message_mcc_grenades") + "\n"
+    for name in ("NETWORK_RULES_HEADER_SIZE", "NETWORK_RULES_AIM_ASSIST_SIZE"):
+        code += re.search(r"^#define " + name + r" .*$", rules, re.M).group(0) + "\n"
+    code += "#include <stdint.h>\n"
+    code += function((ROOT / "port/linux/game/network_rules.c").read_text(), "network_rules_stamp_window")
+    code += r'''
+struct network_rules_layout {int epoch_kind;};
+static struct network_rules_layout const *distributed_wire_layout(void){static struct network_rules_layout layout;return &layout;}
+static int network_objects_client_synchronized(void){return 1;}
+static int distributed_legacy_host(void){return 0;}
+static int network_rules_client_takes_unsynchronized(int type,int stream,int batch){(void)type;(void)stream;(void)batch;return 1;}
+'''
     code += checkpoint_reset or "static void distributed_reset_checkpoint_state(boolean receive){(void)receive;}\n"
     for name in ("distributed_advance_checkpoint", "distributed_message_epoch_valid",
                  "distributed_message_time_bounded", "distributed_message_stale"):
         code += function(source, name)
+    code += function(source, "distributed_kind_known")
+    code += r'''
+static int unknown_kinds;
+static void distributed_unknown_kind(long m,byte t){(void)m;(void)t;unknown_kinds++;}
+'''
     code += dispatch
+    code += r'''
+static void network_distributed_handle_message(long machine_index,word const *message,word size)
+{distributed_handle_message(machine_index,message,size);}
+'''
     code += r'''
 static void send(long machine,byte type,unsigned long epoch,long time,byte count,word size){
  union {word alignment;byte bytes[128];} message;
@@ -249,7 +278,19 @@ static void distributed_batch_add(short sender,void const *message,word size,wor
 #define network_distributed_server_send_to_all_reliably(m,s) distributed_batch_add(0,m,s,0)
 #define network_distributed_client_send_reliably(m,s) distributed_batch_add(HOST_SENDER,m,s,0)
 #define network_distributed_server_send_to_machine_reliably(i,m,s) distributed_batch_add(i,m,s,0)
+/* (port, this fork: a little-endian build's messages as they are, network_distributed.h;
+the client's hold of ChupathingyCE's layouts with an epoch kind, none in the fork's 43; and
+its routes to the transport, as they go with no header bytes of the layout's own) */
+#define WIRE_MESSAGE(message, size) (message)
+#define WIRE_MESSAGE_OUT(message, size)
+static boolean distributed_held_back(byte type){(void)type;return FALSE;}
+#define network_distributed_client_send(m,s) distributed_batch_add(HOST_SENDER,m,s,0)
+#define network_distributed_server_send_to_machine(i,m,s) distributed_batch_add(i,m,s,0)
 '''
+    code += enum_with(source, "_distributed_wire_to_all_reliably")
+    code += function(source, "distributed_wire_write")
+    code += ("static void distributed_wire_send(short route,long machine_index,void *message,word size)"
+             "{distributed_wire_write(route,machine_index,message,size);}\n")
     for name in ("distributed_fill_header", "distributed_entry_size", "distributed_send",
                  "distributed_send_to_machine", "distributed_send_to_machine_reliably",
                  "distributed_packer_flush"):
@@ -311,7 +352,12 @@ static struct {boolean valid;} distributed_machines;
 static struct {long flags,unit_index,vehicle_index,seat_index;} distributed_sent_units[2];
 static long distributed_player_machines[2];
 static struct {long taken_time[2],taken_host_time[2],input_time[2];} distributed_divergence;
-static struct {long size;} distributed_batches[MAXIMUM_SENDERS];
+static struct {long size,messages;} distributed_batches[MAXIMUM_SENDERS];
+/* (port, this fork: the wire layout looked up again, and the epoch of
+ChupathingyCE's layouts with one, after a checkpoint) */
+static boolean distributed_layout_valid;
+static unsigned long distributed_epoch;
+static void distributed_layout_refresh(void){distributed_layout_valid=TRUE;}
 static struct {long time,unit_index;} distributed_own_positions[2][4];
 static int provisional_inputs;
 static void update_queues_distributed_reset(void){provisional_inputs=0;}

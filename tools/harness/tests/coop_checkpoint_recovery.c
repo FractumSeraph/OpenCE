@@ -171,7 +171,10 @@ static void unit_kill_silent(long index);
 static void unit_kill_no_statistics(long index);
 static short objects_client_retried_inventory_count;
 static long objects_host_told[MAXIMUM_TRACKED_OBJECTS],objects_host_told_count;
-static struct {long time,player_indices[MAXIMUM_LOCAL_PLAYERS];} objects_host_machines[2];
+/* (port, this fork: and the epoch the machine was last told the objects at) */
+static struct {long time,player_indices[MAXIMUM_LOCAL_PLAYERS];unsigned int epoch;} objects_host_machines[2];
+#define _error_log 3
+static void error(int level,char const *format,...) {(void)level;(void)format;}
 static struct {unsigned long checksum,weapons_checksum;} objects_host_inventories[MAXIMUM_TRACKED_OBJECTS];
 static union {long alignment;byte bytes[MAXIMUM_MESSAGE_SIZE];} snapshot_packets[32];
 static word snapshot_sizes[32];
@@ -384,6 +387,24 @@ static void distributed_client_send_vehicles(void) {prediction_ticks++;}
 static void distributed_client_carry_unsteered_vehicles(void) {prediction_ticks++;}
 static void distributed_client_send_identity(void) {prediction_ticks++;}
 static void distributed_client_send_build(void) {prediction_ticks++;}
+
+/* (port, this fork: what ChupathingyCE's network code calls besides: a
+static target's nearest (its name for static_target_near), the host's
+network version (43: static shields' rules), fair play's and recordings'
+game and tick (none here), a host of 41 or older (none) and the layout's epoch (none in the fork's 43,
+whose checkpoint epoch is its own)) */
+#define static_target_nearest static_target_near
+static boolean network_rules_of_version(unsigned int version) {return version<=43;}
+static float network_rules_static_event_reach(int area,float cutoff_radius) {(void)area;return cutoff_radius;}
+static void network_fairplay_new_game(void) { }
+static void network_recording_new_game(void) { }
+static void network_recording_client_tick(void) { }
+/* (the fork keeps the host's damage tables in one allocation, damage_host:
+here they are the fixture's, present; damage_host_tables_reset is the real one) */
+static byte damage_host_present;
+#define damage_host (&damage_host_present)
+static boolean distributed_legacy_host(void) {return FALSE;}
+static unsigned int network_distributed_epoch(void) {return 0;}
 
 #include "engine.inc"
 #include "under_test.inc"

@@ -21,6 +21,10 @@ name: Build
 # - compiles go through ccache, whose cache carries over from run to run, so
 #   a commit only recompiles what it changed; downloads (SDL, musl, Gradle,
 #   the Linux builds' system roots) are cached too;
+# - the 32-bit Linux build is built once (linux) and tested in that job (this
+#   fork: ChupathingyCE's linux-tests, which splits tools/ci_tests.txt over
+#   runners, is left out, below); the big-endian tests need no build and
+#   start at once;
 # - pushes build only release branches and tags, not main: a commit reaches
 #   main through a pull request whose Build passed, and the nightly, the
 #   releases and the test builds start their own run (workflow_dispatch);
@@ -330,14 +334,12 @@ jobs:
           # (OpenCE's widescreen loading screen and chant, MCC maps and checkpoints,
           # keyboard glyphs)
           python3 -m pytest -q tools/test_loading_widescreen.py tools/test_loading_chant.py
-          # (not yet: test_mcc_tag_validation, test_mcc_share_storage, test_mcc_checkpoint,
-          # test_checkpoint_epoch, test_coop_checkpoint, test_coop_checkpoint_recovery and the
-          # keyboard glyph tests, which build OpenCE's code from slices and need the fork's
-          # stand-ins: build/UPDATING.md, OpenCE 14ff64cd8)
           python3 -m pytest -q \
-            tools/test_mcc_cache_format.py tools/test_mcc_projectiles.py \
+            tools/test_mcc_cache_format.py tools/test_mcc_projectiles.py tools/test_mcc_tag_validation.py \
             tools/test_mcc_share.py tools/test_mcc_share_rules.py tools/test_mcc_share_stage.py \
-            tools/test_mcc_share_metadata.py tools/test_mcc_load_network.py
+            tools/test_mcc_share_metadata.py tools/test_mcc_load_network.py tools/test_mcc_share_storage.py \
+            tools/test_mcc_checkpoint.py tools/test_checkpoint_epoch.py tools/test_coop_checkpoint.py \
+            tools/test_coop_checkpoint_recovery.py
           # (ChupathingyCE's tests of its MCC maps, Steam link and Workshop, map
           # lists, lobby switch and network 43 hosting, merged 2026-11-12)
           python3 -m pytest -q \
@@ -350,11 +352,19 @@ jobs:
             tools/test_mcc_workshop.py tools/test_mcc_score_hint.py tools/test_network_test_startup.py \
             tools/test_steam_workshop.py tools/test_steam_bridge.py tools/test_steam_content.py \
             tools/test_workshop_list.py tools/test_map_list_view.py tools/test_lobby_switch_prompt.py \
-            tools/test_net43_host.py tools/test_server_mcc_playable.py tools/test_macos_fullscreen_space.py
-          python3 -m pytest -q tools/test_menu_button_glyphs.py
+            tools/test_net43_host.py tools/test_server_mcc_playable.py tools/test_macos_fullscreen_space.py \
+            tools/test_guide_layout.py tools/test_mcc_host_identity.py tools/test_mcc_maps_first.py tools/test_retry_backoff.py \
+            tools/test_mcc_bgfx_textures.py tools/test_workshop_questions.py
+          python3 -m pytest -q tools/test_keyboard_glyphs.py tools/test_menu_button_glyphs.py tools/test_mcc_keyboard_glyphs.py
           # OpenCE's dedicated server (halo --server): --version, and --server without maps refused (exit code 2);
           # its cases with clients need the retail maps, and are skipped
           python3 -m pytest -q tools/test_dedicated_server.py
+          # ChupathingyCE's dedicated server joins its own game through 127.0.0.1 (a host
+          # of a version not known): its join request whole, its network_version read back
+          # by the host's decoder, not cut to 0x70 and refused as version 0 (fs.00253).
+          # No retail maps here for a live server: the game's own encoder, decoder and
+          # rules, built from linux64's units with the sanitizers
+          python3 -m pytest -q -rs tools/test_join_request_version.py
           python3 tools/test_light_storage.py
           python3 -m pytest -q tools/test_controller_buttons.py tools/test_controller_remap.py tools/test_controller_remap_context.py tools/test_hud_button_style.py tools/test_hud_corrections.py
           python3 tools/test_saved_game_script_globals.py
@@ -467,6 +477,53 @@ jobs:
         with:
           path: .ccache
           key: ccache-linux-ubuntu-clang22-${{ github.sha }}
+
+  # (ChupathingyCE's linux-tests, its pytest files of tools/ci_tests.txt in
+  # parallel against this build (#1122), is left out of this fork: the linux
+  # job's Test steps run the fork's list, which leaves out or adapts the tests
+  # written for ChupathingyCE's code; build/UPDATING.md)
+
+  linux-big-endian:
+    needs: gate
+    # Delta's wire on a big-endian machine, as the Xbox 360 and Wii U are
+    # (tools/test_delta_big_endian.py, under QEMU), and structure culling's
+    # reads of the map's vertices there. Needs no build: it runs beside them.
+    # (32-bit headers and libraries without gcc-multilib, which the s390x
+    # cross compiler conflicts with: the shader key test builds with -m32)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit }}
+
+      - name: Delta on big-endian
+        timeout-minutes: 15
+        run: |
+          # (apt fails fast and retries: a mirror that stalls has hung a run
+          # for more than 15 minutes; each try is also cut off by timeout)
+          printf '%s\n' 'Acquire::Retries "3";' 'Acquire::http::Timeout "30";' 'Acquire::https::Timeout "30";' \
+            | sudo tee /etc/apt/apt.conf.d/80-ci-fail-fast > /dev/null
+          apt_try() {
+            for attempt in 1 2 3; do
+              sudo timeout 300 "$@" && return 0
+              echo "apt: try $attempt of $* failed" >&2
+              sleep 10
+            done
+            return 1
+          }
+          apt_try apt-get update -q
+          apt_try apt-get install -y -q --no-install-recommends gcc-s390x-linux-gnu libc6-dev-s390x-cross qemu-user \
+            libc6-dev-i386 lib32gcc-13-dev python3-pytest
+          DELTA_BE_REQUIRED=1 python3 -m pytest -q tools/test_delta_big_endian.py tools/test_vertex_byte_order.py -rs
+          # (the shader key lists read the same on a big-endian machine)
+          if [ -f tools/test_shader_keys.py ]; then
+            DELTA_BE_REQUIRED=1 python3 -m pytest -q tools/test_shader_keys.py -rs
+          fi
+          # (structure culling from the Xbox's vertex bytes, #925)
+          if [ -f tools/harness/tests/test_structure_culling_byte_order.py ]; then
+            DELTA_BE_REQUIRED=1 python3 -m pytest -q tools/harness/tests/test_structure_culling_byte_order.py -rs
+          fi
 
   linux64:
     needs: gate
@@ -840,9 +897,12 @@ jobs:
           pattern: chupathingyce-server-linux-*
           path: artifacts
 
+      # (no cache of QEMU's image: it kept 30 MB for every pull request, which
+      # crowded main's compile caches out of the repository's 10 GB)
       - uses: docker/setup-qemu-action@v3
         with:
           platforms: arm64
+          cache-image: false
 
       - uses: docker/setup-buildx-action@v3
 

@@ -7,14 +7,21 @@ import sys
 
 import pytest
 
-# (port, this fork: the harness builds OpenCE's script runtime from its source
-# text, which in this fork is ChupathingyCE's, its data arrays and thread
-# stacks laid out otherwise: hs_console_state.inl is compiled in the game
-# itself; build/UPDATING.md, OpenCE 14ff64cd8, says what is left to do)
-pytestmark = pytest.mark.skip(reason="the fork's hs runtime and data arrays are ChupathingyCE's")
+# (port, this fork: the script runtime built from the source text is
+# ChupathingyCE's: its data arrays hold their elements by XPTR, its value
+# slots and thread stack are its own, and hs_console_state.c stands in for
+# what it calls besides (Stubbs mode's functions, skipped nodes))
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from harness import ROOT, enum_with, function, mutated, read, structure
+from harness import ROOT, configured, enum_with, function, mutated, read, structure
+
+
+def define(source, name):
+    """A #define, with its continuation lines."""
+    match = re.search(r"^#define\s+" + re.escape(name) + r"\b(?:[^\n]*\\\n)*[^\n]*", source, re.M)
+    if not match:
+        raise LookupError(f"define not found in the sources: {name}")
+    return match.group(0) + "\n"
 
 
 def declaration(source, name):
@@ -24,19 +31,29 @@ def declaration(source, name):
 @pytest.fixture(scope="session")
 def console_state_tool(tmp_path_factory, request):
     work = tmp_path_factory.mktemp("hs-console-state")
-    runtime = read("source/hs/hs_runtime.c")
-    data = read("source/memory/data.c")
-    data_h = read("source/memory/data.h")
+    # (port, this fork: as the 32-bit game builds them, without HALO_64BIT)
+    runtime = configured(read("source/hs/hs_runtime.c"))
+    data = configured(read("source/memory/data.c"))
+    data_h = configured(read("source/memory/data.h"))
     syntax = read("source/hs/hs_scenario_definitions.h")
     checkpoint = read("port/linux/game/mcc_checkpoint.c")
     compiler = read("source/hs/hs_compile.c")
     hs = read("source/hs/hs.c")
-    types = "\n".join(structure(runtime, name) for name in
+    # (port, this fork: the thread stack's size first, which its structure uses)
+    types = enum_with(runtime, "HS_THREAD_STACK_SIZE =") + "\n"
+    types += "\n".join(structure(runtime, name) for name in
         ("hs_stack_frame", "hs_thread_datum", "hs_runtime_globals", "hs_global_datum"))
     types += "\n" + "\n".join(structure(data_h, name) for name in ("data_array", "datum_header"))
+    # (port, this fork: ChupathingyCE's data arrays hold their elements by
+    # XPTR, and its script value slots as a little-endian build has them)
+    types += "\n" + define(data_h, "DATA_ARRAY_OWN_ELEMENTS")
+    types += "#define HS_SLOT_MEMBER(type, name) type name;\n"
+    types += "#define HS_SLOT_TRAILING_PAD(declaration) declaration\n"
+    types += "#define HS_SLOT(type, slot) ((type *)(slot))\n"
+    types += define(syntax, "HS_UNION_SLOT")
     types += "\n" + "\n".join(structure(syntax, name) for name in ("hs_syntax_node", "hs_script"))
     types += "\n" + "\n".join(enum_with(runtime, name) for name in
-        ("_hs_thread_type_script =", "_hs_syntax_node_primitive_bit =", "HS_THREAD_STACK_SIZE =", "_hs_thread_in_function_call_bit ="))
+        ("_hs_thread_type_script =", "_hs_syntax_node_primitive_bit =", "_hs_thread_in_function_call_bit ="))
     types += "\n" + enum_with(syntax, "_hs_script_startup =")
     types += "\n" + enum_with(read("source/hs/hs.h"), "_hs_type_void")
     types += "\n" + enum_with(read("source/hs/hs.h"), "_hs_function_begin =")
@@ -99,7 +116,7 @@ def console_state_tool(tmp_path_factory, request):
     binary = work / ("console.exe" if os.name == "nt" else "console")
     command = [os.environ.get("CC", "clang"), "-m32", "-std=gnu89", "-O2", "-Wall", "-Werror",
         "-Wno-unused-function", "-Wno-unused-variable", "-D_CRT_SECURE_NO_WARNINGS", "-DZ_PREFIX",
-        "-Dz_errmsg=z_port_errmsg", "-I"+str(zlib), "-I"+str(work),
+        "-Dz_errmsg=z_port_errmsg", "-I"+str(zlib), "-I"+str(ROOT / "source/cseries"), "-I"+str(work),
         str(ROOT / "tools/harness/tests/hs_console_state.c"), str(zlib / "crc32.c"), "-o", str(binary)]
     compiled = subprocess.run(command, capture_output=True, text=True)
     assert compiled.returncode == 0, compiled.stdout + compiled.stderr

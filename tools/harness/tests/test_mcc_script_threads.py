@@ -6,8 +6,8 @@ from pathlib import Path
 import pytest
 from tools.harness import build, read, run, structure, enum_with, function
 
-# (this fork, since the merge of ChupathingyCE 38aae92ee: build/UPDATING.md)
-pytestmark = pytest.mark.skip(reason="the fork's mcc_script_threads.inl checks its storage with zlib's crc32, which the harness has no stand-in for")
+# (port, this fork, since the merge of ChupathingyCE 38aae92ee: the storage
+# is checked with zlib's crc32, which mcc_script_threads.c computes itself)
 
 
 @pytest.fixture(scope="module")

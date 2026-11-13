@@ -5,10 +5,9 @@ from pathlib import Path
 
 import pytest
 
-# (port, this fork: the game clock's code it builds is the fork's, with OpenCE's
-# held distributed target and the profiling sections, which its stand-ins lack; build/UPDATING.md, OpenCE 14ff64cd8, has the
-# list of the harness tests left to adapt)
-pytestmark = pytest.mark.skip(reason="the fork's game_time.c needs more stand-ins")
+# (port, this fork: the game clock's code it builds is the fork's, with its
+# distributed target, profiling sections, debug.fixed_step and the main menu's
+# clock: tick_fraction_held.c stands in for them)
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from harness import CHECK_FAILED, build, constant, enum_with, function, mutated, read, run, structure  # noqa: E402
@@ -28,11 +27,14 @@ def generated(control=None):
     source = read('source/game/game_time.c')
     connections = enum_with(read('source/game/game.h'), '_game_connection_local')
     waiting = re.search(r"^static boolean game_time_ticks_waiting = FALSE;", source, re.M).group(0)
+    # (port, this fork: a reliable host update's time, which a client ticks toward)
+    target = re.search(r"^static long game_time_distributed_target = NONE;", source, re.M).group(0)
     code = '\n'.join([
         'enum { SOME_LARGE_NUMBER_OF_TICKS = %d };' % constant(source, 'SOME_LARGE_NUMBER_OF_TICKS'),
         structure(source, 'game_time_globals_struct'),
         'static struct game_time_globals_struct *game_time_globals;',
         waiting,
+        target,
     ] + [function(source, name) for name in (
         'game_time_initialize_for_new_map', 'game_time_held', 'game_time_get_speed', 'game_time_get_tick_fraction',
         'game_time_update')])

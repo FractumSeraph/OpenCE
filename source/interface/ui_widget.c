@@ -1585,8 +1585,9 @@ static wchar_t *spinner_string_list_get_string(
 /* port: text boxes' string list indices from here are the descriptions of
 spinners' extra items (spinner_extras' descriptions), above the Custom
 Edition maps' string list indices and bitmap frames (port/linux/game/ui_map_list.c
-keeps them below 0x7000) */
-#define SPINNER_EXTRA_DESCRIPTION_BASE 0x7000
+keeps them below 0x7C00: this fork, since ChupathingyCE's map list of 2,560
+rows, five strings each from 0x4000, reaches 0x7200) */
+#define SPINNER_EXTRA_DESCRIPTION_BASE 0x7C00
 /* ... and the pixels the kills to win spinner is wider (for three digits) */
 #define SPINNER_EXTRA_WIDTH 12
 
@@ -8680,6 +8681,52 @@ static void ui_widgets_process_mouse(
 /* port: port/linux/game/menu_functions.c; optional PC legend spacing. */
 short menu_functions_glyph_offset(struct widget_instance *widget);
 
+/* port: how far left a prompt's pieces move for the key caps to their
+right: a key cap wider than the button's picture it stands for reaches
+left of it (ENTER's, for A), and touched the words before it ("=BACK"):
+the pieces left of it on its line, its own row of the footer, move left by
+as much, the room between them as the Xbox's pictures had it */
+static short ui_widget_port_key_cap_shift(
+	struct widget_instance *parent,
+	struct widget_instance *child)
+{
+	struct ui_widget_definition *child_definition = ui_widget_definition_get(child->definition_tag_index);
+	struct widget_instance *sibling;
+	short child_x1 = (short)(child_definition->bounds.x1 + child->horizontal_offset);
+	short child_y0 = (short)(child_definition->bounds.y0 + child->vertical_offset);
+	short child_y1 = (short)(child_definition->bounds.y1 + child->vertical_offset);
+	short shift = 0;
+
+	for (sibling = parent->child; sibling; sibling = sibling->next)
+	{
+		struct ui_widget_definition *definition;
+		rectangle2d bounds;
+		short left;
+
+		if (sibling == child || !sibling->visible)
+			continue;
+		definition = ui_widget_definition_get(sibling->definition_tag_index);
+		if (definition->background_bitmap.index == NONE)
+			continue;
+		bounds = definition->bounds;
+		bounds.x0 = (short)(bounds.x0 + sibling->horizontal_offset);
+		bounds.x1 = (short)(bounds.x1 + sibling->horizontal_offset);
+		bounds.y0 = (short)(bounds.y0 + sibling->vertical_offset);
+		bounds.y1 = (short)(bounds.y1 + sibling->vertical_offset);
+		/* (on its line, wholly left of the picture, and near it) */
+		if (bounds.y0 >= child_y1 || bounds.y1 <= child_y0 || child_x1 > bounds.x0 + 1 ||
+			bounds.x0 - child_x1 > 120)
+		{
+			continue;
+		}
+		left = pc_menu_button_key_cap_left(definition->background_bitmap.index, bounds.x0, bounds.y0, bounds.x1,
+			bounds.y1);
+		if (left < bounds.x0)
+			shift = (short)(shift + bounds.x0 - left);
+	}
+	return shift;
+}
+
 static void widget_instance_render_recursive(
 	struct widget_instance *widget,
 	rectangle2d *clip_rect,
@@ -8931,14 +8978,17 @@ static void widget_instance_render_recursive(
 	{
 		for (child = widget->child; child; child = child->next)
 		{
+			point2d child_offset = offset;
+
 			focus = child == widget->focused_child;
 			use_nifty_plasma_fx = focus &&
 				(widget->type == _ui_widget_type_spinner_list ||
 				widget->type == _ui_widget_type_column_list);
+			child_offset.x = (short)(child_offset.x - ui_widget_port_key_cap_shift(widget, child));
 			widget_instance_render_recursive(
 				child,
 				clip_rect,
-				offset,
+				child_offset,
 				focus,
 				use_nifty_plasma_fx);
 		}
@@ -10704,6 +10754,43 @@ void process_ui_widgets(
 
 	return;
 }
+
+#if defined(HALO_GUIDE) && (!defined(HALO_MCC) || HALO_MCC)
+/* port: the screen the Delta Guide's Workshop PLAY opened
+(port/linux/game/menu_functions.c): the first player's screen now, and
+whether a screen is still up or behind the one up (its history, which back
+returns to) */
+long ui_widget_port_active_screen_tag(
+	void)
+{
+	return widget_globals.active_widgets[0] ? widget_globals.active_widgets[0]->definition_tag_index : NONE;
+}
+
+boolean ui_widget_port_screen_shown_or_behind(
+	long tag)
+{
+	long local_player_index;
+
+	if (tag == NONE)
+		return FALSE;
+	for (local_player_index = 0; local_player_index < MAXIMUM_NUMBER_OF_LOCAL_PLAYERS; local_player_index++)
+	{
+		struct widget_stack_node *node;
+
+		if (widget_globals.active_widgets[local_player_index] &&
+			widget_globals.active_widgets[local_player_index]->definition_tag_index == tag)
+		{
+			return TRUE;
+		}
+		for (node = widget_globals.widget_stack[local_player_index]; node; node = node->next)
+		{
+			if (node->data.previous_widget_tag == tag)
+				return TRUE;
+		}
+	}
+	return FALSE;
+}
+#endif
 
 #ifdef HALO_GAME_BROWSER
 /* port: a screen by name over the first player's (Online Games' Start, the

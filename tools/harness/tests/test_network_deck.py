@@ -15,8 +15,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from harness import CHECK_FAILED, build, constant, enum_with, function, mutated, read, run, structure  # noqa: E402
 from harness.riding import engine, without_includes  # noqa: E402
 
-# (this fork, since the merge of ChupathingyCE 38aae92ee: build/UPDATING.md)
-pytestmark = pytest.mark.skip(reason="ChupathingyCE's wire layout functions in the fork's merged distributed code need more stand-ins (distributed_wire_layout, network_rules_unit_state_length)")
+# (port, this fork, since the merge of ChupathingyCE 38aae92ee: the state's
+# reader asks ChupathingyCE's wire layout for further parts; network_deck.c
+# stands in for a layout of the fork's own 43, which has none)
 
 NETWORK = "port/linux/game/network_distributed.c"
 RIDING = "port/linux/game/vehicle_riding.c"
@@ -88,6 +89,9 @@ def generated(control=None):
                    "DISTRIBUTED_UNIT_STATE_MINIMUM_SIZE"):
         types += enum_with(network, member) + "\n"
     types += structure(network, "distributed_unit_state") + "\n"
+    # (port, this fork: the wire layout's unit state parts, and the none of a game of its own 43)
+    types += "#include <stdint.h>\n" + structure(read("port/linux/game/network_rules.h"), "network_rules_layout") + "\n"
+    types += re.search(r"^static uint8_t const distributed_no_parts\[.*$", network, re.M).group(0) + "\n"
     code = "".join(function(sources["riding"], name) + "\n" for name in RIDING_FUNCTIONS)
     code += "".join(function(network, name) + "\n" for name in NETWORK_FUNCTIONS)
     return (("types.inc", types), ("under_test.inc", code))

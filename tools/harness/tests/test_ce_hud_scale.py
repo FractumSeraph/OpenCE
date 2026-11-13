@@ -13,10 +13,8 @@ from pathlib import Path
 
 import pytest
 
-# (port, this fork: ce_hud.c now reads its tags through ChupathingyCE's guarded
-# loader (ce_loaded_pointer, ce_tags_writable), which its stand-ins lack; build/UPDATING.md, OpenCE 14ff64cd8, has the
-# list of the harness tests left to adapt)
-pytestmark = pytest.mark.skip(reason="ce_hud.c's guarded loader needs stand-ins")
+# (port, this fork: ce_hud.c reads its tags through ChupathingyCE's guarded
+# loader (ce_loaded_pointer, ce_tags_writable): ce_hud_scale.c stands in for it)
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from harness import CHECK_FAILED, build, enum_with, function, mutated, read, run, structure  # noqa: E402
@@ -24,7 +22,7 @@ from harness import CHECK_FAILED, build, enum_with, function, mutated, read, run
 CASES = ["elements", "numbers-halved", "items", "digits-kept", "digits-halved", "bitmap-flags-cleared",
          "detail-after-reflection", "behaviours", "mixed-meters", "xbox-ammo-meters"]
 FUNCTIONS = ("ce_range_within", "ce_hud_read_long", "ce_hud_tag_cache_pointer", "ce_hud_reference_tag",
-             "ce_hud_bitmap_group", "ce_hud_placement", "ce_hud_element_placement", "ce_hud_block_placements",
+             "ce_hud_bitmap_group", "ce_hud_block_elements", "ce_hud_placement", "ce_hud_element_placement", "ce_hud_block_placements",
              "ce_hud_items_placements", "ce_hud_bitmap_scale_flags_clear", "ce_hud_digits_halve",
              "ce_hud_meter_bitmap", "ce_hud_block_meter_bitmaps", "ce_hud_static_bitmap", "ce_hud_block_static_bitmaps",
              "ce_hud_mixed_meters_find", "ce_hud_unit_interface", "ce_hud_weapon_interface",
