@@ -298,7 +298,7 @@ Beside the maps and the saves, the game keeps folders of its own
 
 | Folder | Contents |
 | --- | --- |
-| `logs/` in the data root | The logs: `debug.txt`, `halo.log` (Windows) and `crashes/`. Zip this folder for a bug report. `paths.logs` (`HALO_LOG_ROOT`) puts it elsewhere. |
+| `logs/` in the data root | The logs: `debug.txt`, `halo.log` (Windows) and `crashes/`. Zip this folder for a bug report. `paths.logs` (`HALO_LOG_ROOT`) puts it elsewhere; a save root you name (`paths.saves`, `HALO_SAVE_ROOT`) gets its own `logs/` (with `paths.saves` set only in `config.toml`, the few lines written while the game reads that file still go to the usual place). |
 | `data/` in the data root | What a player adds that is not a map: `data/fonts/` holds the player's own fonts (`display.high_res_font`). |
 | `cache/` in the save root | What the game can make again; safe to delete. `paths.cache` (`HALO_CACHE_ROOT`) puts it elsewhere. |
 | `private/` in the save root | What is the player's alone. |
@@ -897,7 +897,7 @@ the setting for one start of the game. It has priority over the file.
 | `game.custom_edition` | `true` | `HALO_CUSTOM_EDITION` | `true`: Halo PC maps are played (Custom Edition's, HaloMD's and Halo PC retail's). `false`: none of them is listed, played or downloaded, and a game on one says that they are turned off. OpenCE's setting. |
 | `game.move_old_map_folders` | `"ask"` | `HALO_MOVE_OLD_MAP_FOLDERS` | The older folders of Halo PC maps (`maps/ce`, `md_maps`), which are still played from. `"ask"`: the game offers once to move them into `maps_ce` and `maps_md` (each folder moved whole, never copied; one that cannot be moved stays where it is). `"yes"`: moved without asking. `"no"`: left where they are. Android moves them unless this is `"no"`. |
 | `data.download_url` | `"https://halo.fractumseraph.net/assets/maps/"` | `HALO_DATA_DOWNLOAD_URL` | Desktop builds. Where the first start offers to download the `maps` folder from, when there is none: an `https://` folder holding its files and `maps.txt` (the files' names and sizes, a line each; the `assets/maps/` of `services/selfhost`). Empty: the game offers only an Xbox disc image. |
-| `paths.logs` | `""` | `HALO_LOG_ROOT` | The logs folder (`debug.txt`, `halo.log`, `crashes/`, and `bans.txt` and `cheaters.txt` beside them). Empty: `logs/` in the data root. With it, the data root can be read-only (a dedicated server's maps mounted so). Refer to "Files and folders". |
+| `paths.logs` | `""` | `HALO_LOG_ROOT` | The logs folder (`debug.txt`, `halo.log`, `crashes/`, and `bans.txt` and `cheaters.txt` beside them). Empty: `logs/` in the save root when `paths.saves` is set (not on Android, the browser or the dedicated server), else in the data root. With it, the data root can be read-only (a dedicated server's maps mounted so). Refer to "Files and folders". |
 | `paths.custom_maps` | `""` | `HALO_CUSTOM_MAPS_ROOT` | The `custom_maps` folder (Custom Edition maps, with their `bitmaps.map`, `sounds.map` and `loc.map`). Empty: the one in the data root. OpenCE's setting. |
 | `paths.cache` | `""` | `HALO_CACHE_ROOT` | The cache folder. Empty: `cache/` in the save root. |
 | `game.mcc_campaigns` | `true` | `HALO_MCC_CAMPAIGNS` | Use explicit MCC campaign metadata for discovery, mission titles, authored ordering and progression. In co-op only the host chooses the next mission. Reopen the map list after changing this. |

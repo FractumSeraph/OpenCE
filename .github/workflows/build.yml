@@ -354,7 +354,8 @@ jobs:
             tools/test_workshop_list.py tools/test_map_list_view.py tools/test_lobby_switch_prompt.py \
             tools/test_net43_host.py tools/test_server_mcc_playable.py tools/test_macos_fullscreen_space.py \
             tools/test_guide_layout.py tools/test_mcc_host_identity.py tools/test_mcc_maps_first.py tools/test_retry_backoff.py \
-            tools/test_mcc_bgfx_textures.py tools/test_workshop_questions.py
+            tools/test_mcc_bgfx_textures.py tools/test_workshop_questions.py \
+            tools/test_guide_themes.py tools/test_log_root.py tools/test_preview_cache.py
           python3 -m pytest -q tools/test_keyboard_glyphs.py tools/test_menu_button_glyphs.py tools/test_mcc_keyboard_glyphs.py
           # OpenCE's dedicated server (halo --server): --version, and --server without maps refused (exit code 2);
           # its cases with clients need the retail maps, and are skipped
