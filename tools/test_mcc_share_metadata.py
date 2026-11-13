@@ -390,7 +390,10 @@ def test_campaign_kind_across_native_metadata_paths(metadata_tool, tmp_path, mon
     assert run(metadata_tool, "manifest", root, True)[0] == "1 2"
     assert run(metadata_tool, "menu", root, True) == ["1 2", "first", "second"]
     assert run(metadata_tool, "scan", tmp_path, True) == ["2", "first", "second"]
-    assert run(metadata_tool, "scan", tmp_path, False) == ["0"]
+    # (ChupathingyCE's #1140, merged 2026-11-12: a Workshop campaign's
+    # missions are listed with game.mcc_campaigns off too, which then only
+    # leaves out their authored order and progression)
+    assert run(metadata_tool, "scan", tmp_path, False) == ["2", "first", "second"]
     ok, entries = plan(metadata_tool, root, True)
     assert ok and validate(metadata_tool, root, entries, True)[0] == 1
     before = run(metadata_tool, "digest", root, True)
