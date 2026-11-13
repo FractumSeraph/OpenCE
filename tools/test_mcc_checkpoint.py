@@ -208,8 +208,7 @@ void mcc_campaign_snapshot(void *out) {
 }
 int mcc_campaign_validate(void const *in,unsigned long bytes) {
     return (bytes==MCC_CAMPAIGN_SNAPSHOT_BYTES || bytes==MCC_CAMPAIGN_SNAPSHOT_V5_BYTES || bytes==MCC_CAMPAIGN_SNAPSHOT_V4_BYTES || bytes==MCC_CAMPAIGN_SNAPSHOT_V1_BYTES) && ((unsigned char const *)in)[0]==1 &&
-        (bytes!=MCC_CAMPAIGN_SNAPSHOT_BYTES || (((unsigned char const *)in)[MCC_CAMPAIGN_SNAPSHOT_V5_BYTES]==42 &&
-            !memcmp((unsigned char const *)in+MCC_CAMPAIGN_SNAPSHOT_BYTES-4,"\0\0\0\0",4)));
+        (bytes!=MCC_CAMPAIGN_SNAPSHOT_BYTES || ((unsigned char const *)in)[MCC_CAMPAIGN_SNAPSHOT_V5_BYTES]==42);
 }
 int mcc_campaign_restore(void const *in,unsigned long bytes) {
     if(!mcc_campaign_validate(in,bytes))return 0;campaign_restores++;return 1;
@@ -370,7 +369,7 @@ int main(int argc,char **argv) {
     if(!strncmp(argv[1],"snapshot",8)) {
         FILE *output;
         if(argc!=3)return 2;
-        if(!strcmp(argv[1],"snapshot_maximum"))payload_size=MCC_CHECKPOINT_PAYLOAD_LIMIT-4;
+        if(!strcmp(argv[1],"snapshot_maximum"))payload_size=MCC_CHECKPOINT_PAYLOAD_LIMIT;
         if(!strcmp(argv[1],"snapshot_names")||!strcmp(argv[1],"snapshot_names_maximum")) {
             name_bytes=!strcmp(argv[1],"snapshot_names_maximum")?MCC_OBJECT_NAMES_SNAPSHOT_MAXIMUM:640*4;
             memset(name_state,255,name_bytes);mcc_checkpoint_put(name_state+513*4,0x00010000);
@@ -416,11 +415,11 @@ int main(int argc,char **argv) {
     } else if(!strcmp(argv[1],"capture_fail")) {
         malformed=1;game_state_save();result=!writes&&!checkpoint_notifications&&!game_state_globals.saved_game_valid;
     } else if(!strcmp(argv[1],"maximum")) {
-        payload_size=MCC_CHECKPOINT_PAYLOAD_LIMIT-4;
+        payload_size=MCC_CHECKPOINT_PAYLOAD_LIMIT;
         result=mcc_checkpoint_capture(live,sizeof(live),used,GAME_STATE_CPU_SIZE);
         result &= mcc_checkpoint_restore(live,sizeof(live),used,GAME_STATE_CPU_SIZE);
     } else if(!strcmp(argv[1],"oversize")) {
-        payload_size=MCC_CHECKPOINT_PAYLOAD_LIMIT-3;
+        payload_size=MCC_CHECKPOINT_PAYLOAD_LIMIT+1;
         result=!mcc_checkpoint_capture(live,sizeof(live),used,GAME_STATE_CPU_SIZE);
     } else {
         if(!strcmp(argv[1],"core"))game_state_save_core("test");else game_state_save();
@@ -458,7 +457,7 @@ int main(int argc,char **argv) {
             if(!strcmp(argv[1],"payload"))p[7]^=1;
             else if(!strcmp(argv[1],"campaign")) {
                 p[payload_size]=2;
-                mcc_checkpoint_put(f+12,mcc_checkpoint_checksum(p,payload_size+MCC_CHECKPOINT_CAMPAIGN_V4_BYTES));
+                mcc_checkpoint_put(f+12,mcc_checkpoint_checksum(p,payload_size+MCC_CHECKPOINT_CAMPAIGN_BYTES));
                 mcc_checkpoint_put(f+92,mcc_checkpoint_checksum(f,92));
             }
             else if(!strcmp(argv[1],"footer"))f[0]^=1;
@@ -536,7 +535,7 @@ def test_checkpoint_checksum_matches_independent_oracle(checkpoint_tool, size):
 
 
 @pytest.mark.parametrize("case,payload_bytes,name_bytes", [
-    ("snapshot", 16, 0), ("snapshot_maximum", 65540, 0),
+    ("snapshot", 16, 0), ("snapshot_maximum", 65544, 0),
     ("snapshot_names", 16, 2560), ("snapshot_names_maximum", 16, 131068),
 ])
 def test_checkpoint_persisted_bytes(checkpoint_tool, tmp_path, case, payload_bytes, name_bytes):
@@ -547,17 +546,14 @@ def test_checkpoint_persisted_bytes(checkpoint_tool, tmp_path, case, payload_byt
     assert len(image) == 524288
     # The persisted format keeps its CPU tail and 96-byte footer at fixed offsets.
     tail, footer = 393216 - (65544 + 768 + 96), 393216 - 96
-    # (port, this fork: version 4, the campaign snapshot's 772 bytes in the
-    # payload, the stand-in's mark at 768 among them; its last 4, the skulls,
-    # zero, in the footer at 88)
-    payload = bytearray(payload_bytes + 772)
+    payload = bytearray(payload_bytes + 768)
     payload[:6] = b"GMC4\1\0"
     payload[payload_bytes] = 1
-    payload[payload_bytes + 768] = 42
     expected = bytearray(96)
-    struct.pack_into("<4s5I", expected, 0, b"MCCS", 4, len(payload), zlib.crc32(payload), 0x12345678, 772)
+    struct.pack_into("<4s5I", expected, 0, b"MCCS", 4, len(payload), zlib.crc32(payload), 0x12345678, 768)
     name = b"mcc_maps\\one\\a10\0"
     expected[24:24 + len(name)] = name
+    expected[88] = 42
     struct.pack_into("<I", expected, 92, zlib.crc32(expected[:92]))
     assert image[tail:tail + len(payload)] == payload
     assert image[tail + len(payload):footer] == b"\xa5" * (footer - tail - len(payload))

@@ -677,7 +677,15 @@ The version-2 payload includes gravity, navigation markers, dialogue gain
 and the campaign's infinite-ammunition flag. Version-1 inventory snapshots
 remain readable, with the new campaign state initialized to its baseline.
 The footer remains at its original address. Images are validated before
-restoring either state.
+restoring either state. The payload keeps the campaign snapshot's first
+768 bytes (its version-5 size); what the snapshot grew by since lives in the
+footer, so no arena offset moves: footer version 3 holds the model ambient
+word at +88 (snapshot version 6), and footer version 4 the skulls word at +84
+as well (snapshot version 7), with the map name's room cut to 60 bytes (its
+first 59 characters are kept and compared). `mcc_checkpoint_footer.inl` packs
+and unpacks them, and refuses to build when the snapshot grows again without
+a new footer version. A checkpoint whose extra state cannot be captured is
+not written at all, so a revert then starts the map over; the log says so.
 
 Campaign snapshots use the existing OpenCE host/client transport, authority
 checks and stale-tick filtering. They are sent only in MCC games; the native
@@ -1844,9 +1852,7 @@ four successful file-stamped results survive session teardown, while session
 bindings and unfinished readers are cleared. Any changed resource candidate
 invalidates reuse. Actual loads retain their independent content checks and
 loading display. The renderer, preparation settings, Android protections and
-Xbox/CE paths are unchanged. See the
-[reader's guide](reading/maps_and_resources.md#mcc-loading-feedback) for the
-call path, slice limits and lifecycle. The measurements below describe the
+Xbox/CE paths are unchanged. The measurements below describe the
 original fix, not validation of this follow-up.
 
 ### Missing-unit script calls (issues #50 and #63)
@@ -2059,7 +2065,7 @@ and stale handles, truncated reads, unknown-rate payload rejection, allocation
 failures and teardown. The native sound harness compiles the real converter;
 codec-vector tests continue to verify its output. Campaign tests check weapon
 spawning on the host/local game, refusal on clients and after teardown, and
-restart. The reader's route is in [Maps and resources](reading/maps_and_resources.md).
+restart.
 
 Disposable map fixtures, generated caches and duplicate test binaries were
 removed. Useful logs were retained, and test saves were archived with their
