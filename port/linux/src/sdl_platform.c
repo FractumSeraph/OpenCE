@@ -4460,23 +4460,13 @@ void platform_pump_events(void)
 		if (platform_sdl_started && (null_renderer || platform_video_tried))
 			platform_pump_events_headless();
 		return;
+	}
+	if (SDL_GetCurrentThreadID() != platform_event_thread)
+		return;
 #if !defined(_WIN32) && !defined(HALO_ANDROID)
 	/* (the game isn't stuck: quit_watchdog) */
 	quit_watchdog_beat();
 #endif
-	if (exit_ticks == (Uint64)-1)
-	{
-		double seconds = config_real("debug.exit_after");
-
-		exit_ticks = seconds > 0.0 ? SDL_GetTicks() + (Uint64)(seconds * 1000.0) : 0;
-	}
-	if (exit_ticks && SDL_GetTicks() >= exit_ticks)
-	{
-		platform_log("exiting after debug.exit_after");
-		exit(EXIT_SUCCESS);
-	}
-	if (SDL_GetCurrentThreadID() != platform_event_thread)
-		return;
 	exit_after_check();
 #ifdef HALO_ANDROID
 	if (android_quit_requested)
