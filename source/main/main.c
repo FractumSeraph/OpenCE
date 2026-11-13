@@ -426,6 +426,8 @@ void platform_log(const char *format, ...);
 #include "plasma_lighting.h" /* port: port/linux/game/plasma_lighting.c */
 #include "mcc_cache.h"
 #include "mcc_main.h"
+#include "stubbs_mode.h" /* port: port/linux/game/stubbs_mode.c */
+#include "stubbs_campaign.h" /* port: port/linux/game/stubbs_campaign.c */
 
 /* port: the main loop's stage, for the console's bring-up watchdog
 (port/xbox/src/xbox_port.c); nothing elsewhere */
@@ -1438,6 +1440,10 @@ short main_get_solo_level_from_name(
 	else
 		level = strstr(lower_name, "d40") ? 9 : NONE;
 
+	/* port: Stubbs mode's levels (port/linux/game/stubbs_campaign.c) */
+	if (stubbs_mode_active())
+		level = stubbs_campaign_level_from_name(name, level);
+
 	return level;
 }
 
@@ -1465,6 +1471,9 @@ char const *main_get_solo_level_name(
 
 	if (level >= 0 && level < NUMBEROF(scenario_paths))
 		result = scenario_paths[level];
+	/* port: Stubbs mode's levels (port/linux/game/stubbs_campaign.c) */
+	if (stubbs_mode_active())
+		result = stubbs_campaign_level_name(level, result);
 
 	return result;
 }

@@ -94,6 +94,8 @@ symbols in this file:
 #include "models/models.h"
 #include "structure_culling.h" /* port: port/linux/game/structure_culling.c */
 #include "halo_perf_log.h" /* port: console.perf_log */
+#include "stubbs_mode.h" /* port: port/linux/game/stubbs_mode.c */
+#include "stubbs_player.h" /* port: port/linux/game/stubbs_image_effects.c */
 #ifdef HALO_CONSOLE_PERFORMANCE_MODE
 #include "cutscene/cinematics.h"
 #endif
@@ -551,6 +553,10 @@ static void render_window(
 		HALO_PERF_RENDER_PART(_halo_perf_render_lens_flares);
 		rasterizer_lens_flares_draw();
 		HALO_PERF_RENDER_PART(_halo_perf_render_world);
+		/* port: Stubbs mode's image effect over the 3D view
+		(port/linux/game/stubbs_image_effects.c) */
+		if (stubbs_mode_active())
+			stubbs_image_effects_render(local_player_index);
 		/* port: the 3D view tone mapped (display.hdr) and antialiased
 		(display.anti_aliasing), before the HUD and menus are drawn over it */
 		if (rasterizer_target == _render_target_primary)

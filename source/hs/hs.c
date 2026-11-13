@@ -12244,6 +12244,8 @@ static struct hs_function_definition_with_1_parameter const debug_structure_cull
 /* port: Stubbs the Zombie's functions, a table of their own after Halo's
 (Stubbs mode only: port/linux/game/stubbs_functions.c) */
 #include "stubbs_mode.h"
+#include "stubbs_functions.h"
+#include "stubbs_campaign.h" /* (the map_name allowance) */
 #define HS_FUNCTION_COUNT() (hs_function_table_count + stubbs_function_count())
 #else
 #define HS_FUNCTION_COUNT() hs_function_table_count
@@ -13739,7 +13741,12 @@ static short hs_syntax_node_check(
 	/* (Stubbs mode's functions, past Halo's, a map may call) */
 	if (function_index<(short)NUMBEROF(hs_function_allowed_in_maps) &&
 		from_map && !hs_function_allowed_in_maps[function_index] &&
-		!(hs_scenario_pack_menus && !csstrcmp(function->name, "map_name")))
+		!(hs_scenario_pack_menus && !csstrcmp(function->name, "map_name"))
+#if defined(HALO_MAP_LIST) && !defined(HALO_XBOX_CONSOLE)
+		/* (Stubbs mode's levels, port/linux/game/stubbs_campaign.c) */
+		&& !(stubbs_mode_active() && !csstrcmp(function->name, "map_name") && stubbs_campaign_map_name_allowed())
+#endif
+		)
 	{
 		return _hs_node_refusal_function;
 	}
