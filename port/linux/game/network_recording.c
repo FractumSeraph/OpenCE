@@ -53,7 +53,10 @@ a type a reader does not know it skips:
               recording, where the host had not told it where this other
               player was since the frame before, so that the game had
               carried them on as they went: the replay viewer draws them
-              between the frames the host's word came in), position (3
+              between the frames the host's word came in; world 64: a
+              rider's position is the world's, since 2026-11-12: before
+              it, a rider's was its seat's in its vehicle's space, which
+              the viewer places on the vehicle's track), position (3
               floats: their feet),
               eye height (2, millimetres), aim (yaw, pitch: 2 each,
               radians times 10000), health and shields (1 each, of 255;
@@ -1625,15 +1628,19 @@ static void recording_tick(
 			long weapon_index = unit->unit.current_weapon_index != NONE ?
 				unit->unit.weapon_object_indices[unit->unit.current_weapon_index] : NONE;
 			real_point3d eye;
+			real_point3d origin;
 			real_vector3d aim = unit->unit.aiming_vector;
 			byte flags = 0;
 			real yaw, pitch, height;
 
 			unit_get_camera_position(unit_index, &eye);
+			/* (where the unit is in the world: a rider's own position is its
+			seat's, in its vehicle's node's space) */
+			object_get_origin(unit_index, &origin);
 			normalize3d(&aim);
 			yaw = (real)atan2(aim.j, aim.i);
 			pitch = (real)asin(PIN(aim.k, -1.0f, 1.0f));
-			height = (eye.z - unit->object.position.z) * 1000.0f;
+			height = (eye.z - origin.z) * 1000.0f;
 			if (TEST_FLAG(unit->unit.control_flags, _unit_control_crouch_modifier_bit))
 				flags |= 1;
 			if (TEST_FLAG(unit->unit.control_flags, _unit_control_weapon_primary_trigger_bit))
@@ -1644,7 +1651,7 @@ static void recording_tick(
 			if ((signed char)unit->unit.current_zoom_level >= 0)
 				flags |= 8;
 			if (unit->object.parent_object_index != NONE)
-				flags |= 16;
+				flags |= 16 | 64;
 			/* (a client: another player the host sent nothing new of
 			since the last frame, sent less often the further they are
 			from this machine's players; a rider goes with its vehicle's
@@ -1657,9 +1664,9 @@ static void recording_tick(
 			}
 			at = put_u8(at, (unsigned long)living[index].player_index);
 			at = put_u8(at, flags);
-			at = put_real(at, unit->object.position.x);
-			at = put_real(at, unit->object.position.y);
-			at = put_real(at, unit->object.position.z);
+			at = put_real(at, origin.x);
+			at = put_real(at, origin.y);
+			at = put_real(at, origin.z);
 			at = put_u16(at, (unsigned long)(short)PIN(height, -32000.0f, 32000.0f));
 			at = put_u16(at, (unsigned long)(short)(yaw * 10000.0f));
 			at = put_u16(at, (unsigned long)(short)(pitch * 10000.0f));

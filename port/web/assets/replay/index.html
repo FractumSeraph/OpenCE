@@ -492,8 +492,82 @@ function addChunks(r, chunks) {
     r.last = r.frames[r.frames.length - 1].tick;
   }
   r.objectList = [...r.objects.values()];
+  placeRiders(r);
   smoothGuessed(r);
   indexTracks(r);
+}
+
+// (a recording before 2026-11-12: a rider's position (frame flag 16 without
+// 64) is its seat's in its vehicle's space, near 0, 0, 0. Each ride is put
+// on the vehicle it was in: a vehicle of the tag the frame names, the one
+// nearest where the player was just before (or after) the ride, its seat's
+// offset turned as the vehicle faces)
+function vehiclePoseAt(track, t) {
+  const s = track.samples;
+  if (!s.length || t < s[0].tick - 30) return null;
+  let lo = 0, hi = s.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (s[mid].tick <= t) lo = mid; else hi = mid - 1;
+  }
+  const a = s[lo], b = s[lo + 1];
+  if (!vehicleSeen(track, t)) return null;
+  if (!b || b.tick - a.tick > 30 || t <= a.tick) return a;
+  const f = (t - a.tick) / (b.tick - a.tick);
+  return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f, z: a.z + (b.z - a.z) * f, f: a.f, u: a.u };
+}
+function vehicleSeen(track, t) {
+  for (const sp of track.spans) if (t >= sp.start && (sp.end == null || t < sp.end + 30)) return true;
+  return false;
+}
+function placeRiders(r) {
+  const vehicles = r.objectList.filter(track => track.type === 1 && track.samples.length);
+  if (!vehicles.length) return;
+  const bySlot = new Map();
+  for (const frame of r.frames) {
+    for (const e of frame.entries) {
+      if (!bySlot.has(e.slot)) bySlot.set(e.slot, []);
+      bySlot.get(e.slot).push({ tick: frame.tick, e });
+    }
+  }
+  let placed = 0;
+  for (const list of bySlot.values()) {
+    for (let i = 0; i < list.length; i++) {
+      if (!(list[i].e.flags & 16) || (list[i].e.flags & 64)) continue;
+      let j = i;
+      while (j + 1 < list.length && (list[j + 1].e.flags & 16) && !(list[j + 1].e.flags & 64) &&
+        list[j + 1].tick - list[j].tick < 60) j++;
+      // (where the player was on foot next to the ride)
+      const before = i > 0 && list[i].tick - list[i - 1].tick < 90 ? list[i - 1] : null;
+      const after = j + 1 < list.length && list[j + 1].tick - list[j].tick < 90 ? list[j + 1] : null;
+      const anchor = before || after;
+      const at = before ? list[i].tick : list[j].tick;
+      let best = null, bestDistance = 12;
+      if (anchor) {
+        for (const track of vehicles) {
+          if (list[i].e.vehicle !== 0xFFFF && track.tag !== list[i].e.vehicle) continue;
+          const pose = vehiclePoseAt(track, at);
+          if (!pose) continue;
+          const d = Math.hypot(pose.x - anchor.e.x, pose.y - anchor.e.y, pose.z - anchor.e.z);
+          if (d < bestDistance) { best = track; bestDistance = d; }
+        }
+      }
+      for (let k = i; k <= j; k++) {
+        const e = list[k].e, pose = best && vehiclePoseAt(best, list[k].tick);
+        if (!pose) { e.unplaced = true; continue; }
+        // (the vehicle's axes: forward, left (up cross forward), up)
+        const f = pose.f, u = pose.u;
+        const l = [u[1] * f[2] - u[2] * f[1], u[2] * f[0] - u[0] * f[2], u[0] * f[1] - u[1] * f[0]];
+        const lx = e.x, ly = e.y, lz = e.z;
+        e.x = pose.x + f[0] * lx + l[0] * ly + u[0] * lz;
+        e.y = pose.y + f[1] * lx + l[1] * ly + u[1] * lz;
+        e.z = pose.z + f[2] * lx + l[2] * ly + u[2] * lz;
+        placed++;
+      }
+      i = j;
+    }
+  }
+  r.ridersPlaced = placed;
 }
 
 // (a client's own recording: where the host had not told it of another
@@ -1905,12 +1979,16 @@ async function loadRealMapAs(loading) {
     if (loading !== realMapLoading) return;
     const group = new THREE.Group();
     const textures = new Map();
-    const texture = ref => {
+    // (a detail map is its own texture, its colours as they are: the game
+    // multiplies the base map by twice it, 0.5 leaving it as it is)
+    const anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+    const texture = (ref, detail = false) => {
       if (!ref) return null;
-      if (!textures.has(ref.key)) {
-        const t = new THREE.DataTexture(new Uint8Array([128, 128, 128, 255]), 1, 1);
+      const key = detail ? `detail:${ref.key}` : ref.key;
+      if (!textures.has(key)) {
+        const t = new THREE.DataTexture(new Uint8Array(detail ? [128, 128, 128, 255] : [128, 128, 128, 255]), 1, 1);
         t.needsUpdate = true;
-        textures.set(ref.key, t);
+        textures.set(key, t);
         ref.read().then(image => {
           if (loading !== realMapLoading || !image) return;
           t.image = { data: image.rgba, width: image.width, height: image.height };
@@ -1918,10 +1996,11 @@ async function loadRealMapAs(loading) {
           t.magFilter = THREE.LinearFilter;
           t.minFilter = THREE.LinearMipmapLinearFilter;
           t.generateMipmaps = true;
+          t.anisotropy = anisotropy;
           t.needsUpdate = true;
         }).catch(() => {});
       }
-      return textures.get(ref.key);
+      return textures.get(key);
     };
     let triangles = 0;
     for (const bsp of data.bsps) {
@@ -1941,6 +2020,21 @@ async function loadRealMapAs(loading) {
           new THREE.MeshLambertMaterial({ map, color: map ? 0xffffff : 0x8a9488, side: mesh.twoSided ? THREE.DoubleSide : THREE.FrontSide });
         // (the shader's blending: cut-out leaves and fences by alpha test,
         // glass and effects blended, adding or multiplying as the game does)
+        // (its detail map, tiled detailScale times over the base map's
+        // coordinates: the fine grain of the ground and the rocks, which the
+        // base map alone, stretched over the whole map, has not)
+        const detail = map && mesh.detailMap ? texture(mesh.detailMap, true) : null;
+        if (detail) {
+          const scale = mesh.detailScale || 1;
+          material.onBeforeCompile = shader => {
+            shader.uniforms.detailMap = { value: detail };
+            shader.uniforms.detailScale = { value: scale };
+            shader.fragmentShader = "uniform sampler2D detailMap;\nuniform float detailScale;\n" +
+              shader.fragmentShader.replace("#include <map_fragment>",
+                "#include <map_fragment>\n#ifdef USE_MAP\ndiffuseColor.rgb *= texture2D(detailMap, vMapUv * detailScale).rgb * 2.0;\n#endif");
+          };
+          material.customProgramCacheKey = () => "detail";
+        }
         if (mesh.alphaTest) material.alphaTest = 0.5;
         else if (mesh.transparent) {
           material.transparent = true;
