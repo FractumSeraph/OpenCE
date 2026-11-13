@@ -339,7 +339,9 @@ jobs:
             tools/test_mcc_share.py tools/test_mcc_share_rules.py tools/test_mcc_share_stage.py \
             tools/test_mcc_share_metadata.py tools/test_mcc_load_network.py tools/test_mcc_share_storage.py \
             tools/test_mcc_checkpoint.py tools/test_checkpoint_epoch.py tools/test_coop_checkpoint.py \
-            tools/test_coop_checkpoint_recovery.py \n            tools/test_mcc_local_package.py tools/test_mcc_server.py tools/test_mcc_share_menu.py \n            tools/test_mcc_resource_selection.py tools/test_mcc_identity_candidates.py
+            tools/test_coop_checkpoint_recovery.py \
+            tools/test_mcc_local_package.py tools/test_mcc_server.py tools/test_mcc_share_menu.py \
+            tools/test_mcc_resource_selection.py tools/test_mcc_identity_candidates.py
           # (ChupathingyCE's tests of its MCC maps, Steam link and Workshop, map
           # lists, lobby switch and network 43 hosting, merged 2026-11-12)
           python3 -m pytest -q \
