@@ -160,6 +160,9 @@ game's carnage report, <name>.json beside the copy gives its address:
 #include "units/units.h"
 #include "network_distributed.h"
 #include "network_recording.h"
+#if defined(HALO_GAME_BROWSER) && !defined(HALO_CONSOLE_NO_DELTA_PROFILE)
+#include "halo_profile_screen.h" /* profile_names_local_game_name: port/linux/game/profile_names.c */
+#endif
 #include "map_share.h"
 #include "halo_map_families.h"
 #ifdef HALO_PORT_CHAT
@@ -1520,6 +1523,29 @@ static void recording_note_player(
 		name[character] = player_name_character_ascii(player->name[character]);
 	}
 	name[character] = 0;
+#if defined(HALO_GAME_BROWSER) && !defined(HALO_CONSOLE_NO_DELTA_PROFILE)
+	/* (this machine's player whose Halo profile is linked to a Delta profile
+	plays under its handle, cut to a Halo name's 11 letters: the recording
+	keeps the handle whole, the one the cut name begins) */
+	if (player->local_player_index != NONE)
+	{
+		wchar_t whole[24];
+
+		if (profile_names_local_game_name(player->local_player_index, whole, (long)NUMBEROF(whole)))
+		{
+			short length;
+
+			for (length = 0; length < character && whole[length] == (wchar_t)(unsigned char)name[length]; length++)
+				;
+			if (length == character)
+			{
+				for (length = 0; whole[length] && length < (short)sizeof(name) - 1; length++)
+					name[length] = player_name_character_ascii(whole[length]);
+				name[length] = 0;
+			}
+		}
+	}
+#endif
 	/* (the host's admins' recording alone: a player's own keeps no one's) */
 	machine_index = recording.own ? NONE : distributed_player_machine(player_index);
 	if (machine_index != NONE)
