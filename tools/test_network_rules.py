@@ -235,17 +235,19 @@ def test_policy_setting_is_documented():
 def test_the_version_and_the_wire():
     limits = (ROOT / "port/linux/include/halo_port_limits.h").read_text(encoding="utf-8")
     delta = (ROOT / "port/linux/include/delta.h").read_text(encoding="utf-8")
-    # (port, this fork: its hosts announce 43, OpenCE's newest, and speak its
-    # own wire, chupa-43a, ahead of ChupathingyCE's chupa-41a, rows 42 and 43;
-    # its clients still join hosts of 41 and before: tools/test_delta_compat.py)
-    assert "#define HALO_PORT_NETWORK_VERSION 43\n" in limits
+    # (port, this fork: its hosts announce 44, OpenCE's newest, and speak its
+    # own wire, chupa-43a, ahead of ChupathingyCE's chupa-41a, rows 42 and 43:
+    # 44 changed no message; its clients still join hosts of 41 and before:
+    # tools/test_delta_compat.py)
+    assert "#define HALO_PORT_NETWORK_VERSION 44\n" in limits
+    assert "#define DELTA_BUILT_IN_HOSTING 44\n" in delta
     assert "#define HALO_PORT_HOST_NETWORK_VERSION_MINIMUM 42\n" in limits
     assert '#define DELTA_WIRE "chupa-43a"' in delta
     assert 'X("chupa-36a"' not in delta and "DELTA_WIRE_HOST_OLDEST" not in delta
     assert "#define DELTA_LEGACY_NEWEST 43\n" in delta
     for number in (30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43):
         assert re.search(rf'X\({number}, "build-\d+", additive\)', delta)
-    assert "#define HALO_PORT_NETWORK_VERSION_MAXIMUM 44\n" in limits
+    assert "#define HALO_PORT_NETWORK_VERSION_MAXIMUM 45\n" in limits
 
 
 def test_game_kind_beside_the_delta_tag():

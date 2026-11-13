@@ -71,6 +71,10 @@ machines (its bridge, src/delta_chat_bridge.h): network_distributed.c gives
 them to it, and the main loop runs it instead of this one. Here only the
 scoreboard's mute (game_engine.c) and its voice (network_voice.c) remain in
 use there.
+
+A dedicated server takes a player's "!switch" or "!team" (the whole line)
+as their asking to change teams (server_team_switch.c): the line is sent on
+to no one, and the host's notices say what came of it.
 */
 
 #include "controller_remap.h"
@@ -102,6 +106,7 @@ use there.
 #include "text_filter.h"
 #include "halo_keyboard.h"
 #include "server_director.h"
+#include "server_team_switch.h"
 
 #include <stdio.h>
 
@@ -571,6 +576,19 @@ static char const *chat_command_word(
 	while (text[index] == ' ')
 		index++;
 	return text + index;
+}
+
+/* whether a line (chat_text_clean's) is a dedicated server's player's team
+change, "!switch" or "!team" and nothing more, in either case (one with more
+is said: "!team push" is talk) */
+static boolean chat_team_switch_command(
+	char const *text)
+{
+	char const *rest = chat_command_word(text, "!switch");
+
+	if (!rest)
+		rest = chat_command_word(text, "!team");
+	return rest && !*rest;
 }
 
 /* what a typed line (chat_text_clean's) asks: "/mute <player> [minutes]" or
@@ -1679,6 +1697,24 @@ void network_chat_handle_up(
 	}
 	/* (a muted player's line goes no further: they are told for how long) */
 	chat_player_name_ascii(sender, name);
+	/* (a dedicated server's player's "!switch" or "!team", the whole line,
+	muted or not: said to no one, they are moved to the other team and
+	everyone told, or told why not: server_team_switch.c) */
+	if (halo_server_mode() && chat_team_switch_command(text))
+	{
+		char notice[CHAT_TEXT_SIZE];
+
+		if (server_team_switch(DATUM_INDEX_NEW(line.player_index, sender->identifier), name, notice,
+				(long)sizeof(notice)))
+		{
+			chat_host_notice(NONE, notice);
+		}
+		else
+		{
+			chat_host_notice(machine_index, notice);
+		}
+		return;
+	}
 	if ((mute = chat_mute_find(chat_mutes, NUMBEROF(chat_mutes), name, now)) != NULL)
 	{
 		short minutes = chat_mute_minutes_left(mute, now);

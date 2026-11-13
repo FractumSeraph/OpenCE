@@ -127,7 +127,10 @@ cutscene's sound carries how far the host has played it, and a machine's
 MCC conversion holds a round's start out of an allowance; a player standing
 on a vehicle rides it (a unit's state carries the deck it stands on, the map's
 riding choice has its own message: port/linux/NETCODE.md).
-port (this fork): 43, OpenCE's newest, which its hosts announce (OpenCE's
+Version 44: MCC package offers are automatic under Map Sharing, and a joiner
+may satisfy omitted base resources with its own validated local files (no
+message changed: 44 joins 43's hosts as they are).
+port (this fork): 44, OpenCE's newest, which its hosts announce (OpenCE's
 clients join only their own number), its join request 42's (40's pass and
 proof after the hardware id, then the version) and its votes 41's
 (network_votekick.c, network_map_vote.c), speaking the wire chupa-43a,
@@ -136,7 +139,7 @@ hosts announce 32. Delta clients (ChupathingyCE's 0.8.0e to 0.8.0h, this
 fork's) join a host whose wire plays with theirs (chupa-38a, from chupa-28a,
 delta.h) whatever number it announces, and are sent the record of the older
 of their HELLO's version and this one (network_server_message_handler.c). */
-#define HALO_PORT_NETWORK_VERSION 43
+#define HALO_PORT_NETWORK_VERSION 44
 /* ... the versions whose hosts a client joins: its own, and those that differ
 from it only in what the other machines leave out (a message a machine of
 the other version does not know it drops). Which are which is delta.h's
@@ -148,7 +151,7 @@ here, which the command repository reads). A host
 never checks a client's version: the client does (network_client_manager.c),
 so the range is the client's. */
 #define HALO_PORT_NETWORK_VERSION_MINIMUM 11
-#define HALO_PORT_NETWORK_VERSION_MAXIMUM 44
+#define HALO_PORT_NETWORK_VERSION_MAXIMUM 45
 /* ... the numbers in use (port/linux/src/delta.c): the three above, until a
 legacy table (docs/delta.md) widens them; code asks these, not the numbers */
 int delta_legacy_announce(void);

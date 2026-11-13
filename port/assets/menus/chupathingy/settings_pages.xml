@@ -316,16 +316,15 @@
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_chat_style" x="54" y="95" platform="console"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/view_map_sharing" x="54" y="73"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_map_download" x="54" y="73"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_mcc_map_share" x="54" y="95"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_workshop_maps" x="54" y="117" platform="desktop"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_mcc_campaigns" x="54" y="139" platform="desktop"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_mcc_campaigns" x="54" y="117" platform="android web switch console"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_mcc_collections" x="54" y="161" platform="desktop"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_mcc_collections" x="54" y="139" platform="android web switch console"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_map_seed" x="54" y="183" platform="desktop"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_map_seed" x="54" y="161" platform="android web switch console"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_map_seed_upload" x="54" y="205" platform="desktop"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_map_seed_upload" x="54" y="183" platform="android web switch console"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_workshop_maps" x="54" y="95" platform="desktop"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_mcc_campaigns" x="54" y="117" platform="desktop"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_mcc_campaigns" x="54" y="95" platform="android web switch console"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_mcc_collections" x="54" y="139" platform="desktop"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_mcc_collections" x="54" y="117" platform="android web switch console"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_map_seed" x="54" y="161" platform="desktop"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_map_seed" x="54" y="139" platform="android web switch console"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_map_seed_upload" x="54" y="183" platform="desktop"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_map_seed_upload" x="54" y="161" platform="android web switch console"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/view_streamer" x="54" y="73"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_streamer_enabled" x="54" y="73"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_slurs" x="54" y="95"/>
@@ -485,16 +484,15 @@
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_scoreboard_background" x="54" y="103" platform="console"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/view_map_sharing" x="54" y="73"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_map_download" x="54" y="73"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_mcc_map_share" x="54" y="103"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_workshop_maps" x="54" y="133" platform="desktop"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_mcc_campaigns" x="54" y="163" platform="desktop"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_mcc_campaigns" x="54" y="133" platform="android web switch console"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_mcc_collections" x="54" y="193" platform="desktop"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_mcc_collections" x="54" y="163" platform="android web switch console"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_map_seed" x="54" y="223" platform="desktop"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_map_seed" x="54" y="193" platform="android web switch console"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_map_seed_upload" x="54" y="253" platform="desktop"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_map_seed_upload" x="54" y="223" platform="android web switch console"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_workshop_maps" x="54" y="103" platform="desktop"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_mcc_campaigns" x="54" y="133" platform="desktop"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_mcc_campaigns" x="54" y="103" platform="android web switch console"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_mcc_collections" x="54" y="163" platform="desktop"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_mcc_collections" x="54" y="133" platform="android web switch console"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_map_seed" x="54" y="193" platform="desktop"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_map_seed" x="54" y="163" platform="android web switch console"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_map_seed_upload" x="54" y="223" platform="desktop"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_map_seed_upload" x="54" y="193" platform="android web switch console"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/view_streamer" x="54" y="73"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_streamer_enabled" x="54" y="73"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/in_game/op_slurs" x="54" y="103"/>
@@ -750,3 +748,4 @@
 		<string text="Who sees when you're on and what you play."/>
 	</strings>
 </menus>
+

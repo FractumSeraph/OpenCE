@@ -184,7 +184,7 @@ lockstep netcode was removed, set to play it): it tells the player why.
 ## OpenCE network agreement
 
 OpenCE network version 42 replaced version 41 for Xbox, Custom Edition and MCC sessions;
-version 43 (below, "Versions") replaces it.
+version 44 (below, "Versions") replaces it.
 Advertisements and ordinary join requests carry this one version; mismatched
 versions are rejected before admission. There is no separate MCC capability
 envelope or optional shoulder-camera protocol. Retired fork message IDs 101 and
@@ -462,9 +462,10 @@ the signalling of 26 and of the versions before it (p2p_signal.c,
 MESSAGE_VERSION_OLD), so they join both, and take a map file whose header
 checksum or hash is the host's version (map_family_version_matches), so
 they play the Custom Edition maps of hosts of 29 and of the versions before
-it. It announces 43, OpenCE's newest, and speaks the wire `chupa-43a`
-(its own, ahead of ChupathingyCE's `chupa-41a`), with rows 42 and 43
-(`port/linux/include/delta.h`). Its hosts play 43 alone: a join request
+it. It announces 44, OpenCE's newest, and speaks the wire `chupa-43a`
+(its own, ahead of ChupathingyCE's `chupa-41a`; 44 changed no message from
+43, so it keeps 43's wire), with rows 42 and 43
+(`port/linux/include/delta.h`). Its hosts play 44 alone: a join request
 without 42's version word (0x70 bytes, or 40's 0x70 + 234) is answered
 "version too old", as is a Delta machine whose record is older than 42's
 (`network_server_message_handler.c`). As a client it still joins hosts of
@@ -481,6 +482,10 @@ the dedicated flag from a host of 39 or later with that tag or without the
 old layout's wire (`network_client_manager.c`). Its dedicated hosts,
 ChupathingyCE's (`server/src/dedicated.c`) and `halo --server`, set both
 listing flags, OpenCE's 32 and ChupathingyCE's 128.)
+
+Version 44 unifies MCC offers under Map Sharing and lets a receiver satisfy
+omitted base resources with its own validated local files. Message layouts
+are unchanged; the changed sharing agreement requires matching peers.
 
 `port/linux/network_format.txt` records the wire format of the current
 version (`tools/network_format.py`): `test_linux_port.py` fails when the
@@ -1066,16 +1071,16 @@ its name alone beside it, has its name given back as the map lists find it.
 
 MCC supports host-only delivery for eligible local and Workshop packages.
 It uses MCC-owned messages **103** (request) and **104** (response),
-separate from CE sharing 83-86. Every map family uses OpenCE version **43**.
+separate from CE sharing 83-86. Every map family uses network version **44** for automatic sharing and local base dependencies.
 The shared settings record includes two 32-byte MCC digests, zero for Xbox/CE:
 the gameplay/resource identity and the required-JSON identity. The distributed
 header is 12 bytes, including its checkpoint epoch.
 
-- **Permission and admission.** `network.mcc_map_share` defaults off. The host
-  offers only its current map package, classified by its locally maintained
-  `mcc_share.txt`: `<gameplay SHA-256> <maker>`. Unknown content, missing credit,
-  known stock, loose maps and `_shared` are refused. Eligible Workshop and local
-  packages use the same policy. The client requires `network.map_download`
+- **Permission and admission.** The existing `network.map_share` setting
+  enables both CE and MCC sharing. MCC offers only the current validated
+  package automatically; no manual approval list is required. Loose maps and
+  `_shared` are not packages to offer. An existing `mcc_share.txt` may supply
+  optional maker attribution but cannot enable or block sharing. The client requires `network.map_download`
   (existing default on) and explicit acceptance of the size/maker prompt.
   Before acceptance it receives only an offer; it creates no stage and requests
   no file chunks. If either setting is off, the download action is absent.
@@ -1098,8 +1103,10 @@ header is 12 bytes, including its checkpoint epoch.
 - **Selected files.** `mcc_share_package_build` uses the validated resource
   selection cached by `mcc_validation_resources`; it does not scan arbitrary
   siblings. Only used package `bitmaps.map`/`sounds.map` are eligible, including
-  their resolved Workshop fallback paths. A required root/shared resource
-  refuses the offer with a host diagnostic naming the dependency. Recognized
+  their resolved Workshop fallback paths. Root/shared base resources and
+  package copies matching an installed base are omitted. Joiners must provide
+  matching local dependencies; the complete gameplay fingerprint still covers
+  their contents, and missing or mismatched resources prevent admission. Recognized
   package/campaign/mission JSON and referenced supported PNG previews travel
   with the map; `credits.txt`, `readme.txt`, `license.txt` and a valid bounded
   Workshop sidecar preserve attribution. `ModInfo.json` is parsed metadata,
@@ -1149,6 +1156,14 @@ or completed holds cannot be restarted by replaying `BEGIN` on the same
 connection and host revision. `READY` grants only the existing fifteen-second
 player-add grace; it does not prove that an untrusted client checked its files.
 Actual map loading still fingerprints content independently.
+
+Local validation enumerates distinct usable files only for resource types the
+map references. An explicit package override stays authoritative; an unreadable
+or invalid override reports its file error instead of trying base alternatives.
+Each distinct combination still requires the full gameplay SHA-256. An unchanged
+failed exact path is not hashed again after discovery rescans; changed files or
+required metadata permit a fresh check. These are local work and diagnostic
+changes, with no change to message layouts, fingerprint framing or version 44.
 
 After admission, synchronous MCC conversion has a separate bounded progress
 contract in `mcc_load_network.c` and `mcc_load_network_game.c`. Reliable message

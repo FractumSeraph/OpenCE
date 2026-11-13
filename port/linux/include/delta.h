@@ -548,11 +548,12 @@ game is played by one number. */
 hosts with no table row for its wire: ChupathingyCE's, the last release's
 row's (chupa-41a's announce, 41), so that a new wire plays as the release
 before it did until a signed table says otherwise; a console's build
-without the list keeps HALO_PORT_NETWORK_VERSION. Port (this fork): 43, its
+without the list keeps HALO_PORT_NETWORK_VERSION. Port (this fork): 44, its
 HALO_PORT_NETWORK_VERSION, which its game plays natively and its hosts
-alone announce (a pin below 42 refused, HALO_PORT_HOST_NETWORK_VERSION_MINIMUM);
-the live servers run with no row for chupa-43a */
-#define DELTA_BUILT_IN_HOSTING 43
+alone announce (a pin below 42 refused, HALO_PORT_HOST_NETWORK_VERSION_MINIMUM;
+44 changed no message from 43, whose wire chupa-43a it keeps); the live
+servers run with no row for chupa-43a */
+#define DELTA_BUILT_IN_HOSTING 44
 /* the newest version the table in use proves for hosting (its announce, or
 its hosting list's newest) */
 int delta_legacy_hosting_newest(void);
