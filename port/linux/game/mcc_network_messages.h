@@ -35,4 +35,15 @@ boolean network_distributed_mcc_session(void);
 /* ... and whether the network game's layout would carry them, before any map
 is loaded: what an MCC map needs to be played in it */
 boolean network_distributed_mcc_layout(void);
+/* (the host: network_server_message_handler.c, a joined machine's stream,
+lobby or game; the client: network_client_message_handler.c, machine_index
+NONE) OpenCE's MCC package sharing messages, 103 and 104, which this build
+never sends (mcc_share_rules.h): a host declines a 103 (104, "off") when its
+game's layout carries MCC's messages, a client notes a 104 and drops it.
+TRUE when the message was one of them (taken here, whatever was done) */
+boolean network_distributed_mcc_share_message(long machine_index, void const *message, word size);
+/* (a client, network_test.c's probe alone) a 103 manifest request for the
+level to the host, as OpenCE's client sends one: FALSE when the game's layout
+has no MCC messages */
+boolean network_distributed_mcc_share_request(char const *level);
 #endif

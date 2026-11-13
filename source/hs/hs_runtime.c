@@ -2250,7 +2250,8 @@ void hs_evaluate_logical(
 	}
 	else
 	{
-		boolean argument = *value;
+		/* port: hs_evaluate wrote a whole slot; a big-endian one keeps its boolean last (HS_SLOT) */
+		boolean argument = *HS_SLOT(boolean, value);
 
 		if (and)
 			*result = *result && argument;

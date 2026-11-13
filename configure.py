@@ -155,6 +155,11 @@ parser.add_argument(
     help="profile-guided optimisation from this profile instead",
 )
 parser.add_argument(
+    "--android-vulkan-validation",
+    action="store_true",
+    help="put the Vulkan validation layer in the Android app (debug.vk_validation; adds about 30 MB)",
+)
+parser.add_argument(
     "--android-ndk",
     type=str,
     help="Android NDK for `ninja android` and `ninja android64` (default: ANDROID_NDK_HOME, or the newest under the Android SDK)",
@@ -246,6 +251,7 @@ sln = SimpleNamespace(
     port_pgo=args.pgo,
     port_pgo_profile=args.pgo_profile,
     android_ndk=args.android_ndk,
+    android_vulkan_validation=args.android_vulkan_validation,
     android_guest_cc=args.android_guest_cc,
     web_emcc=args.web_emcc,
     with_ffmpeg=args.with_ffmpeg,

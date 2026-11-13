@@ -9,12 +9,13 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from harness import CHECK_FAILED, build, constant, function, mutated, read, run, structure  # noqa: E402
 
-CASES = ["mcc-title-bounds", "mcc-title-anchors", "drawn-in-the-game", "not-over-a-menu", "time-goes-on-under-a-menu"]
+CASES = ["mcc-title-bounds", "mcc-title-anchors", "mcc-title-fit", "drawn-in-the-game", "not-over-a-menu", "time-goes-on-under-a-menu"]
 
 # a fault in cinematic_render and the case that must catch it
 NEGATIVE_CONTROLS = {
     "mcc-title-clipped": (("mcc_hud_title_bounds(&wide_bounds, title->justification, title->text_flags);",
                            "(void)0;"), "mcc-title-bounds"),
+    "mcc-title-not-moved-up": (("bounds->y0 = (short)(bounds->y0 - overflow);", "(void)0;"), "mcc-title-fit"),
     "drawn-over-a-menu": (("if (!ui_widgets_active())", "if (TRUE)"), "not-over-a-menu"),
     "time-stops-under-a-menu": (("active_title->time += game_time_get_paused()",
                                  "active_title->time += ui_widgets_active() || game_time_get_paused()"),
@@ -30,13 +31,13 @@ def generated(fault=None):
     for source, name in ((cinematics, "scenario_cutscene_title"), (header, "cinematic_title"),
                          (header, "cinematic_global_data")):
         config += structure(source, name) + "\n"
-    # (ChupathingyCE's cinematic_title_edge_shift, which cinematic_render calls for wide screens)
-    code = function(cinematics, "cinematic_render")
+    # (ours shifts a title on a wide screen: that function too)
+    code = function(cinematics, "cinematic_title_edge_shift") + "\n" + function(cinematics, "cinematic_render")
+    hud = read("port/linux/game/mcc_hud_draw.c")
+    code = function(hud, "mcc_hud_title_bounds") + "\n" + function(hud, "mcc_hud_title_fit") + "\n" + code
     if fault:
         code = mutated(code, *fault)
-    code = function(cinematics, "cinematic_title_edge_shift") + "\n" + code
-    helper = function(read("port/linux/game/mcc_hud_draw.c"), "mcc_hud_title_bounds")
-    return (("config.inc", config), ("under_test.inc", helper + "\n" + code + "\n"))
+    return (("config.inc", config), ("under_test.inc", code + "\n"))
 
 
 @pytest.mark.parametrize("case", CASES)

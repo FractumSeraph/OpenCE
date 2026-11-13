@@ -200,6 +200,12 @@ places): a Halo Custom Edition install's maps folder, when it names an
 install, else the folder itself; "" for none. (OpenCE's setting, which
 names an install) */
 const char *platform_custom_edition_root(void);
+/* the folder of the save root the Xbox drives (all but d:\) are in from now
+on: "stubbs" puts u:\, z:\ and the others in <save root>/stubbs/, so a
+mode's profiles and saved games stay apart from Halo's (Stubbs mode:
+port/linux/game/stubbs_campaign.c). Empty or NULL (the start): the save root
+itself. Set before the game opens a file on those drives */
+void platform_save_drive_folder(const char *folder);
 /* one of the game's own folders (port_folders.h: data/ and logs/ in the
 data root, cache/ and private/ in the save root, or paths.logs and
 paths.cache), made if need be */

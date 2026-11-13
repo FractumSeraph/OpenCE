@@ -23,15 +23,15 @@ one UDP port: see "It shows, but nobody can join" below.
 ## Which download
 
 Each [release](https://github.com/ChupathingyCE/chupathingyce/releases/latest)
-has the server for three kinds of machine. Run `uname -m` on yours if you're
-not sure.
+has four server downloads: three for Linux and one for Windows. Each is a
+zip. Run `uname -m` on a Linux machine if you're not sure which one fits.
 
 | Download | `uname -m` | For |
 | --- | --- | --- |
-| `chupathingyce-server-linux-x64` | `x86_64` | Most VPSes and PCs: Intel and AMD 64-bit. |
-| `chupathingyce-server-linux-arm64` | `aarch64` | 64-bit ARM: Oracle Cloud's free tier (Ampere A1), other Ampere and Graviton servers, Raspberry Pi 4 and 5 with a 64-bit OS. |
-| `chupathingyce-server-linux-x86` | `i686`, `i386` | Older 32-bit PCs. It runs on a 64-bit x86 Linux too, and uses a little less memory there. |
-| `chupathingyce-server-windows-x64` | | 64-bit Windows 10 and 11, and Windows Server. Its `README.txt` ([windows/README.txt](windows/README.txt)) covers `start-server.bat` and running it as a Windows service; the rest of this page holds for it too. |
+| `chupathingyce-server-linux-x64.zip` | `x86_64` | Most VPSes and PCs: Intel and AMD 64-bit. |
+| `chupathingyce-server-linux-arm64.zip` | `aarch64` | 64-bit ARM: Oracle Cloud's free tier (Ampere A1), other Ampere and Graviton servers, Raspberry Pi 4 and 5 with a 64-bit OS. |
+| `chupathingyce-server-linux-x86.zip` | `i686`, `i386` | Older 32-bit PCs. It runs on a 64-bit x86 Linux too, and uses a little less memory there. |
+| `chupathingyce-server-windows-x64.zip` | | 64-bit Windows 10 and 11, and Windows Server. Its `README.txt` ([windows/README.txt](windows/README.txt)) covers `start-server.bat` and running it as a Windows service; the rest of this page holds for it too. |
 
 On Windows 10 or 11, use `chupathingyce-server-windows-x64` (or
 `chupathingyce-server-windows-x86` on 32-bit Windows): see
@@ -48,8 +48,8 @@ small VPS will do.
 ## Quick start
 
 1. Download the server for your machine and unpack it. You get
-   `chupathingyce-server`, a `playlists` folder, `blocked_names.txt` and
-   this README.
+   `chupathingyce-server`, a `playlists` folder, `blocked_names.txt`,
+   this README and the license files.
 2. Make a data folder with a `maps` folder in it, and copy in the game's
    `ui.map` and the multiplayer maps (all of them: about 300 MB). Use the
    maps of the North American (NTSC) Xbox disc, as the players do. Halo PC
@@ -70,6 +70,11 @@ HALO_DEDICATED=playlists/free_for_all.txt HALO_DEDICATED_NAME="My Server" \
 The server prints what it is doing; leave it running. It shows on
 stats.chupathingy.org within a few seconds. Ctrl+C stops it, and takes its game
 off the lists as it goes.
+
+No playlist set? With the control panel on (the default), the server
+starts anyway and waits for its first-run setup in the panel. There you
+pick its name, players and playlist. See
+[First-run setup](docs/moderation.md#first-run-setup-no-console-needed).
 
 The data folder is the current folder, unless `HALO_DATA_ROOT` says
 otherwise. The server writes its log, `debug.txt`, in `logs/` there
@@ -93,8 +98,7 @@ ready image, `ghcr.io/chupathingyce/server`: see
   `true`: then it stays the same (its key and token kept in
   `lasting_invite.key` in the save folder), to post on a website.
 - Is a public game (unless `HALO_DEDICATED_PUBLIC` is `false`): it shows in
-  the in-game Server Browser (Join Game > Server Browser) of OpenCE and
-  ChupathingyCE.
+  the in-game Server Browser of Chupathingy and OpenCE.
 - Plays the playlist's entries in order: once enough players have joined,
   the lobby counts down by itself; after each game the carnage report shows
   for 20 seconds (`HALO_DEDICATED_POSTGAME_SECONDS`), then the next entry's
@@ -155,7 +159,7 @@ and the security notes: [docs/moderation.md](docs/moderation.md).
    link privately. Each person chooses their own password and second
    factor. People can require a second factor of everyone.
 4. **Moderators in the game.** A moderator binds their account to their
-   ChupathingyCE game (My account: join, then Ask my game), or you add them
+   Chupathingy game (My account: join, then Ask my game), or you add them
    by their moderator key: `sv_mod_add <player> moderator` on the console,
    once they have signed in from the game's Moderation screen, or a line in
    `moderators.txt`. They then warn, kick and ban from the game.
@@ -170,8 +174,10 @@ console and control tokens act as the owner. Every change is checked
 against its role wherever it came from, limited per person, and written to
 `control_audit.log` (who, what, whom, why, when; never addresses).
 
-**Security notes.** Off by default: no panel, no API, no moderators, no
-link. On the loopback address unless told otherwise; HTTPS beyond it.
+**Security notes.** The panel and its API are on for this machine alone
+(127.0.0.1) unless told otherwise, and HTTPS beyond it. Our Docker image
+keeps them off until you set them. Nobody is a moderator until you make
+them one, and the server links to the site only when you ask.
 Passwords as Argon2id hashes, guessing slowed per address and per account,
 codes good once, sessions in HttpOnly SameSite cookies with CSRF tokens.
 Moderators are known by a key their game proves, never by a name or

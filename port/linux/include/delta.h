@@ -370,11 +370,16 @@ and 43. ChupathingyCE's builds play them by "chupa-43a's facts"
 header's further bytes and checkpoint epoch with its boundary message, a
 unit state's further parts, the riders' ejection), which a table's layouts
 can also say for later versions, their game chupa-41a's with every older
-number. This fork (FractumSeraph/OpenCE) plays 42 and 43 natively, as
-OpenCE's game: its hosts play 43 alone (a Delta machine of an older version
-refused), its clients join hosts of 42 and 43 and of the versions before
-them (42's header and record converted at the client's connection,
-network_rules.h); a table's facts apply to it past 43 only. */
+number. chupa-44a (ChupathingyCE's): OpenCE's 44 built in (44 is 43's
+layout and rules under a new number, their build-355), an MCC map's game
+hosted at the newest MCC-capable number the build or a table proves, and a
+host's answer to OpenCE's MCC package request (103) declined. This fork
+(FractumSeraph/OpenCE) speaks chupa-43a, whose row chupa-44a's builds keep,
+and plays 42 to 44 natively, as OpenCE's game, MCC package sharing (103 to
+106) included: its hosts play 44 alone (a Delta machine of an older version
+refused), its clients join hosts of 42 to 44 and of the versions before them
+(42's header and record converted at the client's connection,
+network_rules.h); a table's facts apply to it past 43, 44's being 43's. */
 #define DELTA_WIRE "chupa-43a"
 
 /* Wire compatibility ranges: the oldest wire each one plays the game with,
@@ -400,7 +405,8 @@ has shipped a newer wire. */
 	X("chupa-38a", "chupa-28a") /* 33 to 38 played by the host's number; a host announcing 32 plays as chupa-32a's */ \
 	X("chupa-39a", "chupa-28a") /* the tagged advertisement and 39's dedicated flag; the game's messages as chupa-38a's, a host announcing 32 plays as chupa-32a's */ \
 	X("chupa-41a", "chupa-28a") /* the longer join request to hosts of 40 on; the game's messages as chupa-39a's */ \
-	X("chupa-43a", "chupa-28a") /* (this fork) OpenCE's 42 and 43 as a client of their hosts, older hosts' game as chupa-41a's; its own hosts refuse machines before 42 */
+	X("chupa-43a", "chupa-28a") /* (this fork) OpenCE's 42 and 43 as a client of their hosts, older hosts' game as chupa-41a's; its own hosts refuse machines before 42 */ \
+	X("chupa-44a", "chupa-28a") /* OpenCE's 44 built in (43's layout), MCC games at the newest proven number; ChupathingyCE declines 103, this fork shares MCC packages as OpenCE does; the game's messages as chupa-43a's */
 
 /* Each wire's newest OpenCE network version that every build of it plays by
 its own rules (DELTA_LEGACY_NEWEST when it was made): the most a signed
@@ -564,14 +570,25 @@ void delta_legacy_hold(int hold);
 0 when it is not one this machine may announce) */
 int delta_legacy_pinned(void);
 /* the number the next games this machine hosts announce, whatever the table
-in use and network.announce say: OpenCE's 43 for a game on an MCC map (the
-MCC helper asks it before hosting), so that build-344's machines join it; 0
-goes back to the usual number. Taken at once in the lobby, and at a game's
+in use and network.announce say: delta_legacy_mcc_version's for a game on an
+MCC map (the MCC helper asks it before hosting), so that OpenCE's MCC
+machines join it; 0 goes back to the usual number. Taken at once in the lobby, and at a game's
 end while one is under way (delta_legacy_hold). A version this build does
 not play (past the newest it knows, by its rules or the table's layouts, or
 outside the numbers it joins) is refused: 0, else 1. A host of a version
 with a version word (42 on) refuses a join request without it */
 int delta_legacy_host_game_at(int version);
+/* the number a game on an MCC map is hosted at: the newest this build may
+host whose layout carries MCC's record and messages (42 on,
+DELTA_LEGACY_MCC_FIRST): the newest the table in use proves for hosting when
+that is past the build's own rules (a later version's layout, from the
+table), else the newest built in (DELTA_LEGACY_NEWEST), within the numbers
+the build joins; 0 when none is (a local table that narrows below 43: 42
+was in no release of OpenCE's, so no one would join). From chupa-44a:
+before, 43 was in the code, so a raise of OpenCE's number was a release */
+int delta_legacy_mcc_version(void);
+#define DELTA_LEGACY_MCC_FIRST 42
+#define DELTA_LEGACY_MCC_RELEASED 43
 
 /* ---------- host protections: what a host enforces for its clients
 

@@ -292,6 +292,7 @@ boolean network_map_vote_handles_message(word const *message, word size);
 void network_map_vote_handle_message(long machine_index, word const *message, word size, boolean from_stream);
 void map_share_handle_message(long machine_index, word const *message, word size, boolean from_stream);
 void network_distributed_handle_stream_message(long machine_index, word const *message, word size);
+boolean network_distributed_mcc_share_message(long machine_index, void const *message, word size);
 /* (the host's budget for a client machine's lobby messages) */
 boolean network_distributed_lobby_message_allowed(long machine_index);
 
@@ -3225,6 +3226,33 @@ static boolean network_game_server_handle_message_client_player_settings_request
 		else
 		{
 			network_event("server failed to decode a message_client_player_settings_request packet");
+		}
+	}
+	/* port: a machine joining the game in progress, in its pregame screen
+	until it starts: its players' teams, as the host takes them
+	(network_game_server_late_joiner_player_settings, X#83) */
+	else if (network_game_server_get_state(server, NULL) == _network_game_server_state_ingame &&
+		!network_game_server_client_machine_is_loaded(server, client_machine))
+	{
+		struct network_player player;
+		short packet_type = _message_client_player_settings_request;
+		short packet_version = NETWORK_GAME_MESSAGE_VERSION;
+
+		message_size -= sizeof(word);
+		if (!decode_network_game_message(
+			&player,
+			message + 1,
+			&message_size,
+			&packet_type,
+			&packet_version,
+			_network_game_packet_class_client_pregame))
+		{
+			network_event("server failed to decode a message_client_player_settings_request packet");
+		}
+		else if (!network_game_server_late_joiner_player_settings(server, client_machine, &player))
+		{
+			network_event(
+				"failed to handle a message_client_player_settings_request because the machine is in the game");
 		}
 	}
 	else

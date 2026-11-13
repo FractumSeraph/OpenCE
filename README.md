@@ -1236,6 +1236,9 @@ with their authors credited in each commit.
   clock read only when something needs it.
 - [theLlamaNet](https://github.com/theLlamaNet): the Android on-screen touch
   controls, through JoshRob297's halo-ce-touch.
+- Guven (GuvenHuso) and hispanorum (OpenCE): the debug camera flown by
+  mouse and keyboard, and its saved spot kept for the player in view
+  (written from a description of their work).
 
 </details>
 
@@ -1259,10 +1262,12 @@ with their authors credited in each commit.
   mOTA-lEV's [OpenCE-Faber](https://github.com/SutlabSol/OpenCE-Faber),
   used under GPL-3.0 with his permission.
 - Controller button icons by snapchipper, CC0 (`port/assets/prompts`).
-- Headphone 3D sound (`audio.hrtf`): head-related impulse responses from the
-  [SADIE II database](https://www.york.ac.uk/sadie-project/database.html)
-  (KEMAR, subject D2), University of York, Apache License 2.0
-  (`port/assets/hrtf`).
+- The Xbox's 3D sound and reverb (`audio.hrtf`, `audio.reverb`): the HRTF
+  measured on an Xbox and the reconstruction of its DSP reverb are
+  [OpenH1](https://github.com/OpenH1/OpenH1)'s work, brought into
+  [GulchCE](https://github.com/chestahh/GulchCE) by chestahh
+  (`port/linux/src/dsound_xbox_*`,
+  [docs/reading/xbox_audio.md](docs/reading/xbox_audio.md)).
 - High-res HUD art on the Xbox maps: Aerocatia's and Jessie's HUD art from
   [Halo PC Restored](https://github.com/Aerocatia/halopc-restored) (release
   r220), used with Aerocatia's permission on the condition that both are
@@ -1292,7 +1297,8 @@ with their authors credited in each commit.
   beside them in `port/third_party`. The 64-bit desktop builds' test
   renderer uses bgfx, bx and bimg by Branimir Karadžić (BSD-2-Clause), with
   glslang and SPIRV-Cross (Khronos, BSD-3-Clause and Apache-2.0), fetched
-  at build time (`tools/bgfx_build.py`). Their licenses ship with those builds.
+  at build time (`tools/bgfx_build.py`). Every download carries their notices
+  and full license texts in one file, `THIRD-PARTY-NOTICES.txt`.
 
 ### Contributors
 

@@ -142,6 +142,7 @@ symbols in this file:
 #include "mcc_damage.h" /* port: port/linux/game/mcc_damage.c */
 #include "mcc_ui_teams.h" /* port: port/linux/game/mcc_ui_teams.c */
 #include "server_team_switch.h" /* port: port/linux/game/server_team_switch.c */
+#include "mcc_skulls.h" /* port: MCC's skulls on MCC maps */
 
 /* network_game_globals.c's */
 boolean network_game_distributed_client(void);
@@ -1075,6 +1076,8 @@ static void object_damage_aftermath(
 		/* port: MCC extension data cannot be represented by a scalar impulse. */
 		mcc_accelerate_unit = mcc_damage_acceleration(&damage_effect->damage,
 			object_definition->object.acceleration_scale, &direction, &acceleration);
+		/* port: MCC's Sputnik skull, objects "more easily displaced" (mcc_skulls.c) */
+		scale_vector3d(&acceleration, mcc_skulls_impulse_scale(), &acceleration);
 
 		switch (object->object.type)
 		{
@@ -1548,6 +1551,10 @@ void object_cause_damage(
 
 			if (actor_index != NONE)
 				ai_adjust_damage(actor_index, damage, &total_damage);
+			/* port: MCC's Black Eye skull: a player's melee hit on an enemy
+			recharges their shields (mcc_skulls.c) */
+			if (damage_definition->category == _damage_category_melee)
+				mcc_skulls_melee_hit(damage->owner_object_index, object_index);
 		}
 	}
 
@@ -2024,12 +2031,13 @@ void area_of_effect_cause_damage(
 		return;
 	area_of_effect_nesting++;
 
+	/* port: MCC's Boom skull doubles an explosion's radius (mcc_skulls.c) */
 	object_count = objects_in_sphere(
 		0,
 		0,
 		&damage->location,
 		&damage->origin,
-		definition->cutoff_radius,
+		definition->cutoff_radius * mcc_skulls_blast_scale(),
 		object_indices,
 		NUMBEROF(object_indices));
 	if (object_count > 0)
@@ -2167,7 +2175,9 @@ void object_damage_update(
 		}
 		else if (object->object.shield_vitality < 1.f)
 		{
-			if (object->object.shield_stun_ticks == 0)
+			/* port: not a player's under MCC's Black Eye skull: their melee
+			hits recharge them instead (mcc_skulls_melee_hit) */
+			if (object->object.shield_stun_ticks == 0 && mcc_skulls_shields_recharge(object_index))
 			{
 				real shield_recharge =
 					collision_model->resistance.runtime_shield_recharge_velocity;
@@ -2658,12 +2668,13 @@ static void area_of_effect_cause_damage_to_object(
 			&object->object.bounding_sphere_center,
 			&damage->direction);
 		distance = normalize3d(&damage->direction);
-		radius_delta = damage_effect->cutoff_radius - damage_effect->falloff_radius;
+		/* port: MCC's Boom skull doubles an explosion's radii (mcc_skulls.c) */
+		radius_delta = (damage_effect->cutoff_radius - damage_effect->falloff_radius) * mcc_skulls_blast_scale();
 		if (radius_delta > 0.f)
 		{
 			scale = PIN(
 				1.f -
-					(distance - damage_effect->falloff_radius) /
+					(distance - damage_effect->falloff_radius * mcc_skulls_blast_scale()) /
 					radius_delta,
 				0.f,
 				1.f);

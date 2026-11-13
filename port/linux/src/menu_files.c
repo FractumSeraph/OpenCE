@@ -1065,13 +1065,21 @@ void halo_menus_log(char const *file, long line, char const *message, char const
 {
 	platform_log("menus: %s:%ld: %s%s%s", file ? file : "?", line, message, detail ? " " : "", detail ? detail : "");
 }
-/* (a menu's texture, the renderer's: OpenGL's or the bgfx backend's) */
+/* (a menu's texture, the renderer's: OpenGL's, the bgfx backend's or the
+Vulkan backend's) */
 static void menu_art_delete(unsigned int texture)
 {
 #ifdef HALO_BGFX
 	if (xgpu_bgfx)
 	{
 		xgpu_bgfx_texture_delete(texture);
+		return;
+	}
+#endif
+#ifdef HALO_VULKAN
+	if (xgpu_vulkan)
+	{
+		xgpu_vulkan_texture_delete(texture);
 		return;
 	}
 #endif
@@ -1215,11 +1223,7 @@ unsigned int menu_art_texture(unsigned long data, unsigned long *levels)
 	/* (display.title_font changed: the title drawn again from its set) */
 	if (art[index].texture && art[index].cyborg != cyborg)
 	{
-#ifdef HALO_BGFX
 		menu_art_delete(art[index].texture);
-#else
-		glDeleteTextures(1, &art[index].texture);
-#endif
 		art[index].texture = 0;
 	}
 	if (!art[index].texture)

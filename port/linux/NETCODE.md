@@ -654,8 +654,8 @@ is its own, or one of a range (HALO_PORT_NETWORK_VERSION_MINIMUM to
 HALO_PORT_NETWORK_VERSION_MAXIMUM, halo_port_limits.h) of versions that
 differ from it only in messages the other machine drops, not knowing them,
 or whose rules it plays by the host's version (above). This build has
-version 32 built in and joins hosts of 11 to 42: back to version 11, the
-newest breaking one, and one past the newest it knows (41), which it
+version 32 built in and joins hosts of 11 to 45: back to version 11, the
+newest breaking one, and one past the newest it knows (44), which it
 presumes additive. A signed legacy table widens the range without a
 release (docs/delta.md, "The legacy number"). The game browser lists the
 range's games.

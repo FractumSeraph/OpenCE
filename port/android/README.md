@@ -1,5 +1,9 @@
 # Android
 
+The Android download is the native 64-bit build: see "The native 64-bit
+build" below (`ninja android64_apk`). The rest of this page starts with the
+older build, which is no longer released.
+
 `ninja android` builds the game for 64-bit ARM Android (arm64-v8a).
 `ninja android_apk` makes an app from it:
 `port/android/app/build/outputs/apk/debug/app-debug.apk`.
@@ -130,7 +134,9 @@ The app is `net.fractumseraph.halo` in this fork (ChupathingyCE's is
 `dev.horrible.chupathingyce`), and its name on the device is Fractum Halo.
 Refer to "App ID, signing and versions".
 
-## The native 64-bit build (experimental)
+<a id="the-native-64-bit-build-experimental"></a>
+
+## The native 64-bit build
 
 `ninja android64` builds the game as native 64-bit code (LP64), as the
 Linux x86-64, Windows x64 and macOS builds do (`HALO_64BIT`,
@@ -589,6 +595,18 @@ over a build with the same code. The code increases when `VERSION`
 increases, and it never decreases. The minor number and the patch number
 must be less than 100: the build stops if they are not. `versionName` is
 the full version, for example `0.6.2b-nightly.3`.
+
+## Graphics: OpenGL ES and Vulkan
+
+The game draws with OpenGL ES by default. A Vulkan renderer is there to try,
+for phones whose OpenGL ES driver draws the game wrongly or slowly: in
+`config.toml`, in the `[display]` section, set `renderer = "vulkan"` and
+start the game again. If Vulkan cannot start, the game uses OpenGL ES, and
+the log says why. On a phone with a Qualcomm Adreno GPU, `vk_driver = "auto"`
+also uses Turnip, the open-source Vulkan driver, which the launcher downloads
+once into the game's data folder. [VULKAN.md](VULKAN.md) has the settings,
+what is not drawn with it yet, and how it is built. The renderer is
+thelinkin3000's (PR #152).
 
 ## Widescreen
 

@@ -7,8 +7,10 @@ OpenGL 4.1 takes; `HALO_GL_LEGACY=1` forces it, to test). It plays sound
 through SDL3. It accepts keyboard, mouse and
 gamepad input.
 
-The game is 32-bit code because its data (tags, cache files, saved games)
-contains 32-bit pointers, as on the Xbox.
+The game was 32-bit code first because its data (tags, cache files, saved
+games) contains 32-bit pointers, as on the Xbox. Most players now use the
+64-bit build, `ninja linux64` (refer to "64-bit" below). The 32-bit build
+is for older systems.
 
 ## Requirements
 
@@ -78,7 +80,7 @@ starts on more systems than the build machine's:
   SDL even when Steam sets `LD_LIBRARY_PATH`. Few distributions have a
   32-bit SDL 3. This SDL loads X11, Wayland, libdecor, PipeWire, PulseAudio
   and ALSA when it starts, so it starts with whichever of them the system
-  has. It is linked only to glibc. Its license is `SDL3-LICENSE.txt`.
+  has. It is linked only to glibc. Its license is in `THIRD-PARTY-NOTICES.txt`.
 
 The 64-bit build (`ninja linux64`, below) is portable the same way, with
 Debian 11's 64-bit (amd64) packages.
@@ -192,8 +194,10 @@ the game browser show the same choices in message boxes):
 A maps folder that isn't the Xbox maps later (Halo PC's ui.map, or none)
 opens the setup screen on Maps instead of a message and a quit. Held Shift
 or a controller's Back at start, `--setup`, or `launcher.show_at_start =
-"always"` open it too; runs nobody watches (`debug.hidden_window`,
-`debug.exit_after`, the null renderer, Steam Deck Game Mode) never show it.
+"always"` open it too, and so does SETUP in the menus' settings
+(`launcher.menu_entry`). In Steam Deck Game Mode it opens only when asked
+for: Back held at start, `--setup`, or SETUP. Runs nobody watches
+(`debug.hidden_window`, `debug.exit_after`, the null renderer) never show it.
 `debug.launcher_test` scripts it for tests and screenshots.
 
 Its Play section picks the mode: vanilla, or a pack with its own `ui.map`,
@@ -423,6 +427,11 @@ keyboard's), drawn in the Xbox menus' look.
 | vote yes in the vote running (to kick a player, to end the game) | F1 (a controller: the D-pad's left, while the vote runs) |
 | vote no in the vote running | F2 (a controller: the D-pad's right, while the vote runs) |
 | the chat's recent lines and players (M mutes one for you) | H |
+| talk in voice chat (hold, with `audio.voice_chat = "push_to_talk"`) | V |
+| switch the voice channel | B |
+| open or close the Delta Guide | F3 (on a Mac, F3 or backslash) |
+| take a screenshot | F9, Print Screen |
+| save a clip (with `clips.enabled`) | F10 |
 
 Always: \` opens the developer console, F12 releases or captures the mouse,
 F11 changes between fullscreen and window. Screenshot (default F10,
@@ -469,14 +478,14 @@ menus where it has the same, else a placeholder, listed in
 
 The campaign is wired: Campaign, on player 1's profile (the one last used),
 continues its saved game, starts a level it has reached at a difficulty (New
-Game), or loads or deletes any profile's saved game (Load Game). Many of the
-other functions behind the screens are not wired to this game yet
-(`port/assets/menus/UNWIRED.md`): the lists they fill (profiles, maps,
-servers, key bindings) are empty, and the settings they change do not
-change. The screens open, close and move between each other as the PC
-version's.
+Game), or loads or deletes any profile's saved game (Load Game). The
+multiplayer screens are wired too: the Server Browser, the map and game type
+lists, Server Setup and its START GAME. A few of the PC version's functions
+still do nothing here, such as the Direct IP screen's own fields and the
+Server Browser's filter settings (`port/assets/menus/UNWIRED.md`). The
+screens open, close and move between each other as the PC version's.
 
-`display.menus` chooses one of three views:
+`display.menus` chooses one of two menu sets:
 
 - `"chupathingy"` (the default): the Xbox's menus and look with Halo PC's
   screens added where they help, as one set: PROFILES, SETTINGS (Controls,
@@ -488,8 +497,13 @@ version's.
 - `"xbox"`: the Xbox's menus, as close to the console as can be, with only
   what this port needs added (Online Games, joining, the host's END GAME,
   the essential prompts).
-- `"gearbox"` (or the older `"pc"`): Gearbox's Halo PC menus, as close to
-  Halo PC as can be, with its Server Browser.
+
+The Gearbox menus (Halo PC's, `"gearbox"` or the older `"pc"`) were a third
+set until 0.9.1. They were retired as a menu set: a file that names them gets
+the Xbox menus, the game says so once ("Gearbox menus were retired. You're on
+the Xbox menus now; change it in Settings.") and writes `"xbox"` in its place.
+Their screens stay in `port/assets/menus/ce`: the Chupathingy menus are built
+from many of them, and the rest are kept for extra screens.
 
 The map lists (New Game's and Create Game's Map screen) choose, in their
 first row, SINGLEPLAYER (the campaign's levels), MULTIPLAYER (the Xbox's
@@ -659,7 +673,7 @@ with a comment for each setting and its default value, commented out:
 ```toml
 [display]
 # ...
-# Which menus to use: "chupathingy", "xbox" or "gearbox".
+# Which menus to use: "chupathingy" or "xbox".
 # Put your own menus in a menus folder next to config.toml.
 # Restart Chupathingy after a change.
 # menus = "chupathingy"
@@ -693,9 +707,10 @@ Earlier versions wrote every setting as a value. The first start of this
 version updates such a file once (`config_version = 2` at the top
 marks it): a setting that holds the default of this version is commented
 out, so that it follows the default. A setting with another value stays,
-also the default of an earlier version (`display.menus = "pc"`, the default
-before 0.5.2b, or `"xbox"`, the default before 0.8.0), which you may have
-chosen; the log names it. The log has one
+also the default of an earlier version (`"xbox"` for `display.menus`, the
+default before 0.8.0), which you may have chosen; the log names it. (The
+default before 0.5.2b, `"pc"`, was the Gearbox menus, which are now the
+Xbox menus, with a one-time notice.) The log has one
 line that tells how many lines changed.
 
 A version from before `config_version`, run on a file of this layout, adds
@@ -738,7 +753,7 @@ the setting for one start of the game. It has priority over the file.
 | `display.max_fps` | `0` | `HALO_MAX_FPS` | With vsync off, the most frames each second. `0`: twice the display's refresh rate (on Android, 120). `-1`: no limit, which can hang some Intel graphics (Raptor Lake), resetting the desktop's graphics too, and heats a phone. Under gamescope (the Steam Deck's Game Mode) with OpenGL, a limit at the display's refresh rate is given to the window as vsync, so the frames stay in step with the display and don't judder. A whole fraction of it (30 at 60 Hz) works the same way with SDL's x11 driver. With the Wayland driver the clock keeps the limit, because SDL takes any interval above 1 as 1 there. The log says when this applies. Everywhere else, and with bgfx, the clock keeps the limit as before. |
 | `display.frames_in_flight` | `3` | `HALO_FRAMES_IN_FLIGHT` | Windows and Linux: the most frames the GPU has queued, 1 to 8. Each frame waits until the GPU has finished the frame this many before it, so that the frames come evenly when the GPU is slower than the game. `0`: the driver decides, which on a slow GPU can give a long frame every few frames. Refer to "Frame rate". |
 | `display.anti_aliasing` | `"msaa2x"` on 64-bit computers, `"off"` on 32-bit ones, Android and the server | `HALO_ANTI_ALIASING` | The smoothing of jagged edges, which the Xbox did not have. `"off"`: none, as on the Xbox. `"fxaa"` or `"smaa"`: a pass over the 3D view after the game draws it. The HUD and the menus stay sharp. SMAA is the sharper and costs more. `"ssaa2x"`: the game draws at two times the resolution in each direction (at most the GPU's largest texture), and the picture is scaled down. The GPU does four times the work. Not with `display.resolution_scaling = "original"`. `"msaa2x"`, `"msaa4x"` or `"msaa8x"`: each pixel of the 3D view has that many samples (at most the GPU's). On Android, `"smaa"` gives FXAA and `"ssaa2x"` none. A change applies from the next frame. Refer to "Anti-aliasing" in "What operates". |
-| `display.renderer` | `"gl"` | `HALO_RENDERER` | What draws the game. `"gl"`: OpenGL. `"bgfx"`: an experimental test renderer under the same D3D8 interface, config-only with no menu row: Metal on macOS, Vulkan on Windows and Linux. On Windows, `"d3d11"` draws with Direct3D 11 instead, for testing on computers whose Vulkan is missing or bad; it is only used when chosen, and falls back to OpenGL. A Vulkan driver `display.vulkan_blocklist` skips goes to OpenGL. It is in every 64-bit desktop build (macOS, Windows x64, Linux x64; not the 32-bit builds, Android or consoles). If bgfx can't start (no working Vulkan driver, say), the game says so in the log and draws with OpenGL instead. The log names the backend and the GPU. Known differences: the Halo PC ammo and health meters, a brighter first-person pistol and grainy water. FXAA, SMAA and supersampling are OpenGL only, so with bgfx they become `"msaa2x"` and one line says so in the log. Read at start-up. |
+| `display.renderer` | `"gl"` | `HALO_RENDERER` | What draws the game. `"gl"`: OpenGL. `"bgfx"`: a test renderer under the same D3D8 interface, chosen on the RENDERER row of the display settings (OPENGL, VULKAN, METAL, DIRECT3D 11) and after a restart: Metal on macOS, Vulkan on Windows and Linux. On Windows, `"d3d11"` draws with Direct3D 11 instead, for testing on computers whose Vulkan is missing or bad; it is only used when chosen, and falls back to OpenGL. A Vulkan driver `display.vulkan_blocklist` skips goes to OpenGL. It is in every 64-bit desktop build (macOS, Windows x64, Linux x64; not the 32-bit builds, Android or consoles). If bgfx can't start (no working Vulkan driver, say), the game says so in the log and draws with OpenGL instead. The log names the backend and the GPU. Known differences: the Halo PC ammo and health meters, a brighter first-person pistol and grainy water. FXAA, SMAA and supersampling are OpenGL only, so with bgfx they become `"msaa2x"` and one line says so in the log. Read at start-up. |
 | `debug.gpu_flush_draws` | `-1` | `HALO_GPU_FLUSH_DRAWS` | Flush the GPU's pipeline every this many draws. `-1`: every 3 on Intel graphics with Mesa's driver, which can otherwise hang in the game's long runs of small draws and reset the desktop's graphics too. `0`: never. |
 | `debug.gpu_visibility_readback` | `"auto"` | `HALO_GPU_VISIBILITY_READBACK` | How the lens flare and light glow tests get their results. `auto` (this fork: OpenCE's choice): read on the CPU on AMD's own driver, which loses results copied into a mapped buffer (no sun flares or light glows), and copied into the buffer on every other driver. `cpu` or `buffer` forces one. |
 | `debug.door_portals_log` | `false` | `HALO_DOOR_PORTALS_LOG` | Logs the level portals each door covers when it is paired with them (`source/objects/door_portals.c`). |
@@ -795,7 +810,7 @@ the setting for one start of the game. It has priority over the file.
 | `display.scoreboard_team_layout` | `"teams"` | `HALO_SCOREBOARD_TEAM_LAYOUT` | How the multiplayer scoreboard (hold BACK, or tab) lists a team game's players. `"teams"`: a column for each team, red on the left and blue on the right. `"score"`: all the players in order of score. With more players than fit, the mouse wheel and Page Up / Page Down scroll the scoreboard. |
 | `display.scoreboard_background` | `true` | `HALO_SCOREBOARD_BACKGROUND` | `true`: the multiplayer scoreboard (hold BACK, or tab) has a panel behind its text, for clearer text. |
 | `display.scoreboard_platforms` | `"auto"` | `HALO_SCOREBOARD_PLATFORMS` | A small logo of each player's platform (Windows, macOS, Linux, Android, Steam Deck, Xbox and so on) before their name on a network game's scoreboard, for players whose client sends it over Delta Peer; other players (OpenCE, retail) get no logo. `"auto"`: shown with the Chupathingy menus only, since the Xbox and Gearbox menus stay close to the originals. `"on"`: with any menus. `"off"`: never. |
-| `display.delta_profile` | `true` | `HALO_DELTA_PROFILE` | Delta Profile in the game: the DELTA row of Profiles (the Chupathingy menus) and button of Select Profile (the Gearbox menus), the "Delta:" line on a Halo profile, and Online Games' Start. `false` hides them all, and Start opens the profile's web page as before, or Link Profile while this copy is not linked. Refer to `docs/delta.md`, Delta Profile in the game. |
+| `display.delta_profile` | `true` | `HALO_DELTA_PROFILE` | Delta Profile in the game: the DELTA row of Profiles (the Chupathingy menus) the "Delta:" line on a Halo profile, and Online Games' Start. `false` hides them all, and Start opens the profile's web page as before, or Link Profile while this copy is not linked. Refer to `docs/delta.md`, Delta Profile in the game. |
 | `display.online_games_view` | `"public"` | `HALO_ONLINE_GAMES_VIEW` | The view Online Games opens on in a session (LB and RB switch, and the last one stays): `"all"`, `"public"` (CHUPATHINGY + PUBLIC: every game but OpenCE's dedicated servers), `"chupathingy"` (our servers and Delta hosts) or `"opence"` (OpenCE's dedicated servers). |
 | `display.opence_empty_servers` | `"folded"` | `HALO_OPENCE_EMPTY_SERVERS` | The empty OpenCE dedicated servers in Online Games' ALL and OPENCE views: `"folded"` puts them in one EMPTY SERVERS row at the end (A opens and closes it; closed each session), `"shown"` lists each one at the end. |
 | `display.profile_names` | `true` | `HALO_PROFILE_NAMES` | On the scoreboard, the postgame report and the lobby, players who share their Delta profile (`network.share_profile`) show by the profile's name, in games on Delta. `false`: every player by their game name. OpenCE players, and what OpenCE players see, are unchanged. |
@@ -833,6 +848,8 @@ the setting for one start of the game. It has priority over the file.
 | `display.hdr_paper_white` | `0` | `HALO_HDR_PAPER_WHITE` | Not on Android or in a browser. With `display.hdr_output` on an HDR display, how bright white is in nits, 80 to 1000: the HUD, the menus and the 3D view's white (scRGB's 1.0 is 80 nits). `203` is HDR television's reference white for SDR content (ITU-R BT.2408). `0`: Windows' "SDR content brightness", as SDL reports it. Video Setup's GRAPHICS screen sets it (PAPER WHITE), and its HDR CALIBRATION screen by eye, beside a grey scale ("HDR" in "What operates"). |
 | `display.hdr_peak_brightness` | `0` | `HALO_HDR_PEAK_BRIGHTNESS` | Not on Android or in a browser. With `display.hdr_output` on an HDR display, the brightest the display shows in nits, 250 to 10000, which `display.hdr_tone_mapping` fits the brightest light to. `0`: what Windows reports, which its HDR Calibration app sets. Video Setup's GRAPHICS screen sets it (PEAK BRIGHTNESS), and its HDR CALIBRATION screen by eye: raised until a ring at 10000 nits disappears into a square at the value ("HDR" in "What operates"). |
 | `display.doors_block_light` | `true` | `HALO_DOORS_BLOCK_LIGHT` | `true`: a closed door stops a dynamic light behind it (a plasma bolt, an explosion, a flashlight in the next room) from lighting the walls and objects on your side. Each door is matched with the level portals it covers once it has rested at each end of its travel; a moving door lets light through. Drawing only: the AI's sense of light and the network are unchanged (`source/objects/door_portals.c`). `false`: the light comes through the door, as on the Xbox. This replaces the old `debug.doors_pass_light` key, which is gone. |
+| `display.light_effects` | `"auto"` | `HALO_LIGHT_EFFECTS` | Light from projectiles, muzzle flashes, glowing emitters and held weapons, with soft falloff, blocked by walls. `"high"`: all of it. `"low"`: only the shots and muzzle flashes. `"off"`: the game's own lighting, as on the Xbox. `"auto"`: `"high"`, or `"off"` on a software renderer. Drawing only. LIGHT EFFECTS in the display settings. Based on chestahh's dynamic lighting in GulchCE (`port/linux/game/lighting_config.c`). Desktop only. |
+| `display.theme` | `"blue"` | `HALO_THEME` | The colors of the Delta Guide and the setup screen: `"blue"` (HALO BLUE), `"green"` (DASHBOARD GREEN), `"orange"` (VISOR ORANGE), `"live"` (LIVE ORANGE) or `"red"` (CHUPATHINGY RED). A change shows at once. |
 | `display.particle_limit` | `4096` (the Switch: `2048`, the Xbox 360: `1024`) | `HALO_PARTICLE_LIMIT` | The most particles alive at once (sparks, smoke, casings, debris). When it is full, the oldest makes room for a new one. The Xbox had 1024. `0`: the port's own 8192. Changes at once. |
 | `display.particle_ticks` | `false` (consoles: `true`) | `HALO_PARTICLE_TICKS` | `true`: particles not attached to an object move once a 30 Hz tick, as on the Xbox, and are drawn smoothly between ticks. That saves collision tests. `false`: they move every frame, which is smoother at high refresh rates. Takes effect at the next map. |
 | `display.dynamic_light_limit` | `0` (consoles: `8`; the original Xbox: `0`) | `HALO_DYNAMIC_LIGHT_LIMIT` | The most dynamic lights (muzzle flashes, plasma, explosions) that light the level at once. The biggest on screen light the walls and floor; the rest light only the objects near them. `0`: no limit, as on the Xbox. Changes at once. |
@@ -845,7 +862,7 @@ the setting for one start of the game. It has priority over the file.
 | `audio.effects_volume` | `1.0` | `HALO_EFFECTS_VOLUME` | The volume of the other sounds (effects and speech), of the master volume. |
 | `audio.buffer_frames` | `2048` on macOS, `1024` on Android, `512` elsewhere | `HALO_AUDIO_BUFFER_FRAMES` | The audio device's buffer, in sample frames at 48 kHz, from `64` to `8192`. Larger rides out stalls that would cut the sound out; smaller has less delay (512 is 11 ms, 1024 is 21 ms, 2048 is 43 ms). |
 | `audio.channels` | `"auto"` | `HALO_AUDIO_CHANNELS` | `"stereo"`, `"5.1"` or `"7.1"`: surround sound as with Dolby Digital on the Xbox. The game sends its 2D sounds to the center and back speakers as the Xbox did, 3D sounds are panned around the front and back speakers (and the sides on 7.1), and the reverberation plays from all of them. `"auto"`: 5.1 on a device of 6 channels, 7.1 on one of 8, else stereo (a device of some other count is more likely an audio interface's outputs than speakers). The LFE channel is left to the receiver's bass management, as on the Xbox. Read when the game starts. Desktop only. Audio Setup: Speakers. |
-| `audio.hrtf` | `"on"` (consoles: `"off"`) | `HALO_AUDIO_HRTF` | `"on"`: 3D sounds are rendered for headphones (binaural, with head-related transfer functions): each is filtered as the head and ears would hear it from its direction, the far ear a little later, so it sounds in front, behind, to the side, above or below you instead of between your ears. This matches the Xbox, which filtered every 3D sound for direction, on TV stereo too, so it is the default; these are measured responses (the SADIE II database's KEMAR, `port/assets/hrtf`), not the Xbox's own,, equalized so they do not change the sounds' tone overall. Close sounds (your own footsteps and weapons) stay centered as with the stereo pan. `"auto"`: on when the output's name says it is headphones (a headset, AirPods, "Headphones"), checked again when the output changes. `"off"`: the stereo pan, for speakers if Headphone 3D sounds odd on them. Stereo output only; changes take effect at once. Audio Setup: Headphone 3D. |
+| `audio.hrtf` | `"on"` (consoles: `"off"`) | `HALO_AUDIO_HRTF` | `"on"`: 3D sounds are rendered for headphones (binaural, with head-related transfer functions): each is filtered as the head and ears would hear it from its direction, the far ear a little later, so it sounds in front, behind, to the side, above or below you instead of between your ears. This matches the Xbox, which filtered every 3D sound for direction, on TV stereo too, so it is the default; it is the Xbox's own HRTF, nine bands and a delay per ear fitted to recordings of an Xbox (`src/dsound_xbox_hrtf.inl`). Close sounds (your own footsteps and weapons) stay centered as with the stereo pan. `"auto"`: on when the output's name says it is headphones (a headset, AirPods, "Headphones"), checked again when the output changes. `"off"`: the stereo pan, for speakers if Headphone 3D sounds odd on them. Stereo output only; changes take effect at once. Audio Setup: Headphone 3D. |
 | `audio.doppler` | `true` | `HALO_AUDIO_DOPPLER` | `true`: moving sounds are Doppler shifted, higher coming at you and lower going away (a Warthog, a Banshee, a projectile going past), from the velocities the game gives each sound, as the Xbox's DirectSound shifted them. `false`: every sound plays at its own pitch. Audio Setup: Doppler. |
 | `audio.reverb` | `true` (the Steam Link: `false`) | `HALO_REVERB` | `true`: the sounds of the world reverberate as the place the player is in does: the sound environments of the maps (a corridor, a cave, a large hall, outdoors) set the reverberation, as the I3DL2 reverb of the Xbox did. A sound behind a wall or a door is muffled in it too. `false`: no reverberation (sounds behind a wall are still muffled). |
 | `audio.stereo_doppler` | `false` | `HALO_STEREO_DOPPLER` | `true`: a stereo sound placed in the world (an engine, a rocket in flight) rises in pitch as it comes towards the player and falls as it goes away, as the 3D sounds do. `false`: stereo sounds play at their own pitch, as the Xbox played them. Audio Setup's SOUND PROCESSING screen sets it. |
@@ -883,6 +900,7 @@ the setting for one start of the game. It has priority over the file.
 | `game.console_log` | `"none"` | `HALO_CONSOLE_LOG` | What the console shows on the screen. `"none"`: only the asserts that stop the game. `"important"`: bans, players that the host drops for cheating, the reasons that the game refuses a command, and the asserts that stop the game. `"all"`: all the lines. The output of a command always shows. `debug.txt` gets all the lines. The developer console's own output is drawn only while the console is open (`terminal_render 2`, the default); `terminal_render 1` draws it all the time and `0` never. |
 | `launcher.show_at_start` | `"when_needed"` | `HALO_LAUNCHER_SHOW` | When the setup screen opens before the game: `"when_needed"` (the first start, missing maps, `--setup`, or Shift or a controller's Back held at start) or `"always"`. Refer to "Start the game". |
 | `launcher.hold_to_open` | `true` | `HALO_LAUNCHER_HOLD` | `true`: Shift or a controller's Back held at start opens the setup screen. |
+| `launcher.menu_entry` | `true` | `HALO_LAUNCHER_MENU_ENTRY` | `true`: SETUP in the menus' settings starts the game again on the setup screen. `false`: it is left out. |
 | `launcher.mode_choice`, `launcher.default_mode` | `"ask"`, `"vanilla"` | `HALO_LAUNCHER_MODE_CHOICE`, `HALO_LAUNCHER_DEFAULT_MODE` | With more than one way to play (a pack with its own menus): `"ask"` picks on the setup screen at each start, `"default"` starts `launcher.default_mode` (`"vanilla"`, or a pack's id such as `"cex"`). Refer to "Start the game". |
 | `game.language` | `""` | `HALO_LANGUAGE` | The language of the menus: `ja`, `de`, `fr`, `es` or `it`. Empty: English. |
 | `game.enhanced_animations` | `true` | `HALO_ENHANCED_ANIMATIONS` | `true`: the player bipeds' grenade throws keep their legs moving, blended by speed and direction (crouched throws stay crouched, throws in the air use the jump's legs), Warthog and Scorpion riders stay seated to throw and let go of the grips to throw and reload, and a player turns with the aim while throwing, as while meleeing, and in the air, as while running (the original froze the body in a jump and kept the aim within its aiming screen about it, so a shot after turning in the air went between the jump's facing and the crosshair). `false`: the original animations, which freeze the legs during a throw and stand a rider up and the body in the air. The turning with the aim (throwing, in the air) moves where shots go, so in a network game every player turns so whatever this says; `false` turns it off only in a game of one machine. Only in config.toml, not in the menus. |
@@ -903,6 +921,7 @@ the setting for one start of the game. It has priority over the file.
 | `game.mcc_campaigns` | `true` | `HALO_MCC_CAMPAIGNS` | Use explicit MCC campaign metadata for discovery, mission titles, authored ordering and progression. In co-op only the host chooses the next mission. Reopen the map list after changing this. |
 | `game.mcc_collections` | `true` | `HALO_MCC_COLLECTIONS` | Group MCC packages by the bundled Workshop collection list, including imported packages identified by a sidecar. Reopen the map list after changing this. |
 | `game.workshop_maps` | `true` | `HALO_WORKSHOP_MAPS` | Discover installed Halo CE Steam Workshop maps on desktop. Local MCC packages take precedence. Android and web use local packages. |
+| `game.mcc_skulls` | `""` | `HALO_MCC_SKULLS` | The MCC skulls on when an MCC map starts, as MCC's skull menu would turn them on: their names split by commas (fog, black_eye, mythic, iron, famine, catch, anger, thunderstorm, thats_just_wrong, assassins, bandanna, boom, eye_patch, recession, blind, ghost, sputnik). A map's own scripts may turn skulls on and off after that. Xbox and Custom Edition maps are never affected (ChupathingyCE's; desktop). |
 | `paths.steam` | `""` | `HALO_STEAM_ROOT` | A Steam folder or library to check first for subscribed Halo CE Workshop items. Automatic discovery also checks Windows registry installations; Linux's `STEAM_COMPAT_CLIENT_INSTALL_PATH`, `$XDG_DATA_HOME/Steam` and home-folder locations; and their library lists. Empty: automatic discovery only. |
 | `network.address` | `""` | `HALO_NET_ADDRESS` | The IPv4 address of this machine for system link. Refer to "Play on one computer". |
 | `network.broadcast` | `""` | `HALO_NET_BROADCAST` | IPv4 addresses, with commas between them, that get the broadcasts of the game. Empty: 255.255.255.255. |
@@ -985,6 +1004,7 @@ the setting for one start of the game. It has priority over the file.
 | `network.coop_team_wipe` | `"auto"` | `HALO_NET_COOP_TEAM_WIPE` | TEAM WIPE in Server Setup > Co-op Options: `"auto"` reverts the checkpoint in a PRIVATE game and only respawns the team in a PUBLIC game (a dedicated server's: `server.public` with internet play). `"revert"` or `"respawn"` overrides visibility; a password does not make a PUBLIC game private. Changed players/machine assignments fall back to position-only respawn with a host diagnostic. A missing checkpoint also uses position-only respawn. Scripted mission failures keep their existing revert behavior. |
 | `network.brokers_file` | `"brokers.txt"` | `HALO_NET_BROKERS_FILE` | The file of the public MQTT brokers that let the machines of an invite find each other, and that carry the listings of the server browser: next to `config.toml`, unless a full path. One `host:port` on each line, up to 5; `#` starts a comment. |
 | `network.stun_servers` | Google and Cloudflare | `HALO_NET_STUN` | The public STUN servers (`host:port`, with commas between them) that give the internet address of a machine. |
+| `network.public_address` | (empty) | `HALO_NET_PUBLIC_ADDRESS` | A host setting: the address players reach this machine's games at (`host` or `host:port`; the port defaults to `network.tunnel_port`), for a host behind a relay or tunnel. While hosting, it is advertised to the game list, invites and Online Games pings in place of the STUN address, UPnP is not asked, and the host sends nothing to joining players' addresses first: it answers them where they are heard from. Joining someone else's game is unchanged (STUN, UPnP and hole punching as usual). |
 | `network.announce` | `"latest"` | `HALO_NET_ANNOUNCE` | The OpenCE network version that the games you host announce. `"latest"` follows the newest one the signed legacy table proves for hosting, between games and with no restart. A number pins it, such as `32`. Refer to `docs/delta.md`, "Auto-announce". |
 | `network.legacy_table` | `""` | `HALO_LEGACY_TABLE` | For testing, and for admins: a legacy table file, not signed, next to `config.toml` unless a full path. Its row for the wire of the build sets the OpenCE network versions that the game announces and joins, in place of the signed tables. The log shows a warning at start. Refer to `docs/delta.md`. Empty: none. |
 | `network.browser_url` | `"https://stats.chupathingy.org"` | `HALO_NET_BROWSER` | The game list server: hosted games are listed there, System Link shows its games, and the reports below go there. Empty: none. |
@@ -1118,12 +1138,15 @@ the setting for one start of the game. It has priority over the file.
 | `controls.clip` | `"F10"` | `HALO_KEY_CLIP` | Saves the last `clips.seconds` as an MP4 in `<data root>/clips/`, named as screenshots are, when `clips.enabled` is on (`src/capture_clips.c`). |
 | `clips.enabled`, `clips.seconds` | `false`, `30` | `HALO_CLIPS`, `HALO_CLIPS_SECONDS` | Keep the last 5 to 120 seconds of the game encoded in memory, picture and sound, for `controls.clip`: the hardware's H.264 on macOS (VideoToolbox, up to 1920x1080 at 60), else FFmpeg's MPEG-4 Part 2 (up to 1280x720 at 30); AAC sound. The renderer scales and reads the frame back behind fences and lends it to an encoder thread; nothing runs while off. Read at start. `debug.clips_software` forces the software encoder, for tests. |
 | `delta.hold_back` | `false` | `HALO_DELTA_HOLD_BACK` | Holding Back (a controller's, or F1) about 0.6 s in the menus opens the Delta Guide. While it is on, the menus get Back only once it is let go (a tap), never for a hold, so a hold on the main menu doesn't also ask to quit. Off by default, as the Xbox's Back acts on press. |
-| `delta.menu_item` | `false` (Android: `true`) | `HALO_DELTA_MENU_ITEM` | The Delta Guide on the main menu (DELTA before QUIT, in the Chupathingy and Gearbox menus), under ONLINE GAMES in the Multiplayer menu, and beside BACK in Gearbox's Multiplayer menu, each opening it on PARTY. Off by default: the Delta Guide is summoned like an overlay (its key, the Guide button, Back held), and the main menu says so instead (`delta.hint_shown`). On by default on Android, where a touch screen has no Guide button. The Delta Guide's SETTINGS has SHOW IN MENUS. It takes effect the next time the menus load. |
+| `delta.menu_item` | `false` (Android: `true`) | `HALO_DELTA_MENU_ITEM` | The Delta Guide on the main menu (DELTA before QUIT, in the Chupathingy menus), and under ONLINE GAMES in the Multiplayer menu, each opening it on PARTY. Off by default: the Delta Guide is summoned like an overlay (its key, the Guide button, Back held), and the main menu says so instead (`delta.hint_shown`). On by default on Android, where a touch screen has no Guide button. The Delta Guide's SETTINGS has SHOW IN MENUS. It takes effect the next time the menus load. |
 | `delta.hint_shown` | `0` | `HALO_DELTA_HINT_SHOWN` | How many times the main menu has said how to open the Delta Guide ("Press F3 for the Delta Guide", or a controller's way when one was used last: "Hold Back for the Delta Guide" with `delta.hold_back`, else "Press the Guide button", never on a Mac, where macOS often keeps the Home button). It says so the first 3 times the main menu is reached (counted once drawn), then no more, and never with `delta.menu_item` on. |
-| `delta.pause_menu` | `true` | `HALO_DELTA_PAUSE_MENU` | The Delta Guide in the pause menu, after CONTROLS, in all three menu sets. |
+| `delta.pause_menu` | `true` | `HALO_DELTA_PAUSE_MENU` | The Delta Guide in the pause menu, after CONTROLS, in both menu sets. |
+| `delta.guide_background` | `"auto"` | `HALO_DELTA_GUIDE_BACKGROUND` | What the Delta Guide draws behind its panel: `"plain"`, a dark shade over the game, `"cellwall"`, the Xbox dashboard's cell wall (a mesh inside a slowly turning sphere, as the TeamUIX site draws it) in the theme's colors (the dashboard's own per skin, from Theseus), or `"auto"`, the cell wall with Dashboard Green and the shade with the other themes. The Delta Guide's SETTINGS has BACKGROUND (AUTO, PLAIN, CELLWALL). OpenGL ES 2 builds draw the shade. |
 | `delta.notify_in_game` | `false` | `HALO_DELTA_NOTIFY_IN_GAME` | The Delta Guide's notifications (a new invite or friend request) during a game. They always show in the menus. |
 | `delta.notify_online` | `false` | `HALO_DELTA_NOTIFY_ONLINE` | A notification in the menus when a friend comes online. Never during a game. |
 | `delta.bring_party` | `true` | `HALO_DELTA_BRING_PARTY` | The Delta Guide's BRING PARTY TO MY GAME: when you lead a party, the games you join or host are told to its members, who follow you (each can stay with B). |
+| `delta.follow_leader` | `"ask"` | `HALO_DELTA_FOLLOW_LEADER` | When your party's leader goes to a game: `"ask"` gives you a few seconds to stay and then follows, but in a game you stay unless you press join. `"always"` follows when the seconds run out, in a game too. `"never"` doesn't offer it. FOLLOW LEADER in the Delta Guide's PARTY. |
+| `debug.party_test` | `""` | `HALO_PARTY_TEST` | Party steps once the menus are up, separated by commas, for tests: `"create"`, `"join:<code>"`, `"invite:<handle>"` or another action. |
 | `debug.delta_open` | `false` | `HALO_DELTA_OPEN` | Opens the Delta Guide once the menus or a map are up, for tests and screenshots. |
 | `debug.delta_toast` | `""` | `HALO_DELTA_TOAST` | Shows a test notification with this text once the main menu is up. |
 | `debug.delta_section` | `""` | `HALO_DELTA_SECTION` | The section `debug.delta_open` opens on, by name (`PARTY`, `CLAN`). Empty: the first. |

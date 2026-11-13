@@ -419,11 +419,9 @@ const char *platform_custom_edition_root(void)
 	return root;
 }
 
-/* whether an Xbox path is the game's log, d:\debug.txt or d:\debug.old.txt
-(errors.c), which is in logs/: its name, or NULL */
-static const char *log_file_name(const char *xbox_path)
+/* whether an Xbox path is d:\<one of names>: its name, or NULL */
+static const char *d_file_name(const char *xbox_path, const char *const *names, unsigned long count)
 {
-	static const char *const names[] = { "debug.txt", "debug.old.txt" };
 	const char *name = xbox_path;
 	unsigned long index;
 
@@ -432,7 +430,7 @@ static const char *log_file_name(const char *xbox_path)
 	name += 2;
 	while (*name == '\\' || *name == '/')
 		name++;
-	for (index = 0; index < sizeof(names) / sizeof(*names); index++)
+	for (index = 0; index < count; index++)
 	{
 		const char *a = name, *b = names[index];
 
@@ -445,6 +443,26 @@ static const char *log_file_name(const char *xbox_path)
 			return names[index];
 	}
 	return NULL;
+}
+
+/* whether an Xbox path is the game's log, d:\debug.txt or d:\debug.old.txt
+(errors.c), which is in logs/: its name, or NULL */
+static const char *log_file_name(const char *xbox_path)
+{
+	static const char *const names[] = { "debug.txt", "debug.old.txt" };
+
+	return d_file_name(xbox_path, names, sizeof(names) / sizeof(*names));
+}
+
+/* whether an Xbox path is one of the player's own files the game keeps on
+d:\, which are in the save root (a test's HALO_SAVE_ROOT keeps them
+there): the debug camera's d:\camera.txt (director.c's
+debug_camera_save and debug_camera_load): its name, or NULL */
+static const char *save_root_file_name(const char *xbox_path)
+{
+	static const char *const names[] = { "camera.txt" };
+
+	return d_file_name(xbox_path, names, sizeof(names) / sizeof(*names));
 }
 #ifdef HALO_WINDOW_REBASE
 /* A saved game is the game state written out raw, pointers and all
@@ -523,7 +541,8 @@ static int translate_workshop(const char *cursor, char *resolved, unsigned long 
 
 	while (*cursor == '\\' || *cursor == '/')
 		cursor++;
-	/* MCC-owned local layout resolution is independent of Steam discovery. */
+	/* a Workshop folder copied whole into the data root, with its nested
+	maps (mcc_local_package.c); no Steam needed */
 	if (mcc_local_package_path(cursor, platform_data_root(), resolved, size))
 	{
 		*rest = cursor + strlen(cursor);
@@ -601,6 +620,14 @@ static int translate_elsewhere(const char *cursor, char *resolved, unsigned long
 	return 0;
 }
 
+/* the save root's folder of the drives (platform_save_drive_folder) */
+static char save_drive_folder[32];
+
+void platform_save_drive_folder(const char *folder)
+{
+	snprintf(save_drive_folder, sizeof(save_drive_folder), "%s", folder ? folder : "");
+}
+
 void platform_translate_path(const char *xbox_path, char *host_path, unsigned long host_path_size)
 {
 	char resolved[1024];
@@ -611,11 +638,17 @@ void platform_translate_path(const char *xbox_path, char *host_path, unsigned lo
 	const char *cursor = xbox_path;
 #endif
 	const char *log_name = log_file_name(xbox_path);
+	const char *save_name = save_root_file_name(xbox_path);
 	unsigned long length;
 
 	if (log_name)
 	{
 		snprintf(host_path, host_path_size, "%s/%s", platform_folder(_port_folder_logs), log_name);
+		return;
+	}
+	if (save_name)
+	{
+		snprintf(host_path, host_path_size, "%s/%s", platform_save_root(), save_name);
 		return;
 	}
 	snprintf(resolved, sizeof(resolved), "%s", platform_data_root());
@@ -637,7 +670,16 @@ void platform_translate_path(const char *xbox_path, char *host_path, unsigned lo
 		{
 			struct posix_file_information information;
 
-			snprintf(resolved, sizeof(resolved), "%s/%c", platform_save_root(), drive);
+			if (save_drive_folder[0])
+			{
+				/* (a mode's own folder: platform_save_drive_folder) */
+				snprintf(resolved, sizeof(resolved), "%s/%s", platform_save_root(), save_drive_folder);
+				if (posix_stat(resolved, &information) != 0)
+					posix_make_directory(resolved);
+				snprintf(resolved, sizeof(resolved), "%s/%s/%c", platform_save_root(), save_drive_folder, drive);
+			}
+			else
+				snprintf(resolved, sizeof(resolved), "%s/%c", platform_save_root(), drive);
 			/* every Xbox drive always exists; create its directory on first use */
 			if (posix_stat(resolved, &information) != 0)
 				posix_make_directory(resolved);
@@ -1455,6 +1497,25 @@ BOOL WINAPI MoveFileA(LPCSTR existing_file_name, LPCSTR new_file_name)
 	}
 	if (rename(from, to) != 0)
 	{
+		/* another file system (a maps folder that is a link to another
+		drive, as Linux players point maps_ce at their Custom Edition
+		install): copied and the original removed, as Windows's MoveFileA
+		does across volumes; a copy that fails leaves nothing behind, but a
+		file that appeared there since the check above is not ours and stays */
+		if (errno == EXDEV)
+		{
+			if (!CopyFileA(existing_file_name, new_file_name, TRUE))
+			{
+				DWORD error = GetLastError();
+
+				if (error != ERROR_ALREADY_EXISTS)
+					unlink(to);
+				SetLastError(error);
+				return FALSE;
+			}
+			unlink(from);
+			return TRUE;
+		}
 		platform_set_last_error_from_errno(errno);
 		return FALSE;
 	}

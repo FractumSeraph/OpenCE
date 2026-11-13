@@ -1569,13 +1569,52 @@ void test_input_hold_fire(int hold)
 
 /* debug.test_input "menu:<buttons>": the buttons pressed one a second, from
 the first poll, for testing the menus: a, b, x, y, lb, rb (white and black),
-up, down, left, right, start, back, key:<a key's name> (a key of the
+up, down, left, right, start, back, rs (the right stick's click),
+key:<a key's name> (a key of the
 keyboard, as SDL names it: key:C; key:W+C holds both), the mouse's (move,
 click, rclick, wheel, below), shot, fire (the trigger held all its second),
 fireshot (fire, and a shot 600 ms in) or wait (none), separated by spaces or
 commas */
-static char test_input_menu[512];
+static char test_input_menu[4096];
 static Uint64 test_input_menu_since;
+
+/* debug.test_input "follow:<file>": the same buttons, read from a file as
+another program writes them there; each line that appears is played as a
+menu: script from that moment (for a test that answers what the game shows,
+such as a dance-off's steps) */
+static char test_input_follow_path[256];
+static long test_input_follow_offset;
+
+static void test_input_follow_poll(void)
+{
+	FILE *file;
+	char text[sizeof(test_input_menu)];
+	size_t length;
+
+	if (!test_input_follow_path[0] || !(file = fopen(test_input_follow_path, "rb")))
+		return;
+	if (!fseek(file, test_input_follow_offset, SEEK_SET) &&
+		(length = fread(text, 1, sizeof(text) - 1, file)) > 0)
+	{
+		char *end;
+
+		text[length] = 0;
+		/* (whole lines only: the rest waits for its newline) */
+		if ((end = strrchr(text, '\n')) != NULL)
+		{
+			*end = 0;
+			test_input_follow_offset += (long)(end - text) + 1;
+			for (end = text; *end; end++)
+			{
+				if (*end == '\n' || *end == '\r')
+					*end = ' ';
+			}
+			snprintf(test_input_menu, sizeof(test_input_menu), "%s", text);
+			test_input_menu_since = SDL_GetTicks();
+		}
+	}
+	fclose(file);
+}
 
 /* the token of this second, held or not (NULL for none) */
 static const char *test_input_menu_current(size_t *length)
@@ -2010,6 +2049,8 @@ static void test_input_gamepad(XINPUT_GAMEPAD *pad)
 			snprintf(test_input_menu, sizeof(test_input_menu), "%s", setting + 5);
 			test_input_menu_since = SDL_GetTicks();
 		}
+		else if (!strncmp(setting, "follow:", 7))
+			snprintf(test_input_follow_path, sizeof(test_input_follow_path), "%s", setting + 7);
 		else if (!strncmp(setting, "bot:", 4))
 			seed = atoi(setting + 4);
 		else if (!strcmp(setting, "bot"))
@@ -2018,6 +2059,43 @@ static void test_input_gamepad(XINPUT_GAMEPAD *pad)
 		{
 			seed = atoi(setting + 5);
 			looking = 1;
+		}
+	}
+	test_input_follow_poll();
+	/* (HALO_TEST_INPUT_FILE: a file whose text, when it appears, is a new
+	"menu:" script from now, for tests that wait on the game between steps;
+	the file is emptied once read) */
+	{
+		static const char *file_name;
+		static Uint64 file_checked;
+		static int file_known;
+
+		if (!file_known)
+		{
+			file_name = getenv("HALO_TEST_INPUT_FILE");
+			file_known = 1;
+		}
+		if (file_name && *file_name && SDL_GetTicks() - file_checked >= 250)
+		{
+			FILE *file = fopen(file_name, "rb");
+
+			file_checked = SDL_GetTicks();
+			if (file)
+			{
+				char text[sizeof(test_input_menu)];
+				size_t length = fread(text, 1, sizeof(text) - 1, file);
+
+				fclose(file);
+				text[length] = 0;
+				if (length)
+				{
+					snprintf(test_input_menu, sizeof(test_input_menu), "%s", text);
+					test_input_menu_since = SDL_GetTicks();
+					file = fopen(file_name, "wb");
+					if (file)
+						fclose(file);
+				}
+			}
 		}
 	}
 	if (test_input_menu[0])

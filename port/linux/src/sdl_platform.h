@@ -108,9 +108,15 @@ BOOL platform_import_poll(char *file, int file_size, unsigned long long *done, u
 BOOL platform_sdl_initialize(void);
 /* creates the window and makes its OpenGL context current on this thread */
 BOOL platform_video_initialize(unsigned long width, unsigned long height);
-#ifdef HALO_BGFX
+#if defined(HALO_BGFX) || defined(HALO_VULKAN)
 /* the window again for OpenGL, when bgfx does not start (d3d8_bgfx.inl) */
 BOOL platform_video_reopen_for_gl(void);
+#ifdef HALO_VULKAN
+/* the one-time questions after a fallback (d3d8_vk.inl): to stay on OpenGL
+ES, or on the phone's own Vulkan driver, for good */
+void platform_offer_opengl_es(void);
+void platform_offer_system_driver(const char *driver);
+#endif
 /* display.renderer chooses bgfx: "bgfx", or on Windows "d3d11" (bgfx on
 Direct3D 11) */
 BOOL platform_bgfx_chosen(void);
@@ -173,6 +179,8 @@ void platform_show_message(const char *title, const char *message);
 (xinput_sdl.c); taken, the request is cleared (d3d8_gl.c, at presentation) */
 void platform_screenshot_request(void);
 BOOL platform_screenshot_take_request(void);
+/* after a Vulkan start that did not get going: asks whether to stay on OpenGL */
+void platform_offer_opengl(void);
 /* a snapshot of the input state; consume_motion resets the mouse deltas */
 void platform_input_read(struct platform_input_state *state, BOOL consume_motion);
 /* the pointer in the menus (d3d8_gl.c, halo_ui_pointer_update) */

@@ -52,6 +52,9 @@ enum
 	the tag cache in any case) */
 	CE_MAXIMUM_BSP_LIGHTMAPS = 0x10000,
 	CE_MAXIMUM_LIGHTMAP_MATERIALS = 0x10000,
+	/* (the materials of every lightmap together, capped far above any real
+	map's, whose BSP has a few thousand, #1089) */
+	CE_MAXIMUM_BSP_MATERIALS = 0x100000,
 	CE_MAXIMUM_MATERIAL_VERTICES = 0x100000,
 	/* the most bytes of compressed vertices a BSP's materials are given
 	(ce_bsp_loaded): several times what the largest maps take. Materials
@@ -155,6 +158,7 @@ boolean ce_bsp_check(
 	byte *structure, *lightmaps;
 	long lightmap_count, lightmap_index;
 	unsigned long vertex_bytes = 0;
+	unsigned long materials_walked = 0;
 
 	*bytes = 0;
 	if (!header)
@@ -215,6 +219,12 @@ than sphere_intersects_cluster_portal projects into an array on the stack */
 			CE_MAXIMUM_LIGHTMAP_MATERIALS, "a structure BSP's lightmap materials", &material_count, &materials))
 		{
 			return FALSE;
+		}
+		materials_walked += (unsigned long)material_count;
+		if (materials_walked > CE_MAXIMUM_BSP_MATERIALS)
+		{
+			return ce_refuse("a structure BSP's lightmaps name more than %lu materials in all",
+				(unsigned long)CE_MAXIMUM_BSP_MATERIALS);
 		}
 		for (material_index = 0; material_index < material_count; material_index++)
 		{

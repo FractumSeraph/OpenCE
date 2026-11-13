@@ -173,8 +173,10 @@ static enum mcc_cache_status mcc_check_assets(void *data, struct mcc_cache_repor
                 return MCC_CACHE_BAD_BITMAP;
             /* Tags that share one bitmap group count its bitmaps again; a map
              * can hold no more distinct ones than its tag data has room for,
-             * which also bounds the texture table built from this count. */
-            if (++r->bitmap_count>r->identity.tag_data_size/0x30) return MCC_CACHE_BAD_BITMAP;
+             * which also bounds the texture table built from this count
+             * (and the reader's own limit, MCC_CACHE_MAX_BITMAPS). */
+            if (++r->bitmap_count>MCC_CACHE_MAX_BITMAPS || r->bitmap_count>r->identity.tag_data_size/0x30)
+                return MCC_CACHE_BAD_BITMAP;
             if (format==18) r->bc7_bitmap_count++;
         }
     }
@@ -216,6 +218,9 @@ int mcc_cache_visit_resources(void *data,struct mcc_cache_report const *report,
     uint32_t i;
     if (!data || !report || report->status!=MCC_CACHE_OK || !visit) return 0;
     checked=*report;
+    /* (counted again from none: the limits are on one walk's totals) */
+    checked.bitmap_count=checked.bc7_bitmap_count=checked.external_bitmap_count=0;
+    checked.sound_permutation_count=checked.external_sound_count=0;
     for (i=0;i<report->tag_count;i++) {
         uint8_t *entry=mcc_cache_pointer(data,report,report->tag_base+40+i*32,32);
         char *name;
