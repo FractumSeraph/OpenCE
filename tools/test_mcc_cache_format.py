@@ -251,10 +251,14 @@ def test_bitmaps_counted_within_a_limit(report_tool, tmp_path):
     list is sized from the total): a total past the reader's limit is refused,
     not wrapped"""
     path = tmp_path / "shared.map"
-    path.write_bytes(shared_bitmap_map(4, 16))
+    # (port, this fork: two entries, 32 counted, not ChupathingyCE's four,
+    # 64: OpenCE's bound by the tag data, which this fork's reader keeps too,
+    # refuses more than its 0xA00 bytes hold: test_shared_bitmap_groups_are_
+    # bounded_by_the_tag_data)
+    path.write_bytes(shared_bitmap_map(2, 16))
     code, report = audit(report_tool, path)
     assert code == 0, report
-    assert int(report["bitmaps"]) == 64
+    assert int(report["bitmaps"]) == 32
     path.write_bytes(shared_bitmap_map(257, 4096))
     code, report = audit(report_tool, path)
     assert code == 1, report

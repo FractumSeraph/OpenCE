@@ -132,7 +132,7 @@ def generated(fault=None):
         "network_objects_discard_client_effects"))
     code += "\n" + "\n".join(function(distributed, name) for name in (
         "distributed_vector_unpack", "distributed_unit_vector_unpack",
-        "distributed_scripted_pose_apply", "distributed_handle_unit_state"))
+        "distributed_scripted_pose_apply", "distributed_unit_release_others", "distributed_handle_unit_state"))
     code += "\n" + "\n".join(function(objects, name) for name in (
         "distributed_client_note_own_inventory", "distributed_client_own_settled",
         "distributed_client_weapon_here", "distributed_client_inventory_whole",

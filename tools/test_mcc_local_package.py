@@ -47,8 +47,12 @@ int steam_workshop_windows_roots(char paths[][STEAM_WORKSHOP_PATH_SIZE],int n) {
 #endif
 '''
     native = (SRC / "xbox_files.c").read_text()
+    # (ChupathingyCE's: d_file_name names d:\'s files, the save root's among
+    # them, and a mode's own folder of the save drives)
+    driver += "\nstatic char save_drive_folder[32];\n"
     driver += "\n".join(function(native, name) for name in
-                         ("trim_separators", "names_match", "log_file_name", "mcc_folder_prefix",
+                         ("trim_separators", "names_match", "d_file_name", "log_file_name", "save_root_file_name",
+                          "mcc_folder_prefix",
                           "translate_workshop", "translate_elsewhere", "platform_translate_path"))
     driver += r'''
 int main(int argc,char **argv) {
