@@ -16,6 +16,9 @@ pointers */
 #define XPTR(type) type *
 #define xbox_pointer(address) ((void *)(address))
 #define xbox_address(pointer) ((void *)(pointer))
+/* (port, this fork: mcc_script_threads_prepare names its failing check) */
+#define _error_silent 0
+static void error(int priority, char const *format, ...) {(void)priority;(void)format;}
 #include "types.inc"
 static byte image[2*1024*1024], saved[sizeof(image)];
 static unsigned long used=160000, capacity=sizeof(image);
