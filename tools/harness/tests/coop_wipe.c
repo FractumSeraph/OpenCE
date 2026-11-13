@@ -59,6 +59,9 @@ static boolean game_time_get_paused(void){return paused;}
 static boolean players_are_all_dead(void){return all_dead;}
 static boolean main_coop_host_revert(void){if(!game_state_globals.saved_game_valid)return FALSE;reverts++;return TRUE;}
 static void players_respawn_at_checkpoint(void){respawns++;}
+/* (MCC's Iron skull, ChupathingyCE's mcc_skulls.c: off here, so a death never restarts the level) */
+static boolean mcc_skulls_restart_on_death(void){return FALSE;}
+static void main_reset_map(void){CHECK(0,"the level restarted");}
 static void game_state_revert(void){reverts++;}
 static void game_state_call_before_save_procs(void){}
 static void main_stop_time(void){}

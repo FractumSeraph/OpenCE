@@ -15,7 +15,11 @@ def code():
     macro = re.search(r"#define HS_FUNCTION_PARAMETER_TYPE\(.*?\n(?:.*\\\n)*.*\n", header).group(0)
     types += "\n#ifdef HALO_64BIT\n" + macro + "#endif\n"
     types += structure(read("source/hs/hs_scenario_definitions.h"), "hs_syntax_node")
-    return types, function(read("port/linux/game/mcc_scripts.c"), "mcc_script_call_valid")
+    # (ChupathingyCE's mcc_scripts.c checks the arguments in a function of
+    # their own, which mcc_script_call_valid calls)
+    scripts = read("port/linux/game/mcc_scripts.c")
+    return types, (function(scripts, "mcc_script_call_arguments_valid") + "\n" +
+                   function(scripts, "mcc_script_call_valid"))
 
 
 def execute(types, source, case):
