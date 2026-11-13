@@ -778,10 +778,6 @@ boolean network_game_client_handle_message(
 					/* port: map sharing's (83 to 86), to a map fetch alone
 					(port/linux/game/map_share_client.c); anything else's
 					dropped below, as ever */
-					/* (port: OpenCE's MCC package answer, 104, which this
-					build never asks for: noted and dropped) */
-					if (network_distributed_mcc_share_message(NONE, message, message_size))
-						break;
 					if (!map_share_client_message(message, message_size,
 						!network_connection_last_read_was_unreliable()))
 #endif
