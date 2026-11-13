@@ -10538,6 +10538,55 @@ static void widget_pool_log_update(
 	}
 }
 
+/* port: with HALO_MENU_DUMP (menu_tags.c's menu_dump, a test aid), a log
+line "menu-dump: now <screen>|<focus>|<item>|<screens open>" each time the
+first player's screen, its focus (the widget at the end of its focus's
+path) or that list's chosen item changes: what a press did, for the
+browser test that presses every row (build/tools/smoke/menu-crawl.mjs) */
+#ifndef HALO_XBOX_CONSOLE
+/* (the desktop, Android and browser builds: the Xbox's has no platform_log) */
+char *tag_get_name(long tag_index);
+
+static void ui_widget_port_menu_trace(
+	void)
+{
+	static int enabled = -1;
+	static char last[512];
+	struct widget_instance *screen = widget_globals.active_widgets[0];
+	struct widget_instance *focus = screen;
+	struct widget_instance *other;
+	char now[512];
+	long open = 0;
+
+	if (enabled < 0)
+	{
+		char const *dump = getenv("HALO_MENU_DUMP");
+
+		enabled = dump && *dump && *dump != '0';
+	}
+	if (!enabled)
+		return;
+	for (other = screen; other; other = other->previous)
+		open++;
+	while (focus && focus->focused_child)
+		focus = focus->focused_child;
+	snprintf(now, sizeof(now), "%s|%s|%d|%ld",
+		screen ? tag_get_name(screen->definition_tag_index) : "",
+		focus ? tag_get_name(focus->definition_tag_index) : "",
+		focus && focus->parent && (focus->parent->type == _ui_widget_type_column_list ||
+			focus->parent->type == _ui_widget_type_spinner_list) ?
+			(int)focus->parent->parameters.list.selected_index : -1,
+		open);
+	if (strcmp(now, last))
+	{
+		snprintf(last, sizeof(last), "%s", now);
+		platform_log("menu-dump: now %s", now);
+	}
+}
+#else
+#define ui_widget_port_menu_trace()
+#endif
+
 void process_ui_widgets(
 	void)
 {
@@ -10554,6 +10603,7 @@ void process_ui_widgets(
 		widget_globals.initialized);
 	widget_globals.current_system_milliseconds = system_milliseconds();
 	widget_pool_log_update();
+	ui_widget_port_menu_trace();
 #ifndef HALO_XBOX_CONSOLE
 	ui_widgets_process_mouse();
 	if (ui_widget_port_press_controller != NONE)

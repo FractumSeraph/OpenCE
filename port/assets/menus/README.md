@@ -30,6 +30,17 @@ file, the line and the problem, and the game uses the Xbox's menus. The
 setting `display.menus = "xbox"` also uses them. `debug.menu_open` starts on
 one screen (by its name, `main_menu/settings_select/...`), for looking at it.
 
+To find buttons that lead nowhere, start the game with `HALO_MENU_DUMP=1`
+(the browser page takes `?halo-env=HALO_MENU_DUMP=1,HALO_MENUS=chupathingy`).
+The log then has a `menu-dump:` line for every widget, the map's and these
+files', as the game put them together. `python3 tools/menu_audit.py <log>`
+follows every screen from the main menu (`--all`: every screen, the ones the
+game opens itself too) and names each row whose A does nothing, as the
+engine passes a press: from the screen down the focus's path, the first
+widget with a handler takes it. `--map` prints what every row does. With the
+dump on, the game also logs `menu-dump: now <screen>|<focus>|<item>|...`
+whenever the screen or the focus changes, for a test that presses every row.
+
 ## Writing them again
 
 `tools/ce_menus.py` writes every file in `ce/` and `menus.json` again,

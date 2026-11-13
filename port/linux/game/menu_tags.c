@@ -2688,6 +2688,8 @@ static void host_setup_patch(void)
 	}
 }
 
+static void menu_dump(void);
+
 void menu_tags_loaded(
 	char const *map_name)
 {
@@ -2881,6 +2883,8 @@ mcc_settings:
 		main_menu_delta_patch();
 	platform_log("menus: %ld widgets, %ld string lists and %ld bitmaps added to the map's %ld tags",
 		widget_count, own_lists + menus->string_list_count, menus->bitmap_count, build.first_index);
+	if (!game_map)
+		menu_dump();
 	goto done;
 
 failed:
@@ -2894,6 +2898,92 @@ done:
 	free(build.strings_tags);
 	free(build.bitmap_tags);
 	memset(&build, 0, sizeof(build));
+}
+
+/* HALO_MENU_DUMP=1 (a test aid, not a setting: the browser page passes it
+from ?halo-env=): every widget the menus have, the map's and ours, one log
+line each, "menu-dump:" then its name, type, its event handlers (event,
+what they do, the function they run, the widget they open), its game data
+inputs and its children, for tools/menu_audit.py, which finds the buttons
+that lead nowhere */
+static char const *menu_dump_tag_name(
+	long tag_index)
+{
+	return tag_index == NONE ? "" : tag_get_name(tag_index);
+}
+
+static void menu_dump(
+	void)
+{
+	struct tag_iterator iterator;
+	long tag;
+	char const *dump = getenv("HALO_MENU_DUMP");
+
+	if (!dump || !*dump || *dump == '0')
+		return;
+	platform_log("menu-dump: root %s", menu_tags.root[0] ? menu_tags.root : "ui\\shell\\main_menu\\main_menu");
+	tag_iterator_new(&iterator, UI_WIDGET_DEFINITION_TAG);
+	while ((tag = tag_iterator_next(&iterator)) != NONE)
+	{
+		struct ui_widget_definition const *definition = tag_get(UI_WIDGET_DEFINITION_TAG, tag);
+		struct ui_widget_event_handler_reference const *handlers = xbox_pointer(definition->event_handlers.address);
+		struct ui_widget_child_reference const *children = xbox_pointer(definition->child_widgets.address);
+		struct ui_widget_conditional_reference const *conditionals =
+			xbox_pointer(definition->conditional_widgets.address);
+		struct ui_widget_game_data_input_reference const *inputs =
+			xbox_pointer(definition->game_data_inputs.address);
+		char line[2048];
+		size_t used;
+		long index;
+
+		used = (size_t)snprintf(line, sizeof(line), "menu-dump: W|%s|%d|%lx|%s", tag_get_name(tag), definition->type,
+			(unsigned long)definition->flags, menu_dump_tag_name(definition->extended_description_widget.index));
+		/* (platform_log keeps a line to 2048 characters: a long widget's
+		go on in "menu-dump: +" lines) */
+#define MENU_DUMP_ADD(...) \
+		do { \
+			if (used > 1600) \
+			{ \
+				platform_log("%s", line); \
+				used = (size_t)snprintf(line, sizeof(line), "menu-dump: +"); \
+			} \
+			if (used < sizeof(line)) \
+				used += (size_t)snprintf(line + used, sizeof(line) - used, __VA_ARGS__); \
+		} while (0)
+		for (index = 0; index < definition->event_handlers.count; index++)
+		{
+			struct ui_widget_event_handler_reference const *handler = &handlers[index];
+			char const *function = NULL;
+			char const *event = handler->event_type >= 0 && handler->event_type < (short)NUMBEROF(event_names) ?
+				event_names[handler->event_type] : "?";
+
+			if (TEST_FLAG(handler->flags, _event_handler_run_function_bit))
+			{
+				function = handler->function >= PC_MENU_FUNCTION_BASE ?
+					pc_menu_function_name(handler->function - PC_MENU_FUNCTION_BASE) :
+					ui_widget_event_handler_function_name(handler->function);
+			}
+			MENU_DUMP_ADD("|E:%s:%lx:%s:%s", event, (unsigned long)handler->flags, function ? function : "",
+				menu_dump_tag_name(handler->widget_tag.index));
+		}
+		for (index = 0; index < definition->game_data_inputs.count; index++)
+		{
+			short function = inputs[index].function;
+			char const *name = function >= PC_MENU_FUNCTION_BASE ?
+				(function - PC_MENU_FUNCTION_BASE < (short)NUMBEROF(port_game_data_input_names) ?
+					port_game_data_input_names[function - PC_MENU_FUNCTION_BASE] : "?") :
+				(function >= 0 && function < (short)NUMBEROF(game_data_input_names) ? game_data_input_names[function] : "?");
+
+			MENU_DUMP_ADD("|I:%s", name);
+		}
+		for (index = 0; index < definition->child_widgets.count; index++)
+			MENU_DUMP_ADD("|C:%s", menu_dump_tag_name(children[index].widget_tag.index));
+		for (index = 0; index < definition->conditional_widgets.count; index++)
+			MENU_DUMP_ADD("|K:%s", menu_dump_tag_name(conditionals[index].widget_tag.index));
+#undef MENU_DUMP_ADD
+		platform_log("%s", line);
+	}
+	platform_log("menu-dump: end");
 }
 
 void menu_tags_unloaded(

@@ -3451,7 +3451,10 @@
        chat's test tone, and its mode, and a player's own recordings
        (network.record_my_games); port/linux/src/port_config.c) */
     function setTestEnvironment() {
-      const allowed = new Set(["HALO_VOICE_TEST", "HALO_VOICE_CHAT", "HALO_NET_RECORD_MY_GAMES"]);
+      /* (and for tools/menu_audit.py: which menus, display.menus, and
+         their dump, HALO_MENU_DUMP: menu_tags.c) */
+      const allowed = new Set(["HALO_VOICE_TEST", "HALO_VOICE_CHAT", "HALO_NET_RECORD_MY_GAMES", "HALO_MENUS",
+        "HALO_MENU_DUMP"]);
       const wanted = new URLSearchParams(location.search).get("halo-env") || "";
       for (const pair of wanted.split(",")) {
         const at = pair.indexOf("=");
