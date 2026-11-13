@@ -44,9 +44,17 @@ void hs_console_state_reset(void)
     }
 }
 
+/* port (this fork): a script's string value is an Xbox address
+ * (hs_compile.c's xbox_address), which a 64-bit build's sources pointer is not:
+ * its offset into the sources, or past them */
+static uintptr_t hs_console_source_offset(unsigned long value)
+{
+    return (uintptr_t)xbox_pointer(value) - (uintptr_t)hs_console_state->sources;
+}
+
 static void hs_console_source_mark_value(byte *marked, unsigned long value)
 {
-    uintptr_t offset = (uintptr_t)value - (uintptr_t)hs_console_state->sources;
+    uintptr_t offset = hs_console_source_offset(value);
     if (offset < sizeof(hs_console_state->sources))
         marked[offset / HS_CONSOLE_SOURCE_BYTES] = TRUE;
 }
@@ -141,7 +149,7 @@ static struct hs_syntax_node const *hs_console_saved_node(struct hs_console_stat
 
 static boolean hs_console_saved_string(struct hs_console_state const *state, long value)
 {
-    uintptr_t offset = (uintptr_t)(unsigned long)value - (uintptr_t)hs_console_state->sources;
+    uintptr_t offset = hs_console_source_offset((unsigned long)value);
     if (offset >= sizeof(state->sources)) return FALSE;
     return memchr((char const *)state->sources + offset, 0,
         HS_CONSOLE_SOURCE_BYTES - offset % HS_CONSOLE_SOURCE_BYTES) != NULL;
@@ -232,7 +240,7 @@ static boolean hs_console_saved_source_owner(struct hs_console_state const *stat
         node = state->nodes + hs_console_walk[--depth];
         if (!(node->flags & 8) && (node->flags & 1) && !(node->flags & 4) &&
             node->constant_type == _hs_type_string && hs_type_valid(node->type)) {
-            uintptr_t offset = (uintptr_t)(unsigned long)node->data - (uintptr_t)hs_console_state->sources;
+            uintptr_t offset = hs_console_source_offset((unsigned long)node->data);
             if (offset >= sizeof(state->sources) ||
                 state->roots[offset / HS_CONSOLE_SOURCE_BYTES] != root) return FALSE;
         }

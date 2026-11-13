@@ -1,12 +1,3 @@
-/* (port, this fork: as MCC's units, mcc_cache.c's MCC_CACHE_64BIT_REFUSED) */
-#if defined(HALO_64BIT) && defined(__clang__)
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wint-conversion"
-#pragma clang diagnostic ignored "-Wint-to-pointer-cast"
-#pragma clang diagnostic ignored "-Wpointer-to-int-cast"
-#pragma clang diagnostic ignored "-Wpointer-integer-compare"
-#pragma clang diagnostic ignored "-Wincompatible-pointer-types"
-#endif
 /* Included by mcc_cache.c for its bounds-checked opener. Independent jobs
  * retain private readers; cached facts never establish session admission. */
 #include <xtl.h>
@@ -249,6 +240,3 @@ void mcc_validation_update(void)
         snprintf(mcc_validation_reason,sizeof(mcc_validation_reason),"%s",mcc_validation_job->reason);
     }
 }
-#if defined(HALO_64BIT) && defined(__clang__)
-#pragma clang diagnostic pop
-#endif

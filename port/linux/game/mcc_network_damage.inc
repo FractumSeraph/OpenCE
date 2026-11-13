@@ -1,12 +1,3 @@
-/* (port, this fork: as MCC's units, mcc_cache.c's MCC_CACHE_64BIT_REFUSED) */
-#if defined(HALO_64BIT) && defined(__clang__)
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wint-conversion"
-#pragma clang diagnostic ignored "-Wint-to-pointer-cast"
-#pragma clang diagnostic ignored "-Wpointer-to-int-cast"
-#pragma clang diagnostic ignored "-Wpointer-integer-compare"
-#pragma clang diagnostic ignored "-Wincompatible-pointer-types"
-#endif
 /* MCC additions to the generic damage ledger. Included after the common
  * projectile/reach/throw validators, so their established policy stays the
  * same for all four MCC grenade kinds. Native two-kind paths are untouched. */
@@ -52,6 +43,3 @@ static void mcc_network_extra_grenade_damage(short player, long damage_index,
         }
     }
 }
-#if defined(HALO_64BIT) && defined(__clang__)
-#pragma clang diagnostic pop
-#endif

@@ -1,12 +1,3 @@
-/* (port, this fork: as MCC's units, mcc_cache.c's MCC_CACHE_64BIT_REFUSED) */
-#if defined(HALO_64BIT) && defined(__clang__)
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wint-conversion"
-#pragma clang diagnostic ignored "-Wint-to-pointer-cast"
-#pragma clang diagnostic ignored "-Wpointer-to-int-cast"
-#pragma clang diagnostic ignored "-Wpointer-integer-compare"
-#pragma clang diagnostic ignored "-Wincompatible-pointer-types"
-#endif
 /* MCC startup selections wait for local admission; pause-menu restarts use
  * the reliable round transition and an MCC-owned snapshot. Included by the
  * server implementation to keep its private representation private. */
@@ -254,6 +245,3 @@ boolean mcc_ui_restart_network_game(void)
     }
     return success;
 }
-#if defined(HALO_64BIT) && defined(__clang__)
-#pragma clang diagnostic pop
-#endif

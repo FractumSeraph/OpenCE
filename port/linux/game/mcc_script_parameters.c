@@ -1,13 +1,3 @@
-/* (port, this fork: the 64-bit builds compile MCC's code, but play no MCC
-map, mcc_cache.c's MCC_CACHE_64BIT_REFUSED: its tag addresses are a 32-bit
-build's pointers, which this build's Xbox addresses are not) */
-#if defined(HALO_64BIT) && defined(__clang__)
-#pragma clang diagnostic ignored "-Wint-conversion"
-#pragma clang diagnostic ignored "-Wint-to-pointer-cast"
-#pragma clang diagnostic ignored "-Wpointer-to-int-cast"
-#pragma clang diagnostic ignored "-Wpointer-integer-compare"
-#pragma clang diagnostic ignored "-Wincompatible-pointer-types"
-#endif
 /* MCC wire parameters: script+0x50 block, 36-byte name/type records;
  * syntax primitive/global/local flags 0x15 and zero-based slot in data.
  * Public schema: Invader scenario.json and scenario/pre_compile.cpp.

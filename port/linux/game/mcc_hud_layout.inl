@@ -1,12 +1,3 @@
-/* (port, this fork: as MCC's units, mcc_cache.c's MCC_CACHE_64BIT_REFUSED) */
-#if defined(HALO_64BIT) && defined(__clang__)
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wint-conversion"
-#pragma clang diagnostic ignored "-Wint-to-pointer-cast"
-#pragma clang diagnostic ignored "-Wpointer-to-int-cast"
-#pragma clang diagnostic ignored "-Wpointer-integer-compare"
-#pragma clang diagnostic ignored "-Wincompatible-pointer-types"
-#endif
 /* Stock layout recognition, before canvas conversion. Unit HUDs include
  * bitmap geometry; weapon/grenade panels use their authored placements so
  * replacement artwork does not move an otherwise stock counter. Handles,
@@ -194,6 +185,3 @@ static int mcc_hud_layout_stock(uint64_t hash)
     for (i=0;i<NUMBEROF(stock);i++) if (hash==stock[i]) return hash!=0;
     return 0;
 }
-#if defined(HALO_64BIT) && defined(__clang__)
-#pragma clang diagnostic pop
-#endif

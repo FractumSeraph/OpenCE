@@ -1,13 +1,3 @@
-/* (port, this fork: the 64-bit builds compile MCC's code, but play no MCC
-map, mcc_cache.c's MCC_CACHE_64BIT_REFUSED: its tag addresses are a 32-bit
-build's pointers, which this build's Xbox addresses are not) */
-#if defined(HALO_64BIT) && defined(__clang__)
-#pragma clang diagnostic ignored "-Wint-conversion"
-#pragma clang diagnostic ignored "-Wint-to-pointer-cast"
-#pragma clang diagnostic ignored "-Wpointer-to-int-cast"
-#pragma clang diagnostic ignored "-Wpointer-integer-compare"
-#pragma clang diagnostic ignored "-Wincompatible-pointer-types"
-#endif
 /* MCC script linking and MCC-only native functions. Unknown functions cause
  * a load failure; silently removing campaign logic would hide broken maps. */
 #ifndef HALO_MCC
@@ -117,7 +107,8 @@ static void mcc_mission_segment_evaluate(short function, long thread, boolean in
     long *arguments = hs_macro_function_evaluate(function, thread, initialize);
     char const *segment;
     if (!arguments) return;
-    segment = (char const *)(uintptr_t)arguments[0];
+    /* port: a string argument is an Xbox address (cseries/xbox_address.h) */
+    segment = (char const *)xbox_pointer((uint32_t)arguments[0]);
     /* This port acknowledges a local segment event, without MCC's external
      * telemetry service. Keep the boolean result: shipped scripts use it in
      * conditional expressions before cinematics. MCC also uses the older
@@ -260,7 +251,13 @@ boolean mcc_script_call_arguments_valid(struct hs_syntax_node const *call, struc
     }
     for (argument = 0; argument < function->parameter_count; ++argument) {
         node = datum_try_and_get(syntax, next);
+#ifdef HALO_64BIT
+        /* port: past the first, a 64-bit build's parameter types follow the
+         * padded definition (hs.h) */
+        if (!node || node->type != HS_FUNCTION_PARAMETER_TYPE(function, argument)) return FALSE;
+#else
         if (!node || node->type != function->parameter_types[argument]) return FALSE;
+#endif
         next = node->next_node_index;
     }
     return next == NONE;

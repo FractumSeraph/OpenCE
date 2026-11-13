@@ -1,12 +1,3 @@
-/* (port, this fork: as MCC's units, mcc_cache.c's MCC_CACHE_64BIT_REFUSED) */
-#if defined(HALO_64BIT) && defined(__clang__)
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wint-conversion"
-#pragma clang diagnostic ignored "-Wint-to-pointer-cast"
-#pragma clang diagnostic ignored "-Wpointer-to-int-cast"
-#pragma clang diagnostic ignored "-Wpointer-integer-compare"
-#pragma clang diagnostic ignored "-Wincompatible-pointer-types"
-#endif
 /* The same CRC and SHA framing as the synchronous load checks, with bounded
  * slices for lobby navigation. Owns its readers and never draws or ticks game
  * state. The source stream belongs to mcc_validation and outlives this check. */
@@ -133,6 +124,3 @@ int mcc_resources_check_step(struct mcc_resource_check *check, uint32_t *checksu
     } while (spent<4194304 && (unsigned long)(system_milliseconds()-began)<2);
     return 0;
 }
-#if defined(HALO_64BIT) && defined(__clang__)
-#pragma clang diagnostic pop
-#endif

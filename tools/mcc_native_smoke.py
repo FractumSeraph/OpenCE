@@ -45,7 +45,9 @@ def run_case(args, name, binary):
     output.mkdir(parents=True, exist_ok=True)
     init = data / "init.txt"
     original = init.read_bytes() if init.exists() else None
-    debug = data / "debug.txt"
+    # (port, this fork: the game writes debug.txt in the data root's logs
+    # folder, port_paths.c)
+    debug = data / "logs" / "debug.txt" if (data / "logs").is_dir() else data / "debug.txt"
     offset = debug.stat().st_size if debug.exists() else 0
     marker = "mcc_smoke_" + uuid.uuid4().hex
     env = {key: value for key, value in os.environ.items() if not key.startswith("HALO_")}

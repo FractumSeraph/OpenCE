@@ -1,12 +1,3 @@
-/* (port, this fork: as MCC's units, mcc_cache.c's MCC_CACHE_64BIT_REFUSED) */
-#if defined(HALO_64BIT) && defined(__clang__)
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wint-conversion"
-#pragma clang diagnostic ignored "-Wint-to-pointer-cast"
-#pragma clang diagnostic ignored "-Wpointer-to-int-cast"
-#pragma clang diagnostic ignored "-Wpointer-integer-compare"
-#pragma clang diagnostic ignored "-Wincompatible-pointer-types"
-#endif
 /* Included after the native interpreter's declarations. This MCC-only
  * adapter uses its existing stack service, so arguments, recursion, sleep
  * and checkpoint state remain inside each checkpointed thread stack. */
@@ -309,6 +300,3 @@ static boolean mcc_hs_parameter_set(long thread_index, struct hs_syntax_node *va
     }
     return TRUE;
 }
-#if defined(HALO_64BIT) && defined(__clang__)
-#pragma clang diagnostic pop
-#endif
