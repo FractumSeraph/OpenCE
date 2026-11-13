@@ -80,7 +80,9 @@ def game():
     if sys.platform == "darwin":
         candidates = [ROOT / "build" / "macos" / "ChupathingyCE.app" / "Contents" / "MacOS" / "chupathingy"]
     elif sys.platform.startswith("linux") or sys.platform.startswith("freebsd"):
-        candidates = [ROOT / "build" / name / "chupathingy" for name in ("linux64", "freebsd64", "linux")]
+        # (this fork's builds are halo: tools/linux_build.py)
+        candidates = [ROOT / "build" / name / program for name in ("linux64", "freebsd64", "linux")
+                      for program in ("chupathingy", "halo")]
     else:
         candidates = []
     for candidate in candidates:
@@ -146,7 +148,7 @@ def binary():
     found = game()
     # (linux-tests unpacks the linux build: there it must run, never skip)
     if not found and os.environ.get("GITHUB_ACTIONS") and sys.platform.startswith("linux"):
-        pytest.fail("no build/linux/chupathingy in linux-tests")
+        pytest.fail("no build/linux/chupathingy or build/linux/halo in the CI's Linux tests")
     if not found:
         pytest.skip("no built game (LOG_ROOT_GAME, or build/macos, linux64, freebsd64 or linux)")
     return found
