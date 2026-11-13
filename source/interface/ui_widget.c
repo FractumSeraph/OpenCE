@@ -9639,6 +9639,13 @@ static boolean widget_takes_any_controller(
 		(we_are_at_the_main_menu || players_port_local_player_count() <= 1);
 }
 
+#ifdef HALO_XBOX_CONSOLE
+/* (port: the original Xbox has neither of the PC menus' controller hooks:
+its menus are the Xbox's own) */
+#define pc_menu_screen_reads_every_controller(widget) ((void)(widget), FALSE)
+#define pc_menu_screen_routes_by_controller(widget) ((void)(widget), FALSE)
+#endif
+
 /* port: the controller whose events a screen reads (NONE: every one's;
 only its own while another controller has a widget of its own) */
 static short widget_event_controller(
