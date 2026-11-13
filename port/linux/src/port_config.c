@@ -679,10 +679,12 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"Keep the GPU programs the game links under the save root (shader_cache),\n"
 		"and load them from there next time instead of linking them again, which\n"
 		"stalls a frame on some drivers; false links each every run." },
+#if HALO_MCC
 	{ "display.mcc_texture_prepare_mb", _config_integer, "0", "HALO_MCC_TEXTURE_PREPARE_MB", _environment_value, _platform_desktop,
 		"MCC only: prepare large non-paletted textures during loading, within\n"
 		"this estimated GPU memory budget in MiB (0 disables, maximum 512).\n"
 		"Does not change texture quality or the Xbox/Custom Edition caches." },
+#endif
 	{ "display.stats_log", _config_boolean, "false", "HALO_STATS_LOG", _environment_value, _platform_all,
 		"A line a second in the log with the frame rate, the mode, the map, the\n"
 		"renderer and the size of the 3D view, so a graphics bug's report or two\n"
@@ -1312,6 +1314,7 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"Halo PC's in maps_pc. Their tags are checked as the game's own maps'\n"
 		"are before they run. false: none of them is listed, played or\n"
 		"downloaded (OpenCE's setting)." },
+#if HALO_MCC
 	{ "game.mcc_campaigns", _config_boolean, "true", "HALO_MCC_CAMPAIGNS", _environment_value, _platform_all,
 		"Use explicit MCC campaign manifests for mission discovery, ordering and\n"
 		"progression. Reopen the map list after changing this." },
@@ -1328,6 +1331,7 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"boom, eye_patch, recession, blind, ghost, sputnik). A map's own scripts\n"
 		"may turn skulls on and off after that. Xbox and Custom Edition maps are\n"
 		"never affected." },
+#endif
 
 	{ "game.bomb_spawns", _config_string, "\"\"", "HALO_BOMB_SPAWNS", _environment_value, _platform_all | _platform_server,
 		"Where the bomb goes in a Bomb or Grifball game you host. Use it on\n"
@@ -1805,6 +1809,7 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"Count this install in Fractum Halo's usage numbers: twice a day the\n"
 		"game tells the fork's server that it is running, with a random ID made\n"
 		"for this install, the version and the platform. false sends nothing." },
+#if HALO_MCC
 	{ "network.workshop_downloads", _config_string, "\"ask\"", "HALO_NET_WORKSHOP_DOWNLOADS", _environment_value,
 		_platform_desktop,
 		"Get a game's missing MCC Workshop map through your Steam when you join:\n"
@@ -1816,6 +1821,7 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 	{ "network.workshop_url", _config_string, "\"\"", "HALO_WORKSHOP_URL", _environment_value, _platform_desktop,
 		"The list of MCC Workshop items the Delta Guide's Workshop shows (with\n"
 		"MCC on this computer). Empty shows only the items Steam has installed." },
+#endif
 	{ "network.list_hosted_games", _config_boolean, "true", "HALO_NET_LIST_GAMES", _environment_value,
 		_platform_all | _platform_server,
 		"List the public games you host without a password on the game list,\n"
@@ -2365,6 +2371,7 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 	{ "paths.custom_maps", _config_string, "\"\"", "HALO_CUSTOM_MAPS_ROOT", _environment_value, _platform_desktop,
 		"The custom_maps folder (Custom Edition maps, and their bitmaps.map,\n"
 		"sounds.map and loc.map); empty for the one in the data folder." },
+#if HALO_MCC
 	{ "paths.steam", _config_string, "\"\"", "HALO_STEAM_ROOT", _environment_value, _platform_desktop,
 		"A Steam folder (or Steam library) to check first for subscribed Halo CE\n"
 		"Workshop items. Empty uses automatic discovery: Windows registry, Linux\n"
@@ -2378,6 +2385,7 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"Empty is steam/ in the data folder. Use a big drive for MCC's files." },
 	{ "paths.steam_api", _config_string, "\"\"", "HALO_STEAM_API", _environment_value, _platform_desktop,
 		"A steam_api library for the Workshop to use. Empty uses MCC's own on Windows." },
+#endif
 
 	/* ---- data */
 	{ "data.download_url", _config_string, "\"https://halo.fractumseraph.net/assets/maps/\"", "HALO_DATA_DOWNLOAD_URL",
@@ -2517,11 +2525,13 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"With debug.network_test_bomb: the joining machine's player holds the\n"
 		"trigger for the first four seconds of each try. They pick the bomb up\n"
 		"with it held, throw it down and pick it up again." },
+#if HALO_MCC
 	{ "debug.network_test_mcc_request", _config_boolean, "false", "HALO_NETWORK_TEST_MCC_REQUEST",
 		_environment_value, _platform_all,
 		"With debug.network_test \"join\": once joined, the machine asks the host\n"
 		"for its MCC map package as OpenCE's client does (message 103), to see\n"
 		"the host decline it. A test's probe." },
+#endif
 	{ "debug.network_test_bomb_keep", _config_boolean, "false", "HALO_NETWORK_TEST_BOMB_KEEP", _environment_value,
 		_platform_all,
 		"With debug.network_test_bomb: the carrier is not moved into the goal\n"
@@ -2777,6 +2787,7 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"Run without a window, and draw nothing." },
 	{ "debug.gl_debug", _config_boolean, "false", "HALO_GL_DEBUG", _environment_set_is_true, _platform_all,
 		"Report OpenGL errors in the log." },
+#if HALO_MCC
 	{ "debug.workshop_offer", _config_string, "\"\"", "HALO_WORKSHOP_OFFER", _environment_value, _platform_desktop,
 		"A join's missing Workshop map offered over the main menu once, as\n"
 		"\"<item id>:<title>\", for tests. Leave it empty for none." },
@@ -2809,6 +2820,7 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		_platform_desktop,
 		"The Delta Guide's Workshop marks an item subscribed without opening\n"
 		"Steam, for tests." },
+#endif
 	{ "debug.menu_open", _config_string, "\"\"", "HALO_MENU_OPEN", _environment_value, _platform_all,
 		"Start on this menu screen instead of the main menu. Leave it empty for\n"
 		"the main menu." },
@@ -3365,7 +3377,7 @@ static void config_path(char *path, size_t size)
 #if !defined(HALO_ANDROID) && !defined(HALO_XBOX_CONSOLE)
 	char folder[1024];
 #endif
-#ifdef __APPLE__
+#if defined(__APPLE__) && !defined(HALO_XBOX_CONSOLE)
 	const char *save_root = getenv("HALO_SAVE_ROOT");
 
 	/* (a copy given a save root of its own, a test's, keeps its settings

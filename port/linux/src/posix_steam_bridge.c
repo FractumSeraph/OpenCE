@@ -11,6 +11,7 @@ sign-in in a terminal, and MCC's depots moved into place.
 SPDX-FileCopyrightText: Milenko x Horrible Dev
 SPDX-License-Identifier: MIT
 */
+#include "../include/halo_port_features.h" /* HALO_MCC: on a console it is 0 before the test below */
 #if !defined(HALO_MCC) || HALO_MCC /* Halo MCC maps (halo_port_features.h): a console builds this to nothing */
 
 #if !defined(_WIN32) && !defined(__ANDROID__) && !defined(HALO_ANDROID) && !defined(HALO_WEB) /* (this fork: the browser build is HALO_ANDROID without __ANDROID__: steam_client_bridge.c has its stand-ins) */

@@ -13,11 +13,21 @@ SPDX-License-Identifier: GPL-3.0-or-later
 #ifndef STUBBS_CAMPAIGN_H
 #define STUBBS_CAMPAIGN_H
 
+/* (HALO_CONSOLE_NO_STUBBS: which build has Stubbs mode, read here so
+every unit sees the same side of the switch) */
+#include "halo_console_features.h"
+
 struct widget_instance;
 struct event_record;
 
 /* Stubbs's levels, a10_plaza to c50_end (Halo has ten) */
 #define STUBBS_CAMPAIGN_LEVEL_COUNT 12
+
+/* Stubbs's ui.map's Load Level strings: a level's name, picture and
+description by its index, then the locked card's and the saved game's
+description */
+#define STUBBS_CAMPAIGN_STRING_LOCKED STUBBS_CAMPAIGN_LEVEL_COUNT
+#define STUBBS_CAMPAIGN_STRING_SAVED_GAME (STUBBS_CAMPAIGN_LEVEL_COUNT + 1)
 
 #ifndef HALO_CONSOLE_NO_STUBBS
 /* as the game starts (main.c's main_loop): Stubbs's profiles and saved games
@@ -49,12 +59,6 @@ level may be picked (finished, the one after the last finished, or the
 first) */
 unsigned long stubbs_campaign_level_flags(short local_player_index, short level);
 boolean stubbs_campaign_level_available(short local_player_index, short level);
-
-/* Stubbs's ui.map's Load Level strings: a level's name, picture and
-description by its index, then the locked card's and the saved game's
-description */
-#define STUBBS_CAMPAIGN_STRING_LOCKED STUBBS_CAMPAIGN_LEVEL_COUNT
-#define STUBBS_CAMPAIGN_STRING_SAVED_GAME (STUBBS_CAMPAIGN_LEVEL_COUNT + 1)
 
 /* a level won (main.c's main_won_map_private): the level is kept as
 finished for each local player's profile, and the next level's map is
