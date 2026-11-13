@@ -97,6 +97,7 @@ their handlers open opens.
 #include "saved games/saved_game_files.h"
 #include "tag_files/tag_groups.h"
 #include "tag_files/tag_files.h"
+#include "text/draw_string.h"
 #include "text/text_group.h"
 #include "text/unicode.h"
 
@@ -3275,6 +3276,78 @@ project, in the picture's place (its about_text) */
 #define CHUPATHINGY_ABOUT_FRAME 6
 #define CHUPATHINGY_ABOUT_LENGTH 512
 
+/* (a line's width in the font the draw mode has) */
+static short chupathingy_about_width(char const *text, long length)
+{
+	wchar_t wide[128];
+	rectangle2d measure, ink, cursor;
+	long index;
+
+	for (index = 0; index < length && index < (long)NUMBEROF(wide) - 1; index++)
+		wide[index] = (wchar_t)(unsigned char)text[index];
+	wide[index] = 0;
+	set_rectangle2d(&measure, 0, 0, SHORT_MAX, SHORT_MAX);
+	draw_unicode_string_compute_bounds(&measure, wide, &ink, &cursor);
+	return (short)MAX(cursor.x0, ink.x1);
+}
+
+/* the about text's first line into line: "Chupathingy <version>", or the
+version alone where that would run past the text's right edge (a test
+build's or a nightly's long version, "0.9.1-testing.202611122017 (b43619e)":
+the description under it names Chupathingy, and the lines after it keep
+their room), broken at its spaces ("\r\n", as the menus' strings) if it is
+wider still; never inside a word */
+static void chupathingy_about_version(struct widget_instance *about, char const *version, char *line, int size)
+{
+	extern boolean ui_widget_port_text_box_room(struct widget_instance *widget, long *font_index, short *width);
+	real_argb_color color = { 1.0f, 1.0f, 1.0f, 1.0f };
+	long font_index;
+	short width;
+	char words[128];
+	char *word, *next;
+	int length = 0, start = 0;
+
+	snprintf(line, (size_t)size, "Fractum Halo %s", version); /* (this fork's name) */
+	if (!ui_widget_port_text_box_room(about, &font_index, &width))
+		return;
+	draw_string_set_draw_mode(font_index, NONE, 0, 0, &color);
+	if (chupathingy_about_width(line, (long)strlen(line)) <= width)
+		return;
+	snprintf(words, sizeof(words), "%s", version);
+	line[0] = 0;
+	for (word = words; word; word = next)
+	{
+		next = strchr(word, ' ');
+		if (next)
+			*next++ = 0;
+		if (length > start)
+		{
+			int joined = snprintf(line + length, (size_t)(size - length), " %s", word);
+
+			if (joined < 0 || length + joined >= size)
+				break;
+			if (chupathingy_about_width(line + start, length + joined - start) <= width)
+			{
+				length += joined;
+				continue;
+			}
+			line[length] = 0;
+			if (length + 2 >= size)
+				break;
+			line[length++] = '\r';
+			line[length++] = '\n';
+			start = length;
+		}
+		length += snprintf(line + length, (size_t)(size - length), "%s", word);
+		if (length >= size)
+		{
+			length = size - 1;
+			break;
+		}
+	}
+	line[length] = 0;
+}
+
 static void chupathingy_settings_about(struct widget_instance *picture)
 {
 	extern char const *build_identity_watermark(void);
@@ -3283,7 +3356,7 @@ static void chupathingy_settings_about(struct widget_instance *picture)
 #endif
 	struct widget_instance *about = named(picture, "about_text", 0);
 	wchar_t wide[CHUPATHINGY_ABOUT_LENGTH];
-	char text[CHUPATHINGY_ABOUT_LENGTH], version[64], platform[64];
+	char text[CHUPATHINGY_ABOUT_LENGTH], version[64], platform[64], first[160];
 	char const *watermark, *agent, *open, *close, *notice;
 	long index;
 
@@ -3313,8 +3386,9 @@ static void chupathingy_settings_about(struct widget_instance *picture)
 		snprintf(platform, sizeof(platform), "%.*s, %d-bit", (int)(close - open - 1), open + 1, (int)sizeof(void *) * 8);
 	else
 		snprintf(platform, sizeof(platform), "%d-bit", (int)sizeof(void *) * 8);
+	chupathingy_about_version(about, version, first, sizeof(first));
 	snprintf(text, sizeof(text),
-		"Fractum Halo %s\r\n"
+		"%s\r\n"
 		"%s\r\n"
 		"\r\n"
 		"By Milenko and contributors.\r\n"
@@ -3327,7 +3401,7 @@ static void chupathingy_settings_about(struct widget_instance *picture)
 		"Based on ChupathingyCE:\r\n"
 		"chupathingy.org\r\n"
 		"discord.gg/chupathingy",
-		version, platform);
+		first, platform);
 	for (index = 0; text[index] && index < CHUPATHINGY_ABOUT_LENGTH - 1; index++)
 		wide[index] = (wchar_t)(unsigned char)text[index];
 	wide[index] = 0;
@@ -8812,7 +8886,7 @@ static void browser_update(struct widget_instance *list)
 				snprintf(label, sizeof(label), "FILTERS (%s)", browser_list_filter_name());
 		}
 		else
-			snprintf(label, sizeof(label), "FILTER: %s", browser_list_filter_name());
+			snprintf(label, sizeof(label), "%s", browser_list_filter_label());
 		text_to_wide(label, filter, NUMBEROF(filter));
 		text_set(named(screen_of(list), "join_game_button_filters", 0), filter);
 	}
@@ -14144,6 +14218,10 @@ back. */
 
 #define XBOX_SOLO_LEVEL_SELECT "ui\\shell\\main_menu\\solo_level_select\\solo_level_select_screen"
 #define GEARBOX_SOLO_LEVEL_SELECT "pc\\main_menu\\solo_level_select\\solo_level_select_screen"
+/* (the screens the menus open the level select from, under the main menu:
+the Xbox's and Chupathingy's CAMPAIGN, Gearbox's CAMPAIGN then NEW CAMPAIGN) */
+#define XBOX_CAMPAIGN_PROFILE "ui\\shell\\main_menu\\load_campaign_player_profile"
+#define GEARBOX_CAMPAIGN_MENU "pc\\main_menu\\campaign_select\\campaign_menu"
 /* (Gearbox's menus are up: their level select is there, the Chupathingy
 menus' not being the menus up) */
 #define GEARBOX_MENUS_UP() (!pc_menus_chupathingy() && tag_loaded('DeLa', GEARBOX_SOLO_LEVEL_SELECT) != NONE)
@@ -14187,6 +14265,27 @@ boolean ui_widget_port_screen_shown_or_behind(long tag);
 boolean ui_widget_port_open_screen(char const *name);
 boolean browser_screen_create_game(void);
 void main_screen_shell_load(void);
+boolean ui_widget_port_history_set(long const *screens, short count, long opened);
+long ui_widget_port_history_top(void);
+char const *pc_menus_main_menu_name(void);
+
+/* back from the screen PLAY opened goes where it goes from the menus'
+own: its history made theirs, down to the main menu (never none, which
+left the menus' world with no menu up: #1133). A screen of it not loaded:
+the main menu alone */
+static void workshop_play_history(long under)
+{
+	long screens[2];
+	short count = 0;
+
+	screens[count++] = tag_loaded('DeLa', pc_menus_main_menu_name());
+	if (screens[0] == NONE)
+		return;
+	if (under != NONE && under != screens[0])
+		screens[count++] = under;
+	if (!ui_widget_port_history_set(screens, count, NONE))
+		ui_widget_port_history_set(screens, 1, NONE);
+}
 
 /* a game under way, or a network game's lobby (hosted, or joined: a client
 past searching for games) */
@@ -14201,10 +14300,17 @@ static boolean workshop_play_leaves_game(void)
 /* the item's screen, at the main menu */
 static boolean workshop_play_open(void)
 {
-	/* (the list opens on the item's first map, which leads it: the map used
-	last is left as it is) */
+	/* (Create Game, as Online Games' Y: the Multiplayer menu under it, then
+	the main menu, as the menus' MULTIPLAYER leaves them. The list opens on
+	the item's first map, which leads it: the map used last is left as it
+	is) */
 	if (!workshop_play.campaign)
-		return browser_screen_create_game();
+	{
+		if (!browser_screen_create_game())
+			return FALSE;
+		workshop_play_history(ui_widget_port_history_top());
+		return TRUE;
+	}
 	/* (player 1's profile, as the level select needs one: the one used
 	last, else the profile screen first, which makes one) */
 	if (player_ui_get_active_player_profile_index(0) == NONE)
@@ -14222,15 +14328,31 @@ static boolean workshop_play_open(void)
 			profile_index = profile_count ? profile_indices[0] : NONE;
 		}
 		if (profile_index == NONE || !player_profile_get(profile_index, &profile))
-			return ui_widget_port_open_screen(GEARBOX_MENUS_UP() ? "pc\\main_menu\\campaign_select\\campaign_menu" :
-				"ui\\shell\\main_menu\\player_profiles_select\\solo_game_player_profile_select_screen");
+		{
+			if (!ui_widget_port_open_screen(GEARBOX_MENUS_UP() ? GEARBOX_CAMPAIGN_MENU :
+				"ui\\shell\\main_menu\\player_profiles_select\\solo_game_player_profile_select_screen"))
+			{
+				return FALSE;
+			}
+			workshop_play_history(NONE);
+			return TRUE;
+		}
 		player_ui_set_active_player_profile(0, profile_index, &profile);
 	}
 	ui_widget_port_campaign_solo();
-	/* (Gearbox's menus' own, else the Xbox's: the Xbox's and Chupathingy's) */
+	/* (Gearbox's menus' own, else the Xbox's: the Xbox's and Chupathingy's;
+	under it the screen CAMPAIGN opens, then the main menu) */
 	if (GEARBOX_MENUS_UP())
-		return ui_widget_port_open_screen(GEARBOX_SOLO_LEVEL_SELECT);
-	return ui_widget_port_open_screen(XBOX_SOLO_LEVEL_SELECT);
+	{
+		if (!ui_widget_port_open_screen(GEARBOX_SOLO_LEVEL_SELECT))
+			return FALSE;
+		workshop_play_history(tag_loaded('DeLa', GEARBOX_CAMPAIGN_MENU));
+		return TRUE;
+	}
+	if (!ui_widget_port_open_screen(XBOX_SOLO_LEVEL_SELECT))
+		return FALSE;
+	workshop_play_history(tag_loaded('DeLa', XBOX_CAMPAIGN_PROFILE));
+	return TRUE;
 }
 
 /* the item's maps lead the lists while the screen opened is up or behind

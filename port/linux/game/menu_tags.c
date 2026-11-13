@@ -2904,6 +2904,14 @@ void menu_tags_unloaded(
 		menu_tags_release();
 }
 
+/* the main menu of the menus up, by name (whatever debug.menu_open opens:
+the Guide's Workshop PLAY builds back's history down to it) */
+char const *pc_menus_main_menu_name(
+	void)
+{
+	return menu_tags.loaded && menu_tags.root[0] ? menu_tags.root : "ui\\shell\\main_menu\\main_menu";
+}
+
 char const *pc_menus_root_name(
 	void)
 {
@@ -3213,6 +3221,45 @@ boolean pc_menu_button_key_cap(
 	(void)alpha;
 #endif
 	return FALSE;
+}
+
+/* a prompt in a picture of the menus' (the virtual keyboard's B and A,
+virtual_keyboard.c): which 0 for B, 1 for A, drawn as the footers' key cap
+or button, right-aligned in the bounds. TRUE when the menus' prompts stand
+for the pictures (which NONE: only whether they do, nothing drawn) */
+boolean pc_menu_keyboard_prompt(
+	long which,
+	short x0,
+	short y0,
+	short x1,
+	short y1)
+{
+#ifdef HALO_GAME_BROWSER
+	extern boolean moderation_screen_active(void);
+	/* (as pc_menu_key_cap_button: the keyboard's, and the Chupathingy
+	menus' for every device) */
+	boolean modern = menu_tags.loaded && menu_tags.chupathingy;
+	int button = which == 0 ? UI_BUTTON_B : UI_BUTTON_A;
+	float size;
+	float width;
+
+	(void)x0;
+	if (!halo_keyboard_prompts() && !modern)
+		return FALSE;
+	if (which == NONE || moderation_screen_active())
+		return TRUE;
+	size = (float)(y1 - y0) * 0.62f;
+	width = ui_overlay_button_width(button, size);
+	ui_overlay_button(button, size, (float)x1 - width, (float)y0 + ((float)(y1 - y0) - size) * 0.5f, 0xFFFFFFFF);
+	return TRUE;
+#else
+	(void)which;
+	(void)x0;
+	(void)y0;
+	(void)x1;
+	(void)y1;
+	return FALSE;
+#endif
 }
 
 /* the keyboard's key in a menu text's prompt ("Press [Enter] to Join",

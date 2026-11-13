@@ -40,6 +40,7 @@ with it under the lock.
 #include "p2p.h"
 #include "p2p_internal.h"
 #include "browser.h"
+#include "../game/network_rules.h"
 #include "game_report.h"
 #include "delta_peer.h"
 #include "server_badge.h"
@@ -163,6 +164,8 @@ struct hosted_game
 	/* its map's Workshop item (browser_host_workshop), "" for none */
 	char workshop_id[BROWSER_WORKSHOP_ID_LENGTH];
 	char workshop_title[BROWSER_WORKSHOP_TITLE_LENGTH];
+	/* its game type's name (browser_host_gametype), "" for none */
+	char gametype[BROWSER_GAMETYPE_LENGTH];
 };
 
 /* another player's card, as the site gave it (browser_player_card) */
@@ -2897,6 +2900,9 @@ static void announce(const char *invite, const struct hosted_game *game)
 	}
 	snprintf(text, sizeof(text), "%d", game->engine);
 	form_add(form, sizeof(form), "engine", text);
+	/* (the game type's name: a field older lists ignore) */
+	if (game->gametype[0])
+		form_add(form, sizeof(form), "gametype", game->gametype);
 	snprintf(text, sizeof(text), "%d", game->players);
 	form_add(form, sizeof(form), "players", text);
 	snprintf(text, sizeof(text), "%d", game->maximum_players);
@@ -4314,6 +4320,14 @@ void browser_host_workshop(const char *id, const char *title)
 	snprintf(browser_host_workshop_title, sizeof(browser_host_workshop_title), "%s", title ? title : "");
 }
 
+static char browser_host_gametype_name[BROWSER_GAMETYPE_LENGTH];
+
+void browser_host_gametype(const char *name, short engine, int teams, int difficulty)
+{
+	network_rules_gametype_name(name, engine, teams, difficulty, browser_host_gametype_name,
+		sizeof(browser_host_gametype_name));
+}
+
 void browser_host_update(const unsigned short *name, const char *map, short engine, short players,
 	short maximum_players, int open, short score_limit, int teams,
 	const struct browser_roster_player *roster, int roster_count)
@@ -4343,6 +4357,7 @@ void browser_host_update(const unsigned short *name, const char *map, short engi
 	game.has_delta = delta_peer_game_host_summary(&game.delta);
 	memcpy(game.workshop_id, browser_host_workshop_id, sizeof(game.workshop_id));
 	memcpy(game.workshop_title, browser_host_workshop_title, sizeof(game.workshop_title));
+	memcpy(game.gametype, browser_host_gametype_name, sizeof(game.gametype));
 
 	pthread_mutex_lock(&browser_lock);
 	if (memcmp(&game, &browser.hosted, sizeof(game)))
@@ -5014,6 +5029,13 @@ const char *browser_list_filter_name(void)
 	static const char *const names[BROWSER_LIST_FILTERS] = { "ALL", "MULTIPLAYER", "CO-OP" };
 
 	return names[list_filter];
+}
+
+const char *browser_list_filter_label(void)
+{
+	static const char *const labels[BROWSER_LIST_FILTERS] = { "CO-OP: SHOWN", "CO-OP: HIDDEN", "CO-OP: ONLY" };
+
+	return labels[list_filter];
 }
 
 int browser_list_filter_allows(const char *map)

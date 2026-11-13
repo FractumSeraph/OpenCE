@@ -359,7 +359,7 @@ static int mcc_identity_refusal(char const name[128],char const *session)
     char const *leaf=strrchr(session,'\\')+1,*candidate;
     char text[256];
     short i,count=mcc_maps_count(FALSE);
-    if (!mcc_workshop_wire_unpack(name,&host)) kind=MCC_WORKSHOP_NOT_WORKSHOP;
+    if (!mcc_workshop_host_item(name,&host)) kind=MCC_WORKSHOP_NOT_WORKSHOP;
     else for (i=0;i<count;i++) {
         candidate=mcc_maps_level_name(i);
         if (mcc_workshop_local_item(candidate,&local) && !strcmp(local.id,host.id)) {
