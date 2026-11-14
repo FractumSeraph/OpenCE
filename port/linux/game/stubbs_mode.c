@@ -359,7 +359,9 @@ static long stubbs_animation_convert(unsigned char *base, unsigned long size, un
 			first_set = set_count ? stubbs_host(base, size, sets_address, STUBBS_ANIMATION_SET_SIZE) : NULL;
 			if (first_set)
 			{
-				memcpy(block, first_set + STUBBS_ANIMATION_SET_ANIMATIONS_OFFSET, 12);
+				/* (port, this fork: memmove, as a map's set can be addressed
+				over the block itself; the host fuzzer's stubbs_tags found it) */
+				memmove(block, first_set + STUBBS_ANIMATION_SET_ANIMATIONS_OFFSET, 12);
 				stubbs_weapon_class_animations_order(base, size, block,
 					set_count < 0x100 ? stubbs_host(base, size, sets_address, set_count * STUBBS_ANIMATION_SET_SIZE) : NULL,
 					set_count);
