@@ -16307,7 +16307,7 @@ static void main_set_map_name_evaluate(
 	if (arguments)
 	{
 		if (hs_runtime_port_executing_console_command())
-			main_set_map_name(arguments->value);
+			main_set_map_name(xbox_pointer(arguments->value));
 		/* (this fork: a known map pack's menus, and Stubbs mode's levels,
 		switch as the console does: hs_syntax_node_check lets only them) */
 		else if (hs_runtime_port_executing_script_type() != NONE && (hs_scenario_pack_menus
@@ -16315,9 +16315,9 @@ static void main_set_map_name_evaluate(
 			|| (stubbs_mode_active() && stubbs_campaign_map_name_allowed())
 #endif
 			))
-			main_set_map_name(arguments->value);
+			main_set_map_name(xbox_pointer(arguments->value));
 		else if (hs_runtime_port_executing_script_type() != NONE)
-			main_script_map_name(arguments->value);
+			main_script_map_name(xbox_pointer(arguments->value));
 		else
 			error(_error_silent, "map_name requires a script or console command; a global initializer cannot change maps");
 		hs_return(thread_index, 0);

@@ -256,7 +256,19 @@ static void loading_screen_compute(
 /* sdl_platform.c */
 void platform_menus_set_active(int active);
 
-#if defined(HALO_GAME_BROWSER) && !defined(HALO_CONSOLE_NO_LOADING_PICTURE)
+#if defined(HALO_GAME_BROWSER) && !defined(HALO_CONSOLE_NO_LOADING_PICTURE) && !defined(HALO_CPU_LOADING_SCREEN)
+/* (port, this fork: the CPU loading screen, which draws ChupathingyCE's join
+screen's picture, is not built: the join screen is black, with its words and
+progress over it, browser_screen.c) */
+unsigned char const *loading_screen_join_frame(
+	boolean restart)
+{
+	static unsigned char black[480][640][4];
+
+	(void)restart;
+	return &black[0][0][0];
+}
+#elif defined(HALO_GAME_BROWSER) && !defined(HALO_CONSOLE_NO_LOADING_PICTURE)
 /* ---------- the join screen's (display.join_screen: browser_screen.c) */
 
 /* how long one of its loops takes, a load's sweep from dark to dark */
