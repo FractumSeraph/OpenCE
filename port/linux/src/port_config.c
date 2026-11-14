@@ -669,6 +669,7 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"The console's picture on its way to the screen: 1.0 shows it as drawn;\n"
 		"higher values lift the dark areas (the picture is raised to 1/gamma),\n"
 		"lower ones deepen them. For matching the original Xbox on the same TV." },
+#ifndef HALO_CONSOLE_NO_LOADING_PICTURE
 	{ "display.join_screen", _config_boolean, "true", "HALO_JOIN_SCREEN", _environment_value, _platform_all,
 		"Show the loading screen while a game is joined or its map downloads,\n"
 		"with what is going on and B to cancel. false: a small panel over the\n"
@@ -1498,7 +1499,6 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"In the game lobby of a game you host: \"button\" (the default) holds\n"
 		"the countdown until you choose START GAME; \"auto\" lets it run by\n"
 		"itself once enough players are in, as the Xbox's lobby does." },
-#ifndef HALO_CONSOLE_NO_LOADING_PICTURE
 	{ "network.online", _config_boolean, "true", "HALO_NET_ONLINE", _environment_value,
 		_platform_all | _platform_xbox | _platform_server, ONLINE_HELP },
 	{ "network.lasting_invite", _config_boolean, "false", "HALO_NET_LASTING_INVITE", _environment_value,
