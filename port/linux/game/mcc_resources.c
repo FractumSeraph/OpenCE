@@ -314,7 +314,9 @@ int mcc_resources_select(struct mcc_runtime *runtime,void *raw)
     return mcc_resources_select_paths(runtime,raw,NULL);
 }
 
-/* (mcc_resources_candidates: OpenCE's, mcc_resource_check.inl) */
+/* (mcc_resources_candidates: OpenCE's, mcc_resource_check.inl, below) */
+static int mcc_resources_candidates(struct mcc_runtime *runtime,void *raw,
+    struct mcc_resource_candidates *choices);
 
 
 void mcc_resources_dispose(struct mcc_runtime *runtime)

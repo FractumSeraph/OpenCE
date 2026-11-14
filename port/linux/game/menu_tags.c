@@ -2690,7 +2690,7 @@ static void host_setup_patch(void)
 
 static void menu_dump(void);
 
-#ifdef HALO_GAME_BROWSER
+#if defined(HALO_GAME_BROWSER) && 0 /* (port, this fork: not built, editor_rows_xbox below) */
 /* ---------- the Xbox's menus' game type editor: the game modes layer's rows
 
 The Xbox's Slayer rules screen gets MODE (NONE, SWAT) and its player
