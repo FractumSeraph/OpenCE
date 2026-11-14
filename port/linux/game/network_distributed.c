@@ -5174,6 +5174,15 @@ boolean network_aim_assist_blocked(
 {
 	short connection = game_connection();
 
+#ifdef HALO_GAME_BROWSER
+	/* (Hardcore: no aim assist for any device, game_modes.c) */
+	{
+		boolean game_mode_no_aim_assist(void);
+
+		if (game_in_progress() && !main_menu_is_active() && game_mode_no_aim_assist())
+			return TRUE;
+	}
+#endif
 	return network_rules_aim_assist_blocks(game_in_progress(), main_menu_is_active(),
 		connection == _game_connection_network_server, connection == _game_connection_network_client,
 		distributed_aim_assist_setting(), distributed_aim_assist_blocked_by_host);
@@ -6771,7 +6780,7 @@ boolean network_distributed_identity_banned(
 /* (the dedicated server's sv_ban_account) a Delta account banned that need
 not be in the game: a line of BANS_FILE with only its account (32 hex
 digits), for ever (until 0) or until then, its handle as the players';
-docs/delta.md, "Shared ban lists". TRUE if written */
+docs/delta/control.md, "Shared ban lists". TRUE if written */
 boolean network_distributed_ban_account(
 	char const *account,
 	char const *handle,

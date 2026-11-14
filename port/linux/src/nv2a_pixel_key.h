@@ -61,6 +61,14 @@ struct nv2a_pixel_shader_key
 	unsigned char source_blend;
 	/* MCC environment lightmap pass only; part of the compiled shader key. */
 	unsigned char mcc_bump_attenuation;
+	/* ChupathingyCE's display.hdr glow (a draw brightened past white), its
+	slot kept: always 0 in this fork, whose HDR is OpenCE's (xgpu_post.c) */
+	unsigned char hdr;
+	/* texture 0 is the high-res text's atlas of distance fields
+	(text_hires.h, text_hires_atlas_fields): its texel is read as white, its
+	alpha the coverage of the glyph's edge, the median of red, green and blue
+	at 0.5, smoothed over one pixel of the screen (XGPU_TEXT_FIELD_RANGE) */
+	unsigned char text_fields;
 };
 
 #endif

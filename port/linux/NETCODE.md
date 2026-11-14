@@ -532,7 +532,7 @@ the player and gives it to co-op's friendly fire rule (network_coop.c).
 OpenCE's `network_aim_assist.c` reads the same message 90 on a client
 (network_distributed.c hands it on): one policy, sent once. Messages 87 to
 89 are OpenCE's text chat (`network_chat.c`: a line up, a line down, the
-host's chat settings), which Delta chat bridges (`docs/delta.md`, Chat): a
+host's chat settings), which Delta chat bridges (`docs/delta/peer.md`, Chat): a
 build without them drops them as unknown, so they take no version of their
 own.
 
@@ -671,7 +671,7 @@ or whose rules it plays by the host's version (above). This build has
 version 32 built in and joins hosts of 11 to 45: back to version 11, the
 newest breaking one, and one past the newest it knows (44), which it
 presumes additive. A signed legacy table widens the range without a
-release (docs/delta.md, "The legacy number"). The game browser lists the
+release (docs/delta/versioning.md, "The legacy number"). The game browser lists the
 range's games.
 
 `port/linux/network_format.txt` records the wire format of the current

@@ -792,6 +792,20 @@ static long shadow_scale_choose(void)
 
 	while (scale < SHADOW_MAP_MAXIMUM_SCALE && SHADOW_MAP_SIZE * scale * 2 <= resolution)
 		scale *= 2;
+#ifdef HALO_CONSOLE_SHADOW_MAP_MAXIMUM
+	/* (the Xbox 360's EDRAM: the screen, the 3D view and its depth leave
+	room for the two 512x512 maps, not for 1024x1024 ones, which then got
+	no target at all and drew over the view) */
+	while (scale > 1 && SHADOW_MAP_SIZE * scale > HALO_CONSOLE_SHADOW_MAP_MAXIMUM)
+	{
+		scale /= 2;
+		if (SHADOW_MAP_SIZE * scale <= HALO_CONSOLE_SHADOW_MAP_MAXIMUM)
+		{
+			platform_log("shadow maps: display.shadow_resolution %ld is more than the console's EDRAM holds beside "
+				"the screen; drawing them at %ld", resolution, (long)(SHADOW_MAP_SIZE * scale));
+		}
+	}
+#endif
 	return scale;
 }
 
@@ -5810,6 +5824,7 @@ static void bind_textures(struct nv2a_pixel_shader_key *key, float texture_scale
 				key->coverage_alpha = description.hires_coverage != FALSE;
 				key->point_threshold = description.hires_point_threshold != FALSE;
 				key->ce_meter_channels = description.ce_meter_channels != FALSE;
+				key->text_fields = description.hires_fields != FALSE;
 			}
 			key->sampler_type[stage] = gl_target == GL_TEXTURE_CUBE_MAP ? _xgpu_sampler_cube :
 				gl_target == GL_TEXTURE_3D ? _xgpu_sampler_3d : _xgpu_sampler_2d;
@@ -10130,6 +10145,7 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 {
 	static long screenshot_every = -1;
 	static int screenshot_window = -1;
+	struct render_target_entry *back_buffer;
 
 	RENDER_TIME_BEGIN();
 
@@ -10142,9 +10158,32 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 	if (screenshot_window < 0)
 		screenshot_window = config_boolean("debug.screenshot_window") ? 1 : 0;
 
-	if (device.gl_ready)
+	/* (no back buffer without its memory: render_target_get finds nothing
+	for a surface without Data, which d3d8_surface_initialize leaves when
+	contiguous memory runs out, and logs; #1298) */
+	back_buffer = device.gl_ready ? render_target_get(&device.back_buffer) : NULL;
+	if (device.gl_ready && !back_buffer)
 	{
-		struct render_target_entry *back_buffer = render_target_get(&device.back_buffer);
+		/* (said once: the frame is skipped, the window left black, and
+		debug.txt says why) */
+		static BOOL said;
+
+		if (!said)
+		{
+			unsigned long width = 0, height = 0;
+			BOOL depth = FALSE;
+			int window_width = 0, window_height = 0;
+
+			said = TRUE;
+			surface_dimensions(&device.back_buffer, &width, &height, &depth);
+			platform_video_drawable_size(&window_width, &window_height);
+			platform_log("Direct3D: no back buffer to present (data %08lx, %lux%lu, format %08lx, window %dx%d): "
+				"frames are skipped", (unsigned long)device.back_buffer.Data, width, height,
+				(unsigned long)device.back_buffer.Format, window_width, window_height);
+		}
+	}
+	if (back_buffer)
+	{
 		int window_width, window_height, width, height, x, y;
 		/* (the browser's too: looked up before the default framebuffer is
 		bound for the blit, as a new framebuffer_get entry binds itself) */

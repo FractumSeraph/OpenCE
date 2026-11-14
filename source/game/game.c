@@ -201,6 +201,7 @@ struct game_options;
 #include "tag_files/tag_files.h"
 #include "cseries/cseries_windows.h"
 #include "halo_perf_log.h" /* port: console.perf_log */
+#include "game_modes.h" /* port: the game modes layer (docs/modes.md) */
 
 /* network_game_globals.c's */
 boolean network_game_distributed_client(void);
@@ -534,8 +535,12 @@ void game_set_game_variant(
 	{
 		game_variant_global = *variant;
 	}
-	/* port: its PC options, until the network game's are given */
+	/* port: its PC options, until the network game's are given, and no
+	further options (the game modes layer's) until they are */
 	game_variant_options_default(&game_variant_global, &game_variant_options_global);
+#ifdef HALO_GAME_BROWSER
+	game_mode_options_set(NULL);
+#endif
 
 	return;
 }
@@ -559,6 +564,22 @@ struct game_variant_options const *game_variant_options_get(
 	void)
 {
 	return &game_variant_options_global;
+}
+
+void game_set_game_mode_options(
+	unsigned char const *options)
+{
+#ifdef HALO_GAME_BROWSER
+	/* port, this fork: ChupathingyCE's game modes layer is left with none:
+	this fork plays OpenCE's SWAT and Hardcore (port/linux/game/game_modes.c,
+	from the gametype's options, the form OpenCE's machines and theirs send),
+	which the layer would apply a second time */
+	(void)options;
+	game_mode_options_set(NULL);
+	game_mode_variant_overrides(&game_variant_global);
+#else
+	(void)options;
+#endif
 }
 
 void game_set_game_engine_index(
@@ -896,9 +917,14 @@ void game_dispose(
 	return;
 }
 
-boolean game_precache_new_map(
+/* port: a map's precache; refusable, a map that can't be copied into the
+cache (its file missing, cut short or damaged) returns FALSE, the game as it
+was, where the Xbox's took it for a damaged disc (display_error_damaged_media),
+whose error stops the game for good (game_precache_new_map_refusable) */
+static boolean game_precache_map(
 	char *map_name,
-	boolean blocking)
+	boolean blocking,
+	boolean refusable)
 {
 	long map_status;
 	/* port: display.loading_screen */
@@ -922,7 +948,7 @@ boolean game_precache_new_map(
 		}
 
 		if (!cache_files_precache_in_progress() &&
-			!cache_files_precache_map_begin(map_name, blocking))
+			!cache_files_precache_map_begin(map_name, blocking && !refusable))
 		{
 			/* port: an MCC level that isn't there (mcc_cache_require
 			wrote why to debug.txt and queued it for the menus) is not
@@ -938,6 +964,9 @@ boolean game_precache_new_map(
 				_error_silent,
 				"shouldn't be here... map '%s' doesn't exist",
 				map_name);
+			/* port: (refused: the game as it was) */
+			if (blocking && refusable)
+				return FALSE;
 			if (blocking)
 			{
 				match_vassert(
@@ -1031,6 +1060,17 @@ boolean game_precache_new_map(
 
 			progress_bar_end();
 			ui_widgets_close_all();
+			/* port: (refused, its copy ended: the cache slot is emptied as
+			the copy fails) */
+			if (map_status == _cached_map_file_failed && refusable)
+			{
+				error(_error_silent, "the copy of map '%s' into the cache failed", map_name);
+				cache_files_precache_map_abandon();
+				globals = game_globals;
+				globals->map_load_in_progress = FALSE;
+				globals->loading_progress = 0.0f;
+				return FALSE;
+			}
 			if (map_status == _cached_map_file_failed)
 				display_error_damaged_media();
 			cache_files_precache_map_end();
@@ -1065,6 +1105,23 @@ boolean game_precache_new_map(
 	}
 
 	return TRUE;
+}
+
+boolean game_precache_new_map(
+	char *map_name,
+	boolean blocking)
+{
+	return game_precache_map(map_name, blocking, FALSE);
+}
+
+/* port: a map precached, blocking, as game_precache_new_map does, but a map
+that can't be copied into the cache returns FALSE with nothing of the current
+game disposed of (main_change_map_name, network_game_create_game_objects).
+Based on work by goatbutt and the OpenH1 team. */
+boolean game_precache_new_map_refusable(
+	char *map_name)
+{
+	return game_precache_map(map_name, TRUE, TRUE);
 }
 
 void game_dispose_from_old_map(

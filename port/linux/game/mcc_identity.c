@@ -291,7 +291,7 @@ int mcc_identity_host_ready(char const *map)
 }
 
 /* port: the host's MCC part of a 43-layout settings record (13,200 bytes:
-docs/delta.md's chupa-43a), over the bytes of it at offset (length of them)
+docs/delta/versioning.md's chupa-43a), over the bytes of it at offset (length of them)
 in data: the map name's Workshop tail (bytes 64 to 127 of the name, at
 name_offset), and the two digests after the local data, its last 64 bytes:
 the content's (chester's fingerprint), then the package metadata's. (This
@@ -334,6 +334,7 @@ static int mcc_identity_matches(char const *name,unsigned char const digest[32],
         !memcmp(digest,mcc_host_identity.digest,32) &&
         !memcmp(&before,&mcc_host_identity.files,sizeof(before))) {
         if (validated) *validated=before;
+        if (resources) memset(resources,0,2*128);
         return 1;
     }
     ok=mcc_validation_lookup(name,NULL,actual) &&
@@ -402,6 +403,16 @@ int mcc_identity_pending(char const *name)
     char canonical[64];
     if (!mcc_identity_job.active && !mcc_admission_client_pending()) return 0;
     return !name || (mcc_package_name(name,canonical) && !strcmp(canonical,mcc_identity_job.session));
+}
+
+/* (port, this fork: ChupathingyCE's chosen base resource sets for a joined
+game; this fork's admission is OpenCE's, whose validation picks them, so the
+loader makes its own choice here) */
+int mcc_identity_resources(char const *name,char paths[2][128])
+{
+    (void)name;
+    (void)paths;
+    return 0;
 }
 
 int mcc_identity_accept(struct network_game const *game)

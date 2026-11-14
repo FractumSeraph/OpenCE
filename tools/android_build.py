@@ -26,7 +26,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .linux_build import (CUSTOM_EDITION_DEFINES, LINUX_PROFILE, MBEDTLS_DEFINES, MBEDTLS_DIR, MINIUPNPC_DEFINES, MINIUPNPC_DIR, MUSL_MATH_DIR, STB_DIR,
+from .linux_build import (CUSTOM_EDITION_DEFINES, MODS_DEFINES, LINUX_PROFILE, MBEDTLS_DEFINES, MBEDTLS_DIR, MINIUPNPC_DEFINES, MINIUPNPC_DIR, MUSL_MATH_DIR, STB_DIR,
                           XDK_INCLUDE, compile_launcher, configuration_defines, game_browser_defines, game_defines_and_includes,
                           game_sources, miniupnpc_sources, musl_math_sources, opus_flags, opus_sources, pgo_mode,
                           pgo_profile, profile_use_flags, updater_defines, xdk_headers)
@@ -571,7 +571,7 @@ def generate_android_build(n: Writer, sln: Any) -> None:
     # configure.py; and Halo PC's Custom Edition maps, linux_build.py
     # CUSTOM_EDITION_DEFINES)
     guest_abi = " ".join(GUEST_ABI_FLAGS + configuration_defines(sln)
-                         + game_browser_defines(sln) + CUSTOM_EDITION_DEFINES)
+                         + game_browser_defines(sln) + CUSTOM_EDITION_DEFINES + MODS_DEFINES)
     guest_code = " ".join(GUEST_CODE_FLAGS)
     # (the movies' FFmpeg, when this build has it: its headers and libraries are
     # built first, so a source that includes them compiles against them)

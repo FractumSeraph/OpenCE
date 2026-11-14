@@ -53,6 +53,9 @@ VOLUMES = [(str(step), f"{step / 10:g}") for step in range(11)]
 # consoles are ChupathingyCE's, packed by _layout's places as the others
 # (their _console_places is not used here)
 PLATFORMS = ("desktop", "android", "web", "switch", "console")
+# how fast a zoomed view turns, on top of the zoom's own slowing
+ZOOM_SENSITIVITIES = [(f"{round(value * 100)}%", f"{value:g}") for value in (0.25, 0.5, 0.75, 1, 1.25, 1.5, 2)]
+RETICLE_SIZES = [(f"{round(value * 100)}%", f"{value:g}") for value in (0.5, 0.75, 1, 1.25, 1.5, 2)]
 
 # A row that does something rather than set a setting (A runs its function,
 # port/linux/game/menu_functions.c's), with a value its function shows in
@@ -64,7 +67,7 @@ class Action(tuple):
         return super().__new__(cls, (label, None, run, help_text, platform, key))
 
 
-# update.h's UPDATER_GAMESCOPE_WHERE names the page: Settings > Online >
+# update.h's UPDATER_GAMESCOPE_WHERE names the page: Settings > Network Setup >
 # Updates (tools/test_update_install.py checks they agree)
 INSTALL_UPDATE = Action("INSTALL UPDATE:", "install_update", "port update install",
                         "Download the new version. Chupathingy restarts.", "desktop")
@@ -124,6 +127,9 @@ SCREENS = {
         # help line, which is lower)
         "spacing": 24,
         "help_top": 368,
+        # (nested lists of more rows than fit above the help line, which
+        # menu_functions.c scrolls: views_scroll)
+        "scrolls": ["interface"],
         # (rows in the place of the row before them: Window Size in
         # Resolution's, port/linux/game/menu_functions.c showing the one the
         # display mode chosen uses; Android's resolution and anti-aliasing in
@@ -205,14 +211,20 @@ SCREENS = {
                  [("128", "128"), ("256", "256"), ("512", "512"), ("1024", "1024")],
                  "The detail of object shadows.",
                  None),
+                ("SOFT SHADOWS:", "display.shadow_filtering", ON_OFF,
+                 "Soften the edges of object shadows.\nOff draws them sharp.", None),
                 ("PER-PIXEL LIGHTING:", "display.per_pixel_lighting", ON_OFF,
                  "Light models per pixel instead of per vertex.", None),
                 ("LIGHT EFFECTS:", "display.light_effects",
                  [("AUTO", "auto"), ("HIGH", "high"), ("LOW", "low"), ("OFF", "off")],
                  "Light from shots, muzzle flashes and glowing things.\nOff looks like the Xbox. Auto turns it off when slow.",
                  "desktop"),
+                ("CAMO WEAPON FIX:", "display.camo_weapon_fix", ON_OFF,
+                 "Walls never cut your camouflaged weapon.\nOff looks like the Xbox.", None),
                 ("DOORS BLOCK LIGHT:", "display.doors_block_light", ON_OFF,
                  "A closed door stops light from the other side.\nOff lets it through, as on the Xbox.", None),
+                ("PLASMA SPARKS:", "display.plasma_sparks", ON_OFF,
+                 "Sparks off a live plasma grenade.\nOff looks like the Xbox.", None),
                 ("FULL MODEL DETAIL:", "display.full_model_detail", ON_OFF,
                  "Always draw models at their highest detail.", None),
                 ("MODEL DETAIL:", "display.model_detail",
@@ -270,15 +282,19 @@ SCREENS = {
                              "Set Peak Brightness and Paper White by eye,\nwith patterns brighter than white.",
                              "desktop"),
             ]),
-            # (input.keyboard_prompts is in config.toml alone: the prompts
-            # follow the device used last)
-            ("interface", "INTERFACE", "The menus, HUD and scoreboard.", [
+            # (the menus, text, buttons, HUD and scoreboard in one list:
+            # more rows than fit above the help line, so it scrolls:
+            # menu_functions.c's views_scroll, "scrolls" below)
+            ("interface", "INTERFACE", "The menus, text, buttons, HUD and scoreboard.", [
                 # (read when the game starts: menu_tags.c)
                 ("MENU STYLE:", "display.menus",
                  [("CHUPATHINGY", "chupathingy"), ("XBOX", "xbox"), ("GEARBOX", "gearbox")],
                  "Takes effect on restart.", NOT_CONSOLE),
-                ("HIGH-RES HUD:", "display.high_res_hud", ON_OFF,
-                 "Draw the HUD in high resolution.", NOT_CONSOLE),
+                ("TITLE FONT:", "display.title_font", [("CLASSIC", "classic"), ("CYBORG", "cyborg"), ("HALO", "halo")],
+                 "Classic looks like Halo's titles. Cyborg matches the text.\nHalo makes them from your own Halo files.",
+                 # (not on the consoles, the Switch included, which have the
+                 # classic titles only: HALO_CONSOLE_NO_TITLE_CHOICE)
+                 "desktop android"),
                 ("HIGH-RES TEXT:", "display.high_res_text", ON_OFF,
                  "Draw text and titles in high resolution.", NOT_CONSOLE),
                 # (the game's own counter, main.c's main_framerate_render,
@@ -287,6 +303,12 @@ SCREENS = {
                 # BUTTON APPEARANCE, the controller_appearance screen)
                 ("SHOW FRAMES:", "display.show_fps", ON_OFF,
                  "Draw the frame rate at the bottom right of a game,\ncounted over half a second.", None),
+                # (the ~ key's console: terminal.c's drop-down one, or the
+                # Xbox's lines at the bottom)
+                ("CONSOLE:", "display.console_style", [("DROP-DOWN", "dropdown"), ("CLASSIC", "classic")],
+                 "Drop-down slides down from the top.\nClassic is the Xbox's.", NOT_CONSOLE),
+                ("MENU BUTTONS:", "input.button_look", [("GEM", "gem"), ("FLAT", "flat")],
+                 "The buttons in menus and the Guide.", "desktop android switch"),
                 ("PLAYER NAMES:", "display.player_names",
                  [("NONE", "none"), ("ALL", "all"), ("ALLIES", "allies"), ("ENEMIES", "enemies")],
                  "Names above players, where the host allows them.", NOT_CONSOLE),
@@ -307,14 +329,11 @@ SCREENS = {
                 ("FOLLOW CAMERA:", "display.follow_camera",
                  [("OFF", "off"), ("LONG WAITS", "long_waits"), ("ALWAYS", "always")],
                  "While dead, follow a player's view, if the host allows it.", None),
-                ("VERSION WATERMARK:", "display.version_watermark", ON_OFF,
-                 "Show the version while playing.", None),
-                ("TITLE FONT:", "display.title_font", [("CLASSIC", "classic"), ("CYBORG", "cyborg"), ("HALO", "halo")],
-                 "Classic looks like Halo's titles. Cyborg matches the text.\nHalo makes them from your own Halo files.",
-                 # (not on the consoles, the Switch included, which have the
-                 # classic titles only: HALO_CONSOLE_NO_TITLE_CHOICE; last,
-                 # so the Switch's list has no gap)
-                 "desktop android"),
+                ("RETICLE SIZE:", "display.reticle_scale", RETICLE_SIZES,
+                 "The reticle's size. 100% is the Xbox's.", None),
+                # (ChupathingyCE's: the loading screen while joining, browser_screen.c)
+                ("JOIN SCREEN:", "display.join_screen", ON_OFF,
+                 "Show the loading screen while joining a game.", "desktop android"),
             ]),
         ],
     },
@@ -352,6 +371,8 @@ SCREENS = {
             ("RESAMPLER:", "audio.resampler", [("XBOX", "xbox"), ("SINC", "sinc"), ("LINEAR", "linear")],
              "Xbox models the original sound. Sinc reduces\naliasing; linear gives a brighter sound.",
              None),
+            ("HIT SOUNDS:", "audio.hit_sounds", ON_OFF,
+             "A tone when your shot hits another player.", None),
             ("SOUND:", "audio.enabled", ON_OFF,
              "Turn all sound on or off. Takes effect on restart.", None),
         ],
@@ -660,6 +681,8 @@ MOUSE_ROWS = [
      "Moving the mouse forward looks down.", NOT_CONSOLE),
     ("AIM ASSIST:", "input.mouse_aim_assist", ON_OFF,
      "Use controller aim assist with the mouse.", NOT_CONSOLE),
+    ("ZOOM SENSITIVITY:", "input.mouse_zoom_sensitivity", ZOOM_SENSITIVITIES,
+     "How fast the mouse turns while zoomed in.", NOT_CONSOLE),
     # (OpenCE's Mouse Setup's: port/linux/src/sdl_platform.c's
     # menu_cursor_size; last, as the other platforms have no row in its place)
     ("MENU CURSOR:", "display.menu_cursor",
@@ -670,6 +693,8 @@ MOUSE_ROWS = [
 GAMEPAD_ROWS = [
     ("LOOK SENSITIVITY:", "profile.look_sensitivity", [(str(step), str(step)) for step in range(1, 11)],
      "Adjust the look sensitivity.", None),
+    ("ZOOM SENSITIVITY:", "input.stick_zoom_sensitivity", ZOOM_SENSITIVITIES,
+     "How fast the stick turns while zoomed in.", None),
     ("INVERT LOOK:", "profile.invert_look", YES_NO, "Pushing the right stick up looks down.", None),
     ("INVERT FLIGHT:", "profile.flight_inversion", YES_NO,
      "Pushing up flies down in flying vehicles.", None),
@@ -697,7 +722,7 @@ CONTROLLER_LINKS = [
 # voice and text chat's keys), then the mouse's settings (MOUSE_ROWS) in the
 # same list (menu_functions.c's CONTROL_GROUP_MOUSE)
 CONTROL_GROUPS = ["MOVEMENT", "WEAPONS", "ACTIONS", "COMMUNICATION", "MOUSE"]
-CONTROL_ROWS = 7
+CONTROL_ROWS = 9
 
 # the settings whose rows have the wider spinner (a device's name, streamer
 # mode's levels)
@@ -1094,7 +1119,13 @@ def _setting_rows(base: str, spec: dict) -> tuple:
     rows, extra = [], []
     for entry in entries:
         if entry[0] == "mark":
-            rows.append((f"{base}/view_{entry[1]}", None, 0))
+            # (a list that scrolls has its mark at the last place whose row
+            # ends above the help line: the window's bottom, menu_functions.c's
+            # views_scroll; the marks are not drawn)
+            place = 0
+            if entry[1] in spec.get("scrolls", ()):
+                place = (spec.get("help_top", 350) - 28 - 73) // spec["spacing"]
+            rows.append((f"{base}/view_{entry[1]}", None, place))
             extra += _mark(base, entry[1])
         elif entry[0] == "link":
             _, view, key, places, label_index = entry
@@ -1645,6 +1676,15 @@ STRING_INSERTS = {
         "Two hundred kills to win.",
         "Two hundred and fifty kills to win.",
         "Five hundred kills to win.",
+    ]), (26, [
+        # (the game modes layer's MODE, after TIME LIMIT's: docs/modes.md;
+        # menu_tags.c's EDITOR_*_HELP_* for the Xbox's menus)
+        "No mode. The game plays by the rules above.",
+        "SWAT. No shields, and one shot to the head kills.",
+    ])],
+    "main_menu/settings_select/multiplayer_setup/player_options_edit/cap_player_options": [(28, [
+        "The usual motion tracker and aim assist.",
+        "No motion tracker and no aim assist. A kill brings\\nyour health and shields back to full.",
     ])],
 }
 

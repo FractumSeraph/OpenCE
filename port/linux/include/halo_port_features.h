@@ -77,6 +77,13 @@ bitmaps, as retail, without the atlas's texture memory */
 #define HALO_CONSOLE_NO_HIRES
 #endif
 
+/* the high-res text's glyphs as distance fields (text_hires.c), which the
+desktop and Android pixel shaders decode (nv2a_psh.c): a console's own
+renderer has no such shader, so its atlas keeps the rasterized glyphs */
+#ifndef HALO_CONSOLE_NO_TEXT_FIELDS
+#define HALO_CONSOLE_NO_TEXT_FIELDS
+#endif
+
 /* the players' names above their heads (interface/hud.c): retail names
 only the player under the reticle */
 #ifndef HALO_CONSOLE_NO_PLAYER_NAMES
@@ -167,7 +174,7 @@ and the Wii U too, which set their own switch and not HALO_CONSOLE */
 #define HALO_CONSOLE_NO_VOICE
 #endif
 
-/* voice chat over Delta Peer (docs/delta.md, Voice): the desktop builds'
+/* voice chat over Delta Peer (docs/delta/peer.md, Voice): the desktop builds'
 and Android's (HALO_GAME_BROWSER), as host and client, and the dedicated
 server's as a relay alone; HALO_PORT_VOICE_AUDIO is the microphone, Opus
 and playback, which a dedicated server (HALO_SERVER) leaves out: it relays

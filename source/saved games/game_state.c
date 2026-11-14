@@ -129,6 +129,7 @@ symbols in this file:
 #include "mcc_cache.h" /* port: port/linux/game/mcc_cache.h */
 #include "mcc_checkpoint.h" /* port: port/linux/game/mcc_checkpoint.h */
 #include "hs_console_state.h" /* port: port/linux/game/hs_console_state.inl */
+#include "stubbs_regions.h"
 /* port: object_bounds_cache.c's */
 void object_bounds_cache_invalidate(void);
 /* port: hs_runtime.c's and hs_globals_external.c's (game_state_image_accept) */
@@ -239,7 +240,10 @@ static game_state_after_load_proc after_load_procs[] =
 	/* port: restore matching homes or forget an unrelated disk/core load. */
 	coop_vehicles_after_load,
 	/* port: (vehicle_riding.c: also for a revert in the same structure) */
-	bipeds_riding_latch
+	bipeds_riding_latch,
+	/* port: Stubbs mode's region rows start again from the objects put back
+	(port/linux/game/stubbs_regions.c) */
+	stubbs_regions_forget
 };
 
 /* ---------- public code */

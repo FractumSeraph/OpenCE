@@ -31,10 +31,12 @@
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/op_stereo_doppler" x="54" y="217" platform="android web switch console"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/op_resampler" x="54" y="313" platform="desktop"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/op_resampler" x="54" y="241" platform="android web switch console"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/op_enabled" x="54" y="337" platform="desktop"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/op_enabled" x="54" y="265" platform="android web switch console"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/op_link_voice" x="54" y="361" platform="desktop"/>
-		<child widget="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/op_link_voice" x="54" y="289" platform="android web switch console"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/op_hit_sounds" x="54" y="337" platform="desktop"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/op_hit_sounds" x="54" y="265" platform="android web switch console"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/op_enabled" x="54" y="361" platform="desktop"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/op_enabled" x="54" y="289" platform="android web switch console"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/op_link_voice" x="54" y="385" platform="desktop"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/op_link_voice" x="54" y="313" platform="android web switch console"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/view_voice" x="54" y="73"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/op_voice_chat" x="54" y="73"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/op_voice_volume" x="54" y="97"/>
@@ -146,11 +148,20 @@
 	<widget name="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/resampler_spinner" type="spinner" left="3" top="2" width="147" height="20" flags="pass_unhandled_to_focused_child left_right_tabs_items" strings="XBOX|SINC|LINEAR" setting="audio.resampler" values="xbox|sinc|linear" font="ui\large_ui" color="#FF2896FF" align="center" text_y="1" header_bitmap="bitmaps/arrow_sm_left" footer_bitmap="bitmaps/arrow_sm_right" header_bounds="7 -6 19 0" footer_bounds="7 150 19 156">
 		<on event="created" run="port setting load"/>
 	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/op_hit_sounds" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF">
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/hit_sounds_label"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/hit_sounds_spinner" x="320" y="1"/>
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/hit_sounds_label" type="text" controller="1" width="300" height="22" string_list="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/labels" string_index="11" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="4">
+	</widget>
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/hit_sounds_spinner" type="spinner" left="3" top="2" width="147" height="20" flags="pass_unhandled_to_focused_child left_right_tabs_items" strings="ON|OFF" setting="audio.hit_sounds" values="true|false" font="ui\large_ui" color="#FF2896FF" align="center" text_y="1" header_bitmap="bitmaps/arrow_sm_left" footer_bitmap="bitmaps/arrow_sm_right" header_bounds="7 -6 19 0" footer_bounds="7 150 19 156">
+		<on event="created" run="port setting load"/>
+	</widget>
 	<widget name="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/op_enabled" width="512" height="28" flags="pass_unhandled_to_focused_child" bitmap="bitmaps/option_bkds" color="#FF2896FF">
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/enabled_label"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/enabled_spinner" x="320" y="1"/>
 	</widget>
-	<widget name="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/enabled_label" type="text" controller="1" width="300" height="22" string_list="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/labels" string_index="11" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="4">
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/enabled_label" type="text" controller="1" width="300" height="22" string_list="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/labels" string_index="12" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="4">
 	</widget>
 	<widget name="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/enabled_spinner" type="spinner" left="3" top="2" width="147" height="20" flags="pass_unhandled_to_focused_child left_right_tabs_items" strings="ON|OFF" setting="audio.enabled" values="true|false" font="ui\large_ui" color="#FF2896FF" align="center" text_y="1" header_bitmap="bitmaps/arrow_sm_left" footer_bitmap="bitmaps/arrow_sm_right" header_bounds="7 -6 19 0" footer_bounds="7 150 19 156">
 		<on event="created" run="port setting load"/>
@@ -161,7 +172,7 @@
 		<on event="left_mouse" run="mouse emit accept event"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/link_voice_label"/>
 	</widget>
-	<widget name="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/link_voice_label" type="text" controller="1" width="300" height="22" string_list="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/labels" string_index="12" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="4">
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/link_voice_label" type="text" controller="1" width="300" height="22" string_list="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/labels" string_index="13" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="4">
 	</widget>
 	<widget name="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/view_voice" width="1" height="1">
 	</widget>
@@ -169,7 +180,7 @@
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/voice_chat_label"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/voice_chat_spinner" x="320" y="1"/>
 	</widget>
-	<widget name="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/voice_chat_label" type="text" controller="1" width="300" height="22" string_list="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/labels" string_index="13" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="4">
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/voice_chat_label" type="text" controller="1" width="300" height="22" string_list="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/labels" string_index="14" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="4">
 	</widget>
 	<widget name="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/voice_chat_spinner" type="spinner" left="3" top="2" width="147" height="20" flags="pass_unhandled_to_focused_child left_right_tabs_items" strings="PUSH TO TALK|OPEN MIC|OFF" setting="audio.voice_chat" values="push_to_talk|open_mic|off" font="ui\large_ui" color="#FF2896FF" align="center" text_y="1" header_bitmap="bitmaps/arrow_sm_left" footer_bitmap="bitmaps/arrow_sm_right" header_bounds="7 -6 19 0" footer_bounds="7 150 19 156">
 		<on event="created" run="port setting load"/>
@@ -178,7 +189,7 @@
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/voice_volume_label"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/voice_volume_spinner" x="320" y="1"/>
 	</widget>
-	<widget name="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/voice_volume_label" type="text" controller="1" width="300" height="22" string_list="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/labels" string_index="14" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="4">
+	<widget name="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/voice_volume_label" type="text" controller="1" width="300" height="22" string_list="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/labels" string_index="15" font="ui\large_ui" color="#FF2896FF" text_x="13" text_y="4">
 	</widget>
 	<widget name="main_menu/settings_select/player_setup/player_profile_edit/audio_settings/voice_volume_spinner" type="spinner" left="3" top="2" width="147" height="20" flags="pass_unhandled_to_focused_child left_right_tabs_items" strings="0|1|2|3|4|5|6|7|8|9|10" setting="audio.voice_volume" values="0|0.1|0.2|0.3|0.4|0.5|0.6|0.7|0.8|0.9|1" font="ui\large_ui" color="#FF2896FF" align="center" text_y="1" header_bitmap="bitmaps/arrow_sm_left" footer_bitmap="bitmaps/arrow_sm_right" header_bounds="7 -6 19 0" footer_bounds="7 150 19 156">
 		<on event="created" run="port setting load"/>
@@ -205,6 +216,7 @@
 		<string text="DOPPLER:"/>
 		<string text="STEREO DOPPLER:"/>
 		<string text="RESAMPLER:"/>
+		<string text="HIT SOUNDS:"/>
 		<string text="SOUND:"/>
 		<string text="VOICE CHAT"/>
 		<string text="VOICE CHAT:"/>
@@ -223,6 +235,7 @@
 		<string text="Pitch shift of moving sounds, as on the Xbox."/>
 		<string text="Shift stereo sounds' pitch as they come and go,\nas 3D sounds' is. The Xbox played them flat."/>
 		<string text="Xbox models the original sound. Sinc reduces\naliasing; linear gives a brighter sound."/>
+		<string text="A tone when your shot hits another player."/>
 		<string text="Turn all sound on or off. Takes effect on restart."/>
 		<string text="Talking to the other players, and their voices."/>
 		<string text="Talk in network games: while PUSH TO TALK is held\n(Controls), whenever you speak, or never."/>

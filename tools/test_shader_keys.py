@@ -183,14 +183,16 @@ def test_slots_match_the_game():
     """the tool's and the README's slots are the game's (xgpu_shader_keys.c)."""
     source = SOURCE.read_text()
     # (port, this fork: OpenCE's CE meters, blend factor and MCC bump attenuation after the Light
-    # effects, 122 to 124)
+    # effects, 122 to 124; then ChupathingyCE's HDR glow and text fields, 125 and 126)
     assert "_slot_texture_modes = 100," in source and \
         "_slot_ce_meter_channels,\n\t_slot_source_blend,\n\t_slot_mcc_bump_attenuation,\n" \
-        "\t_slot_last = _slot_mcc_bump_attenuation" in source
+        "\t_slot_hdr,\n\t_slot_text_fields,\n\t_slot_last = _slot_text_fields" in source
     readme = (ROOT / "port" / "assets" / "shaders" / "README.md").read_text()
     # (this fork's numbers: ChupathingyCE puts MCC bump attenuation at 122)
     assert "121 the Light effects, 122 a CE meter's channels, 123 the source blend factor and 124 an MCC" \
         in readme.replace("\n  ", " ")
+    assert "125 ChupathingyCE's HDR glow (always 0 here: this fork's HDR is OpenCE's) and 126 the high-res " \
+        "text's distance fields" in readme.replace("\n  ", " ")
 
 
 def test_embedded_in_every_build():

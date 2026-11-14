@@ -527,6 +527,7 @@ static void stubbs_object_flag_set(
 	}
 }
 
+#ifndef HALO_CONSOLE_NO_STUBBS /* (the header's empty one on a console) */
 boolean stubbs_functions_object_cannot(
 	long object_index,
 	short what)
@@ -543,6 +544,7 @@ boolean stubbs_functions_object_cannot(
 	}
 	return FALSE;
 }
+#endif
 
 /* (a region's index in the object's model, by name: NONE for none) */
 static short stubbs_object_region_index(
@@ -856,6 +858,7 @@ whistle lesson): the name has no object until it is used. hs_cast
 (hs_runtime.c) creates such a unit as a script casts its name, for a name
 whose placement says so and that has no object yet. */
 
+#ifndef HALO_CONSOLE_NO_STUBBS /* (the header's empty one on a console) */
 boolean stubbs_functions_name_placed_on_demand(
 	short object_name_index)
 {
@@ -881,3 +884,4 @@ boolean stubbs_functions_name_placed_on_demand(
 		placements, name->runtime_scenario_datum_index, placement_size);
 	return TEST_FLAG(placement->placement_flags, 0) != 0; /* (bit 0: not placed automatically) */
 }
+#endif

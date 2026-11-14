@@ -394,6 +394,7 @@ symbols in this file:
 #include <emscripten.h> /* port: the browser runs the main loop (port/web/README.md) */
 #endif
 #include "camera/director.h"
+#include "units/units.h" /* port: the vehicle field of view */
 #include "camera/observer.h"
 #include "cutscene/cinematics.h"
 #include "effects/player_effects.h"
@@ -1313,15 +1314,32 @@ real first_person_weapon_projection_scale(
 }
 
 /* port: what the reticle's size (and its items' offsets from the middle)
-is scaled by in the local player's first-person view: 1. (port, this fork:
+is scaled by in the local player's first-person view: display.reticle_scale,
+the size the player picked (1 the Xbox's). (port, this fork:
 ChupathingyCE's display.reticle_scales_with_fov scaled it with their
 display.field_of_view, which this fork leaves out; OpenCE's display.fov
 scales the reticle already, view_fov.c) */
 real first_person_reticle_scale(
 	short local_player_index)
 {
-	(void)local_player_index;
-	return 1.0f;
+	extern double config_real(char const *name);
+	static unsigned long read_at = (unsigned long)-1;
+	static real size = 1.0f;
+
+	if (read_at != config_changes())
+	{
+		read_at = config_changes();
+#ifndef HALO_XBOX_CONSOLE
+		/* (the Xbox's config.toml has no such key: 1 there, as retail) */
+		size = PIN((real)config_real("display.reticle_scale"), 0.5f, 2.0f);
+#endif
+	}
+	if (local_player_index < 0 || local_player_index >= MAXIMUM_NUMBER_OF_LOCAL_PLAYERS ||
+		director_get_perspective(local_player_index) != _director_perspective_first_person)
+	{
+		return 1.0f;
+	}
+	return size;
 }
 
 /* port: TRUE when display.field_of_view has the first-person view at
@@ -1331,7 +1349,7 @@ is the setting, view_fov.c; the fog asks render_fov_reticle_scale itself) */
 boolean first_person_field_of_view_widened(
 	short local_player_index)
 {
-	return local_player_index != NONE &&
+	return local_player_index >= 0 && local_player_index < MAXIMUM_NUMBER_OF_LOCAL_PLAYERS &&
 		director_get_perspective(local_player_index) == _director_perspective_first_person &&
 		render_fov_reticle_scale(local_player_index) != 1.0f;
 }
@@ -1358,10 +1376,42 @@ static real far_clip_distance_floor(
 
 	return distance;
 }
+
+#ifndef HALO_XBOX_CONSOLE
+/* port: display.shadow_filtering, the object shadows' blur (the
+rasterizer_shadows_convolution console global, on as on the Xbox): set to
+the setting when it changes, so the console global still overrides it
+until the setting itself changes again. The original Xbox keeps its own. */
+static void shadow_filtering_apply(
+	void)
+{
+	extern int config_boolean(char const *name);
+	static unsigned long read_at = (unsigned long)-1;
+	static int applied = -1;
+
+	if (read_at != config_changes())
+	{
+		int value = config_boolean("display.shadow_filtering") != 0;
+
+		read_at = config_changes();
+		/* (only when the setting itself changes: a change of another
+		leaves the console global as it was set) */
+		if (value != applied)
+		{
+			applied = value;
+			rasterizer_debug_options.shadow_convolution_enabled = (boolean)value;
+		}
+	}
+}
+#endif
+
 void set_window_camera_values(
 	struct render_window *window,
 	struct observer_result const *observer)
 {
+#ifndef HALO_XBOX_CONSOLE
+	shadow_filtering_apply();
+#endif
 	if (observer)
 	{
 		window->rasterizer_camera.position = observer->position;
@@ -1698,6 +1748,8 @@ boolean main_menu_is_loaded(
 }
 #endif
 
+static void main_map_change_failed(char const *map_name, char const *reason); /* port: (below) */
+
 static void main_new_map(
 	struct game_options *options)
 {
@@ -1711,6 +1763,19 @@ static void main_new_map(
 		/* port: an MCC map that fails to load goes back to the menus (mcc_main.c) */
 		if (mcc_main_load_failed(options->map_name))
 			return;
+		/* port: a map that doesn't load (its tags damaged) goes back to the
+		main menu with its reason, where the Xbox stopped for good
+		(_error_immediate: halt_and_catch_fire); the main menu's own map
+		failing is as it was. Based on work by goatbutt and the OpenH1 team */
+		if (!main_globals.main_menu_scenario_loaded)
+		{
+			error(_error_silent, "game_load() failed.");
+			main_map_change_failed(options->map_name, NULL);
+			errors_clear();
+			main_goto_main_menu();
+			main_menu_load();
+			return;
+		}
 		error(_error_immediate, "game_load() failed.");
 	}
 
@@ -1745,6 +1810,71 @@ static void main_new_map(
 	return;
 }
 
+/* port: the solo map's name before map_name changed it (main_set_map_name),
+for a change that is refused (main_map_change_failed) */
+static char main_map_name_before_change[NUMBEROF(main_globals.soloplayer_map_name)];
+/* (and whether it was: a change that came another way keeps the name) */
+static boolean main_map_name_before_change_captured;
+
+/* port: a map that can't be loaded (a name typed wrong at the console or in
+init.txt, a map file missing or damaged) is refused before the game it would
+end is left: the reason goes to debug.txt and the console, and to the menus'
+error dialog, and the game stays as it was. The Xbox's precache took a
+missing map for a damaged disc, whose error stopped the game for good
+(display_error_damaged_media, main_loop_of_death). Based on work by goatbutt
+and the OpenH1 team */
+static void main_map_change_failed(
+	char const *map_name,
+	char const *reason)
+{
+	static wchar_t text[320];
+	char message[320];
+	short index;
+
+	error(_error_silent, "can't load map '%s'", map_name);
+	console_warning("can't load map '%s' (debug.txt says why)", map_name);
+	if (reason && reason[0])
+		snprintf(message, sizeof(message), "%s", reason);
+	else
+	{
+		char const *file_name = strrchr(map_name, '\\') ? strrchr(map_name, '\\') + 1 : map_name;
+
+		/* (the map's own name: a level's path doesn't fit the dialog) */
+		snprintf(message, sizeof(message),
+			"Couldn't load the map \"%.63s\". It's missing from the maps folder or damaged.", file_name);
+	}
+	for (index = 0; message[index] && index < NUMBEROF(text) - 1; index++)
+		text[index] = (wchar_t)(unsigned char)message[index];
+	text[index] = 0;
+	if (main_globals.main_menu_scenario_loaded)
+		display_error_text_deferred(text, NONE);
+	else
+		display_error_text_when_main_menu_loaded(text);
+	if (main_map_name_before_change_captured)
+	{
+		csstrncpy(main_globals.soloplayer_map_name, main_map_name_before_change,
+			NUMBEROF(main_globals.soloplayer_map_name) - 1);
+		main_globals.soloplayer_map_name[NUMBEROF(main_globals.soloplayer_map_name) - 1] = 0;
+		main_map_name_before_change_captured = FALSE;
+	}
+	main_globals.defer_map_change = FALSE;
+	main_globals.map_change_load_timer = 0;
+
+	return;
+}
+
+static boolean main_map_change_refused(
+	char const *map_name)
+{
+	char reason[320];
+
+	if (cache_files_map_loadable(map_name, reason, sizeof(reason)))
+		return FALSE;
+	main_map_change_failed(map_name, reason);
+
+	return TRUE;
+}
+
 static void main_change_map_name(
 	void)
 {
@@ -1761,6 +1891,9 @@ static void main_change_map_name(
 		main_goto_main_menu();
 		return;
 	}
+	/* port: (a map that can't be loaded refused, the game as it was) */
+	if (!main_globals.map_change_load_timer && main_map_change_refused(main_globals.soloplayer_map_name))
+		return;
 	if (main_globals.main_menu_scenario_loaded == TRUE)
 	{
 		if (!main_globals.map_change_load_timer)
@@ -1790,6 +1923,22 @@ static void main_change_map_name(
 
 	if (main_globals.frame_start_milliseconds >= main_globals.map_change_load_timer)
 	{
+		/* port: the map copied into the cache before anything of this game
+		is left, as the main menu's map is (main_load_ui_scenario): a map
+		whose copy fails (its file cut short or damaged) is refused and the
+		game stays. The menus the copy's loading screen closed are opened
+		again. (An MCC level has its own checks: #1149) */
+		if (game_in_progress() && main_globals.connection == _game_connection_local &&
+			!mcc_level_name(main_globals.soloplayer_map_name) &&
+			!game_precache_new_map_refusable(main_globals.soloplayer_map_name))
+		{
+			ui_widgets_set_fade_value(-1.0f);
+			ui_widgets_inhibit_processing(FALSE);
+			if (main_globals.main_menu_scenario_loaded)
+				main_screen_shell_load();
+			main_map_change_failed(main_globals.soloplayer_map_name, NULL);
+			return;
+		}
 		ui_widgets_set_fade_value(-1.0f);
 		ui_stop_main_menu_music();
 		main_menu_active(FALSE);
@@ -2725,6 +2874,14 @@ void main_set_map_name(
 	map_name = pack_map_name;
 #endif
 	main_globals.want_to_be_at_main_menu = FALSE;
+	/* port: (the name a refused change goes back to: main_map_change_failed) */
+	if (!main_globals.defer_map_change)
+	{
+		csstrncpy(main_map_name_before_change, main_globals.soloplayer_map_name,
+			NUMBEROF(main_map_name_before_change) - 1);
+		main_map_name_before_change[NUMBEROF(main_map_name_before_change) - 1] = 0;
+		main_map_name_before_change_captured = TRUE;
+	}
 	csstrncpy(main_globals.soloplayer_map_name, map_name, NUMBEROF(main_globals.soloplayer_map_name) - 1);
 	main_globals.soloplayer_map_name[NUMBEROF(main_globals.soloplayer_map_name) - 1] = 0;
 	main_globals.allow_persistent_storage = TRUE;
@@ -3187,6 +3344,13 @@ static void main_setup_connection(
 		main_globals.want_to_be_at_main_menu = TRUE;
 		main_menu_load();
 	}
+	/* port: init.txt's map_name naming a map that can't be loaded: refused,
+	and the main menu loaded in its place (main_map_change_refused) */
+	else if (main_map_change_refused(main_globals.soloplayer_map_name))
+	{
+		main_globals.want_to_be_at_main_menu = TRUE;
+		main_menu_load();
+	}
 	else
 	{
 		main_globals.connection = _game_connection_local;
@@ -3198,8 +3362,19 @@ static void main_setup_connection(
 		options.map_name[NUMBEROF(options.map_name) - 1] = 0;
 		options.difficulty = global_difficulty_level;
 		/* port: (as main_change_map_name's, #1149) */
-		if (!game_precache_new_map(options.map_name, TRUE) && mcc_main_load_failed(options.map_name))
+		if (mcc_level_name(options.map_name))
+		{
+			if (!game_precache_new_map(options.map_name, TRUE) && mcc_main_load_failed(options.map_name))
+				return;
+		}
+		/* port: (and one whose copy fails: game_precache_new_map_refusable) */
+		else if (!game_precache_new_map_refusable(options.map_name))
+		{
+			main_map_change_failed(options.map_name, NULL);
+			main_globals.want_to_be_at_main_menu = TRUE;
+			main_menu_load();
 			return;
+		}
 		game_dispose_from_old_map();
 		main_new_map(&options);
 	}
@@ -3996,6 +4171,11 @@ static boolean main_loop_iteration(
 		input_frame_begin();
 		MAIN_STAGE("input_update");
 		input_update();
+#ifndef HALO_XBOX_CONSOLE
+		/* port: the console's controller B and Back, and the controllers
+		left alone while it is open (console.c) */
+		console_input_update();
+#endif
 		MAIN_STAGE("input_abstraction_update");
 		input_abstraction_update();
 		profile_scope_exit(main_input_section)

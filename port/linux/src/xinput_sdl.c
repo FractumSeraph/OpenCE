@@ -125,6 +125,9 @@ static float mouse_wheel_accumulated = 0.0f;
 /* the wheel's notches turned while a chat line is typed, not yet taken
 (halo_chat_wheel_steps) */
 static int chat_wheel_steps = 0;
+/* the wheel's turn for the console's scrollback (halo_console_wheel_steps),
+whether the mouse is captured or not */
+static float console_wheel_accumulated = 0.0f;
 /* the wheel's switch (wheel_update): when the wheel last moved, until when
 Y is held, and whether a scroll is under way */
 static Uint64 wheel_moved_ms = 0;
@@ -668,6 +671,7 @@ static void mouse_poll(const struct platform_input_state *input)
 		mouse_pending_x = 0.0f;
 		mouse_pending_y = 0.0f;
 	}
+	console_wheel_accumulated += input->mouse_wheel;
 	if (!input->mouse_released)
 	{
 		int button;
@@ -685,9 +689,14 @@ static void mouse_poll(const struct platform_input_state *input)
 			last_input_scheme = 0;
 			last_input_seen = TRUE;
 		}
-		mouse_wheel_accumulated += input->mouse_wheel;
-		if (input->mouse_wheel != 0.0f)
-			wheel_moved_ms = SDL_GetTicks();
+		/* (the wheel scrolls the console while it is open, never the
+		weapons) */
+		if (!console_is_active())
+		{
+			mouse_wheel_accumulated += input->mouse_wheel;
+			if (input->mouse_wheel != 0.0f)
+				wheel_moved_ms = SDL_GetTicks();
+		}
 	}
 	pthread_mutex_unlock(&mouse_lock);
 }
@@ -1189,7 +1198,9 @@ static const char *const binding_settings[NUMBER_OF_HALO_KEYBOARD_ACTIONS] =
 	chat.c reads them; then OpenCE's text chat's, network_chat.c's; and the votes',
 	network_votekick.c's) */
 	"controls.screenshot", "controls.push_to_talk", "controls.chat_all", "controls.chat_team",
-	"controls.chat_log", "controls.chat", "controls.team_chat", "controls.vote_yes", "controls.vote_no", "controls.voice_channel",
+	"controls.chat_log", "controls.chat", "controls.team_chat", "controls.vote_yes", "controls.vote_no", "controls.voice_channel", "controls.vehicle_secondary_fire",
+	/* (ChupathingyCE's: the vehicle's alternate fire, and walking) */
+	"controls.walk",
 };
 
 static const struct
@@ -1395,6 +1406,21 @@ int halo_keyboard_binding_label(int action, int slot, char *shown, unsigned int 
 	halo_input_name(bindings[action][slot], name, sizeof(name));
 	halo_input_shown_name(name, shown, size);
 	return shown[0] != 0;
+}
+
+int halo_keyboard_action_bound(int action)
+{
+	int slot;
+
+	if (action < 0 || action >= NUMBER_OF_HALO_KEYBOARD_ACTIONS)
+		return FALSE;
+	bindings_read();
+	for (slot = 0; slot < MAXIMUM_BINDINGS; slot++)
+	{
+		if (bindings[action][slot] >= 0)
+			return TRUE;
+	}
+	return FALSE;
 }
 
 static BOOL input_held(const struct platform_input_state *input, int code)
@@ -2152,6 +2178,20 @@ static void test_input_gamepad(XINPUT_GAMEPAD *pad)
 		pad->bAnalogButtons[XINPUT_GAMEPAD_LEFT_TRIGGER] = 255;
 }
 
+/* the mouse wheel's whole notches since the last call, away from the
+player positive (the console's scrollback, terminal.c: it asks each frame,
+open or not, so that a turn before it opened is not kept) */
+int halo_console_wheel_steps(void)
+{
+	int steps;
+
+	pthread_mutex_lock(&mouse_lock);
+	steps = (int)console_wheel_accumulated;
+	console_wheel_accumulated -= (float)steps;
+	pthread_mutex_unlock(&mouse_lock);
+	return steps;
+}
+
 static void wheel_update(void)
 {
 	Uint64 now = SDL_GetTicks();
@@ -2608,8 +2648,46 @@ int halo_linux_gyro_look(short gamepad_index, float *yaw, float *pitch)
 }
 #endif
 
+/* a gamepad's buttons pressed and triggers pulled since its last reading
+(platform_gamepad_presses_take): a tap let go of before the reading. From the
+OpenH1 team's fix (g0atbutt, OpenH1 0473c477) */
+struct gamepad_taps
+{
+	Uint32 buttons;
+	unsigned int triggers;
+};
+
+/* the gamepad's taps, taken: once a reading */
+static void gamepad_taps_take(SDL_Gamepad *gamepad, struct gamepad_taps *taps)
+{
+	taps->buttons = 0;
+	taps->triggers = 0;
+	if (gamepad)
+		platform_gamepad_presses_take((Uint32)SDL_GetGamepadID(gamepad), &taps->buttons, &taps->triggers);
+}
+
+/* a button held, or pressed and let go of since the last reading */
+static BOOL gamepad_button_down(SDL_Gamepad *gamepad, const struct gamepad_taps *taps, SDL_GamepadButton button)
+{
+	return SDL_GetGamepadButton(gamepad, button) || (taps && (taps->buttons & (1u << button)) != 0);
+}
+
+/* a trigger as 0 to 255; one pulled and let go of since the last reading
+fully pulled */
+static int gamepad_trigger(SDL_Gamepad *gamepad, const struct gamepad_taps *taps, SDL_GamepadAxis axis,
+	unsigned int bit)
+{
+	int value = SDL_GetGamepadAxis(gamepad, axis);
+
+	if (taps && (taps->triggers & bit) && value < PLATFORM_GAMEPAD_TRIGGER_PRESSED)
+		return 255;
+	return value * 255 / 32767;
+}
+
 static void sdl_gamepad_state(SDL_Gamepad *gamepad, XINPUT_GAMEPAD *pad)
 {
+	struct gamepad_taps tapped;
+	struct gamepad_taps const *taps = &tapped;
 	static const struct
 	{
 		SDL_GamepadButton button;
@@ -2629,18 +2707,20 @@ static void sdl_gamepad_state(SDL_Gamepad *gamepad, XINPUT_GAMEPAD *pad)
 	int left_trigger, right_trigger;
 	SHORT value;
 
+	/* (what was pressed and let go of since the last reading counts once) */
+	gamepad_taps_take(gamepad, &tapped);
 	for (index = 0; index < (int)(sizeof(digital) / sizeof(digital[0])); index++)
 	{
-		if (SDL_GetGamepadButton(gamepad, digital[index].button))
+		if (gamepad_button_down(gamepad, taps, digital[index].button))
 			pad->wButtons |= digital[index].mask;
 	}
-	merge_button(pad, XINPUT_GAMEPAD_A, SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_SOUTH));
-	merge_button(pad, XINPUT_GAMEPAD_B, SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_EAST));
-	merge_button(pad, XINPUT_GAMEPAD_X, SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_WEST));
-	merge_button(pad, XINPUT_GAMEPAD_Y, SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_NORTH));
+	merge_button(pad, XINPUT_GAMEPAD_A, gamepad_button_down(gamepad, taps, SDL_GAMEPAD_BUTTON_SOUTH));
+	merge_button(pad, XINPUT_GAMEPAD_B, gamepad_button_down(gamepad, taps, SDL_GAMEPAD_BUTTON_EAST));
+	merge_button(pad, XINPUT_GAMEPAD_X, gamepad_button_down(gamepad, taps, SDL_GAMEPAD_BUTTON_WEST));
+	merge_button(pad, XINPUT_GAMEPAD_Y, gamepad_button_down(gamepad, taps, SDL_GAMEPAD_BUTTON_NORTH));
 	/* the Duke's white and black buttons sit where later pads have shoulders */
-	merge_button(pad, XINPUT_GAMEPAD_WHITE, SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER));
-	merge_button(pad, XINPUT_GAMEPAD_BLACK, SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER));
+	merge_button(pad, XINPUT_GAMEPAD_WHITE, gamepad_button_down(gamepad, taps, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER));
+	merge_button(pad, XINPUT_GAMEPAD_BLACK, gamepad_button_down(gamepad, taps, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER));
 #if defined(SDL_PLATFORM_LINUX) && !defined(HALO_ANDROID)
 	/* an original Xbox pad's black and white are BTN_C and BTN_Z (halo_xbox_pad_buttons.h) */
 	if (xbox_pad_has_black_white_buttons(SDL_GetGamepadVendor(gamepad), SDL_GetGamepadProduct(gamepad)))
@@ -2655,8 +2735,8 @@ static void sdl_gamepad_state(SDL_Gamepad *gamepad, XINPUT_GAMEPAD *pad)
 	}
 #endif
 
-	left_trigger = SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER) * 255 / 32767;
-	right_trigger = SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) * 255 / 32767;
+	left_trigger = gamepad_trigger(gamepad, taps, SDL_GAMEPAD_AXIS_LEFT_TRIGGER, 1);
+	right_trigger = gamepad_trigger(gamepad, taps, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER, 2);
 	if (left_trigger > pad->bAnalogButtons[XINPUT_GAMEPAD_LEFT_TRIGGER])
 		pad->bAnalogButtons[XINPUT_GAMEPAD_LEFT_TRIGGER] = (BYTE)left_trigger;
 	if (right_trigger > pad->bAnalogButtons[XINPUT_GAMEPAD_RIGHT_TRIGGER])

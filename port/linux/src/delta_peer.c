@@ -629,6 +629,7 @@ static void host_send_welcome(struct delta_peer *peer, int machine_index)
 	welcome.legacy_table_serial = handshake_serial(peer);
 	welcome.key = peer->local.key;
 	memcpy(welcome.build, peer->local.build, sizeof(welcome.build));
+	welcome.modes = peer->local.modes;
 	peer_send(peer, client->ipv4, client->port, data, delta_wire_write_welcome(data, client->session, &welcome));
 }
 
@@ -1029,7 +1030,7 @@ void delta_peer_moderation_roles_changed(struct delta_peer *peer)
 	peer->moderation_roles_dirty = 1;
 }
 
-/* ---------- chat (docs/delta.md, Chat) */
+/* ---------- chat (docs/delta/peer.md, Chat) */
 
 /* whether a machine's session takes lines of a kind: a player's need chat
 agreed, the host's own server_messages */
@@ -2790,11 +2791,34 @@ int delta_peer_machine_pending(const struct delta_peer *peer, delta_u32 now, int
 	return !elapsed(now, peer->machine_seen_time[machine_index], DELTA_PEER_HANDSHAKE_TIME);
 }
 
+int delta_peer_machine_session(const struct delta_peer *peer, delta_u32 now, int machine_index)
+{
+	const struct delta_peer_game_machine *machine;
+
+	if (peer->mode != _mode_host || !valid_machine(machine_index))
+		return -1;
+	machine = host_game_machine(peer, machine_index);
+	if (!machine || machine->local)
+		return -1;
+	if (peer->peers[machine_index].used)
+		return 1;
+	if (!peer->machine_seen[machine_index])
+		return -1;
+	return elapsed(now, peer->machine_seen_time[machine_index], DELTA_PEER_HANDSHAKE_TIME) ? 0 : -1;
+}
+
 int delta_peer_machine_legacy_version(const struct delta_peer *peer, int machine_index)
 {
 	if (peer->mode != _mode_host || !valid_machine(machine_index) || !peer->peers[machine_index].used)
 		return 0;
 	return peer->peers[machine_index].hello.legacy_version;
+}
+
+delta_u32 delta_peer_machine_modes(const struct delta_peer *peer, int machine_index)
+{
+	if (peer->mode != _mode_host || !valid_machine(machine_index) || !peer->peers[machine_index].used)
+		return 0;
+	return peer->peers[machine_index].hello.modes;
 }
 
 int delta_peer_machine_lacks(const struct delta_peer *peer, delta_u32 now, int machine_index, int capability)
@@ -2979,6 +3003,7 @@ static void client_send_hello(struct delta_peer *peer, delta_u32 now)
 	hello.legacy_table_serial = handshake_serial(peer);
 	hello.key = peer->local.key;
 	memcpy(hello.build, peer->local.build, sizeof(hello.build));
+	hello.modes = peer->local.modes;
 	peer_send(peer, peer->host_ipv4, peer->host_port, data, delta_wire_write_hello(data, peer->session, &hello));
 	peer->hello_time = now;
 }
@@ -3717,7 +3742,7 @@ void delta_peer_receive(struct delta_peer *peer, delta_u32 now, delta_u32 ipv4, 
 		peer->dropped++;
 }
 
-/* ---------- verified names (docs/delta.md, Verified names) */
+/* ---------- verified names (docs/delta/peer.md, Verified names) */
 
 static int host_identity_agreed(const struct delta_peer *peer, int machine_index)
 {

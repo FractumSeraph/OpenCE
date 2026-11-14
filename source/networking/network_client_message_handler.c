@@ -1172,6 +1172,7 @@ int delta_legacy_announce(void);
 unsigned network_rules_client_settings_version(unsigned joined, int hosting, unsigned announce);
 int network_rules_settings_options_size(unsigned version, unsigned total_size);
 int network_rules_settings_fold_extended(unsigned char *record, int total_size, int options_size);
+void network_rules_extended_options_default(unsigned char *options);
 
 enum
 {
@@ -1195,6 +1196,24 @@ typedef char network_game_client_settings_size_assert[
 	sizeof(network_game_client_settings_staging) == NETWORK_GAME_CLIENT_SETTINGS_MAXIMUM &&
 	NETWORK_GAME_CLIENT_SETTINGS_EXTENDED_SIZE - NETWORK_GAME_CLIENT_SETTINGS_SIZE == HALO_PORT_LEGACY_OPTIONS_SHORTFALL &&
 	NETWORK_GAME_CLIENT_EXTENDED_OPTIONS_VERSION == HALO_PORT_GAME_MODES_NETWORK_VERSION ? 1 : -1];
+
+/* port, this fork: ChupathingyCE's game modes layer's further options of the
+host's gametype, which network_game_mode_options gives the game; this fork
+plays OpenCE's game types from the record's own options (game_modes.c), so
+none here (game.c leaves the layer with none) */
+byte const *network_game_client_mode_options(
+	void)
+{
+	static byte none[16];
+	static boolean ready = FALSE;
+
+	if (!ready)
+	{
+		network_rules_extended_options_default(none);
+		ready = TRUE;
+	}
+	return none;
+}
 
 /* port: the version whose record the host sends: its advertised one, but
 for the host's own machine (which joined its game at home, told none) the
@@ -1371,7 +1390,7 @@ static boolean network_game_client_receive_game_settings_piece(
 					network_game_client_settings_folded.variant.human_readable_game_description))
 				{
 					network_event("co-op: leaving the host's game: it is co-op, which the original Xbox does not play");
-					display_error_text_deferred(L"This game is network co-op,\r\nwhich the original Xbox\r\ndoesn't play yet.", NONE);
+					display_error_text_when_main_menu_loaded(L"This game is network co-op,\r\nwhich the original Xbox\r\ndoesn't play yet.");
 					network_game_client_rejected_by_game(client, source_address, _rejection_code_game_is_closed);
 					return TRUE;
 				}

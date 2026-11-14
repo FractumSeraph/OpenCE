@@ -313,6 +313,11 @@ void distributed_checkpoint_to_machine(long machine_index);
 void network_distributed_reverted(void);
 /* A client has received this epoch's ordered snapshot end (creation may retry). */
 boolean distributed_checkpoint_ready(void);
+/* (the host) a text in one client's console and, on a client that shows
+its host's notices there, its chat (_distributed_message_notice, as OpenCE's
+servers send their server messages): printable ASCII, cut to the notice's
+159 characters */
+void distributed_send_notice_to_machine(long machine_index, char const *text);
 /* the player at an absolute index, or NULL */
 struct player_datum *distributed_player(short player_index);
 /* a player's absolute index for a message, NO_PLAYER for none; and back */

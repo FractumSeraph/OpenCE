@@ -89,6 +89,8 @@ symbols in this file:
 #include "tag_files/tag_groups.h"
 #ifdef HALO_GAME_BROWSER
 #include "gametype_files.h" /* port: port/linux/game/gametype_files.c */
+#include "game/game_modes.h" /* port: the game modes layer's built-ins and further options */
+#include "../../port/linux/game/network_rules.h" /* port: the further options' defaults (every build's) */
 #endif
 /* the saved game file checksum is an XDK content signature. */
 #include <xtl.h>
@@ -107,6 +109,11 @@ enum
 	/* port: version 2 adds OpenCE's gametypes' options (game_engine.h's
 	struct game_variant_options from mode on); version 1's are read too */
 	PLAYLIST_PROFILE_OPTIONS_VERSION = 2,
+	/* (ChupathingyCE's game modes layer's further options: this fork keeps
+	none in the file, its version 2 being OpenCE's options; theirs, the 0x1C
+	PC options and these 16 bytes, is refused by its size and read with the
+	defaults) */
+	PLAYLIST_PROFILE_MODE_OPTIONS_SIZE = 16,
 	MAXIMUM_GAME_VARIANT_NAME_LENGTH = 12,
 	NUMBER_OF_DEFAULT_PLAYLIST_PROFILES = 26,
 };
@@ -201,16 +208,19 @@ static boolean playlist_profile_read_block(
 	byte *block);
 static boolean playlist_profile_options_from_block(
 	byte const *block,
-	struct game_variant_options *options);
+	struct game_variant_options *options,
+	byte *modes);
 static void playlist_profile_options_to_block(
 	byte *block,
-	struct game_variant_options const *options);
+	struct game_variant_options const *options,
+	byte const *modes);
 
 /* ---------- globals */
 
 /* port: the options the asynchronous write writes (playlist_profile_write),
-the file's own when the saver gave none */
+the file's own when the saver gave none; and the further options with them */
 static struct game_variant_options playlist_profile_write_options;
+static byte playlist_profile_write_modes[PLAYLIST_PROFILE_MODE_OPTIONS_SIZE];
 
 static struct playlist_profile_runtime_globals_prefix playlist_profile_globals = { 0 };
 static struct playlist_profile_data playlist_profile_default_data =
@@ -253,11 +263,17 @@ static struct
 {
 	struct game_variant *(*build)(struct game_variant *variant);
 	wchar_t const *name;
+	/* (the game modes layer's built-ins: game_mode_builtin's index, whose
+	PC options and further options the file holds; NONE for the others) */
+	long mode_builtin;
 } const playlist_profile_port_defaults[] =
 {
-	{ build_game_variant_bomb, L"Bomb" },
-	{ build_game_variant_grifball, L"Grifball" },
-	{ build_game_variant_grifball_open_pitch, L"Open Pitch" },
+	{ build_game_variant_bomb, L"Bomb", NONE },
+	{ build_game_variant_grifball, L"Grifball", NONE },
+	{ build_game_variant_grifball_open_pitch, L"Open Pitch", NONE },
+	/* (port, this fork: ChupathingyCE's game modes layer's built-ins, SWAT,
+	Hardcore, HC CTF, HC Oddball and HC King, are left out: this fork plays
+	OpenCE's own, listed before these: game_modes.c) */
 };
 #define NUMBER_OF_PORT_DEFAULT_PLAYLIST_PROFILES \
 	(short)(sizeof(playlist_profile_port_defaults) / sizeof(playlist_profile_port_defaults[0]))
@@ -531,7 +547,7 @@ boolean playlist_profile_get_from_data_with_options(
 	if (csmemcmp(&checksum, data + PLAYLIST_PROFILE_CHECKSUM_DATA_SIZE, sizeof(checksum)))
 		return FALSE;
 	csmemcpy(variant, data, sizeof(struct game_variant));
-	if (!playlist_profile_options_from_block(data, options))
+	if (!playlist_profile_options_from_block(data, options, NULL))
 		game_variant_options_default(variant, options);
 	return TRUE;
 }
@@ -581,12 +597,14 @@ void playlist_profile_save(
 	struct game_variant *variant)
 {
 	struct game_variant_options options;
+	byte modes[PLAYLIST_PROFILE_MODE_OPTIONS_SIZE];
 
-	/* port: the file's PC options kept */
+	/* port: the file's PC options kept, and its further options */
 	if (playlist_profile_index != NONE)
 	{
 		playlist_profile_get_options(playlist_profile_index, &options);
-		playlist_profile_save_with_options(playlist_profile_index, variant, &options);
+		playlist_profile_get_mode_options(playlist_profile_index, modes);
+		playlist_profile_save_with_modes(playlist_profile_index, variant, &options, modes);
 	}
 
 	return;
@@ -604,7 +622,7 @@ boolean playlist_profile_get_options(
 		TEST_FLAG(playlist_profile_index, _saved_game_file_index_valid_bit) &&
 		playlist_profile_read_block(playlist_profile_index, block))
 	{
-		if (!playlist_profile_options_from_block(block, options))
+		if (!playlist_profile_options_from_block(block, options, NULL))
 			game_variant_options_default((struct game_variant *)block, options);
 		return TRUE;
 	}
@@ -612,11 +630,43 @@ boolean playlist_profile_get_options(
 	return FALSE;
 }
 
-/* port: a gametype saved with its PC options */
+/* port: a gametype's further options (the game modes layer's, docs/modes.md):
+the file's (a version 2 block), else the defaults (none) */
+boolean playlist_profile_get_mode_options(
+	long playlist_profile_index,
+	byte *modes)
+{
+	byte block[SAVED_GAME_FILE_BLOCK_SIZE];
+	struct game_variant_options options;
+
+	if (playlist_profile_index != NONE &&
+		TEST_FLAG(playlist_profile_index, _saved_game_file_index_valid_bit) &&
+		playlist_profile_read_block(playlist_profile_index, block))
+	{
+		if (playlist_profile_options_from_block(block, &options, modes))
+			return TRUE;
+	}
+	network_rules_extended_options_default(modes);
+	return FALSE;
+}
+
+/* port: a gametype saved with its PC options (its further options the
+defaults: playlist_profile_save_with_modes keeps them) */
 void playlist_profile_save_with_options(
 	long playlist_profile_index,
 	struct game_variant *variant,
 	struct game_variant_options const *options)
+{
+	playlist_profile_save_with_modes(playlist_profile_index, variant, options, NULL);
+}
+
+/* port: a gametype saved with its PC options and further options (NULL:
+the defaults) */
+void playlist_profile_save_with_modes(
+	long playlist_profile_index,
+	struct game_variant *variant,
+	struct game_variant_options const *options,
+	byte const *modes)
 {
 	match_assert(
 		"c:\\halo\\SOURCE\\saved games\\playlist_profile.c",
@@ -637,6 +687,12 @@ void playlist_profile_save_with_options(
 			playlist_profile_globals.thread = NULL;
 		}
 		playlist_profile_write_options = *options;
+		if (modes)
+			csmemcpy(playlist_profile_write_modes, modes, sizeof(playlist_profile_write_modes));
+		else
+		{
+			network_rules_extended_options_default(playlist_profile_write_modes);
+		}
 		playlist_profile_write(playlist_profile_index, variant);
 #ifdef HALO_GAME_BROWSER
 		/* port: and its game type file, the dedicated server's format
@@ -744,7 +800,7 @@ static void playlist_profile_create_default_profiles_on_disk(
 				PLAYLIST_PROFILE_CHECKSUM_DATA_SIZE,
 				(XCALCSIG_SIGNATURE *)(block + PLAYLIST_PROFILE_CHECKSUM_DATA_SIZE));
 			if (playlist_profile_default_is_game_mode(profile_index))
-				playlist_profile_options_to_block(block, &options);
+				playlist_profile_options_to_block(block, &options, NULL);
 
 			_snprintf(path, MAXIMUM_FILENAME_LENGTH, "z:\\saved\\playlists\\default_playlist\\%02d\\blam.lst", profile_index);
 			path[MAXIMUM_FILENAME_LENGTH] = 0;
@@ -950,7 +1006,7 @@ static unsigned long __stdcall playlist_profile_write_thread_proc(
 				block,
 				sizeof(struct game_variant),
 				(struct _XCALCSIG_SIGNATURE *)(block + sizeof(struct game_variant)));
-			playlist_profile_options_to_block(block, &playlist_profile_write_options);
+			playlist_profile_options_to_block(block, &playlist_profile_write_options, playlist_profile_write_modes);
 
 			if (!file_set_position(&file, 0) ||
 				!file_write(&file, sizeof(block), block))
@@ -1073,11 +1129,12 @@ struct playlist_profile_options_header
 
 static boolean playlist_profile_options_from_block(
 	byte const *block,
-	struct game_variant_options *options)
+	struct game_variant_options *options,
+	byte *modes)
 {
 	struct playlist_profile_options_header header;
 	byte const *data = block + PLAYLIST_PROFILE_OPTIONS_OFFSET;
-	unsigned long size = sizeof(header) + sizeof(*options);
+	unsigned long size;
 	XCALCSIG_SIGNATURE checksum;
 
 	csmemcpy(&header, data, sizeof(header));
@@ -1091,6 +1148,9 @@ static boolean playlist_profile_options_from_block(
 	saved_game_file_generate_checksum((byte *)data, size, &checksum);
 	if (csmemcmp(&checksum, data + size, sizeof(checksum)))
 		return FALSE;
+	/* (this fork: no further options in the file, playlist_profile_options_to_block) */
+	if (modes)
+		network_rules_extended_options_default(modes);
 	/* (version 1's: none of OpenCE's gametypes, their options the defaults) */
 	game_modes_options_default(options);
 	csmemcpy(options, data + sizeof(header), header.size);
@@ -1110,12 +1170,16 @@ static boolean playlist_profile_options_from_block(
 
 static void playlist_profile_options_to_block(
 	byte *block,
-	struct game_variant_options const *options)
+	struct game_variant_options const *options,
+	byte const *modes)
 {
 	struct playlist_profile_options_header header;
 	byte *data = block + PLAYLIST_PROFILE_OPTIONS_OFFSET;
 	unsigned long size = sizeof(header) + sizeof(*options);
 
+	/* (port, this fork: the game modes layer's further options are not kept:
+	OpenCE's gametypes, in the options, are this fork's modes) */
+	(void)modes;
 	header.magic = PLAYLIST_PROFILE_OPTIONS_MAGIC;
 	header.version = PLAYLIST_PROFILE_OPTIONS_VERSION;
 	header.size = sizeof(*options);
@@ -1126,4 +1190,5 @@ static void playlist_profile_options_to_block(
 
 typedef char verify_playlist_profile_options_fit[
 	PLAYLIST_PROFILE_OPTIONS_OFFSET + sizeof(struct playlist_profile_options_header) +
-		sizeof(struct game_variant_options) + sizeof(XCALCSIG_SIGNATURE) <= SAVED_GAME_FILE_BLOCK_SIZE ? 1 : -1];
+		sizeof(struct game_variant_options) + PLAYLIST_PROFILE_MODE_OPTIONS_SIZE + sizeof(XCALCSIG_SIGNATURE) <=
+		SAVED_GAME_FILE_BLOCK_SIZE ? 1 : -1];

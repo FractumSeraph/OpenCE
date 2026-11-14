@@ -19,7 +19,8 @@ tag) and `port/linux/src/port_mods.c` (the mods folder and its files).
 The mods are in the `mods` folder of the data root (the folder with
 `maps/`; on Android the app's data folder, on the web the browser's storage
 for the site). Each mod is a folder in it, with a `mod.toml` and a `tags`
-folder:
+folder, or a zip archive (`.pk3` or `.zip`) with the same inside
+(ChupathingyCE's):
 
 ```
 mods/
@@ -32,6 +33,9 @@ mods/
     mod.toml
     tags/
       ui/hud/hud_item_messages.unicode_string_list
+  hd_weapons.pk3
+    mod.toml
+    tags/sound/sfx/weapons/assault rifle/fire.sound
 ```
 
 The files in `tags` have the paths of the tags they replace: a tag's name,
@@ -64,7 +68,8 @@ the mods folder is passed over. `maps = []` is every map. A Halo PC map is
 named by its file's name too, without the `@ce`, `@md` or `@pc` the game
 names it with (`bloodgulch` for `bloodgulch@ce`, this fork's).
 
-A folder without `mod.toml` is not a mod. A mod made for a later `format`
+A folder without `mod.toml` is not a mod; an archive without one is a mod
+named after its file. A mod made for a later `format`
 than the build's, or whose `maps` names no map, is not played. The game
 logs anything else wrong in `mod.toml` (an unknown key, a value of the
 wrong type) and uses the rest; a `mod.toml` that is not TOML at all is
@@ -74,7 +79,8 @@ The game's log is its output: the terminal on Linux, `halo.log` beside
 `halo.exe` on Windows, logcat on Android, and the page's log on the web.
 
 Limits: 256 mods, folder names of 63 bytes at most, 262144 files in all, 24
-folders deep under `tags`, and 64 maps in a mod's `maps`.
+folders deep under `tags`, 64 maps in a mod's `maps`, and 8192 entries in an
+archive.
 
 ## The load order
 

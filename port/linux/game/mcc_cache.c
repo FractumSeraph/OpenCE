@@ -88,8 +88,13 @@ static int mcc_cache_probe(char const *name, struct mcc_cache_source const *sour
     char *reason, size_t reason_size)
 {
     struct mcc_precache_snapshot before, after;
+    char chosen[2][128];
     int stamped = mcc_precache_snapshot(name, &before);
     if (reason && reason_size) reason[0]=0;
+    /* (a joined game's own base resources, picked by the host's SHA-256: never
+     * a result kept from the loader's own choice) */
+    if (mcc_identity_resources(name, chosen))
+        return mcc_resources_probe_explain(name, source, checksum, reason, reason_size);
     if (mcc_validation_lookup(name, checksum, NULL)) return 1;
     if (stamped && mcc_validation.checksum && !strcmp(name, mcc_validation.name) &&
         !memcmp(&before, &mcc_validation.files, sizeof(before))) {
@@ -254,6 +259,20 @@ int mcc_content_probe(char const *name,unsigned char digest[32])
     ok=mcc_resources_fingerprint_probe(name,&source,digest);
     fclose(stream);
     return ok;
+}
+
+int mcc_content_match(char const *name,unsigned char const digest[32],char paths[2][128],
+    char *reason,unsigned long reason_size)
+{
+    struct mcc_cache_identity identity;
+    struct mcc_cache_source source;
+    FILE *stream=mcc_open(name,&source,&identity);
+    int result;
+    if (reason && reason_size) reason[0]=0;
+    if (!stream) return 0;
+    result=mcc_resources_fingerprint_match(name,&source,digest,paths,reason,(size_t)reason_size);
+    fclose(stream);
+    return result;
 }
 
 boolean mcc_cache_present(char const *name, unsigned long checksum, char *message, long size)

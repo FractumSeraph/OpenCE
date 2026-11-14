@@ -91,6 +91,15 @@ filter indiscriminately to every asset.
 5. [port_config.c](../../port/linux/src/port_config.c) and
    [port_settings.py](../../tools/port_settings.py) define settings and menus.
 
+The reverb's delay lines are read by cursors kept modulo each line's size,
+not by a division per tap, and a frame with no fade running reads the new
+environment alone; its output is the same to the bit (tools/test_xbox_audio.py
+checks both). Per 256-frame mix: 3.3 µs on an Apple M-series core (4.9
+before), 9.7 µs on a Ryzen 5 2600 (20.3 before), and on the 360's PowerPC
+111,500 instructions with no divisions, where it was 174,700 with 2,048
+divisions and 14,700 multiplies (counted in an emulator; 0.9.0's reverb was
+166,500).
+
 For a mono shot behind and above the camera in a cave, the existing game supplies
 its position, velocity and cave environment. The direct path gets distance and
 obstruction gain, then the upper/rear HRTF response on stereo. The room send gets

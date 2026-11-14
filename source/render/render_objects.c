@@ -562,6 +562,7 @@ static void render_object_list(
 		and the overshield finds its own values by their address
 		(overshield_effect.c), so they are not copied again */
 		real const *shown_functions = object->object.outgoing_function_values;
+		short region_count; /* port: the regions an object's permutations cover */
 
 		if (!object_is_first_person_camera(object_index) || render.camera.mirrored || (legs && node_matrices))
 		{
@@ -722,7 +723,7 @@ static void render_object_list(
 						definition->object.model.index,
 						level_of_detail_pixels,
 						node_matrices,
-						object->object.region_permutations,
+						object_get_region_permutations(object_index, &region_count),
 						object_get_change_colors(object_index),
 						shown_functions,
 						data->lighting,
@@ -744,7 +745,7 @@ static void render_object_list(
 						definition->object.model.index,
 						level_of_detail_pixels * 0.3f,
 						node_matrices,
-						object->object.region_permutations,
+						object_get_region_permutations(object_index, &region_count),
 						object_get_change_colors(object_index),
 						object->object.outgoing_function_values,
 						data->lighting,

@@ -53,6 +53,14 @@ enum halo_keyboard_action
 	HALO_KEYBOARD_VOTE_NO,
 	/* (ChupathingyCE's voice chat: the next channel; port/linux/game/voice_game.c) */
 	HALO_KEYBOARD_VOICE_CHANNEL,
+	/* a vehicle's secondary fire (source/input/input_abstraction.c): in a
+	vehicle's seat, when it has a key, it is the grenade control's in place
+	of the grenade key's (with none, the grenade key's, as retail) */
+	HALO_KEYBOARD_VEHICLE_SECONDARY_FIRE,
+	/* walk (source/input/input_abstraction.c): while held, the keyboard
+	moves at half speed, as a stick pushed halfway does (with no key, the
+	keyboard runs, as retail) */
+	HALO_KEYBOARD_WALK,
 	NUMBER_OF_HALO_KEYBOARD_ACTIONS
 };
 
@@ -65,6 +73,9 @@ int halo_keyboard_binding_label(int action, int slot, char *shown, unsigned int 
 /* whether voice chat's push to talk is held (controls.push_to_talk), in the
 game and in the menus alike */
 int halo_push_to_talk_held(void);
+
+/* whether an action has a key or button bound to it */
+int halo_keyboard_action_bound(int action);
 
 /* the game's button prompts show the keyboard's keys, not the
 controller's buttons (the keyboard or mouse used last, unless
