@@ -79,7 +79,9 @@ int main(int argc,char **argv) {
     zlib = ROOT / "port/third_party/zlib"
     sources = [work / "driver.c", files, *[SRC / (name + ".c") for name in
         ("steam_workshop", "mcc_local_package", "mcc_manifest", "mcc_menu_metadata", "mcc_preview_image",
-         "posix_mcc_preview", "posix_mcc_share", "server_json")], *sorted(zlib.glob("*.c"))]
+         "posix_mcc_preview", "posix_mcc_share", "server_json")],
+               # (mcc_manifest.c's metadata digest, ChupathingyCE's: the SHA-256 it hashes with)
+               ROOT / "port/linux/game/mcc_sha256.c", *sorted(zlib.glob("*.c"))]
     exe = work / ("local.exe" if windows else "local")
     result = subprocess.run([cc, *flags, "-std=gnu11", "-DZ_PREFIX", "-I", str(SRC), "-I", str(zlib),
                              *map(str, sources), "-o", str(exe)], capture_output=True, text=True)
