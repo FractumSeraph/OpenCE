@@ -402,7 +402,7 @@ def test_new_executable_started(keys, builds, server, tmp_path):
     for name in ("chupathingy", "helper-tool"):
         assert after[name][1] & 0o111, (name, oct(after[name][1]))
     assert not after["notes-new.txt"][1] & 0o111
-    assert after["halo"][1] == 0o755 and after["SDL3-LICENSE.txt"][1] == 0o600
+    assert after["halo"][1] == 0o755 and after["THIRD-PARTY-NOTICES.txt"][1] == 0o600
 
 
 OLD_LICENSE_FILES = ("SDL3-LICENSE.txt", "mbedtls-LICENSE.txt", "miniupnpc-LICENSE.txt", "Overpass-OFL.txt",

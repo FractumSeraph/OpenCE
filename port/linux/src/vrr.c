@@ -18,7 +18,7 @@ SPDX-License-Identifier: GPL-3.0-or-later
 #include <stdlib.h>
 #include <string.h>
 
-#if defined(__linux__) && !defined(__ANDROID__)
+#if defined(__linux__) && !defined(__ANDROID__) && !defined(HALO_ANDROID)
 #define VRR_LINUX
 #include <dlfcn.h>
 #include <fcntl.h>
