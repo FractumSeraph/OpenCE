@@ -384,12 +384,8 @@ Fishsticks has zoom on the left trigger and melee on the right stick's
 button, the grenade thrown with the right bumper, crouch on B and grenades
 switched with the pad's left direction (which then does not strafe or turn).
 
-Recon is the standard layout with action and reload on the right bumper and
-grenades switched with the left bumper (the flashlight moves to X).
-
 Controls Setup (Settings > Controls, or the Xbox and Gearbox menus' pause
-menu's CONTROLS; the Chupathingy menus' X or Start accepts it, B cancels;
-in a game, Start there accepts rather than closing the pause menu) has
+menu's CONTROLS) has
 every device's controls in one list: DEVICE chooses KEYBOARD/MOUSE or
 GAMEPAD (the device used last when it opens), and SHOW chooses the keys'
 groups or the mouse's settings, or the controller's settings or buttons.
@@ -485,7 +481,7 @@ still do nothing here, such as the Direct IP screen's own fields and the
 Server Browser's filter settings (`port/assets/menus/UNWIRED.md`). The
 screens open, close and move between each other as the PC version's.
 
-`display.menus` chooses one of two menu sets:
+`display.menus` chooses one of three views:
 
 - `"chupathingy"` (the default): the Xbox's menus and look with Halo PC's
   screens added where they help, as one set: PROFILES, SETTINGS (Controls,
@@ -497,13 +493,8 @@ screens open, close and move between each other as the PC version's.
 - `"xbox"`: the Xbox's menus, as close to the console as can be, with only
   what this port needs added (Online Games, joining, the host's END GAME,
   the essential prompts).
-
-The Gearbox menus (Halo PC's, `"gearbox"` or the older `"pc"`) were a third
-set until 0.9.1. They were retired as a menu set: a file that names them gets
-the Xbox menus, the game says so once ("Gearbox menus were retired. You're on
-the Xbox menus now; change it in Settings.") and writes `"xbox"` in its place.
-Their screens stay in `port/assets/menus/ce`: the Chupathingy menus are built
-from many of them, and the rest are kept for extra screens.
+- `"gearbox"` (or the older `"pc"`): Gearbox's Halo PC menus, as close to
+  Halo PC as can be, with its Server Browser.
 
 The map lists (New Game's and Create Game's Map screen) choose, in their
 first row, SINGLEPLAYER (the campaign's levels), MULTIPLAYER (the Xbox's
@@ -673,7 +664,7 @@ with a comment for each setting and its default value, commented out:
 ```toml
 [display]
 # ...
-# Which menus to use: "chupathingy" or "xbox".
+# Which menus to use: "chupathingy", "xbox" or "gearbox".
 # Put your own menus in a menus folder next to config.toml.
 # Restart Chupathingy after a change.
 # menus = "chupathingy"
@@ -707,10 +698,9 @@ Earlier versions wrote every setting as a value. The first start of this
 version updates such a file once (`config_version = 2` at the top
 marks it): a setting that holds the default of this version is commented
 out, so that it follows the default. A setting with another value stays,
-also the default of an earlier version (`"xbox"` for `display.menus`, the
-default before 0.8.0), which you may have chosen; the log names it. (The
-default before 0.5.2b, `"pc"`, was the Gearbox menus, which are now the
-Xbox menus, with a one-time notice.) The log has one
+also the default of an earlier version (`display.menus = "pc"`, the default
+before 0.5.2b, or `"xbox"`, the default before 0.8.0), which you may have
+chosen; the log names it. The log has one
 line that tells how many lines changed.
 
 A version from before `config_version`, run on a file of this layout, adds
@@ -792,6 +782,7 @@ the setting for one start of the game. It has priority over the file.
 | `display.shadow_resolution` | `256` (the server: `128`) | `HALO_SHADOW_RESOLUTION` | The size of the maps that the shadows of the objects are drawn in, in pixels each way: `128`, `256`, `512` or `1024` (other values go down to one of these). The game draws the shadow of each object into a map of 128x128 pixels, blurs it and projects it onto the ground. On a large screen, the edges of these shadows show steps that move when the object moves. A larger map makes the edges smooth; the blur is made wider to match, so the shadows are as soft as on the Xbox. Each doubling adds two passes of the blur. `128`: as on the Xbox. |
 | `display.menus` | `"chupathingy"` (`"pc"`, Gearbox's, in the browser build) | `HALO_MENUS` | `"chupathingy"` (the default): the Xbox's menus with Halo PC's PROFILES, SETTINGS and QUIT, the settings pages, and Online Games, in the Xbox's look. `"xbox"`: the Xbox's menus, as close to the console as can be, with Online Games. `"gearbox"` (or the older `"pc"`): Gearbox's Halo PC menus. The Halo PC screens are built from the files in `port/assets/menus` and a `menus` folder next to `config.toml`. A file that sets `"xbox"` (the default before 0.8.0) keeps it. The browser build defaults to `"pc"`: its online play (the page's rooms, the native gateway) is in Gearbox's Create Game and Server Browser. Refer to "Menus". |
 | `display.full_model_detail` | `false` | `HALO_FULL_MODEL_DETAIL` | `true`: every model (characters, vehicles, weapons, scenery) is drawn with its most detailed geometry at any distance, instead of the simpler versions the game uses for models far away. Drawing only: the game itself is unchanged. `false`: as on the Xbox. |
+| `display.menus` | `"chupathingy"` | `HALO_MENUS` | `"chupathingy"` (the default): the Xbox's menus with Halo PC's PROFILES, SETTINGS and QUIT, the settings pages, and Online Games, in the Xbox's look. `"xbox"`: the Xbox's menus, as close to the console as can be, with Online Games. `"gearbox"` (or the older `"pc"`): Gearbox's Halo PC menus. The Halo PC screens are built from the files in `port/assets/menus` and a `menus` folder next to `config.toml`. A file that sets `"xbox"` (the default before 0.8.0) keeps it. Refer to "Menus". |
 | `display.version_watermark` | `false` | `HALO_VERSION_WATERMARK` | `true`: the build's version ("0.7.5a (5c1a363)"), which the main menu shows small and faint in the bottom right corner, is shown there while playing too: handy for screenshots and bug reports. |
 | `display.menu_language` | `"maps"` | `HALO_MENU_LANGUAGE` | The PC menus' language. `"maps"`: the language of the Custom Edition whose `loc.map` is in `custom_maps` (English without one). `"english"`: English. The port's own lines are English. |
 | `display.player_names` | `"none"` | `HALO_PLAYER_NAMES` | In multiplayer, whose names are drawn above their heads: `"all"`, `"allies"`, `"enemies"` or `"none"`. Only where the game's host allows it (its `network.allow_player_names`, a dedicated server's `allow_player_names`); a host that says nothing (OpenCE's, an older build) allows none, and a name shows only on the player aimed at, as on the Xbox. An ally's name is drawn above the triangle the game shows over teammates. An enemy's name shows only within the motion sensor's reach, while the enemy is in sight and not camouflaged, so it never shows where an enemy hides. The gametype's motion tracker setting also applies: no names if it shows no players, only allies' if it shows only friends. |
@@ -811,7 +802,7 @@ the setting for one start of the game. It has priority over the file.
 | `display.scoreboard_background` | `true` | `HALO_SCOREBOARD_BACKGROUND` | `true`: the multiplayer scoreboard (hold BACK, or tab) has a panel behind its text, for clearer text. |
 | `display.scoreboard_icons` | `true` | `HALO_SCOREBOARD_ICONS` | The scoreboard's icons: platform logos and the Delta mark of verified players (SCOREBOARD ICONS in Settings and the Guide). `false`: just names and scores. |
 | `display.scoreboard_platforms` | `"auto"` | `HALO_SCOREBOARD_PLATFORMS` | A small logo of each player's platform (Windows, macOS, Linux, Android, Steam Deck, Xbox and so on) before their name on a network game's scoreboard, for players whose client sends it over Delta Peer; other players (OpenCE, retail) get no logo. `"auto"`: shown with the Chupathingy menus only, since the Xbox and Gearbox menus stay close to the originals. `"on"`: with any menus. `"off"`: never. |
-| `display.delta_profile` | `true` | `HALO_DELTA_PROFILE` | Delta Profile in the game: the DELTA row of Profiles (the Chupathingy menus) the "Delta:" line on a Halo profile, and Online Games' Start. `false` hides them all, and Start opens the profile's web page as before, or Link Profile while this copy is not linked. Refer to `docs/delta.md`, Delta Profile in the game. |
+| `display.delta_profile` | `true` | `HALO_DELTA_PROFILE` | Delta Profile in the game: the DELTA row of Profiles (the Chupathingy menus) and button of Select Profile (the Gearbox menus), the "Delta:" line on a Halo profile, and Online Games' Start. `false` hides them all, and Start opens the profile's web page as before, or Link Profile while this copy is not linked. Refer to `docs/delta.md`, Delta Profile in the game. |
 | `display.online_games_view` | `"public"` | `HALO_ONLINE_GAMES_VIEW` | The view Online Games opens on in a session (LB and RB switch, and the last one stays): `"all"`, `"public"` (CHUPATHINGY + PUBLIC: every game but OpenCE's dedicated servers), `"chupathingy"` (our servers and Delta hosts) or `"opence"` (OpenCE's dedicated servers). |
 | `display.opence_empty_servers` | `"folded"` | `HALO_OPENCE_EMPTY_SERVERS` | The empty OpenCE dedicated servers in Online Games' ALL and OPENCE views: `"folded"` puts them in one EMPTY SERVERS row at the end (A opens and closes it; closed each session), `"shown"` lists each one at the end. |
 | `display.profile_names` | `true` | `HALO_PROFILE_NAMES` | On the scoreboard, the postgame report and the lobby, players who share their Delta profile (`network.share_profile`) show by the profile's name, in games on Delta. `false`: every player by their game name. OpenCE players, and what OpenCE players see, are unchanged. |
@@ -929,16 +920,7 @@ the setting for one start of the game. It has priority over the file.
 | `network.online` | `true` | `HALO_NET_ONLINE` | `true`: internet play. `false`: system link on the local network only. The browser build plays online through its page (WebRTC and the native gateway) either way; internet play's own machinery (its UDP tunnel, the brokers, the pings) never runs there (`p2p_native_online`, `port/linux/src/p2p.c`). |
 | `network.join_from_clipboard` | `"never"` | `HALO_NET_JOIN_FROM_CLIPBOARD` | An invite link on the clipboard when the game comes to the front: `"ask"` asks over the menus whether to join its game (with its name and map when the game list knows them; No is kept for that invite), `"always"` joins it, `"never"` leaves it. `true` and `false`, from older versions, mean `"always"` and `"never"`. Network Settings in the Chupathingy and Gearbox menus. |
 | `network.copy_to_clipboard` | `false` | `HALO_NET_COPY_TO_CLIPBOARD` | `true`: when this copy starts to host a game, its invite link goes on the clipboard. `false`: the game leaves the clipboard alone; the link is in the log, and INVITE LINK in the Gearbox menus' Server Settings copies it. Network Settings in the Chupathingy and Gearbox menus. |
-| `network.fair_play` | `"refuse"` | `HALO_NET_FAIR_PLAY` | When you host: check players' shots for cheats. `"refuse"` refuses a bullet's hit on a player through a solid wall, or far from where its shooter aimed (silent aim), and logs those, near misses of the checks, fast snaps of the aim and aim held on enemies behind walls (wallhacks) in `fairplay.txt` beside `bans.txt`; `"log"` only logs; `"off"` checks nothing. Refer to `server/docs/admin.md`, "Fair play checks". |
-| `network.record_games` | `false` | `HALO_NET_RECORD_GAMES` | When you host: record every game to `recordings\` in the data folder (each player's position, aim, health, weapon and pose every tick, the world's vehicles, items and projectiles, their names, addresses and hardware ids, the fair play checks' verdicts, the kills and the game's events, scores and chat, the map's walls and file), compressed, about 15 to 25 MB an hour, to watch again at https://halo.fractumseraph.net/watch/. Refer to `server/docs/admin.md`, "Recordings". |
-| `network.record_my_games` | `false` | `HALO_NET_RECORD_MY_GAMES` | Record the network games you play, joined or hosted, to `recordings\` in the data folder (in the browser, the browser's own storage on your device, never sent to the server; Download in the page's Game settings, or Save in the replay viewer): the game as your machine saw it, every player's position, aim, health, weapon and pose, the world's vehicles, items and projectiles, the kills, scores and chat, the map's walls and file. No one's address or hardware id is kept, and there are no fair play verdicts (only a host checks hits). In a game you joined, players far from yours or out of their sight are less exact than in a host's recording: the host sends them every 2nd to 6th tick (NETCODE.md, "The players each client needs") and your game fills in between; the replay viewer draws them on the line between the host's updates instead (frame flag 32). Watch them at https://halo.fractumseraph.net/watch/: press Open a recording and choose a `.hrec` from `recordings` in the data root (on Android `Android/data/net.fractumseraph.halo/files/recordings`); the browser build's are listed there. The chat says so as each recording starts. RECORD MY GAMES in Network Setup. A host with `network.record_games` on writes its admins' recording instead. |
-| `network.recordings_megabytes` | `2048` | `HALO_NET_RECORDINGS_MEGABYTES` | How many megabytes of recordings to keep: the oldest go first; 0 keeps them all. |
-| `network.record_public` | `false` | `HALO_NET_RECORD_PUBLIC` | When you host, with `network.record_games`: also write each game's public copy to `recordings\public\`, for anyone to watch live or again in the replay viewer: no player's address or hardware id and no fair play verdicts, and the game as it is played held back `network.record_public_delay` seconds so that no one watching can tell its players where the others are. `live.json` there says which game is being written. Serve that folder alone, never `recordings\`. Refer to `server/docs/admin.md`, "Public replays and watching live". |
-| `network.record_public_delay` | `30` | `HALO_NET_RECORD_PUBLIC_DELAY` | How many seconds the public copy is held back while its game is played. |
-| `network.record_public_megabytes` | `2048` | `HALO_NET_RECORD_PUBLIC_MEGABYTES` | How many megabytes of public copies to keep: the oldest go first; 0 keeps them all. |
-| `network.shared_bans` | `""` | `HALO_NET_SHARED_BANS` | When you host: ban lists other hosts publish, taken as your own bans: https:// addresses, with commas between them (FractumSeraph's servers' is `https://halovps.fractumseraph.net/bans/shared.txt`). They are fetched at start and every 10 minutes into `shared_bans.txt` beside `bans.txt`, and a machine whose hardware id (or address) is in one is refused. Name only lists whose publishers you trust. Refer to `server/docs/admin.md`, "Shared ban lists". |
-| `network.lasting_invite` | `false` | `HALO_NET_LASTING_INVITE` | `true`: the invite link of the game you host stays the same from one run of the game to the next (a dedicated server's, to post on a website). Its key and token are kept in `lasting_invite.key` in the save folder, which only you can read. Anyone who has the link can always use it; a new password, or making the game private, still makes a new link, which is then kept. Copy the file to one machine only. `false`: a new link each run. |
-| `network.map_downloads` | `"ask"` | `HALO_NET_MAP_DOWNLOADS` | A Custom Edition map a game you join needs and you don't have: over BitTorrent first (`maps.torrents`: other players, the trackers and web seeds), then from the HaloNet and HaloMaps archives (`maps.archives`), then from the community map repositories (maps.halonet.net and its mirrors, as Chimera downloads from them); a host that shares its map sends it before any of these (`network.map_share`). `"ask"`: the Online Games screen offers to download it (Yes, No, Don't ask again, which writes `"always"` or `"never"` here). `"always"`: downloaded without asking. `"never"`: the game only says which map is missing (map sharing aside), and the Server Browser's join does not download it either. Halo PC's own maps (Blood Gulch, Putput, ...) are offered too in this fork; with `"never"` the game asks you to copy them from your install. Network Settings in the PC menus. The map is checked before it goes in `maps_ce`: refer to "Halo PC maps" in the [README](../../README.md). Not on the dedicated server. |
+| `network.map_downloads` | `"ask"` | `HALO_NET_MAP_DOWNLOADS` | A Custom Edition map a game you join needs and you don't have, from the community map repositories (maps.halonet.net and its mirrors, as Chimera downloads from them). `"ask"`: the Online Games screen offers to download it (Yes, No, Don't ask again, which writes `"always"` or `"never"` here). `"always"`: downloaded without asking. `"never"`: the game only says which map is missing. Network Settings in the PC menus. The map is checked before it goes in `maps_ce`: refer to "Halo PC maps" in [docs/maps.md](../../docs/maps.md#halo-pc-maps). Not on the dedicated server. |
 | `network.maps_url` | `"https://maps.chupathingy.org"` | `HALO_NET_MAPS_URL` | Chupathingy maps, asked for a missing Custom Edition map when the community map repositories don't have it, and whose blacklist every map is held to. Its lists are signed, so a copy of them elsewhere works too. Empty: none. Refer to "Chupathingy maps" in [docs/maps.md](../../docs/maps.md#halo-pc-maps). Desktop and Android. |
 | `network.map_share` | `false` | `HALO_NET_MAP_SHARE` | Map sharing: a player who joins without your Custom Edition map, and asks for it, gets it from your game, a dedicated server's or one you host from the menus. Only the map your game is on now, only the map file (never `bitmaps.map`, `sounds.map` or `loc.map`), only to machines in your game, over TCP port 5153. Off by default. Refer to "Map sharing". |
 | `network.map_share_upload` | `1024` | `HALO_NET_MAP_SHARE_UPLOAD` | The most map sharing sends, in KB a second, shared by everyone downloading at once (16 to 20480). A game you host from the menus sends 256 unless you set it. |
@@ -1139,10 +1121,9 @@ the setting for one start of the game. It has priority over the file.
 | `controls.clip` | `"F10"` | `HALO_KEY_CLIP` | Saves the last `clips.seconds` as an MP4 in `<data root>/clips/`, named as screenshots are, when `clips.enabled` is on (`src/capture_clips.c`). |
 | `clips.enabled`, `clips.seconds` | `false`, `30` | `HALO_CLIPS`, `HALO_CLIPS_SECONDS` | Keep the last 5 to 120 seconds of the game encoded in memory, picture and sound, for `controls.clip`: the hardware's H.264 on macOS (VideoToolbox, up to 1920x1080 at 60), else FFmpeg's MPEG-4 Part 2 (up to 1280x720 at 30); AAC sound. The renderer scales and reads the frame back behind fences and lends it to an encoder thread; nothing runs while off. Read at start. `debug.clips_software` forces the software encoder, for tests. |
 | `delta.hold_back` | `false` | `HALO_DELTA_HOLD_BACK` | Holding Back (a controller's, or F1) about 0.6 s in the menus opens the Delta Guide. While it is on, the menus get Back only once it is let go (a tap), never for a hold, so a hold on the main menu doesn't also ask to quit. Off by default, as the Xbox's Back acts on press. |
-| `delta.menu_item` | `false` (Android: `true`) | `HALO_DELTA_MENU_ITEM` | The Delta Guide on the main menu (DELTA before QUIT, in the Chupathingy menus), and under ONLINE GAMES in the Multiplayer menu, each opening it on PARTY. Off by default: the Delta Guide is summoned like an overlay (its key, the Guide button, Back held), and the main menu says so instead (`delta.hint_shown`). On by default on Android, where a touch screen has no Guide button. The Delta Guide's SETTINGS has SHOW IN MENUS. It takes effect the next time the menus load. |
+| `delta.menu_item` | `false` (Android: `true`) | `HALO_DELTA_MENU_ITEM` | The Delta Guide on the main menu (DELTA before QUIT, in the Chupathingy and Gearbox menus), under ONLINE GAMES in the Multiplayer menu, and beside BACK in Gearbox's Multiplayer menu, each opening it on PARTY. Off by default: the Delta Guide is summoned like an overlay (its key, the Guide button, Back held), and the main menu says so instead (`delta.hint_shown`). On by default on Android, where a touch screen has no Guide button. The Delta Guide's SETTINGS has SHOW IN MENUS. It takes effect the next time the menus load. |
 | `delta.hint_shown` | `0` | `HALO_DELTA_HINT_SHOWN` | How many times the main menu has said how to open the Delta Guide ("Press F3 for the Delta Guide", or a controller's way when one was used last: "Hold Back for the Delta Guide" with `delta.hold_back`, else "Press the Guide button", never on a Mac, where macOS often keeps the Home button). It says so the first 3 times the main menu is reached (counted once drawn), then no more, and never with `delta.menu_item` on. |
-| `delta.pause_menu` | `true` | `HALO_DELTA_PAUSE_MENU` | The Delta Guide in the pause menu, after CONTROLS, in both menu sets. |
-| `delta.guide_background` | `"auto"` | `HALO_DELTA_GUIDE_BACKGROUND` | What the Delta Guide draws behind its panel: `"plain"`, a dark shade over the game, `"cellwall"`, the Xbox dashboard's cell wall (a mesh inside a slowly turning sphere, as the TeamUIX site draws it) in the theme's colors (the dashboard's own per skin, from Theseus), or `"auto"`, the cell wall with Dashboard Green and the shade with the other themes. The Delta Guide's SETTINGS has BACKGROUND (AUTO, PLAIN, CELLWALL). OpenGL ES 2 builds draw the shade. |
+| `delta.pause_menu` | `true` | `HALO_DELTA_PAUSE_MENU` | The Delta Guide in the pause menu, after CONTROLS, in all three menu sets. |
 | `delta.notify_in_game` | `false` | `HALO_DELTA_NOTIFY_IN_GAME` | The Delta Guide's notifications (a new invite or friend request) during a game. They always show in the menus. |
 | `delta.notify_online` | `false` | `HALO_DELTA_NOTIFY_ONLINE` | A notification in the menus when a friend comes online. Never during a game. |
 | `delta.bring_party` | `true` | `HALO_DELTA_BRING_PARTY` | The Delta Guide's BRING PARTY TO MY GAME: when you lead a party, the games you join or host are told to its members, who follow you (each can stay with B). |
@@ -1513,10 +1494,9 @@ COPY PARTY LINK copies `https://stats.chupathingy.org/party/<CODE>`, whose
 page opens `halo://party/<CODE>`. The game writes the link
 to the standard error. With `network.copy_to_clipboard` set to `true`, it
 also puts the link on the clipboard; INVITE LINK in the Gearbox menus'
-Server Settings copies it at any time. Each run of the game makes a new
-link, unless `network.lasting_invite` is `true`. The game reads the clipboard
-only when you paste (PASTE LINK, Ctrl+V), or when `network.join_from_clipboard`
-is `"ask"` or `"always"`. The links of older
+Server Settings copies it at any time. The game reads the clipboard only when you paste (PASTE
+LINK, Ctrl+V), or when `network.join_from_clipboard` is `"ask"` or
+`"always"`. The links of older
 versions of the game (44 digits) do not operate. The game writes a message
 when it gets one.
 

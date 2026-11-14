@@ -96,9 +96,7 @@ static const char *const renderer_choices[] = { "gl", "bgfx", NULL };
 static const char *const renderer_names[] = { "OPENGL", "VULKAN", NULL };
 #endif
 #endif
-/* (Gearbox's menus, "gearbox" or the older "pc", are no longer one: such a
-value is the Xbox's, menu_tags.c's menus_chosen) */
-static const char *const menus_choices[] = { "chupathingy", "xbox", NULL };
+static const char *const menus_choices[] = { "xbox", "gearbox", "chupathingy", NULL };
 /* display.title_font's (hud_hires.c, menu_files.c, ui_overlay.c) */
 static const char *const title_font_choices[] = { "classic", "cyborg", "halo", NULL };
 static const char *const channels_choices[] = { "auto", "stereo", "5.1", "7.1", NULL };
@@ -501,10 +499,10 @@ void settings_row_value(const struct settings_row *row, char *text, int size)
 			return;
 		}
 	}
-	/* (display.menus' retired "gearbox" and "pc" are the Xbox's) */
-	if (!strcmp(row->key, "display.menus") && (same(value, "gearbox") || same(value, "pc")))
+	/* (display.menus' older "pc" is Gearbox's) */
+	if (!strcmp(row->key, "display.menus") && same(value, "pc"))
 	{
-		snprintf(text, (size_t)size, "XBOX");
+		snprintf(text, (size_t)size, "GEARBOX");
 		return;
 	}
 	shown(value, text, size);
@@ -540,8 +538,8 @@ void settings_row_change(const struct settings_row *row, int step)
 	if (!values.count)
 		return;
 	current(row->key, value, sizeof(value));
-	if (!strcmp(row->key, "display.menus") && (same(value, "gearbox") || same(value, "pc")))
-		snprintf(value, sizeof(value), "xbox");
+	if (!strcmp(row->key, "display.menus") && same(value, "pc"))
+		snprintf(value, sizeof(value), "gearbox");
 	for (index = 0; index < values.count; index++)
 	{
 		if (same(values.value[index], value))
