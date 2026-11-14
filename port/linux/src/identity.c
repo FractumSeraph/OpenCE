@@ -1093,13 +1093,13 @@ void identity_slot_files(int slot, char *key_name, char *cert_name, int size)
 {
 	if (slot <= 0)
 	{
-		snprintf(key_name, (size_t)size, "delta_device.key");
-		snprintf(cert_name, (size_t)size, "delta_device.cert");
+		snprintf(key_name, (size_t)size, IDENTITY_DEVICE_FILE ".key");
+		snprintf(cert_name, (size_t)size, IDENTITY_DEVICE_FILE ".cert");
 	}
 	else
 	{
-		snprintf(key_name, (size_t)size, "delta_device_%d.key", slot);
-		snprintf(cert_name, (size_t)size, "delta_device_%d.cert", slot);
+		snprintf(key_name, (size_t)size, IDENTITY_DEVICE_FILE "_%d.key", slot);
+		snprintf(cert_name, (size_t)size, IDENTITY_DEVICE_FILE "_%d.cert", slot);
 	}
 }
 

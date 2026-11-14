@@ -678,7 +678,7 @@ static int device_key(unsigned char *seed, unsigned char *public_key, unsigned c
 {
 	char path[1024];
 
-	identity_path("delta_device.key", path, sizeof(path));
+	identity_path(IDENTITY_DEVICE_FILE ".key", path, sizeof(path));
 	if (!posix_browser_device_key(path, seed, IDENTITY_SEED_SIZE))
 		return 0;
 	identity_public(seed, public_key);
@@ -740,12 +740,12 @@ static void identity_new_device(void)
 	pthread_mutex_lock(&browser_lock);
 	shown_valid = 0;
 	pthread_mutex_unlock(&browser_lock);
-	identity_path("delta_device.cert", path, sizeof(path));
+	identity_path(IDENTITY_DEVICE_FILE ".cert", path, sizeof(path));
 	remove(path);
-	identity_path("delta_device.key", path, sizeof(path));
+	identity_path(IDENTITY_DEVICE_FILE ".key", path, sizeof(path));
 	remove(path);
 	/* (a new device is not signed out: it enrolls, or signs in by code) */
-	identity_path("delta_device.out", path, sizeof(path));
+	identity_path(IDENTITY_DEVICE_FILE ".out", path, sizeof(path));
 	remove(path);
 	identity_read = 1;
 }
@@ -808,13 +808,13 @@ static void read_certificate_file(void)
 	identity_read = 1;
 	/* (signed out by its player: nothing as the account until it signs in
 	again by code) */
-	identity_path("delta_device.out", path, sizeof(path));
+	identity_path(IDENTITY_DEVICE_FILE ".out", path, sizeof(path));
 	if (file_exists(path))
 	{
 		identity.signed_out = 1;
 		return;
 	}
-	identity_path("delta_device.cert", path, sizeof(path));
+	identity_path(IDENTITY_DEVICE_FILE ".cert", path, sizeof(path));
 	file = fopen(path, "r");
 	if (!file)
 		return;
@@ -856,7 +856,7 @@ static void write_certificate_file(const unsigned char *certificate, int certifi
 {
 	char path[1024], text[2 * (IDENTITY_DEVICE_MOST + IDENTITY_ISSUER_SIZE + IDENTITY_ID_SIZE) + 4];
 
-	identity_path("delta_device.cert", path, sizeof(path));
+	identity_path(IDENTITY_DEVICE_FILE ".cert", path, sizeof(path));
 	identity_hex(certificate, certificate_size, text);
 	strcat(text, "\n");
 	identity_hex(issuer, issuer_size, text + strlen(text));
@@ -905,12 +905,12 @@ static void identity_refused(int status, const char *response)
 		/* (revoked or signed out on the site: as signed out here, this run
 		and after, so the player key never goes in its place; signing in by
 		code again ends it) */
-		identity_path("delta_device.cert", path, sizeof(path));
+		identity_path(IDENTITY_DEVICE_FILE ".cert", path, sizeof(path));
 		remove(path);
 		pthread_mutex_lock(&browser_lock);
 		shown_valid = 0;
 		pthread_mutex_unlock(&browser_lock);
-		identity_path("delta_device.out", path, sizeof(path));
+		identity_path(IDENTITY_DEVICE_FILE ".out", path, sizeof(path));
 		file = fopen(path, "w");
 		if (file)
 			fclose(file);
@@ -1594,7 +1594,7 @@ static void signed_out_mark(int on)
 	char path[1024];
 	FILE *file;
 
-	identity_path("delta_device.out", path, sizeof(path));
+	identity_path(IDENTITY_DEVICE_FILE ".out", path, sizeof(path));
 	if (!on)
 	{
 		remove(path);
@@ -1840,7 +1840,7 @@ static int device_sign_out(void)
 	/* (404: the site doesn't know it; 403: off already) */
 	if (status != 200 && status != 403 && status != 404)
 		return 0;
-	identity_path("delta_device.cert", path, sizeof(path));
+	identity_path(IDENTITY_DEVICE_FILE ".cert", path, sizeof(path));
 	remove(path);
 	identity_wipe(&identity.token, sizeof(identity.token));
 	identity.has_certificate = 0;

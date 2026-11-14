@@ -516,9 +516,9 @@ static void test_account_slots(void)
 	CHECK(identity_account_slot(text, "bad") == 0 && identity_account_slot(text, "four") == 0);
 	CHECK(identity_account_slot(text, "nobody") == 0 && identity_account_slot("", "player1") == 0);
 	identity_slot_files(0, key, cert, sizeof(key));
-	CHECK(!strcmp(key, "delta_device.key") && !strcmp(cert, "delta_device.cert"));
+	CHECK(!strcmp(key, IDENTITY_DEVICE_FILE ".key") && !strcmp(cert, IDENTITY_DEVICE_FILE ".cert"));
 	identity_slot_files(2, key, cert, sizeof(key));
-	CHECK(!strcmp(key, "delta_device_2.key") && !strcmp(cert, "delta_device_2.cert"));
+	CHECK(!strcmp(key, IDENTITY_DEVICE_FILE "_2.key") && !strcmp(cert, IDENTITY_DEVICE_FILE "_2.cert"));
 }
 
 static void test_issuer(void)
@@ -691,7 +691,7 @@ static void test_text(void)
 		"pc_windows", "0.9.1 \"x\"");
 	CHECK(length > 0 && strstr(text, "\"key\": \"" VECTOR_PLAYER_KEY "\"") &&
 		strstr(text, "\"device_key\": \"" VECTOR_DEVICE_PUBLIC "\"") && strstr(text, "\"build\": \"0.9.1 x\"") &&
-		strstr(text, "\"client_id\": \"chupathingy\""));
+		strstr(text, "\"client_id\": \"" IDENTITY_CLIENT_ID "\""));
 	CHECK(identity_json_member(text, "platform", out, sizeof(out)) == 10 && !strcmp(out, "pc_windows"));
 
 	/* the answers */

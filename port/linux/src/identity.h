@@ -50,8 +50,30 @@ root's folder (save_folder_default) or the key's file name
 (identity_slot_files). The site keeps a device key with the app it first
 signed in through, so a fork that finds Chupathingy's key is refused (409
 other_client) */
+/* (port, this fork: Fractum Halo's own client, fractum-halo-405acc,
+registered at the site's /delta/clients; the consoles' builds, which this
+fork does not make, keep ChupathingyCE's) */
+#if !defined(IDENTITY_CLIENT_ID) && !defined(HALO_CONSOLE)
+#define IDENTITY_CLIENT_ID "fractum-halo-405acc"
+#endif
 #ifndef IDENTITY_CLIENT_ID
 #define IDENTITY_CLIENT_ID "chupathingy"
+#endif
+
+/* (port, this fork) the device key's files in the save root: the key,
+<IDENTITY_DEVICE_FILE>.key, its certificate, .cert, and the answer being
+waited on, .out; a slot's <IDENTITY_DEVICE_FILE>_<n>.key and .cert. Fractum
+Halo's are fractum_device, not ChupathingyCE's delta_device: the site keeps
+a device key with the app it first signed in through, and this fork's builds
+before fractum-halo-405acc signed theirs in as Chupathingy (409
+other_client), so a player approves this app's device once. The consoles'
+keep delta_device (their tests write it) */
+#ifndef IDENTITY_DEVICE_FILE
+#ifdef HALO_CONSOLE
+#define IDENTITY_DEVICE_FILE "delta_device"
+#else
+#define IDENTITY_DEVICE_FILE "fractum_device"
+#endif
 #endif
 
 /* a certificate's flags and capabilities */
