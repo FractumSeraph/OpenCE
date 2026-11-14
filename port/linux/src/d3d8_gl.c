@@ -4932,7 +4932,10 @@ static GLuint vertex_shader_make(struct vertex_shader_object *program, BOOL imme
 
 static GLuint vertex_shader_get(struct vertex_shader_object *program, BOOL immediate, BOOL lit, BOOL plasma)
 {
-	return vertex_shader_make(program, immediate, lit, plasma, device.vertex_shader->packed_mask, FALSE);
+	/* (port, this fork: no shader set yet when the first draw is a
+	fixed-function one, MCC's loading screen started from init.txt) */
+	return vertex_shader_make(program, immediate, lit, plasma,
+		device.vertex_shader ? device.vertex_shader->packed_mask : 0, FALSE);
 }
 
 /* (prepare: its compile asked for and not waited on, a map's loading

@@ -765,6 +765,12 @@ char *nv2a_fixed_function_glsl(void)
 
 #ifdef HALO_GLES
 	xgpu_text_append(&text, "#version %s\n", xgpu_capabilities.shading_language);
+#else
+	/* (port, this fork: the desktop's too, as nv2a_vertex_shader_to_glsl's:
+	since ChupathingyCE's older drivers' path, 8815a3e49, the prologue has
+	none, and without it every fixed-function draw, the loading screen's
+	light bar, failed to compile and crashed in vertex_shader_get) */
+	xgpu_text_append(&text, "%s", XGPU_GL_VERSION_LINE);
 #endif
 	xgpu_text_append(&text, "%s", shader_prologue);
 	for (index = 0; index < XGPU_VERTEX_ATTRIBUTE_COUNT; index++)
