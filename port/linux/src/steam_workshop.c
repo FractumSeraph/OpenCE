@@ -201,6 +201,13 @@ int steam_workshop_read_map(const char *text, int length, struct steam_workshop_
 	name_length = (unsigned)strlen(map->name);
 	if (name_length > 4 && !strcmp(map->name + name_length - 4, ".map"))
 		map->name[name_length - 4] = 0;
+	/* (port, this fork: and not "." or ".." once the extension is off, as
+	"..map" and "...map" would leave; the fuzzer's find, workshop_json) */
+	if (!strcmp(map->name, ".") || !strcmp(map->name, ".."))
+	{
+		memset(map, 0, sizeof(*map));
+		return 0;
+	}
 	neutral_title(text, length, map->title);
 	if (mcc_json_string(text, length, thumbnail_path, thumbnail, sizeof(thumbnail)) && path_is_plain(thumbnail))
 	{
