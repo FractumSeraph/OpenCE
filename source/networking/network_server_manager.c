@@ -446,6 +446,7 @@ symbols in this file:
 
 #include "cseries.h"
 #include "game_modes.h" /* port: port/linux/game/game_modes.c */
+#include "../../port/linux/game/network_rules.h" /* port: the game modes layer's further options (network_rules_mode_options_host) */
 #include "bungie_net/common/message_header.h"
 #include "bungie_net/network/transport.h"
 #include "bungie_net/network/transport_address_constants.h"

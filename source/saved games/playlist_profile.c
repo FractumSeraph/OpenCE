@@ -85,6 +85,7 @@ symbols in this file:
 #include "tag_files/files.h"
 #include "game/game_engine_playlist.h"
 #include "game_modes.h" /* port: port/linux/game/game_modes.c */
+#include "../../port/linux/game/network_rules.h" /* port: network_rules_extended_options_default, in every build */
 #include "text/text_group.h"
 #include "tag_files/tag_groups.h"
 #ifdef HALO_GAME_BROWSER

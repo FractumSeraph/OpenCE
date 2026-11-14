@@ -785,6 +785,7 @@ static void spatialize(const struct sdl_stream *stream, float *left, float *righ
 	{
 		/* (on surround a sound behind as the direction mirrored ahead) */
 		hrtf_place(side, up, output_channels == 8 ? fabsf(ahead) : output_channels == 6 ? fabsf(ahead) : ahead, distance,
+			stream->minimum_distance,
 			output_channels >= 6 && ahead < 0.0f, hrtf_out);
 		hrtf_out->gain = 0.70710678f * attenuation * gain_from_millibels(stream->direct) * voice_cone_gain(stream);
 		hrtf_out->pair[0] = pair[0];

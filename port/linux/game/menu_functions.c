@@ -12254,8 +12254,7 @@ static wchar_t const *host_setup_help(short row)
 		return host_setup.opence_welcome ? L"OpenCE players get one line about Chupathingy." :
 			L"OpenCE players get no line from you.";
 	case _host_row_rules:
-		return L"Team switching, chat filter, aim assist, shields, names, follow camera,
-OpenCE welcome.";
+		return L"Team switching, chat filter, aim assist, shields, names, follow camera,\nOpenCE welcome.";
 	case _host_row_start:
 		return host_help_with_status(L"Open the lobby.", with_status, NUMBEROF(with_status));
 	}

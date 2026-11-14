@@ -29,10 +29,7 @@ int mcc_resources_select(struct mcc_runtime *runtime, void *raw);
 int mcc_resources_select_paths(struct mcc_runtime *runtime, void *raw, char const paths[2][128]);
 /* Distinct usable local files per type. An unused type has one empty
  * choice; a package's own file is the only choice for its type. */
-struct mcc_resource_candidates {
-    unsigned count[2];
-    char paths[2][MCC_PACKAGE_BASE_SETS][128];
-};
+/* (struct mcc_resource_candidates: above, OpenCE's, which has these fields) */
 int mcc_resources_fingerprint_match(char const *name, struct mcc_cache_source const *source,
     unsigned char const expected[32], char paths[2][128], char *reason, size_t reason_size);
 int mcc_resources_checksum(struct mcc_runtime *runtime, unsigned mask, uint32_t *checksum);

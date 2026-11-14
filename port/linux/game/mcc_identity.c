@@ -334,7 +334,6 @@ static int mcc_identity_matches(char const *name,unsigned char const digest[32],
         !memcmp(digest,mcc_host_identity.digest,32) &&
         !memcmp(&before,&mcc_host_identity.files,sizeof(before))) {
         if (validated) *validated=before;
-        if (resources) memset(resources,0,2*128);
         return 1;
     }
     ok=mcc_validation_lookup(name,NULL,actual) &&

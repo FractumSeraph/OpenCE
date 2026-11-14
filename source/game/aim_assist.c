@@ -44,7 +44,7 @@ symbols in this file:
 
 #include "cseries.h"
 #include "game/aim_assist.h"
-#include "game_modes.h" /* port: port/linux/game/game_modes.c */
+#include "../../port/linux/game/game_modes.h" /* port: port/linux/game/game_modes.c (by its path: source/game has ChupathingyCE's game_modes.h) */
 
 #include "camera/director.h"
 #include "camera/observer.h"

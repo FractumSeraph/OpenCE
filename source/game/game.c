@@ -120,7 +120,7 @@ struct game_options;
 
 #include "cseries/cseries.h"
 #include "game/game.h"
-#include "game_modes.h" /* port: port/linux/game/game_modes.c */
+#include "../../port/linux/game/game_modes.h" /* port: port/linux/game/game_modes.c (by its path: source/game has ChupathingyCE's game_modes.h) */
 #include "stubbs_horde.h" /* port: port/linux/game/stubbs_horde.c */
 #include "ai/ai.h"
 #include "bink/bink_playback.h"

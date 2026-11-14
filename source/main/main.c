@@ -423,7 +423,7 @@ void platform_log(const char *format, ...);
 #endif
 #include "mcc_cache.h" /* port: port/linux/game/mcc_cache.h */
 #include "mcc_main.h" /* port: port/linux/game/mcc_main.h */
-#include "custom_edition_maps.h" /* port: main_script_map_name, a Custom Edition campaign's maps */
+#include "halo_map_families.h" /* port: main_script_map_name, a Halo PC campaign's maps (this fork's map families) */
 #include "view_fov.h" /* port: display.fov, before the projection and culling */
 #include "halo_perf_log.h" /* port: console.perf_log */
 #include "plasma_lighting.h" /* port: port/linux/game/plasma_lighting.c */
@@ -1032,14 +1032,21 @@ static boolean main_script_level_resolve(
 		length -= 4;
 	if (!length || length > 64)
 		return FALSE;
-	if (custom_edition_level_name(current))
+	/* (port, this fork: a Halo PC map is <name>@ce, @md or @pc, ChupathingyCE's
+	map families, not OpenCE's custom_edition_maps: the next level is one of
+	the same family that this machine can load) */
 	{
-		snprintf(candidate, sizeof(candidate), "%s%.*s", CUSTOM_EDITION_LEVEL_NAME_PREFIX, (int)length, leaf);
-		if (!custom_edition_maps_level_campaign(candidate) || strlen(candidate) >= size)
-			return FALSE;
-		csstrncpy(next, candidate, size - 1);
-		next[size - 1] = 0;
-		return TRUE;
+		short family = map_family_parse(current, NULL, 0);
+
+		if (family == _map_family_custom_edition || family == _map_family_halomd || family == _map_family_halo_pc)
+		{
+			snprintf(candidate, sizeof(candidate), "%.*s%s", (int)length, leaf, map_family_suffix(family));
+			if (strlen(candidate) >= size || !cache_files_map_loadable(candidate, NULL, 0))
+				return FALSE;
+			csstrncpy(next, candidate, size - 1);
+			next[size - 1] = 0;
+			return TRUE;
+		}
 	}
 
 	return FALSE;

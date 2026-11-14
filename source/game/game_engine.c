@@ -537,7 +537,7 @@ symbols in this file:
 /* ---------- headers */
 
 #include "cseries.h"
-#include "game_modes.h" /* port: port/linux/game/game_modes.c */
+#include "../../port/linux/game/game_modes.h" /* port: port/linux/game/game_modes.c (by its path: source/game has ChupathingyCE's game_modes.h) */
 #include "keyboard_glyphs.h" /* port: port/linux/game/keyboard_glyphs.c */
 #include "infection.h" /* port: port/linux/game/infection.c */
 #include "cseries_windows.h"

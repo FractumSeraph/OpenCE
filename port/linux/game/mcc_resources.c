@@ -314,59 +314,7 @@ int mcc_resources_select(struct mcc_runtime *runtime,void *raw)
     return mcc_resources_select_paths(runtime,raw,NULL);
 }
 
-/* chester (GulchCE): each type's distinct local files that satisfy the map,
-in the loader's order. A package's own file is the only choice, and a broken
-one fails before any base set is tried. */
-static int mcc_resources_candidates(struct mcc_runtime *runtime,void *raw,
-    struct mcc_resource_candidates *choices)
-{
-    unsigned type,set,i;
-    memset(choices,0,sizeof(*choices));
-    for (type=1;type<=2;type++) {
-        unsigned *count=&choices->count[type-1];
-        if (!(type==1 ? runtime->report.external_bitmap_count : runtime->report.external_sound_count)) {
-            *count=1;
-            continue;
-        }
-        for (set=0;set<MCC_PACKAGE_BASE_SETS;set++) {
-            struct mcc_resource_file file;
-            struct mcc_resource_probe probe;
-            char path[128];
-            int authoritative,valid;
-            if (!mcc_package_resource_candidate(runtime->level_name,type,set,path)) {
-                snprintf(runtime->failure,sizeof(runtime->failure),
-                    "Cannot read %s. Check access to this MCC resource.",type==1 ? "bitmaps.map" : "sounds.map");
-                return 0;
-            }
-            authoritative=!mcc_package_shared_resource(path,type);
-            for (i=0;i<*count;i++) if (!strcmp(path,choices->paths[type-1][i])) break;
-            if (i<*count) continue;
-            memset(&file,0,sizeof(file));
-            runtime->failure[0]=0;
-            valid=mcc_resource_open(&file,type,runtime->level_name,path,runtime->failure,sizeof(runtime->failure));
-            if (valid==1) {
-                probe.type=type;probe.file=&file;probe.shared=NULL;
-                valid=mcc_cache_visit_resources(raw,&runtime->report,mcc_resource_check,&probe);
-                /* (a Workshop item's own file may lean on MCC's shared sets: its
-                 * selection checks that, so it stays the choice here) */
-                if (!valid && authoritative) valid=1;
-            } else valid=0;
-            mcc_resource_close(&file);
-            if (valid) strcpy(choices->paths[type-1][(*count)++],path);
-            if (authoritative) {
-                if (!valid) return 0;
-                break;
-            }
-        }
-        if (!*count) {
-            if (!runtime->failure[0]) snprintf(runtime->failure,sizeof(runtime->failure),
-                "No matching %s. Install its MCC package resources beside the level.",type==1 ? "bitmaps.map" : "sounds.map");
-            return 0;
-        }
-    }
-    runtime->failure[0]=0;
-    return 1;
-}
+/* (mcc_resources_candidates: OpenCE's, mcc_resource_check.inl) */
 
 
 void mcc_resources_dispose(struct mcc_runtime *runtime)
