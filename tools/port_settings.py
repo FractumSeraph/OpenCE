@@ -161,6 +161,10 @@ SCREENS = {
              "desktop android web"),
             ("V-SYNC:", "display.vsync", ON_OFF,
              "Sync frames to the display.", NOT_CONSOLE),
+            # (display.vrr: sdl_platform.c's platform_vrr, port/linux/src/vrr.h)
+            ("VARIABLE REFRESH:", "display.vrr", [("OFF", "off"), ("ON", "on"), ("AUTO", "auto")],
+             "For G-SYNC or FreeSync: V-Sync with the frame rate held\njust under the refresh rate. Auto follows the system.",
+             "desktop"),
             # (port/linux/game/menu_functions.c: 30 also turns display.interpolation
             # off, the others on, on every platform. Android's has the rates
             # its displays have (OpenCE's FRAME RATE LIMIT there). Instant Aim,
