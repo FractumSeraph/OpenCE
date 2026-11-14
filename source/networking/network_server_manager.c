@@ -475,6 +475,7 @@ symbols in this file:
 #include "mcc_share.h" /* port: port/linux/game/mcc_share.c */
 #include "network_link.h" /* port: port/linux/game/network_link.c */
 #include "mcc_workshop.h" /* port: an MCC map's Workshop item in the listing */
+#include "mcc_maps.h" /* port: its name in this machine's catalog, for the listing */
 #include "mcc_cache.h" /* port: mcc_level_name */
 #include "saved games/player_profile.h"
 #include "text/unicode.h"
@@ -2463,11 +2464,22 @@ boolean network_game_server_idle(
 			/* (an MCC map's Workshop item, for the listing) */
 			{
 				struct mcc_workshop_item item;
+				char map_title[BROWSER_MAP_TITLE_LENGTH];
 
+				/* (and the map's own name: its file may be just a number) */
 				if (mcc_workshop_listing(game->map.name, &item))
-					browser_host_workshop(item.id, item.title);
+				{
+					short catalog = mcc_maps_find(game->map.name);
+
+					if (!mcc_workshop_map_title(game->map.name, catalog != NONE ? mcc_maps_name(catalog) : NULL,
+						item.title, map_title, sizeof(map_title)))
+					{
+						map_title[0] = 0;
+					}
+					browser_host_workshop(item.id, item.title, map_title);
+				}
 				else
-					browser_host_workshop("", "");
+					browser_host_workshop("", "", "");
 			}
 			/* (its game type's name, for the listing's "gametype"; a
 			built-in without a name of its own, as the engine and teams
