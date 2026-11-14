@@ -980,7 +980,7 @@ the setting for one start of the game. It has priority over the file.
 | `network.fire_origins` | `true` | `HALO_NET_FIRE_ORIGINS` | Host: whether a client's reported hit that the shooter's camera had no line of sight to may still count from where the client says its player's shots leave, when that is not the camera (distributed message 93: a VR build's weapon hand, which may be past a corner the camera is behind). The hand must be within 0.4 world units of the camera, no more than 0.05 behind the eye along the line to the target, 0.2 to its side and 0.1 above it, with the line from the eye to it clear; the host logs how many hits counted only that way. `false`: from the camera and vehicles' guns only (`network_damage.c`). |
 | `network.vehicle_riding` | `false` | `HALO_NET_VEHICLE_RIDING` | Host: with `true`, a player standing on a moving vehicle is carried by it, turns with it, lands back on it after a jump and keeps its motion when stepping or jumping off; the vehicle it stands on does not hurt it. The base setting (co-op's options in Server Setup write it). In multiplayer (online, system link, split screen) the gametype's VEHICLE RIDING rule under Vehicle Options, saved with the gametype, overrides it; a gametype without the rule is off, whatever this setting says (stock gametypes and older saved ones have none). A co-op rotation entry's `riding` rule overrides it for that entry. Changes count from the next map; clients use the host's decision, including when joining mid-map, and its `debug.riding_` values. Film playback and the editor never ride. Saved games of builds before this setting are not offered or loaded. No row in the Settings menu. A map can choose for itself, winning over the base setting, the gametype and the dedicated override until the next map: with `(global boolean vehicle_riding true)` (or `false`; its value at the map's start counts, a later `set` does not), or with `(vehicle_riding true)` or `(vehicle_riding false)` in a startup script, which counts only on the map's first tick and wins over the global. The old `game.vehicle_riding` name is not read. |
 | `network.map_share` | `true` | `HALO_NET_MAP_SHARE` | When you host: automatically offer CE maps and MCC packages. MCC base resources stay local to each machine; players consent before an MCC download. SHARE MAPS in Server Setup > Map Sharing writes its choice here. Refer to "Map sharing". |
-| `network.map_share_upload` | `1024` | `HALO_NET_MAP_SHARE_UPLOAD` | When you host: the most kilobytes per second that the game sends of maps (`16` to `20480`, 20 MB/s). UPLOAD LIMIT in Server Setup > Map Sharing writes its choice here. |
+| `network.map_share_upload` | `1024` | `HALO_NET_MAP_SHARE_UPLOAD` | When you host: the most kilobytes per second that the game sends of maps (`16` to `256000`, 250 MB/s). UPLOAD LIMIT in Server Setup > Map Sharing writes its choice here. |
 | `network.map_seed` | `true` | `HALO_NET_MAP_SEED` | When you play in the game of another machine: help send its map to players who join without it. HELP SEND MAPS in Settings > Network Setup > Map Sharing. |
 | `network.map_seed_upload` | `256` | `HALO_NET_MAP_SEED_UPLOAD` | When you play in the game of another machine: the most kilobytes per second that the game sends of maps to other players (`16` to `10240`, 10 MB/s). UPLOAD LIMIT in Settings > Network Setup > Map Sharing. |
 | `network.map_download` | `true` | `HALO_NET_MAP_DOWNLOAD` | DOWNLOAD MAPS in Settings > Network Setup > Map Sharing. CE downloads from players as before; MCC permits a host offer and asks before transferring files. Off: CE leaves a missing-map game; MCC offers manual/Workshop installation and cancellation. |
@@ -1990,8 +1990,12 @@ asked again. To keep the upload free for the game, the host sends at most
 `network.map_share_upload` (1024 KB/s: UPLOAD LIMIT in Server Setup > Map
 Sharing) and each other player at most `network.map_seed_upload` (256 KB/s:
 UPLOAD LIMIT in Settings > Network Setup > Map Sharing). Set these lower on
-a slow connection. DOWNLOAD MAPS there (`network.map_download`) turns
-downloading off: you then leave a game whose map you do not have.
+a slow connection. A download from one machine goes at most about 1 MB a
+frame (some 50 MB/s at 60 frames a second, 100 MB/s at 144), whatever the
+limit; the host's limit is shared by every download at once, so a host with
+a fast connection can choose up to 250 MB/s. DOWNLOAD MAPS there
+(`network.map_download`) turns downloading off: you then leave a game whose
+map you do not have.
 
 **This fork never renames, moves or replaces a map file.** Maps keep their
 names. Since network version 29 (OpenCE's build-206), a game is on a map by
