@@ -2662,8 +2662,14 @@ static void gamepad_taps_take(SDL_Gamepad *gamepad, struct gamepad_taps *taps)
 {
 	taps->buttons = 0;
 	taps->triggers = 0;
+#if defined(HALO_ARM64_GUEST) && !defined(HALO_IOS)
+	/* (port, this fork: the Android guest's SDL has no SDL_GetGamepadID,
+	host_imports.list: only what is held when read counts there) */
+	(void)gamepad;
+#else
 	if (gamepad)
 		platform_gamepad_presses_take((Uint32)SDL_GetGamepadID(gamepad), &taps->buttons, &taps->triggers);
+#endif
 }
 
 /* a button held, or pressed and let go of since the last reading */

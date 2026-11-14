@@ -665,11 +665,10 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"teams and READY, the map and the host's menu, for a game you host\n"
 		"or joined and for dedicated servers. false: the Xbox's System Link\n"
 		"screen, as the Xbox menus have it." },
-	{ "network.lobby_start", _config_string, "\"button\"", "HALO_NET_LOBBY_START", _environment_value, _platform_all,
-		"In the game lobby of a game you host: \"button\" (the default) holds\n"
-		"the countdown until you choose START GAME; \"auto\" lets it run by\n"
-		"itself once enough players are in, as the Xbox's lobby does." },
-#ifndef HALO_CONSOLE_NO_LOADING_PICTURE
+	{ "display.gamma", _config_real, "1.0", NULL, _environment_value, _platform_xbox360,
+		"The console's picture on its way to the screen: 1.0 shows it as drawn;\n"
+		"higher values lift the dark areas (the picture is raised to 1/gamma),\n"
+		"lower ones deepen them. For matching the original Xbox on the same TV." },
 	{ "display.join_screen", _config_boolean, "true", "HALO_JOIN_SCREEN", _environment_value, _platform_all,
 		"Show the loading screen while a game is joined or its map downloads,\n"
 		"with what is going on and B to cancel. false: a small panel over the\n"
@@ -1109,6 +1108,18 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"slowing: 1 (100%) as before, 0.5 half as fast." },
 	{ "input.keyboard_prompts", _config_boolean, "true", "HALO_KEYBOARD_PROMPTS", _environment_value, _platform_desktop,
 		"Show keys in button prompts while you use the keyboard and mouse." },
+	/* (ChupathingyCE's prompts' buttons, DKrumpp's HD art: this fork shows
+	MENU BUTTONS in Interface; its HUD's buttons are OpenCE's, BUTTON APPEARANCE) */
+	{ "input.button_style", _config_string, "\"auto\"", "HALO_BUTTON_STYLE", _environment_value, _platform_all,
+		"The controller buttons the prompts show: \"auto\" (the controller you\n"
+		"use), or one style for every controller: \"duke\" (the original Xbox's),\n"
+		"\"xbox\", \"playstation\" or \"switch\". The keyboard shows its keys.\n"
+		"The Xbox menus show their own." },
+	{ "input.button_look", _config_string, "\"gem\"", "HALO_BUTTON_LOOK", _environment_value, _platform_all,
+		"The look of the menus' and the Guide's buttons: \"gem\" or \"flat\"." },
+	{ "input.hud_buttons", _config_string, "\"classic\"", "HALO_HUD_BUTTONS", _environment_value, _platform_all,
+		"The buttons in a game's prompts (\"Hold X to pick up\"): \"classic\", the\n"
+		"map's own, or \"hd\", input.button_style's flat buttons." },
 	{ "input.touch_controls", _config_string, "\"on\"", "HALO_TOUCH_CONTROLS", _environment_value, _platform_android | _platform_web,
 		"On-screen touch controls: \"on\" or \"off\". \"auto\" shows them only\n"
 		"when no controller is connected. On Android, the carnage report's\n"
@@ -1483,6 +1494,11 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"In team games: \"even\" puts the bots on both teams, evening them with\n"
 		"the players; \"against\" puts them all on the team the players are not on." },
 
+	{ "network.lobby_start", _config_string, "\"button\"", "HALO_NET_LOBBY_START", _environment_value, _platform_all,
+		"In the game lobby of a game you host: \"button\" (the default) holds\n"
+		"the countdown until you choose START GAME; \"auto\" lets it run by\n"
+		"itself once enough players are in, as the Xbox's lobby does." },
+#ifndef HALO_CONSOLE_NO_LOADING_PICTURE
 	{ "network.online", _config_boolean, "true", "HALO_NET_ONLINE", _environment_value,
 		_platform_all | _platform_xbox | _platform_server, ONLINE_HELP },
 	{ "network.lasting_invite", _config_boolean, "false", "HALO_NET_LASTING_INVITE", _environment_value,
@@ -3200,10 +3216,6 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"vertices where they are in memory. false copies every vertex for each\n"
 		"frame instead, as the other renderer does: slower, for comparing when\n"
 		"models look broken. Read when Fractum Halo starts." },
-	{ "display.gamma", _config_real, "1.0", NULL, _environment_value, _platform_xbox360,
-		"The console's picture on its way to the screen: 1.0 shows it as drawn;\n"
-		"higher values lift the dark areas (the picture is raised to 1/gamma),\n"
-		"lower ones deepen them. For matching the original Xbox on the same TV." },
 	{ "console.picture_frame", _config_integer, "0", NULL, _environment_value, _platform_console_gl,
 		"For comparing the renderers: the picture of this frame, and of the\n"
 		"frame three times as late, written beside the game as pictureN.raw\n"

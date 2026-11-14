@@ -1,6 +1,6 @@
 # Playing online
 
-The short version is on the [front page](../README.md#play-online).
+The short version is on the [front page](../README.md#playing-online).
 
 ## Playing with other builds
 
@@ -18,7 +18,7 @@ Browser builds can't join our games, and we can't join theirs.
   runs against each new one, and once it passes, a signed table tells
   existing Chupathingy builds which network versions to announce and join,
   without a new download. A change to how multiplayer plays still needs a
-  release. The "Compatible with" line in the [README](../README.md#play-online)
+  release. The "Compatible with" line in the [README](../README.md#playing-online)
   says which versions this release plays with.
 - **Delta** is Chupathingy's network family ([docs/delta](delta/README.md)):
   the game list, stats, profile links and dedicated server admin tools on
