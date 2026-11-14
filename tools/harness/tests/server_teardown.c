@@ -30,6 +30,8 @@ static char network_game_server_cooperative_next_map[128];
 static boolean network_game_server_memory_do_not_use_directly_in_use;
 /* (ui_widget_port_host's: the new server is the PC menus' Create Game's) */
 static boolean network_game_port_pc_menus_hosting;
+/* (ChupathingyCE's: whether the game hosted is split screen's, its ports this computer's) */
+static boolean network_game_hosting_local;
 static struct network_message message;
 static struct network_game_server *disposing;
 static char order[64];
