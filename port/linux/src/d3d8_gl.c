@@ -339,9 +339,8 @@ static struct
 	(the floating-point window, or bgfx's HDR10 swap chain) */
 	BOOL output;
 	/* the paper white in nits (display.hdr_paper_white, or the display's
-	SDR white), the output's white in nits (scRGB's 80), and the display's
-	SDR white in the output's units (SDL's; 1 without HDR) */
-	float paper_white, output_white, sdr_white;
+	SDR white), and the output's white in nits (scRGB's 80) */
+	float paper_white, output_white;
 	/* what the code drawing says of the draw (halo_hdr_draw_kind) */
 	int kind;
 } hdr;
@@ -357,14 +356,10 @@ static BOOL hdr_active(void)
 the first-person weapon's own transparent parts, the HUD's glows, the light
 of the world (erin.cena's and g0atbutt's hooks in OpenH1, with the team's
 permission) */
-/* (a console build that has the hook as a no-op macro, halo_linux_source_fixups.h, defines
-nothing here) */
-#ifndef halo_hdr_draw_kind
 void halo_hdr_draw_kind(int kind)
 {
 	hdr.kind = kind;
 }
-#endif
 
 /* the tag of a draw into the HDR back buffer (nv2a_pixel_shader_key.hdr):
 a glow brightened past white, where the draw is one the code named and its
@@ -417,7 +412,6 @@ static void hdr_display_read(BOOL hdr10)
 #else
 	hdr.output_white = XGPU_HDR_SCRGB_WHITE_NITS;
 #endif
-	hdr.sdr_white = display_hdr && sdr_white > 0.0f ? sdr_white : 1.0f;
 	white_nits = display_hdr && sdr_white > 0.0f ? sdr_white * hdr.output_white : XGPU_HDR_REFERENCE_WHITE_NITS;
 	if (paper > 0)
 	{
@@ -6464,7 +6458,6 @@ void halo_screen_anti_alias(short x0, short y0, short x1, short y1)
 menus are drawn over it, and before display.anti_aliasing's pass (which
 then finds the edges the display shows); in place, into the multisampled
 renderbuffer with multisampling */
-#ifndef halo_screen_tone_map
 void halo_screen_tone_map(short x0, short y0, short x1, short y1)
 {
 	struct render_target_entry *target;
@@ -6501,7 +6494,6 @@ void halo_screen_tone_map(short x0, short y0, short x1, short y1)
 	glBindVertexArray(device.vertex_array);
 	xgpu_gl_state_invalidate();
 }
-#endif
 
 /* ---------- display.hdr's settings, and its present */
 
@@ -6528,10 +6520,7 @@ static void hdr_read(void)
 		return;
 	if (hdr.read && hdr.read_at == config_changes())
 	{
-		/* (the display's numbers matter only while the picture is HDR, or
-		the window is: not every frame of an SDR game) */
-		if (hdr.active || hdr.float_window)
-			hdr_display_read(hdr10);
+		hdr_display_read(hdr10);
 		return;
 	}
 	if (!hdr.read)
@@ -6598,28 +6587,6 @@ static void hdr_read(void)
 	hdr_display_read(hdr10);
 }
 
-/* the window's encoding (xgpu_tone_map_encoding's): linear for a
-floating-point window, always (it shows what it is given as linear light:
-the picture at paper white while the output is HDR, else at the desktop's
-own SDR white, with no room above it); the picture as it is for an 8-bit
-one. The overlay drawn into the window takes the same (ui_overlay.c). */
-static void hdr_window_encoding(float encoding[4])
-{
-	if (!hdr.float_window)
-		xgpu_tone_map_encoding(encoding, _xgpu_hdr_output_sdr, 0.0f, &hdr.tone_mapping);
-	else if (hdr.output)
-		xgpu_tone_map_encoding(encoding, _xgpu_hdr_output_linear, hdr.paper_white / hdr.output_white,
-			&hdr.tone_mapping);
-	else
-	{
-		struct xgpu_tone_mapping sdr = { 0 };
-
-		sdr.peak = 1.0f;
-		sdr.ui = 1.0f;
-		xgpu_tone_map_encoding(encoding, _xgpu_hdr_output_linear, hdr.sdr_white, &sdr);
-	}
-}
-
 /* the back buffer into the window's x, y, width, height by display.hdr's
 shader, where a blit would not do (the back buffer is half floats, or the
 window is floating point); FALSE for the blit */
@@ -6631,7 +6598,8 @@ static BOOL hdr_present(const struct render_target_entry *back_buffer, GLuint re
 	(void)read_framebuffer;
 	if (back_buffer->target.format != GL_RGBA16F && !hdr.float_window)
 		return FALSE;
-	hdr_window_encoding(encoding);
+	xgpu_tone_map_encoding(encoding, hdr.output && hdr.float_window ? _xgpu_hdr_output_linear : _xgpu_hdr_output_sdr,
+		hdr.paper_white / hdr.output_white, &hdr.tone_mapping);
 	if (!xgpu_post_present(back_buffer->target.texture, x, y, width, height, encoding))
 		return FALSE;
 	glBindVertexArray(device.vertex_array);
@@ -6910,10 +6878,6 @@ static struct
 	gl_fence_sync_proc fence_sync;
 	gl_client_wait_sync_proc client_wait_sync;
 	gl_delete_sync_proc delete_sync;
-	/* the shot is the back buffer's (a floating-point window): its
-	framebuffer, its rows from the top */
-	BOOL from_frame;
-	GLuint frame_framebuffer;
 } gl_capture;
 
 /* the fences' entry points (OpenGL 3.2's, loaded here alone: gl.h's list is
@@ -6985,7 +6949,7 @@ static void gl_capture_frame(int x, int y, int width, int height)
 			/* (the writer copies it on its own thread; it stays mapped, and
 			unused, until then) */
 			if (mapped && capture_screenshot_lend(mapped, (long)gl_capture.width, (long)gl_capture.height,
-				(long)gl_capture.width * 4, TRUE, !gl_capture.from_frame, &gl_capture.released))
+				(long)gl_capture.width * 4, TRUE, TRUE, &gl_capture.released))
 			{
 				gl_capture.mapped = TRUE;
 			}
@@ -7000,23 +6964,6 @@ static void gl_capture_frame(int x, int y, int width, int height)
 	if (width <= 0 || height <= 0 || !capture_screenshot_take())
 		return;
 	gl_capture_look_up();
-	/* (a floating-point window holds linear light, which 8 bits of it are
-	not a picture: the shot is the game's frame, read from the back buffer,
-	its rows from the top, without the overlay) */
-	gl_capture.from_frame = FALSE;
-	if (hdr.float_window)
-	{
-		struct render_target_entry *back_buffer = render_target_get(&device.back_buffer);
-
-		if (back_buffer)
-		{
-			gl_capture.from_frame = TRUE;
-			x = y = 0;
-			width = (int)back_buffer->target.gl_width;
-			height = (int)back_buffer->target.gl_height;
-			gl_capture.frame_framebuffer = framebuffer_get(back_buffer->target.texture, 0);
-		}
-	}
 	gl_capture.width = (unsigned long)width;
 	gl_capture.height = (unsigned long)height;
 	if (!gl_capture.buffer)
@@ -7027,8 +6974,7 @@ static void gl_capture_frame(int x, int y, int width, int height)
 		gl_capture.buffer_size = gl_capture.width * gl_capture.height * 4;
 		glBufferData(GL_PIXEL_PACK_BUFFER, (GLsizeiptr)gl_capture.buffer_size, NULL, GL_STREAM_READ);
 	}
-	glBindFramebuffer(GL_READ_FRAMEBUFFER, gl_capture.from_frame ? gl_capture.frame_framebuffer :
-		platform_window_framebuffer());
+	glBindFramebuffer(GL_READ_FRAMEBUFFER, platform_window_framebuffer());
 	glPixelStorei(GL_PACK_ALIGNMENT, 4);
 	/* (the window's row 0 is the picture's bottom: the rows come bottom
 	first, capture.c turns them over) */
@@ -7371,14 +7317,7 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 #undef picture_height
 #if defined(HALO_GAME_BROWSER) && !defined(HALO_CONSOLE_GLES2)
 		/* the overlay's screens, over the picture at the window's resolution
-		(ui_overlay.c), in the window's encoding (a floating-point window's
-		linear light) */
-		{
-			float encoding[4];
-
-			hdr_window_encoding(encoding);
-			ui_overlay_set_output(encoding);
-		}
+		(ui_overlay.c) */
 		ui_overlay_present(x, y, width, height, window_width, window_height);
 #endif
 #ifndef HALO_GL_ES
