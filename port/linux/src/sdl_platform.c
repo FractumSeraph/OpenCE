@@ -5237,9 +5237,19 @@ void platform_pump_events(void)
 		/* (a tap counted until the controller's next reading) */
 		case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
 			gamepad_button_pressed(event.gbutton.which, event.gbutton.button);
+#if !defined(HALO_ANDROID) && !defined(HALO_GLES)
+			/* (this fork, OpenCE's: the menus' pointer goes with a controller) */
+			menu_cursor_controller_used(input_state.ui_pointer);
+#endif
 			break;
 		case SDL_EVENT_GAMEPAD_AXIS_MOTION:
 			gamepad_trigger_moved(event.gaxis.which, event.gaxis.axis, event.gaxis.value);
+#if !defined(HALO_ANDROID) && !defined(HALO_GLES)
+			/* (past a stick's or trigger's rest, as gamepad_idle in
+			xinput_sdl.c has it) */
+			if (event.gaxis.value > 8000 || event.gaxis.value < -8000)
+				menu_cursor_controller_used(input_state.ui_pointer);
+#endif
 			break;
 		case SDL_EVENT_GAMEPAD_ADDED:
 #if defined(HALO_ARM64_GUEST) && !defined(HALO_IOS)
@@ -5267,17 +5277,6 @@ void platform_pump_events(void)
 			}
 #endif
 			break;
-#if !defined(HALO_ANDROID) && !defined(HALO_GLES)
-		case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
-			menu_cursor_controller_used(input_state.ui_pointer);
-			break;
-		case SDL_EVENT_GAMEPAD_AXIS_MOTION:
-			/* (past a stick's or trigger's rest, as gamepad_idle in
-			xinput_sdl.c has it) */
-			if (event.gaxis.value > 8000 || event.gaxis.value < -8000)
-				menu_cursor_controller_used(input_state.ui_pointer);
-			break;
-#endif
 		case SDL_EVENT_GAMEPAD_REMOVED:
 			/* (SDL keeps a gamepad open until it is closed, even once the
 			controller has gone) */
