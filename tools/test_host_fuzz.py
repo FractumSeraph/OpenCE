@@ -152,7 +152,10 @@ if pytest:
     # server's director) calls a hundred more functions that they lack, so
     # these are left out until they have this fork's stand-ins:
     # build/UPDATING.md, "ChupathingyCE 7552a9c60")
-    FORK_LEFT_OUT = {"client_messages", "distributed_messages", "mcc_prepare", "server_messages"}
+    # (and mod_sound: its stand-ins are for ChupathingyCE's mods.c, sounds
+    # only; this fork's plays bitmaps, text and models too, mod_files.c's
+    # harness test checking their bounds)
+    FORK_LEFT_OUT = {"client_messages", "distributed_messages", "mcc_prepare", "mod_sound", "server_messages"}
 
     @pytest.mark.parametrize("name", sorted(TARGETS))
     def test_host_fuzz(name, tmp_path):
