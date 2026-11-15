@@ -209,7 +209,13 @@ static BOOL last_input_seen;
 static unsigned last_used_gamepad;
 static int scheme_of(SDL_Gamepad *p){(void)p;return 1;}
 static unsigned SDL_GetGamepadID(SDL_Gamepad *p){(void)p;return 7;}
-''' + '\n'.join(function(original, name) for name in ['stick', 'merge_button', 'sdl_gamepad_state']) +
+/* (ChupathingyCE's taps between readings: none here) */
+typedef unsigned int Uint32;
+typedef int SDL_GamepadAxis;
+#define PLATFORM_GAMEPAD_TRIGGER_PRESSED 8000
+struct gamepad_taps {Uint32 buttons;unsigned int triggers;};
+static void platform_gamepad_presses_take(Uint32 id,Uint32 *buttons,unsigned int *triggers){(void)id;*buttons=0;*triggers=0;}
+''' + '\n'.join(function(original, name) for name in ['stick', 'merge_button', 'gamepad_taps_take', 'gamepad_button_down', 'gamepad_trigger', 'sdl_gamepad_state']) +
           source('port/linux/src/controller_remap_input.c') + r'''
 int main(void) {
  SDL_Gamepad device;XINPUT_GAMEPAD old,current,physical;int n,i;

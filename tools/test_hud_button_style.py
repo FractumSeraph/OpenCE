@@ -45,6 +45,8 @@ struct widget_instance {
 };
 struct pc_menu_setting {int value_count;char const *values[2];};
 static void controller_button_rows_show(struct widget_instance *list) {(void)list;assert(0);}
+/* (ChupathingyCE's scrolling of a long nested list: not this test's) */
+static void views_scroll(struct widget_instance *list,char const *view) {(void)list;(void)view;}
 static struct widget_instance spinner;
 static struct pc_menu_setting setting={2,{"true","false"}};
 static struct pc_menu_setting *pc_menu_setting_get(int id) {(void)id;return &setting;}
