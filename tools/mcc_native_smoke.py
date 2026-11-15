@@ -45,10 +45,13 @@ def run_case(args, name, binary):
     output.mkdir(parents=True, exist_ok=True)
     init = data / "init.txt"
     original = init.read_bytes() if init.exists() else None
-    # (port, this fork: the game writes debug.txt in the data root's logs
-    # folder, port_paths.c)
-    debug = data / "logs" / "debug.txt" if (data / "logs").is_dir() else data / "debug.txt"
-    offset = debug.stat().st_size if debug.exists() else 0
+    # (port, this fork: the game writes debug.txt in the save root's logs
+    # folder, port_paths.c; older builds in the data root's)
+    debug = output / "saves" / "logs" / "debug.txt"
+    if debug.exists():
+        debug.unlink()
+    older = data / "logs" / "debug.txt" if (data / "logs").is_dir() else data / "debug.txt"
+    older_offset = older.stat().st_size if older.exists() else 0
     marker = "mcc_smoke_" + uuid.uuid4().hex
     env = {key: value for key, value in os.environ.items() if not key.startswith("HALO_")}
     env.update(HALO_DATA_ROOT=str(data), HALO_SAVE_ROOT=str(output / "saves"),
@@ -62,9 +65,10 @@ def run_case(args, name, binary):
     transcript = ""
     process = connection = None
     def trace():
-        if not debug.exists():
+        path, offset = (debug, 0) if debug.exists() else (older, older_offset)
+        if not path.exists():
             return ""
-        with debug.open("rb") as stream:
+        with path.open("rb") as stream:
             stream.seek(offset)
             return stream.read().decode("latin1")
     try:
