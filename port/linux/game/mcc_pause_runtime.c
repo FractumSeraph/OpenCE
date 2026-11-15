@@ -1,13 +1,3 @@
-/* (port, this fork: the 64-bit builds compile MCC's code, but play no MCC
-map, mcc_cache.c's MCC_CACHE_64BIT_REFUSED: its tag addresses are a 32-bit
-build's pointers, which this build's Xbox addresses are not) */
-#if defined(HALO_64BIT) && defined(__clang__)
-#pragma clang diagnostic ignored "-Wint-conversion"
-#pragma clang diagnostic ignored "-Wint-to-pointer-cast"
-#pragma clang diagnostic ignored "-Wpointer-to-int-cast"
-#pragma clang diagnostic ignored "-Wpointer-integer-compare"
-#pragma clang diagnostic ignored "-Wincompatible-pointer-types"
-#endif
 /* MCC-owned stock-style pause resources. The map's widgets, HUD and objective
  * tags are never overwritten. A copied tag table is published only once the
  * complete menu and its independently allocated art are ready. */
@@ -43,7 +33,8 @@ struct mcc_pause_instance {
     void *data;
     unsigned long unused[2];
 };
-/* (port, this fork: a 32-bit build's layout; a 64-bit build plays no MCC map) */
+/* (port, this fork: a 32-bit build's layout: HALO_MCC_PAUSE_MENUS is in no
+build, and its host pointers would be XPTR fields on 64-bit) */
 #ifndef HALO_64BIT
 typedef char mcc_pause_instance_size[sizeof(struct mcc_pause_instance)==32?1:-1];
 #endif

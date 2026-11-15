@@ -1188,6 +1188,14 @@ See [MCC maps](../../docs/mcc_maps.md) for supported formats, resources and limi
 [MCC previews](../../docs/reading/mcc_level_previews.md) for menu discovery, and
 [browser imports](../../docs/reading/browser_imports.md) for browser storage.
 
+The 32-bit and the 64-bit builds play MCC maps alike (the 64-bit builds since
+2026-11-12: their tag addresses are Xbox addresses, refer to "Current
+boundaries" in [MCC maps](../../docs/mcc_maps.md)). To check a build on
+local packages, `python tools/mcc_native_smoke.py --executable <halo.exe>
+--data-root <folder with maps/ui.map and mcc_maps/> --output <folder>
+<package>/<level>` loads each level with a hidden window and runs a console
+command after 150 ticks.
+
 All map families use network version 44 (camera mode 32745); older peers
 cannot join, including OpenCE protocol 43 peers. MCC content identity, sharing
 consent and load-progress checks remain separate from the existing Xbox/CE paths;
@@ -2645,6 +2653,12 @@ checkpoint saves can still use (about 900 KB, `hs_console_state.inl`, added
 with the MCC maps): the checkpoints and cores of the builds before it have
 another layout and are refused. A checkpoint whose script threads cannot be
 saved with their syntax is not taken; the one before it is kept.
+
+The 64-bit builds' game state is 1 MB larger than the 32-bit builds' (its
+CPU part 0x14C0000 bytes, `halo_port_capacity.h`), for an MCC map's script
+threads and checkpoint slot: a 64-bit build's checkpoints from before
+2026-11-12 are of the smaller size and are refused (their checksum fails),
+and the level starts over.
 
 ## What operates
 

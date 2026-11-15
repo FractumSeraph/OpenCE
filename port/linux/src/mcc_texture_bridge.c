@@ -1,13 +1,3 @@
-/* (port, this fork: the 64-bit builds compile MCC's code, but play no MCC
-map, mcc_cache.c's MCC_CACHE_64BIT_REFUSED: its tag addresses are a 32-bit
-build's pointers, which this build's Xbox addresses are not) */
-#if defined(HALO_64BIT) && defined(__clang__)
-#pragma clang diagnostic ignored "-Wint-conversion"
-#pragma clang diagnostic ignored "-Wint-to-pointer-cast"
-#pragma clang diagnostic ignored "-Wpointer-to-int-cast"
-#pragma clang diagnostic ignored "-Wpointer-integer-compare"
-#pragma clang diagnostic ignored "-Wincompatible-pointer-types"
-#endif
 /* MCC pixels already live in immutable, independently owned storage. Keep
  * their GPU copies here rather than staging them through the Xbox LRU heap.
  * A header's exact registered identity, never its Data word, grants access. */

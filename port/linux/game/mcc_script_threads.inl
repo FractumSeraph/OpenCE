@@ -1,12 +1,3 @@
-/* (port, this fork: as MCC's units, mcc_cache.c's MCC_CACHE_64BIT_REFUSED) */
-#if defined(HALO_64BIT) && defined(__clang__)
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wint-conversion"
-#pragma clang diagnostic ignored "-Wint-to-pointer-cast"
-#pragma clang diagnostic ignored "-Wpointer-to-int-cast"
-#pragma clang diagnostic ignored "-Wpointer-integer-compare"
-#pragma clang diagnostic ignored "-Wincompatible-pointer-types"
-#endif
 /* Included by hs_runtime.c after its private types. MCC threads use a bounded
  * array in checked, otherwise unused CPU-image space. Inline native stacks,
  * allocation records and Xbox/CE checkpoints keep their original layout. */
@@ -48,7 +39,17 @@ int mcc_script_threads_prepare(void)
     byte *storage=mcc_checkpoint_script_storage((void *)image,used,capacity,MCC_SCRIPT_THREAD_STORAGE);
     if (mcc_threads.storage || !storage || !hs_thread_data ||
         hs_thread_data->size!=sizeof(struct hs_thread_datum) ||
-        hs_thread_data->maximum_count!=MCC_SCRIPT_THREAD_COUNT) return 0;
+        hs_thread_data->maximum_count!=MCC_SCRIPT_THREAD_COUNT) {
+        /* port (this fork): which of them, in debug.txt */
+        error(_error_silent,"mcc: script threads: %s (game state %lu of %lu bytes used, %lu wanted; "
+            "threads %d of %d bytes, %d of them)",
+            mcc_threads.storage ? "already prepared" : !storage ? "no room in the game state" :
+            !hs_thread_data ? "no thread table" : "the thread table differs",
+            used,capacity,(unsigned long)MCC_SCRIPT_THREAD_STORAGE,
+            hs_thread_data ? (int)hs_thread_data->size : 0,(int)sizeof(struct hs_thread_datum),
+            hs_thread_data ? (int)hs_thread_data->maximum_count : 0);
+        return 0;
+    }
     mcc_threads.original=malloc(MCC_SCRIPT_THREAD_STORAGE);
     if (!mcc_threads.original) return 0;
     memcpy(mcc_threads.original,storage,MCC_SCRIPT_THREAD_STORAGE);
@@ -213,6 +214,3 @@ int mcc_script_threads_restore(void *image, unsigned long used, unsigned long ca
     mcc_threads_stamp(storage);
     return mcc_threads_array_valid(array,mcc_threads.array,MCC_SCRIPT_THREAD_BYTES);
 }
-#if defined(HALO_64BIT) && defined(__clang__)
-#pragma clang diagnostic pop
-#endif

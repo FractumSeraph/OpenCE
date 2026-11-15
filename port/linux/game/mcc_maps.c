@@ -1,13 +1,3 @@
-/* (port, this fork: the 64-bit builds compile MCC's code, but play no MCC
-map, mcc_cache.c's MCC_CACHE_64BIT_REFUSED: its tag addresses are a 32-bit
-build's pointers, which this build's Xbox addresses are not) */
-#if defined(HALO_64BIT) && defined(__clang__)
-#pragma clang diagnostic ignored "-Wint-conversion"
-#pragma clang diagnostic ignored "-Wint-to-pointer-cast"
-#pragma clang diagnostic ignored "-Wpointer-to-int-cast"
-#pragma clang diagnostic ignored "-Wpointer-integer-compare"
-#pragma clang diagnostic ignored "-Wincompatible-pointer-types"
-#endif
 /*
 MCC_MAPS.C
 
@@ -497,10 +487,6 @@ static void mcc_maps_scan(void)
     mcc_menu_catalog.campaigns_enabled = campaigns;
     mcc_menu_catalog.scanned=TRUE;
     mcc_menu_catalog.count=0;
-#ifdef HALO_64BIT
-    /* (port, this fork: none listed on a 64-bit build, mcc_cache.c) */
-    return;
-#endif
     mcc_maps_scan_directory("",FALSE);
     /* The subscribed Steam Workshop items: each map is the level mcc_maps\<item id>\<map name>. */
     for (i=0;i<steam_workshop_count();i++) {

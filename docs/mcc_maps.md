@@ -1133,6 +1133,21 @@ decoded texture storage to exceed the former single 512 MiB offset range.
   Allocation refusals report the address, size and OS error in `debug.txt`.
   Early reservation failures are retained until `windows_startup` opens the
   port log, then reported to stderr (normally `halo.log` for release builds).
+- (this fork) The 64-bit builds (Windows x64, Linux x64, macOS, Android
+  arm64, the 64-bit servers) play MCC maps too. Their tag addresses are
+  32-bit Xbox addresses in the 4 GB region `xbox_memory.c` reserves
+  (`cseries/xbox_address.h`): a map's tag window is at its linked address
+  inside that region (`mcc_memory.c`'s `HALO_64BIT` branch), which lies in
+  the Xbox heap's range. The heap keeps `0x50000000`-`0x54000000` free from
+  its start and steps over it (`xbox_heap.c`, `XBOX_HEAP_MCC_WINDOW`); a map
+  linked elsewhere moves that hole while the heap has not reached it. Code
+  that reads or writes a tag's address converts with `xbox_pointer` and
+  `xbox_address` (`MCC_POINTER` and `MCC_ADDRESS`, `mcc_runtime.h`); an MCC
+  native function's parameter types past the first are read with
+  `HS_FUNCTION_PARAMETER_TYPE` (`hs.h`), as the definition is padded to its
+  pointers there. Their game state's CPU part is 1 MB larger
+  (`halo_port_capacity.h`): their pools fill more of it, and the MCC script
+  threads and checkpoint slot need about 1.3 MB of the rest.
   The map loader still retries the reservation and refuses occupied memory.
   MCC network load failures schedule session teardown and a menu reload before
   the next frame's input update, rather than entering the fatal error screen.

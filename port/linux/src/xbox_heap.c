@@ -35,6 +35,10 @@ as the heap grows: the console has no pages backed on first touch */
 /* (above Custom Edition maps' tag cache and the room above it, platform.h) */
 #define XBOX_HEAP_BASE 0x42000000U
 #define XBOX_HEAP_END 0x7f000000U
+/* the tag window of MCC's tools' maps (mcc_memory.c), held from the heap's
+start: a heap grown past it (224 MB in) would refuse every MCC map */
+#define XBOX_HEAP_MCC_WINDOW 0x50000000U
+#define XBOX_HEAP_MCC_WINDOW_SIZE 0x04000000U
 #endif
 #define HEAP_MAGIC 0x68656170U /* 'heap' */
 #define SMALL_CLASS_COUNT 13 /* 16 bytes .. 64 KB of payload */
@@ -89,6 +93,10 @@ static BOOL heap_initialize(void)
 #endif
 	heap_next = base;
 	heap_end = xbox_pointer(XBOX_HEAP_END);
+#ifndef HALO_WINDOW_TRANSLATED
+	heap_hole_address = XBOX_HEAP_MCC_WINDOW;
+	heap_hole_size = XBOX_HEAP_MCC_WINDOW_SIZE;
+#endif
 	return TRUE;
 }
 
@@ -156,17 +164,18 @@ size_t xbox_heap_used(void)
 #ifndef HALO_WINDOW_TRANSLATED
 /* port: MCC maps are linked to their own tag addresses, 0x50000000 for
 MCC's tools, inside the heap's range: the heap leaves that window to them
-(port/linux/src/mcc_memory.c), stepping over it as it grows, from the first
-MCC map on for the rest of the run. FALSE when the heap has used the window
-already, or another is held */
+(port/linux/src/mcc_memory.c), stepping over it as it grows. MCC's tools'
+window is held from the start (heap_initialize); a map linked elsewhere
+moves the hole there while the heap has not reached it. FALSE when the
+heap has used that window already */
 BOOL xbox_heap_reserve_window(unsigned int address, unsigned int size)
 {
 	BOOL result = FALSE;
 
 	pthread_mutex_lock(&heap_lock);
 	heap_initialize();
-	if (heap_hole_size)
-		result = heap_hole_address == address && heap_hole_size == size;
+	if (heap_hole_size && heap_hole_address == address && heap_hole_size == size)
+		result = TRUE;
 	else if (address >= XBOX_HEAP_BASE && address <= XBOX_HEAP_END && size <= XBOX_HEAP_END - address &&
 		heap_next <= (unsigned char *)xbox_pointer(address))
 	{

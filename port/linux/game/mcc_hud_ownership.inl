@@ -1,12 +1,3 @@
-/* (port, this fork: as MCC's units, mcc_cache.c's MCC_CACHE_64BIT_REFUSED) */
-#if defined(HALO_64BIT) && defined(__clang__)
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wint-conversion"
-#pragma clang diagnostic ignored "-Wint-to-pointer-cast"
-#pragma clang diagnostic ignored "-Wpointer-to-int-cast"
-#pragma clang diagnostic ignored "-Wpointer-integer-compare"
-#pragma clang diagnostic ignored "-Wincompatible-pointer-types"
-#endif
 /* HUD conversion writes per-consumer values into a cache which may intern
  * roots, whole blocks and scalar records. Plan from pristine bytes, isolate
  * consumers, then publish their pointers before normalizing any placement. */
@@ -177,7 +168,7 @@ static int mcc_hud_plan_prepare(struct mcc_hud_plan *plan,struct mcc_runtime *r)
      * a child descriptor that another consumer still needs to copy. */
     for (i=roots;i<plan->count;i++) {
         struct mcc_hud_use *use=plan->uses+i;
-        uint32_t address=(uint32_t)(uintptr_t)use->owned;
+        uint32_t address=MCC_ADDRESS(use->owned); /* port: an Xbox address on 64-bit */
         memcpy(plan->uses[use->parent].owned+use->offset+4,&address,4);
     }
     ok=1;
@@ -205,6 +196,3 @@ static void mcc_hud_plan_report(struct mcc_hud_plan const *plan)
         (unsigned long)native,(unsigned long)authored,(unsigned long)aliases,
         (unsigned long)copies,(unsigned long)bytes);
 }
-#if defined(HALO_64BIT) && defined(__clang__)
-#pragma clang diagnostic pop
-#endif

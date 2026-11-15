@@ -132,7 +132,16 @@ indices are the console's */
 
 #else
 #define HALO_PORT_GAME_STATE_BASE_ADDRESS 0x81A00000 /* (0x80061000) */
+#ifdef HALO_64BIT
+/* (port, this fork) 1 MB more: a 64-bit build's pools, of 8-byte pointers,
+fill about 19.6 MB of the 32-bit builds' 0x13C0000, and an MCC map's
+script threads and checkpoint slot (mcc_script_threads.inl,
+mcc_checkpoint.c) need about 1.3 MB of the rest. A 64-bit build's saved
+games of the smaller size are refused (game_state.c), not misread */
+#define HALO_PORT_GAME_STATE_CPU_SIZE 0x14C0000 /* (0x305000) */
+#else
 #define HALO_PORT_GAME_STATE_CPU_SIZE 0x13C0000 /* (0x305000) */
+#endif
 #define HALO_PORT_GAME_STATE_GPU_SIZE 0x40000 /* (0x40000) */
 #define HALO_PORT_GAME_STATE_SIZE (HALO_PORT_GAME_STATE_CPU_SIZE+HALO_PORT_GAME_STATE_GPU_SIZE)
 
