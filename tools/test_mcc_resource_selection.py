@@ -39,6 +39,9 @@ def resource_tool(tmp_path_factory):
     code = code.replace('/* RESOURCES */', resources).replace('/* PLANNER */',
         '\n'.join(function(planner, n) for n in ('base_resource_copy', 'base_resources')))
     (work / 'driver.c').write_text(code)
+    # (mcc_identity.c's: a joined game's chosen base sets, none in this test)
+    (work / 'identity.c').write_text('int mcc_identity_resources(char const *name, char paths[2][128])'
+                                     ' { (void)name; (void)paths; return 0; }\n')
     (work / 'crc.c').write_text('#define Z_PREFIX\n#include "' + (ROOT / 'port/third_party/zlib/crc32.c').as_posix() + '"\n')
     # Deterministic access denial on every host, including an elevated Windows run.
     package = work / 'package.c'
@@ -49,7 +52,7 @@ def resource_tool(tmp_path_factory):
         'if(denied && strstr(path,"mcc_maps/p/sounds.map")) {errno=EACCES;return NULL;}\n'
         'return fopen(path,mode); }\n#define fopen test_open\n#include "' +
         (game / 'mcc_package.c').as_posix() + '"\n')
-    return compile_tool(work, [work / 'driver.c', package, GAME / 'mcc_sha256.c',
+    return compile_tool(work, [work / 'driver.c', work / 'identity.c', package, GAME / 'mcc_sha256.c',
                               work / 'crc.c'])
 
 
