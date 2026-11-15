@@ -55,6 +55,7 @@ boolean main_menu_is_active(void);
 #ifdef HALO_GAME_BROWSER
 /* browser_screen.c */
 boolean browser_screen_active(void);
+boolean browser_screen_join_light(float *progress);
 #endif
 
 /* ---------- globals */
@@ -65,6 +66,9 @@ static struct
 	boolean shown;
 	/* the share done, as last drawn: the light never goes back */
 	real progress;
+	/* (this fork: the screen drawn is Online Games' join screen's, whose
+	words and B are its own: browser_screen_join_light) */
+	boolean joining;
 } download_screen;
 
 /* ---------- private code */
@@ -165,7 +169,13 @@ boolean download_screen_active(
 	char status[160];
 
 	/* (over Online Games too: its panel, which shows the repositories'
-	downloads, is behind it; browser_screen.c, map_download.c) */
+	downloads, is behind it; browser_screen.c, map_download.c; but not
+	under Online Games' join screen, which shows the download itself, its
+	light drawn by download_screen_render) */
+#ifdef HALO_GAME_BROWSER
+	if (browser_screen_join_light(&fraction))
+		return FALSE;
+#endif
 	return main_menu_is_active() && config_boolean("maps.download_screen") &&
 		download_screen_source(&fraction, name, sizeof(name), status, sizeof(status)) != _download_none;
 }
@@ -219,6 +229,31 @@ void download_screen_render(
 	short index;
 	short source = _download_none;
 
+#ifdef HALO_GAME_BROWSER
+	/* (this fork: Online Games' join screen, connecting or downloading
+	the map, is the loading screen too, its words and progress drawn over
+	it by browser_screen.c. A join's connecting has no share to show: its
+	light sweeps across and starts over, so it goes back, which a download's
+	never does) */
+	if (!config_boolean("debug.null_renderer") && browser_screen_join_light(&fraction))
+	{
+		if (!download_screen.shown || !download_screen.joining)
+		{
+			if (download_screen.shown)
+				progress_bar_download_end();
+			download_screen.shown = TRUE;
+			download_screen.joining = TRUE;
+		}
+		progress_bar_download_display(PIN(fraction, 0.001f, 1.0f));
+		return;
+	}
+	if (download_screen.shown && download_screen.joining)
+	{
+		download_screen.shown = FALSE;
+		download_screen.joining = FALSE;
+		progress_bar_download_end();
+	}
+#endif
 	/* (nothing drawn without a renderer: debug.null_renderer, a server's) */
 	if (!download_screen_active() || config_boolean("debug.null_renderer") ||
 		(source = download_screen_source(&fraction, name, sizeof(name), status, sizeof(status))) == _download_none)

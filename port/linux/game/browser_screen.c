@@ -335,6 +335,9 @@ static struct
 frame (a new one starts its loop from black), and debug.join_screen's
 preview (_join_screen_connecting or _join_screen_downloading, its start) */
 	boolean join_screen_up;
+	/* (system_milliseconds when it came up: the connecting light's sweep,
+	browser_screen_join_light) */
+	unsigned long join_light_started;
 	short join_preview;
 	unsigned long join_preview_time;
 	/* a Custom Edition map the game being joined needs (_offer_*): its
@@ -5431,40 +5434,97 @@ boolean browser_screen_join_screen_shown(
 }
 
 #if !defined(HALO_CONSOLE_NO_LOADING_PICTURE)
-static void draw_join_screen(
+/* (port, this fork: how long the light takes to cross the loading screen
+while a join connects, its share not known: then it starts over) */
+#define JOIN_SCREEN_CONNECT_SWEEP_MILLISECONDS 3600
+
+/* what the join screen says, and the share done (0 to 1) of a download */
+static float join_screen_words(
 	short mode,
-	float margin)
+	char *title,
+	size_t title_size,
+	char *detail,
+	size_t detail_size)
 {
-	static int serial;
-	unsigned char const *picture = loading_screen_join_frame(!browser_screen.join_screen_up);
-	char title[192];
-	char detail[192];
 	float done = 0.0f;
-	float width;
 
-	browser_screen.join_screen_up = TRUE;
-	ui_overlay_layer(0);
-	/* the loading screen, 4:3 in the middle and black beside it, as the
-	game's own is drawn */
-	ui_overlay_rect(-margin, 0, 640 + 2 * margin, 480, 0, 0x000000FF);
-	serial = serial == 0x7FFFFFFF ? 2 : serial + 1;
-	ui_overlay_picture(serial, picture, 640, 480, 0, 0, 640, 480, 0xFFFFFFFF);
-
-	/* what is going on, low on it, and B to cancel under that */
 	if (mode == _join_screen_downloading && browser_screen.join_preview)
 	{
 		/* (debug.join_screen's: a download of 29 MB that loops) */
 		done = (float)((system_milliseconds() - browser_screen.join_preview_time) % 12000) / 12000.0f;
-		snprintf(title, sizeof(title), "Downloading %s.map", browser_screen.offer_display);
-		snprintf(detail, sizeof(detail), "%.1f of %.1f MB", done * 29.0f, 29.0f);
+		snprintf(title, title_size, "Downloading %s.map", browser_screen.offer_display);
+		snprintf(detail, detail_size, "%.1f of %.1f MB", done * 29.0f, 29.0f);
 	}
 	else if (mode == _join_screen_downloading)
-		download_words(title, sizeof(title), detail, sizeof(detail), &done);
+		download_words(title, title_size, detail, detail_size, &done);
 	else
 	{
-		snprintf(title, sizeof(title), "Connecting to %s", browser_screen.connecting_name);
+		snprintf(title, title_size, "Connecting to %s", browser_screen.connecting_name);
 		detail[0] = 0;
 	}
+	return done;
+}
+
+/* port (this fork): the light of the loading screen behind the join screen,
+download_screen.c's: TRUE while the join screen is up, with how far across
+the screen the light is (a download's share, or a sweep that starts over
+while connecting). The fork draws the Xbox's own loading screen on the GPU
+(progress_bar.c, as a map's download screen does), not ChupathingyCE's CPU
+copy (loading_screen.c, HALO_CPU_LOADING_SCREEN, not built: its frames
+outgrew the Android guest image) */
+boolean browser_screen_join_light(
+	float *progress)
+{
+	short mode = browser_screen.active ? join_screen_mode() : _join_screen_none;
+	char title[192];
+	char detail[192];
+
+	if (mode == _join_screen_none)
+		return FALSE;
+	if (mode == _join_screen_downloading)
+		*progress = join_screen_words(mode, title, sizeof(title), detail, sizeof(detail));
+	else
+	{
+		*progress = (float)((system_milliseconds() - browser_screen.join_light_started) %
+			JOIN_SCREEN_CONNECT_SWEEP_MILLISECONDS) / (float)JOIN_SCREEN_CONNECT_SWEEP_MILLISECONDS;
+	}
+	return TRUE;
+}
+
+static void draw_join_screen(
+	short mode,
+	float margin)
+{
+	char title[192];
+	char detail[192];
+	float done;
+	float width;
+	boolean restart = !browser_screen.join_screen_up;
+
+	if (restart)
+		browser_screen.join_light_started = system_milliseconds();
+	browser_screen.join_screen_up = TRUE;
+	ui_overlay_layer(0);
+#ifdef HALO_CPU_LOADING_SCREEN
+	/* the loading screen, 4:3 in the middle and black beside it, as the
+	game's own is drawn */
+	{
+		static int serial;
+		unsigned char const *picture = loading_screen_join_frame(restart);
+
+		ui_overlay_rect(-margin, 0, 640 + 2 * margin, 480, 0, 0x000000FF);
+		serial = serial == 0x7FFFFFFF ? 2 : serial + 1;
+		ui_overlay_picture(serial, picture, 640, 480, 0, 0, 640, 480, 0xFFFFFFFF);
+	}
+#else
+	/* (port, this fork: the loading screen under these words is the GPU's,
+	drawn with the menus by download_screen_render: browser_screen_join_light) */
+	(void)margin;
+	(void)restart;
+#endif
+
+	/* what is going on, low on it, and B to cancel under that */
+	done = join_screen_words(mode, title, sizeof(title), detail, sizeof(detail));
 	ui_overlay_text_glow(UI_FONT_MENU, 15.0f, 320, 384, UI_ALIGN_CENTER, 0xFFFFFFFF, 0x3D8BFF90, title);
 	if (mode == _join_screen_downloading)
 	{
@@ -5481,6 +5541,13 @@ static void draw_join_screen(
 	}
 	width = prompt_width_sized(UI_BUTTON_B, "=CANCEL", PROMPT_BUTTON, PROMPT_TEXT);
 	prompt_sized(UI_BUTTON_B, "=CANCEL", 320 - width / 2, 442, PROMPT_BUTTON, PROMPT_TEXT, TRUE, 436, 470);
+}
+#else
+boolean browser_screen_join_light(
+	float *progress)
+{
+	(void)progress;
+	return FALSE;
 }
 #endif
 

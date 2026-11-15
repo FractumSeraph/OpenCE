@@ -3826,6 +3826,16 @@ void map_share_render(
 
 		if (download_screen_active())
 			return;
+#ifdef HALO_GAME_BROWSER
+		/* (nor under Online Games' join screen, which says how the join
+		goes over the same loading screen) */
+		{
+			boolean browser_screen_join_screen_shown(void);
+
+			if (browser_screen_join_screen_shown())
+				return;
+		}
+#endif
 	}
 	font_tag_index = interface_get_tag_index(_interface_font_terminal);
 	if (font_tag_index == NONE)
