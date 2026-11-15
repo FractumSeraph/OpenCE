@@ -89,7 +89,7 @@ static void our_response(int direction, float *left, float *right, struct hrtf_p
 	hrtf_initialize();
 	memset(&parameters, 0, sizeof(parameters));
 	hrtf_place((float)(3.0 * sin(azimuth) * cos(elevation)), (float)(3.0 * sin(elevation)),
-		(float)(3.0 * cos(azimuth) * cos(elevation)), 3.0f, placing_behind, &parameters);
+		(float)(3.0 * cos(azimuth) * cos(elevation)), 3.0f, 0.0f, placing_behind, &parameters);
 	parameters.gain = 1.0f;
 	if (placed)
 		*placed = parameters;

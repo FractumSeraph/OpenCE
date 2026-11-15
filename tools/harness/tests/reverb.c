@@ -405,8 +405,8 @@ int main(int argc, char **argv)
 			{
 				if (--expected < 0) expected = 63;
 			}
-			reverb.position = position;
-			CHECK(reverb_tap(line, 64, delay) == line[expected],
+			/* (ChupathingyCE's reverb: the line's cursor, not a shared position) */
+			CHECK(reverb_tap(line, 64, position, delay) == line[expected],
 				"ring wrap: position %ld, delay %ld read outside the expected slot", position, delay);
 		}
 		return 0;

@@ -14,13 +14,15 @@ def generated(old_guard=False):
         "hs_runtime_port_executing_console_command", "hs_runtime_port_executing_script_type"))
     evaluator = function(read("source/hs/hs.c"), "main_set_map_name_evaluate")
     if old_guard:
-        evaluator = mutated(evaluator,
-            'if (hs_runtime_port_executing_console_command())\n\t\t\tmain_set_map_name(arguments->value);\n'
-            '\t\telse if (hs_runtime_port_executing_script_type() != NONE)\n'
-            '\t\t\tmain_script_map_name(arguments->value);\n\t\telse\n'
-            '\t\t\terror(_error_silent, "map_name requires a script or console command; a global initializer cannot change maps");',
+        # (this fork's evaluator: its guard from the console's call to the
+        # refusal, whatever lies between: a pack's menus and Stubbs mode's levels)
+        first = evaluator.index("if (hs_runtime_port_executing_console_command())")
+        last = evaluator.index('error(_error_silent, "map_name requires')
+        last = evaluator.index('");', last) + 3
+        evaluator = mutated(evaluator, evaluator[first:last],
             'if (hs_runtime_port_executing_script_type() != NONE)\n'
-            '\t\t\tmain_script_map_name(arguments->value);\n\t\telse\n\t\t\tmain_set_map_name(arguments->value);')
+            '\t\t\tmain_script_map_name(xbox_pointer(arguments->value));\n\t\telse\n'
+            '\t\t\tmain_set_map_name(xbox_pointer(arguments->value));')
     return (("types.inc", enum_with(runtime, "_hs_thread_type_script =") + "\n" +
              enum_with(read("source/hs/hs_scenario_definitions.h"), "_hs_script_startup =")),
             ("under_test.inc", code + "\n" + evaluator))

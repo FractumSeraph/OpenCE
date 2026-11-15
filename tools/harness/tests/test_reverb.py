@@ -32,7 +32,7 @@ CASES = ["ring-wrap", "parameters", "response", "levels", "transition", "change"
 
 # a fault in the reverb, and the case that must catch it
 NEGATIVE_CONTROLS = {
-    "negative-ring-index": (("position - delay % size + size", "position - delay + size"), "ring-wrap"),
+    "negative-ring-index": (("return line[at < 0 ? at + size : at];", "return line[at < 0 ? 0 : at];"), "ring-wrap"),
     # the decay HF ratio over 1 let through (a cave's high frequencies decaying slower), as it was
     "hf-ratio-over-1": (("if (properties->flDecayHFRatio < 1.0f)", "if (properties->flDecayHFRatio != 1.0f)"),
                         "parameters"),
@@ -49,8 +49,8 @@ NEGATIVE_CONTROLS = {
     # the lines' lengths in whole milliseconds at 48 kHz, as the port's own reverb had
     "lines-48k": (("{ 1392, 1684, 2044, 2476 }", "{ 2784, 3368, 4088, 4952 }"), "parameters"),
     # a delay longer than the input's line not wrapping round it (the mountains' reflections a quarter second later)
-    "no-wrap": (("delay = delay < 16 ? 16 : (delay - 16) % size + 16;", "delay = delay < 16 ? 16 : delay;\n"
-                 "\tif (delay > size) delay = size;"), "response"),
+    "no-wrap": (("\telse if (delay >= size + 16)\n\t\tdelay = (delay - 16) % size + 16;\n",
+                 "\telse if (delay >= size)\n\t\tdelay = size - 1;\n"), "response"),
     # the four channels on stereo each side's pair summed whole, not the back at -3 dB as the Xbox's downmix
     "stereo-back-whole": (("(held[0] + 0.70710678f * held[2]) * level", "(held[0] + held[2]) * level"), "levels"),
     # a new environment faded to over 85 ms, as it was (a sound started with it echoing as the room before)

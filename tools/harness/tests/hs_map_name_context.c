@@ -24,6 +24,9 @@ static void *hs_macro_function_evaluate(short function_index, long thread_index,
 }
 static void main_set_map_name(char const *name) { (void)name; unrestricted++; }
 static void main_script_map_name(char const *name) { (void)name; restricted++; }
+/* (this fork: a string argument is an Xbox address, and a known map pack's
+menus and Stubbs mode's levels switch as the console does: neither here) */
+static boolean hs_scenario_pack_menus = FALSE;
 static void hs_return(long index, long value) { (void)index; (void)value; returned++; }
 #define _error_silent 0
 static void error(int severity, char const *message) { (void)severity; (void)message; refused++; }
