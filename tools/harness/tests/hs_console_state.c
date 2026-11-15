@@ -47,6 +47,9 @@ static unsigned long used=160000,capacity=sizeof(image);
 static void mcc_campaign_reset_model_lighting(void) {}
 static int mcc_cache_tags_loaded(void) {return loaded;}
 static void *game_state_port_cpu_region(unsigned long *u,unsigned long *c) {*u=used;*c=capacity;return image;}
+/* (before storage.inc: mcc_script_threads_prepare names its failing check) */
+static void error(int severity,char const *message,...) {(void)severity;(void)message;}
+#define _error_silent 0
 #include "definitions.inc"
 #include "storage.inc"
 #include "valid.inc"
@@ -82,8 +85,6 @@ static void hs_script_evaluate(short i,long t,boolean initialize) {(void)i;(void
 static void hs_syntax_error(long i) {(void)i;abort();}
 static void hs_stack_overflow(long i) {(void)i;abort();}
 static void object_list_gc(void) {}
-static void error(int severity,char const *message,...) {(void)severity;(void)message;}
-#define _error_silent 0
 static void hs_evaluate(long,long,long *);
 static void hs_thread_main(long);
 static long global_scenario_index=0;
