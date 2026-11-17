@@ -203,6 +203,8 @@ void platform_log(const char *format, ...);
 /* port: the light definition the Light effects' glows borrow (below) */
 static long light_port_glow_definition;
 
+#include "overshield_effect.h" /* port: port/linux/game/overshield_effect.c */
+
 /* ---------- constants */
 
 enum
@@ -820,6 +822,7 @@ void lights_dispose(
 	void)
 {
 	plasma_lighting_forget(); /* port: the Light effects' lights go with the array */
+	overshield_effect_reset(); /* port: queued identities and model heights belong to this map. */
 	cluster_partition_delete(&light_cluster_partition);
 
 	return;
@@ -829,6 +832,7 @@ void lights_initialize_for_new_map(
 	void)
 {
 	plasma_lighting_forget(); /* port: no light of the Light effects crosses maps */
+	overshield_effect_reset(); /* port: queued identities and model heights belong to this map. */
 	light_port_glow_definition = NONE - 1;
 	data_make_valid(light_data);
 	lights_game_globals->render_lights = TRUE;
@@ -843,6 +847,7 @@ void lights_dispose_from_old_map(
 {
 	plasma_lighting_forget();
 	light_port_glow_definition = NONE - 1;
+	overshield_effect_reset(); /* port: queued identities and model heights belong to this map. */
 	data_make_invalid(light_data);
 	cluster_partition_make_invalid(&light_cluster_partition);
 

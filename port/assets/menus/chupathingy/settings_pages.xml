@@ -365,6 +365,7 @@
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_map_seed" x="54" y="139" platform="android web switch console"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_map_seed_upload" x="54" y="183" platform="desktop"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_map_seed_upload" x="54" y="161" platform="android web switch console"/>
+		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_steam_workshop" x="54" y="183" platform="android"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/view_streamer" x="54" y="73"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_streamer_enabled" x="54" y="73"/>
 		<child widget="main_menu/settings_select/player_setup/player_profile_edit/network_setup/op_slurs" x="54" y="95"/>

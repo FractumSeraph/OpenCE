@@ -465,6 +465,12 @@ SCREENS = {
                  [(f"{kb} KB/S" if kb < 1024 else f"{kb // 1024} MB/S", str(kb)) for kb in (64, 128, 256, 512, 1024,
                                                                                          2048, 4096, 8192, 10240)],
                  "The most you send of maps to other players, so\nthat the game keeps the rest of your upload.", None),
+                # (OpenCE's Steam Workshop, Android's: signing in with Steam
+                # and downloading MCC content, a screen of its own,
+                # _steam_workshop)
+                _screen_link("STEAM WORKSHOP", "network_setup/steam_workshop",
+                             "Sign in with Steam to download MCC's shared files\nand Halo 1 Workshop maps into mcc_maps.",
+                             "android"),
             ], "desktop android"),
             # (port/linux/game/text_filter.c: words hidden in what other
             # players, maps and mods show, each group from a severity of Surge
@@ -664,7 +670,11 @@ SCREENS["network_setup/in_game"] = {
         _network_views["chat"],
         ("multiplayer_hud", "MULTIPLAYER HUD", "Players' names above their heads, and the\nscoreboard.",
          [row for view in SCREENS["video_settings"]["views"] for row in view[3] if row[1] in _hud_settings]),
-        _network_views["map_sharing"],
+        # (without OpenCE's Steam Workshop, which is the main menu's: its
+        # sign-in and downloads are not for the middle of a game)
+        (*_network_views["map_sharing"][:3],
+         [row for row in _network_views["map_sharing"][3] if row[1] != f"{SCREEN_LINK}network_setup/steam_workshop"],
+         *_network_views["map_sharing"][4:]),
         _network_views["streamer"],
     ],
 }
@@ -1011,7 +1021,7 @@ def _screen_link_row(base: str, row: tuple, key: str, label_index: int) -> list:
     as a nested list's row (_link_row), A opening the screen"""
     label, setting, _, _, platform, *_ = row
     folder = setting[len(SCREEN_LINK):]
-    target = f"{PE}/{folder}/{SCREENS[folder]['screen']}"
+    target = f"{PE}/{folder}/{(SCREENS.get(folder) or CUSTOM_SCREENS[folder])['screen']}"
     lines = _widget(f"{base}/op_{key}", [("width", 512), ("height", 28), ("flags", "pass_unhandled_to_focused_child"),
                                          ("bitmap", "bitmaps/option_bkds"), ("color", "#FF2896FF"),
                                          ("platform", platform)],
@@ -1422,6 +1432,8 @@ def settings_files() -> dict:
     # mcc_share.c opens, and the downloaded copies' list)
     files[f"{PE}/network_setup/mcc_download".replace("/", ".") + ".xml"] = _mcc_download()
     files[f"{PE}/network_setup/mcc_downloads".replace("/", ".") + ".xml"] = _mcc_downloads()
+    # (OpenCE's Steam Workshop screen, Android's host: MAP SHARING's STEAM WORKSHOP opens it)
+    files[STEAM_WORKSHOP.replace("/", ".") + ".xml"] = _steam_workshop()
     return {name: ['<?xml version="1.0" encoding="UTF-8"?>',
                    "<!-- The port's settings screen, in the PC version's style (tools/port_settings.py) -->",
                    "<menus>", *lines, "</menus>", ""] for name, lines in files.items()}
@@ -3285,6 +3297,82 @@ def _mcc_download() -> list:
                          [f'<on event="a" run="port mcc share {action}"/>',
                           f'<on event="start" run="port mcc share {action}"/>',
                           '<on event="left_mouse" run="mouse emit accept event"/>'])
+    return lines
+
+
+# the screens of a category that are no settings screen (_setting_screen),
+# made by a function of their own
+CUSTOM_SCREENS = {"network_setup/steam_workshop": {"screen": "steam_workshop_screen"}}
+
+# ---------- the Steam Workshop (Settings > Network Setup > STEAM WORKSHOP:
+# the host's port/android/host/steam_downloads.c, menu_functions.c's "port
+# steam" functions; from Halo Content Evolved's): on the left the rows (the
+# sign-in, the hub, MCC's shared files, the Halo 1 Workshop's items), a row
+# each with its name and state; on the right, in the lobby's frame, the row
+# chosen's details and the item's preview (steam_picture: a text box, drawn
+# over by menu_functions.c)
+STEAM_WORKSHOP = f"{PE}/network_setup/steam_workshop"
+STEAM_ROWS = 11
+STEAM_PICTURE_BOUNDS = (448, 262, 128, 128)
+
+
+def _steam_workshop() -> list:
+    base = STEAM_WORKSHOP
+    back = ['<on event="b" run="port steam back"/>', '<on event="back" run="port steam back"/>']
+    lines = _widget(f"{base}/steam_workshop_screen", [("width", 640), ("height", 480),
+                                                       ("flags", "pass_unhandled_to_focused_child"),
+                                                       ("bitmap", "bitmaps/gradient")],
+                    [*back, '<child widget="main_menu/new_select/sel_list_desc_bkd"/>',
+                     f'<child widget="{base}/steam_list"/>', f'<child widget="{base}/header_steam"/>'])
+    lines += _widget(f"{base}/header_steam",
+                     [("type", "text"), ("controller", 1), ("left", 35), ("top", 11), ("width", 363), ("height", 59),
+                      ("text", "STEAM WORKSHOP"), ("font", "ui\\large_ui"), ("color", "#FFFFFFFF"), ("text_x", 13),
+                      ("text_y", 16)], [])
+    rows = [f'<child widget="{base}/op_steam_{index + 1}" x="20" y="{73 + 30 * index}"/>' for index in range(STEAM_ROWS)]
+    lines += _widget(f"{base}/steam_list", [("type", "column_list"), ("width", 640), ("height", 480),
+                                            ("flags", "pass_unhandled_to_focused_child up_down_tabs_children"),
+                                            ("description", f"{base}/steam_details")],
+                     ['<data input="port steam update"/>', '<on event="created" run="port steam init"/>',
+                      '<on event="deleted" run="port steam close"/>', *rows,
+                      f'<child widget="{base}/button_bar" y="414"/>'])
+    for index in range(STEAM_ROWS):
+        lines += _widget(f"{base}/op_steam_{index + 1}",
+                         [("width", 390), ("height", 28), ("flags", "pass_unhandled_to_focused_child"),
+                          ("bitmap", "bitmaps/sel_list_item_bkd_top" if index == 0 else "bitmaps/sel_list_item_bkd"),
+                          ("color", "#FF2896FF")],
+                         ['<on event="a" run="port steam choose"/>', '<on event="start" run="port steam choose"/>',
+                          '<on event="left_mouse" run="mouse emit accept event"/>',
+                          f'<child widget="{base}/steam_name" x="12"/>',
+                          f'<child widget="{base}/steam_state" x="252"/>'])
+    # (the name shortened to fit, steam_update: most of the row, as SIGN IN WITH
+    # ACCOUNT needs; the state whole, kept to 15 characters by the host: "DOWNLOAD
+    # AGAIN?", an account's name shortened)
+    lines += _widget(f"{base}/steam_name",
+                     [("type", "text"), ("controller", 1), ("width", 236), ("height", 28), ("font", "ui\\large_ui"),
+                      ("color", "#FF2896FF"), ("text_y", 4)], [])
+    lines += _widget(f"{base}/steam_state",
+                     [("type", "text"), ("controller", 1), ("width", 132), ("height", 22), ("font", "ui\\small_ui"),
+                      ("color", "#FF2896FF"), ("align", "center"), ("text_y", 6), ("text_flags", "no_focus_test")],
+                     [])
+    lines += _widget(f"{base}/steam_details", [("width", 640), ("height", 480)],
+                     [f'<child widget="{base}/steam_details_name"/>', f'<child widget="{base}/steam_details_text"/>',
+                      f'<child widget="{base}/steam_picture"/>'])
+    lines += _widget(f"{base}/steam_details_name",
+                     [("type", "text"), ("controller", 1), ("left", 412), ("top", 84), ("width", 200), ("height", 44),
+                      ("font", "ui\\large_ui"), ("color", "#FFFFFFFF")], [])
+    left, top, width, height = STEAM_PICTURE_BOUNDS
+    lines += _widget(f"{base}/steam_details_text",
+                     [("type", "text"), ("controller", 1), ("left", 412), ("top", 130), ("width", 200),
+                      ("height", top - 130), ("font", "ui\\small_ui"), ("color", "#FF2896FF")], [])
+    lines += _widget(f"{base}/steam_picture",
+                     [("type", "text"), ("controller", 1), ("left", left), ("top", top), ("width", width),
+                      ("height", height), ("font", "ui\\small_ui"), ("text_flags", "no_focus_test")], [])
+    lines += _widget(f"{base}/button_bar",
+                     [("type", "column_list"), ("width", 640), ("height", 28),
+                      ("flags", "pass_unhandled_to_focused_child left_right_tabs_items")],
+                     [f'<child widget="{base}/button_back" x="510" y="1"/>'])
+    lines += _text_button(f"{base}/button_back", "BACK", ['<on event="a" run="port steam back"/>',
+                                                         '<on event="start" run="port steam back"/>'])
     return lines
 
 

@@ -10,3 +10,5 @@ from its `C/` directory; nothing else of the SDK is used.
 The Steam content client (`port/linux/src/steam_content`) unpacks Steam's
 LZMA ("VZa") Workshop chunks with it. It builds into the 64-bit desktop
 platform layers (macOS, Linux, the dedicated server).
+
+OpenCE's Steam client (`port/android/host/steam_unpack.c`, in the Android app's host) uses the same decoder for the "VZa" chunks of Steam's depots.

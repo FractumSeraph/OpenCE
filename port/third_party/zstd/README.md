@@ -18,3 +18,5 @@ release.
 
 The desktop builds use it to read Custom Edition maps compressed with
 Chimera's `chimera-compress` (`port/linux/src/map_compressed.c`).
+
+OpenCE's Steam client (`port/android/host/steam_unpack.c`, in the Android app's host) uses the same decoder for the "VSZa" chunks of Steam's depots.
