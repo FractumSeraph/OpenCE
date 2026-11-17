@@ -49,8 +49,8 @@ k <vertex code> <flags> <packed mask> <pixel key number>
   coverage alpha, 118 per-pixel lighting, 119 the alpha test's samples, 120
   point thresholds, 121 the Light effects, 122 a CE meter's channels, 123 the
   source blend factor and 124 an MCC lightmap pass's bump attenuation (this
-  fork's, OpenCE's), 125 ChupathingyCE's HDR glow (always 0 here: this fork's
-  HDR is OpenCE's) and 126 the high-res text's distance fields (texture 0 is
+  fork's, OpenCE's), 125 display.hdr's glow (a draw brightened past white,
+  ChupathingyCE's) and 126 the high-res text's distance fields (texture 0 is
   their atlas). A new field takes the next number, and a number is never
   used again, so an older list still reads: a slot a build doesn't know is
   skipped, and a field a list doesn't give is 0.

@@ -48,6 +48,7 @@ int android_geometry_fixes = 1;
 int android_texture_fixes = 1;
 int android_render_chip = _android_chip_unknown;
 #endif
+#include "xgpu_tone_map.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -99,6 +100,12 @@ static BOOL bg_visibility_end(DWORD index, unsigned long number);
 static UINT bg_visibility_result(DWORD index, unsigned long *number);
 static BOOL bg_back_buffer_size(int *width, int *height, int *pixel_width, int *pixel_height);
 static const char *bg_renderer_name(void);
+/* display.hdr's (xgpu_tone_map.h): whether the renderer draws into half
+floats, the tone mapping of a window's 3D view, and whether the swap chain
+is HDR10 */
+static BOOL bg_hdr_targets(void);
+static void bg_tone_map(short x0, short y0, short x1, short y1);
+static BOOL bg_hdr10(void);
 #endif
 #ifdef HALO_VULKAN
 /* the Android app's Vulkan backend in place of OpenGL ES (display.renderer =
@@ -364,6 +371,151 @@ static int anti_aliasing(void)
 		anti_aliasing_read();
 	return anti_aliasing_values[anti_aliasing_value].mode;
 }
+
+/* ---------- HDR
+
+display.hdr (xgpu_post.c, xgpu_tone_map.h): the back buffer in GL_RGBA16F,
+which keeps what the game's additive blending adds past white, tone mapped
+over each window's 3D view before the HUD is drawn (halo_screen_tone_map)
+and put in the window by a shader (D3DDevice_Present). Taken up between
+frames (halo_screen_commit) and as the GL context is made (hdr_read). The
+bgfx renderer has its own targets, pass and HDR10 swap chain
+(d3d8_bgfx.inl), from the same settings. Not on Android nor the consoles,
+whose settings leave it out. hkmodd wrote the OpenGL path (OpenCE pull
+request 280, before its license changed). */
+static struct
+{
+	/* config_changes() when the settings were read, if they have been;
+	display.hdr as it was then */
+	unsigned long read_at;
+	BOOL read, wanted;
+	/* display.hdr, where the GPU draws into half floats and the programs
+	build: the back buffer is GL_RGBA16F */
+	BOOL active;
+	struct xgpu_tone_mapping tone_mapping;
+	/* the window's pixels are floating point (display.hdr_output): its
+	pixels are linear, in scRGB's units (1.0 the output's white) */
+	BOOL float_window;
+	/* display.hdr_output: the display shows HDR, and the output is HDR
+	(the floating-point window, or bgfx's HDR10 swap chain) */
+	BOOL output;
+	/* the paper white in nits (display.hdr_paper_white, or the display's
+	SDR white), the output's white in nits (scRGB's 80), and the display's
+	SDR white in the output's units (SDL's; 1 without HDR) */
+	float paper_white, output_white, sdr_white;
+	/* what the code drawing says of the draw (halo_hdr_draw_kind) */
+	int kind;
+} hdr;
+
+static void hdr_read(void);
+
+static BOOL hdr_active(void)
+{
+	return hdr.active;
+}
+
+/* what the game's code knows of the draws that follow (HALO_HDR_KIND_*):
+the first-person weapon's own transparent parts, the HUD's glows, the light
+of the world (erin.cena's and g0atbutt's hooks in OpenH1, with the team's
+permission) */
+/* (a console build that has the hook as a no-op macro, halo_linux_source_fixups.h, defines
+nothing here) */
+#ifndef halo_hdr_draw_kind
+void halo_hdr_draw_kind(int kind)
+{
+	hdr.kind = kind;
+}
+#endif
+
+/* the tag of a draw into the HDR back buffer (nv2a_pixel_shader_key.hdr):
+a glow brightened past white, where the draw is one the code named and its
+blend adds light (xgpu_tone_map.h's _xgpu_hdr_tag_*); 0 for every other
+draw, and every draw without display.hdr */
+static unsigned char hdr_draw_tag(void)
+{
+	BOOL additive;
+
+	if (!hdr.active || !hdr.kind || !D3D__RenderState[D3DRS_ALPHABLENDENABLE])
+		return _xgpu_hdr_tag_none;
+	/* (an add of the source, by its own color or alpha, onto the destination
+	kept whole: what can leave [0, 1]) */
+	additive = D3D__RenderState[D3DRS_BLENDOP] == D3DBLENDOP_ADD &&
+		D3D__RenderState[D3DRS_DESTBLEND] == D3DBLEND_ONE &&
+		(D3D__RenderState[D3DRS_SRCBLEND] == D3DBLEND_ONE || D3D__RenderState[D3DRS_SRCBLEND] == D3DBLEND_SRCALPHA ||
+			D3D__RenderState[D3DRS_SRCBLEND] == D3DBLEND_SRCCOLOR);
+	if (hdr.kind & HALO_HDR_KIND_HUD_GLOW)
+		return additive ? _xgpu_hdr_tag_hud_glow : _xgpu_hdr_tag_none;
+	if ((hdr.kind & HALO_HDR_KIND_FIRST_PERSON) &&
+		((hdr.kind & (HALO_HDR_KIND_NUMERIC | HALO_HDR_KIND_METER)) || additive))
+		return _xgpu_hdr_tag_weapon_glow;
+	if ((hdr.kind & HALO_HDR_KIND_LIGHT) && additive)
+		return _xgpu_hdr_tag_light;
+	return _xgpu_hdr_tag_none;
+}
+
+/* the display and the settings it is shown by: the paper white in nits
+(display.hdr_paper_white, or the display's SDR white, which SDL says in
+scRGB's units of 80 nits on Windows and as 1.0 for macOS's EDR, taken as
+100 nits; BT.2408's 203 where it says nothing), the peak over it
+(display.hdr_peak, or the display's headroom; 1 without an HDR output) and
+the UI's white over it (display.hdr_ui_nits). hdr.output says whether the
+output is HDR: with display.hdr_output, a display showing HDR, and a
+floating-point window or bgfx's HDR10 swap chain (hdr10). */
+static void hdr_display_read(BOOL hdr10)
+{
+	float sdr_white = 1.0f, headroom = 1.0f;
+	BOOL display_hdr = FALSE;
+	long paper = config_integer("display.hdr_paper_white");
+	long peak = config_integer("display.hdr_peak");
+	long ui = config_integer("display.hdr_ui_nits");
+	float white_nits, peak_nits;
+
+#if !defined(HALO_GL_ES) && !defined(HALO_CONSOLE_GL_LAYER) && !defined(HALO_CONSOLE_GLES2)
+	display_hdr = platform_video_hdr(&sdr_white, &headroom);
+#endif
+#ifdef __APPLE__
+	hdr.output_white = 100.0f;
+#else
+	hdr.output_white = XGPU_HDR_SCRGB_WHITE_NITS;
+#endif
+	hdr.sdr_white = display_hdr && sdr_white > 0.0f ? sdr_white : 1.0f;
+	white_nits = display_hdr && sdr_white > 0.0f ? sdr_white * hdr.output_white : XGPU_HDR_REFERENCE_WHITE_NITS;
+	if (paper > 0)
+	{
+		paper = paper < XGPU_HDR_PAPER_WHITE_MINIMUM ? XGPU_HDR_PAPER_WHITE_MINIMUM :
+			paper > XGPU_HDR_PAPER_WHITE_MAXIMUM ? XGPU_HDR_PAPER_WHITE_MAXIMUM : paper;
+		hdr.paper_white = (float)paper;
+	}
+	else
+		hdr.paper_white = white_nits;
+	hdr.output = hdr.active && config_boolean("display.hdr_output") && display_hdr && (hdr.float_window || hdr10);
+	if (!hdr.output)
+	{
+		hdr.tone_mapping.peak = 1.0f;
+		hdr.tone_mapping.ui = 1.0f;
+		return;
+	}
+	if (peak > 0)
+	{
+		peak = peak < XGPU_HDR_PEAK_MINIMUM ? XGPU_HDR_PEAK_MINIMUM :
+			peak > XGPU_HDR_PEAK_MAXIMUM ? XGPU_HDR_PEAK_MAXIMUM : peak;
+		peak_nits = (float)peak;
+	}
+	else
+		peak_nits = white_nits * (headroom >= 1.0f ? headroom : 1.0f);
+	if (peak_nits < hdr.paper_white)
+		peak_nits = hdr.paper_white;
+	hdr.tone_mapping.peak = peak_nits / hdr.paper_white;
+	if (ui > 0)
+	{
+		ui = ui < XGPU_HDR_PAPER_WHITE_MINIMUM ? XGPU_HDR_PAPER_WHITE_MINIMUM :
+			ui > XGPU_HDR_PAPER_WHITE_MAXIMUM ? XGPU_HDR_PAPER_WHITE_MAXIMUM : ui;
+		hdr.tone_mapping.ui = ((float)ui > peak_nits ? peak_nits : (float)ui) / hdr.paper_white;
+	}
+	else
+		hdr.tone_mapping.ui = 1.0f;
+}
+
 
 /* display.resolution_scaling's part of the resolution each way: 1 for
 "native", 0.75, 0.5 or 0.25 for "75%", "50%" or "25%", 0 for "original" (the
@@ -820,38 +972,6 @@ long halo_shadow_map_scale(void)
 	}
 	return shadow_scale;
 }
-
-/* display.hdr (xgpu_post.c): the back buffer in GL_RGBA16F, which keeps
-what the game's additive blending adds past white, tone mapped over each
-window's 3D view before the HUD is drawn (halo_screen_tone_map) and put in
-the window by a shader (D3DDevice_Present). Taken up between frames
-(halo_screen_commit) and as the GL context is made (hdr_read). */
-static struct
-{
-	/* config_changes() when the settings were read, if they have been;
-	display.hdr as it was then */
-	unsigned long read_at;
-	BOOL read, wanted;
-	/* display.hdr, where the GPU draws into half floats and the programs
-	build: the back buffer is GL_RGBA16F */
-	BOOL active;
-	struct xgpu_tone_mapping tone_mapping;
-	/* the window's pixels are floating point (display.hdr_output): its
-	pixels are linear, in scRGB's units, the desktop's white sdr_white */
-	BOOL float_window;
-	float sdr_white;
-	/* the float window's display has HDR on (platform_video_hdr), as the
-	last frame found */
-	BOOL display_on;
-	/* display.hdr_paper_white and display.hdr_peak_brightness, in nits: 0
-	for Windows' own (its SDR content brightness, and its HDR calibration's
-	peak, as SDL reports them) */
-	int paper_white, peak_brightness;
-#ifdef HALO_GLES
-	/* the most samples a pixel of a GL_RGBA16F renderbuffer */
-	GLint maximum_samples;
-#endif
-} hdr;
 
 void halo_screen_ui_offset(unsigned char centered)
 {
@@ -2555,6 +2675,10 @@ static struct render_target_entry *render_target_get(const D3DSurface *surface)
 	/* Textures may already be selected for this draw. Allocating its target
 	 * must not replace the active sampler's input with the output image. */
 	glGetIntegerv(GL_TEXTURE_BINDING_2D, &previous_texture);
+	entry->screen_buffer = surface->Data == (depth ? device.depth_buffer.Data : device.back_buffer.Data);
+	/* (display.hdr: the back buffer with room above white) */
+	entry->target.format = depth ? GL_DEPTH24_STENCIL8 :
+		entry->screen_buffer && hdr.active ? GL_RGBA16F : GL_RGBA8;
 	glGenTextures(1, &entry->target.texture);
 	gl_check_errors("target texture create");
 	glBindTexture(GL_TEXTURE_2D, entry->target.texture);
@@ -2844,217 +2968,6 @@ static BOOL bind_targets(BOOL *has_depth)
 #endif
 	*has_depth = depth != NULL;
 	return TRUE;
-}
-
-/* ---------- display.hdr */
-
-static const char *const tone_mapping_names[NUMBER_OF_XGPU_TONE_MAPPINGS] =
-	{ "neutral", "aces", "reinhard", "gt7" };
-
-/* the HDR calibration screen (port/linux/game/menu_functions.c), while it
-is drawn: the pattern of its row chosen (HDR_CALIBRATION_PEAK or
-HDR_CALIBRATION_PAPER_WHITE), and the paper white and peak it shows, in
-nits (0 for Windows'), which the display takes in place of the settings'
-until the screen closes (OK writes them to the settings) */
-enum
-{
-	HDR_CALIBRATION_PEAK,
-	HDR_CALIBRATION_PAPER_WHITE
-};
-
-static struct
-{
-	/* device.frame + 1 of the frame the screen was last drawn in; 0 never */
-	unsigned long frame;
-	int pattern;
-	int paper_white, peak_brightness;
-} hdr_calibration;
-
-/* a setting in nits, within lowest and highest; 0 (Windows' own) stays */
-static int hdr_nits(int value, int lowest, int highest)
-{
-	return value <= 0 ? 0 : value < lowest ? lowest : value > highest ? highest : value;
-}
-
-/* the calibration screen was drawn in this frame, or (or_last_frame) in
-this frame or the one before: it says so as it is drawn, after this frame's
-halo_screen_commit */
-static BOOL hdr_calibration_shown(BOOL or_last_frame)
-{
-	return hdr.float_window && hdr_calibration.frame &&
-		device.frame + 1 - hdr_calibration.frame <= (or_last_frame ? 1UL : 0UL);
-}
-
-int halo_hdr_calibration_available(void)
-{
-	return hdr.float_window && hdr.display_on;
-}
-
-void halo_hdr_calibration_show(int pattern, int paper_white, int peak_brightness)
-{
-	hdr_calibration.frame = device.frame + 1;
-	hdr_calibration.pattern = pattern;
-	hdr_calibration.paper_white = hdr_nits(paper_white, 80, 1000);
-	hdr_calibration.peak_brightness = hdr_nits(peak_brightness, 250, 10000);
-}
-
-/* a rectangle of the menus' 640 by 480 units (the screen's middle, as the
-menus are drawn) as corners in the window, row 0 at the bottom, where the
-back buffer is drawn at window's x, y, width and height */
-static void hdr_calibration_place(const struct render_target_entry *back_buffer, const int window[4], float left,
-	float top, float right, float bottom, GLint corners[4])
-{
-	float across = (float)window[2] / (float)back_buffer->target.width;
-	float down = (float)window[3] / (float)back_buffer->target.height;
-	float offset = (float)(halo_screen_width() - 640) / 2.0f;
-
-	corners[0] = window[0] + (GLint)((left + offset) * across + 0.5f);
-	corners[2] = window[0] + (GLint)((right + offset) * across + 0.5f);
-	corners[1] = window[1] + window[3] - (GLint)(bottom * down + 0.5f);
-	corners[3] = window[1] + window[3] - (GLint)(top * down + 0.5f);
-}
-
-/* a square, and a ring in it, of the menus' units: its left and top, the
-square's colour and the ring's (scRGB) */
-static void hdr_calibration_square(const struct render_target_entry *back_buffer, const int window[4], float left,
-	float top, float square_color, float ring_color)
-{
-	/* (the square's side, and the ring's radii) */
-	const float SIDE = 180.0f, OUTER = 62.0f, INNER = 42.0f;
-	float down = (float)window[3] / (float)back_buffer->target.height;
-	float color[3], ring[4];
-	GLint corners[4];
-
-	hdr_calibration_place(back_buffer, window, left, top, left + SIDE, top + SIDE, corners);
-	color[0] = color[1] = color[2] = square_color;
-	ring[0] = ring[1] = ring[2] = ring[3] = 0.0f;
-	xgpu_post_fill(corners, color, ring);
-	color[0] = color[1] = color[2] = ring_color;
-	ring[0] = (float)(corners[0] + corners[2]) / 2.0f;
-	ring[1] = (float)(corners[1] + corners[3]) / 2.0f;
-	ring[2] = OUTER * down;
-	ring[3] = INNER * down;
-	xgpu_post_fill(corners, color, ring);
-}
-
-/* the calibration screen's pattern, over its menus, between its rows and
-its help. The peak's: a square at the peak shown, and in it a ring at 10000
-nits, brighter than any display shows, which disappears into the square
-once the square is as bright as the display goes. Paper white's: a grey
-scale up to white at the paper white shown, as the menus' white then is,
-beside a square of that white with a ring in it at the peak, the light past
-white. */
-static void hdr_calibration_draw(const struct render_target_entry *back_buffer, const int window[4])
-{
-	/* (scRGB, 1.0 at 80 nits) */
-	const float BRIGHTEST = 10000.0f / 80.0f;
-	const int GREYS = 8;
-	float paper = hdr.sdr_white, peak = hdr.sdr_white * hdr.tone_mapping.peak;
-
-	if (hdr_calibration.pattern == HDR_CALIBRATION_PEAK)
-	{
-		hdr_calibration_square(back_buffer, window, 230.0f, 146.0f, peak, BRIGHTEST);
-	}
-	else
-	{
-		float ring[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-		int grey;
-
-		for (grey = 0; grey < GREYS; grey++)
-		{
-			float color[3];
-			GLint corners[4];
-
-			/* (the menus' values are gamma encoded, as the presentation's) */
-			color[0] = color[1] = color[2] = powf((float)(grey + 1) / (float)GREYS, 2.2f) * paper;
-			hdr_calibration_place(back_buffer, window, 100.0f + 26.0f * (float)grey, 166.0f,
-				100.0f + 26.0f * (float)(grey + 1), 306.0f, corners);
-			xgpu_post_fill(corners, color, ring);
-		}
-		hdr_calibration_square(back_buffer, window, 360.0f, 146.0f, paper, peak);
-	}
-}
-
-/* display.hdr's settings, if they have changed: the back buffer's entries
-are made again in the format it takes (what they held is lost, and a frame
-clears them before it draws) */
-static void hdr_read(void)
-{
-	const char *curve;
-	double exposure;
-	BOOL wanted, supported = TRUE, active;
-	struct render_target_entry *entry;
-	int value;
-
-	if (!device.gl_ready || (hdr.read && hdr.read_at == config_changes()))
-		return;
-	if (!hdr.read)
-	{
-#ifdef HALO_GLES
-		glGetInternalformativ(GL_RENDERBUFFER, GL_RGBA16F, GL_SAMPLES, 1, &hdr.maximum_samples);
-#else
-		GLint component_type = GL_NONE;
-
-		/* (the window's own framebuffer, as display.hdr_output made it) */
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
-		glGetFramebufferAttachmentParameteriv(GL_FRAMEBUFFER, GL_BACK_LEFT,
-			GL_FRAMEBUFFER_ATTACHMENT_COMPONENT_TYPE, &component_type);
-		hdr.float_window = component_type == GL_FLOAT;
-		xgpu_gl_state_invalidate();
-#endif
-		hdr.sdr_white = 1.0f;
-		hdr.tone_mapping.peak = 1.0f;
-		hdr.tone_mapping.paper = 0.0f;
-	}
-	hdr.read = TRUE;
-	hdr.read_at = config_changes();
-	curve = config_string("display.hdr_tone_mapping");
-	exposure = config_real("display.hdr_exposure");
-	wanted = config_boolean("display.hdr");
-	hdr.paper_white = hdr_nits((int)config_integer("display.hdr_paper_white"), 80, 1000);
-	hdr.peak_brightness = hdr_nits((int)config_integer("display.hdr_peak_brightness"), 250, 10000);
-	for (value = NUMBER_OF_XGPU_TONE_MAPPINGS - 1; value > 0 && strcmp(curve, tone_mapping_names[value]); value--)
-	{
-	}
-	exposure = !(exposure >= 0.25) ? 0.25 : exposure > 4.0 ? 4.0 : exposure;
-#ifdef HALO_GLES
-	supported = xgpu_capabilities.color_buffer_half_float;
-#endif
-	active = wanted && supported && xgpu_post_prepare_hdr();
-	/* (logged as it changes) */
-	if (active != hdr.active || wanted != hdr.wanted ||
-		(active && (value != hdr.tone_mapping.curve || (float)exposure != hdr.tone_mapping.exposure)))
-	{
-		if (active)
-			platform_log("HDR: on, %s tone mapping%s, exposure %.2f", tone_mapping_names[value],
-				strcmp(curve, tone_mapping_names[value]) ? " (the setting's is unknown)" : "", exposure);
-		else if (wanted && !supported)
-			platform_log("HDR: the GPU cannot draw into half floats, so off");
-		else if (wanted)
-			platform_log("HDR: its programs do not build, so off");
-		else
-			platform_log("HDR: off");
-	}
-	hdr.wanted = wanted;
-	hdr.tone_mapping.curve = value;
-	hdr.tone_mapping.exposure = (float)exposure;
-	if (active == hdr.active)
-		return;
-	hdr.active = active;
-	for (entry = render_targets; entry; entry = entry->next)
-	{
-		if (!entry->screen_buffer || entry->target.depth)
-			continue;
-		/* (the multisampled renderbuffer takes the format when it is next
-		made: render_target_multisample) */
-		render_target_multisample(&entry->target, 0);
-		entry->target.format = active ? GL_RGBA16F : GL_RGBA8;
-		glBindTexture(GL_TEXTURE_2D, entry->target.texture);
-		render_target_storage(&entry->target);
-	}
-	xgpu_gl_state_invalidate();
-	/* (multisampling's samples, which may be fewer for half floats) */
-	anti_aliasing_prepare();
 }
 
 /* ---------- device creation */
@@ -3366,13 +3279,6 @@ static void anti_aliasing_prepare(void)
 		platform_log("anti-aliasing: the GPU has at most %d samples a pixel", (int)anti_aliasing_maximum_samples);
 		anti_aliasing_samples = anti_aliasing_maximum_samples < 2 ? 0 : anti_aliasing_maximum_samples;
 	}
-#ifdef HALO_GLES
-	if (hdr.active && anti_aliasing_samples > hdr.maximum_samples)
-	{
-		platform_log("anti-aliasing: the GPU has at most %d samples a pixel of half floats", (int)hdr.maximum_samples);
-		anti_aliasing_samples = hdr.maximum_samples < 2 ? 0 : hdr.maximum_samples;
-	}
-#endif
 	if ((mode == _anti_aliasing_fxaa || mode == _anti_aliasing_smaa) && !xgpu_post_prepare(mode == _anti_aliasing_smaa))
 		platform_log("anti-aliasing: its programs do not build, so the 3D view is not antialiased");
 	xgpu_gl_state_invalidate();
@@ -3809,40 +3715,8 @@ long halo_screen_commit(void)
 	supersampling changes the scale below) */
 	anti_aliasing_read();
 	/* display.hdr, and how bright the display goes (an HDR display's
-	headroom, with display.hdr_output's floating-point window) */
+	headroom, with display.hdr_output) */
 	hdr_read();
-#ifndef HALO_ANDROID
-	if (hdr.float_window)
-	{
-		float sdr_white, headroom, paper, peak;
-		BOOL on = platform_video_hdr(&sdr_white, &headroom);
-		/* (the calibration screen's, while it is drawn) */
-		BOOL calibrating = hdr_calibration_shown(TRUE);
-		int paper_white = calibrating ? hdr_calibration.paper_white : hdr.paper_white;
-		int peak_brightness = calibrating ? hdr_calibration.peak_brightness : hdr.peak_brightness;
-
-		hdr.display_on = on;
-		/* (in nits: scRGB's 1.0 is 80) */
-		paper = paper_white ? (float)paper_white : sdr_white * 80.0f;
-		peak = peak_brightness ? (float)peak_brightness : headroom * sdr_white * 80.0f;
-		if (!on)
-		{
-			paper = sdr_white * 80.0f;
-			peak = paper;
-		}
-		if (peak < paper)
-			peak = paper;
-		if (paper != hdr.sdr_white * 80.0f || peak / paper != hdr.tone_mapping.peak)
-		{
-			if (on && !calibrating)
-				platform_log("HDR: the display's paper white %.0f nits%s, peak %.0f nits%s", paper,
-					paper_white ? "" : " (Windows')", peak, peak_brightness ? "" : " (Windows')");
-		}
-		hdr.sdr_white = paper / 80.0f;
-		hdr.tone_mapping.peak = peak / paper;
-		hdr.tone_mapping.paper = on ? paper / 100.0f : 0.0f;
-	}
-#endif
 	/* display.shadow_resolution, if it has changed: the maps' entries at
 	the old scale are freed (render_targets_evict), new ones made at the new */
 	if (shadow_scale && shadow_scale_read_at != config_changes())
@@ -6274,6 +6148,7 @@ static struct program_entry *prepare_draw(BOOL immediate)
 	key.combiner_state[D3DRS_PSFINALCOMBINERCONSTANT1] = 0;
 	key.texture_modes = D3D__RenderState[D3DRS_PSTEXTUREMODES];
 	key.mcc_bump_attenuation = mcc_environment_shader_active();
+	key.hdr = hdr_draw_tag();
 	/* the textures before the targets: a render target the draw samples
 	has its multisampled pixels resolved by a blit (render_target_resolve),
 	which binds framebuffers of its own, and the back buffer can be both
@@ -9196,17 +9071,30 @@ void halo_screen_anti_alias(short x0, short y0, short x1, short y1)
 	glBindVertexArray(device.vertex_array);
 	xgpu_gl_state_invalidate();
 }
+	glBindVertexArray(device.vertex_array);
+	xgpu_gl_state_invalidate();
+}
 
 /* display.hdr's tone mapping of a window's 3D view, before the HUD and
 menus are drawn over it, and before display.anti_aliasing's pass (which
 then finds the edges the display shows); in place, into the multisampled
 renderbuffer with multisampling */
+#ifndef halo_screen_tone_map
 void halo_screen_tone_map(short x0, short y0, short x1, short y1)
 {
 	struct render_target_entry *target;
 	GLuint source, destination;
 	GLint corners[4];
 
+#ifdef HALO_BGFX
+	/* (bgfx's: a pass of its own, d3d8_bgfx.inl) */
+	if (bg_active())
+	{
+		if (hdr.active)
+			bg_tone_map(x0, y0, x1, y1);
+		return;
+	}
+#endif
 	if (!device.gl_ready || !hdr.active)
 		return;
 	target = render_target_get(&device.back_buffer);
@@ -9220,13 +9108,149 @@ void halo_screen_tone_map(short x0, short y0, short x1, short y1)
 	/* (both found first: making a framebuffer binds it) */
 	source = framebuffer_get(target->target.texture, 0);
 	destination = target->target.samples ? framebuffer_find(target->target.multisample, 0, TRUE) : source;
-	if (xgpu_post_tone_map(source, target->target.texture, destination, target->target.gl_width,
-		target->target.gl_height, corners, &hdr.tone_mapping) && target->target.samples)
+	if (xgpu_post_tone_map(source, destination, target->target.gl_width, target->target.gl_height, corners,
+		&hdr.tone_mapping) && target->target.samples)
 	{
 		target->target.unresolved = TRUE;
 	}
 	glBindVertexArray(device.vertex_array);
 	xgpu_gl_state_invalidate();
+}
+#endif
+
+/* ---------- display.hdr's settings, and its present */
+
+static const char *const tone_mapping_names[NUMBER_OF_XGPU_TONE_MAPPINGS] = { "neutral", "aces", "reinhard" };
+
+/* display.hdr's settings, if they have changed: the back buffer's entries
+are made again in the format it takes (what they held is lost, and a frame
+clears them before it draws); and the display's numbers, each frame */
+static void hdr_read(void)
+{
+	const char *curve;
+	double exposure;
+	BOOL wanted, active;
+	struct render_target_entry *entry;
+	int value;
+	BOOL hdr10 = FALSE;
+
+#ifdef HALO_BGFX
+	if (bg_active())
+		hdr10 = bg_hdr10();
+	else
+#endif
+	if (!device.gl_ready)
+		return;
+	if (hdr.read && hdr.read_at == config_changes())
+	{
+		/* (the display's numbers matter only while the picture is HDR, or
+		the window is: not every frame of an SDR game) */
+		if (hdr.active || hdr.float_window)
+			hdr_display_read(hdr10);
+		return;
+	}
+	if (!hdr.read)
+	{
+#if !defined(HALO_GL_ES) && !defined(HALO_CONSOLE_GL_LAYER)
+		hdr.float_window = platform_video_float_window();
+#endif
+		hdr.tone_mapping.peak = 1.0f;
+		hdr.tone_mapping.ui = 1.0f;
+	}
+	hdr.read = TRUE;
+	hdr.read_at = config_changes();
+	curve = config_string("display.hdr_tone_mapping");
+	exposure = config_real("display.hdr_exposure");
+	wanted = FALSE;
+#if !defined(HALO_GL_ES) && !defined(HALO_CONSOLE_GL_LAYER) && !defined(HALO_CONSOLE_GLES2)
+	wanted = config_boolean("display.hdr");
+#endif
+	for (value = NUMBER_OF_XGPU_TONE_MAPPINGS - 1; value > 0 && strcmp(curve, tone_mapping_names[value]); value--)
+	{
+	}
+	exposure = !(exposure >= XGPU_HDR_EXPOSURE_MINIMUM) ? XGPU_HDR_EXPOSURE_MINIMUM :
+		exposure > XGPU_HDR_EXPOSURE_MAXIMUM ? XGPU_HDR_EXPOSURE_MAXIMUM : exposure;
+	active = wanted;
+#ifdef HALO_BGFX
+	if (active && bg_active())
+		active = bg_hdr_targets();
+	else
+#endif
+	if (active && !xgpu_post_prepare_hdr())
+		active = FALSE;
+	/* (logged as it changes) */
+	if (active != hdr.active || wanted != hdr.wanted ||
+		(active && (value != hdr.tone_mapping.curve || (float)exposure != hdr.tone_mapping.exposure)))
+	{
+		if (active)
+			platform_log("HDR: on, %s tone mapping%s, exposure %.2f", tone_mapping_names[value],
+				strcmp(curve, tone_mapping_names[value]) ? " (the setting's is unknown)" : "", exposure);
+		else if (wanted)
+			platform_log("HDR: the renderer cannot draw it here, so off");
+		else
+			platform_log("HDR: off");
+	}
+	hdr.wanted = wanted;
+	hdr.tone_mapping.curve = value;
+	hdr.tone_mapping.exposure = (float)exposure;
+	if (active != hdr.active)
+	{
+		hdr.active = active;
+		for (entry = render_targets; entry; entry = entry->next)
+		{
+			if (!entry->screen_buffer || entry->target.depth)
+				continue;
+			/* (the multisampled renderbuffer takes the format when it is next
+			made: render_target_multisample) */
+			render_target_multisample(&entry->target, 0);
+			entry->target.format = active ? GL_RGBA16F : GL_RGBA8;
+			glBindTexture(GL_TEXTURE_2D, entry->target.texture);
+			render_target_storage(&entry->target);
+		}
+		memset(recent_render_targets, 0, sizeof(recent_render_targets));
+		xgpu_gl_state_invalidate();
+	}
+	hdr_display_read(hdr10);
+}
+
+/* the window's encoding (xgpu_tone_map_encoding's): linear for a
+floating-point window, always (it shows what it is given as linear light:
+the picture at paper white while the output is HDR, else at the desktop's
+own SDR white, with no room above it); the picture as it is for an 8-bit
+one. The overlay drawn into the window takes the same (ui_overlay.c). */
+static void hdr_window_encoding(float encoding[4])
+{
+	if (!hdr.float_window)
+		xgpu_tone_map_encoding(encoding, _xgpu_hdr_output_sdr, 0.0f, &hdr.tone_mapping);
+	else if (hdr.output)
+		xgpu_tone_map_encoding(encoding, _xgpu_hdr_output_linear, hdr.paper_white / hdr.output_white,
+			&hdr.tone_mapping);
+	else
+	{
+		struct xgpu_tone_mapping sdr = { 0 };
+
+		sdr.peak = 1.0f;
+		sdr.ui = 1.0f;
+		xgpu_tone_map_encoding(encoding, _xgpu_hdr_output_linear, hdr.sdr_white, &sdr);
+	}
+}
+
+/* the back buffer into the window's x, y, width, height by display.hdr's
+shader, where a blit would not do (the back buffer is half floats, or the
+window is floating point); FALSE for the blit */
+static BOOL hdr_present(const struct render_target_entry *back_buffer, GLuint read_framebuffer, int x, int y,
+	int width, int height)
+{
+	float encoding[4];
+
+	(void)read_framebuffer;
+	if (back_buffer->target.format != GL_RGBA16F && !hdr.float_window)
+		return FALSE;
+	hdr_window_encoding(encoding);
+	if (!xgpu_post_present(back_buffer->target.texture, x, y, width, height, encoding))
+		return FALSE;
+	glBindVertexArray(device.vertex_array);
+	return TRUE;
 }
 
 /* ---------- presentation */
@@ -9856,6 +9880,10 @@ static struct
 	gl_fence_sync_proc fence_sync;
 	gl_client_wait_sync_proc client_wait_sync;
 	gl_delete_sync_proc delete_sync;
+	/* the shot is the back buffer's (a floating-point window): its
+	framebuffer, its rows from the top */
+	BOOL from_frame;
+	GLuint frame_framebuffer;
 } gl_capture;
 
 /* the fences' entry points (OpenGL 3.2's, loaded here alone: gl.h's list is
@@ -9927,7 +9955,7 @@ static void gl_capture_frame(int x, int y, int width, int height)
 			/* (the writer copies it on its own thread; it stays mapped, and
 			unused, until then) */
 			if (mapped && capture_screenshot_lend(mapped, (long)gl_capture.width, (long)gl_capture.height,
-				(long)gl_capture.width * 4, TRUE, TRUE, &gl_capture.released))
+				(long)gl_capture.width * 4, TRUE, !gl_capture.from_frame, &gl_capture.released))
 			{
 				gl_capture.mapped = TRUE;
 			}
@@ -9942,6 +9970,23 @@ static void gl_capture_frame(int x, int y, int width, int height)
 	if (width <= 0 || height <= 0 || !capture_screenshot_take())
 		return;
 	gl_capture_look_up();
+	/* (a floating-point window holds linear light, which 8 bits of it are
+	not a picture: the shot is the game's frame, read from the back buffer,
+	its rows from the top, without the overlay) */
+	gl_capture.from_frame = FALSE;
+	if (hdr.float_window)
+	{
+		struct render_target_entry *back_buffer = render_target_get(&device.back_buffer);
+
+		if (back_buffer)
+		{
+			gl_capture.from_frame = TRUE;
+			x = y = 0;
+			width = (int)back_buffer->target.gl_width;
+			height = (int)back_buffer->target.gl_height;
+			gl_capture.frame_framebuffer = framebuffer_get(back_buffer->target.texture, 0);
+		}
+	}
 	gl_capture.width = (unsigned long)width;
 	gl_capture.height = (unsigned long)height;
 	if (!gl_capture.buffer)
@@ -9952,7 +9997,8 @@ static void gl_capture_frame(int x, int y, int width, int height)
 		gl_capture.buffer_size = gl_capture.width * gl_capture.height * 4;
 		glBufferData(GL_PIXEL_PACK_BUFFER, (GLsizeiptr)gl_capture.buffer_size, NULL, GL_STREAM_READ);
 	}
-	glBindFramebuffer(GL_READ_FRAMEBUFFER, platform_window_framebuffer());
+	glBindFramebuffer(GL_READ_FRAMEBUFFER, gl_capture.from_frame ? gl_capture.frame_framebuffer :
+		platform_window_framebuffer());
 	glPixelStorei(GL_PACK_ALIGNMENT, 4);
 	/* (the window's row 0 is the picture's bottom: the rows come bottom
 	first, capture.c turns them over) */
@@ -10310,11 +10356,9 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
 		/* (display.hdr's back buffer, or display.hdr_output's window, by a
-		shader: a blit neither makes the pixels linear nor, on OpenGL ES,
-		converts half floats) */
-		if (!((back_buffer->target.format == GL_RGBA16F || hdr.float_window) &&
-			xgpu_post_present(back_buffer->target.texture, x, y, width, height,
-				hdr.float_window ? hdr.sdr_white : 0.0f)))
+		shader: a blit neither makes the pixels linear nor clamps them as the
+		tone mapping left them) */
+		if (!hdr_present(back_buffer, read_framebuffer, x, y, width, height))
 		{
 			glBindFramebuffer(GL_READ_FRAMEBUFFER, read_framebuffer);
 			/* Creating the source framebuffer binds both targets. A cached
@@ -10334,23 +10378,18 @@ void WINAPI D3DDevice_Present(CONST RECT *source_rectangle, CONST RECT *destinat
 		}
 #undef picture_width
 #undef picture_height
-		/* (the HDR calibration screen's pattern, brighter than the back
-		buffer's white can be) */
-		if (hdr_calibration_shown(FALSE) && hdr.display_on)
-		{
-			int window[4];
-
-			window[0] = x;
-			window[1] = y;
-			window[2] = width;
-			window[3] = height;
-			hdr_calibration_draw(back_buffer, window);
-		}
 		glBindVertexArray(device.vertex_array);
 		gl_check_errors("present blit");
 #if defined(HALO_GAME_BROWSER) && !defined(HALO_CONSOLE_GLES2)
 		/* the overlay's screens, over the picture at the window's resolution
-		(ui_overlay.c) */
+		(ui_overlay.c), in the window's encoding (a floating-point window's
+		linear light) */
+		{
+			float encoding[4];
+
+			hdr_window_encoding(encoding);
+			ui_overlay_set_output(encoding);
+		}
 		ui_overlay_present(x, y, width, height, window_width, window_height);
 #endif
 #if !defined(HALO_ANDROID) && !defined(HALO_CONSOLE_GLES2)

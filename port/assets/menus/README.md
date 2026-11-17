@@ -204,9 +204,7 @@ difficulty` are the port's, as the Xbox's take the Xbox's widgets. The
 settings screens': `port settings save` (OK) writes the settings changed
 (config.toml's, or `profile.<field>`: the profile being edited) and applies
 them, `port settings defaults` shows the defaults, `port settings help` the
-help of the row chosen; HDR Calibration's `port hdr calibration` (a
-`<data>`) has the renderer draw the pattern of the row chosen at the values
-shown. A screen's nested lists (Video Setup's ADVANCED and
+help of the row chosen. A screen's nested lists (Video Setup's ADVANCED and
 INTERFACE, Network Setup's CHAT and PRIVACY): rows after an empty widget
 named `view_<name>` are that list's (`view_main` the screen's own), `port
 settings view` on a row named `op_link_<name>` opens it, `port settings

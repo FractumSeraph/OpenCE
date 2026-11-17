@@ -11,8 +11,8 @@ port/linux/game/menu_functions.c: "port setting load" shows its value,
 "port settings save" (OK) writes those changed and applies them, "port
 settings defaults" shows the defaults. A screen's VIEWS are nested lists in
 it, which a row of its list opens; a few rows open screens of their own
-instead, OpenCE's that a nested list cannot be (_screen_link: HDR
-Calibration, Discord Account, the controller's Button Remapping, Button
+instead, OpenCE's that a nested list cannot be (_screen_link: Discord
+Account, the controller's Button Remapping, Button
 Appearance and Stick Dead Zones). Controls Setup has every device's
 controls in one list: the keyboard's keys, the mouse's settings, and the
 controller's settings and buttons. Each platform's rows are packed in places
@@ -81,15 +81,6 @@ INSTALL_UPDATE = Action("INSTALL UPDATE:", "install_update", "port update instal
 # would be (_console_places).
 CONSOLE = "console"
 NOT_CONSOLE = "desktop android web switch"
-
-# an HDR display's paper white and peak in nits (display.hdr_paper_white,
-# display.hdr_peak_brightness), in steps fine enough for HDR Calibration's
-# patterns (and BT.2408's reference white, 203); Extra Effects' rows have the
-# same, so they show what it chose
-PAPER_WHITES = [("AUTO", "0")] + [(str(nits), str(nits)) for nits in sorted({*range(80, 200, 10), 200, 203, *range(220, 401, 20), 250})]
-PEAK_BRIGHTNESSES = [("AUTO", "0")] + [(str(nits), str(nits)) for nits in
-                                       [*range(250, 600, 25), *range(600, 1200, 50), *range(1200, 2001, 100),
-                                        2500, 3000, 4000, 5000, 6000, 8000, 10000]]
 
 # a row that opens a screen of its own (SCREENS' folder) in place of a
 # setting: its setting is SCREEN_LINK and the folder, its key the folder's
@@ -262,25 +253,6 @@ SCREENS = {
                 ("GLOW INTENSITY:", "display.shield_glow_intensity",
                  [("DEFAULT", "default"), ("LIGHT SHOW", "light_show")],
                  "Light Show: three times as far, at full from a\nthird of the flare. Online: the host's choice.", None),
-                ("HDR:", "display.hdr", ON_OFF,
-                 "Let explosions, plasma and the sun shine brighter\nthan white, then fit them to the screen.", None),
-                ("HDR DISPLAY:", "display.hdr_output", ON_OFF,
-                 "On an HDR display (Windows HDR on), show that\nlight truly brighter. From the next start.", "desktop"),
-                ("TONE CURVE:", "display.hdr_tone_mapping",
-                 [("GT7", "gt7"), ("NEUTRAL", "neutral"), ("ACES", "aces"), ("REINHARD", "reinhard")],
-                 "GT7: bright light turns white, as on film. Neutral:\nas drawn. ACES: more contrast. Reinhard: softer.",
-                 None),
-                ("PAPER WHITE:", "display.hdr_paper_white", PAPER_WHITES,
-                 "With HDR Display, how bright white is, in nits.\nAuto: Windows' SDR content brightness.", "desktop"),
-                ("PEAK BRIGHTNESS:", "display.hdr_peak_brightness", PEAK_BRIGHTNESSES,
-                 "With HDR Display, your display's brightest, in\nnits. Auto: Windows' HDR calibration.", "desktop"),
-                # (a screen of its own, video_settings/hdr_calibration: the
-                # renderer draws its patterns while it is open. Its row is
-                # shown only with an HDR display: menu_functions.c's
-                # hdr_calibration_row_show)
-                _screen_link("HDR CALIBRATION", "video_settings/hdr_calibration",
-                             "Set Peak Brightness and Paper White by eye,\nwith patterns brighter than white.",
-                             "desktop"),
             ]),
             # (the menus, text, buttons, HUD and scoreboard in one list:
             # more rows than fit above the help line, so it scrolls:
@@ -334,6 +306,27 @@ SCREENS = {
                 # (ChupathingyCE's: the loading screen while joining, browser_screen.c)
                 ("JOIN SCREEN:", "display.join_screen", ON_OFF,
                  "Show the loading screen while joining a game.", "desktop android"),
+            ]),
+            ("hdr", "HDR SETUP", "HDR, the HDR display, tone mapping and brightness.", [
+                ("HDR:", "display.hdr", ON_OFF,
+                 "Keep the light of explosions, plasma and glows past\nwhite, and roll it off instead of clipping.", "desktop"),
+                ("HDR DISPLAY:", "display.hdr_output", ON_OFF,
+                 "With HDR, on an HDR display, show that light\nbrighter than white. From the next start.", "desktop"),
+                ("TONE MAPPING:", "display.hdr_tone_mapping",
+                 [("NEUTRAL", "neutral"), ("ACES", "aces"), ("REINHARD", "reinhard")],
+                 "Neutral keeps the picture and rolls off only the\nbrightest parts. ACES is filmic, Reinhard softer.", "desktop"),
+                ("EXPOSURE:", "display.hdr_exposure",
+                 [(f"{value:g}", f"{value:g}") for value in (0.5, 0.75, 1, 1.25, 1.5, 2)],
+                 "The view's brightness before tone mapping.", "desktop"),
+                ("HDR BRIGHTNESS:", "display.hdr_paper_white",
+                 [("AUTO", "0")] + [(f"{value}", f"{value}") for value in (80, 100, 120, 160, 200, 250, 300, 400, 500)],
+                 "How bright white is on an HDR display, in nits.\nAuto is the display's own.", "desktop"),
+                ("HDR PEAK:", "display.hdr_peak",
+                 [("AUTO", "0")] + [(f"{value}", f"{value}") for value in (400, 600, 800, 1000, 1500, 2000, 4000)],
+                 "The brightest highlight on an HDR display,\nin nits. Auto asks the display.", "desktop"),
+                ("HUD BRIGHTNESS:", "display.hdr_ui_nits",
+                 [("SAME", "0")] + [(f"{value}", f"{value}") for value in (80, 100, 120, 160, 200, 250, 300, 400, 500)],
+                 "The HUD's and menus' white on an HDR display,\nin nits.", "desktop"),
             ]),
         ],
     },
@@ -573,23 +566,8 @@ SCREENS = {
 # the screens a row of a list opens (_screen_link), each an ordinary
 # settings screen with the same pending edits, Defaults, OK and Cancel:
 # OpenCE's, which a nested list cannot be (a renderer's patterns, a screen
-# of the game's own text). Video Setup's EXTRA EFFECTS opens HDR Calibration
-# (with an HDR display), Network Setup's PRIVACY Discord Account.
-#
-# HDR Calibration: the peak, then paper white, each row's pattern drawn by
-# the renderer between the rows and the help, at the values shown, which the
-# display takes while the screen is open (menu_functions.c's "port hdr
-# calibration", d3d8_gl.c's hdr_calibration_draw)
-SCREENS["video_settings/hdr_calibration"] = {
-    "screen": "hdr_calibration_settings_screen", "header": SCREENS["video_settings"]["header"],
-    "spacing": 30, "inputs": ["port hdr calibration"],
-    "rows": [
-        ("PEAK BRIGHTNESS:", "display.hdr_peak_brightness", PEAK_BRIGHTNESSES,
-         "Raise it until the ring just disappears into\nthe square: the brightest your display shows.", None),
-        ("PAPER WHITE:", "display.hdr_paper_white", PAPER_WHITES,
-         "How bright white is (the menus, the HUD, the\ngrey bars), in nits. Choose what looks right.", None),
-    ],
-}
+# of the game's own text): Network Setup's PRIVACY Discord Account.
+
 
 # the controller's sticks' dead zones (port/linux/src/xinput_sdl.c's
 # halo_stick_dead_range): OpenCE's screen of its own, config.toml's, for

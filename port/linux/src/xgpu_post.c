@@ -19,27 +19,24 @@ compiled as GLSL at its HIGH preset: edges from luma, blending weights from
 its lookup textures, then the blend. Android has FXAA only (d3d8_gl.c's
 anti_aliasing_values).
 
-display.hdr's passes are here too: the tone mapping of a window's 3D view in
-the GL_RGBA16F back buffer, in place as the anti-aliasing is (and before
-it), and the presentation of that back buffer into the window, which a blit
-from a floating-point target would not make linear for an HDR display (nor,
-on OpenGL ES, convert at all). The game's values are gamma encoded (the Xbox
+display.hdr's passes are here too (xgpu_tone_map.h): the tone mapping of a
+window's 3D view in the GL_RGBA16F back buffer, in place as the
+anti-aliasing is (and before it), and the presentation of that back buffer
+into the window, which a blit from a floating-point target would not make
+linear for an HDR display. The game's values are gamma encoded (the Xbox
 sent them to the television as they were): the tone mapping takes them to
 linear light (a power of 2.2), scales them by the exposure, brings what is
-past white into the display's range with its curve, and encodes them again.
-The default curve, "gt7", is Polyphony Digital's GT7 tone mapping operator
-(port/third_party/gt7_tone_mapping, MIT licensed), in GLSL here.
-
-The HDR calibration screen's patterns are drawn here too, into
-display.hdr_output's window after the back buffer: rectangles and rings of
-one colour each, in scRGB, which may be far brighter than the menus' white.
+past white into the display's range with its curve, and encodes them
+again. The OpenGL path and the curves are hkmodd's (OpenCE pull request
+280, before its license changed).
 */
 
 #include "xgpu.h"
+#include "xgpu_tone_map.h"
 
 #include <stdlib.h>
 
-#ifndef HALO_GLES
+#ifndef HALO_GL_ES
 #include "zlib_prefixed.h"
 
 /* port/third_party/smaa, embedded by tools/embed_assets.py: the shader's
@@ -61,7 +58,6 @@ enum
 	_post_program_smaa_blend,
 	_post_program_tone_map,
 	_post_program_present,
-	_post_program_fill,
 	NUMBER_OF_POST_PROGRAMS
 };
 
@@ -71,7 +67,6 @@ enum
 	_post_set_fxaa,
 	_post_set_smaa,
 	_post_set_hdr,
-	_post_set_fill,
 	NUMBER_OF_POST_SETS
 };
 
@@ -80,12 +75,10 @@ static struct
 	GLuint vertex_shader;
 	GLuint programs[NUMBER_OF_POST_PROGRAMS];
 	/* each program's metrics uniform, FXAA's bounds, the tone mapping's
-	settings, the presentation's rectangle and scale, and the fill's colour
-	and ring */
+	settings, and the presentation's rectangle and encoding */
 	GLint metrics[NUMBER_OF_POST_PROGRAMS];
 	GLint bounds;
-	GLint tone, rectangle, scale;
-	GLint fill_color, fill_ring;
+	GLint tone, rectangle, encoding;
 	/* each set's programs or textures could not be made */
 	BOOL failed[NUMBER_OF_POST_SETS];
 	/* the size of the textures below, and color's internal format */
@@ -107,7 +100,7 @@ static struct
 
 static void shader_header(struct xgpu_text *text)
 {
-#ifdef HALO_GLES
+#ifdef HALO_GL_ES
 	xgpu_text_append(text,
 		"#version %s\n"
 		"precision highp float;\n"
@@ -223,155 +216,19 @@ static const char fxaa_source[] =
 	"\tresult = vec4(color_at(position + max(varies ? pixel_offset : 0.0, subpixel) * across), 1.0);\n"
 	"}\n";
 
-/* display.hdr's tone mapping. "neutral" leaves the picture as it is drawn
-up to KNEE of the peak and rolls off only what is brighter, by the largest
-channel (so that a colour keeps its hue and saturation), along an extended
-Reinhard curve that meets the line below it at the same slope and reaches
-the peak at WHITE times it. "aces" is Krzysztof Narkowicz's fit of the ACES
-filmic curve (more contrast; white itself comes out at 0.8), "reinhard" the
-extended Reinhard curve on luminance (softer, and darker throughout).
-"gt7" is Gran Turismo 7's (the default): the colour in Rec.2020 at its
-brightness in nits (1.0 at paper white, from display.hdr_paper_white or
-Windows'), each channel along GT7's curve to the display's peak, blended
-with that curve's brightness at the colour's own hue in ICtCp, whose chroma
-fades out as the colour nears the peak: the brightest light goes to white,
-as film and the eye take it, and as the Xbox's 8 bits clipped it, in place
-of staying saturated. Without an HDR display, as GT7's SDR: 250 nits white,
-1.0 at it. */
+/* display.hdr's tone mapping (xgpu_tone_map.h), the pixel's own texel
+alone */
 static const char tone_map_source[] =
 	"uniform sampler2D color_texture;\n"
-	"/* the curve (xgpu.h), the exposure, the peak, and with an HDR display\n"
-	"GT7's unit (100 nits) in paper whites */\n"
+	"/* the curve (xgpu.h), the exposure, the peak and the UI's white */\n"
 	"uniform vec4 tone;\n"
 	"out vec4 result;\n"
 	"\n"
-	"const float GAMMA = 2.2;\n"
-	"const float KNEE = 0.8;\n"
-	"const float WHITE = 8.0;\n"
+	XGPU_TONE_MAP_GLSL
 	"\n"
-	"float extended_reinhard(float value, float white)\n"
-	"{\n"
-	"\treturn value * (1.0 + value / (white * white)) / (1.0 + value);\n"
-	"}\n"
-	"\n"
-	"/* GT7's tone mapping (port/third_party/gt7_tone_mapping, MIT, Polyphony\n"
-	"Digital): linear Rec.2020, 1.0 = 100 nits */\n"
-	"const float PQ_M1 = 0.1593017578125;\n"
-	"const float PQ_M2 = 78.84375;\n"
-	"const float PQ_C1 = 0.8359375;\n"
-	"const float PQ_C2 = 18.8515625;\n"
-	"const float PQ_C3 = 18.6875;\n"
-	"\n"
-	"float pq_encode(float value)\n"
-	"{\n"
-	"\tfloat y = pow(max(value, 0.0) / 100.0, PQ_M1);\n"
-	"\n"
-	"\treturn exp2(PQ_M2 * (log2(PQ_C1 + PQ_C2 * y) - log2(1.0 + PQ_C3 * y)));\n"
-	"}\n"
-	"\n"
-	"float pq_decode(float signal)\n"
-	"{\n"
-	"\tfloat p = pow(clamp(signal, 0.0, 1.0), 1.0 / PQ_M2);\n"
-	"\n"
-	"\treturn pow(max(p - PQ_C1, 0.0) / (PQ_C2 - PQ_C3 * p), 1.0 / PQ_M1) * 100.0;\n"
-	"}\n"
-	"\n"
-	"vec3 rgb_to_ictcp(vec3 rgb)\n"
-	"{\n"
-	"\tvec3 lms = vec3(dot(rgb, vec3(1688.0, 2146.0, 262.0)), dot(rgb, vec3(683.0, 2951.0, 462.0)),\n"
-	"\t\tdot(rgb, vec3(99.0, 309.0, 3688.0))) / 4096.0;\n"
-	"\tvec3 pq = vec3(pq_encode(lms.x), pq_encode(lms.y), pq_encode(lms.z));\n"
-	"\n"
-	"\treturn vec3(dot(pq, vec3(2048.0, 2048.0, 0.0)), dot(pq, vec3(6610.0, -13613.0, 7003.0)),\n"
-	"\t\tdot(pq, vec3(17933.0, -17390.0, -543.0))) / 4096.0;\n"
-	"}\n"
-	"\n"
-	"vec3 ictcp_to_rgb(vec3 ictcp)\n"
-	"{\n"
-	"\tvec3 pq = vec3(dot(ictcp, vec3(1.0, 0.00860904, 0.11103)), dot(ictcp, vec3(1.0, -0.00860904, -0.11103)),\n"
-	"\t\tdot(ictcp, vec3(1.0, 0.560031, -0.320627)));\n"
-	"\tvec3 lms = vec3(pq_decode(pq.x), pq_decode(pq.y), pq_decode(pq.z));\n"
-	"\n"
-	"\treturn max(vec3(dot(lms, vec3(3.43661, -2.50645, 0.0698454)), dot(lms, vec3(-0.79133, 1.9836, -0.192271)),\n"
-	"\t\tdot(lms, vec3(-0.0259499, -0.0989137, 1.12486))), vec3(0.0));\n"
-	"}\n"
-	"\n"
-	"/* GT Tone Mapping's curve, with a convergent shoulder, to peak */\n"
-	"float gt_curve(float x, float peak)\n"
-	"{\n"
-	"\tconst float ALPHA = 0.25, MID_POINT = 0.538, LINEAR_SECTION = 0.444, TOE_STRENGTH = 1.280;\n"
-	"\tfloat k = (LINEAR_SECTION - 1.0) / (ALPHA - 1.0);\n"
-	"\n"
-	"\tif (x < 0.0)\n"
-	"\t\treturn 0.0;\n"
-	"\tif (x < LINEAR_SECTION * peak)\n"
-	"\t{\n"
-	"\t\tfloat linear_weight = smoothstep(0.0, MID_POINT, x);\n"
-	"\n"
-	"\t\treturn (1.0 - linear_weight) * MID_POINT * pow(x / MID_POINT, TOE_STRENGTH) + linear_weight * x;\n"
-	"\t}\n"
-	"\treturn peak * (LINEAR_SECTION + k) - peak * k * exp(LINEAR_SECTION / k) * exp(-x / (k * peak));\n"
-	"}\n"
-	"\n"
-	"/* each channel along the curve, blended with the curve's luminance at the\n"
-	"colour's hue, whose chroma fades as the colour nears the target */\n"
-	"vec3 gt7(vec3 rgb, float target)\n"
-	"{\n"
-	"\tvec3 ucs = rgb_to_ictcp(rgb);\n"
-	"\tvec3 skewed = vec3(gt_curve(rgb.r, target), gt_curve(rgb.g, target), gt_curve(rgb.b, target));\n"
-	"\tfloat chroma = 1.0 - smoothstep(0.98, 1.16, ucs.x / rgb_to_ictcp(vec3(target)).x);\n"
-	"\tvec3 scaled = ictcp_to_rgb(vec3(rgb_to_ictcp(skewed).x, ucs.yz * chroma));\n"
-	"\n"
-	"\treturn min(mix(skewed, scaled, 0.6), vec3(target));\n"
-	"}\n"
-	"\n"
-
 	"void main()\n"
 	"{\n"
-	"\tvec3 color = pow(max(texelFetch(color_texture, ivec2(gl_FragCoord.xy), 0).rgb, vec3(0.0)), vec3(GAMMA)) * tone.y;\n"
-	"\tfloat peak = tone.z;\n"
-	"\n"
-	"\tif (tone.x < 0.5)\n"
-	"\t{\n"
-	"\t\tfloat knee = KNEE * peak;\n"
-	"\t\tfloat largest = max(color.r, max(color.g, color.b));\n"
-	"\n"
-	"\t\tif (largest > knee)\n"
-	"\t\t{\n"
-	"\t\t\tfloat range = peak - knee;\n"
-	"\t\t\tfloat rolled = knee + range * extended_reinhard((largest - knee) / range, (WHITE * peak - knee) / range);\n"
-	"\n"
-	"\t\t\tcolor *= rolled / largest;\n"
-	"\t\t}\n"
-	"\t}\n"
-	"\telse if (tone.x < 1.5)\n"
-	"\t{\n"
-	"\t\tvec3 x = color / peak;\n"
-	"\n"
-	"\t\tcolor = peak * clamp(x * (2.51 * x + 0.03) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0);\n"
-	"\t}\n"
-	"\telse if (tone.x < 2.5)\n"
-	"\t{\n"
-	"\t\tfloat luminance = dot(color, vec3(0.2126, 0.7152, 0.0722)) / peak;\n"
-	"\n"
-	"\t\tif (luminance > 0.0)\n"
-	"\t\t\tcolor *= extended_reinhard(luminance, WHITE) / luminance;\n"
-	"\t}\n"
-	"\telse\n"
-	"\t{\n"
-	"\t\t/* (Rec.709 to Rec.2020, in GT7's units: an HDR display's paper white,\n"
-	"\t\telse GT7's SDR white, 250 nits, and its SDR target, 1.0 at 250) */\n"
-	"\t\tfloat unit = tone.w > 0.0 ? tone.w : 2.5;\n"
-	"\t\tfloat target = tone.w > 0.0 ? max(peak * unit, 2.5) : 2.5;\n"
-	"\t\tvec3 wide = vec3(dot(color, vec3(0.627404, 0.329283, 0.043313)), dot(color, vec3(0.069097, 0.919540, 0.011362)),\n"
-	"\t\t\tdot(color, vec3(0.016391, 0.088013, 0.895595))) * unit;\n"
-	"\t\tvec3 mapped = gt7(wide, target) / unit;\n"
-	"\n"
-	"\t\tcolor = max(vec3(dot(mapped, vec3(1.660491, -0.587641, -0.072850)),\n"
-	"\t\t\tdot(mapped, vec3(-0.124550, 1.132900, -0.008349)), dot(mapped, vec3(-0.018151, -0.100579, 1.118730))),\n"
-	"\t\t\tvec3(0.0));\n"
-	"\t}\n"
-	"\tresult = vec4(pow(min(color, vec3(peak)), vec3(1.0 / GAMMA)), 1.0);\n"
+	"\tresult = vec4(tone_map(texelFetch(color_texture, ivec2(gl_FragCoord.xy), 0).rgb, tone), 1.0);\n"
 	"}\n";
 
 /* the back buffer into the window: the window's rows are from the bottom */
@@ -379,8 +236,9 @@ static const char present_source[] =
 	"uniform sampler2D color_texture;\n"
 	"/* the window's rectangle: x, y, 1 / width, 1 / height */\n"
 	"uniform vec4 rectangle;\n"
-	"/* more than 0: linear, times this (scRGB) */\n"
-	"uniform float scale;\n"
+	"/* the output (xgpu.h), the paper white in its units, the UI's white and\n"
+	"the peak in whites (xgpu_tone_map_encoding) */\n"
+	"uniform vec4 encoding;\n"
 	"out vec4 result;\n"
 	"\n"
 	"void main()\n"
@@ -388,28 +246,14 @@ static const char present_source[] =
 	"\tvec2 position = (gl_FragCoord.xy - rectangle.xy) * rectangle.zw;\n"
 	"\tvec3 color = max(textureLod(color_texture, vec2(position.x, 1.0 - position.y), 0.0).rgb, vec3(0.0));\n"
 	"\n"
-	"\tresult = vec4(scale > 0.0 ? pow(color, vec3(2.2)) * scale : min(color, vec3(1.0)), 1.0);\n"
+	"\tif (encoding.x > 1.5)\n"
+	"\t\tcolor = min(pow(color, vec3(2.2)) * encoding.z, vec3(encoding.w)) * encoding.y;\n"
+	"\telse\n"
+	"\t\tcolor = min(color, vec3(1.0));\n"
+	"\tresult = vec4(color, 1.0);\n"
 	"}\n";
 
-/* the viewport in one colour, or only a ring of it */
-static const char fill_source[] =
-	"/* linear (scRGB) */\n"
-	"uniform vec4 color;\n"
-	"/* the ring's centre, and its outer and inner radius, in the window's\n"
-	"pixels; an outer radius of 0: the whole viewport */\n"
-	"uniform vec4 ring;\n"
-	"out vec4 result;\n"
-	"\n"
-	"void main()\n"
-	"{\n"
-	"\tfloat from_centre = distance(gl_FragCoord.xy, ring.xy);\n"
-	"\n"
-	"\tif (ring.z > 0.0 && (from_centre > ring.z || from_centre < ring.w))\n"
-	"\t\tdiscard;\n"
-	"\tresult = vec4(color.rgb, 1.0);\n"
-	"}\n";
-
-#ifndef HALO_GLES
+#ifndef HALO_GL_ES
 /* the main functions of SMAA's passes, after SMAA.hlsl; its vertex
 functions' offsets are found for each pixel */
 static const char *const smaa_mains[] =
@@ -462,7 +306,7 @@ static GLuint program_build(int which)
 	static const char *const names[NUMBER_OF_POST_PROGRAMS] =
 	{
 		"FXAA", "SMAA edge detection", "SMAA blending weight", "SMAA neighborhood blending",
-		"HDR tone mapping", "HDR presentation", "HDR calibration"
+		"HDR tone mapping", "HDR presentation"
 	};
 	static const struct
 	{
@@ -497,11 +341,7 @@ static GLuint program_build(int which)
 	{
 		xgpu_text_append(&text, "%s", present_source);
 	}
-	else if (which == _post_program_fill)
-	{
-		xgpu_text_append(&text, "%s", fill_source);
-	}
-#ifndef HALO_GLES
+#ifndef HALO_GL_ES
 	else if (xgpu_smaa_shader_size)
 	{
 		xgpu_text_append(&text,
@@ -541,12 +381,7 @@ static GLuint program_build(int which)
 	else if (which == _post_program_present)
 	{
 		post.rectangle = glGetUniformLocation(program, "rectangle");
-		post.scale = glGetUniformLocation(program, "scale");
-	}
-	else if (which == _post_program_fill)
-	{
-		post.fill_color = glGetUniformLocation(program, "color");
-		post.fill_ring = glGetUniformLocation(program, "ring");
+		post.encoding = glGetUniformLocation(program, "encoding");
 	}
 	return program;
 }
@@ -606,7 +441,7 @@ static void textures_fit(BOOL smaa, GLenum format, unsigned long width, unsigned
 	}
 }
 
-#ifndef HALO_GLES
+#ifndef HALO_GL_ES
 /* a lookup texture of SMAA's from its zlib stream; 0 if it does not
 inflate */
 static GLuint lookup_texture(const unsigned int *stream, unsigned long stream_size, GLenum format,
@@ -712,7 +547,7 @@ static void pass_state(void)
 	glDisable(GL_BLEND);
 	glDisable(GL_CULL_FACE);
 	glDisable(GL_POLYGON_OFFSET_FILL);
-#ifndef HALO_GLES
+#ifndef HALO_GL_ES
 	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 #endif
 	glBindVertexArray(post.vertex_array);
@@ -736,7 +571,7 @@ BOOL xgpu_post_prepare(BOOL smaa)
 	{
 		return FALSE;
 	}
-#ifndef HALO_GLES
+#ifndef HALO_GL_ES
 	if (smaa && !post.area)
 	{
 		post.area = lookup_texture(xgpu_smaa_area_texture, xgpu_smaa_area_texture_size, GL_RG8, GL_RG,
@@ -803,7 +638,26 @@ BOOL xgpu_post_anti_alias(BOOL smaa, GLuint framebuffer, GLenum format, unsigned
 	return TRUE;
 }
 
-BOOL xgpu_post_tone_map(GLuint source, GLuint source_texture, GLuint destination, unsigned long width, unsigned long height,
+/* ---------- high dynamic range (xgpu_tone_map.h) */
+
+void xgpu_tone_map_set(float tone[4], const struct xgpu_tone_mapping *tone_mapping)
+{
+	tone[0] = (float)tone_mapping->curve;
+	tone[1] = tone_mapping->exposure;
+	tone[2] = tone_mapping->peak >= 1.0f ? tone_mapping->peak : 1.0f;
+	tone[3] = tone_mapping->ui > 0.0f ? tone_mapping->ui : 1.0f;
+}
+
+void xgpu_tone_map_encoding(float encoding[4], int output, float paper_white,
+	const struct xgpu_tone_mapping *tone_mapping)
+{
+	encoding[0] = (float)output;
+	encoding[1] = paper_white;
+	encoding[2] = tone_mapping->ui > 0.0f ? tone_mapping->ui : 1.0f;
+	encoding[3] = tone_mapping->peak >= 1.0f ? tone_mapping->peak : 1.0f;
+}
+
+BOOL xgpu_post_tone_map(GLuint source, GLuint destination, unsigned long width, unsigned long height,
 	const GLint corners[4], const struct xgpu_tone_mapping *tone_mapping)
 {
 	float tone[4];
@@ -812,26 +666,19 @@ BOOL xgpu_post_tone_map(GLuint source, GLuint source_texture, GLuint destination
 		return FALSE;
 	textures_fit(FALSE, GL_RGBA16F, width, height);
 	pass_state();
-	if (destination == source)
-	{
-		/* (a pass cannot read the texture it draws into) */
-		color_copy(source, corners);
-		source_texture = post.color;
-	}
+	color_copy(source, corners);
 
-	tone[0] = (float)tone_mapping->curve;
-	tone[1] = tone_mapping->exposure;
-	tone[2] = tone_mapping->peak;
-	tone[3] = tone_mapping->paper;
-	texture_bind(0, source_texture);
+	xgpu_tone_map_set(tone, tone_mapping);
+	texture_bind(0, post.color);
 	glUseProgram(post.programs[_post_program_tone_map]);
 	glUniform4fv(post.tone, 1, tone);
+	/* (the color alone: the game keeps values of its own in alpha) */
 	pass_draw(_post_program_tone_map, destination, corners, TRUE);
 	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 	return TRUE;
 }
 
-BOOL xgpu_post_present(GLuint texture, int x, int y, int width, int height, float scale)
+BOOL xgpu_post_present(GLuint texture, int x, int y, int width, int height, const float encoding[4])
 {
 	float rectangle[4];
 
@@ -848,30 +695,7 @@ BOOL xgpu_post_present(GLuint texture, int x, int y, int width, int height, floa
 	texture_bind(0, texture);
 	glUseProgram(post.programs[_post_program_present]);
 	glUniform4fv(post.rectangle, 1, rectangle);
-	glUniform1f(post.scale, scale);
-	glDrawArrays(GL_TRIANGLES, 0, 3);
-	return TRUE;
-}
-
-BOOL xgpu_post_fill(const GLint corners[4], const float color[3], const float ring[4])
-{
-	float values[4];
-
-	if (!programs_prepare(_post_set_fill, _post_program_fill, _post_program_fill))
-		return FALSE;
-	if (corners[2] <= corners[0] || corners[3] <= corners[1])
-		return TRUE;
-	pass_state();
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	glViewport(corners[0], corners[1], corners[2] - corners[0], corners[3] - corners[1]);
-	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-	glUseProgram(post.programs[_post_program_fill]);
-	values[0] = color[0];
-	values[1] = color[1];
-	values[2] = color[2];
-	values[3] = 1.0f;
-	glUniform4fv(post.fill_color, 1, values);
-	glUniform4fv(post.fill_ring, 1, ring);
+	glUniform4fv(post.encoding, 1, encoding);
 	glDrawArrays(GL_TRIANGLES, 0, 3);
 	return TRUE;
 }

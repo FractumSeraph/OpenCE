@@ -84,19 +84,25 @@ static void glBlitFramebuffer(int sx0, int sy0, int sx1, int sy1,
 /* (port, this fork: the window's framebuffer, 0 but on iOS) */
 static GLuint platform_window_framebuffer(void) { return 0; }
 
-static int xgpu_post_present(GLuint texture, int x, int y, int width, int height, float white)
+/* (ChupathingyCE's hdr_present, d3d8_gl.c: the HDR back buffer's shader into
+the window, which falls back to the blit when it cannot) */
+static int test_hdr_present(GLuint texture, GLenum format)
 {
+    if (format != GL_RGBA16F)
+        return FALSE;
     assert(draw_binding == 0 && texture == expected_texture);
     if (shader_success)
         shader_presents++;
     return shader_success;
 }
+#define hdr_present(back, read, x, y, width, height) \
+    ((void)(read), (void)(x), (void)(y), (void)(width), (void)(height), \
+     test_hdr_present((back)->target.texture, (back)->target.format))
 
 static void present(GLuint texture, int floating)
 {
     struct test_buffer { struct { GLuint texture; GLenum format; int gl_width, gl_height; } target; } buffer;
     struct test_buffer *back_buffer = &buffer;
-    struct { int float_window; float sdr_white; } hdr = { 0, 1.0f };
     int x = 0, y = 0, width = 640, height = 480;
     GLuint read_framebuffer;
 #define picture_width ((GLint)back_buffer->target.gl_width)

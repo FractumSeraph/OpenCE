@@ -142,12 +142,12 @@ int platform_audio_devices(int recording, char (*names)[PLATFORM_AUDIO_DEVICE_NA
 the system's default for "default", or one not found */
 SDL_AudioDeviceID platform_audio_device(int recording, const char *name);
 void platform_video_drawable_size(int *width, int *height);
-#ifndef HALO_ANDROID
 /* whether the window's display shows HDR, with the desktop's white (in
-scRGB's units, 1.0 being 80 nits) and how many times brighter than it the
-display goes (1.0 without HDR) */
+scRGB's units, 1.0 being 80 nits; 1.0 for macOS's EDR) and how many times
+brighter than it the display goes (1.0 without HDR); and whether the
+window's pixels are floating point (display.hdr_output, scRGB) */
 BOOL platform_video_hdr(float *sdr_white, float *headroom);
-#endif
+BOOL platform_video_float_window(void);
 #ifdef HALO_IOS
 /* the part of the drawable the picture is shown in, in pixels from its top
 left: all of it, but where the platform keeps part for itself (iPhone Duo

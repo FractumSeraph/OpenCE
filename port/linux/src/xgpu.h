@@ -372,6 +372,10 @@ struct xgpu_render_target
 	/* changes whenever the target is drawn into or cleared (d3d8_gl.c,
 	bind_targets) */
 	unsigned long written;
+	/* the texture's (and the multisampled renderbuffer's) internal format:
+	GL_RGBA8, GL_DEPTH24_STENCIL8, or GL_RGBA16F for the back buffer with
+	display.hdr (d3d8_gl.c) */
+	GLenum format;
 };
 
 /* the GL texture holding a render target with this physical address, or 0 */
@@ -449,7 +453,7 @@ GL_RGBA16F with display.hdr); FALSE if its programs do not build */
 BOOL xgpu_post_anti_alias(BOOL smaa, GLuint framebuffer, GLenum format, unsigned long width,
 	unsigned long height, const GLint corners[4]);
 
-/* ---------- high dynamic range
+/* ---------- high dynamic range (xgpu_tone_map.h)
 
 display.hdr (d3d8_gl.c): the back buffer is GL_RGBA16F, so that what the
 game's blending adds up past white is kept rather than clipped, and each
@@ -465,7 +469,6 @@ enum
 	_xgpu_tone_mapping_neutral,
 	_xgpu_tone_mapping_aces,
 	_xgpu_tone_mapping_reinhard,
-	_xgpu_tone_mapping_gt7,
 	NUMBER_OF_XGPU_TONE_MAPPINGS
 };
 
@@ -475,28 +478,50 @@ struct xgpu_tone_mapping
 	/* the scale of the linear values before the curve */
 	float exposure;
 	/* the brightest value the curve gives, in the display's whites: 1.0 for
-	SDR, an HDR display's headroom */
+	SDR, an HDR display's headroom over paper white */
 	float peak;
-	/* with an HDR display, paper white in GT7's units (100 nits); 0 for SDR */
-	float paper;
+	/* the UI's white over paper white (display.hdr_ui_nits): the view is
+	left under the frame's 1 by it, so that the HUD is the brighter; 1 for
+	the same */
+	float ui;
 };
+
+/* the display's encodings at the present */
+enum
+{
+	/* the frame's values, clamped to [0, 1] (the window's 8 bits) */
+	_xgpu_hdr_output_sdr,
+	/* HDR10: Rec. 2020 primaries, SMPTE ST 2084 (PQ), 1.0 10 000 nits (bgfx's
+	swap chain) */
+	_xgpu_hdr_output_pq,
+	/* scRGB: linear light, 1.0 the output's own white (OpenGL's
+	floating-point window) */
+	_xgpu_hdr_output_linear,
+};
+
+/* the shaders' uniforms (xgpu_tone_map.h): tone from the tone mapping;
+encoding from the output, the paper white in the output's units (over
+10 000 nits for PQ, over the output's white for linear), and the tone
+mapping's UI white and peak */
+void xgpu_tone_map_set(float tone[4], const struct xgpu_tone_mapping *tone_mapping);
+void xgpu_tone_map_encoding(float encoding[4], int output, float paper_white,
+	const struct xgpu_tone_mapping *tone_mapping);
 
 /* the tone mapping and presentation programs made now; FALSE if they
 cannot be (once FALSE, it stays so) */
 BOOL xgpu_post_prepare_hdr(void);
 
 /* tone maps the corners (as xgpu_post_anti_alias's) of a GL_RGBA16F target:
-reads its pixels from source_texture (source is its framebuffer), writes the
-colour (not alpha) into destination (the same, or its multisampled
-renderbuffer's) */
-BOOL xgpu_post_tone_map(GLuint source, GLuint source_texture, GLuint destination, unsigned long width, unsigned long height,
+reads its pixels from source (its texture's framebuffer), writes the colour
+(not alpha) into destination (the same, or its multisampled renderbuffer's) */
+BOOL xgpu_post_tone_map(GLuint source, GLuint destination, unsigned long width, unsigned long height,
 	const GLint corners[4], const struct xgpu_tone_mapping *tone_mapping);
 
 /* draws a GL_RGBA16F target's texture into the bound draw framebuffer's x,
 y, width, height (the window's, row 0 at the bottom), turned the right way
-up: as it is (SDR), or, with scale more than 0, made linear and scaled by
-it (an HDR display's scRGB framebuffer: scale is its SDR white) */
-BOOL xgpu_post_present(GLuint texture, int x, int y, int width, int height, float scale);
+up: as it is (SDR), or, for an HDR display's scRGB framebuffer, made linear
+and scaled to the paper white (encoding: xgpu_tone_map_encoding's) */
+BOOL xgpu_post_present(GLuint texture, int x, int y, int width, int height, const float encoding[4]);
 
 /* Android: a vertex (indices 0) or index (1) buffer resource whose size
 bytes the game wrote once and will not write again, drawn from a GL buffer
@@ -519,11 +544,5 @@ flare's slot is read only once a count of the flare's own tests has come
 (rasterizer_lights.c; d3d8_gl.c) */
 unsigned long long xgpu_visibility_tests_ended(unsigned long index);
 unsigned long long xgpu_visibility_test_counted(unsigned long index);
-/* fills the corners x0, y0 to x1, y1 of the window (row 0 at the bottom)
-with color, as it is (an HDR display's scRGB framebuffer: linear, 1.0 at 80
-nits), or only the ring ring[0], ring[1] (its centre in the window), from
-radius ring[3] to ring[2]; ring[2] 0 for the whole rectangle. FALSE if its
-program does not build. */
-BOOL xgpu_post_fill(const GLint corners[4], const float color[3], const float ring[4]);
 
 #endif

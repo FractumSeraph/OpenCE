@@ -397,6 +397,40 @@ static const struct config_setting config_settings[] =
 		"\"msaa4x\" or \"msaa8x\". Android has \"off\", \"fxaa\", \"msaa2x\" and\n"
 		"\"msaa4x\". The default is \"msaa2x\" on 64-bit computers. It is \"off\"\n"
 		"on 32-bit computers and Android." },
+	{ "display.hdr", _config_boolean, "false", "HALO_HDR", _environment_value, _platform_desktop,
+		"Draw the 3D view into a floating-point back buffer, which keeps what\n"
+		"the game's additive effects (explosions, plasma, lights, the sun's\n"
+		"glare) add past white, and tone map it before the HUD is drawn:\n"
+		"display.hdr_tone_mapping brings it back to the display's range\n"
+		"instead of clipping it. The glows the game draws (teleporters, light\n"
+		"fixtures, energy shields, plasma bolts, the weapon's displays) go\n"
+		"past white. false draws into 8 bits a channel, as the Xbox does." },
+	{ "display.hdr_output", _config_boolean, "false", "HALO_HDR_OUTPUT", _environment_value, _platform_desktop,
+		"With display.hdr, send HDR to a display that has it (the operating\n"
+		"system's HDR must be on): the bgfx renderer's HDR10 swap chain, or\n"
+		"on OpenGL a floating-point window (scRGB), taken up when the game\n"
+		"starts. What is past white is then shown brighter than white rather\n"
+		"than tone mapped down to it." },
+	{ "display.hdr_tone_mapping", _config_string, "\"neutral\"", "HALO_HDR_TONE_MAPPING", _environment_value,
+		_platform_desktop,
+		"With display.hdr, the curve that brings what is past white into the\n"
+		"display's range: \"neutral\" (the picture as drawn, with only its\n"
+		"brightest parts rolled off), \"aces\" (filmic, more contrast) or\n"
+		"\"reinhard\" (softer, and darker throughout)." },
+	{ "display.hdr_exposure", _config_real, "1.0", "HALO_HDR_EXPOSURE", _environment_value, _platform_desktop,
+		"With display.hdr, the 3D view's brightness in linear light before it\n"
+		"is tone mapped, 0.25 to 4.0." },
+	{ "display.hdr_paper_white", _config_integer, "0", "HALO_HDR_PAPER_WHITE", _environment_value,
+		_platform_desktop,
+		"With display.hdr_output: how bright the game's white (surfaces, the\n"
+		"HUD, the menus) is, in nits, 80 to 500. 0 is the display's own SDR\n"
+		"white (Windows' SDR brightness)." },
+	{ "display.hdr_peak", _config_integer, "0", "HALO_HDR_PEAK", _environment_value, _platform_desktop,
+		"With display.hdr_output: the brightest highlight, in nits, 400 to\n"
+		"10000. 0 asks the display." },
+	{ "display.hdr_ui_nits", _config_integer, "0", "HALO_HDR_UI_NITS", _environment_value, _platform_desktop,
+		"With display.hdr_output: the HUD's and the menus' white, in nits, 80\n"
+		"to 500, no brighter than the peak. 0 is the paper white's." },
 	{ "display.shadow_resolution", _config_integer, DEFAULT_SHADOW_RESOLUTION, "HALO_SHADOW_RESOLUTION",
 		_environment_value, _platform_all,
 		"Shadow size in pixels: 128, 256, 512 or 1024. The Xbox used 128." },
@@ -817,38 +851,6 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"Gulch's base) stay apart at any distance in place of flickering\n"
 		"through each other. false: 24 bits, as the Xbox's. Taken up when the\n"
 		"game starts." },
-	{ "display.hdr", _config_boolean, "false", "HALO_HDR", _environment_value, _platform_all,
-		"Draw the 3D view into a floating-point back buffer, which keeps what\n"
-		"the game's additive effects (explosions, plasma, lights, the sun's\n"
-		"glare) add past white, and tone map it before the HUD is drawn:\n"
-		"display.hdr_tone_mapping brings it back to the display's range\n"
-		"instead of clipping it. false draws into 8 bits a channel, as the\n"
-		"Xbox does." },
-	{ "display.hdr_exposure", _config_real, "1.0", "HALO_HDR_EXPOSURE", _environment_value, _platform_all,
-		"With display.hdr, the 3D view's brightness in linear light before it\n"
-		"is tone mapped, 0.25 to 4.0." },
-	{ "display.hdr_tone_mapping", _config_string, "\"gt7\"", "HALO_HDR_TONE_MAPPING", _environment_value,
-		_platform_all,
-		"With display.hdr, the curve that fits the brightest light into what the\n"
-		"display shows: \"gt7\" (Gran Turismo 7's: the brightest light turns to\n"
-		"white, as film shows it), \"neutral\" (the picture as drawn, its\n"
-		"brightest parts rolled off at their own colour), \"aces\" (filmic,\n"
-		"more contrast) or \"reinhard\" (softer, and darker throughout)." },
-	{ "display.hdr_output", _config_boolean, "false", "HALO_HDR_OUTPUT", _environment_value, _platform_desktop,
-		"With display.hdr, ask for a floating-point window (scRGB), so that an\n"
-		"HDR display shows what is past white brighter than the desktop's\n"
-		"white rather than tone mapped down to it; the operating system's HDR\n"
-		"must be on. Taken up when the game starts." },
-	{ "display.hdr_paper_white", _config_integer, "0", "HALO_HDR_PAPER_WHITE", _environment_value, _platform_desktop,
-		"With display.hdr_output on an HDR display, how bright white is, in\n"
-		"nits (80 to 1000): the HUD, the menus, and the 3D view's white. 0:\n"
-		"Windows' SDR content brightness." },
-	{ "display.hdr_peak_brightness", _config_integer, "0", "HALO_HDR_PEAK_BRIGHTNESS", _environment_value,
-		_platform_desktop,
-		"With display.hdr_output on an HDR display, the brightest the display\n"
-		"shows, in nits (250 to 10000), which the brightest light is fitted to.\n"
-		"0: what Windows reports (set by its HDR Calibration app)." },
-
 	{ "display.light_effects", _config_string, "\"auto\"", "HALO_LIGHT_EFFECTS", _environment_value,
 		_platform_desktop,
 		"Light from projectiles, muzzle flashes, glowing emitters and held\n"
@@ -5694,6 +5696,7 @@ static const struct
 	{ "display.resolution_scaling", { "native", "75%", "50%", "25%", "original", NULL }, RESOLUTION_SCALING },
 	{ "display.vrr", { "off", "on", "auto", NULL }, "\"off\"" },
 	{ "display.anti_aliasing", { "off", "fxaa", "smaa", "ssaa2x", "msaa2x", "msaa4x", "msaa8x", NULL }, NULL },
+	{ "display.hdr_tone_mapping", { "neutral", "aces", "reinhard", NULL }, "\"neutral\"" },
 	{ "display.menus", { "xbox", "gearbox", "pc", "chupathingy", NULL }, NULL },
 	{ "display.title_font", { "classic", "cyborg", "halo", NULL }, "\"classic\"" },
 	{ "display.console_style", { "dropdown", "classic", NULL }, "\"dropdown\"" },

@@ -496,8 +496,6 @@ static char const *const port_game_data_input_names[] =
 	"port controller update",
 	/* (a dedicated server's map vote's screen) */
 	"port map vote update",
-	/* (HDR Calibration's patterns, drawn by the renderer) */
-	"port hdr calibration",
 };
 
 struct menu_block_range

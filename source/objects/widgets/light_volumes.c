@@ -322,6 +322,9 @@ void light_volume_render(
 					first_person_weapon_get_local_index(object_index) == render.local_player_index &&
 					csstrcmp(definition->attachment_marker, "flashlight") != 0;
 
+				/* port: (display.hdr: a light's volume is light, as a plasma
+				bolt's: port/linux/src/xgpu_tone_map.h) */
+				halo_hdr_draw_kind(HALO_HDR_KIND_LIGHT);
 				pass_count = on_the_gun ? 2 : 1;
 				for (pass = 0; pass < pass_count; pass++)
 				{
@@ -380,6 +383,7 @@ void light_volume_render(
 				}
 				if (on_the_gun)
 					rasterizer_set_stencil_mode(stencil_mode);
+				halo_hdr_draw_kind(HALO_HDR_KIND_NONE); /* port: (drawn) */
 			}
 		}
 	}

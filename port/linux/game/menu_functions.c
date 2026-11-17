@@ -34,11 +34,7 @@ calls them from PC_MENU_FUNCTION_BASE on):
   (OK) writes those changed and applies the window's (the rest follow
   config.toml themselves), "port settings defaults" shows the defaults,
   "port settings help" the help of the row chosen (and Video Setup's
-  Resolution or Window Size, for the display mode shown; Extra Effects' HDR
-  Calibration only with an HDR display);
-- HDR Calibration's: "port hdr calibration" has the renderer draw the
-  pattern of the row chosen, at the peak and paper white its rows show,
-  which the display takes while the screen is drawn;
+  Resolution or Window Size, for the display mode shown);
 - the settings screens' nested lists: "port settings view" (a row that
   opens one), "port settings back" (B: out of it, else back), "port
   settings accept" (the Chupathingy menus' A: opens one, else OK);
@@ -190,8 +186,6 @@ int config_boolean(char const *name);
 int config_default(char const *name, char *text, size_t size);
 char const *config_string(char const *name);
 void platform_display_apply(void);
-int halo_hdr_calibration_available(void);
-void halo_hdr_calibration_show(int pattern, int paper_white, int peak_brightness);
 void platform_binding_capture_begin(void);
 int platform_binding_capture_poll(int *input);
 void platform_binding_capture_cancel(void);
@@ -2998,11 +2992,11 @@ static boolean settings_view_back(struct widget_instance *widget, boolean *widge
 }
 
 /* the rows that open a screen of their own (tools/port_settings.py's
-_screen_link: OpenCE's HDR Calibration, Discord Account and the controller's
+_screen_link: OpenCE's Discord Account and the controller's
 Button Remapping, Button Appearance and Stick Dead Zones), by their names */
 static boolean screen_link_row(struct widget_instance *row)
 {
-	static char const *const names[] = { "op_hdr_calibration", "op_discord_account", "op_controller_remapping",
+	static char const *const names[] = { "op_discord_account", "op_controller_remapping",
 		"op_controller_appearance", "op_dead_zones" };
 	short index;
 
@@ -3250,66 +3244,6 @@ static void hud_button_style_row_show(struct widget_instance *list)
 	row->visible = visible;
 	if (!visible && list->focused_child == row)
 		focus_widget(list, hud->parent);
-}
-
-/* ---------- HDR Calibration (tools/port_settings.py): Extra Effects' row
-for it is there only with an HDR display (display.hdr_output's window, the
-system's HDR on); on its screen the renderer draws the pattern of the row
-chosen, at the values the rows show, and the display takes them until the
-screen closes (d3d8_gl.c). OK writes them, as any settings screen's does. */
-
-/* d3d8_gl.c's patterns */
-#define HDR_CALIBRATION_PEAK 0
-#define HDR_CALIBRATION_PAPER_WHITE 1
-
-/* the pattern shown: the last row chosen's (the buttons keep it) */
-static int hdr_calibration_pattern = HDR_CALIBRATION_PEAK;
-
-static void hdr_calibration_row_show(struct widget_instance *list)
-{
-	struct widget_instance *row = named(list, "op_hdr_calibration", 0);
-	struct widget_instance *child;
-	short index;
-
-	if (!row)
-		return;
-	/* (in a screen of nested lists, only in the view that has it: views_show
-	decided first) */
-	row->visible = (views_list(list) == list ? row->visible : TRUE) && halo_hdr_calibration_available() != 0;
-	/* (the focus on it, if the display's HDR went off, to the row before) */
-	if (!row->visible && list->focused_child == row && row->previous)
-	{
-		for (index = 0, child = list->child; child && child != row->previous; child = child->next)
-			index++;
-		list->focused_child = row->previous;
-		list->parameters.list.selected_index = index;
-	}
-}
-
-/* the number a spinner of a setting shows; 0 if none */
-static int setting_number_shown(struct widget_instance *list, char const *spinner_name)
-{
-	struct widget_instance *spinner = named(list, spinner_name, 0);
-	struct pc_menu_setting *setting = spinner ? pc_menu_setting_get(spinner->definition_tag_index) : NULL;
-	short index;
-
-	if (!setting)
-		return 0;
-	index = spinner->parameters.list.selected_index;
-	return index >= 0 && index < setting->value_count ? atoi(setting->values[index]) : 0;
-}
-
-/* "port hdr calibration" (its list's, as it is drawn) */
-static void hdr_calibration_update(struct widget_instance *list)
-{
-	struct widget_instance *row = list->focused_child;
-
-	if (row && !strcmp(row->name, "op_hdr_peak_brightness"))
-		hdr_calibration_pattern = HDR_CALIBRATION_PEAK;
-	else if (row && !strcmp(row->name, "op_hdr_paper_white"))
-		hdr_calibration_pattern = HDR_CALIBRATION_PAPER_WHITE;
-	halo_hdr_calibration_show(hdr_calibration_pattern, setting_number_shown(list, "hdr_paper_white_spinner"),
-		setting_number_shown(list, "hdr_peak_brightness_spinner"));
 }
 
 /* ---------- Change Color: the profile's colour, from a list of the
@@ -14982,13 +14916,10 @@ void pc_menu_game_data_function_invoke(
 		hud_button_style_row_show(widget);
 		master_servers_show(widget);
 		discord_account_show(widget);
-		hdr_calibration_row_show(widget);
 		settings_help(widget);
 	}
 	else if (!strcmp(name, "port controls update"))
 		controls_page_update(widget);
-	else if (!strcmp(name, "port hdr calibration"))
-		hdr_calibration_update(widget);
 	else if (!strcmp(name, "controls update menu"))
 		controls_update(widget);
 	else if (!strcmp(name, "port controller update"))

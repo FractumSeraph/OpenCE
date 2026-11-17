@@ -29,7 +29,7 @@ def present_framebuffer(tmp_path_factory):
     renderer = read("port/linux/src/d3d8_gl.c")
     present = function(renderer, "D3DDevice_Present")
     commands = present[present.index("\t\tread_framebuffer = framebuffer_get(back_buffer->target.texture, 0);"):
-                       present.index("\t\t/* (the HDR calibration screen")]
+                       present.index("\t\tglBindVertexArray(device.vertex_array);\n\t\tgl_check_errors(\"present blit\");")]
     commands = configured(commands, names=("HALO_GAME_BROWSER", "HALO_CONSOLE_GLES2", "HALO_BROWSER"))
     work = tmp_path_factory.mktemp("present-framebuffer")
     (work / "cache.inc").write_text("\n".join(

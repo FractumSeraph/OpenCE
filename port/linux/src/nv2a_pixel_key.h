@@ -49,7 +49,8 @@ struct nv2a_pixel_shader_key
 	unsigned char point_threshold;
 	/* a model lighting program's draw the Light effects light
 	(plasma_model_shader.c): their falloff and walls in model_lighting */
-	unsigned char plasma_model;	/* (port, this fork) a Custom Edition HUD meter drawn from a bitmap also
+	unsigned char plasma_model;
+	/* (port, this fork) a Custom Edition HUD meter drawn from a bitmap also
 	drawn as artwork, whose channels are as Halo PC keeps them: texture 0
 	sampled as a Halo PC meter's swizzle does (alpha as the color, red as
 	alpha; OpenCE's, halo_custom_edition_hud_meter) */
@@ -61,8 +62,9 @@ struct nv2a_pixel_shader_key
 	unsigned char source_blend;
 	/* MCC environment lightmap pass only; part of the compiled shader key. */
 	unsigned char mcc_bump_attenuation;
-	/* ChupathingyCE's display.hdr glow (a draw brightened past white), its
-	slot kept: always 0 in this fork, whose HDR is OpenCE's (xgpu_post.c) */
+	/* display.hdr: a glow the game draws in [0, 1] though it stands for
+	light, brightened past white toward its ceiling (xgpu_tone_map.h's
+	_xgpu_hdr_tag_*, 0 for a draw left as it is: d3d8_gl.c's hdr_draw_tag) */
 	unsigned char hdr;
 	/* texture 0 is the high-res text's atlas of distance fields
 	(text_hires.h, text_hires_atlas_fields): its texel is read as white, its

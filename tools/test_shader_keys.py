@@ -191,7 +191,7 @@ def test_slots_match_the_game():
     # (this fork's numbers: ChupathingyCE puts MCC bump attenuation at 122)
     assert "121 the Light effects, 122 a CE meter's channels, 123 the source blend factor and 124 an MCC" \
         in readme.replace("\n  ", " ")
-    assert "125 ChupathingyCE's HDR glow (always 0 here: this fork's HDR is OpenCE's) and 126 the high-res " \
+    assert "125 display.hdr's glow (a draw brightened past white, ChupathingyCE's) and 126 the high-res " \
         "text's distance fields" in readme.replace("\n  ", " ")
 
 
