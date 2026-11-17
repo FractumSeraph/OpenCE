@@ -168,9 +168,6 @@ bolt's) */
 /* the loading screen's picture, RGBA bytes with its top row first, over the
 whole back buffer (port/linux/src/d3d8_gl.c, port/linux/game/loading_screen.c) */
 void halo_draw_picture(const unsigned char *rgba, long width, long height);
-/* display.hdr's tone mapping of a window's 3D view, before its
-anti-aliasing (source/render/render.c) */
-void halo_screen_tone_map(short x0, short y0, short x1, short y1);
 #ifdef HALO_SWITCH_CONSOLE
 /* whether the zoom's blur is drawn on a small copy of the screen and blended
 over it once (source/rasterizer/xbox/rasterizer_xbox_screen_effect.c), and
