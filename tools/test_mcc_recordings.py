@@ -66,7 +66,8 @@ int main(int argc,char **argv) {
     game = ROOT / "port/linux/game"
     command = [clang, "-std=gnu89", "-Wall", "-Wextra", "-Werror", "-Wno-multichar",
                "-I" + str(work), "-I" + str(game), str(source), str(game / "mcc_recordings.c"),
-               str(game / "mcc_tags.c"), "-o", str(binary)]
+               # (port, this fork: OpenCE's diagnostics, which mcc_tags.c calls)
+               str(game / "mcc_tags.c"), str(game / "mcc_diagnostics.c"), "-o", str(binary)]
     if sys.platform == "win32":
         command[1:1] = ["--target=i686-pc-windows-msvc", "-fuse-ld=lld", "-D_CRT_SECURE_NO_WARNINGS"]
     result = subprocess.run(command, capture_output=True, text=True)

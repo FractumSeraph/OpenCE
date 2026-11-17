@@ -6,6 +6,20 @@ from test_mcc_identity import compile_tool
 ROOT = Path(__file__).resolve().parents[1]
 
 
+
+def workshop_extras(tmp_path):
+    """(port, this fork: OpenCE's ModInfo.json reading in mcc_workshop.c, its
+    JSON parser, and stand-ins for the package's folder and the file's read:
+    no package here)"""
+    stub = tmp_path / "workshop_stubs.c"
+    stub.write_text('#include "' + (ROOT / 'port/linux/src/posix.h').as_posix() + '"\n'
+                    'int mcc_manifest_package_root(const char *level, char path[1024])'
+                    ' { (void)level; (void)path; return 0; }\n'
+                    'int posix_mcc_preview_read(const char *root, const char *relative, void *buffer, posix_ulong capacity)'
+                    ' { (void)root; (void)relative; (void)buffer; (void)capacity; return -1; }\n')
+    return [ROOT / "port/linux/src/server_json.c", stub]
+
+
 def test_workshop_identity(tmp_path):
     (tmp_path / "cseries.h").write_text(
         "#include <stddef.h>\ntypedef int boolean;\ntypedef unsigned char byte;\n")
@@ -132,7 +146,7 @@ int main(void) {
 }
 ''')
     game = ROOT / "port/linux/game"
-    exe = compile_tool(tmp_path, [source, game / "mcc_workshop.c", game / "mcc_package.c"])
+    exe = compile_tool(tmp_path, [source, game / "mcc_workshop.c", game / "mcc_package.c", *workshop_extras(tmp_path)])
     result = subprocess.run([str(exe)], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
 
@@ -198,6 +212,6 @@ int main(void) {
 }
 ''')
     game = ROOT / "port/linux/game"
-    exe = compile_tool(tmp_path, [source, game / "mcc_workshop.c", game / "mcc_package.c"])
+    exe = compile_tool(tmp_path, [source, game / "mcc_workshop.c", game / "mcc_package.c", *workshop_extras(tmp_path)])
     result = subprocess.run([str(exe)], cwd=tmp_path, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr

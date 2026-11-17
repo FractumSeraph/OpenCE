@@ -33,6 +33,10 @@ int mcc_recording_prepare(unsigned char *p,uint32_t s,unsigned char v,unsigned c
 int mcc_recording_weapon_only(unsigned char const *p,uint32_t s,unsigned char v,unsigned char c) {
     (void)p;(void)s;(void)v;(void)c;abort();return 0;
 }
+/* (OpenCE's: the check with its reason, which mcc_tags.c calls now) */
+int mcc_recording_prepare_ex(unsigned char *p,uint32_t s,unsigned v,unsigned c,uint32_t *n,char const **r,uint32_t *b) {
+    (void)p;(void)s;(void)v;(void)c;(void)n;(void)r;(void)b;abort();return 0;
+}
 void *mcc_runtime_pointer(struct mcc_runtime *r,uint32_t address,uint32_t size) {
     uint32_t offset=address-r->report.tag_base;
     return address>=r->report.tag_base && offset<=r->used && size<=r->used-offset ? r->tags+offset : NULL;
@@ -51,7 +55,9 @@ int main(int argc,char **argv) {
     binary = work / ("camera.exe" if sys.platform == "win32" else "camera")
     game = ROOT / "port/linux/game"
     command = [compiler, "-std=gnu89", "-Wall", "-Wextra", "-Werror", "-Wno-multichar",
-               "-I" + str(work), "-I" + str(game), str(source), str(game / "mcc_tags.c"), "-o", str(binary)]
+               "-I" + str(work), "-I" + str(game), str(source), str(game / "mcc_tags.c"),
+               # (port, this fork: OpenCE's diagnostics, which mcc_tags.c calls)
+               str(game / "mcc_diagnostics.c"), "-o", str(binary)]
     if sys.platform == "win32":
         command[1:1] = ["--target=i686-pc-windows-msvc", "-fuse-ld=lld", "-D_CRT_SECURE_NO_WARNINGS"]
     result = subprocess.run(command, capture_output=True, text=True)
