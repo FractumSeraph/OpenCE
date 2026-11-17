@@ -15,7 +15,10 @@ def code(source=SOURCE):
     under_test = "\n".join([structure(source, "mcc_resource_item"), structure(source, "mcc_resource_file"),
                             structure(source, "mcc_resources"), structure(source, "mcc_resource_probe")] +
                            [function(source, name) for name in (
-                               "mcc_resource_word", "mcc_resource_close", "mcc_resource_open", "mcc_resource_read",
+                               # (port, this fork: its items sorted, and MCC's shared sets read for a
+                               # Workshop item's map, mcc_resource_read_from)
+                               "mcc_resource_word", "mcc_resource_compare", "mcc_resource_close", "mcc_resource_open",
+                               "mcc_resource_read_from", "mcc_resource_read",
                                "mcc_resource_check", "mcc_resource_equal", "mcc_resources_select_paths",
                                "mcc_resources_dispose")])
     return build("mcc_resource_position", (("limits.inc", limits), ("under_test.inc", under_test)))
@@ -29,7 +32,7 @@ def test_resource_found_by_position(case):
 
 def test_negative_control_shared_file_by_position():
     """A shared file that finds a member by its position is caught."""
-    status, _ = run(code(mutated(SOURCE, "if (!file->own) return 0;", "")), "shared")
+    status, _ = run(code(mutated(SOURCE, "if (shared || !file->own) return 0;", "if (shared) return 0;")), "shared")
     assert status != 0
 
 

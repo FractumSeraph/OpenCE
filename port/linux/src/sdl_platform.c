@@ -3134,6 +3134,13 @@ BOOL platform_video_float_window(void)
 
 BOOL platform_video_hdr(float *sdr_white, float *headroom)
 {
+#if defined(HALO_ANDROID) && defined(HALO_ARM64_GUEST) && !defined(HALO_BROWSER)
+	/* (port, this fork: OpenCE's Android app's guest has no SDL window
+	properties, and the Android builds no HDR: an SDR display) */
+	*sdr_white = 1.0f;
+	*headroom = 1.0f;
+	return FALSE;
+#else
 	SDL_PropertiesID properties = platform_window ? SDL_GetWindowProperties(platform_window) : 0;
 	BOOL enabled = properties && SDL_GetBooleanProperty(properties, SDL_PROP_WINDOW_HDR_ENABLED_BOOLEAN, false);
 
@@ -3144,6 +3151,7 @@ BOOL platform_video_hdr(float *sdr_white, float *headroom)
 	if (!(*headroom >= 1.0f))
 		*headroom = 1.0f;
 	return enabled;
+#endif
 }
 
 BOOL platform_video_initialize(unsigned long width, unsigned long height)

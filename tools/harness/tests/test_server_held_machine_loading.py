@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from harness import CHECK_FAILED, build, constant, enum_with, function, mutated, read, run  # noqa: E402
+from harness import CHECK_FAILED, build, constant, enum_with, function, mutated, port_limits, read, run  # noqa: E402
 
 CASES = ['need-ended-not-loading', 'need-ended-check-complete', 'need-ended-not-timed-out', 'need-ended-joins-late',
          'told-machine-waited-for', 'told-machine-timed-out', 'still-downloading']
@@ -36,7 +36,8 @@ NEGATIVE_CONTROLS = {
 
 def generated(fault=None, faulty_function=None):
     server = read('source/networking/network_server_manager.c')
-    limits = read('port/linux/include/halo_port_limits.h')
+    # (port, this fork: the desktop's limits, not a console's, which come first in the file)
+    limits = port_limits()
     config = ''
     for name in ('HALO_PORT_MAXIMUM_NETWORK_MACHINES', 'HALO_PORT_MAXIMUM_NETWORK_PLAYERS',
                  'HALO_PORT_MAXIMUM_NETWORK_MESSAGE_SIZE'):

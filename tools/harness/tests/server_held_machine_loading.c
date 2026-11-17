@@ -171,6 +171,14 @@ static boolean network_game_server_machine_has_players(struct network_game_serve
 	return TRUE;
 }
 static boolean network_game_has_free_player_slot(struct network_game *game) { (void)game; return TRUE; }
+/* (port, this fork: the pregame load's timeout, and ChupathingyCE's settings
+record a machine is owed, network_server_manager.c's and
+network_server_message_handler.c's: none here) */
+static void network_game_server_pregame_load_timeout(struct network_game_server *s, boolean held)
+{
+	(void)s; (void)held;
+}
+static boolean network_game_server_settings_owed(struct network_game_server *s) { (void)s; return FALSE; }
 static void network_game_server_refuse_late_joiner(struct network_game_server *s,
 	struct network_game_server_client_machine *machine, short code)
 {
