@@ -12,7 +12,11 @@ addresses (32-bit numbers, which are the host's).
 
 const char *platform_data_root(void);
 
-#if defined(HALO_ANDROID)
+/* (port, this fork: only OpenCE's Android app, the guest with its host,
+has the host's Steam client, port/android/host/steam_downloads.c; the
+native Android builds, android64 and android32, and the browser's build
+have the stand-ins below) */
+#if defined(HALO_ANDROID) && defined(HALO_ARM64_GUEST) && !defined(HALO_BROWSER)
 /* the host's (port/android/guest/runtime/guest_host.h) */
 void host_steam_open(unsigned int data_root);
 void host_steam_close(void);

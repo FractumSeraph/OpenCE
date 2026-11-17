@@ -139,7 +139,9 @@ int workshop_authors_read_name(const char *text, int length, char name[WORKSHOP_
 
 /* ---------- asking Steam */
 
-#if defined(HALO_WEB)
+/* (port, this fork: the browser's build, and the native Android builds,
+whose apps have no host's Steam client: no author, as the web build) */
+#if defined(HALO_WEB) || defined(HALO_BROWSER) || (defined(HALO_ANDROID) && !defined(HALO_ARM64_GUEST))
 int workshop_authors_get(const char *item_id, char *name, int size)
 {
 	(void)item_id;

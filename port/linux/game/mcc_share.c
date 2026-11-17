@@ -39,6 +39,15 @@
 #include "../../web/src/web_mcc_storage.h"
 #endif
 
+/* (port, this fork: the host's SHA-256 threads and Steam client are OpenCE's
+Android app's, the guest's host, port/android/host; the native Android
+builds, android64 and android32, and the browser's build have neither) */
+#if defined(HALO_ANDROID) && defined(HALO_ARM64_GUEST) && !defined(HALO_BROWSER)
+#define MCC_SHARE_ANDROID_HOST 1
+#else
+#define MCC_SHARE_ANDROID_HOST 0
+#endif
+
 /* port_config.c's, network_game_globals.c's, network_server_message_handler.c's,
 cseries_windows.c's */
 int config_boolean(const char *name);
@@ -257,7 +266,7 @@ void mcc_share_game_handle_message(
 SHA-256 (host_mcc_hash.c's host_sha256_*), not a few megabytes a frame on
 the game's: hashed in the frame, a 360 MB package outlasted a joiner's wait
 for the offer and took its frames */
-#if defined(HALO_ANDROID)
+#if MCC_SHARE_ANDROID_HOST
 int host_sha256_start(unsigned int path);
 int host_sha256_poll(int id, unsigned int digest, unsigned int size);
 void host_sha256_cancel(int id);
@@ -373,7 +382,7 @@ static int mcc_share_destination(void *user, char const *level,
 
 /* the staged files are the host's content: fingerprinted where they are, with the package's own
 files read from the staging folder, against the identity in the host's game record */
-#if defined(HALO_ANDROID)
+#if MCC_SHARE_ANDROID_HOST
 int host_steam_shared_fetch(unsigned int data_root);
 int host_steam_shared_state(void);
 #endif
@@ -383,7 +392,7 @@ static int mcc_share_shared_asked;
 
 static int mcc_share_shared_pending(void)
 {
-#if defined(HALO_ANDROID)
+#if MCC_SHARE_ANDROID_HOST
     return mcc_share_shared_asked && host_steam_shared_state()==1;
 #else
     return 0;
@@ -465,7 +474,7 @@ static int mcc_share_prepare_install(void *user,struct mcc_share_stage *stage)
         mcc_workshop_wire_unpack(mcc_share_name,&item) ? &item : NULL);
 }
 
-#if defined(HALO_ANDROID)
+#if MCC_SHARE_ANDROID_HOST
 const char *platform_data_root(void);
 #define MCC_SHARE_HOST_ADDRESS(pointer) ((unsigned int)(uintptr_t)(pointer))
 /* (the data root, as the host's Steam calls are given it) */
@@ -477,7 +486,7 @@ missing, as a host never sends them */
 static void mcc_share_shared_begin(void)
 {
     mcc_share_shared_asked=0;
-#if defined(HALO_ANDROID)
+#if MCC_SHARE_ANDROID_HOST
     snprintf(mcc_share_steam_root,sizeof(mcc_share_steam_root),"%s",platform_data_root());
     mcc_share_shared_asked=host_steam_shared_fetch(MCC_SHARE_HOST_ADDRESS(mcc_share_steam_root))==1;
     if (mcc_share_shared_asked)
@@ -615,7 +624,7 @@ boolean mcc_share_game_machine_needs_map(long machine_index)
         mcc_share_host_active(&mcc_share_globals,machine_index));
 }
 
-#if defined(HALO_ANDROID)
+#if MCC_SHARE_ANDROID_HOST
 int host_steam_install_start(unsigned int data_root, unsigned int id_low, unsigned int id_high);
 int host_steam_install_status(void);
 void host_steam_install_progress(unsigned int progress);
@@ -633,7 +642,7 @@ when they are missing (no host sends them), and the host's offer let go; 1
 when begun. The host sends it only when the Workshop cannot. */
 static int mcc_share_install_begin(void)
 {
-#if defined(HALO_ANDROID)
+#if MCC_SHARE_ANDROID_HOST
     struct mcc_workshop_item item;
     unsigned long long id;
     if (!strcmp(mcc_share_install_tried,mcc_share_globals.level)) {
@@ -685,7 +694,7 @@ static void mcc_share_install_end(void)
 /* (the host's offer asked again before it lapses) */
 static void mcc_share_install_renew(void)
 {
-#if defined(HALO_ANDROID)
+#if MCC_SHARE_ANDROID_HOST
     if (system_milliseconds()-mcc_share_install_renewed_at<MCC_SHARE_INSTALL_RENEW_MS) return;
     mcc_share_install_renewed_at=system_milliseconds();
     mcc_share_client_cancel(&mcc_share_globals);
@@ -699,7 +708,7 @@ offer let go once the host has one; not installed, or not the host's: the
 host asked again, and the player asked (the level tried) */
 static void mcc_share_install_update(void)
 {
-#if defined(HALO_ANDROID)
+#if MCC_SHARE_ANDROID_HOST
     struct network_game_client *client;
     struct network_game *game;
     char const *why="could not be installed";
@@ -976,7 +985,7 @@ void mcc_share_game_update(
 		env.upload_limit = mcc_share_upload_limit;
         env.host_finished = mcc_share_host_finished;
         env.host_refused = mcc_share_host_refused;
-#if defined(HALO_ANDROID)
+#if MCC_SHARE_ANDROID_HOST
         env.hash_begin = mcc_share_hash_begin;
         env.hash_poll = mcc_share_hash_poll;
         env.hash_cancel = mcc_share_hash_cancel;
@@ -1028,7 +1037,7 @@ void mcc_share_game_update(
     }
     mcc_share_host_lifecycle();
     mcc_share_update(&mcc_share_globals);
-#if defined(HALO_ANDROID)
+#if MCC_SHARE_ANDROID_HOST
     /* (files the Steam downloader put in mcc_maps, whatever put them there) */
     if (host_steam_take_rescan()) mcc_maps_rescan();
 #endif
@@ -1080,7 +1089,7 @@ void mcc_share_game_render(
 		uint32_t progress[3] = { 0, 0, 0 };
 		char speed[32];
 
-#if defined(HALO_ANDROID)
+#if MCC_SHARE_ANDROID_HOST
 		host_steam_install_progress(MCC_SHARE_HOST_ADDRESS(progress));
 #endif
 		speed[0] = 0;

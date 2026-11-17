@@ -10332,7 +10332,7 @@ static struct bitmap_data *steam_picture_texture(void)
 	}
 	if (steam_screen.preview_key != key)
 	{
-		if (steam_screen_picture(&key, (unsigned int *)steam_screen.picture->base_address) != STEAM_PICTURE_SIDE)
+		if (steam_screen_picture(&key, (unsigned int *)xbox_pointer(steam_screen.picture->base_address)) != STEAM_PICTURE_SIDE)
 			return NULL;
 		rasterizer_bitmap_changed(steam_screen.picture);
 		steam_screen.preview_key = key;
