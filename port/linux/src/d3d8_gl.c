@@ -9071,9 +9071,6 @@ void halo_screen_anti_alias(short x0, short y0, short x1, short y1)
 	glBindVertexArray(device.vertex_array);
 	xgpu_gl_state_invalidate();
 }
-	glBindVertexArray(device.vertex_array);
-	xgpu_gl_state_invalidate();
-}
 
 /* display.hdr's tone mapping of a window's 3D view, before the HUD and
 menus are drawn over it, and before display.anti_aliasing's pass (which
