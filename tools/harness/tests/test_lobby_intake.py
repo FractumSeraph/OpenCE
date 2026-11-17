@@ -36,7 +36,7 @@ def generated(fault=None):
     # (ChupathingyCE's d98e604c2: both intake checks, as the game builds it)
     config += '#define P2P_LOBBY_INTAKE_CHECKS 3\n'
     code = '\n'.join([structure(source, 'listing')] +
-                     [function(source, name) for name in ('sanitize', 'get_long', 'get_text', 'listing_read',
+                     [function(source, name) for name in ('sanitize', 'get_long', 'get_text', 'copy_utf8', 'listing_read',
                                                           'listing_current', 'version_joinable', 'queued_joinable',
                                                           'listing_wanted', 'p2p_lobby_slot_heard')])
     if fault:

@@ -30,7 +30,7 @@ CASES = ["crypto", "listing-signatures", "proof", "server-id", "key-file", "inst
 # the functions taken, in their files' order (each is defined before what calls it)
 SOURCES = {
     "port/linux/src/p2p.c": ["p2p_hex"],
-    "port/linux/src/p2p_lobby.c": ["sanitize", "get_long", "get_text", "listing_read", "listing_signed"],
+    "port/linux/src/p2p_lobby.c": ["sanitize", "get_long", "get_text", "copy_utf8", "listing_read", "listing_signed"],
     "port/linux/src/master_list.c": ["hex_digit", "master_url_allowed", "masters_file", "master_list_read_file", "master_keep",
                                      "master_list_read_defaults", "master_list_read", "master_list_read_json", "master_list_verify", "take_list"],
     "port/linux/src/server_master.c": ["hex_value", "seed_from_text", "key_file_path", "publisher_seed", "key_id_of",
