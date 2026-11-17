@@ -372,10 +372,6 @@ struct xgpu_render_target
 	/* changes whenever the target is drawn into or cleared (d3d8_gl.c,
 	bind_targets) */
 	unsigned long written;
-	/* the texture's (and the multisampled renderbuffer's) internal format:
-	GL_RGBA8, GL_DEPTH24_STENCIL8, or GL_RGBA16F for the back buffer with
-	display.hdr (d3d8_gl.c) */
-	GLenum format;
 };
 
 /* the GL texture holding a render target with this physical address, or 0 */
