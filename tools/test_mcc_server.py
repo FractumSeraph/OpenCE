@@ -121,8 +121,14 @@ typedef int boolean;
 enum {_network_game_server_state_pregame, _network_game_server_state_ingame};
 struct variant {wchar_t human_readable_game_description[16]; int game_engine_index;
     struct {int teams;} universal_variant;};
-struct network_game {wchar_t name[16]; struct {char name[128];} map;
+struct network_game {wchar_t name[16]; struct {char name[128]; unsigned long version;} map;
     struct variant variant; int variant_options, difficulty;};
+/* (port, this fork: the listing's gametype, with co-op's difficulty, and the
+map seeded for those joining: network_server_manager.c's listing_gametype and
+map_torrents_playing, stand-ins here) */
+#define NETWORK_GAME_SERVER_LISTING_GAMETYPE_SIZE 64
+static void listing_gametype(struct network_game *g,char *t,size_t n){(void)g;snprintf(t,n,"%s","Slayer");}
+static void map_torrents_playing(char const *m,unsigned long v,int on){(void)m;(void)v;(void)on;}
 struct network_game_server {struct network_game game;};
 static wchar_t const *title=L"Abyss";
 static char published[64];

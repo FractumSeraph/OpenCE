@@ -41,8 +41,9 @@ def client(tmp_path_factory):
     objects = []
     for source in ["posix_files.c", "posix_mcc_share.c", "workshop_authors.c", "server_json.c"]:
         objects.append(work / (source + ".o"))
-        subprocess.run([clang, "-std=gnu99", "-w", "-c", str(ROOT / "port/linux/src" / source), "-o", str(objects[-1])],
-                       check=True)
+        # (port, this fork: _GNU_SOURCE, as the builds have it, for posix_files.c's dladdr)
+        subprocess.run([clang, "-std=gnu99", "-w", "-D_GNU_SOURCE", "-c", str(ROOT / "port/linux/src" / source), "-o",
+                        str(objects[-1])], check=True)
     for source in ["adler32.c", "crc32.c", "inffast.c", "inflate.c", "inftrees.c", "zutil.c"]:
         objects.append(work / (source + ".o"))
         subprocess.run([clang, "-std=gnu99", "-w", "-DZ_PREFIX", "-c", str(ZLIB / source), "-o", str(objects[-1])],
