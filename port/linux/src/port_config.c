@@ -953,7 +953,8 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 #ifdef HALO_BGFX
 	{ "display.renderer", _config_string, "\"gl\"", "HALO_RENDERER", _environment_value, _platform_desktop,
 		"What draws the game. \"gl\" is OpenGL, the default. \"bgfx\" is a new\n"
-		"renderer we are testing: Metal on macOS, Vulkan on Windows and Linux.\n"
+		"renderer we are testing: Metal on macOS, Vulkan on Windows and Linux\n"
+		"(the menu's VULKAN (BGFX, TESTING) or METAL (BGFX, TESTING)).\n"
 #ifdef _WIN32
 		"On Windows, \"d3d11\" draws with Direct3D 11 instead, for testing on\n"
 		"computers whose Vulkan is missing or bad.\n"
