@@ -752,8 +752,10 @@ the setting for one start of the game. It has priority over the file.
 | `display.menu_cursor` | `"large"` | `HALO_MENU_CURSOR` | Windows, Linux and the web: the menus' pointer for the mouse, the game's blue arrow, sized to the window as Halo PC's was: `"small"`, `"medium"`, `"large"` or `"extra_large"` (18, 24, 32 or 40 of the menus' 480 lines tall), or `"off"` for the system's pointer. MENU CURSOR in Settings > Mouse writes its choice here. |
 | `display.show_fps` | `false` | `HALO_SHOW_FPS=1` sets `true` | `true`: the frame rate at the bottom right of a game, counted over half a second and green from 30 frames each second, red below. The game's own counter, which the Xbox version's `display_framerate` console variable showed. Refer to "Frame rate". |
 | `display.direct_camera` | `true` | `HALO_DIRECT_CAMERA` | `true`: in first person, on foot, the view points where the player aims in each frame, not where the last tick left it. Refer to "Frame rate". Not in Video Setup: config.toml only. |
-| `display.fov` | `0.0` | `HALO_FOV` | The first-person view's field of view on foot, in degrees across at 16:9, from 20 to 150. `0`: the stock view. Refer to "Field of view". |
-| `display.viewmodel_fov` | `0.0` | `HALO_VIEWMODEL_FOV` | The first-person weapon's and hands' field of view, in degrees across at 16:9, from 20 to 150. `0`: the weapon's stock view, also when `display.fov` widens the world. Refer to "Field of view". |
+| `display.field_of_view` | `70.0` | `HALO_FIELD_OF_VIEW` | How wide the first-person view is, in degrees across a 4:3 picture: `70`, as on the Xbox, from `50` to `120`. On a wider screen the view shows more at the sides, as before. Scopes zoom in by as much as before. Only the first-person view changes: cutscenes, the third-person views and the game itself (aim, auto-aim, what each machine sends) do not. Video Setup's Field of View sets it in the menus. |
+| `display.viewmodel_field_of_view` | `0.0` | `HALO_VIEWMODEL_FIELD_OF_VIEW` | How wide the first-person weapon and arms are drawn, in degrees as `display.field_of_view`: `0` (the default) follows `display.field_of_view`, as before; `50` to `120` draws them at that width whatever the view's, so a wide view does not stretch them. `70`: the weapon as on the Xbox. Drawing only. |
+| `display.vehicle_field_of_view` | `0.0` | `HALO_VEHICLE_FIELD_OF_VIEW` | The view's width in a vehicle's seat (driver, gunner or passenger, first or third person), in degrees as `display.field_of_view`: `0` (the default) keeps it as before: a first-person seat follows `display.field_of_view` and a third-person one keeps the game's own; `50` to `120` sets its own for both. Getting in or out eases the view between the two over half a second. Death, cutscenes and scripted cameras keep the game's own. Drawing only. Video Setup's View has Vehicle FOV. |
+| `display.reticle_scales_with_fov` | `true` | `HALO_RETICLE_SCALES_WITH_FOV` | `true`: the weapon's reticle is drawn smaller in a wider `display.field_of_view` and larger in a narrower one, as the world is, so it still covers the weapon's spread. At `70`, the Xbox's, it is the Xbox's size. Only in first person; while zoomed, the scope's picture (its mask, ticks, brackets and zoom label) keeps the Xbox's size, so its parts stay together. `false`: the reticle keeps the Xbox's size at any field of view. Video Setup's Reticle Follows FOV sets it. |
 | `display.viewmodel_visible` | `true` | `HALO_VIEWMODEL_VISIBLE` | `true`: the first-person weapon, hands and what is attached to them are drawn. `false`: they are not; firing, animation, sound and lights go on, and other players' models are drawn. |
 | `display.passenger_third_person` | `false` | `HALO_PASSENGER_THIRD_PERSON` | Third-person view for the Warthog's passenger and the Scorpion's four passengers. Uses the gunner's camera on the Warthog and the driver's on the Scorpion, within the passenger's firing arc. Smooth entry and exit; weapon zoom is disabled while riding. The reticle follows the shot's centre ray. Local view only. In the campaign and co-op only: not in multiplayer, where seeing around the vehicle would be an advantage. |
 | `display.viewmodel_shield` | `false` | `HALO_VIEWMODEL_SHIELD` | `true`: the energy shield's flare (its hits, its charging, its fall) is drawn on the first-person arms too, as on the body, with the unit's own shield shader, with its final displacement limited by the arms' distance and the viewmodel field of view. The stock game draws it on the body only. |
@@ -1422,23 +1424,24 @@ half a second.
 
 ## Field of view
 
-Display's FIELD OF VIEW and VIEWMODEL FOV rows (and its VIEWMODELS list)
-set the field of view of the first-person view (`display.fov`) and of the weapon and hands
-(`display.viewmodel_fov`), from 80 to 150 degrees in steps of 5, and can
-hide the weapon (`display.viewmodel_visible`). DEFAULT, the setting's `0`,
-keeps the stock view. `config.toml` takes any angle from 20 to 150.
+Video Setup's VIEW list (ChupathingyCE's) sets the field of view:
 
-- An angle is across the screen at 16:9. Another shape keeps the same
-  angle up and down, as the stock view does.
-- The field of view applies on foot in first person only. Vehicles, death,
-  cinematics and scripted cameras keep their own view.
-- A scope's zoom levels keep their stock view: the extra width fades out as
-  the zoom comes in. A view narrower than the stock one narrows the zoom
-  too.
-- The reticles scale with the view, so that they stay on the aim. The
-  scopes' pictures keep their place.
-- By default the weapon keeps its stock view when the world is wider:
-  arms and a gun right against the camera stretch at a wide angle.
+- FIELD OF VIEW (`display.field_of_view`): the first-person view's width
+  in degrees, 50 to 120; the Xbox's is 70. A scope's zoom levels widen or
+  narrow with it, so a scope magnifies as much as before.
+- VEHICLE FOV (`display.vehicle_field_of_view`): the view in a vehicle's
+  seat, first or third person. SAME (`0`) keeps the view as before. Getting
+  in or out eases between the two over half a second.
+- VIEWMODEL FOV (`display.viewmodel_field_of_view`): how wide the weapon
+  and arms are drawn, 50 to 120. SAME (`0`) follows the view.
+- RETICLE FOLLOWS FOV (`display.reticle_scales_with_fov`): the reticle is
+  sized to the view, so that it still covers the weapon's spread; times
+  RETICLE SIZE (`display.reticle_scale`, Interface).
+
+`display.viewmodel_visible` hides the weapon (its firing, sounds and lights
+go on). This fork had OpenCE's `display.fov` and `display.viewmodel_fov`
+before 2026-11-17; they are no longer read (`game/view_fov.c` keeps the
+weapon's visibility).
 
 LEGS (`display.first_person_legs`) draws your own body in first person
 from the waist down, so you see your legs when you look down, walking,

@@ -424,7 +424,7 @@ void platform_log(const char *format, ...);
 #include "mcc_cache.h" /* port: port/linux/game/mcc_cache.h */
 #include "mcc_main.h" /* port: port/linux/game/mcc_main.h */
 #include "halo_map_families.h" /* port: main_script_map_name, a Halo PC campaign's maps (this fork's map families) */
-#include "view_fov.h" /* port: display.fov, before the projection and culling */
+#include "view_fov.h" /* port: port/linux/game/view_fov.c (its field of view left out: ChupathingyCE's, below) */
 #include "halo_perf_log.h" /* port: console.perf_log */
 #include "plasma_lighting.h" /* port: port/linux/game/plasma_lighting.c */
 #include "mcc_cache.h"
@@ -1309,33 +1309,181 @@ static void screenshot_record(
 double config_real(const char *name);
 unsigned long config_changes(void);
 
-/* port (this fork): ChupathingyCE's display.field_of_view and
-display.viewmodel_field_of_view are not this fork's settings: OpenCE's
-display.fov and display.viewmodel_fov are (port/linux/game/view_fov.c, the
-view and the first-person weapon's own projection). The first-person
-weapon's projection is left as view_fov.c draws it. */
+/* port: display.field_of_view, the first-person view's width in degrees
+(the Xbox's 70, 50 to 120), as the scale of the tangent of the camera's half
+angle: the unit's and each zoom level's view widen or narrow together, so a
+scope magnifies as much as before. Only what is drawn changes; the observer,
+aim and the game's state keep the original angles. */
+static real first_person_field_of_view_scale(
+	void)
+{
+	static unsigned long read_at = (unsigned long)-1;
+	static real scale = 1.0f;
+
+	if (read_at != config_changes())
+	{
+		real degrees = (real)config_real("display.field_of_view");
+
+		read_at = config_changes();
+		/* (a build without the setting, a console's, reads 0: the original 70) */
+		if (!valid_real(degrees) || degrees <= 0.0f || degrees == 70.0f)
+			scale = 1.0f;
+		else
+		{
+			degrees = PIN(degrees, 50.0f, 120.0f);
+			scale = tangent(DEGREES_TO_RADIANS(degrees) * 0.5f) / tangent(DEGREES_TO_RADIANS(70.0f) * 0.5f);
+		}
+	}
+
+	return scale;
+}
+
+/* port: display.vehicle_field_of_view, the view's width in degrees in a
+vehicle's seat, driver, gunner or passenger, first or third person, as the
+tangent scale first_person_field_of_view_scale gives: 50 to 120; 0 (the
+default) as before, a first-person seat at display.field_of_view and a
+third-person one at the game's own. On foot the third-person views (death,
+the neutral one) keep the game's, as before. */
+static real vehicle_field_of_view_scale(
+	short perspective)
+{
+	static unsigned long read_at = (unsigned long)-1;
+	static real scale = 0.f;
+
+	if (read_at != config_changes())
+	{
+		real degrees = (real)config_real("display.vehicle_field_of_view");
+
+		read_at = config_changes();
+		if (!valid_real(degrees) || degrees <= 0.0f)
+			scale = 0.f;
+		else
+		{
+			degrees = PIN(degrees, 50.0f, 120.0f);
+			scale = tangent(DEGREES_TO_RADIANS(degrees) * 0.5f) / tangent(DEGREES_TO_RADIANS(70.0f) * 0.5f);
+		}
+	}
+
+	if (scale > 0.f)
+		return scale;
+	return perspective == _director_perspective_first_person ? first_person_field_of_view_scale() : 1.f;
+}
+
+/* port: whether the local player's unit sits in a vehicle's seat */
+static boolean local_player_seated(
+	short local_player_index)
+{
+	long player_index = local_player_get_player_index(local_player_index);
+	struct player_datum *player = player_index != NONE ? player_try_and_get(player_index) : NULL;
+	struct unit_datum *unit = player && player->unit_index != NONE ? unit_try_and_get(player->unit_index) : NULL;
+
+	return unit && unit->object.parent_object_index != NONE && unit->unit.parent_seat_index != NONE;
+}
+
+/* port: the view's tangent scale for each local player this frame
+(local_view_field_of_view_update): what set_window_camera_values widens
+the view by and the reticle is sized by, so both are the same frame's */
+static real local_view_scales[MAXIMUM_NUMBER_OF_LOCAL_PLAYERS] = { 1.f, 1.f, 1.f, 1.f };
+/* how far each is into a vehicle's view, 0 on foot to 1 seated, and when */
+static real local_view_vehicle_weights[MAXIMUM_NUMBER_OF_LOCAL_PLAYERS];
+static unsigned long local_view_times[MAXIMUM_NUMBER_OF_LOCAL_PLAYERS];
+
+/* the time getting in or out eases the view between the two widths over */
+#define VEHICLE_VIEW_EASE_MILLISECONDS 500
+
+/* port: the local player's view scale, once a frame: in first person
+display.field_of_view's; in a vehicle's seat display.vehicle_field_of_view's,
+eased between the two over half a second (smoothstep) as the unit gets in
+or out, turning back from where it is if that reverses; the game's own
+in any other view (a scripted camera, death), which also ends an ease, so
+a respawn starts at the view on foot at once */
+static real local_view_field_of_view_update(
+	short local_player_index)
+{
+	short perspective;
+	unsigned long now = system_milliseconds();
+	real step, weight, on_foot;
+
+	if (local_player_index < 0 || local_player_index >= MAXIMUM_NUMBER_OF_LOCAL_PLAYERS)
+		return 1.f;
+	perspective = director_get_perspective(local_player_index);
+	step = (real)(now - local_view_times[local_player_index]) / (real)VEHICLE_VIEW_EASE_MILLISECONDS;
+	local_view_times[local_player_index] = now;
+	if (perspective != _director_perspective_first_person && perspective != _director_perspective_third_person)
+	{
+		local_view_vehicle_weights[local_player_index] = 0.f;
+		return local_view_scales[local_player_index] = 1.f;
+	}
+	if (!local_player_seated(local_player_index))
+	{
+		if (perspective != _director_perspective_first_person)
+		{
+			/* (third person on foot: death's view) */
+			local_view_vehicle_weights[local_player_index] = 0.f;
+			return local_view_scales[local_player_index] = 1.f;
+		}
+		step = -step;
+	}
+	weight = PIN(local_view_vehicle_weights[local_player_index] + PIN(step, -1.f, 1.f), 0.f, 1.f);
+	local_view_vehicle_weights[local_player_index] = weight;
+	weight = weight * weight * (3.f - 2.f * weight);
+	/* (the view on foot that a vehicle's eases from: first person's; a seat
+	that the game shows in third person starts at the game's own) */
+	on_foot = perspective == _director_perspective_first_person ? first_person_field_of_view_scale() : 1.f;
+	local_view_scales[local_player_index] = on_foot + (vehicle_field_of_view_scale(perspective) - on_foot) * weight;
+
+	return local_view_scales[local_player_index];
+}
+
+/* port: display.viewmodel_field_of_view, the first-person weapon's and
+arms' own view width in degrees across a 4:3 picture (0, the default: the
+view's, display.field_of_view; else 50 to 120), as what the first-person
+weapon's projection is scaled by: the weapon is drawn as at that width
+whatever the view's, so a wide view does not stretch it. Zoom still applies
+to it as before. Only what is drawn changes. */
 real first_person_weapon_projection_scale(
 	void)
 {
-	return 1.0f;
+	static unsigned long read_at = (unsigned long)-1;
+	static real weapon_scale = 0.0f;
+
+	if (read_at != config_changes())
+	{
+		real degrees = (real)config_real("display.viewmodel_field_of_view");
+
+		read_at = config_changes();
+		if (!valid_real(degrees) || degrees <= 0.0f)
+			weapon_scale = 0.0f;
+		else
+		{
+			degrees = PIN(degrees, 50.0f, 120.0f);
+			weapon_scale = tangent(DEGREES_TO_RADIANS(degrees) * 0.5f) / tangent(DEGREES_TO_RADIANS(70.0f) * 0.5f);
+		}
+	}
+
+	return weapon_scale > 0.0f ? first_person_field_of_view_scale() / weapon_scale : 1.0f;
 }
 
-/* port: what the reticle's size (and its items' offsets from the middle)
-is scaled by in the local player's first-person view: display.reticle_scale,
-the size the player picked (1 the Xbox's). (port, this fork:
-ChupathingyCE's display.reticle_scales_with_fov scaled it with their
-display.field_of_view, which this fork leaves out; OpenCE's display.fov
-scales the reticle already, view_fov.c) */
+/* port: display.reticle_scales_with_fov, what the reticle's size (and its
+items' offsets from the middle) is scaled by in the local player's
+first-person view: the inverse of the field of view's tangent scale, as the
+world's image is (the screen's aspect and the zoom scale both alike), so the
+reticle still covers the weapon's spread. 1 at 70, the Xbox's, in any other
+view, or with the setting off. Times display.reticle_scale, the size the
+player picked (1 the Xbox's), in first person. */
 real first_person_reticle_scale(
 	short local_player_index)
 {
+	extern int config_boolean(char const *name);
 	extern double config_real(char const *name);
 	static unsigned long read_at = (unsigned long)-1;
+	static boolean enabled = FALSE;
 	static real size = 1.0f;
 
 	if (read_at != config_changes())
 	{
 		read_at = config_changes();
+		enabled = config_boolean("display.reticle_scales_with_fov") != 0;
 #ifndef HALO_XBOX_CONSOLE
 		/* (the Xbox's config.toml has no such key: 1 there, as retail) */
 		size = PIN((real)config_real("display.reticle_scale"), 0.5f, 2.0f);
@@ -1346,19 +1494,22 @@ real first_person_reticle_scale(
 	{
 		return 1.0f;
 	}
-	return size;
+	if (!enabled)
+		return size;
+
+	/* (this frame's view's: local_view_field_of_view_update) */
+	return size / local_view_scales[local_player_index];
 }
 
 /* port: TRUE when display.field_of_view has the first-person view at
 other than the stock 70 degrees (the screen fog's canopy redraw,
-rasterizer_xbox_environment_fog.c). (port, this fork: OpenCE's display.fov
-is the setting, view_fov.c; the fog asks render_fov_reticle_scale itself) */
+rasterizer_xbox_environment_fog.c) */
 boolean first_person_field_of_view_widened(
 	short local_player_index)
 {
 	return local_player_index >= 0 && local_player_index < MAXIMUM_NUMBER_OF_LOCAL_PLAYERS &&
 		director_get_perspective(local_player_index) == _director_perspective_first_person &&
-		render_fov_reticle_scale(local_player_index) != 1.0f;
+		local_view_scales[local_player_index] != 1.0f;
 }
 
 /* port: display.far_clip_distance, how far the world is drawn (1024 as on
@@ -1421,15 +1572,17 @@ void set_window_camera_values(
 #endif
 	if (observer)
 	{
+		real field_of_view_tangent = render_camera_get_adjusted_field_of_view_tangent(observer->field_of_view);
+
+		/* port: display.field_of_view, in first person, and
+		display.vehicle_field_of_view in a vehicle's seat (ChupathingyCE's) */
+		if (window->local_player_index != NONE)
+			field_of_view_tangent *= local_view_field_of_view_update(window->local_player_index);
 		window->rasterizer_camera.position = observer->position;
 		window->rasterizer_camera.forward = observer->forward;
 		window->rasterizer_camera.up = observer->up;
-		/* port: display.fov's view, the local render view only (view_fov.c) */
 		window->rasterizer_camera.vertical_field_of_view =
-			render_fov_vertical(window->local_player_index, 2.0f * arctangent(
-				0.75f * render_camera_get_adjusted_field_of_view_tangent(
-					observer->field_of_view),
-				1.0f));
+			2.0f * arctangent(0.75f * field_of_view_tangent, 1.0f);
 
 		if (window->local_player_index != NONE &&
 			!console_is_active() &&

@@ -1,6 +1,10 @@
 /*
 VIEW_FOV.C
 
+(port, this fork: OpenCE's display.fov and display.viewmodel_fov are
+left out, ChupathingyCE's display.field_of_view and its kin, main.c, in
+their place: the view and the weapon's projection here stay the game's own)
+
 The first-person view's field of view (display.fov, display.viewmodel_fov)
 and whether the weapon is drawn (display.viewmodel_visible), the local
 render view only: the observer, its transitions and what the network sends
@@ -61,7 +65,7 @@ static real render_fov_adjust(short local_player_index, real native_vertical_fie
 
 	if (!initialized || read_at != changes)
 	{
-		double degrees = config_real("display.fov");
+		double degrees = 0.0 /* (port, this fork: display.fov is not a setting here; ChupathingyCE's field of view is, main.c) */;
 
 		initialized = TRUE;
 		read_at = changes;
@@ -186,7 +190,7 @@ static real viewmodel_vertical(void)
 
 	if (!initialized || read_at != changes)
 	{
-		double degrees = config_real("display.viewmodel_fov");
+		double degrees = 0.0 /* (port, this fork: display.viewmodel_fov is not a setting here; ChupathingyCE's field of view is, main.c) */;
 
 		angle = degrees >= 20.0 && degrees <= 150.0 ?
 			(real)(2.0 * atan(tan(degrees * _pi / 360.0) * (9.0 / 16.0))) : 0.0f;

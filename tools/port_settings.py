@@ -188,15 +188,26 @@ SCREENS = {
              [("OFF", "off"), ("FXAA", "fxaa"), ("MSAA 2X", "msaa2x"), ("MSAA 4X", "msaa4x")],
              "Smooth jagged edges.",
              "android web", "anti_aliasing_android"),
-            # (display.fov and display.viewmodel_fov: port/linux/game/view_fov.c)
-            ("FIELD OF VIEW:", "display.fov", [("DEFAULT", "0")] + [(str(n), str(n)) for n in range(80, 151, 5)],
-             "On foot, horizontal at 16:9, in degrees.\nDefault keeps the stock view.", None),
-            ("VIEWMODEL FOV:", "display.viewmodel_fov",
-             [("DEFAULT", "0")] + [(str(n), str(n)) for n in range(80, 151, 5)],
-             "How wide your weapon is drawn, horizontal at 16:9.\nDefault keeps the weapon's stock view.", None),
         ],
         # (rows that open a nested list in the same screen: VIEWS)
         "views": [
+            # (ChupathingyCE's field of view, main.c: in and out of vehicles,
+            # the weapon's, and the reticle sized to it)
+            ("view", "VIEW", "The field of view, in and out of vehicles, and the reticle.", [
+                ("FIELD OF VIEW:", "display.field_of_view",
+                 [(f"{value}" + (" (XBOX)" if value == 70 else ""), f"{value}")
+                  for value in (60, 65, 70, 75, 80, 85, 90, 95, 100, 105, 110, 120)],
+                 "Adjust the field of view.",
+                 None),
+                ("VEHICLE FOV:", "display.vehicle_field_of_view",
+                 [("SAME", "0")] + [(f"{value}", f"{value}") for value in (60, 65, 70, 75, 80, 85, 90, 95, 100, 105, 110, 120)],
+                 "The field of view in vehicles.\nSame keeps it as before.", None),
+                ("VIEWMODEL FOV:", "display.viewmodel_field_of_view",
+                 [("SAME", "0")] + [(f"{value}", f"{value}") for value in (50, 55, 60, 65, 70, 75, 80, 85, 90)],
+                 "How wide your weapon is drawn.\nSame follows the view.", None),
+                ("RETICLE FOLLOWS FOV:", "display.reticle_scales_with_fov", ON_OFF,
+                 "Size the reticle to the field of view, so it matches\nthe weapon's spread.", None),
+            ]),
             ("advanced", "ADVANCED", "Shadows, lighting and detail.", [
                 ("SHADOW RESOLUTION:", "display.shadow_resolution",
                  [("128", "128"), ("256", "256"), ("512", "512"), ("1024", "1024")],

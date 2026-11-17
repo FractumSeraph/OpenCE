@@ -1368,7 +1368,7 @@ void _rasterizer_environment_fog_screen_begin(
 			canopy. At any other angle, less or equal still accepts that
 			redraw where it has slid onto the sky */
 			stick_to_drawn_surface =
-				render_fov_reticle_scale(render.local_player_index) != 1.0f;
+				first_person_field_of_view_widened(render.local_player_index);
 
 			if (pass == 0)
 			{

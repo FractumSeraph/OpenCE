@@ -783,14 +783,24 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 	{ "display.direct_camera", _config_boolean, "true", "HALO_DIRECT_CAMERA", _environment_value, _platform_all | _platform_xbox,
 		"In first person, turn the view in the same frame that the mouse,\n"
 		"a stick or touch moves it." },
-	{ "display.fov", _config_real, "0.0", "HALO_FOV", _environment_value, _platform_all,
-		"The first-person view's field of view on foot, in degrees across at\n"
-		"16:9 (20 to 150); 0 keeps the stock view. Vehicles, cinematics and\n"
-		"scripted cameras keep their own." },
-	{ "display.viewmodel_fov", _config_real, "0.0", "HALO_VIEWMODEL_FOV", _environment_value, _platform_all,
-		"The first-person weapon's and hands' field of view, in degrees across\n"
-		"at 16:9 (20 to 150); 0 keeps the weapon's stock view, also when\n"
-		"display.fov widens the world." },
+	/* (ChupathingyCE's field of view, main.c; OpenCE's display.fov and
+	display.viewmodel_fov, port/linux/game/view_fov.c, are left out in its favour) */
+	{ "display.field_of_view", _config_real, "70.0", "HALO_FIELD_OF_VIEW", _environment_value, _platform_all,
+		"The first-person field of view in degrees, from 50 to 120.\n"
+		"The Xbox used 70." },
+	{ "display.viewmodel_field_of_view", _config_real, "0.0", "HALO_VIEWMODEL_FIELD_OF_VIEW", _environment_value,
+		_platform_all,
+		"The weapon's field of view, from 50 to 120.\n"
+		"0 uses display.field_of_view." },
+	{ "display.vehicle_field_of_view", _config_real, "0.0", "HALO_VEHICLE_FIELD_OF_VIEW", _environment_value,
+		_platform_all,
+		"The field of view in a vehicle's seat, from 50 to 120. 0 keeps it\n"
+		"as before: display.field_of_view in first person, the game's own in\n"
+		"third person." },
+	{ "display.reticle_scales_with_fov", _config_boolean, "true", "HALO_RETICLE_SCALES_WITH_FOV", _environment_value,
+		_platform_all,
+		"Size the reticle to the field of view, so it matches the weapon's\n"
+		"spread on screen. It makes no difference at 70." },
 	{ "display.viewmodel_visible", _config_boolean, "true", "HALO_VIEWMODEL_VISIBLE", _environment_value, _platform_all,
 		"Draw the first-person weapon, hands and what is attached to them.\n"
 		"Off, they are not drawn; firing, animation, sound and lights go on." },

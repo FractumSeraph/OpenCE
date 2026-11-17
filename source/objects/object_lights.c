@@ -1023,10 +1023,7 @@ scaled); its lights' glows are drawn with the world's. A glow on the
 weapon's marker is moved across the view, at the same depth, to where the
 weapon's projection draws that marker, so it stays on the weapon (the
 plasma pistol's and rifle's glows floated beside them). Only the glow: the
-light itself still lights from the marker. (port, this fork: the scale is
-always 1 here, main.c; OpenCE's display.viewmodel_fov draws these glows
-with the weapon's projection, viewmodel_projection_begin in
-rasterizer_lights.c) */
+light itself still lights from the marker. */
 static void lights_port_first_person_flare_positions(
 	struct object_marker *markers,
 	short marker_count)
