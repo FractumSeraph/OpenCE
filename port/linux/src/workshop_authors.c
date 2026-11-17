@@ -5,6 +5,11 @@ The Steam Workshop items' authors (workshop_authors.h): Steam's answers read, an
 of their own.
 */
 
+#include "../include/halo_port_features.h"
+/* (port, this fork: OpenCE's, an MCC Workshop source like ChupathingyCE's:
+nothing on a console, HALO_MCC 0) */
+#if !defined(HALO_MCC) || HALO_MCC
+
 #include "workshop_authors.h"
 #include "server_json.h"
 
@@ -336,3 +341,5 @@ int workshop_authors_get(const char *item_id, char *name, int size)
 	return known;
 }
 #endif
+
+#endif /* HALO_MCC */

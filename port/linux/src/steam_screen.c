@@ -5,6 +5,11 @@ steam_screen.h's: the host's Steam Workshop model, called with the guest's
 addresses (32-bit numbers, which are the host's).
 */
 
+#include "../include/halo_port_features.h"
+/* (port, this fork: OpenCE's, an MCC Workshop source like ChupathingyCE's:
+nothing on a console, HALO_MCC 0) */
+#if !defined(HALO_MCC) || HALO_MCC
+
 #include "steam_screen.h"
 
 #include <stdint.h>
@@ -168,3 +173,5 @@ void steam_screen_text_typed(int kind, char *text, int saved)
 	while (*at)
 		*at++ = 0;
 }
+
+#endif /* HALO_MCC */

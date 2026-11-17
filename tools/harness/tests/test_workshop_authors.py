@@ -59,7 +59,10 @@ NEGATIVE_CONTROLS = {
 
 
 def generated(fault=None):
-    code = read("port/linux/src/workshop_authors.c")
+    # (port, this fork: its MCC gate's header, which builds have on their own
+    # include path; HALO_MCC is on here, as on the desktop)
+    code = read("port/linux/src/workshop_authors.c").replace(
+        '#include "../include/halo_port_features.h"', '#define HALO_MCC 1')
     if fault:
         code = mutated(code, *fault)
     json = mutated(read("port/linux/src/server_json.c"), JSMN, '#include "jsmn.h"')
