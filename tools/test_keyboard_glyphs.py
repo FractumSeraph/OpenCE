@@ -13,6 +13,7 @@ def code(path):
     return re.sub(r'^#include .*$', '', (ROOT / path).read_text(encoding='utf-8'), flags=re.M)
 
 
+@pytest.mark.skip(reason="this fork: OpenCE's BUTTON APPEARANCE settings are left out for ChupathingyCE's BUTTON STYLE (2026-11-17)")
 @pytest.mark.parametrize("android", [False, True])
 def test_manual_auto_activity_disconnect_and_split_screen(tmp_path, android):
     run_c(tmp_path, ("#define HALO_ANDROID 1\n" if android else "") + r'''
@@ -186,6 +187,7 @@ int main(void){
 ''')
 
 
+@pytest.mark.skip(reason="this fork: OpenCE's BUTTON APPEARANCE settings are left out for ChupathingyCE's BUTTON STYLE (2026-11-17)")
 def test_optional_hook_precedes_controller_translation_and_preserves_custom_paths():
     text = (ROOT/'source/interface/hud_messaging.c').read_text(encoding='utf-8')
     start = text.index('case _hud_message_type_icon:')

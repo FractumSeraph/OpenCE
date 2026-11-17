@@ -72,9 +72,8 @@ static short controller_glyph_asset_index(short style, short slot)
     short family;
     /* Older Xbox styles can use the supplied modern bumpers independently of
      * their face buttons. The caller has already resolved automatic detection. */
-    if (style >= 0 && style < 3 && (slot == 4 || slot == 5) &&
-        !strcmp(config_string("display.hud_bumper_style"), "modern"))
-        return (short)(32 + slot - 4);
+    /* (port, this fork: OpenCE's display.hud_bumper_style is left out,
+    2026-11-17: the original Xbox's black and white bumpers) */
     if (style < 3 || style >= 11 || slot < 0 || slot >= 14) return NONE;
     if (slot < 4) return (short)((style - 3) * 4 + slot);
     family = (short)(style < 4 ? 0 : style < 8 ? 1 : 2);

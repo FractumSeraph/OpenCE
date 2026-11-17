@@ -15,6 +15,7 @@ def without_includes(source):
     return '\n'.join(line for line in source.splitlines() if not line.startswith('#include'))
 
 
+@pytest.mark.skip(reason="this fork: OpenCE's BUTTON APPEARANCE settings are left out for ChupathingyCE's BUTTON STYLE (2026-11-17)")
 @pytest.mark.parametrize('android', [False, True])
 def test_identity_preferences_disconnect_and_unknown(tmp_path, android):
     code = r'''
@@ -174,6 +175,7 @@ def test_artwork_mapping_transparency_labels_and_regeneration():
         assert bounds and bounds[0] > 0 and bounds[1] > 0 and bounds[2] < 512 and bounds[3] < 512
 
 
+@pytest.mark.skip(reason="this fork: OpenCE's BUTTON APPEARANCE settings are left out for ChupathingyCE's BUTTON STYLE (2026-11-17)")
 def test_menu_generated_and_default_on():
     import port_settings
     for name, lines in port_settings.settings_files().items():
@@ -207,6 +209,7 @@ def test_menu_generated_and_default_on():
     assert r'"display.hud_bumper_style", _config_string, "\"original\""' in config
 
 
+@pytest.mark.skip(reason="this fork: OpenCE's BUTTON APPEARANCE settings are left out for ChupathingyCE's BUTTON STYLE (2026-11-17)")
 def test_real_glyph_geometry_opacity_cache_and_teardown(tmp_path):
     source = (ROOT / 'port/linux/game/controller_glyphs.c').read_text()
     metadata = (ROOT / 'port/linux/game/controller_glyph_assets.h').read_text()
@@ -330,3 +333,32 @@ def test_classic_letters_are_transparent_cutouts():
         assert np.count_nonzero(holes & (rgba[..., 3] == 0)) > 500
         # No painted black letter remains on any of the coloured faces.
         assert np.min(np.max(rgba[..., :3][solid], axis=1)) > 100
+
+
+def test_style_follows_button_style(tmp_path):
+    """(this fork) the high-res HUD's button art follows ChupathingyCE's
+    input.button_style: AUTO the controller's family, else the family chosen,
+    in its classic art (style 0 Xbox, 4 PlayStation, 8 Switch)"""
+    source = (ROOT / 'port/linux/src/controller_buttons.c').read_text()
+    run_c(tmp_path, r'''
+#include <assert.h>
+#include <string.h>
+enum {CONTROLLER_UNKNOWN, CONTROLLER_XBOX, CONTROLLER_PLAYSTATION, CONTROLLER_SWITCH};
+struct controller_device {int family;};
+static int family;
+static char const *chosen;
+static void controller_device_get(short port, struct controller_device *device) {(void)port; device->family = family;}
+static char const *config_string(char const *name) {assert(!strcmp(name, "input.button_style")); return chosen;}
+''' + function(source, 'controller_button_style_for_port') + r'''
+int main(void)
+{
+    chosen = "auto"; family = CONTROLLER_PLAYSTATION; assert(controller_button_style_for_port(0) == 4);
+    family = CONTROLLER_SWITCH; assert(controller_button_style_for_port(0) == 8);
+    family = CONTROLLER_UNKNOWN; assert(controller_button_style_for_port(0) == 0);
+    chosen = "playstation"; family = CONTROLLER_XBOX; assert(controller_button_style_for_port(1) == 4);
+    chosen = "switch"; assert(controller_button_style_for_port(1) == 8);
+    chosen = "duke"; family = CONTROLLER_SWITCH; assert(controller_button_style_for_port(2) == 0);
+    chosen = "xbox"; assert(controller_button_style_for_port(2) == 0);
+    return 0;
+}
+''')

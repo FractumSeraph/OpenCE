@@ -40,12 +40,6 @@ ON_OFF = [("ON", "true"), ("OFF", "false")]
 # the multiplayer armor colors, in the profile's order (player_profile.c)
 SHIELD_COLORS = ["white", "black", "red", "blue", "gray", "yellow", "green", "pink", "purple", "cyan", "cobalt",
                  "orange", "teal", "sage", "brown", "tan", "maroon", "salmon"]
-XBOX_BUTTON_STYLES = [("XBOX CLASSIC", "classic"), ("XBOX GEMS", "gems"),
-                     ("XBOX DARK GEMS", "menu_gems"), ("XBOX MODERN", "xbox_modern")]
-PS_BUTTON_STYLES = [("PS CLASSIC", "ps_classic"), ("PS GEMS", "ps_gems"),
-                   ("PS DARK GEMS", "ps_dark_gems"), ("PS MODERN", "ps_modern")]
-SWITCH_BUTTON_STYLES = [("SWITCH CLASSIC", "switch_classic"), ("SWITCH GEMS", "switch_gems"),
-                       ("SWITCH MODERN", "switch_modern")]
 SENSITIVITIES = [(f"{value:g}", f"{value:g}") for value in (0.1, 0.15, 0.25, 0.4, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4)]
 VOLUMES = [(str(step), f"{step / 10:g}") for step in range(11)]
 # the platforms a row can be for (the menus' platform attribute,
@@ -282,16 +276,25 @@ SCREENS = {
                  "Draw text and titles in high resolution.", NOT_CONSOLE),
                 # (the game's own counter, main.c's main_framerate_render,
                 # which display.show_fps turns on: frame_rate_display.c.
-                # BUTTON STYLE is the controller's now: Controls Setup's
-                # BUTTON APPEARANCE, the controller_appearance screen)
+                # BUTTON STYLE is ChupathingyCE's, below)
                 ("SHOW FRAMES:", "display.show_fps", ON_OFF,
                  "Draw the frame rate at the bottom right of a game,\ncounted over half a second.", None),
                 # (the ~ key's console: terminal.c's drop-down one, or the
                 # Xbox's lines at the bottom)
                 ("CONSOLE:", "display.console_style", [("DROP-DOWN", "dropdown"), ("CLASSIC", "classic")],
                  "Drop-down slides down from the top.\nClassic is the Xbox's.", NOT_CONSOLE),
+                # (ChupathingyCE's prompts' buttons: input.button_style, DKrumpp's
+                # HD buttons. AUTO follows the controller used last; OpenCE's
+                # BUTTON APPEARANCE is left out in its favour, its HUD art
+                # following this style: controller_buttons.c)
+                ("BUTTON STYLE:", "input.button_style",
+                 [("AUTO", "auto"), ("DUKE", "duke"), ("XBOX", "xbox"), ("PLAYSTATION", "playstation"),
+                  ("SWITCH", "switch")],
+                 "The buttons prompts show. Auto follows the controller\nyou use.", "desktop android switch"),
                 ("MENU BUTTONS:", "input.button_look", [("GEM", "gem"), ("FLAT", "flat")],
                  "The buttons in menus and the Guide.", "desktop android switch"),
+                ("HUD BUTTONS:", "input.hud_buttons", [("CLASSIC", "classic"), ("HD", "hd")],
+                 "Classic: the game's own buttons.", "desktop android switch"),
                 ("PLAYER NAMES:", "display.player_names",
                  [("NONE", "none"), ("ALL", "all"), ("ALLIES", "allies"), ("ENEMIES", "enemies")],
                  "Names above players, where the host allows them.", NOT_CONSOLE),
@@ -535,37 +538,10 @@ SCREENS = {
         # master_servers_show)
         "words": ["OF", "NONE LISTED", "NOT ASKED YET", "OFF"],
     },
-    # OpenCE's Gamepads' screens, which Controls Setup's controller settings
-    # open (CONTROLLER_LINKS): BUTTON APPEARANCE, the HUD's button artwork
-    # (one of the four BUTTON STYLE rows shown, in one place, and BUMPER STYLE
-    # with an Xbox style: controller_button_menu.inl), and BUTTON REMAPPING,
-    # each player's buttons (_controller_screen; its rows are its own)
-    "controller_appearance": {
-        "screen": "controller_appearance_screen", "spacing": 30,
-        "header": ("header_profile_controller_setting", f"{PE}/controller_edit/header_profile_controller_setting"),
-        "same_place": ["hud_button_style_xbox", "hud_button_style_ps", "hud_button_style_switch", "detected_button_style"],
-        "rows": [
-            ("MENU GLYPHS:", "display.menu_button_glyphs", ON_OFF,
-             "Use the selected keyboard/controller style in\nexisting PC-menu face-button legends.", None),
-            ("KEYBOARD GLYPHS:", "display.keyboard_glyphs", ON_OFF,
-             "Opt in to automatic keyboard/mouse keycaps.\nRequires Auto Button Detection.", None),
-            ("AUTO BUTTON DETECTION:", "input.auto_button_detection", ON_OFF,
-             "Detect controller artwork and, with Keyboard\nGlyphs enabled, follow keyboard/mouse activity.", None),
-            ("BUTTON STYLE:", "display.hud_button_style", XBOX_BUTTON_STYLES + PS_BUTTON_STYLES + SWITCH_BUTTON_STYLES + [("KEYBOARD", "keyboard")],
-             "Manual style when auto detection is off. Keyboard\nuses current bindings; controllers need High-Res HUD.", None),
-            ("BUTTON STYLE:", "display.hud_button_style_xbox", XBOX_BUTTON_STYLES,
-             "Preferred Xbox artwork for automatic detection.\nRequires High-Res HUD in Interface.", None),
-            ("BUTTON STYLE:", "display.hud_button_style_ps", PS_BUTTON_STYLES,
-             "Preferred PlayStation artwork for auto detection.\nRequires High-Res HUD in Interface.", None),
-            ("BUTTON STYLE:", "display.hud_button_style_switch", SWITCH_BUTTON_STYLES,
-             "Preferred Switch artwork for automatic detection.\nRequires High-Res HUD in Interface.", None),
-            ("BUTTON STYLE:", "display.detected_button_style", None,
-             "Keyboard/mouse is active. Prompts use your current\nbindings. Turn detection off to choose a fixed style.", None),
-            ("BUMPER STYLE:", "display.hud_bumper_style",
-             [("ORIGINAL XBOX", "original"), ("MODERN XBOX", "modern")],
-             "Original: black/white buttons. Modern: LB/RB.\nKept when automatic detection is on.", None),
-        ],
-    },
+    # OpenCE's Gamepads' screen, which Controls Setup's controller settings
+    # open (CONTROLLER_LINKS): BUTTON REMAPPING, each player's buttons
+    # (_controller_screen; its rows are its own). (Its BUTTON APPEARANCE is
+    # left out: ChupathingyCE's BUTTON STYLE, Interface's, in its place)
     CONTROLLER_REMAPPING: {
         "screen": "controller_remapping_screen", "spacing": 30,
         "dynamic_help": True, "help_top": 320, "help_height": 90,
@@ -710,8 +686,6 @@ GAMEPAD_ROWS = [
 CONTROLLER_LINKS = [
     _screen_link("BUTTON REMAPPING", CONTROLLER_REMAPPING,
                  "Custom button layouts for P1-P4.\nUse / Reload stays combined.", NOT_CONSOLE),
-    _screen_link("BUTTON APPEARANCE", "controller_appearance",
-                 "Controller artwork and bumper style.\nRequires High-Res HUD in Interface.", NOT_CONSOLE),
     _screen_link("STICK DEAD ZONES", "dead_zones", "How far each stick moves before it does\nanything.",
                  NOT_CONSOLE),
 ]

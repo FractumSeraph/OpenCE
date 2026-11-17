@@ -1,5 +1,6 @@
 """Production menu rendering: opt-in boundaries, fitting, fallback and state."""
 import re
+import pytest
 from pathlib import Path
 from harness import function
 from test_hud_button_style import run_c
@@ -7,6 +8,7 @@ from test_hud_button_style import run_c
 ROOT = Path(__file__).resolve().parents[1]
 
 
+@pytest.mark.skip(reason="this fork: OpenCE's BUTTON APPEARANCE settings are left out for ChupathingyCE's BUTTON STYLE (2026-11-17)")
 def test_menu_glyph_policy_fitting_and_state(tmp_path):
     source = (ROOT/'port/linux/game/menu_button_glyphs.c').read_text()
     source = re.sub(r'^#include .*$', '', source, flags=re.M)
@@ -134,6 +136,7 @@ int main(void){
 """)
 
 
+@pytest.mark.skip(reason="this fork: OpenCE's BUTTON APPEARANCE settings are left out for ChupathingyCE's BUTTON STYLE (2026-11-17)")
 def test_menu_toggle_defaults_off_and_generator_owns_screens():
     config=(ROOT/'port/linux/src/port_config.c').read_text()
     assert '"display.menu_button_glyphs", _config_boolean, "false"' in config

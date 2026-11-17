@@ -95,15 +95,20 @@ char const *controller_button_family_setting(int family)
     }
 }
 
+/* (port, this fork: the HUD's button art follows ChupathingyCE's
+input.button_style, the one BUTTON STYLE in the menus: "auto" the controller
+the port has, else the family chosen, each family's classic art. OpenCE's
+display.hud_button_style settings and its BUTTON APPEARANCE screen are left
+out, 2026-11-17) */
 int controller_button_style_for_port(short port)
 {
     struct controller_device device;
-    int style;
-    /* Always identify devices, even when automatic glyph selection is off. */
+    char const *style = config_string("input.button_style");
+    int family;
+    /* Always identify devices, even when the style is a fixed one. */
     controller_device_get(port, &device);
-    if (!config_boolean("input.auto_button_detection") || !device.family)
-        return controller_button_style_index(config_string("display.hud_button_style"));
-    style = controller_button_style_index(config_string(controller_button_family_setting(device.family)));
-    if (controller_button_style_family(style) == device.family) return style;
-    return device.family == CONTROLLER_PLAYSTATION ? 4 : device.family == CONTROLLER_SWITCH ? 8 : 0;
+    family = !strcmp(style, "playstation") ? CONTROLLER_PLAYSTATION :
+        !strcmp(style, "switch") ? CONTROLLER_SWITCH :
+        !strcmp(style, "xbox") || !strcmp(style, "duke") ? CONTROLLER_XBOX : device.family;
+    return family == CONTROLLER_PLAYSTATION ? 4 : family == CONTROLLER_SWITCH ? 8 : 0;
 }

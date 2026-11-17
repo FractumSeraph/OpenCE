@@ -19,9 +19,11 @@ struct bitmap_data *hud_hires_button_bitmap(short style, short slot);
 
 static boolean menu_button_glyph_enabled(short button, short port)
 {
-    return button >= 0 && button < 4 && port >= 0 && port < 4 &&
-        config_boolean("display.menu_button_glyphs") &&
-        !strcmp(config_string("display.menus"), "pc");
+    /* (port, this fork: OpenCE's display.menu_button_glyphs is left out,
+    2026-11-17: the PC menus' legends keep their own letters) */
+    (void)button;
+    (void)port;
+    return FALSE;
 }
 
 /* These are fixed keyboard_gamepad menu controls, independent of gameplay binds.

@@ -565,28 +565,6 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"The consoles have \"classic\" only." },
 	{ "display.high_res_hud", _config_boolean, "true", "HALO_HIGH_RES_HUD", _environment_value, _platform_all,
 		"Draw the HUD from the high-res assets." },
-	{ "display.hud_button_style", _config_string, "\"classic\"", "HALO_HUD_BUTTON_STYLE", _environment_value, _platform_all,
-		"Manual high-res gameplay button style, preserved while automatic detection\n"
-		"is on. Xbox: classic, gems, menu_gems (dark gems), xbox_modern.\n"
-		"PlayStation: ps_classic, ps_gems, ps_dark_gems, ps_modern.\n"
-		"Switch: switch_classic, switch_gems, switch_modern. Controllers require high_res_hud.\n"
-		"keyboard selects binding-aware gameplay keycaps independently of high_res_hud." },
-	{ "display.menu_button_glyphs", _config_boolean, "false", "HALO_MENU_BUTTON_GLYPHS", _environment_value, _platform_all,
-		"Use the selected keyboard/controller style in PC-menu face-button legends." },
-	{ "display.keyboard_glyphs", _config_boolean, "false", "HALO_KEYBOARD_GLYPHS", _environment_value, _platform_all,
-		"With auto button detection on, show binding-aware gameplay keycaps after\n"
-		"keyboard/mouse activity. Off preserves existing prompts. Manual keyboard\n"
-		"style works with detection off. Menu legends require menu_button_glyphs." },
-	{ "display.hud_bumper_style", _config_string, "\"original\"", "HALO_HUD_BUMPER_STYLE", _environment_value, _platform_all,
-		"Xbox Classic, Gems and Dark Gems bumpers: original (black/white) or modern\n"
-		"(LB/RB). Shared by local players, including automatic button detection.\n"
-		"Requires high_res_hud; other button styles keep their own artwork." },
-	{ "display.hud_button_style_xbox", _config_string, "\"classic\"", "HALO_HUD_BUTTON_STYLE_XBOX", _environment_value, _platform_all,
-		"Remembered automatic Xbox style: classic, gems, menu_gems, xbox_modern." },
-	{ "display.hud_button_style_ps", _config_string, "\"ps_classic\"", "HALO_HUD_BUTTON_STYLE_PS", _environment_value, _platform_all,
-		"Remembered automatic PlayStation style: ps_classic, ps_gems, ps_dark_gems, ps_modern." },
-	{ "display.hud_button_style_switch", _config_string, "\"switch_classic\"", "HALO_HUD_BUTTON_STYLE_SWITCH", _environment_value, _platform_all,
-		"Remembered automatic Switch style: switch_classic, switch_gems, switch_modern." },
 	{ "display.widescreen_loading", _config_boolean, "true", "HALO_WIDESCREEN_LOADING", _environment_value, _platform_all,
 		"Widen the stock loading screen, keeping its original picture, sweep\n"
 		"and glow trails. False keeps the central 4:3 framing." },
@@ -1122,8 +1100,10 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"slowing: 1 (100%) as before, 0.5 half as fast." },
 	{ "input.keyboard_prompts", _config_boolean, "true", "HALO_KEYBOARD_PROMPTS", _environment_value, _platform_desktop,
 		"Show keys in button prompts while you use the keyboard and mouse." },
-	/* (ChupathingyCE's prompts' buttons, DKrumpp's HD art: this fork shows
-	MENU BUTTONS in Interface; its HUD's buttons are OpenCE's, BUTTON APPEARANCE) */
+	/* (ChupathingyCE's prompts' buttons, DKrumpp's HD art: Interface's BUTTON
+	STYLE, MENU BUTTONS and HUD BUTTONS. OpenCE's BUTTON APPEARANCE settings,
+	display.hud_button_style and its kin, are left out: its high-res HUD art
+	follows input.button_style, controller_buttons.c) */
 	{ "input.button_style", _config_string, "\"auto\"", "HALO_BUTTON_STYLE", _environment_value, _platform_all,
 		"The controller buttons the prompts show: \"auto\" (the controller you\n"
 		"use), or one style for every controller: \"duke\" (the original Xbox's),\n"
@@ -1178,9 +1158,6 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"How far the controller's right stick moves before it turns the view, in\n"
 		"percent of its travel (0 to 50); -1 for the game's own (27%)." },
 
-	{ "input.auto_button_detection", _config_boolean, "true", "HALO_AUTO_BUTTON_DETECTION", _environment_value, _platform_all,
-		"Limit Button Style to the assigned controller's family. Unknown devices\n"
-		"keep the manual choice. Device detection itself is always available." },
 	{ "input.controller_p1", _config_string, "\"\"", "HALO_CONTROLLER_P1", _environment_value, _platform_all,
 		"P1 custom controller layout; empty uses the profile. Edit in Gamepads >\n"
 		"Button Remapping. v2: stores 25 physical-button names, including unbound.\n"
@@ -5746,12 +5723,6 @@ static const struct
 		"light_show_overshield", "players", NULL }, NULL },
 	{ "network.coop_enemies_mode", { "none", "per_player", "multiplier", NULL }, "\"none\"" },
 	{ "crash_reports.upload", { "ask", "yes", "no", NULL }, "\"yes\"" },
-	{ "display.hud_button_style", { "classic", "gems", "menu_gems", "dark_gems", "xbox_modern",
-		"ps_classic", "ps_gems", "ps_dark_gems", "ps_modern", "switch_classic", "switch_gems", "switch_modern", "keyboard", NULL }, NULL },
-	{ "display.hud_button_style_xbox", { "classic", "gems", "menu_gems", "dark_gems", "xbox_modern", NULL }, NULL },
-	{ "display.hud_bumper_style", { "original", "modern", NULL }, NULL },
-	{ "display.hud_button_style_ps", { "ps_classic", "ps_gems", "ps_dark_gems", "ps_modern", NULL }, NULL },
-	{ "display.hud_button_style_switch", { "switch_classic", "switch_gems", "switch_modern", NULL }, NULL },
 	{ "server.vpn_policy", { "link", "block", "off", NULL }, NULL },
 	{ "server.vpn_fail", { "open", "closed", NULL }, NULL },
 	{ "network.votekick_threshold", { "dynamic", "static", NULL }, NULL },

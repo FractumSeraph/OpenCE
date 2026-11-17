@@ -287,6 +287,7 @@ def test_supplied_controls_and_animation():
         assert abs(y + bottom - height * 8) <= 1
 
 
+@pytest.mark.skip(reason="this fork: OpenCE's BUTTON APPEARANCE settings are left out for ChupathingyCE's BUTTON STYLE (2026-11-17)")
 def test_dark_gems_label_keeps_existing_saved_value():
     import port_settings
     output = '\n'.join('\n'.join(lines) for lines in port_settings.settings_files().values())

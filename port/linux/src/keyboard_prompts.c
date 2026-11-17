@@ -51,10 +51,12 @@ int keyboard_prompt_active(short port)
     return port == 0 && keyboard_active;
 }
 
+/* (port, this fork: the HUD's classic buttons stay the game's own on the
+keyboard, as ChupathingyCE's input.hud_buttons "classic" has them; its "hd"
+buttons show the keys, hud_buttons.c. OpenCE's display.keyboard_glyphs is
+left out, 2026-11-17) */
 int keyboard_prompt_enabled(short port)
 {
-    if (port < 0 || port >= 4) return 0;
-    if (!config_boolean("input.auto_button_detection"))
-        return !strcmp(config_string("display.hud_button_style"), "keyboard");
-    return config_boolean("display.keyboard_glyphs") && keyboard_prompt_active(port);
+    (void)port;
+    return 0;
 }

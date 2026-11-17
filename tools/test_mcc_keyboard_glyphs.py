@@ -39,6 +39,8 @@ typedef unsigned char boolean; typedef unsigned short word;
     run_c(tmp_path,source+r'''
 #include <assert.h>
 static long art(short w,short h,enum mcc_pause_art_kind kind){return 1000+kind;}
+/* (ChupathingyCE's co-op friendly fire toggle, mcc_ui.c's: none here) */
+boolean mcc_ui_coop_friendly_fire_shown(void){return FALSE;}
 int main(void){
  struct mcc_pause_assets assets={{100,101,102},{200,201,202},art,TRUE};
  long i,parent=NONE,old_parent,old_child;int count=0;
