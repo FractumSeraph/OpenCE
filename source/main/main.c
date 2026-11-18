@@ -431,6 +431,10 @@ void platform_log(const char *format, ...);
 #include "mcc_main.h"
 #include "stubbs_mode.h" /* port: port/linux/game/stubbs_mode.c */
 #include "stubbs_campaign.h" /* port: port/linux/game/stubbs_campaign.c */
+#include "halt_facts.h" /* port: the halt screen's facts */
+#ifdef HALO_GUIDE
+#include "halt_screen.h" /* port: port/linux/game/halt_screen.c */
+#endif
 
 /* port: the main loop's stage, for the console's bring-up watchdog
 (port/xbox/src/xbox_port.c); nothing elsewhere */
@@ -1127,6 +1131,16 @@ void main_revert_map(
 	main_globals.revert_map = TRUE;
 	main_globals.lost_map = FALSE;
 	return;
+}
+
+/* port: the network co-op host's RESTART LEVEL (the pause menu), done from
+the main loop rather than from the menu's event (main_coop_restart_private) */
+static boolean main_coop_restart_requested;
+
+void main_coop_restart_level(
+	void)
+{
+	main_coop_restart_requested = TRUE;
 }
 
 void main_skip_cinematic(
@@ -1936,6 +1950,18 @@ static void main_new_map(
 			main_menu_load();
 			return;
 		}
+#ifdef HALO_GAME_BROWSER
+		/* port: the menus' own map that doesn't load (a pack's maps the game
+		can't read, as Stubbs maps a tool unpacked) goes back to the setup
+		screen, which says why, where it stopped on a blue screen. A run
+		nobody watches stops as before */
+		{
+			extern boolean pc_menu_setup_after_failed_menus(char const *map_name);
+
+			if (pc_menu_setup_after_failed_menus(options->map_name))
+				return;
+		}
+#endif
 		error(_error_immediate, "game_load() failed.");
 	}
 
@@ -2285,6 +2311,14 @@ void main_crash(
 	/* BUG (original, deliberate): the "crash" script command ("crashes (for debugging).")
 	 * faults on purpose by storing this literal through the null pointer; the August and
 	 * September 2001 builds (debug and retail) and January all emit this one store. */
+	/* port: "crash halt" stops the game as a failed assert does, for testing
+	the halt screen (halt_and_catch_fire); any other string faults as before */
+	if (str && !csstrcmp(str, "halt"))
+	{
+		display_assert("crash halt: a halt asked for at the console", "c:\\halo\\SOURCE\\main\\main.c", __LINE__, TRUE);
+		halt_and_catch_fire();
+		return;
+	}
 	*(char **)NULL = "chucky was here!  NULL belongs to me!!!!!";
 	return;
 }
@@ -2301,67 +2335,6 @@ static char const *port_build_identity(
 		"%s\r\nFull log: debug.txt (game data folder)\r\nRecent messages (newest first):",
 		build_identity());
 	return banner;
-}
-
-/* port: the halt screen's messages, the newest first, at most 8 lines of at
-most 110 characters, so that the failure shows when older messages run off
-the screen (OpenCE 48342f52) */
-static char const *port_error_tail(
-	char const *messages)
-{
-	enum { MAX_LINES = 8, MAX_LINE_BYTES = 110 };
-	static char recent[MAX_LINES * (MAX_LINE_BYTES + 5) + 1];
-	static char const too_many[] = "[...too many errors to print...]";
-	char const *lines[MAX_LINES];
-	size_t lengths[MAX_LINES];
-	char const *cursor;
-	char const *start;
-	size_t length;
-	size_t copied;
-	size_t used = 0;
-	unsigned int count = 0;
-	unsigned int index;
-
-	for (cursor = messages; *cursor; )
-	{
-		start = cursor;
-		while (*cursor && *cursor != '\r' && *cursor != '\n')
-			cursor++;
-		length = (size_t)(cursor - start);
-		while (*cursor == '\r' || *cursor == '\n')
-			cursor++;
-		if (!length || (length >= sizeof(too_many) - 1 && !strncmp(start, too_many, sizeof(too_many) - 1)))
-			continue;
-		if (count == MAX_LINES)
-		{
-			for (index = 1; index < MAX_LINES; index++)
-			{
-				lines[index - 1] = lines[index];
-				lengths[index - 1] = lengths[index];
-			}
-			count--;
-		}
-		lines[count] = start;
-		lengths[count++] = length;
-	}
-	if (!count)
-		return "No recent messages. See debug.txt for details.\r\n";
-	for (index = count; index > 0; index--)
-	{
-		length = lengths[index - 1];
-		copied = length < MAX_LINE_BYTES ? length : MAX_LINE_BYTES;
-		memcpy(recent + used, lines[index - 1], copied);
-		used += copied;
-		if (copied < length)
-		{
-			memcpy(recent + used, "...", 3);
-			used += 3;
-		}
-		recent[used++] = '\r';
-		recent[used++] = '\n';
-	}
-	recent[used] = 0;
-	return recent;
 }
 
 void main_print_version(
@@ -2461,6 +2434,18 @@ void main_load_ui_scenario(
 {
 	struct game_options options;
 
+#ifdef HALO_GAME_BROWSER
+	/* port: a menus' map that can't be copied into the cache (a pack's maps
+	the game can't read, as Stubbs maps a tool unpacked: no zlib stream)
+	goes back to the setup screen (main_new_map), where the copy's assert
+	stopped the game on a blue screen. Loaded, it is as before */
+	if (!game_precache_new_map_refusable("levels\\ui\\ui"))
+	{
+		extern boolean pc_menu_setup_after_failed_menus(char const *map_name);
+
+		pc_menu_setup_after_failed_menus("levels\\ui\\ui");
+	}
+#endif
 	game_precache_new_map("levels\\ui\\ui", TRUE);
 	match_assert("c:\\halo\\SOURCE\\main\\main.c", 1092,
 		!main_globals.main_menu_scenario_loaded);
@@ -2581,7 +2566,12 @@ static void main_revert_map_private(
 {
 	/* (a network client never reverts on its own: its game is the host's) */
 	if (main_coop_host())
-		main_coop_host_revert();
+	{
+		/* (no saved state to go back to while everyone is dead: the respawn
+		the loss would have given them, whose timer main_revert_map stopped) */
+		if (!main_coop_host_revert() && players_are_all_dead())
+			players_respawn_at_checkpoint();
+	}
 	else if (game_connection() != _game_connection_network_client)
 	{
 		game_state_revert();
@@ -3883,6 +3873,108 @@ void main_framerate_render(
 	return;
 }
 
+/* port: the halt screen's facts (halt_facts.h), gathered once as the game
+stops: no tag lookup, no allocation */
+static struct halt_facts halt_screen_facts;
+/* (the log's end read into it) */
+static char halt_screen_log[8192];
+
+static void halt_screen_gather(
+	void)
+{
+	struct halt_facts *facts = &halt_screen_facts;
+	char const *reason;
+	char const *file;
+	long line;
+	FILE *log;
+
+	csmemset(facts, 0, sizeof(*facts));
+	reason = error_halt_place(&file, &line);
+	csstrncpy(facts->reason, reason[0] ? reason : "No reason given.", sizeof(facts->reason) - 1);
+	halt_facts_place(facts->place, (int)sizeof(facts->place), file, line);
+	halt_facts_map(facts->map, (int)sizeof(facts->map), cache_file_loaded_map_name());
+	if (stubbs_mode_active())
+	{
+		facts->mode = "Stubbs";
+	}
+	else if (mcc_cache_tags_loaded())
+	{
+		facts->mode = "MCC map";
+	}
+	else if (facts->map[0] && CACHE_FILE_TAGS_ARE_CE())
+	{
+		facts->mode = "Custom Edition map";
+	}
+	else
+	{
+		facts->mode = "Xbox map";
+	}
+	facts->build = port_build_identity();
+
+	/* the log's end, as debug.txt has it (its addresses and home folder
+	already taken out as the lines were written) */
+	log = fopen(error_log_path(), "rb");
+	if (log)
+	{
+		long size;
+		long length = 0;
+
+		fseek(log, 0, SEEK_END);
+		size = ftell(log);
+		if (size > 0)
+		{
+			fseek(log, size > (long)sizeof(halt_screen_log) ? size - (long)sizeof(halt_screen_log) : 0, SEEK_SET);
+			length = (long)fread(halt_screen_log, 1, sizeof(halt_screen_log), log);
+		}
+		fclose(log);
+		halt_facts_log_lines(facts, halt_screen_log, (int)length);
+	}
+
+	return;
+}
+
+/* the facts as text, for the game's terminal font (the screen without the
+overlay) */
+static char halt_screen_text[4096];
+
+static void halt_screen_text_build(
+	void)
+{
+	struct halt_facts const *facts = &halt_screen_facts;
+	long length;
+	long index;
+
+	length = snprintf(halt_screen_text, sizeof(halt_screen_text),
+		"The game stopped\r\n\r\n%s\r\n%s%sMap: %s%s%s%s\r\nBuild: %s\r\n\r\n",
+		facts->reason, facts->place, facts->place[0] ? "\r\n" : "", facts->map[0] ? facts->map : "none",
+		facts->map[0] ? " (" : "", facts->map[0] ? facts->mode : "", facts->map[0] ? ")" : "", facts->build);
+	for (index = 0; index < facts->line_count && length > 0 && length < (long)sizeof(halt_screen_text); index++)
+	{
+		length += snprintf(halt_screen_text + length, sizeof(halt_screen_text) - (size_t)length, "%s\r\n",
+			facts->lines[index]);
+	}
+
+	return;
+}
+
+/* port: a halt nobody sees (a run nobody watches, the dedicated server, a
+halt on a thread that cannot draw): its facts in the log, and the game
+ends with a failure, for what runs it to see */
+static void halt_screen_exit(
+	void)
+{
+	struct halt_facts const *facts = &halt_screen_facts;
+	char line[600];
+
+	snprintf(line, sizeof(line), "halt: %s%s%s (map %s, %s); exiting\r\n", facts->reason,
+		facts->place[0] ? " at " : "", facts->place, facts->map[0] ? facts->map : "none", facts->mode);
+	write_to_error_file(line, TRUE);
+#ifdef HALO_CONSOLE_LOG_BUFFER
+	error_log_flush();
+#endif
+	exit(EXIT_FAILURE);
+}
+
 void halt_and_catch_fire(
 	void)
 {
@@ -3891,6 +3983,7 @@ void halt_and_catch_fire(
 	struct scenario *scenario;
 	struct rasterizer_frame_begin_parameters frame_parameters;
 	struct rasterizer_window_begin_parameters window_parameters;
+	boolean overlay_shown = FALSE;
 
 #ifdef HALO_BROWSER
 	platform_log("web halt: %s", error_get());
@@ -3943,15 +4036,53 @@ void halt_and_catch_fire(
 			}
 		}
 
-		if (scenario)
+		/* port: what stopped the game, for the screen */
+		halt_screen_gather();
+		halt_screen_text_build();
 		{
-			font_tag_index = interface_get_tag_index(_interface_font_terminal);
+			short choice = 0;
+
+#ifdef HALO_SERVER
+			/* port: the dedicated server stops, so that what runs it sees
+			the failure */
+			choice = 2;
+#endif
+#ifdef HALO_GUIDE
+			/* port: the menus' look and the ways out, when someone watches
+			from the window's own thread (halt_screen.c); else the game
+			ends */
+			switch (halt_screen_choose())
+			{
+			case HALT_SCREEN_SHOWN:
+				choice = 1;
+				break;
+			case HALT_SCREEN_EXIT:
+				choice = 2;
+				break;
+			default:
+				break;
+			}
+#endif
+			overlay_shown = choice == 1;
+			if (choice == 2)
+			{
+				halt_screen_exit();
+			}
 		}
-		if (!scenario || font_tag_index == NONE)
+
+		font_tag_index = NONE;
+		if (!overlay_shown)
 		{
-			font_tag_index = tag_loaded(
-				FONT_GROUP_TAG,
-				"old tags\\internal system plain");
+			if (scenario)
+			{
+				font_tag_index = interface_get_tag_index(_interface_font_terminal);
+			}
+			if (!scenario || font_tag_index == NONE)
+			{
+				font_tag_index = tag_loaded(
+					FONT_GROUP_TAG,
+					"old tags\\internal system plain");
+			}
 		}
 
 		while (TRUE)
@@ -3987,18 +4118,23 @@ void halt_and_catch_fire(
 				&window_parameters.frustum,
 				TRUE);
 			window_parameters.rasterizer_target = 0;
-			window_parameters.fog.atmospheric_color = *global_real_rgb_blue;
+			/* port: dark, as the menus' backdrop, rather than the Xbox's blue */
+			window_parameters.fog.atmospheric_color = *global_real_rgb_black;
 			window_parameters.fog.atmospheric_maximum_distance = 0.0f;
 			window_parameters.fog.atmospheric_minimum_distance = 0.0f;
 			window_parameters.fog.planar_mode = 0;
 			render.camera = window_parameters.camera;
 			rasterizer_window_begin(&window_parameters);
 
-			if (font_tag_index != NONE)
+			if (!overlay_shown && font_tag_index != NONE)
 			{
 				point2d cursor = { 0, 0 };
 				rectangle2d bounds = rasterizer_globals.reserved04.frame_bounds;
 
+				/* (inset from the screen's edges, as a television may cut
+				them) */
+				bounds.x0 += 24;
+				bounds.y0 += 24;
 				draw_string_set_draw_mode(
 					font_tag_index,
 					NONE,
@@ -4012,15 +4148,14 @@ void halt_and_catch_fire(
 					NULL,
 					&cursor,
 					-4,
-					port_build_identity());
-				bounds.y0 = cursor.y - 1;
-				rasterizer_draw_string(
-					&bounds,
-					NULL,
-					&cursor,
-					-4,
-					port_error_tail(error_get()));
+					halt_screen_text);
 			}
+#ifdef HALO_GUIDE
+			if (overlay_shown)
+			{
+				halt_screen_frame(&halt_screen_facts);
+			}
+#endif
 
 			rasterizer_transparent_geometry_draw(TRUE);
 			rasterizer_transparent_geometry_draw(FALSE);
@@ -4029,7 +4164,16 @@ void halt_and_catch_fire(
 			rasterizer_windows_end();
 			rasterizer_frame_end();
 			rasterizer_present(NULL, NULL);
+			/* port: the controllers read too, for the overlay's ways out */
+			if (overlay_shown)
+			{
+				input_frame_begin();
+			}
 			input_update();
+			if (overlay_shown)
+			{
+				input_frame_end();
+			}
 		}
 	}
 
@@ -4261,6 +4405,15 @@ static boolean main_loop_iteration(
 			{
 				MAIN_STAGE("main_won_map_private");
 				main_won_map_private();
+			}
+
+			/* port: the co-op host's RESTART LEVEL: everyone back to the lobby
+			on the same level (network_server_manager.c) */
+			if (main_coop_restart_requested)
+			{
+				main_coop_restart_requested = FALSE;
+				if (main_coop_host())
+					network_game_server_port_cooperative_restart();
 			}
 
 			if (main_globals.respawn)

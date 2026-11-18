@@ -4281,6 +4281,22 @@ static void queue_keystroke(const SDL_KeyboardEvent *event)
 	keystroke_count++;
 }
 
+void platform_test_keystroke(int scancode, int modifiers)
+{
+	SDL_KeyboardEvent event;
+
+	memset(&event, 0, sizeof(event));
+	event.scancode = (SDL_Scancode)scancode;
+	event.key = SDL_GetKeyFromScancode((SDL_Scancode)scancode, (SDL_Keymod)modifiers, false);
+	event.mod = (SDL_Keymod)modifiers;
+	pthread_mutex_lock(&input_lock);
+	event.down = true;
+	queue_keystroke(&event);
+	event.down = false;
+	queue_keystroke(&event);
+	pthread_mutex_unlock(&input_lock);
+}
+
 BOOL platform_next_keystroke(struct platform_keystroke *keystroke)
 {
 	BOOL result = FALSE;
@@ -4914,6 +4930,13 @@ static void platform_pump_events_headless(void)
 (halo_console_features.h) */
 void console_performance_update(void);
 #endif
+
+/* whether this is the thread that has the window and its events (the
+halt screen draws only there: halt_screen.c) */
+int platform_on_event_thread(void)
+{
+	return platform_window && SDL_GetCurrentThreadID() == platform_event_thread;
+}
 
 void platform_pump_events(void)
 {

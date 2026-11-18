@@ -86,6 +86,8 @@ BOOL platform_run_is_quiet(void);
 not Game Mode, which shows the setup screen, drawn in the game's own window):
 no setup screen either */
 BOOL platform_run_is_unwatched(void);
+/* whether this is the thread with the window and its events */
+int platform_on_event_thread(void);
 
 /* the maps out of a file the player picked (the first start, the
 launcher's Add maps), on a thread of their own: the kind of file it is
@@ -235,6 +237,10 @@ while it is, where there is one that text input shows (Steam's, Android's on
 a touchscreen); each field begun brings it up again */
 void platform_screen_keyboard(BOOL show, BOOL password);
 BOOL platform_next_keystroke(struct platform_keystroke *keystroke);
+/* debug.test_input's typing (press: and type:): a key pressed and let go,
+as the keyboard's would be, into the keystrokes the game reads (a text
+box's, the console's); modifiers are SDL's (SDL_KMOD_*) */
+void platform_test_keystroke(int scancode, int modifiers);
 /* nonzero when a key, mouse button or touch was pressed since the last call
 (which forgets them): a movie's skip (bink_playback.c) */
 int platform_movie_skip_pressed(void);

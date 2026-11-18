@@ -1312,10 +1312,14 @@ validation gates; native results do not establish browser compatibility.
      players' ammunition and grenade counts from the host only once a
      round trip has passed since it last fired, reloaded or threw (what
      the host says before then is from before). How old what a unit
-     carries is travels in 16 bits. A client keeps an inventory whose
-     unit or weapons have not come yet (the stream can trail the datagram)
-     and applies it in full once they have, the newest of a unit's winning;
-     one is dropped `EMPTY_INVENTORY_TICKS` after the newest came.
+     carries is travels in 16 bits. A change of weapons or grenades goes
+     the tick it happens (not at the next tenth of a second) and once more
+     a fifth of a second later, and a client keeps what the host says a
+     unit carries when the unit or a weapon in it has not come yet (the
+     objects come over the host's stream, what they carry in a datagram,
+     read first when both come at once: a spawned player's gun came a
+     second after it, at the host's next refresh) and applies it as soon
+     as they come.
    - Players take the units the host spawns them with, seats are the
      host's (a client's own player's once it has ridden otherwise for
      longer than a round trip), and the CTF flags and oddballs are the same

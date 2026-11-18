@@ -3801,6 +3801,9 @@ Multiplayer go back to one player (main_menu_initialize,
 multiplayer_type_menu_initialize).
 With one gamepad, it is player 2's (pc_menu_split_players) */
 
+/* (ONLINE's: Select Map opens on the campaign's first level: coop_online) */
+static boolean pc_menus_coop_first;
+
 /* "port coop begin": two players, player 1 on its profile (campaign_profile)
 and the controller that chose co-op */
 static boolean coop_begin(short controller)
@@ -3809,6 +3812,8 @@ static boolean coop_begin(short controller)
 
 	player_spawn_count = 1;
 	player_ui_reset_single_player_local_player_controllers();
+	/* (a level preselected by ONLINE that Select Map never took) */
+	pc_menus_coop_first = FALSE;
 	if (!campaign_profile(controller, &profile))
 		return campaign_fail();
 	player_spawn_count = 2;
@@ -3861,6 +3866,33 @@ static boolean coop_player2_choose(short controller)
 	player_ui_set_single_player_local_player_controller(1, controller);
 	player_ui_set_active_player_profile(1, profile_list.indices[profile_list.chosen], &profile);
 	return TRUE;
+}
+
+/* the Multiplayer menu's ONLINE CO-OP (ui_widget.c): network co-op, through
+the host flow Online Games' CREATE GAME opens (Select Map, GAME SETUP, the
+lobby), with Select Map on the campaign's first level
+(pc_menus_coop_first_take). #1252 */
+boolean pc_menus_coop_first_take(void)
+{
+	boolean first = pc_menus_coop_first;
+
+	pc_menus_coop_first = FALSE;
+	return first;
+}
+
+boolean pc_menus_coop_online(void)
+{
+	/* (not on the original Xbox, which hosts no network co-op: Delta's
+	platform policy, xbox_coop.c) */
+#if defined(HALO_GAME_BROWSER) && !defined(HALO_XBOX_CONSOLE)
+	boolean browser_screen_create_coop_game(void);
+
+	pc_menus_coop_first = TRUE;
+	if (browser_screen_create_coop_game())
+		return TRUE;
+	pc_menus_coop_first = FALSE;
+#endif
+	return campaign_fail();
 }
 
 /* ---------- Controls Setup: the keyboard and mouse's controls
@@ -9406,6 +9438,24 @@ boolean pc_menu_setup_offered(void)
 #endif
 }
 
+/* the menus' own map didn't load (main_new_map: a pack's maps the game can't
+read): the setup screen, which shows the folder's maps and why, rather than a
+blue screen. FALSE in a run nobody watches and in the builds without it */
+boolean pc_menu_setup_after_failed_menus(char const *map_name)
+{
+#ifdef HALO_LAUNCHER
+	extern BOOL platform_run_is_unwatched(void);
+
+	if (platform_run_is_unwatched())
+		return FALSE;
+	platform_log("the menus' map '%s' doesn't load: starting again on the setup screen", map_name);
+	return launcher_restart_to_setup() != 0;
+#else
+	(void)map_name;
+	return FALSE;
+#endif
+}
+
 /* "port setup open" (its A) */
 boolean pc_menu_setup_open(void)
 {
@@ -14786,6 +14836,7 @@ boolean pc_menu_event_function_invoke(
 		{
 			return coop_player2_choose(controller);
 		}
+
 		else if (!strcmp(name, "request del player profile"))
 		{
 			return profile_delete_request();
