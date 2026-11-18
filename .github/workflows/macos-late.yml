@@ -1,0 +1,267 @@
+name: macOS late
+
+# (port, this fork) A release without macOS gets it later.
+#
+# build.yml publishes a release from every push to main when every other
+# platform builds; macOS's job is waited for but not required, since GitHub's
+# macOS runners are often not to be had (the job is cancelled waiting for
+# one). Such a release goes out at once, and a Mac's self-updater finds no
+# file of its own in it and stays where it is.
+#
+# This workflow then builds macOS from the newest release's own commit, with
+# the release's own version (v<VERSION>-fs.<run> -> HALO_VERSION, a release
+# build), and adds it to that release: fractum-halo-macos-<config>.zip and
+# their .sig, updates.json (and its .sig) written again over every file of the
+# release with the macOS ones, and SHA256SUMS (and its .sig) likewise. The
+# Macs then update to it as the other platforms already have.
+#
+# It runs when a run of build.yml on main ends, and every three hours after,
+# so that a runner that is still not to be had is tried again; and by hand
+# (with a tag, or the newest release). It does nothing when the newest
+# release has its macOS build, or while a build of main is under way (that
+# build's release may have it).
+
+on:
+  workflow_run:
+    workflows: [Build]
+    types: [completed]
+    branches: [main]
+  schedule:
+    - cron: "17 */3 * * *"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The release to add macOS to (empty, the newest)
+        type: string
+        default: ""
+
+# (one at a time: a second waits, and then finds the build in the release)
+concurrency:
+  group: macos-late
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  find:
+    if: github.repository != 'ChupathingyCE/chupathingyce'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.find.outputs.tag }}
+      version: ${{ steps.find.outputs.version }}
+      number: ${{ steps.find.outputs.number }}
+      commit: ${{ steps.find.outputs.commit }}
+    steps:
+      - name: The release without macOS
+        id: find
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          tag="$TAG"
+          if [ -z "$tag" ]; then
+            # (a build of main under way: its release may have macOS; the next
+            # run after it looks again)
+            if [ "$GITHUB_EVENT_NAME" != workflow_run ] &&
+              [ -n "$(gh run list --repo "$REPOSITORY" --workflow build.yml --branch main --event push \
+                --json status --jq '.[] | select(.status != "completed") | .status')" ]; then
+              echo "a build of main is under way: nothing now"
+              exit 0
+            fi
+            tag=$(gh release list --repo "$REPOSITORY" --limit 20 --json tagName,isLatest \
+              --jq '[.[] | select(.isLatest and (.tagName | contains("-fs.")))][0].tagName // empty')
+          fi
+          if [ -z "$tag" ]; then
+            echo "no fork release"
+            exit 0
+          fi
+          if gh release view "$tag" --repo "$REPOSITORY" --json assets --jq '.assets[].name' |
+            grep -qx 'fractum-halo-macos-release.zip'; then
+            echo "$tag has its macOS build"
+            exit 0
+          fi
+          version="${tag#v}"
+          case "$version" in
+            *-fs.[0-9]*) ;;
+            *) echo "::error::$tag is not a fork release (v<VERSION>-fs.<run>)"; exit 1 ;;
+          esac
+          number=$((10#${version##*-fs.}))
+          # (the commit the release was made from: build.yml creates it with
+          # --target <sha>; else the tag's)
+          commit=$(gh release view "$tag" --repo "$REPOSITORY" --json targetCommitish --jq .targetCommitish)
+          if ! printf '%s' "$commit" | grep -qE '^[0-9a-f]{40}$'; then
+            commit=$(gh api "repos/$REPOSITORY/commits/$tag" --jq .sha)
+          fi
+          echo "$tag ($version, build $number) at $commit has no macOS build: building it"
+          {
+            echo "tag=$tag"
+            echo "version=$version"
+            echo "number=$number"
+            echo "commit=$commit"
+          } >> "$GITHUB_OUTPUT"
+
+  macos:
+    needs: find
+    if: needs.find.outputs.tag != ''
+    # (as build.yml's macos job, at the release's commit and version)
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      HALO_VERSION: ${{ needs.find.outputs.version }}
+      HALO_RELEASE_BUILD: "1"
+      HALO_BUILD_NUMBER: ${{ needs.find.outputs.number }}
+      CI_COMPILER_LAUNCHER: ccache
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_MAXSIZE: 1G
+    steps:
+      - name: Install the toolchain
+        run: brew install ninja ccache
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.find.outputs.commit }}
+
+      # (main's caches, restored only: build.yml's runs on main save them)
+      - uses: actions/cache/restore@v4
+        with:
+          path: .ccache
+          key: ccache-macos-${{ needs.find.outputs.commit }}
+          restore-keys: ccache-macos-
+
+      - uses: actions/cache/restore@v4
+        with:
+          path: build/downloads
+          key: ffmpeg-source-${{ hashFiles('tools/ffmpeg_build.py') }}
+
+      - uses: actions/cache/restore@v4
+        with:
+          path: build/macos/third_party
+          key: macos-sdl3-${{ hashFiles('tools/android_build.py', 'tools/macos_build.py', 'tools/ffmpeg_build.py') }}
+
+      - uses: actions/cache/restore@v4
+        with:
+          path: build/bgfx
+          key: bgfx-source-${{ hashFiles('tools/bgfx_build.py') }}
+
+      - name: Debug
+        run: python3 tools/ci_build.py macos debug
+
+      - name: Release
+        run: python3 tools/ci_build.py macos release
+
+      - name: Package
+        run: |
+          tar -C dist -cf chupathingyce-macos-debug.tar chupathingyce-macos-debug
+          tar -C dist -cf chupathingyce-macos-release.tar chupathingyce-macos-release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chupathingyce-macos-debug
+          path: chupathingyce-macos-debug.tar
+          retention-days: 3
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chupathingyce-macos-release
+          path: chupathingyce-macos-release.tar
+          retention-days: 3
+
+  publish:
+    needs: [find, macos]
+    if: needs.find.outputs.tag != '' && needs.macos.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      # (the signing tools as the release's commit has them)
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.find.outputs.commit }}
+          sparse-checkout: |
+            VERSION
+            tools/update_sign.py
+            port/linux/src/update_key.h
+            tools/ci_build.py
+            tools/version.py
+            tools/release_sign.sh
+            deploy/release-key.pub
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: chupathingyce-macos-*
+
+      - name: Add macOS to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          TAG: ${{ needs.find.outputs.tag }}
+          VERSION_NAME: ${{ needs.find.outputs.version }}
+          COMMIT: ${{ needs.find.outputs.commit }}
+          # (as build.yml's release job: the fork's update key, and OpenCE's
+          # release key for SHA256SUMS)
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+          RELEASE_PUBLIC_KEY: ${{ vars.RELEASE_PUBLIC_KEY }}
+        run: |
+          # (another run may have added it while this one built)
+          if gh release view "$TAG" --repo "$REPOSITORY" --json assets --jq '.assets[].name' |
+            grep -qx 'fractum-halo-macos-release.zip'; then
+            echo "$TAG has its macOS build already"
+            exit 0
+          fi
+          if [ -z "$UPDATE_SIGNING_KEY" ]; then
+            echo "::error::no UPDATE_SIGNING_KEY secret: the release's updates.json cannot be written again"
+            exit 1
+          fi
+          # every file of the release, then the macOS zips beside them
+          mkdir release
+          gh release download "$TAG" --repo "$REPOSITORY" --dir release
+          added=()
+          for config in debug release; do
+            tar="artifacts/chupathingyce-macos-$config/chupathingyce-macos-$config.tar"
+            [ -f "$tar" ] || continue
+            mkdir -p "unpacked/$config" && tar -C "unpacked/$config" -xf "$tar"
+            (cd "unpacked/$config/chupathingyce-macos-$config" &&
+              zip -qry "$GITHUB_WORKSPACE/release/fractum-halo-macos-$config.zip" .)
+            added+=("release/fractum-halo-macos-$config.zip")
+          done
+          if [ "${#added[@]}" = 0 ]; then
+            echo "::error::no macOS build to add"
+            exit 1
+          fi
+          # (the macOS zips signed; updates.json written again over every zip,
+          # the release's commit and tag as build.yml writes them)
+          key="$RUNNER_TEMP/update-key.pem"
+          (umask 077 && printf '%s\n' "$UPDATE_SIGNING_KEY" > "$key")
+          python3 tools/update_sign.py sign "$key" "$VERSION_NAME" "${added[@]}" >/dev/null
+          rm -f release/updates.json release/updates.json.sig
+          python3 tools/update_sign.py manifest "$key" "$VERSION_NAME" --tag "$TAG" --debug-tag "$TAG" \
+            --commit "$COMMIT" release/*.zip >/dev/null
+          rm -f "$key"
+          python3 tools/update_sign.py verify "$VERSION_NAME" release/*.zip
+          files=("${added[@]}")
+          for zip in "${added[@]}"; do files+=("$zip.sig"); done
+          files+=(release/updates.json release/updates.json.sig)
+          # (SHA256SUMS of every file again, and its signature)
+          rm -f release/SHA256SUMS release/SHA256SUMS.sig
+          python3 tools/ci_build.py sums release
+          files+=(release/SHA256SUMS)
+          if [ -n "$RELEASE_SIGNING_KEY" ]; then
+            sh tools/release_sign.sh sign release/SHA256SUMS
+            sh tools/release_sign.sh verify release/SHA256SUMS
+            files+=(release/SHA256SUMS.sig)
+          fi
+          ls -l "${files[@]}"
+          gh release upload "$TAG" "${files[@]}" --repo "$REPOSITORY" --clobber
+          # (the release's notes no longer say macOS is missing)
+          gh release view "$TAG" --repo "$REPOSITORY" --json body --jq .body |
+            grep -v "No macOS build in this release" > notes.txt
+          printf '\nThe macOS build was added after the release (macos-late.yml).\n' >> notes.txt
+          gh release edit "$TAG" --repo "$REPOSITORY" --notes-file notes.txt
+          echo "$TAG: macOS added"

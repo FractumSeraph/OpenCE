@@ -1985,8 +1985,10 @@ jobs:
     # (macOS's build is waited for but not required: GitHub's macOS runners
     # are often not to be had, and a release without it is published all the
     # same; a Mac's self-updater finds no file of its own in that release's
-    # updates.json and stays on its version until one that has it. Every
-    # other build must succeed, and a run cancelled by hand publishes nothing.)
+    # updates.json until macos-late.yml builds macOS at the release's commit
+    # and version and adds it, after this run and every three hours, as long
+    # as the runner is not to be had. Every other build must succeed, and a
+    # run cancelled by hand publishes nothing.)
     if: >-
       !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' &&
       github.repository != 'ChupathingyCE/chupathingyce' &&
@@ -2097,7 +2099,7 @@ jobs:
             echo "The release builds are for playing; the debug builds stop at the first failed assertion."
             if ! ls release/fractum-halo-macos-*.zip >/dev/null 2>&1; then
               echo
-              echo "No macOS build in this release (GitHub's macOS runner was not to be had): the previous release's is the newest."
+              echo "No macOS build in this release (GitHub's macOS runner was not to be had): the previous release's is the newest until it is added (macos-late.yml)."
             fi
           } > notes.txt
           gh release create "v$version" "${files[@]}" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
