@@ -119,6 +119,9 @@ static boolean hs_scenario_node_skipped(long i) {(void)i;return FALSE;}
 static long hs_type_default_value(short type) {return type==_hs_type_void ? 0 : type==_hs_type_string ? (long)"" : NONE;}
 #include "policy.inc"
 #include "console.inc"
+/* (ChupathingyCE's: a thread's name for the halt screen's and the log's lines,
+which runtime.inc's hs_thread_delete gives) */
+static char const *hs_thread_format(long thread_index) {(void)thread_index;return "thread";}
 #include "runtime.inc"
 
 static struct hs_compile_globals hs_compile_globals;

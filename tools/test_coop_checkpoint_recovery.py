@@ -50,7 +50,7 @@ def generated(fault=None):
         (damage, ("REPORT_WORLD_BOUND", "REPORT_IMPACT_TOLERANCE", "TARGET_HISTORY_TICKS",
                   "MAXIMUM_RECENT_WEAPONS", "MAXIMUM_GRENADE_THROWS", "MAXIMUM_STUCK_PROJECTILES",
                   "RECENT_WEAPON_TICKS", "HIT_REPORT_BURST_SECONDS", "PLAYER_TRAIL_POINTS",
-                  "DAMAGE_RATE_CACHE_SIZE", "MAXIMUM_HIT_REPORTS_PER_TICK")),
+                  "DAMAGE_RATE_CACHE_SIZE", "MAXIMUM_HIT_REPORTS_PER_TICK", "DAMAGE_PART_COUNT")),
     ):
         config.extend(define_value(source, name) for name in names)
     config.append(define_value(distributed_h, 'DISTRIBUTED_UNIT_SCALE'))
@@ -115,8 +115,11 @@ def generated(fault=None):
         "distributed_object_index_valid", "distributed_real_valid", "distributed_point_valid",
         "distributed_axes_make_valid", "distributed_player", "distributed_player_from_byte",
         "distributed_player_is_local", "distributed_living_unit"))
+    # (ChupathingyCE's bounded velocities, which distributed_transform_valid checks)
+    code += "\n#define DISTRIBUTED_VELOCITY_BOUND 10000.0f\n#define DISTRIBUTED_ANGULAR_VELOCITY_BOUND 1000.0f\n"
     code += "\n" + "\n".join(function(objects, name) for name in (
-        "distributed_vector_valid", "distributed_transform_valid", "network_objects_client_has"))
+        "distributed_vector_valid", "distributed_vector_bounded", "distributed_transform_valid",
+        "network_objects_client_has"))
     code += "\n" + "\n".join(function(players, name) for name in (
         "network_player_detach_unit", "network_player_attach_unit"))
     code += "\n" + "\n".join(function(units, name) for name in (
