@@ -52,6 +52,22 @@ SDL_Scancode SDL_GetScancodeFromName(const char *name)
 	return (SDL_Scancode)host_sdl_scancode_from_name(name);
 }
 
+/* (the console's test keystrokes, platform_test_keystroke: the host's SDL
+has the layouts, but a US one, a hardware keyboard's usual labels there,
+spares a host import) */
+SDL_Keycode SDL_GetKeyFromScancode(SDL_Scancode scancode, SDL_Keymod modstate, bool key_event)
+{
+	static char const plain[] = "1234567890\r\x1b\b\t -=[]\\#;'`,./";
+	static char const shifted[] = "!@#$%^&*()\r\x1b\b\t _+{}|~:\"~<>?";
+	bool shift = !key_event && (modstate & SDL_KMOD_SHIFT) != 0;
+
+	if (scancode >= SDL_SCANCODE_A && scancode <= SDL_SCANCODE_Z)
+		return (SDL_Keycode)((shift ? 'A' : 'a') + (scancode - SDL_SCANCODE_A));
+	if (scancode >= SDL_SCANCODE_1 && scancode <= SDL_SCANCODE_SLASH)
+		return (SDL_Keycode)(unsigned char)(shift ? shifted : plain)[scancode - SDL_SCANCODE_1];
+	return SDL_SCANCODE_TO_KEYCODE(scancode);
+}
+
 Uint64 SDL_GetTicks(void)
 {
 	return (Uint64)host_sdl_ticks();
