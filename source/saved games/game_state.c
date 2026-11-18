@@ -311,6 +311,8 @@ void game_state_dispose(
 /* port: what last rewrote the game state, and when (game time), for
 game_state_check_data_arrays' report */
 static char const *game_state_last_event = "startup";
+/* port: checkpoints saved (game_state_port_checkpoints_saved) */
+static unsigned long game_state_checkpoints_saved = 0;
 static long game_state_last_event_time = NONE;
 
 static void game_state_note_event(
@@ -387,8 +389,17 @@ void game_state_save(
 	}
 	main_start_time();
 	game_state_note_event("checkpoint saved");
+	game_state_checkpoints_saved++;
 
 	return;
+}
+
+/* port: how many checkpoints have saved since the game started (Lua
+scripts tell a new checkpoint by it changing: lua_twiddlings.c) */
+unsigned long game_state_port_checkpoints_saved(
+	void)
+{
+	return game_state_checkpoints_saved;
 }
 
 /* port: whether game_state_revert has a saved state to go back to */

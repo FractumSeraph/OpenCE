@@ -332,6 +332,15 @@ long director_get_followed_unit(
 	return NONE;
 }
 
+/* port: (director.h) */
+boolean director_port_first_person(
+	short local_player_index)
+{
+	if (local_player_index < 0 || local_player_index >= MAXIMUM_NUMBER_OF_LOCAL_PLAYERS)
+		return FALSE;
+	return director_globals.local_players[local_player_index].camera_proc == first_person_camera_update;
+}
+
 director_perspective director_get_perspective(
 	short local_player_index)
 {

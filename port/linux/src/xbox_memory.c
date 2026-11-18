@@ -71,6 +71,14 @@ takes the address as a hint, which every caller here checks it got) */
 #define web_memory_bytes() ((unsigned long long)__builtin_wasm_memory_size(0) << 16)
 #endif
 
+#if defined(_WIN32) && !defined(HALO_64BIT) && !defined(HALO_SERVER)
+#include <stdlib.h>
+#include <SDL3/SDL.h>
+
+/* what a 32-bit Windows is told, where the window can't be reserved */
+#define XBOX_MEMORY_NEEDS_64_BIT "This build needs 64-bit Windows."
+#endif
+
 #ifdef HALO_64BIT
 #define PAGE_SIZE_BYTES 0x1000U
 #else
@@ -404,6 +412,13 @@ static void contiguous_arena_reserve(void)
 		snprintf(platform_xbox_address_space_error, sizeof(platform_xbox_address_space_error),
 			"%u MB at %p: %s", (unsigned int)(PLATFORM_CONTIGUOUS_SIZE >> 20), wanted,
 			result == MAP_FAILED ? strerror(errno) : "the system put it elsewhere");
+#endif
+#if defined(_WIN32) && !defined(HALO_SERVER)
+		/* (32-bit Windows gives a program 2 GB, all below the window: the
+		game would only run out of memory as it starts) */
+		platform_log("%s", XBOX_MEMORY_NEEDS_64_BIT);
+		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Fractum Halo", XBOX_MEMORY_NEEDS_64_BIT, NULL);
+		exit(EXIT_FAILURE);
 #endif
 #endif
 	}

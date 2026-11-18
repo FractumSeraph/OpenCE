@@ -289,6 +289,7 @@ symbols in this file:
 #include "cseries/cseries_windows.h"
 #endif
 #include "mcc_scripts.h"
+#include "lua_scripting.h" /* port: Lua's execute_script functions */
 
 /* port: bipeds.c's; cheats.c's (hs_evaluate_set) */
 extern boolean rider_ejection;
@@ -979,6 +980,9 @@ static char const *expression_get_function_name(
 				struct hs_function_definition *mcc_function = mcc_script_function(syntax_node->index);
 				if (mcc_function)
 					return mcc_function->name;
+				mcc_function = lua_scripting_hs_function(syntax_node->index);
+				if (mcc_function)
+					return mcc_function->name;
 			}
 			if ((word)syntax_node->index>=hs_function_count())
 				return "(corrupt function)";
@@ -1067,6 +1071,36 @@ short hs_runtime_port_scenario_boolean(
 
 	/* (a boolean is its low byte, as the engine reads it: the global's value is a whole long) */
 	return (boolean)hs_global_evaluate(designator)!=FALSE;
+}
+
+/* port: a map's own script global by its name (the case kept), for a Lua
+script's get_global and set_global (port/linux/game/lua_chimera_api.c, as
+Chimera's read_global): its type, _hs_unparsed for none, and where its
+value is kept */
+short hs_runtime_scenario_global(
+	char const *name,
+	long **value)
+{
+	struct scenario *scenario;
+	short global_index;
+
+	*value = NULL;
+	if (!hs_runtime_globals.initialized || global_scenario_index==NONE || !hs_global_data || !name)
+		return _hs_unparsed;
+	scenario = global_scenario_get();
+	for (global_index = 0; global_index<scenario->hs_globals.count; global_index++)
+	{
+		struct hs_global const *global = TAG_BLOCK_GET_ELEMENT(&scenario->hs_globals, global_index, struct hs_global);
+		struct hs_global_datum *datum;
+
+		if (strcmp(name, global->name))
+			continue;
+		/* (as hs_global_evaluate finds it) */
+		datum = (struct hs_global_datum *)datum_get(hs_global_data, global_index+hs_external_global_count);
+		*value = &datum->value;
+		return global->type;
+	}
+	return _hs_unparsed;
 }
 
 char const *hs_runtime_get_executing_thread_name(
@@ -3010,9 +3044,13 @@ static void hs_thread_main(
 		index_count = TEST_FLAG(expression->flags, _hs_syntax_node_script_bit) ?
 			global_scenario_get()->hs_scripts.count :
 			hs_function_count();
-		/* port: MCC's additional functions are past the table's (mcc_scripts.c) */
-		if (!TEST_FLAG(expression->flags, _hs_syntax_node_script_bit) && mcc_script_function(expression->index))
+		/* port: MCC's additional functions are past the table's (mcc_scripts.c), and
+		a Lua script's execute_script's (lua_scripting.h) */
+		if (!TEST_FLAG(expression->flags, _hs_syntax_node_script_bit) &&
+			(mcc_script_function(expression->index) || lua_scripting_hs_function(expression->index)))
+		{
 			index_count = expression->index + 1;
+		}
 		if (expression->index<0 || expression->index>=index_count)
 		{
 			hs_syntax_error(thread_index);

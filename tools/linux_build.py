@@ -121,6 +121,18 @@ TOML_DIR = Path("port/third_party/tomlc17")
 EXPAT_DIR = Path("port/third_party/expat")
 EXPAT_SOURCES = ("xmlparse.c", "xmlrole.c", "xmltok.c")
 KCP_DIR = Path("port/third_party/kcp")
+# mods' Lua scripts for Chimera's Lua API (port/linux/game/lua_scripting.c):
+# the desktop builds' (HALO_LUA), not the consoles', Android's or the
+# dedicated server's
+LUA_DIR = Path("port/third_party/lua")
+LUA_DEFINES = ["-DHALO_LUA"]
+
+
+def lua_sources() -> List[Path]:
+    """the Lua library's sources (port/third_party/lua, without an interpreter)"""
+    return sorted(LUA_DIR.glob("*.c"))
+
+
 # Link Profile's QR code (port/linux/src/browser.c)
 QRCODEGEN_DIR = Path("port/third_party/qrcodegen")
 MONOCYPHER_DIR = Path("port/third_party/monocypher")
@@ -670,6 +682,8 @@ class Linux32Units:
     # the instruction set, in place of march_flag's x86 one (a 32-bit ARM
     # console's: the Steam Link's)
     instruction_set: Optional[List[str]] = None
+    # mods' Lua scripts (LUA_DEFINES): the desktop build's, not the server's
+    lua: bool = False
 
 
 # the ABI flags only x86 has, which clang rejects for another target: the
@@ -712,7 +726,8 @@ def linux32_objects(n: Writer, units: Linux32Units, obj_dir: Path, extra_cflags:
     abi = " ".join(_retarget_units(LINUX_ABI_FLAGS, units) + target + configuration_defines(sln)
                    + ([] if getattr(sln, "port_release", False) else ["-fstack-protector-strong"])
                    + browser_defines + CUSTOM_EDITION_DEFINES + MODS_DEFINES + COMPRESSED_MAP_DEFINES + units.extra_flags
-                   + units.ffmpeg[0])
+                   + units.ffmpeg[0]
+                   + ([*LUA_DEFINES, f"-idirafter {LUA_DIR}"] if units.lua else []))
     port_include = PORT_DIR / "include"
     sdk_flags = f"-idirafter {XDK_INCLUDE}"
     posix_flags = _retarget_units(POSIX_FLAGS, units)
@@ -851,6 +866,10 @@ def linux32_objects(n: Writer, units: Linux32Units, obj_dir: Path, extra_cflags:
     # voice chat's codec (port/third_party/opus)
     for source in opus_sources():
         add_object(source, opus_cflags(abi))
+    # mods' Lua scripts' Lua (port/third_party/lua; lua_scripting.c)
+    if units.lua:
+        for source in lua_sources():
+            add_object(source, " ".join([abi, "-std=gnu11", f"-I{LUA_DIR}", "-w"]))
     # Link Profile's QR code (port/third_party/qrcodegen; browser.c)
     add_object(QRCODEGEN_DIR / "qrcodegen.c", " ".join([abi, "-std=gnu11", "-w"]))
     # internet play's signatures, for public games' listings
@@ -985,7 +1004,7 @@ def generate_linux_build(n: Writer, sln: Any) -> None:
     units = Linux32Units(sln=sln, config=config, game_browser=getattr(sln, "game_browser", False),
                          semantics_header=semantics_header, platform_semantics_header=platform_semantics_header,
                          embedded_assets=embedded_assets, sysroot_flags=sysroot_cflags,
-                         ffmpeg=(ffmpeg_cflags, ffmpeg_libs),
+                         ffmpeg=(ffmpeg_cflags, ffmpeg_libs), lua=True,
                          # configure.py --window-rebase: the memory window wherever
                          # HALO_WINDOW_BASE puts it (source/cseries/xbox_address.h), to
                          # test on the desktop what the Switch needs; never a build to ship

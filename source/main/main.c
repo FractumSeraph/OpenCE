@@ -3959,9 +3959,11 @@ static void halt_screen_text_build(
 
 /* port: a halt nobody sees (a run nobody watches, the dedicated server, a
 halt on a thread that cannot draw): its facts in the log, and the game
-ends with a failure, for what runs it to see */
+ends with a failure, for what runs it to see. immediately: at once, once
+the log has it, without exit()'s handlers (a halt off the window's thread,
+where they could wait on locks the other threads hold) */
 static void halt_screen_exit(
-	void)
+	boolean immediately)
 {
 	struct halt_facts const *facts = &halt_screen_facts;
 	char line[600];
@@ -3972,6 +3974,13 @@ static void halt_screen_exit(
 #ifdef HALO_CONSOLE_LOG_BUFFER
 	error_log_flush();
 #endif
+	if (immediately)
+	{
+		/* (unistd.h's, and the C library's on Windows: this file is C89) */
+		void _exit(int status);
+
+		_exit(EXIT_FAILURE);
+	}
 	exit(EXIT_FAILURE);
 }
 
@@ -4041,6 +4050,7 @@ void halt_and_catch_fire(
 		halt_screen_text_build();
 		{
 			short choice = 0;
+			boolean exit_immediately = FALSE;
 
 #ifdef HALO_SERVER
 			/* port: the dedicated server stops, so that what runs it sees
@@ -4051,6 +4061,8 @@ void halt_and_catch_fire(
 			/* port: the menus' look and the ways out, when someone watches
 			from the window's own thread (halt_screen.c); else the game
 			ends */
+			int platform_on_event_thread(void);
+
 			switch (halt_screen_choose())
 			{
 			case HALT_SCREEN_SHOWN:
@@ -4058,6 +4070,7 @@ void halt_and_catch_fire(
 				break;
 			case HALT_SCREEN_EXIT:
 				choice = 2;
+				exit_immediately = !platform_on_event_thread();
 				break;
 			default:
 				break;
@@ -4066,7 +4079,7 @@ void halt_and_catch_fire(
 			overlay_shown = choice == 1;
 			if (choice == 2)
 			{
-				halt_screen_exit();
+				halt_screen_exit(exit_immediately);
 			}
 		}
 

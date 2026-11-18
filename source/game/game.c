@@ -202,6 +202,7 @@ struct game_options;
 #include "cseries/cseries_windows.h"
 #include "halo_perf_log.h" /* port: console.perf_log */
 #include "game_modes.h" /* port: the game modes layer (docs/modes.md) */
+#include "lua_scripting.h" /* port: mods' Lua scripts (port/linux/game/lua_scripting.c) */
 
 /* network_game_globals.c's */
 boolean network_game_distributed_client(void);
@@ -379,6 +380,8 @@ void game_tick(
 	actors, made the first light from it (Sentry NATIVE-7) */
 	game_state_check_data_arrays();
 	lights_port_recover();
+	/* port: mods' Lua scripts' "pretick" (port/linux/game/lua_scripting.c) */
+	lua_scripting_pretick();
 
 	/* port: a client of another's game, the host's rules (its own cheats and
 	game speed, set before it joined too, put back) */
@@ -443,6 +446,8 @@ void game_tick(
 	/* port: and at its end, before the frame draws the lights */
 	game_state_check_data_arrays();
 	lights_port_recover();
+	/* port: mods' Lua scripts' "tick" (lua_scripting.c) */
+	lua_scripting_tick();
 
 	profile_exit(game_update_section);
 	collision_log_end_period();
@@ -793,6 +798,9 @@ void game_initialize_for_new_map(
 	from now on go elsewhere, port/linux/game/network_objects.c) */
 	network_objects_placed();
 	ui_widgets_safe_to_load(TRUE);
+	/* port: mods' Lua scripts: the map's load, and their "map load"
+	(port/linux/game/lua_scripting.c) */
+	lua_scripting_map_load();
 #ifdef HALO_XBOX_CONSOLE
 	/* port: a test build of more than 16 players logs its memory at each
 	map's start (port/xbox/src/xbox_memory.c; nothing in a stock build) */
@@ -1127,6 +1135,9 @@ boolean game_precache_new_map_refusable(
 void game_dispose_from_old_map(
 	void)
 {
+	/* port: the map's Lua scripts' "unload", and they close
+	(port/linux/game/lua_scripting.c) */
+	lua_scripting_map_unload();
 #ifdef HALO_XBOX_CONSOLE
 	/* port: and at its end, with the objects' peaks over it */
 	{
@@ -1196,6 +1207,8 @@ void game_frame(
 		585,
 		game_globals->active);
 
+	/* port: mods' Lua scripts' "preframe" (port/linux/game/lua_scripting.c) */
+	lua_scripting_preframe();
 	collision_log_begin_period(1);
 	particles_update(frame_dt);
 	contrails_update(frame_dt);
@@ -1208,6 +1221,8 @@ void game_frame(
 	rasterizer_frame_update(frame_dt);
 	numeric_countdown_timer_update();
 	collision_log_end_period();
+	/* port: and their "frame" */
+	lua_scripting_frame();
 
 	return;
 }

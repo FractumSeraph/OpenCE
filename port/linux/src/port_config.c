@@ -1475,6 +1475,17 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 	{ "game.workshop_file_limit_mb", _config_integer, "4096", "HALO_WORKSHOP_FILE_LIMIT_MB", _environment_value,
 		_platform_desktop,
 		"The largest single file, in MB, the game's own Steam download takes." },
+
+#ifdef HALO_LUA
+	/* ---- lua: mods' scripts for Chimera's Lua API (port/linux/game/lua_scripting.c) */
+	{ "lua.scripts", _config_boolean, "false", "HALO_LUA_SCRIPTS", _environment_value, _platform_desktop,
+		"Run mods' Lua scripts made for Chimera, from the lua folder beside\n"
+		"maps/. A map pack's own are in lua/<pack>, like lua/spv3." },
+	{ "lua.twiddlings", _config_boolean, "true", "HALO_LUA_TWIDDLINGS", _environment_value, _platform_desktop,
+		"Let those scripts read and change the game's memory, translated\n"
+		"from Halo PC's. false makes every read 0 and refuses every write." },
+#endif
+
 	/* ---- network */
 
 	/* ---- bots */
@@ -3289,6 +3300,10 @@ static const struct
 		"host." },
 	{ "bots", 0,
 		"Computer players in the local (split screen) games you host." },
+#ifdef HALO_LUA
+	{ "lua", 0,
+		"Mods' Lua scripts made for Chimera." },
+#endif
 	{ "network", 0,
 #ifdef HALO_SERVER
 		"Internet play, the Server Browser, the game list and Delta Stats. Most\n"
