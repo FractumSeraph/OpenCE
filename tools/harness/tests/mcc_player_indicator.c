@@ -60,6 +60,9 @@ static void interface_draw_bitmap(struct bitmap_data const *b, point2d const *po
 
 /* (port, this fork: what the fork's code calls that OpenCE's does not) */
 #define hud_player_name_in_sight_this_tick(player_index, unit_index, head) TRUE
+/* (ChupathingyCE's verified names, game_engine.c's: the game name here) */
+#define GAME_ENGINE_SHOWN_NAME_LENGTH 22
+#define game_engine_player_shown_name(player_index, name, size) ((void)(player_index), (void)(size), (name))
 #include "under_test.inc"
 
 static void check_family(int is_mcc, unsigned short flags, real expected)
