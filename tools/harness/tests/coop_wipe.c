@@ -83,6 +83,8 @@ static void coop_pickups_new_game(void){}
 static void coop_vehicles_new_game(void){}
 static int sound_syncs;
 static void coop_sound_sync_reset(void){sound_syncs=0;}
+/* (ChupathingyCE's checkpoint count, game_state.c's, which Lua scripts read) */
+static unsigned long game_state_checkpoints_saved;
 #include "under_test.inc"
 static long add_player(void){long id=datum_new(player_data);int slot=DATUM_INDEX_TO_ABSOLUTE_INDEX(id);CHECK(id!=NONE,"player fixture full");((struct player_datum *)datum_get(player_data,id))->unit_index=100+slot;live_machine_players[slot<2?slot:2][slot<3?0:1]=id;return id;}
 static struct player_datum *player(int slot){return (void *)(player_data->data+slot*player_data->size);}

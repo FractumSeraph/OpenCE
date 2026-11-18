@@ -68,6 +68,8 @@ static struct hs_function_definition test_function={_hs_type_void,test_evaluate,
 static long hs_function_table_count=1;
 static struct hs_function_definition *hs_function_get(short i) {if(i!=0&&!(loaded&&i==0x7000))abort();return &test_function;}
 static struct hs_function_definition *mcc_script_function(short i) {return loaded&&i==0x7000 ? &test_function : NULL;}
+/* (ChupathingyCE's Lua scripts' execute_script functions: none here) */
+static struct hs_function_definition *lua_scripting_hs_function(short i) {(void)i;return NULL;}
 static int hs_scenario_script_disabled(short i) {(void)i;return 0;}
 static long game_time_get(void) {return now;}
 static int game_in_progress(void) {return 1;}

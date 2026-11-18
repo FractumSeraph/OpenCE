@@ -68,6 +68,8 @@ static void players_note_checkpoint(void){}
 static void hud_autosave(boolean on){(void)on;}
 #define console_printf(...) ((void)0)
 
+/* (ChupathingyCE's checkpoint count, game_state.c's, which Lua scripts read) */
+static unsigned long game_state_checkpoints_saved;
 #include "under_test.inc"
 
 /* one frame of one tick (main_loop): its start, the scripts' tick, its end */
