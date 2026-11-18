@@ -15,7 +15,10 @@ name: macOS late
 # release with the macOS ones, and SHA256SUMS (and its .sig) likewise. The
 # Macs then update to it as the other platforms already have.
 #
-# It runs when a run of build.yml on main ends, and every three hours after,
+# GitHub's Apple silicon runners are the ones often not to be had; when one is
+# not, the same build runs on an Intel Mac (macos_intel: the application is
+# universal either way). It runs when a run of build.yml on main ends, and
+# every three hours after,
 # so that a runner that is still not to be had is tried again; and by hand
 # (with a tag, or the newest release). It does nothing when the newest
 # release has its macOS build, or while a build of main is under way (that
@@ -170,9 +173,81 @@ jobs:
           path: chupathingyce-macos-release.tar
           retention-days: 3
 
-  publish:
+  # (the same on an Intel Mac when GitHub has no Apple silicon one to give:
+  # "not acquired by Runner ... after multiple attempts", capacity, the job
+  # cancelled in a quarter of an hour. The application is universal either way:
+  # tools/macos_build.py builds both architectures)
+  macos_intel:
     needs: [find, macos]
-    if: needs.find.outputs.tag != '' && needs.macos.result == 'success'
+    if: always() && needs.find.outputs.tag != '' && needs.macos.result != 'success'
+    runs-on: macos-15-intel
+    timeout-minutes: 60
+    env:
+      HALO_VERSION: ${{ needs.find.outputs.version }}
+      HALO_RELEASE_BUILD: "1"
+      HALO_BUILD_NUMBER: ${{ needs.find.outputs.number }}
+      CI_COMPILER_LAUNCHER: ccache
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_MAXSIZE: 1G
+    steps:
+      - name: Install the toolchain
+        run: brew install ninja ccache
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.find.outputs.commit }}
+
+      # (main's caches, restored only: build.yml's runs on main save them)
+      - uses: actions/cache/restore@v4
+        with:
+          path: .ccache
+          key: ccache-macos-${{ needs.find.outputs.commit }}
+          restore-keys: ccache-macos-
+
+      - uses: actions/cache/restore@v4
+        with:
+          path: build/downloads
+          key: ffmpeg-source-${{ hashFiles('tools/ffmpeg_build.py') }}
+
+      - uses: actions/cache/restore@v4
+        with:
+          path: build/macos/third_party
+          key: macos-sdl3-${{ hashFiles('tools/android_build.py', 'tools/macos_build.py', 'tools/ffmpeg_build.py') }}
+
+      - uses: actions/cache/restore@v4
+        with:
+          path: build/bgfx
+          key: bgfx-source-${{ hashFiles('tools/bgfx_build.py') }}
+
+      - name: Debug
+        run: python3 tools/ci_build.py macos debug
+
+      - name: Release
+        run: python3 tools/ci_build.py macos release
+
+      - name: Package
+        run: |
+          tar -C dist -cf chupathingyce-macos-debug.tar chupathingyce-macos-debug
+          tar -C dist -cf chupathingyce-macos-release.tar chupathingyce-macos-release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chupathingyce-macos-debug
+          path: chupathingyce-macos-debug.tar
+          retention-days: 3
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chupathingyce-macos-release
+          path: chupathingyce-macos-release.tar
+          retention-days: 3
+
+  publish:
+    needs: [find, macos, macos_intel]
+    if: >-
+      always() && needs.find.outputs.tag != '' &&
+      (needs.macos.result == 'success' || needs.macos_intel.result == 'success')
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
