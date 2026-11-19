@@ -254,9 +254,11 @@ void dsound_port_set_channel_stereo_position(short virtual_channel_index, boolea
 	real distance, real minimum_distance, real distance_fade, real occlusion, real obstruction,
 	boolean attenuate_direct_path, real approach);
 
-/* port: the voices' log (sound_voices_full_log), on every port build but the
-original Xbox's, whose voices are its hardware's */
-#if defined(HALO_CUSTOM_EDITION) && !defined(HALO_XBOX_CONSOLE)
+/* port: the voices' log (sound_voices_full_log), on every port build. The
+original Xbox's voices are its hardware's, and its few PCM ones are where a
+Custom Edition map's sounds run out first (warthog-xbox #94); it says each
+type's first line only, once a map */
+#if defined(HALO_CUSTOM_EDITION)
 #define SOUND_VOICES_LOG
 #endif
 
@@ -4625,6 +4627,13 @@ static void sound_voices_full_log(
 	}
 
 	now = (long)system_milliseconds();
+#ifdef HALO_XBOX_CONSOLE
+	/* (the rest are counted, and said when the map is left) */
+	if (sound_voices_log[channel_type_flags].told)
+	{
+		return;
+	}
+#endif
 	if (sound_voices_log[channel_type_flags].told &&
 		now - sound_voices_log[channel_type_flags].last_time < SOUND_VOICES_LOG_INTERVAL_MILLISECONDS)
 	{
@@ -4690,7 +4699,42 @@ static void sound_voices_peak_log(
 				sound_voices_count(channel_type_flags, &busy),
 				sound_voices_type_name(channel_type_flags));
 		}
+		/* (those since the type's last line) */
+		if (sound_voices_log[channel_type_flags].stolen || sound_voices_log[channel_type_flags].dropped)
+		{
+			error(_error_silent, "sound: %s voices: %ld more taken and %ld more sounds not played "
+				"after the last line about them",
+				sound_voices_type_name(channel_type_flags),
+				sound_voices_log[channel_type_flags].stolen,
+				sound_voices_log[channel_type_flags].dropped);
+		}
 	}
 	csmemset(sound_voices_log, 0, sizeof(sound_voices_log));
+}
+#endif
+
+#ifdef HALO_XBOX_CONSOLE
+/* port: the definition of the sound a channel plays, or NONE, for the Xbox
+mixer's log line about a channel whose permutation is not in the tags
+(sound_dsound_xbox.c, warthog-xbox #154) */
+long sound_manager_channel_definition_index(
+	short channel_index)
+{
+	struct sound_channel_datum *channel;
+	struct sound_datum *sound;
+
+	if (!sound_data || channel_index<0 || channel_index>=sound_manager_globals.channel_count ||
+		channel_index>=MAXIMUM_SOUND_CHANNELS)
+	{
+		return NONE;
+	}
+	channel = &sound_channels[channel_index];
+	if (channel->sound_index==NONE)
+	{
+		return NONE;
+	}
+	sound = (struct sound_datum *)datum_try_and_get(sound_data, channel->sound_index);
+
+	return sound ? sound->definition_index : NONE;
 }
 #endif

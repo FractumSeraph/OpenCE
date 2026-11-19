@@ -227,6 +227,9 @@ static void *game_engine_get_variant(void) {return &variant;}
 #define game_engine_get_variant() (&variant)
 static int weapon_is_flag(long index) {(void)index;return 0;}
 static void game_engine_objective_weapon_deleted(long index) {(void)index;CHECK(0,"unexpected objective");}
+/* (ChupathingyCE's respawn countdown's last beep, when the host spawns a
+client's player first: nothing of the recovery's) */
+static void game_engine_client_respawned(short player_index) {(void)player_index;}
 static void object_iterator_new(struct object_iterator *it,int mask,int flags) {it->next=0;it->mask=mask;(void)flags;}
 static void *object_iterator_next(struct object_iterator *it) {
     while(it->next<world_capacity){int slot=it->next++;struct object_header *h=(struct object_header *)object_header_data->data+slot;

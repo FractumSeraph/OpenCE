@@ -268,6 +268,9 @@ static struct tag_schema_group const groups[] = {
 };
 struct tag_schema_group const *const tag_schema_group_lists[] = {groups, NULL};
 struct tag_schema_group const tag_schema_custom_edition_groups[] = {{0, {0, 0}, NULL}};
+/* (ChupathingyCE's tag_validate.c: the layout it checks the Xbox's tags by,
+tag_schema_groups.c's) */
+struct tag_schema_layout const tag_schema_xbox_layout = {"Xbox", tag_schema_group_lists, NULL, 0x1600000, 0};
 
 #ifdef MCC_HUD_VALIDATION
 static char hud_validation_message[512];

@@ -1685,6 +1685,16 @@ boolean map_family_campaign(
 		cache_file_is(path, family_cache_version(family), CACHE_TYPE_SOLO);
 }
 
+/* (ChupathingyCE's name for the campaign maps' list, its Load Level's:
+ui_map_list.c's add_custom_campaign_entries; the same maps) */
+void map_family_list_campaign(
+	short family,
+	void (*found)(char const *file, void *context),
+	void *context)
+{
+	map_family_list_campaigns(family, found, context);
+}
+
 #endif
 
 /* ---------- downloaded maps

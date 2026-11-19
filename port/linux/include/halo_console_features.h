@@ -46,9 +46,15 @@ HALO_CONSOLE_WIDGET_POOL_SIZE
 	ui_widget.c; console.widget_pool_log logs what the menus use)
 HALO_CONSOLE_MAP_LIST_ROWS
 	the rows of the menus' map list (port/linux/game/ui_map_list.c): the
-	original Xbox's 40, every other console's 256; the desktop builds and
+	original Xbox's 128, every other console's 256; the desktop builds and
 	Android leave it undefined and hold 2560, room for a large Custom
-	Edition folder beside the whole MCC catalog
+	Edition folder beside the whole MCC catalog. A row's map name, names
+	and description are held in pools at their own length
+HALO_CONSOLE_MAP_LIST_TEXT
+	the wide characters of the map list's pooled names and descriptions:
+	the original Xbox's 12288 (24 KB for its 128 rows; a row past it keeps
+	its names but not its description, and one without room for its names
+	is left out, both logged). Without it, room for every row's longest
 HALO_CONSOLE_NO_GUIDE
 	no Guide (port/linux/game/guide.c, over any screen) and no presence
 	sent to the site (browser.c, network.share_presence), their settings
@@ -215,7 +221,9 @@ HALO_CONSOLE_PERFORMANCE_MODE
 	and console_performance_sky, console_performance_object_transparents,
 	console_performance_decoration_distance and
 	console_performance_hud_frames, what else it leaves out (render_sky.c,
-	render_objects.c, hud_draw.c)
+	render_objects.c, hud_draw.c). The objects' transparent parts and the
+	plants are see-through cover, so in a network game a port keeps them
+	unless display.performance_online_cuts is on (port_config.c)
 HALO_CONSOLE_CACHE_SCREEN
 	a console whose cache files are slow to make (a FAT32 stick, which writes
 	them full of zeros): they are made long a little at a time, and
@@ -261,6 +269,10 @@ HALO_PORT_UPDATE_API, HALO_PORT_UPDATE_REPOSITORY
 	signed with its own key, update_public_keys in the port's
 	halo_port_update_keys.h (update_key.h); the game's release key signs
 	nothing the port's server sends
+HALO_PORT_UPDATE_DOWNLOADS
+	with HALO_PORT_UPDATE_API, where the release's files are downloaded
+	from, when that is not the API's address and /releases/download (a
+	port on GitHub: https://github.com/<owner>/<name>/releases/download)
 HALO_PORT_UPDATE_SCRIPT, HALO_PORT_UPDATE_RESTART_EXIT_CODE
 	the launch script an update replaces with the game, and the code the
 	game exits with after an update for that script to start the new
@@ -539,9 +551,18 @@ ChupathingyCE's map_share_client.c is left out: map_share.h) */
 #define HALO_HOST_MAP_DOWNLOADS 1
 #endif
 
-/* the menus' map list's rows (ui_map_list.c): a console's own size */
+/* the menus' map list's rows (ui_map_list.c): a console's own size. The
+original Xbox's: its 13, Custom Edition+ and a Custom Edition folder, and a
+pack or two of about 30 maps each (Halo: Not Halo Edition has 29), with room
+to spare; 40 left a pack listed last out (warthog-xbox #145) */
 #if defined(HALO_XBOX_CONSOLE) && !defined(HALO_CONSOLE_MAP_LIST_ROWS)
-#define HALO_CONSOLE_MAP_LIST_ROWS 40
+#define HALO_CONSOLE_MAP_LIST_ROWS 128
+#endif
+/* (and their names' and descriptions' wide characters, pooled: 24 KB, about
+100 a row. The Xbox's own rows keep theirs in ui.map, and the maps without
+a description share one) */
+#if defined(HALO_XBOX_CONSOLE) && !defined(HALO_CONSOLE_MAP_LIST_TEXT)
+#define HALO_CONSOLE_MAP_LIST_TEXT 12288
 #endif
 #if (defined(HALO_CONSOLE) || defined(HALO_SWITCH_CONSOLE) || defined(HALO_WIIU_CONSOLE) || \
 	defined(HALO_XBOX_CONSOLE) || defined(HALO_XBOX360_CONSOLE)) && !defined(HALO_CONSOLE_MAP_LIST_ROWS)

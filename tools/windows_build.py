@@ -113,11 +113,9 @@ def updater_defines(release: bool) -> str:
     configuration; and the channel and commit (build_identity.c)"""
     defines = (f'-DHALO_VERSION=\\"{version()}\\" -DHALO_RELEASE_BUILD={int(release_build())} '
                f'{build_info_defines(release)} {identity_defines()}')
-    # (HALO_UPDATE_REPOSITORY: the GitHub repository whose releases it
-    # updates from, owner/name; tools/ci_build.py gives the one it is built in)
-    repository = os.environ.get("HALO_UPDATE_REPOSITORY", "")
-    if re.fullmatch(r"[A-Za-z0-9-]+/[A-Za-z0-9._-]+", repository):
-        defines += f' -DHALO_UPDATE_REPOSITORY=\\"{repository}\\"'
+    # (HALO_UPDATE_REPOSITORY, the repository whose releases it updates from:
+    # identity_defines, tools/version.py; tools/ci_build.py gives the one it is
+    # built in)
     return defines
 
 WINDOWS_ABI_FLAGS = [

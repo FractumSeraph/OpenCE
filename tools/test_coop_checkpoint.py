@@ -243,6 +243,9 @@ static struct {long definition_index;} objects_client_picked_up_weapons[2];
 static struct {long time,vehicle_index;} objects_client_own_vehicles[2][4];
 static int mcc_resets;
 static void mcc_network_new_game(void){mcc_resets++;}
+/* (ChupathingyCE's objects_role_memory: the client's tables emptied, as
+network_objects_reverted asks first) */
+static void objects_client_tables_empty(void){memset(client_damage_animations,0,sizeof(client_damage_animations));}
 ''' + definitions + "\n" + function(source, "network_objects_reverted") + function(source, "network_objects_new_game") + r'''
 int main(void){
  int i,j;

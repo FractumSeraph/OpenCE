@@ -40,6 +40,19 @@ enum tag_field_type
 
 /* ---------- structures */
 
+/* a loaded tag (cache_files.c's table; here for a console's inline tag_get,
+below) */
+struct cache_file_tag_instance
+{
+	long group_tag;
+	long parent_group_tags[2];
+	long tag_index;
+	/* read from the cache file: Xbox addresses */
+	XPTR(char) name;
+	XPTR(void) base_address;
+	unsigned long unused[2];
+};
+
 typedef void (*byte_swap_block_proc)(void *);
 typedef boolean (*postprocess_block_proc)(void *, boolean);
 typedef byte *(*format_block_proc)(long, struct tag_block *, long, byte *);
@@ -147,6 +160,14 @@ void *tag_empty_data(void);
 void *tag_data_get_pointer(struct tag_data const *data, long offset, long size);
 void *tag_block_get_element_with_size(struct tag_block const *block, long index, long element_size);
 
+#ifdef HALO_CUSTOM_EDITION
+/* port: where a Custom Edition map's tags are (ce_map_checks.h's
+CE_IMAGE_TAG_CACHE_BASE and _SIZE, which ce_map_checks.c checks these
+against), for the inline TAG_BLOCK_GET_ELEMENT */
+#define TAG_GROUPS_CE_TAG_CACHE_BASE 0x40440000UL
+#define TAG_GROUPS_CE_TAG_CACHE_SIZE 0x01700000UL
+#endif
+
 /* port: tag_block_get_element_with_size without a call where all it checks
 holds (the game's most frequent call: a fortieth of the web build's frame),
 and that function where something does not, which notes and handles it
@@ -188,6 +209,49 @@ static __inline__ void *tag_block_get_element_fast(
 long tag_loaded(long group_tag, const char *name);
 
 void *tag_get(long group_tag, long tag_index);
+
+#ifdef HALO_CONSOLE_INLINE_ACCESSORS
+/* port: a console's busiest units' tag_get (halo_port_features.h): the
+tag's data without the call when the index is a loaded tag's (in a Custom
+Edition map whatever its salt, as cache_get_tag_instance takes it), of the
+group asked for or one it inherits from, and its data is loaded. Anything
+else is the function's, which asserts on it or gives the empty tag, as
+always */
+extern struct cache_file_tag_instance *global_tag_instances;
+/* (the loaded tags' count, 0 while none are: cache_files.c) */
+extern long const *cache_file_loaded_tag_count;
+#ifdef HALO_CUSTOM_EDITION
+extern boolean cache_file_is_ce;
+#endif
+
+static __inline__ void *tag_get_fast(
+	long group_tag,
+	long tag_index)
+{
+	short absolute_index = (short)tag_index;
+
+	if (absolute_index >= 0 && absolute_index < *cache_file_loaded_tag_count && global_tag_instances)
+	{
+		struct cache_file_tag_instance *tag_instance = &global_tag_instances[absolute_index];
+
+		if ((!(tag_index & 0xFFFF0000) || tag_instance->tag_index == tag_index
+#ifdef HALO_CUSTOM_EDITION
+				|| cache_file_is_ce
+#endif
+			) &&
+			(tag_instance->group_tag == group_tag ||
+				tag_instance->parent_group_tags[0] == group_tag ||
+				tag_instance->parent_group_tags[1] == group_tag) &&
+			tag_instance->base_address)
+		{
+			return xbox_pointer(tag_instance->base_address);
+		}
+	}
+
+	return (tag_get)(group_tag, tag_index);
+}
+#define tag_get(group_tag, tag_index) tag_get_fast((group_tag), (tag_index))
+#endif
 
 /* ---------- globals */
 

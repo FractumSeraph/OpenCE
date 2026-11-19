@@ -802,6 +802,60 @@ static long main_loss_last_tick;
 static long main_respawn_last_tick;
 /* port: the game tick a checkpoint last counted (main_save_map_private) */
 static long main_save_last_tick;
+#ifdef HALO_CONSOLE_CHECKPOINT_TRACE
+/* port: a test build's trace of a checkpoint's wait, into the log
+(--console-checkpoint-trace, warthog-xbox #84): when it starts, each change
+in which safety check stops it (game_safe_to_save), and how it ends, with
+the ticks waited and the checks that said no */
+static struct
+{
+	boolean waiting;
+	long ticks;
+	long checks;
+	long unsafe_checks;
+	long lines;
+	char const *check;
+} main_save_trace;
+
+static void main_save_trace_check(
+	boolean safe)
+{
+	char const *check = safe ? NULL : game_save_unsafe_check;
+
+	if (!main_save_trace.waiting)
+	{
+		csmemset(&main_save_trace, 0, sizeof(main_save_trace));
+		main_save_trace.waiting = TRUE;
+		error(_error_silent, "checkpoint: waiting for a safe moment (tick %ld)", (long)game_time_get());
+	}
+	main_save_trace.checks++;
+	if (!safe)
+		main_save_trace.unsafe_checks++;
+	/* (a few lines a checkpoint: a check that keeps changing is counted) */
+	if (check != main_save_trace.check && main_save_trace.lines < 16)
+	{
+		main_save_trace.lines++;
+		if (check)
+			error(_error_silent, "checkpoint: not safe: %s (%ld ticks in)", check, main_save_trace.ticks);
+		else
+			error(_error_silent, "checkpoint: safe again after %s (%ld ticks in)", main_save_trace.check,
+				main_save_trace.ticks);
+	}
+	main_save_trace.check = check;
+}
+
+static void main_save_trace_end(
+	char const *how)
+{
+	if (main_save_trace.waiting)
+	{
+		error(_error_silent, "checkpoint: %s after %ld ticks (%ld of %ld checks not safe%s%s)", how,
+			main_save_trace.ticks, main_save_trace.unsafe_checks, main_save_trace.checks,
+			main_save_trace.check ? ", the last: " : "", main_save_trace.check ? main_save_trace.check : "");
+	}
+	main_save_trace.waiting = FALSE;
+}
+#endif
 boolean debug_force_frame_rate_update = FALSE;
 boolean debug_no_drawing = FALSE;
 boolean debug_game_save = FALSE;
@@ -2208,6 +2262,9 @@ void main_save_map_safe(
 {
 	if (!main_globals.saving_map || main_globals.save_map_timeout)
 	{
+#ifdef HALO_CONSOLE_CHECKPOINT_TRACE
+		main_save_trace_end("asked again");
+#endif
 		main_globals.saving_map = TRUE;
 		main_globals.save_map_safely = TRUE;
 		main_globals.save_map_timeout = TRUE;
@@ -2225,6 +2282,9 @@ void main_save_map_no_timeout(
 {
 	if (!main_globals.saving_map || main_globals.save_map_timeout)
 	{
+#ifdef HALO_CONSOLE_CHECKPOINT_TRACE
+		main_save_trace_end("asked again");
+#endif
 		main_globals.saving_map = TRUE;
 		main_globals.save_map_safely = TRUE;
 		main_globals.ticks_until_next_save_check = 0;
@@ -2692,11 +2752,17 @@ static void main_save_map_private(
 
 			while (ticks-- > 0 && !save_map)
 			{
+#ifdef HALO_CONSOLE_CHECKPOINT_TRACE
+				main_save_trace.ticks++;
+#endif
 				if (main_globals.ticks_unable_to_save++ >= 240 &&
 					main_globals.save_map_timeout)
 				{
 					if (debug_game_save)
 						console_printf(FALSE, "gave up trying to save");
+#ifdef HALO_CONSOLE_CHECKPOINT_TRACE
+					main_save_trace_end("gave up");
+#endif
 					main_globals.saving_map = FALSE;
 					return;
 				}
@@ -2708,7 +2774,12 @@ static void main_save_map_private(
 					or one driving past held off, and a level's checkpoint (the
 					Maw's before its Warthog run) gave up; a team wipe went back
 					to the one before */
-					if (coop_scripts_safe_to_save())
+					boolean safe = coop_scripts_safe_to_save();
+
+#ifdef HALO_CONSOLE_CHECKPOINT_TRACE
+					main_save_trace_check(safe);
+#endif
+					if (safe)
 					{
 						if (main_globals.safe_intervals++ >= 3)
 							save_map = TRUE;
@@ -2730,6 +2801,10 @@ static void main_save_map_private(
 
 		if (save_map)
 		{
+#ifdef HALO_CONSOLE_CHECKPOINT_TRACE
+			if (save_map_safely)
+				main_save_trace_end("saved");
+#endif
 			/* port: remember where the players are, for network co-op respawns */
 			players_note_checkpoint();
 			hud_autosave(TRUE);

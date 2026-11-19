@@ -484,6 +484,7 @@ boolean ce_map_check(HANDLE file, char const *map_name, long file_length, long t
 char const *ce_map_refusal(void);
 void ce_map_refused_verify(char const *map_name, char const *path, unsigned long header_checksum, char *verdict,
 	long size);
+boolean ce_map_check_stale(void);
 /* the version of the map checked or loaded (port/linux/game/ce_resources.c) */
 extern long ce_map_cache_version;
 /* the last map refused (ce_map_check), its size and checksum, and why,
@@ -536,7 +537,9 @@ static boolean ce_map_open(
 	}
 	ce_map_refused_open = FALSE;
 #endif
-	if (ce_map_file.file && !_stricmp(ce_map_name, map_name))
+	/* (the map open, unless a load found it changed since it was checked:
+	then it is opened and checked again, port/linux/game/ce_map_checks.c) */
+	if (ce_map_file.file && !_stricmp(ce_map_name, map_name) && !ce_map_check_stale())
 		return TRUE;
 	if (strlen(map_name) >= sizeof(ce_map_name) - 1)
 		return FALSE;

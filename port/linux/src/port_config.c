@@ -452,11 +452,13 @@ static const struct config_setting config_settings[] =
 	{ "display.first_person_weapon", _config_boolean, "true", "HALO_FIRST_PERSON_WEAPON", _environment_value,
 		_platform_all,
 		"Draw your weapon and arms. false hides them." },
-	{ "display.widescreen", _config_string, "\"dashboard\"", NULL, _environment_value, _platform_xbox,
-		"Widescreen on a 16:9 TV. \"dashboard\" follows the Xbox dashboard:\n"
-		"with Widescreen set there, the game shows more to the sides and the\n"
-		"HUD and menus fit the wide screen. \"off\" keeps the 4:3 picture, as\n"
-		"the original game did. Read when Fractum Halo starts." },
+	{ "display.widescreen", _config_string, "\"off\"", NULL, _environment_value, _platform_xbox,
+		"Widescreen on a 16:9 TV. \"off\" keeps the 4:3 picture, as the\n"
+		"original game did: the sharpest, with every pixel of the HUD and\n"
+		"menus its own. \"dashboard\" follows the Xbox dashboard: with\n"
+		"Widescreen set there, the game shows more to the sides and the HUD\n"
+		"and menus are stretched to fit, a little softer. Read when\n"
+		"Fractum Halo starts." },
 	{ "display.frame_rate", _config_integer, "30", NULL, _environment_value, _platform_xbox,
 		"Frames a second: 30, as the original game drew, or 60. The game\n"
 		"still runs 30 ticks a second. At 60 the view turns every frame and\n"
@@ -497,6 +499,10 @@ static const struct config_setting config_settings[] =
 	{ "display.performance_hud_frames", _config_boolean, "false", "HALO_PERFORMANCE_HUD_FRAMES", _environment_value,
 		_platform_all,
 		"Whether performance mode draws the HUD's frames and backgrounds, its static pictures." },
+	{ "display.performance_online_cuts", _config_boolean, "false", "HALO_PERFORMANCE_ONLINE_CUTS", _environment_value,
+		_platform_all,
+		"Whether performance mode also leaves out the objects' transparent parts and the plants in network games.\n"
+		"Off, they are drawn in network games, so you see the same cover as everyone else." },
 #endif
 /* (ChupathingyCE's particle and light limits, among the display settings;
 0.8.0h's own merge had put the light limits inside debug.gpu_fault_test's
@@ -1284,7 +1290,9 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"menus. While on, the menus get a Back tap once it is let go, never a\n"
 		"hold. Off by default: the Xbox's Back acts on press." },
 	{ "delta.pause_menu", _config_boolean, "true", "HALO_DELTA_PAUSE_MENU", _environment_value, _platform_all,
-		"Put the Delta Guide in the pause menu, in every menu set." },
+		"Put the Delta Guide in the pause menu of a multiplayer game or a\n"
+		"network co-op game, in every menu set. A campaign played on one\n"
+		"machine has none." },
 #ifdef HALO_ANDROID
 	/* (a touch screen has no Guide button, and its controls hide in the
 	menus: the rows are the way in there) */
@@ -3798,9 +3806,10 @@ starting alone (game.start_with_one_player); 4, Headphone 3D on; 5, the
 Xbox's multiplayer by default (v0.9.0: no names above heads, no follow
 camera, no team changes in games you host). (Port, this fork: not
 ChupathingyCE's 6, the Xbox's own resampler for audio.resampling, which this
-fork's mixer, OpenCE's, reads only for "linear": audio.resampler.) A file
-answered for an earlier generation is asked about the later ones only */
-#define CONFIG_DEFAULTS_GENERATION 5
+fork's mixer, OpenCE's, reads only for "linear": audio.resampler.) 7, the
+original Xbox's 4:3 picture (v0.9.2). A file answered for an earlier
+generation is asked about the later ones only */
+#define CONFIG_DEFAULTS_GENERATION 7
 #define CONFIG_VERSION_LINE "config_version = 2\n"
 #define CONFIG_VERSION_LINES "# Fractum Halo uses this line to update the file. Leave it as it is.\n" CONFIG_VERSION_LINE
 #define CONFIG_VERSION_TEXT "\n" CONFIG_VERSION_LINES
@@ -4651,6 +4660,11 @@ static const struct
 	/* team changes while the teams stay balanced, the default of the games
 	a player hosted until v0.9.0 (a file that names a rule keeps it) */
 	{ "network.team_change", "\"balanced\"", 0, "No team changes in games you host, as on the Xbox", 5 },
+	/* the original Xbox following the dashboard's widescreen, the default
+	until v0.9.2 made it 4:3 as the retail game was (warthog-xbox #114). A
+	file that names "dashboard" keeps it; one that left it commented out
+	follows "off" (config_find_new_defaults: the Xbox asks nothing) */
+	{ "display.widescreen", "\"dashboard\"", 0, "The 4:3 picture, as the original game had", 7 },
 };
 
 #define NUMBER_OF_CONFIG_OLD_DEFAULTS (sizeof(config_old_defaults) / sizeof(config_old_defaults[0]))

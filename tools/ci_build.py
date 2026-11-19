@@ -187,6 +187,7 @@ def main() -> int:
     repository = os.environ.get("GITHUB_REPOSITORY", "")
     if re.fullmatch(r"[A-Za-z0-9-]+/[A-Za-z0-9._-]+", repository):
         os.environ["HALO_UPDATE_REPOSITORY"] = repository
+        os.environ["HALO_UPDATE_GAME_REPOSITORY"] = repository
         print(f"updates from {repository}", flush=True)
     if args.config == "profile" and args.platform not in PROFILE_PLATFORMS:
         parser.error(f"{args.platform} has no profiling build (configure.py --profile): "
@@ -406,7 +407,7 @@ def alpine_build(platform: str, config: str) -> int:
     with CCACHE_DIR in the checkout)"""
     environment = []
     for name in ("CI_COMPILER_LAUNCHER", "CCACHE_DIR", "CCACHE_BASEDIR", "CCACHE_MAXSIZE", "HALO_VERSION",
-                 "HALO_RELEASE_BUILD", "HALO_UPDATE_REPOSITORY", "HALO_FORK_RELEASE", "GITHUB_RUN_NUMBER"):
+                 "HALO_RELEASE_BUILD", "HALO_UPDATE_REPOSITORY", "HALO_UPDATE_GAME_REPOSITORY", "HALO_FORK_RELEASE", "GITHUB_RUN_NUMBER"):
         value = os.environ.get(name)
         if not value:
             continue

@@ -41,6 +41,10 @@ typedef float real;
 #define FLAG(n) (1UL << (n))
 #define TEST_FLAG(v,n) (((v) & FLAG(n)) != 0)
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
+/* (ChupathingyCE's layout table, tag_validate_layout_fits) */
+#ifndef NUMBEROF
+#define NUMBEROF(a) (sizeof(a)/sizeof((a)[0]))
+#endif
 /* (port, this fork: the tags' pointer fields, XPTR, as cseries.h has them) */
 #include "xbox_address.h"
 #endif
@@ -94,6 +98,8 @@ void validation_free(void *p) {
     target = (["--target=i686-pc-windows-msvc", "-fuse-ld=lld", "-D_CRT_SECURE_NO_WARNINGS"]
               if sys.platform == "win32" else ["-m32"])
     command = [compiler, *target, "-std=gnu99", "-O1", "-g", "-Wall", "-Wextra", "-Werror",
+               # (tag_validate_globals names its first fields only, as ChupathingyCE's does)
+               "-Wno-missing-field-initializers",
                "-Wno-multichar", "-fsanitize=undefined", "-fsanitize-trap=undefined",
                f"-I{directory}", f"-I{GAME}",
                # (port, this fork: XBOX_POINTER and XPTR, and ChupathingyCE's tag_validate.c's errors.h,
@@ -169,6 +175,7 @@ void error(short level,char const *text,...);
 #include "tag_schema.h"
 struct tag_schema_group const *const tag_schema_group_lists[] = {NULL};
 struct tag_schema_group const tag_schema_custom_edition_groups[] = {{0, {0, 0}, NULL}};
+struct tag_schema_layout const tag_schema_xbox_layout = {"Xbox", tag_schema_group_lists, NULL, 0x1600000, 0};
 void tag_validate_report(char const *message) { (void)message; }
 int main(void) { return tag_validate_corrections() != 0; }
 ''')

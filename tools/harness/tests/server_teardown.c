@@ -90,6 +90,8 @@ teardown's order) */
 static void map_torrents_playing(const char *level_name, unsigned long version, int hosting) { }
 /* (network_damage.c: the host's damage tables, let go with the server) */
 static void network_damage_host_tables_free(void) { }
+/* (ChupathingyCE's host-only late joiners' table, freed with the game) */
+static void network_game_server_late_joiners_free(void) { }
 /* (the fork's Delta compatibility: hosting's hold on the network number
 announced ends with the server; nothing of the teardown's order) */
 static void delta_legacy_hold(int hold)
