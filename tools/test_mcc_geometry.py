@@ -103,6 +103,7 @@ boolean tag_validate_any_claimed(void const *p,unsigned long n) {(void)p;(void)n
 void *tag_validate_vertex_buffer_data(struct tag_validation *v,void const *p) {(void)v;(void)p;return vertex_data;}
 void *tag_validate_index_buffer_data(struct tag_validation *v,void const *p) {(void)v;(void)p;return index_data;}
 """ + structure(schema, "model_geometry_part") + "\n" + sizes + "\n" +
+        function(schema, "model_geometry_part_blocks_check") + "\n" +
         function(schema, "model_geometry_part_check") + """
 int legacy_model_limits_check(void) {
     struct model_geometry_part part;
