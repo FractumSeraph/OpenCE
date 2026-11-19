@@ -50,6 +50,7 @@ A few people look for most:
 | `display.high_res_font`, `display.high_res_font_large` | Your own font file for the sharp text and Online Games, in place of the built-in fonts: put it in `data/fonts` beside `maps` and give its name (`high_res_font = "MyFont.ttf"`), or a full path. `_large` sets one for the large text only. Empty uses the built-in fonts; a file that can't be read is noted in `logs/debug.txt` and the built-in font is used. The font is yours: Chupathingy ships none but its own free ones, and never sends yours anywhere. |
 | `display.field_of_view` | How wide the first-person view is, in degrees: 70 (the Xbox's) by default, 50 to 120. |
 | `display.reticle_scale` | The reticle's size, `0.5` to `2.0`; `1.0` (the default) is the Xbox's. Video Setup, View: Reticle Size. |
+| `display.crosshair_position` | Where the crosshair and your aim sit: `"retail"` (the default, as on the Xbox), `"centered"` (the middle of your view; only different in split screen, where the Xbox puts it a little off) or `"lowered"` (a tenth of the view's height below the middle, as later Halo games do). The view moves with it, so shots still go where the crosshair is. While you're zoomed, the view snaps back to centered and the scope sits in the middle, by design (Halo 3 does the same). The Guide and the setup screen: Crosshair. |
 | `display.first_person_weapon` | `false` hides your weapon and arms in first person; `true` (the default) draws them. Video Setup, View: Weapon Model. |
 | `display.camo_weapon_fix` | `false` (the default) lets a wall close by cut away your camouflaged first-person weapon, as on the Xbox. `true` draws it in front of walls. Drawing only. Video Setup, Advanced: Camo Weapon Fix. Based on work by goatbutt and the OpenH1 team. |
 | `display.plasma_sparks` | `false` (the default) leaves out the blue sparks off a live plasma grenade, as on the Xbox, which never drew them. `true` draws them, at any frame rate. Drawing only. Video Setup, Advanced: Plasma Sparks. Thanks to ugoboom for the idea. |
@@ -124,6 +125,76 @@ environment variable for one run (the file lists each one's name), which
 overrides the file.
 
 Every setting, with its environment variable and default, is in [port/linux/README.md](../port/linux/README.md#settings).
+
+## Tuning
+
+The `[tuning]` section is for players who want more frames and don't mind
+the game looking a bit plainer. Nothing in it changes how the game plays:
+only what is drawn. Leave it alone and nothing changes.
+
+| Setting | What it does |
+| --- | --- |
+| `tuning.preset` | `"retail"` (the default) changes nothing. `"lan-party"` caps the lights and particles of a big firefight (16 lights, 4 with shine, 2048 particles, particles moved once a tick) and shows a late frame at once (`present_mode = "adaptive"`). `"potato"` is the setup screen's POTATO: 8 lights, 2 with shine, 1024 particles, smaller shadows, no anti-aliasing, the Xbox's own lighting and the picture drawn at 640x480. A preset never raises a build's own limit. |
+| `tuning.present_mode` | With V-Sync on: `"vblank"` (the default) waits for the display before every frame. `"adaptive"` shows a frame that missed the display at once, with a tear, rather than a whole refresh later. OpenGL on Windows, Linux and Android, and the original Xbox. Elsewhere it waits. Read at start. |
+| `tuning.texture_cache` | Original Xbox only: the texture cache's size in MB, like `"20"`, or `"auto"` (the default) for the console's own. It's held between 19 MB and what the console's memory has room for. Read at start. |
+
+A preset fills in the settings it names only where you haven't set them
+yourself. The limits stay where they always were (`display.dynamic_light_limit`,
+`display.specular_light_limit`, `display.particle_limit` and the rest), so a
+value you set there wins over the preset. Turning PERFORMANCE to POTATO on
+the setup screen writes `preset = "potato"`.
+
+A value out of range is held in range, and a word the game doesn't know
+falls back to the default. Either way `logs/debug.txt` says so in a line
+starting `tuning:`. That file also says what every knob was at start
+(`tuning: at=boot`), at each map (`tuning: at=map`) and whenever one
+changes (`tuning: change`). A crash report and Send my logs carry the same
+line.
+
+In a network game nobody sees fewer particles than the Xbox kept (1024).
+Smoke and dust can hide players, and a lower limit would take them away.
+
+### Every knob, and what the presets do on the original Xbox
+
+No knob changes the simulation: the game tick costs the same whatever they
+say. They change only the drawing, the waiting for the display, or memory.
+On the original Xbox most of them aren't settings at all, and the console's
+own limits are already where the presets would put them, so:
+
+- `potato` changes nothing on the original Xbox. It is the same as `retail`
+  there, and the log says so at start (`tuning: preset=potato changes
+  nothing on this console`).
+- `lan-party` changes only the present mode (`adaptive`) on the original
+  Xbox. Its 16 lights and 2048 particles are above the console's own limits,
+  and a preset never raises those.
+- In big games (more than about 24 players) the original Xbox is held back
+  by the game tick, not the drawing, so no preset can make those games run
+  faster there.
+
+The table is made from the code by `tools/tuning_table.py`
+(`tools/test_tuning_table.py` checks it).
+
+<!-- tuning table: made by tools/tuning_table.py, don't edit by hand -->
+
+| Setting | lan-party sets | potato sets | On the original Xbox | Xbox default and range | lan-party on the Xbox | potato on the Xbox | What it costs or saves |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `display.dynamic_light_limit` | `16` | `8` | yes | `8`; 0 to 128 (0: no limit) | nothing | nothing | Drawing. Each dynamic light redraws the level it reaches twice; in a big firefight most of the GPU's time. |
+| `display.specular_light_limit` | `4` | `2` | yes | `2`; 0 to 128 (0: no limit) | nothing | nothing | Drawing. The shine pass of near lights, the costliest pass in a firefight. |
+| `display.particle_limit` | `2048` | `1024` | no | | | | Drawing, and a little CPU a frame for each particle alive. Never under 1024 in a network game. |
+| `display.particle_ticks` | `true` | `true` | no | | | | CPU a frame: moving loose particles once a tick saves two in three of their collision tests at 60 fps. |
+| `display.shadow_resolution` | nothing | `128` | no | | | | Drawing and video memory: bigger shadow maps. |
+| `display.anisotropic_filtering` | nothing | `0` | no | | | | Drawing: texture sampling on the GPU. |
+| `display.anti_aliasing` | nothing | `off` | no | | | | Drawing and video memory: extra samples or a filter pass. |
+| `display.per_pixel_lighting` | nothing | `false` | no | | | | Drawing: lighting work for each pixel instead of each vertex. |
+| `display.light_effects` | nothing | `off` | no | | | | Drawing: the projectile, muzzle and emitter lights, and their wall tests. |
+| `display.resolution_scaling` | nothing | `original` | no | | | | Drawing: "original" fills 640x480 instead of the window. |
+| `tuning.present_mode` | `adaptive` | nothing | yes | `vblank`; `vblank` or `adaptive` | `adaptive` | nothing | Waiting, not work: "adaptive" shows a late frame at once, with a tear, instead of a refresh later. |
+| `tuning.texture_cache` | nothing | nothing | yes | `auto`; "auto", or 19 to 512 MB (and what memory has room for) | nothing | nothing | Memory: a bigger cache loads fewer textures from the disc, and leaves less free. |
+
+<!-- end of tuning table -->
+
+More knobs (explosion particles, effect density, decal distance, tire
+tracks) come once testers' `console.perf_log` lines show what they'd save.
 
 <a id="a-new-renderer-to-test"></a>
 

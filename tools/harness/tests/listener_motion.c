@@ -67,6 +67,10 @@ static struct scenario_cutscene_camera_point test_camera_point;
 #define TAG_BLOCK_GET_ELEMENT(block, index, type) (&test_camera_point)
 static void vectors3d_from_euler_angles3d(real_vector3d *forward, real_vector3d *up,
 	const real_vector3d *orientation) { *forward = zero; *up = zero; }
+/* (ChupathingyCE's SPV3 mode, which narrows wide camera points: off here) */
+#define _pi 3.14159265359f
+static int spv3_mode_active(void) { return 0; }
+static void spv3_mode_note_correction(char const *what) { (void)what; }
 
 #include "under_test.inc"
 

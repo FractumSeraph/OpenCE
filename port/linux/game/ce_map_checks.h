@@ -20,7 +20,6 @@ enum
 {
 	/* (cache_files.c's: where a Custom Edition map's tags are) */
 	CE_IMAGE_TAG_CACHE_BASE = 0x40440000,
-	CE_IMAGE_TAG_CACHE_SIZE = 0x01700000,
 	CE_TAG_INSTANCE_SIZE = 0x20,
 	/* the most one allocation of the port's converted models and level takes
 	(ce_resources_allocate): a strip of a part's most triangles (ce_models.c),
@@ -29,6 +28,12 @@ enum
 	/* a SHA-256 (what a map was checked from: ce_map_loaded_*) */
 	CE_DIGEST_SIZE = 32,
 };
+
+/* (and its size: Custom Edition's, or OpenSauce's in SPV3 mode with its
+window mapped, port/linux/game/spv3_mode.c) */
+#include "spv3_mode.h"
+#define CE_IMAGE_TAG_CACHE_STOCK_SIZE 0x01700000UL
+#define CE_IMAGE_TAG_CACHE_SIZE (spv3_mode_tag_cache_size(CE_IMAGE_TAG_CACHE_STOCK_SIZE))
 
 /* the room above the tag cache for the port's converted models and level
 (port/linux/src/platform.h): its size, 0 if it is not mapped, and always 0
@@ -262,6 +267,20 @@ copied in), its model data's hash
 read (32 bytes of its reference, then its bytes; a BSP not checked is
 FALSE). Whether the load under way has found nothing changed */
 boolean ce_map_loaded_tags_unchanged(void const *tag_data, unsigned long size);
+/* the bytes of zeroes the map open was checked with after its tag data, as
+its last tag's (a HaloMD map's that begins where its tag data ends,
+ce_map_checks.c's ce_tags_tail), or 0: the load puts the same there, and
+its resource maps' tags after them */
+unsigned long ce_map_checked_tags_tail(void);
+/* the bytes of the tag cache the map open was checked to leave free after
+its tags, past what its models and structure BSPs' buffers take
+(ce_resources_allocate_tags may give the tag validator that many) */
+unsigned long ce_map_checked_spare_room(void);
+/* a cache file's tag data size as its header gives it, or, a HaloMD map's
+(version 7) whose header gives the file's length there, as some HaloMD tool
+wrote it (greatwall_1, za_1), the rest of the file after its tag data's
+offset, which Halo PC's loader read */
+long ce_map_header_tag_data_size(long version, long file_length, long tag_data_offset, long tag_data_size);
 boolean ce_map_loaded_resources_unchanged(byte const digest[CE_DIGEST_SIZE]);
 boolean ce_map_loaded_model_data_unchanged(byte const digest[CE_DIGEST_SIZE]);
 boolean ce_map_loaded_bsp_unchanged(void const *reference, void const *bsp, unsigned long size);

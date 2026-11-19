@@ -89,8 +89,13 @@ static void error(int level,char const *fmt,...){(void)level;(void)fmt;}
 #define mcc_admission_handle_message(m,p,s,r) ((void)0)
 #define mcc_load_network_handle_message(m,p,s,r) ((void)0)
 #define network_map_vote_handle_message(m,p,s,r) ((void)0)
+#define net_monitor_message_in(type, size, game_time, in_batch, tick_sample) ((void)0)
+#define net_monitor_warning(warning, type, size) ((void)0)
 '''
     import re
+    # (ChupathingyCE's server monitor: the warnings the dispatch names; its
+    # calls are nothing here)
+    prefix += enum_with((ROOT / "port/linux/game/net_monitor.h").read_text(), "_net_monitor_unknown_kind,") + "\n"
     sizes = sorted(set(re.findall(r"\b(\w+_entry_size)\(", dispatch)))
     prefix += "\n".join(f"#define {name}(...) 1" for name in sizes) + "\n"
     code = prefix + kinds + structure(header, "distributed_message_header")
@@ -267,6 +272,7 @@ def test_outgoing_snapshot_boundary(tmp_path):
     header = (ROOT / "port/linux/game/network_distributed.h").read_text()
     code = generated() + enum_with(header, "_distributed_to_clients")
     code += structure(source, "distributed_packer") + r'''
+#define net_monitor_message_out(type, size) ((void)0)
 static int wire_calls;
 static long game_time_get(void){return 100;}
 static void build_message_header(message_header *h,word size,int type,int version){*h=size;(void)type;(void)version;}

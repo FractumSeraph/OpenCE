@@ -400,6 +400,10 @@ void network_game_client_reset_settings_staging(void); /* port: discard partial 
 #include "halo_join_reasons.h" /* port: why a game can't be joined, as the game lists say it */
 #include "delta.h" /* port: the Delta tag in an advertisement */
 #include "stubbs_multiplayer.h" /* port: port/linux/game/stubbs_multiplayer.c */
+#ifdef HALO_GAME_BROWSER
+#include "net_monitor.h" /* port: the server monitor (port/linux/game/net_monitor.c) */
+#endif
+
 #if defined(HALO_GAME_BROWSER) && !defined(HALO_CONSOLE_NO_DELTA_PROFILE)
 /* port: port/linux/game/profile_names.c's */
 boolean profile_names_local_game_name(long local_player, wchar_t *name, long size);
@@ -1788,6 +1792,10 @@ boolean network_game_client_add_player(
 	players see it as a plain game name) */
 	profile_names_local_game_name(local_player_index, player.name, NETWORK_PLAYER_NAME_LENGTH);
 #endif
+#ifdef HALO_GAME_BROWSER
+	/* port: the server monitor plays under its own name (debug.monitor_name) */
+	net_monitor_player_name(player.name, NETWORK_PLAYER_NAME_LENGTH);
+#endif
 	player.primary_color_index = profile.primary_color_index;
 	player.icon_index = NONE;
 	player.team_index = NONE;
@@ -1942,8 +1950,9 @@ boolean network_game_client_handle_game_update(
 	behind the host for the rest of the game. The host's time is when it
 	sent the update, before this machine's by the way there, so a clock in
 	step is never moved; one behind is, at the next update (once a second at
-	least) */
-	else if (message_packet->game_time > game_time_get() + TICKS_PER_SECOND)
+	least). Once the spiral guard has left ticks unrun on a machine that
+	can't keep up (game_time_update), a few ticks ahead is enough */
+	else if (message_packet->game_time > game_time_get() + game_time_client_catch_up_ticks())
 	{
 		network_event(
 			"the host's clock is %ld ticks ahead of this machine's; taking its game tick #%ld",

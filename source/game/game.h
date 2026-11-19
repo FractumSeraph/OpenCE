@@ -206,6 +206,7 @@ boolean game_time_get_paused(void);
 boolean game_time_held(void);
 /* port: whether the main menu's scene is what ticks (game_time.c) */
 boolean game_time_menu_scene(void);
+long game_time_client_catch_up_ticks(void);
 void game_time_set_paused(boolean paused);
 real game_time_get_speed(void);
 void game_time_set_speed(real speed);

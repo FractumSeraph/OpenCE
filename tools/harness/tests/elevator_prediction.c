@@ -159,7 +159,9 @@ static boolean apply(long unit_index, real_point3d const *position)
 	objects[unit_index].object.position = *position;
 	return TRUE;
 }
-#define distributed_apply_state(unit_index, state, position, velocity, tolerance, blend, speed, fall) apply(unit_index, position)
+/* (kind: ChupathingyCE's server monitor's, what the correction moved) */
+#define distributed_apply_state(kind, unit_index, state, position, velocity, tolerance, blend, speed, fall) \
+	apply(unit_index, position)
 
 /* (this fixture has no vehicle window: keep the elevator's original path) */
 struct vehicle_riding_state { long unused; long ticks; long object_index; };

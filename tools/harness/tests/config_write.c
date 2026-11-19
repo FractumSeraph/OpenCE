@@ -26,6 +26,10 @@ static struct config_value config_values[NUMBER_OF_CONFIG_SETTINGS];
 static pthread_mutex_t config_lock = PTHREAD_MUTEX_INITIALIZER;
 static volatile unsigned long config_change_count;
 static int config_answer_only;
+/* (ChupathingyCE's [tuning]: a setting written by hand, and the presets
+applied again; nothing of the written file) */
+static signed char config_touched[NUMBER_OF_CONFIG_SETTINGS];
+static void config_tuning_apply(long changed) { (void)changed; }
 
 /* config.toml: what it holds, how many times it was written, and how many
 of those by a run that only answers its command line */

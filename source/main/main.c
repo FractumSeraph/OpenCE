@@ -750,6 +750,9 @@ have one: not the Xbox's */
 #else
 #define main_server_mode() halo_server_mode()
 #endif
+#ifdef HALO_CUSTOM_EDITION
+void ce_resources_update(void);
+#endif
 #ifdef HALO_PORT_VOICE
 void voice_game_update(void);
 #endif
@@ -1530,6 +1533,70 @@ real first_person_weapon_projection_scale(
 	}
 
 	return weapon_scale > 0.0f ? first_person_field_of_view_scale() / weapon_scale : 1.0f;
+}
+
+/* port: display.crosshair_position (#508), how far down (in the window's
+units, a HUD pixel) a local player's aim point is drawn, and the crosshair
+with it, from the middle of its window, where the Xbox draws both ("retail",
+0). "centered" puts them in the middle of the player's view: the same in a
+game alone, but a split screen's views reach the screen's edges past their
+windows (the title-safe frame), so the Xbox's aim is a little off their
+middle. "lowered" puts them a tenth of the view's height below its middle,
+as later Halo games do. The view itself moves (render_player_frame moves
+its frustum's bounds, as a tiled screenshot's are), so the aim stays under
+the crosshair: what is seen and where shots go are the same, only framed
+higher or lower. Not while zoomed (the scope's picture is drawn in the
+middle), nor in a cutscene or a view without the player's aim. 0 on the
+original Xbox */
+real first_person_aim_offset(
+	short local_player_index,
+	rectangle2d const *viewport_bounds,
+	rectangle2d const *window_bounds)
+{
+#ifndef HALO_XBOX_CONSOLE
+	extern int config_text(const char *name, char *text, size_t size);
+	static unsigned long read_at = (unsigned long)-1;
+	static short position = 0;
+	short perspective;
+	real viewport_middle;
+	real window_middle;
+
+	if (read_at != config_changes())
+	{
+		char text[32];
+
+		read_at = config_changes();
+		position = 0;
+		if (config_text("display.crosshair_position", text, sizeof(text)))
+		{
+			if (!strcmp(text, "centered"))
+				position = 1;
+			else if (!strcmp(text, "lowered"))
+				position = 2;
+		}
+	}
+	if (!position ||
+		local_player_index < 0 || local_player_index >= MAXIMUM_NUMBER_OF_LOCAL_PLAYERS ||
+		cinematic_in_progress() ||
+		player_control_get_zoom_level(local_player_index) != NONE)
+	{
+		return 0.0f;
+	}
+	perspective = director_get_perspective(local_player_index);
+	if (perspective != _director_perspective_first_person && perspective != _director_perspective_third_person)
+		return 0.0f;
+
+	viewport_middle = (viewport_bounds->y0 + viewport_bounds->y1) * 0.5f;
+	window_middle = (window_bounds->y0 + window_bounds->y1) * 0.5f;
+	if (position == 2)
+		viewport_middle += (viewport_bounds->y1 - viewport_bounds->y0) * 0.1f;
+	return (real)fast_ftol(viewport_middle - window_middle);
+#else
+	(void)local_player_index;
+	(void)viewport_bounds;
+	(void)window_bounds;
+	return 0.0f;
+#endif
 }
 
 /* port: display.reticle_scales_with_fov, what the reticle's size (and its
@@ -3231,6 +3298,55 @@ static void main_update_time_unthrottled(
 }
 
 #endif
+#ifdef HALO_CONSOLE_FRAME_RATE
+/* port: the vertical blanks a frame waits on a console whose display does
+not refresh at 60 Hz (halo_console_refresh_rate: a PAL television without
+PAL60 is 50 Hz). The game counted 60 blanks a second; at 50 its interval of
+2 drew 25 frames a second and its clock ran a sixth slow. A frame every
+blank is every blank at any rate. A frame a tick (30) can't be a whole
+number of 50 Hz blanks: the frame waits for the first blank at or after the
+next tick is due, 2, 2 and 1 blanks in turn, so that each frame draws one
+tick, as at 60. With no tick to wait for (a menu, a pause, a held clock) the
+same 2, 2, 1 by count */
+static short main_console_vblank_interval(
+	short refresh_rate,
+	short frames_per_second)
+{
+	static short cadence_index;
+	short longest;
+	short interval;
+	real fraction;
+	real speed;
+
+	if (frames_per_second <= 0 || frames_per_second >= refresh_rate)
+		return 1;
+	if (refresh_rate % frames_per_second == 0)
+		return (short)(refresh_rate / frames_per_second);
+	longest = (short)((refresh_rate + frames_per_second - 1) / frames_per_second);
+	fraction = game_time_get_tick_fraction();
+	speed = game_time_get_speed();
+	if (frames_per_second == TICKS_PER_SECOND && fraction < 1.0f && speed > 0.0f)
+	{
+		/* (the fewest blanks that surely reach the tick, the longest
+		always does: a slack the other way let a frame stop just short of
+		it once the clock's rounding had built up, and that frame drew no
+		tick) */
+		real ticks_per_blank = speed * (real)TICKS_PER_SECOND / (real)refresh_rate;
+
+		interval = 1;
+		while (interval < longest && fraction + (real)interval * ticks_per_blank < 1.0001f)
+			interval++;
+	}
+	else
+	{
+		interval = (short)(((cadence_index + 1) * refresh_rate + frames_per_second - 1) / frames_per_second -
+			(cadence_index * refresh_rate + frames_per_second - 1) / frames_per_second);
+		cadence_index = (short)((cadence_index + 1) % frames_per_second);
+	}
+	return interval < 1 ? 1 : interval;
+}
+
+#endif
 static void main_update_time(
 	void)
 {
@@ -3267,6 +3383,13 @@ static void main_update_time(
 		{
 			requested_interval = (short)(
 				60 / (rasterizer_globals.framerate_throttle_target ? rasterizer_globals.framerate_throttle_target : 30));
+#ifdef HALO_CONSOLE_FRAME_RATE
+			if (halo_console_refresh_rate() != 60)
+			{
+				requested_interval = main_console_vblank_interval(halo_console_refresh_rate(),
+					rasterizer_globals.framerate_throttle_target ? rasterizer_globals.framerate_throttle_target : 30);
+			}
+#endif
 			main_globals.vblank_interval_requested = requested_interval;
 
 			if (rasterizer_globals.framerate_throttle_debug)
@@ -3441,6 +3564,23 @@ static void main_update_time(
 
 	if (framerate_throttle)
 	{
+#ifdef HALO_CONSOLE_FRAME_RATE
+		/* port: the display's own blanks (counted as 60 a second, a 50 Hz
+		console's clock ran a sixth slow, and fell behind everyone else's
+		in a network game). A blank's length is rounded up, as the game's
+		1/60 is: rounded down, a one-blank frame meant to reach the next
+		tick fell a hair short of it and drew no tick */
+		if (halo_console_refresh_rate() != 60)
+		{
+			real seconds_per_blank = 1.0f / (real)halo_console_refresh_rate();
+
+			seconds_per_blank += seconds_per_blank * 0.00000025f;
+			seconds_elapsed =
+				(real)(target_index - (__int64)main_globals.rasterizer_target_index) *
+				seconds_per_blank;
+		}
+		else
+#endif
 		seconds_elapsed =
 			(real)(target_index - (__int64)main_globals.rasterizer_target_index) *
 			0.01666666753590107f;
@@ -4667,6 +4807,12 @@ static boolean main_loop_iteration(
 			up (port/linux/game/browser_screen.c) */
 			MAIN_STAGE("browser_screen_host_download_update");
 			browser_screen_host_download_update();
+#endif
+#ifdef HALO_CUSTOM_EDITION
+			/* what a Custom Edition or HaloMD map's loading left to tell the
+			player (port/linux/game/ce_resources.c) */
+			MAIN_STAGE("ce_resources_update");
+			ce_resources_update();
 #endif
 #ifdef HALO_PORT_CHAT
 			/* text chat (port/linux/game/chat.c; on a console, its client's

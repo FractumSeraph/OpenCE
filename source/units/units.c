@@ -645,7 +645,9 @@ symbols in this file:
 
 #include "cseries.h"
 #include "infection.h" /* port: port/linux/game/infection.c */
+#include "opensauce.h" /* port: port/linux/game/opensauce_map.c */
 #include "units.h"
+#include "spv3_mode.h" /* port: port/linux/game/spv3_mode.c */
 
 #include "bipeds.h"
 #include "biped_definitions.h"
@@ -707,6 +709,7 @@ symbols in this file:
 #include "mcc_grenades.h" /* port: port/linux/game/mcc_grenades.h */
 #include "mcc_skulls.h" /* port: MCC's skulls on MCC maps */
 #include "mcc_campaign.h" /* port: an MCC map's unlimited ammunition */
+#include "halo_perf_log.h" /* port: console.perf_log */
 
 /* port: the control and animation impulses the host's actors give their
 units go to the clients' copies (port/linux/game/network_actors.c) */
@@ -1478,11 +1481,13 @@ real unit_get_drawn_camouflage(
 	real amount;
 
 	if (render_interpolation_unit_camouflage(unit_index, &amount, super_amount))
-		return amount;
+		return opensauce_map_drawn_camouflage(amount);
 #endif
 	unit = unit_get(unit_index);
 	*super_amount = unit->unit.active_camouflage_super_amount;
-	return unit->unit.active_camouflage;
+	/* port: as drawn (an OpenSauce map's scripts may set it past 1:
+	port/linux/game/opensauce_map.c) */
+	return opensauce_map_drawn_camouflage(unit->unit.active_camouflage);
 }
 
 real unit_get_zoom_magnification(
@@ -2183,6 +2188,17 @@ short unit_add_grenade_type_to_inventory(
 	if (mcc_grenades_active()) return mcc_grenades_add(unit_index, grenade_type, grenade_count);
 	unit = unit_get(unit_index);
 
+	/* port: OpenSauce's maps may give an actor variant one of its four
+	grenade types; in SPV3 mode the two Halo has are taken and the others
+	passed over, logged (port/linux/game/spv3_mode.c) */
+	if (spv3_mode_active() && !VALID_INDEX(grenade_type, NUMBER_OF_UNIT_GRENADE_TYPES))
+	{
+		char what[80];
+
+		snprintf(what, sizeof(what), "grenade type %d (OpenSauce has four, Halo two) not given", grenade_type);
+		spv3_mode_note_correction(what);
+		return 0;
+	}
 	match_assert("c:\\halo\\SOURCE\\units\\units.c", 7309, grenade_count>=0);
 	match_assert("c:\\halo\\SOURCE\\units\\units.c", 7310, (grenade_type >= 0) && (grenade_type < NUMBER_OF_UNIT_GRENADE_TYPES));
 
@@ -5671,6 +5687,8 @@ boolean unit_update(
 	boolean allow_integrated_lights = game_engine_allow_integrated_lights(unit_index);
 
 	profile_enter(unit_update_section);
+	/* port: the bipeds' unit part (halo_perf_log.h: a vehicle's is not timed) */
+	HALO_PERF_BEGIN(_halo_perf_bipeds_unit);
 
 	unit_verify_vectors(unit_index, "unit-update-begin");
 
@@ -6501,6 +6519,7 @@ boolean unit_update(
 
 	unit_verify_vectors(unit_index, "unit-update-end");
 	
+	HALO_PERF_END(_halo_perf_bipeds_unit);
 	profile_exit(unit_update_section);
 	
 	return TRUE;
@@ -12567,6 +12586,16 @@ static void unit_verify_vectors(
 	char const *debugstring)
 {
 	char buffer[512];
+
+	/* port: a console's release-style build (HALO_ASSERTS_COMPILED_OUT)
+	doesn't check: the check logs and asserts, seven times a tick for each
+	unit, and the retail game has neither the check nor its messages */
+#ifdef HALO_ASSERTS_COMPILED_OUT
+	(void)unit_index;
+	(void)debugstring;
+	(void)buffer;
+	return;
+#endif
 
 	if (!unit_vectors_are_valid(unit_index))
 	{

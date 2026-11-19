@@ -755,6 +755,7 @@ the setting for one start of the game. It has priority over the file.
 | `display.field_of_view` | `70.0` | `HALO_FIELD_OF_VIEW` | How wide the first-person view is, in degrees across a 4:3 picture: `70`, as on the Xbox, from `50` to `120`. On a wider screen the view shows more at the sides, as before. Scopes zoom in by as much as before. Only the first-person view changes: cutscenes, the third-person views and the game itself (aim, auto-aim, what each machine sends) do not. Video Setup's Field of View sets it in the menus. |
 | `display.viewmodel_field_of_view` | `0.0` | `HALO_VIEWMODEL_FIELD_OF_VIEW` | How wide the first-person weapon and arms are drawn, in degrees as `display.field_of_view`: `0` (the default) follows `display.field_of_view`, as before; `50` to `120` draws them at that width whatever the view's, so a wide view does not stretch them. `70`: the weapon as on the Xbox. Drawing only. |
 | `display.vehicle_field_of_view` | `0.0` | `HALO_VEHICLE_FIELD_OF_VIEW` | The view's width in a vehicle's seat (driver, gunner or passenger, first or third person), in degrees as `display.field_of_view`: `0` (the default) keeps it as before: a first-person seat follows `display.field_of_view` and a third-person one keeps the game's own; `50` to `120` sets its own for both. Getting in or out eases the view between the two over half a second. Death, cutscenes and scripted cameras keep the game's own. Drawing only. Video Setup's View has Vehicle FOV. |
+| `display.crosshair_position` | `"retail"` | `HALO_CROSSHAIR_POSITION` | Where a player's aim point and crosshair are drawn. `"retail"`: the middle of the title-safe frame, as on the Xbox. `"centered"`: the middle of the player's view, the same in a game alone; a split screen's views reach the screen's edges past their title-safe frames, so the Xbox's aim is a little off their middle. `"lowered"`: a tenth of the view's height below its middle. The view's frustum moves with it (off-center, as a tiled screenshot's), so what is aimed at stays under the crosshair; nothing about the game or the shots changes. In first person and vehicles. While zoomed the view snaps back to centered (by design, as Halo 3 does), so the scope is drawn in the middle; nor in a cutscene. Not on the original Xbox. The Guide and the setup screen: Crosshair. |
 | `display.reticle_scales_with_fov` | `true` | `HALO_RETICLE_SCALES_WITH_FOV` | `true`: the weapon's reticle is drawn smaller in a wider `display.field_of_view` and larger in a narrower one, as the world is, so it still covers the weapon's spread. At `70`, the Xbox's, it is the Xbox's size. Only in first person; while zoomed, the scope's picture (its mask, ticks, brackets and zoom label) keeps the Xbox's size, so its parts stay together. `false`: the reticle keeps the Xbox's size at any field of view. Video Setup's Reticle Follows FOV sets it. |
 | `display.viewmodel_visible` | `true` | `HALO_VIEWMODEL_VISIBLE` | `true`: the first-person weapon, hands and what is attached to them are drawn. `false`: they are not; firing, animation, sound and lights go on, and other players' models are drawn. |
 | `display.passenger_third_person` | `false` | `HALO_PASSENGER_THIRD_PERSON` | Third-person view for the Warthog's passenger and the Scorpion's four passengers. Uses the gunner's camera on the Warthog and the driver's on the Scorpion, within the passenger's firing arc. Smooth entry and exit; weapon zoom is disabled while riding. The reticle follows the shot's centre ray. Local view only. In the campaign and co-op only: not in multiplayer, where seeing around the vehicle would be an advantage. |
@@ -851,6 +852,9 @@ the setting for one start of the game. It has priority over the file.
 | `display.particle_ticks` | `false` (consoles: `true`) | `HALO_PARTICLE_TICKS` | `true`: particles not attached to an object move once a 30 Hz tick, as on the Xbox, and are drawn smoothly between ticks. That saves collision tests. `false`: they move every frame, which is smoother at high refresh rates. Takes effect at the next map. |
 | `display.dynamic_light_limit` | `0` (consoles: `8`; the original Xbox: `0`) | `HALO_DYNAMIC_LIGHT_LIMIT` | The most dynamic lights (muzzle flashes, plasma, explosions) that light the level at once. The biggest on screen light the walls and floor; the rest light only the objects near them. `0`: no limit, as on the Xbox. Changes at once. |
 | `display.specular_light_limit` | `0` (consoles: `2`; the original Xbox: `0`) | `HALO_SPECULAR_LIGHT_LIMIT` | Of those lights, the most that also add their shine to metal and wet floors. The first-person weapon's go first. `0`: no limit, as on the Xbox. Changes at once. |
+| `tuning.preset` | `"retail"` | `HALO_TUNING_PRESET` | Several performance knobs at once. `"retail"`: none changed. `"lan-party"`: `display.dynamic_light_limit` 16, `display.specular_light_limit` 4, `display.particle_limit` 2048, `display.particle_ticks` true, `tuning.present_mode` `"adaptive"`. `"potato"` (the setup screen's PERFORMANCE: POTATO): the limits 8, 2 and 1024, `display.particle_ticks` true, `display.shadow_resolution` 128, `display.anisotropic_filtering` 0, `display.anti_aliasing` `"off"`, `display.per_pixel_lighting` false, `display.light_effects` `"off"`, `display.resolution_scaling` `"original"`. The preset gives a knob its value only where config.toml and the environment don't: those keys stay the one place each value lives, and a preset never raises a build's own limit. Drawing only. Refer to "Tuning". |
+| `tuning.present_mode` | `"vblank"` | `HALO_PRESENT_MODE` | With V-Sync: `"vblank"` waits for the display. `"adaptive"` shows a late frame at once (a swap interval of -1, or the original Xbox's `*_OR_IMMEDIATE` intervals); a driver that refuses it waits, and the log says so. OpenGL on Windows, Linux and Android, and the original Xbox; not with VRR. Read at start. |
+| `tuning.texture_cache` | `"auto"` | none | The original Xbox only: the texture cache in MB, held between 19 MB and what the memory class allows (a 128 or 256 MB console's own size; on a 64 MB console what is free with the main loop's reserve still left). `"auto"`: the console's own. Read at start. |
 | `display.crt_filter` | `false` | `HALO_CRT_FILTER=1` sets `true` | `true`: a CRT look over the picture (scanlines, curvature, a phosphor mask). Only the `bgfx` renderer has it for now. |
 | `display.vulkan_blocklist` | `true` | `HALO_VULKAN_BLOCKLIST` | Windows and Linux, with the `bgfx` renderer: skip Vulkan drivers known to be broken or slow on older computers (nouveau's Vulkan before Turing, NVIDIA older than 470, Mesa's Vulkan for Ivy Bridge, Haswell and Bay Trail, software Vulkan) and draw with OpenGL. `false` tries Vulkan anyway. |
 | `audio.enabled` | `true` | `HALO_NO_AUDIO=1` sets `false` | `false`: no audio device. The sound continues without output. |
@@ -1123,7 +1127,7 @@ the setting for one start of the game. It has priority over the file.
 | `debug.discord_log` | `false` | `HALO_DISCORD_LOG` | Log each activity sent to Discord, without the invite. |
 | `debug.menu_open` | `""` | `HALO_MENU_OPEN` | Start on this screen of the menus (`main_menu/settings_select/...`, as `port/assets/menus` names it), a player profile being edited, to look at it. A settings screen's `#view=<name>` opens that nested list (`#view=buttons`). |
 | `debug.gpu_skip_vertex_shaders`, `debug.gpu_debug_expression`, `debug.gpu_debug_flat`, `debug.gpu_debug_texture0` | off | `HALO_GPU_SKIP_VS`, `HALO_GPU_DEBUG_EXPR`, `HALO_GPU_DEBUG_FLAT`, `HALO_GPU_DEBUG_T0` | Tools to find problems in the graphics: skip the draws of a vertex shader, or replace the output of all pixel shaders with a GLSL expression (for example `t0.rgb`). |
-| `debug.network_test`, `debug.network_test_start`, `debug.network_test_kill`, `debug.network_test_score`, `debug.network_test_shoot`, `debug.network_test_shoot_walls`, `debug.network_test_vehicle`, `debug.network_test_pickup`, `debug.network_test_pickup_weapon`, `debug.network_test_fall`, `debug.network_test_team_change`, `debug.network_test_pause`, `debug.network_test_local_players`, `debug.network_test_bomb_in_goal`, `debug.network_test_bomb_throw`, `debug.network_test_bomb_keep`, `debug.test_input`, `debug.network_test_aim`, `debug.network_test_watch`, `debug.network_test_cheat`, `debug.network_test_public`, `debug.network_test_moderate`, `debug.network_test_moderate_time`, `debug.network_test_password`, `debug.network_test_invite_file` | off | `HALO_NETWORK_TEST`, `HALO_NETWORK_TEST_START`, `HALO_NETWORK_TEST_KILL`, `HALO_NETWORK_TEST_SCORE`, `HALO_NETWORK_TEST_SHOOT`, `HALO_NETWORK_TEST_SHOOT_WALLS`, `HALO_NETWORK_TEST_VEHICLE`, `HALO_NETWORK_TEST_PICKUP`, `HALO_NETWORK_TEST_PICKUP_WEAPON`, `HALO_NETWORK_TEST_FALL`, `HALO_NETWORK_TEST_TEAM_CHANGE`, `HALO_NETWORK_TEST_PAUSE`, `HALO_NETWORK_TEST_LOCAL_PLAYERS`, `HALO_NETWORK_TEST_BOMB_IN_GOAL`, `HALO_NETWORK_TEST_BOMB_THROW`, `HALO_NETWORK_TEST_BOMB_KEEP`, `HALO_TEST_INPUT`, `HALO_NETWORK_TEST_AIM`, `HALO_NETWORK_TEST_WATCH`, `HALO_NETWORK_TEST_CHEAT`, `HALO_NETWORK_TEST_PUBLIC`, `HALO_NETWORK_TEST_MODERATE`, `HALO_NETWORK_TEST_MODERATE_TIME`, `HALO_NETWORK_TEST_PASSWORD`, `HALO_NETWORK_TEST_INVITE_FILE` | Automatic tests of system link (`game/network_test.c`). Refer to `NETCODE.md`. |
+| `debug.network_test`, `debug.network_test_start`, `debug.network_test_kill`, `debug.network_test_score`, `debug.network_test_shoot`, `debug.network_test_shoot_walls`, `debug.network_test_vehicle`, `debug.network_test_pickup`, `debug.network_test_pickup_weapon`, `debug.network_test_fall`, `debug.network_test_bomb_in_goal`, `debug.network_test_bomb_throw`, `debug.network_test_bomb_keep`, `debug.network_test_mcc_request`, `debug.network_test_team_change`, `debug.network_test_pause`, `debug.network_test_moderate`, `debug.network_test_moderate_time`, `debug.network_test_local_players`, `debug.network_test_split_leave`, `debug.network_test_password`, `debug.network_test_invite_file`, `debug.test_input` | off | `HALO_NETWORK_TEST`, `HALO_NETWORK_TEST_START`, `HALO_NETWORK_TEST_KILL`, `HALO_NETWORK_TEST_SCORE`, `HALO_NETWORK_TEST_SHOOT`, `HALO_NETWORK_TEST_SHOOT_WALLS`, `HALO_NETWORK_TEST_VEHICLE`, `HALO_NETWORK_TEST_PICKUP`, `HALO_NETWORK_TEST_PICKUP_WEAPON`, `HALO_NETWORK_TEST_FALL`, `HALO_NETWORK_TEST_BOMB_IN_GOAL`, `HALO_NETWORK_TEST_BOMB_THROW`, `HALO_NETWORK_TEST_BOMB_KEEP`, `HALO_NETWORK_TEST_MCC_REQUEST`, `HALO_NETWORK_TEST_TEAM_CHANGE`, `HALO_NETWORK_TEST_PAUSE`, `HALO_NETWORK_TEST_MODERATE`, `HALO_NETWORK_TEST_MODERATE_TIME`, `HALO_NETWORK_TEST_LOCAL_PLAYERS`, `HALO_NETWORK_TEST_SPLIT_LEAVE`, `HALO_NETWORK_TEST_PASSWORD`, `HALO_NETWORK_TEST_INVITE_FILE`, `HALO_TEST_INPUT` | Automatic tests of system link (`game/network_test.c`). Refer to `NETCODE.md`. |
 | `debug.map_repositories` | `""` | `HALO_MAP_REPOSITORIES` | Tests: the community map repositories a missing map is asked from, their addresses split by spaces (`tools/test_map_repo.py`'s fake one). Empty: HaloNet's. |
 | `debug.map_fetch_folder`, `debug.map_fetch_result`, `debug.map_fetch_name`, `debug.map_fetch_held`, `debug.map_fetch_maximum` | `""`, `""`, `""`, `""`, `512` | `HALO_MAP_FETCH_FOLDER`, `HALO_MAP_FETCH_RESULT`, `HALO_MAP_FETCH_NAME`, `HALO_MAP_FETCH_HELD`, `HALO_MAP_FETCH_MAXIMUM` | The map bot's fetch (`debug.network_test = "fetch:<host>"`): the folder the map goes in, the result file (empty: `result.json` in the folder), the map it came for (its file's name; empty for any), the map versions already held (8 hex digits each, commas between), and the largest map taken in MB (up to 512). Refer to "Map sharing". |
 | `debug.test_gamepads` | 0 | `HALO_TEST_GAMEPADS` | Virtual gamepads (SDL's, up to 4) for tests of split screen: `debug.test_input`'s `menu:` script presses their buttons and sticks as `pad<n>:<button>` (`pad2:a`, `pad1:rs_left`) and takes them out and back with `pad<n>:unplug` and `pad<n>:plug`. |
@@ -1153,7 +1157,7 @@ the setting for one start of the game. It has priority over the file.
 | `debug.delta_row` | `-1` | `HALO_DELTA_ROW` | With `debug.delta_open`, chooses this row of the section it opened on once the row is there, for screenshots. |
 | `debug.delta_test` | `""` | `HALO_DELTA_TEST` | Buttons pressed in the Delta Guide once `debug.delta_open` opened it, one at a time, separated by `;` (`up`, `down`, `left`, `right`, `a`, `b`, `x`, `y`, `lb`, `rb`, `start`, `back`, `lt`, `rt`), for tests. Debug builds only: a release build (`--release`) ignores it. |
 | `debug.chat_test` | `""` | `HALO_CHAT_TEST` | A script of text chat for the tests (`game/chat.c`): `"<seconds>:<what>[:<text>]"` steps separated by `;`, from when this copy is in a game: `all` and `team` say a line, `server` says one as the host's server, `mute` and `unmute` mute a machine as a moderator does (the host), `localmute` mutes one for this copy, `log` and `close` open and close the log, `type` shows a line being typed. |
-| `debug.network_test`, `debug.network_test_start`, `debug.network_test_kill`, `debug.network_test_score`, `debug.network_test_shoot`, `debug.network_test_vehicle`, `debug.network_test_pickup`, `debug.network_test_pickup_weapon`, `debug.network_test_chat`, `debug.network_test_name`, `debug.network_test_public`, `debug.test_input` | off | `HALO_NETWORK_TEST`, `HALO_NETWORK_TEST_START`, `HALO_NETWORK_TEST_KILL`, `HALO_NETWORK_TEST_SCORE`, `HALO_NETWORK_TEST_SHOOT`, `HALO_NETWORK_TEST_VEHICLE`, `HALO_NETWORK_TEST_PICKUP`, `HALO_NETWORK_TEST_PICKUP_WEAPON`, `HALO_NETWORK_TEST_CHAT`, `HALO_NETWORK_TEST_NAME`, `HALO_NETWORK_TEST_PUBLIC`, `HALO_TEST_INPUT` | Automatic tests of system link, or (`log`) a log of the game one machine plays (`game/network_test.c`). Refer to `NETCODE.md`. `debug.test_input = "menu:a down down a"` presses menu buttons one a second (`a`, `b`, `x`, `y`, `up`, `down`, `left`, `right`, `start`, `back` or `wait`), for testing the menus. |
+| `debug.network_test`, `debug.network_test_start`, `debug.network_test_kill`, `debug.network_test_score`, `debug.network_test_shoot`, `debug.network_test_shoot_walls`, `debug.network_test_vehicle`, `debug.network_test_pickup`, `debug.network_test_pickup_weapon`, `debug.network_test_fall`, `debug.network_test_bomb_in_goal`, `debug.network_test_bomb_throw`, `debug.network_test_bomb_keep`, `debug.network_test_mcc_request`, `debug.network_test_team_change`, `debug.network_test_pause`, `debug.network_test_moderate`, `debug.network_test_moderate_time`, `debug.network_test_local_players`, `debug.network_test_split_leave`, `debug.network_test_password`, `debug.network_test_invite_file`, `debug.test_input` | off | `HALO_NETWORK_TEST`, `HALO_NETWORK_TEST_START`, `HALO_NETWORK_TEST_KILL`, `HALO_NETWORK_TEST_SCORE`, `HALO_NETWORK_TEST_SHOOT`, `HALO_NETWORK_TEST_SHOOT_WALLS`, `HALO_NETWORK_TEST_VEHICLE`, `HALO_NETWORK_TEST_PICKUP`, `HALO_NETWORK_TEST_PICKUP_WEAPON`, `HALO_NETWORK_TEST_FALL`, `HALO_NETWORK_TEST_BOMB_IN_GOAL`, `HALO_NETWORK_TEST_BOMB_THROW`, `HALO_NETWORK_TEST_BOMB_KEEP`, `HALO_NETWORK_TEST_MCC_REQUEST`, `HALO_NETWORK_TEST_TEAM_CHANGE`, `HALO_NETWORK_TEST_PAUSE`, `HALO_NETWORK_TEST_MODERATE`, `HALO_NETWORK_TEST_MODERATE_TIME`, `HALO_NETWORK_TEST_LOCAL_PLAYERS`, `HALO_NETWORK_TEST_SPLIT_LEAVE`, `HALO_NETWORK_TEST_PASSWORD`, `HALO_NETWORK_TEST_INVITE_FILE`, `HALO_TEST_INPUT` | Automatic tests of system link (`game/network_test.c`). Refer to `NETCODE.md`. |
 | `debug.virtual_gamepads`, `debug.virtual_gamepad_script` | `0`, empty | `HALO_VIRTUAL_GAMEPADS`, `HALO_VIRTUAL_GAMEPAD_SCRIPT` | Desktop: attach this many SDL virtual gamepads (`0` to `4`), which the game takes for gamepads plugged in, and press their buttons from a script of `<seconds> <pad> <what>` entries separated by semicolons: the seconds from when the network lobby first opens, the pad `1` to `4` (`0`: the keyboard, whose `a` is SPACE and `start` Enter), and a button (`a`, `b`, `x`, `y`, `start`, `back`, `up`, `down`, `left`, `right`, `lb`, `rb`, `lt`, `rt`), `walk` (the sticks move from then on) or `still`. For testing split screen without four controllers, for example `"3 2 start; 6 2 a; 8 0 a; 10 1 a; 11 1 a; 14 0 start"` with `debug.network_test = "host:bloodgulch"`. |
 | `debug.network_test_cues`, `debug.network_test_cue_players` | none, `1` | `HALO_NETWORK_TEST_CUES`, `HALO_NETWORK_TEST_CUE_PLAYERS` | Console lines a test runs at their seconds, from the first tick that many players are in (`"<second> <line>\|..."`; not on the web). |
 | `debug.bot_trace` | `0` | `HALO_BOT_TRACE` | Every this many seconds, each bot's state is written to the log: where it is and where it goes, its path, its target and its weapon. `0`: never. |
@@ -1174,6 +1178,56 @@ the setting for one start of the game. It has priority over the file.
 
 With Mesa drivers, the game sends its GL calls through the GL thread of
 Mesa. To stop this, set the environment variable `mesa_glthread=false`.
+
+### Tuning
+
+The `[tuning]` section (`config_tuning_apply` in `port_config.c`) holds the
+performance knobs that change only what is drawn, never the simulation, so
+a game plays the same on every machine whatever they say. Every default is
+the build's own, which is the retail game on the desktop and the original
+Xbox; the Xbox 360, Wii U and Switch already start with their own light and
+particle caps.
+
+The knobs are the settings themselves. `tuning.preset` does not copy them
+into `[tuning]`: it changes what an unset knob means, so
+`display.particle_limit` and the others keep working as before and stay the
+one place each value lives. A knob given by `config.toml` (as a value, not
+commented out) or by its environment variable keeps that value; the others
+take the preset's, or their default. A preset never raises a limit above
+the build's own default (the Xbox 360's 1024 particles stay 1024 in
+`"lan-party"`). Writing a knob from the menus makes it the player's;
+setting it back to its default (Defaults, `config_reset`) makes it follow
+the preset again.
+
+Each knob is checked: a number out of its range is held in it (the light
+limits 0 to the renderer's most, `display.particle_limit` 0 to the particle
+pool, `tuning.texture_cache` 19 to 512 MB before the console's own limit),
+and a word that is none of a knob's is its default, each said once in the
+log. Nothing in it can stop the game from starting.
+
+The log lines, short and the same on every build, so they can be searched:
+
+    tuning: at=boot preset=potato lights=8(preset) specular=2(preset) particles=512(hand) ... present=vblank
+    tuning: differs from the defaults: preset=potato lights=8(preset) specular=2(preset) particles=512(hand) ...
+    tuning: change particles=4096->512(hand)
+    tuning: at=map preset=potato lights=8(preset) ...
+
+A value is followed by where it came from when that is not the default:
+`(preset)`, `(hand)`, `(clamped)` or `(invalid)`. `at=map` is written at each
+map's start (`game_initialize_for_new_map`). A crash report's JSON has the
+log's last line as `"tuning"` (from `preset=`), and Send my logs sends it
+as a `tuning` field and in its note. The dedicated server has no knobs and
+writes none of these lines.
+
+Fairness: in a network game `display.particle_limit` is held at the Xbox's
+1024 or more (`source/effects/particles.c`), since smoke and dust hide
+players, and the log says so once (`tuning: display.particle_limit 512 held
+at 1024 in a network game`). The light limits only choose which lights
+light the level; every light still lights the players near it.
+
+Not knobs yet: explosion particles, effect density, decal draw distance and
+tire tracks. Each needs engine work, sized first by testers'
+`console.perf_log` lines.
 
 ## MCC maps
 
@@ -2586,6 +2640,67 @@ Your own words: `text_filter.txt` in the data root, with lines of `add
 <word>` (hidden whenever streamer mode is on) and `allow <word>` (never
 hidden), read when the game starts and when the settings change. The web
 build's page draws its own list of mods, which is not filtered.
+
+### Server monitor
+
+The server monitor shows how a public game's host really behaves, from one
+quiet guest, so a dip a player sees can be told apart: the host's, the way
+between, or the player's own machine. `tools/server_monitor.py run` starts
+the game headless in a folder of its own (its own HOME, saves and data
+root) with `debug.network_test = "monitor:<listed name>"`
+(`port/linux/game/net_monitor.c`), waits for it, and writes a report (JSON
+and Markdown); `compare` puts reports side by side.
+
+The monitor opens the Online Games screen, finds the game listed under
+that name (the same name, else the same name in any case, else the one game
+whose name holds it), and joins it as A on it does, once. It joins only a
+game with no password, open to joins, of a version it plays, and with
+`debug.monitor_free_slots` free after its own player (2 unless set, 1 at
+least). Its player is named `debug.monitor_name` ("Chupa" unless set) and
+plays nothing: no chat, and no input (this machine's gamepads, keyboard and
+mouse never reach the game); the tool turns voice, profile sharing, map
+downloads, the game list's reports and the lobby off. It leaves when
+`debug.monitor_minutes` are up and the game under way has ended (20
+minutes later at most), after `debug.monitor_games` games (it won't run
+with neither), at once when the game has fewer free slots than it keeps,
+and for good when the host drops it. The tool runs it once a server at a
+time (a lock file), and not again on a server whose join failed or that
+dropped it until it is told to (`--clear-failed`).
+
+Nothing it writes names an address or a player. Games go by their listed
+names (a player's own game, often named after the player, only counted),
+and the server's lines by their channel, length and a hash: a line may
+name players, so its text goes only to a local file beside the output, and
+only with `debug.monitor_keep_text`; a report never has it. The game's log
+reaches a report only as counts of what kind of line it was.
+
+Every ten seconds a line of JSON goes to `debug.monitor_output`:
+
+- the host's ticks as they arrived: new ticks a second, the gaps between
+  them (mean, spread, largest, and counts by length), the ticks skipped,
+  and the host's clock against this machine's;
+- the corrections, by what they moved (this machine's own player, other
+  players, vehicles it drives or not, AI), with how far and how many were
+  snaps. The net health line's `corrections` counts all of these but the
+  host's; its `own` count is this machine's own players alone;
+- the distributed messages each way by kind, and the datagrams and bytes
+  each way;
+- every byte it read, from the join on: each game packet type (stream or
+  datagram: the game's reliable connection is TCP), each distributed kind,
+  the batches' framing, a layout's header bytes (44's checkpoint epoch),
+  Delta Peer's, and each reason a message was dropped; what no layer took
+  up is the report's "unaccounted" row;
+- the server's lines, by how they came (Delta's chat, or the host's
+  notices, OpenCE's servers' server messages, which a Delta client shows
+  on its console), and the players' chat, counted;
+- the players, the bots (on a dedicated server, players sharing a machine:
+  its own plays no one; a player's game's split screen is not counted as
+  bots), and how often the host told this machine of each;
+- this machine's own frames (the longest, those over 50 and 100 ms): a gap
+  in the host's ticks while every frame here was short wasn't this
+  machine's;
+- the warnings: kinds it doesn't know, messages too far from the host's
+  clock, reordered ones, short ones.
 
 ## Map checks
 

@@ -90,6 +90,7 @@ symbols in this file:
 #include "bitmaps/bitmap_group.h"
 #include "bitmaps/bitmaps_inlines.h"
 #include "bitmaps/bitmap_utilities.h"
+#include "cache/cache_files.h"
 #include "cache/texture_cache.h"
 #include "mcc_cache.h" /* port: port/linux/game/mcc_cache.h */
 #include "mcc_hud_draw.h" /* port: port/linux/game/mcc_hud_draw.h */
@@ -1693,6 +1694,9 @@ static void hud_draw_bitmap_internal(
 	struct dynamic_screen_vertex vertices[4];
 	struct rasterizer_dynamic_screen_geometry_parameters parameters;
 	short vertex_index;
+#if !defined(HALO_XBOX_CONSOLE) && !defined(HALO_CONSOLE_ANAMORPHIC_SCREEN)
+	boolean mirrored_across = FALSE;
+#endif
 
 	csmemset(stack_buffer, 0x62, sizeof(stack_buffer));
 
@@ -1739,6 +1743,47 @@ static void hud_draw_bitmap_internal(
 		}
 	}
 
+#if !defined(HALO_XBOX_CONSOLE) && !defined(HALO_CONSOLE_ANAMORPHIC_SCREEN)
+	/* port: on a screen wider than 4:3, a HUD bitmap that covers the
+	window's whole 4:3 middle (a full-screen tint, vignette or scope mask)
+	reaches the window's edges: its quad is widened and its texture carried
+	on at the same rate, so the middle is drawn as before, and the bitmap,
+	mirrored past its edges, fills the sides: a scope mask's black border
+	stays black, a tint or vignette carries on without a seam or streaks.
+	A Custom Edition map's only, as Halo PC's HUD is laid out for any screen;
+	the Xbox's maps keep their 4:3 HUD. The mirroring is the whole texture's
+	(its addressing): fine for a bitmap that covers the screen, the only kind
+	widened */
+	if (theta == 0.0f && CACHE_FILE_TAGS_ARE_CE())
+	{
+		/* (the viewport's: the window is the HUD's safe area within it) */
+		real window_x0 = 0.0f;
+		real window_x1 = (real)(render.camera.viewport_bounds.x1 - render.camera.viewport_bounds.x0);
+		real window_y0 = 0.0f;
+		real window_y1 = (real)(render.camera.viewport_bounds.y1 - render.camera.viewport_bounds.y0);
+		real middle_width = (window_y1 - window_y0) * 4.0f / 3.0f;
+		real x0 = vertices[0].position.x, x1 = vertices[1].position.x;
+		real y0 = vertices[0].position.y, y1 = vertices[2].position.y;
+
+		if (window_x1 - window_x0 > middle_width + 2.0f && x1 > x0 &&
+			x1 - x0 >= middle_width - 2.0f && y0 <= window_y0 + 1.0f && y1 >= window_y1 - 1.0f &&
+			x0 > window_x0 && x1 < window_x1)
+		{
+			real texels_per_unit = (vertices[1].texture_coordinates.x - vertices[0].texture_coordinates.x) / (x1 - x0);
+
+			for (vertex_index = 0; vertex_index < 4; vertex_index++)
+			{
+				boolean left = vertices[vertex_index].position.x == x0;
+				real edge = left ? window_x0 : window_x1;
+
+				vertices[vertex_index].texture_coordinates.x += (edge - vertices[vertex_index].position.x) *
+					texels_per_unit;
+				vertices[vertex_index].position.x = edge;
+			}
+			mirrored_across = TRUE;
+		}
+	}
+#endif
 	csmemset(&parameters, 0, sizeof(parameters));
 	parameters.map_texture_scale[0].j = 1.0f;
 	parameters.map_texture_scale[0].i = 1.0f;
@@ -1749,6 +1794,10 @@ static void hud_draw_bitmap_internal(
 	parameters.framebuffer_blend_function =
 		_shader_framebuffer_blend_function_alpha_multiply_add;
 	parameters.map[0] = (struct bitmap_data *)bitmap;
+#if !defined(HALO_XBOX_CONSOLE) && !defined(HALO_CONSOLE_ANAMORPHIC_SCREEN)
+	if (mirrored_across)
+		parameters.map_wrapped[0] = 2;
+#endif
 
 	/* port: shared CE HUD sheets need meter channels only for this draw
 	(port/linux/src/xbox_textures.c), leaving their static artwork intact.
@@ -2135,6 +2184,34 @@ void hud_draw_meter(
 	return;
 }
 
+#ifdef HALO_CUSTOM_EDITION
+#include "opensauce.h"
+
+/* port: an OpenSauce map's weapon HUDs (SPV3's) draw a digit from a sprite
+of another bitmap than the number bitmap's first: it is drawn from that one,
+as Halo PC's engine draws it, and said once, on an OpenSauce map only */
+static boolean hud_digits_elsewhere_allowed(
+	struct bitmap_data const *source_bitmap,
+	struct bitmap_data const *number_bitmap)
+{
+	static boolean logged = FALSE;
+
+	/* (not a digit with no bitmap at all, a bad sprite's: it would be drawn
+	from none) */
+	if (!number_bitmap || source_bitmap == number_bitmap || !opensauce_map_active())
+		return FALSE;
+	if (!logged)
+	{
+		logged = TRUE;
+		error(_error_silent, "OpenSauce map: a HUD number's digits are sprites of another bitmap than its first: "
+			"drawn from theirs");
+	}
+	return TRUE;
+}
+#else
+#define hud_digits_elsewhere_allowed(source_bitmap, number_bitmap) FALSE
+#endif
+
 void hud_draw_numbers(
 	short local_player_index,
 	struct hud_absolute_placement_definition const *absolute_placement,
@@ -2324,7 +2401,8 @@ void hud_draw_numbers(
 						match_assert(
 							"c:\\halo\\SOURCE\\interface\\hud_draw.c",
 							515,
-							!digits_on_one_bitmap || source_bitmap==number_bitmap);
+							!digits_on_one_bitmap || source_bitmap==number_bitmap ||
+							hud_digits_elsewhere_allowed(source_bitmap, number_bitmap));
 						hud_draw_bitmap_direct(
 							number_bitmap,
 							absolute_placement->corner,
@@ -2368,7 +2446,8 @@ void hud_draw_numbers(
 							match_assert(
 								"c:\\halo\\SOURCE\\interface\\hud_draw.c",
 								539,
-								!digits_on_one_bitmap || source_bitmap==number_bitmap);
+								!digits_on_one_bitmap || source_bitmap==number_bitmap ||
+								hud_digits_elsewhere_allowed(source_bitmap, number_bitmap));
 							hud_draw_bitmap_direct(
 								number_bitmap,
 								absolute_placement->corner,
@@ -2406,7 +2485,8 @@ void hud_draw_numbers(
 							match_assert(
 								"c:\\halo\\SOURCE\\interface\\hud_draw.c",
 								556,
-								!digits_on_one_bitmap || source_bitmap==number_bitmap);
+								!digits_on_one_bitmap || source_bitmap==number_bitmap ||
+								hud_digits_elsewhere_allowed(source_bitmap, number_bitmap));
 							hud_draw_bitmap_direct(
 								number_bitmap,
 								absolute_placement->corner,
@@ -2446,7 +2526,8 @@ void hud_draw_numbers(
 						match_assert(
 							"c:\\halo\\SOURCE\\interface\\hud_draw.c",
 							575,
-							!digits_on_one_bitmap || source_bitmap==number_bitmap);
+							!digits_on_one_bitmap || source_bitmap==number_bitmap ||
+							hud_digits_elsewhere_allowed(source_bitmap, number_bitmap));
 						hud_draw_bitmap_direct(
 							number_bitmap,
 							absolute_placement->corner,
@@ -2482,7 +2563,8 @@ void hud_draw_numbers(
 						match_assert(
 							"c:\\halo\\SOURCE\\interface\\hud_draw.c",
 							595,
-							!digits_on_one_bitmap || source_bitmap==number_bitmap);
+							!digits_on_one_bitmap || source_bitmap==number_bitmap ||
+							hud_digits_elsewhere_allowed(source_bitmap, number_bitmap));
 						hud_draw_bitmap_direct(
 							number_bitmap,
 							absolute_placement->corner,

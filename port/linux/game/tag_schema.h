@@ -126,6 +126,14 @@ TAG_SCHEMA_END */
 	{ _tag_schema_block, sizeof(struct tag_block), 1, 0, \
 		TAG_SCHEMA_OFFSET(type, field, struct tag_block), (maximum), 0, 0, &(definition), NULL, #field }
 
+/* ... of pc_maximum elements in Halo PC's layout
+(_tag_schema_layout_tool_maxima_kept_bit): a block whose Xbox maximum is
+its tools' alone, no array of the game's, which Halo PC's maps went past
+and Halo PC's engine read as long as it was, to its own limit */
+#define TAG_SCHEMA_PC_BLOCK(type, field, definition, maximum, pc_maximum) \
+	{ _tag_schema_block, sizeof(struct tag_block), 1, 0, \
+		TAG_SCHEMA_OFFSET(type, field, struct tag_block), (maximum), 0, (pc_maximum), &(definition), NULL, #field }
+
 /* ... whose maximum is the editing kit's (_tag_schema_tool_maximum_bit) */
 #define TAG_SCHEMA_TOOL_BLOCK(type, field, definition, maximum) 	{ _tag_schema_block, sizeof(struct tag_block), 1, FLAG(_tag_schema_tool_maximum_bit), 		TAG_SCHEMA_OFFSET(type, field, struct tag_block), (maximum), 0, 0, &(definition), NULL, #field }
 
@@ -236,8 +244,9 @@ struct tag_schema_field
 	/* a block index's block: where it is (TAG_SCHEMA_ROOT,
 	TAG_SCHEMA_STRUCTURE, or how many elements up) and its offset there */
 	long target_level;
-	/* a block index's block's offset; a reset's value; an enum's values in
-	Halo PC's layout (TAG_SCHEMA_PC_ENUM), or 0 */
+	/* a block index's block's offset; a reset's value; an enum's values or
+	a block's most elements in Halo PC's layout (TAG_SCHEMA_PC_ENUM,
+	TAG_SCHEMA_PC_BLOCK), or 0 */
 	long target_offset;
 	/* a block's or structure's definition; a reference's or tag index's
 	groups */
@@ -289,6 +298,9 @@ enum tag_schema_layout_flags
 	port/linux/game/ce_models.c makes them the Xbox's once they are checked.
 	An enum of TAG_SCHEMA_PC_ENUM takes its Halo PC count */
 	_tag_schema_layout_pc_shader_types_bit,
+	/* OpenSauce's memory upgrades (tag_schema_opensauce.c): a scenario's
+	scripts' syntax is for OpenSauce's 28501 nodes, not 19001 */
+	_tag_schema_layout_opensauce_bit,
 	NUMBER_OF_TAG_SCHEMA_LAYOUT_FLAGS
 };
 
@@ -305,6 +317,10 @@ struct tag_schema_layout
 	/* the tag cache the tags (and their structure bsps) are in */
 	unsigned long tag_cache_size;
 	unsigned long flags;
+	/* a block's most elements or a data's most bytes in this layout, given
+	the one the checks would take otherwise (the field's): its own where it
+	has one (OpenSauce's memory upgrades), else that one; NULL: that one */
+	long (*field_maximum)(struct tag_schema_field const *field, long maximum);
 };
 
 /* ---------- prototypes/TAG_SCHEMA_*.C */
@@ -333,9 +349,23 @@ extern struct tag_schema_definition const tag_schema_gbxmodel_schema;
 /* (its tools' overlapping blocks walked as their own where safe:
 _tag_schema_layout_overlaps_walked_bit) */
 extern struct tag_schema_layout const tag_schema_pc_layout;
+/* OpenSauce's (a map with an OpenSauce header: port/linux/game/opensauce_map.c),
+tag_schema_opensauce.c: Halo PC's with OpenSauce's groups first and its
+memory upgrades */
+extern struct tag_schema_layout const tag_schema_opensauce_layout;
 #endif
 
 /* ---------- prototypes/TAG_VALIDATE.C */
+
+/* room for the tags being checked (tag_validate_tags_layout) past them in
+their tag cache: size bytes, their Xbox address, or 0 if there is none.
+Where a loader gives it (cache_files.c, a Custom Edition or HaloMD map's:
+ce_resources_allocate_tags), a root, block or data whose bytes overlap
+another's in a way the walk could not keep shared is copied there, its own,
+rather than walked where it is, made none or refused: what the game or the
+walk writes in one then never changes what another reads. NULL (the
+Xbox's maps, tools/map_validate.c): they are not */
+extern unsigned long (*tag_validate_room_proc)(unsigned long size);
 
 /* the tags at tag_header (tag_data_size bytes read from a map file of
 file_length bytes): FALSE if they cannot be used. Before anything else

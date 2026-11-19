@@ -48,6 +48,10 @@ Automated system link sessions for testing the netcode without the menus
   internet invite as a machine with no player, asks the host for its
   current Custom Edition map, downloads it, writes it and a result
   (debug.map_fetch_*), leaves and quits;
+- "monitor:<listed name>" is the server monitor (net_monitor.c): it joins
+  the game listed under that name from the Online Games screen, as a quiet
+  guest that plays nothing, writes how the host behaves to
+  debug.monitor_output, leaves and quits;
 - "browse" opens the Online Games screen once the main menu is up, as the
   Multiplayer menu's ONLINE GAMES does, and logs each listed game's ping
   every few seconds (measured or estimated, never an address) with its
@@ -107,6 +111,11 @@ host take that action of its Moderation screen ("Kick", "Ban forever", ...:
 moderation_screen.c) on its first other player,
 debug.network_test_moderate_time seconds in, confirmed as a player confirms
 it, with a reason ("network test: moderation ...").
+debug.network_test_split_leave has a host with split screen players
+(debug.network_test_local_players) take them out one by one as the game goes
+on, the last first, as Quit on their pause menu does, and with :rejoin join
+each again half that time later, as a player joining the game in progress
+(for #1325, the crash some time after a split screen player leaves).
 
 debug.network_test_cues: console lines the host (or a game of one machine)
 runs at their ticks, counted from the first tick every player of
@@ -152,6 +161,7 @@ network_test_update, which does nothing there */
 #include "../src/map_download.h"
 #ifdef HALO_GAME_BROWSER
 #include "map_share.h"
+#include "net_monitor.h"
 #endif
 #ifdef HALO_GAME_BROWSER
 #include "../src/browser.h"
@@ -227,6 +237,8 @@ enum
 	_network_test_probe,
 	/* the map bot's fetch (map_share_client.c) */
 	_network_test_fetch,
+	/* the server monitor (net_monitor.c) */
+	_network_test_monitor,
 };
 
 static struct
@@ -268,6 +280,15 @@ static struct
 	(2 or more: split screen), and how many it has added */
 	short local_players;
 	short local_players_added;
+	/* debug.network_test_split_leave: the seconds between leaves, whether
+	they join again, the game times of the next leave and rejoin, the
+	controller who left last (0 none waiting), and those out of the game */
+	real split_leave_seconds;
+	boolean split_rejoin;
+	long split_leave_time;
+	long split_rejoin_time;
+	short split_left;
+	boolean split_out[MAXIMUM_NUMBER_OF_LOCAL_PLAYERS];
 	/* a game has run (a held start is asked again only before the first) */
 	boolean played;
 	real joined_seconds;
@@ -493,6 +514,10 @@ static void network_test_read_settings(
 	{
 		network_test.mode = _network_test_fetch;
 	}
+	else if (!strncmp(setting, "monitor:", 8) && setting[8])
+	{
+		network_test.mode = _network_test_monitor;
+	}
 #endif
 	else if (!strncmp(setting, "find:", 5) && setting[5])
 	{
@@ -544,6 +569,16 @@ static void network_test_read_settings(
 	network_test.camouflage_time = (real)config_real("debug.network_test_camouflage");
 	network_test.melee_interval = (real)config_real("debug.network_test_melee");
 	network_test.local_players = (short)PIN(config_integer("debug.network_test_local_players"), 1, 4);
+	{
+		char const *split_leave = config_string("debug.network_test_split_leave");
+		float split_seconds = 0.0f;
+
+		if (sscanf(split_leave, "%f", &split_seconds) == 1 && split_seconds > 0.0f)
+		{
+			network_test.split_leave_seconds = split_seconds;
+			network_test.split_rejoin = strstr(split_leave, ":rejoin") != NULL;
+		}
+	}
 	network_test.team_change_interval = (real)config_real("debug.network_test_team_change");
 	network_test.pause_time = (real)config_real("debug.network_test_pause");
 	network_test.chat_time = (real)config_real("debug.network_test_chat");
@@ -1992,6 +2027,67 @@ static void network_test_password(
 }
 #endif
 
+/* debug.network_test_split_leave: every so often the last split screen
+player still in the game leaves, as Quit on their pause menu does
+(mcc_ui.c's MCC_PAUSE_ACTION_QUIT); with :rejoin, half the interval later
+they join again, as a split screen player joining the game in progress.
+Player 1 never leaves. Called once a second; the times are deadlines, so a
+slow frame that jumps past one second still leaves or joins */
+static void network_test_split_update(
+	void)
+{
+	long interval = (long)(network_test.split_leave_seconds * TICKS_PER_SECOND);
+	long now = game_time_get();
+	short controller;
+
+	if (network_test.local_players < 2 || network_test.local_players_added < network_test.local_players ||
+		interval <= 0 || now < interval || !global_network_game_client_get())
+	{
+		return;
+	}
+	/* (a new game: its time starts over) */
+	if (network_test.split_leave_time == 0 || network_test.split_leave_time > now + interval)
+		network_test.split_leave_time = interval;
+	if (now >= network_test.split_leave_time)
+	{
+		network_test.split_leave_time = now + interval;
+		for (controller = network_test.local_players - 1; controller > 0; controller--)
+		{
+			if (!network_test.split_out[controller])
+				break;
+		}
+		if (controller > 0)
+		{
+			boolean split_screen = local_player_count() > 1;
+
+			platform_log("network test: split screen player %d leaves (local players %d)", controller + 1,
+				(int)local_player_count());
+			network_game_client_local_player_quit(controller);
+			if (split_screen)
+				player_ui_local_player_left_multiplayer_game(controller);
+			network_test.split_out[controller] = TRUE;
+			network_test.split_left = controller;
+			network_test.split_rejoin_time = now + interval / 2;
+		}
+	}
+	if (network_test.split_rejoin && network_test.split_left > 0 && now >= network_test.split_rejoin_time)
+	{
+		controller = network_test.split_left;
+		if (network_game_client_add_player(global_network_game_client_get(), controller))
+		{
+			player_ui_local_player_joined_multiplayer_game(controller);
+			network_test.split_out[controller] = FALSE;
+			platform_log("network test: split screen player %d joins again (local players %d)", controller + 1,
+				(int)local_player_count());
+		}
+		else
+		{
+			platform_log("network test: split screen player %d could not join again", controller + 1);
+		}
+		network_test.split_left = 0;
+	}
+}
+
 void network_test_update(
 	boolean main_menu_loaded,
 	real seconds)
@@ -2031,6 +2127,17 @@ void network_test_update(
 			return;
 		}
 		map_share_fetch_update(main_menu_loaded, seconds);
+		return;
+	}
+	if (network_test.mode == _network_test_monitor)
+	{
+		/* (the intro movie skipped first, as a button press does) */
+		if (bink_playback_in_progress())
+		{
+			bink_playback_stop();
+			return;
+		}
+		net_monitor_update(main_menu_loaded, seconds);
 		return;
 	}
 #endif
@@ -2171,6 +2278,8 @@ void network_test_update(
 	{
 		network_test.logged_time = game_time_get();
 		network_test_log_players();
+		if (network_test.mode == _network_test_host && network_test.split_leave_seconds > 0.0f)
+			network_test_split_update();
 		if (network_test.shoot_interval > 0.0f &&
 			game_time_get() % MAX(1, (long)(network_test.shoot_interval * TICKS_PER_SECOND)) < TICKS_PER_SECOND)
 		{

@@ -54,6 +54,9 @@ def generated(fault=None, faulty_function=None):
     source = read("port/linux/game/ce_hud.c")
     checks_header = read("port/linux/game/ce_map_checks.h")
     config = enum_with(checks_header, "CE_IMAGE_TAG_CACHE_BASE") + "\n"
+    # (the tag cache's size: ChupathingyCE's macro, Custom Edition's own here,
+    # never SPV3 mode's)
+    config += "#define CE_IMAGE_TAG_CACHE_SIZE 0x01700000UL\n"
     config += structure(checks_header, "ce_tag_instance") + "\n"
     # (the room above the tag cache for converted models: none here)
     config += "#define CE_CONVERSION_ROOM 0UL\n"

@@ -243,6 +243,8 @@ void cinematic_port_checkpoint(void) {}
 void game_state_note_event(char const *event) {(void)event;}
 /* (ChupathingyCE's checkpoint count, which Lua scripts read) */
 static unsigned long game_state_checkpoints_saved;
+/* (ChupathingyCE's OpenSauce script globals, none here) */
+static short opensauce_script_global_count(void) {return 0;}
 int game_state_write_to_file(void) {memcpy(saved,live,sizeof(saved));writes++;return 1;}
 int game_state_write_core(char const *name,void const *data,long size) {
     (void)name;memcpy(saved,data,size);writes++;return 1;

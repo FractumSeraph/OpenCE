@@ -35,7 +35,10 @@ of changes to that map (each 8 bytes: what to change and a value), which
 reaches deeper into a real map than whole-file mutations do. Custom Edition
 maps' resource maps (bitmaps.map, sounds.map, loc.map) are read from the
 folder MAP_FUZZ_CE_RESOURCES names, if any: without them, a map that keeps
-tags there is refused as the game refuses it. The Xbox's ui.map, whose button
+tags there is refused as the game refuses it. Halo PC retail's own
+bitmaps.map and sounds.map, which a HaloMD map's stock bitmaps and sounds are
+read from when a player has them (maps_pc), are read from the folder
+MAP_FUZZ_PC_RESOURCES names, if any. The Xbox's ui.map, whose button
 icons a map's HUD is given (ce_hud.c), is read from MAP_FUZZ_XBOX_UI, if it
 names one: without it, HUD messages are left without them, as in the game.
 
@@ -176,18 +179,27 @@ struct fuzz_file
 int LLVMFuzzerInitialize(int *argc, char ***argv);
 int LLVMFuzzerTestOneInput(unsigned char const *data, size_t size);
 
+/* (MAP_FUZZ_COPY_ROOM: fuzz_copy_room) */
+static long fuzz_copy_room_limit = -1;
+static unsigned long fuzz_copy_room_used;
+
 boolean tag_validate_tags(void *tag_header, long tag_data_size, long file_length, char const *map_name);
 boolean tag_validate_structure_bsp(long tag_index, void *base, long size);
 long tag_validate_corrections(void);
 #ifdef MAP_FUZZ_CE
 struct tag_schema_layout;
 extern struct tag_schema_layout const tag_schema_pc_layout;
+extern struct tag_schema_layout const tag_schema_opensauce_layout;
 boolean tag_validate_tags_layout(struct tag_schema_layout const *layout, void *tag_header, long tag_data_size,
 	long file_length, char const *map_name);
 unsigned long ce_resources_free_mark(void);
+unsigned long ce_resources_allocate_tags(unsigned long size);
+extern unsigned long (*tag_validate_room_proc)(unsigned long size);
 #endif
 
 boolean ce_map_check(HANDLE file, char const *map_name, long file_length, long tag_data_offset, long tag_data_size);
+unsigned long ce_map_checked_tags_tail(void);
+long ce_map_header_tag_data_size(long version, long file_length, long tag_data_offset, long tag_data_size);
 boolean ce_map_bsp_reference_checked(void const *reference);
 extern long ce_map_cache_version;
 boolean ce_resources_tags_loaded(void *tag_instances, long tag_count, unsigned long first_free,
@@ -210,6 +222,7 @@ void ce_bsp_loaded(void *structure);
 void ce_repairs_bsp_loaded(void *structure);
 void ce_bsp_unloaded(void);
 void ce_resources_tags_unloaded(void);
+void ce_resources_update(void);
 void ce_models_tags_unloaded(void);
 void ce_hud_tags_unloaded(void);
 
@@ -237,7 +250,10 @@ static struct
 	char const *name;
 	unsigned char *data;
 	unsigned long size;
-} fuzz_resources[] = { { "bitmaps" }, { "sounds" }, { "loc" } };
+} fuzz_resources[] = { { "bitmaps" }, { "sounds" }, { "loc" }, { "pc_bitmaps" }, { "pc_sounds" } };
+/* (the first three Custom Edition's, MAP_FUZZ_CE_RESOURCES; the others Halo
+PC's own, MAP_FUZZ_PC_RESOURCES) */
+#define FUZZ_RESOURCE_COUNT ((long)(sizeof(fuzz_resources) / sizeof(fuzz_resources[0])))
 /* the Xbox's ui.map (MAP_FUZZ_XBOX_UI) */
 static unsigned char *fuzz_xbox_ui;
 static unsigned long fuzz_xbox_ui_size;
@@ -612,6 +628,40 @@ void release_assert_failed(char const *information, char const *file, long line,
 	abort();
 }
 
+/* (the game under way, a second in: ce_resources_update) */
+boolean game_in_progress(void)
+{
+	return TRUE;
+}
+
+long game_time_get(void)
+{
+	return 31;
+}
+
+/* (one local player, whose HUD lines are written out: ce_resources_update) */
+short local_player_get_next(short local_player_index)
+{
+	return local_player_index == NONE ? 0 : NONE;
+}
+
+void hud_print_message(short local_player_index, wchar_t const *message)
+{
+	if (fuzz_verbose)
+	{
+		fprintf(stderr, "HUD %d: ", local_player_index);
+		for (; *message; message++)
+			fputc((char)*message, stderr);
+		fputc('\n', stderr);
+	}
+}
+
+boolean map_family_halo_pc_resource(char const *name, char *path, long size)
+{
+	snprintf(path, (size_t)size, "pc_%s", name);
+	return TRUE;
+}
+
 /* (tag_groups.c's, as the game reads a block's element: a Custom Edition
 map's through ce_tags_pointer) */
 void *ce_tags_pointer(unsigned long address, long size);
@@ -720,7 +770,7 @@ HANDLE CreateFileA(char const *path, DWORD access, DWORD share, LPSECURITY_ATTRI
 		{
 			long resource;
 
-			for (resource = 0; resource < 3; resource++)
+			for (resource = 0; resource < FUZZ_RESOURCE_COUNT; resource++)
 			{
 				if (!strcmp(path, fuzz_resources[resource].name) && fuzz_resources[resource].data)
 				{
@@ -824,10 +874,38 @@ int ce_vorbis_resample(short **samples, int frames, int channels, int rate, int 
 	return -1;
 }
 
+/* (a piece of a long stream's, below, brought to another rate as the real
+one gives it back: halved in place, doubled in a new allocation of twice
+its frames; each sample is only repeated or dropped. Any other is refused) */
 int ce_vorbis_resample_piece(short **samples, int frames, int channels, int rate, int wanted,
 	const short *before, int before_frames, const short *after, int after_frames)
 {
-	return -1;
+	short *in = *samples;
+	short *out;
+	int index;
+
+	if (frames <= 0 || channels < 1 || channels > 2 || !in)
+		return -1;
+	if (rate == wanted)
+		return frames;
+	if (rate == wanted * 2)
+	{
+		if (frames / 2 <= 0)
+			return -1;
+		for (index = 0; index < frames / 2 * channels; index++)
+			in[index] = in[(index / channels) * 2 * channels + index % channels];
+		return frames / 2;
+	}
+	if (rate * 2 != wanted)
+		return -1;
+	out = malloc((size_t)frames * 2 * (size_t)channels * sizeof(*out));
+	if (!out)
+		return -1;
+	for (index = 0; index < frames * 2 * channels; index++)
+		out[index] = in[(index / channels) / 2 * channels + index % channels];
+	free(in);
+	*samples = out;
+	return frames * 2;
 }
 
 int ce_vorbis_edges(const unsigned char *data, int size, int count, int whole, int *channels, int *sample_rate,
@@ -841,6 +919,72 @@ int ce_vorbis_edges(const unsigned char *data, int size, int count, int whole, i
 
 void ce_vorbis_free(short *samples)
 {
+	free(samples);
+}
+
+/* (a long stream, decoded a piece at a time: a test's stand-in for one,
+data beginning "MAP_FUZZ_PCM" then its channels, rate and frames, gives
+that many frames of a ramp; anything else is refused, as above. Then, if
+not 0, the frame a read stops short at, as stb_vorbis's does where it skips
+a page it cannot read, with more after it) */
+struct fuzz_vorbis_stream
+{
+	int channels;
+	long frames_left;
+	long frame;
+	long short_at;
+};
+
+void *ce_vorbis_stream_open(const unsigned char *data, int size, int *channels, int *sample_rate)
+{
+	struct fuzz_vorbis_stream *stream;
+	int header[4];
+
+	*channels = *sample_rate = 0;
+	if (size < 12 + (int)sizeof(header) || memcmp(data, "MAP_FUZZ_PCM", 12))
+		return NULL;
+	memcpy(header, data + 12, sizeof(header));
+	if (header[0] < 1 || header[0] > 2 || header[2] < 0)
+		return NULL;
+	stream = malloc(sizeof(*stream));
+	if (!stream)
+		return NULL;
+	stream->channels = header[0];
+	stream->frames_left = header[2];
+	stream->frame = 0;
+	stream->short_at = header[3];
+	*channels = header[0];
+	*sample_rate = header[1];
+	return stream;
+}
+
+int ce_vorbis_stream_read(void *stream, short *buffer, int frames)
+{
+	struct fuzz_vorbis_stream *fake = stream;
+	int count, index;
+
+	if (!fake || frames <= 0)
+		return 0;
+	count = fake->frames_left < frames ? (int)fake->frames_left : frames;
+	if (fake->short_at > fake->frame && fake->short_at - fake->frame < count)
+		count = (int)(fake->short_at - fake->frame);
+	for (index = 0; index < count * fake->channels; index++)
+		buffer[index] = (short)(fake->frame + index / fake->channels);
+	fake->frame += count;
+	fake->frames_left -= count;
+	return count;
+}
+
+void ce_vorbis_stream_close(void *stream)
+{
+	free(stream);
+}
+
+short *ce_vorbis_samples_new(int frames, int channels)
+{
+	if (frames <= 0 || channels < 1 || channels > 2)
+		return NULL;
+	return malloc((size_t)frames * (size_t)channels * sizeof(short));
 }
 #endif
 
@@ -913,9 +1057,13 @@ int LLVMFuzzerInitialize(int *argc, char ***argv)
 {
 	char const *base = getenv("MAP_FUZZ_BASE");
 	char const *resources = getenv("MAP_FUZZ_CE_RESOURCES");
+	char const *pc_resources = getenv("MAP_FUZZ_PC_RESOURCES");
 	char const *xbox_ui = getenv("MAP_FUZZ_XBOX_UI");
 
 	fuzz_verbose = getenv("MAP_FUZZ_VERBOSE") != NULL;
+#ifdef MAP_FUZZ_CE
+	fuzz_copy_room_limit = getenv("MAP_FUZZ_COPY_ROOM") ? atol(getenv("MAP_FUZZ_COPY_ROOM")) : -1;
+#endif
 	fuzz_ce_schema = !getenv("MAP_FUZZ_CE_SCHEMA") || strcmp(getenv("MAP_FUZZ_CE_SCHEMA"), "0");
 	fuzz_ce_change = getenv("MAP_FUZZ_CE_CHANGE");
 	if (fuzz_ce_change && !*fuzz_ce_change)
@@ -942,6 +1090,18 @@ int LLVMFuzzerInitialize(int *argc, char ***argv)
 			char path[1024];
 
 			snprintf(path, sizeof(path), "%s/%s.map", resources, fuzz_resources[index].name);
+			fuzz_resources[index].data = fuzz_file_read(path, &fuzz_resources[index].size);
+		}
+	}
+	if (pc_resources && *pc_resources)
+	{
+		long index;
+
+		for (index = 3; index < FUZZ_RESOURCE_COUNT; index++)
+		{
+			char path[1024];
+
+			snprintf(path, sizeof(path), "%s/%s.map", pc_resources, fuzz_resources[index].name + 3);
 			fuzz_resources[index].data = fuzz_file_read(path, &fuzz_resources[index].size);
 		}
 	}
@@ -1134,6 +1294,25 @@ static unsigned char *fuzz_ce_changed(unsigned char const *data, size_t size, st
 
 /* the map loaded as scenario_tags_load and scenario_structure_bsp_load load
 a Custom Edition map that passed its checks */
+/* MAP_FUZZ_COPY_ROOM: the room the tag validator is given for copies, in
+bytes, as a platform with less room past the tags would give it (none
+given: as the game gives it, ce_resources_allocate_tags). The copies a map
+gets never depend on it: a map whose copies don't fit is refused */
+#ifdef MAP_FUZZ_CE
+static unsigned long fuzz_copy_room(unsigned long size)
+{
+	unsigned long aligned = (size + 15) & ~15UL;
+
+	if (aligned > (unsigned long)fuzz_copy_room_limit - fuzz_copy_room_used ||
+		fuzz_copy_room_used > (unsigned long)fuzz_copy_room_limit)
+	{
+		return 0;
+	}
+	fuzz_copy_room_used += aligned;
+	return ce_resources_allocate_tags(size);
+}
+#endif
+
 static void fuzz_ce_load(unsigned char const *data, struct map_header const *header)
 {
 	byte *tag_cache = xbox_pointer(CE_TAG_CACHE_BASE);
@@ -1146,6 +1325,7 @@ static void fuzz_ce_load(unsigned char const *data, struct map_header const *hea
 	byte *model_data;
 	/* (the tag header, which no conversion writes over: ce_tags_writable) */
 	byte tag_header[CE_TAG_HEADER_SIZE];
+	unsigned long tags_tail;
 
 	memset(tag_cache, 0xCD, CE_TAG_CACHE_SIZE);
 	memcpy(tag_cache, data + header->tag_data_offset, (size_t)header->tag_data_size);
@@ -1162,6 +1342,10 @@ static void fuzz_ce_load(unsigned char const *data, struct map_header const *hea
 	memcpy(&vertex_data_size, tag_cache + 0x1C, 4);
 	memcpy(&model_data_size, tag_cache + 0x20, 4);
 	memcpy(tag_header, tag_cache, sizeof(tag_header));
+	/* (a HaloMD map's last tag that begins where its tag data ends, zeroes
+	after it, as it was checked: scenario_tags_load) */
+	tags_tail = ce_map_checked_tags_tail();
+	memset(tag_cache + header->tag_data_size, 0, tags_tail);
 	instances = xbox_pointer(tag_instances);
 	fuzz_tags_are_ce = TRUE;
 	cache_file_is_ce = TRUE;
@@ -1179,13 +1363,17 @@ static void fuzz_ce_load(unsigned char const *data, struct map_header const *hea
 	}
 	ce_loaded_bsps_low(end_free);
 	ce_repairs_scenario_loaded(instances, (long)tag_count, scenario_tag_index);
-	ce_resources_tags_loaded(instances, (long)tag_count, CE_TAG_CACHE_BASE + header->tag_data_size, end_free);
+	ce_resources_tags_loaded(instances, (long)tag_count, CE_TAG_CACHE_BASE + header->tag_data_size + tags_tail,
+		end_free);
 	if (!ce_map_loaded_unchanged())
 	{
 		fuzz_ce_refused("resources");
 		return;
 	}
 	ce_repairs_tags_loaded(instances, (long)tag_count, scenario_tag_index);
+	/* (function fields made valid ones, those in the other byte order
+	turned back, before the schema checks them: scenario_tags_load) */
+	ce_functions_tags_loaded(instances, (long)tag_count);
 	/* (every tag, its own and its resources', through Halo PC's schema
 	before the conversions read them: scenario_tags_load refuses the map if
 	not; and the tags as corrected need no more correcting, as an Xbox
@@ -1193,23 +1381,44 @@ static void fuzz_ce_load(unsigned char const *data, struct map_header const *hea
 	if (fuzz_ce_schema)
 	{
 		unsigned long tags_end = ce_resources_free_mark();
-		long tags_size = tags_end > CE_TAG_CACHE_BASE + (unsigned long)header->tag_data_size &&
+		unsigned long own_size = (unsigned long)header->tag_data_size + tags_tail;
+		long tags_size = tags_end > CE_TAG_CACHE_BASE + own_size &&
 			tags_end <= CE_TAG_CACHE_BASE + CE_TAG_CACHE_SIZE ?
-			(long)(tags_end - CE_TAG_CACHE_BASE) : header->tag_data_size;
+			(long)(tags_end - CE_TAG_CACHE_BASE) : (long)own_size;
 
-		struct tag_schema_layout const *layout = &tag_schema_pc_layout;
+		/* (OpenSauce's layout for a map with OpenSauce's header, as
+		cache_files.c chooses it: port/linux/game/opensauce_map.c) */
+		unsigned long opensauce_signature;
+		struct tag_schema_layout const *layout;
+		char const *layout_name;
+		boolean valid_tags;
 
-		if (!tag_validate_tags_layout(layout, tag_cache, tags_size, header->file_length, "fuzz"))
+		memcpy(&opensauce_signature, data + 0x70, sizeof(opensauce_signature));
+		layout = opensauce_signature == 'yelo' ? &tag_schema_opensauce_layout : &tag_schema_pc_layout;
+		layout_name = opensauce_signature == 'yelo' ? "OpenSauce" : "Halo PC";
+		/* (overlapping blocks given copies of their own past the tags, as
+		scenario_tags_load gives them room: ce_resources_allocate_tags) */
+		tag_validate_room_proc = fuzz_copy_room_limit >= 0 ? fuzz_copy_room : ce_resources_allocate_tags;
+		fuzz_copy_room_used = 0;
+		valid_tags = tag_validate_tags_layout(layout, tag_cache, tags_size, header->file_length, "fuzz");
+		tag_validate_room_proc = NULL;
+		if (!valid_tags)
 		{
 			if (fuzz_verbose)
-				fprintf(stderr, "map_fuzz: the map was refused by Halo PC's tag schema\n");
+				fprintf(stderr, "map_fuzz: the map was refused by %s's tag schema\n", layout_name);
 			return;
 		}
 		if (fuzz_verbose)
-			fprintf(stderr, "map_fuzz: Halo PC's tag schema made %ld corrections\n", (long)tag_validate_corrections());
+			fprintf(stderr, "map_fuzz: %s's tag schema made %ld corrections\n", layout_name,
+				(long)tag_validate_corrections());
 		if (tag_validate_corrections())
 		{
-			boolean valid = tag_validate_tags_layout(layout, tag_cache, tags_size, header->file_length, "fuzz");
+			/* (the copies are the tags' now: in what they take) */
+			unsigned long copies_end = ce_resources_free_mark();
+			long checked_size = copies_end > CE_TAG_CACHE_BASE + (unsigned long)tags_size &&
+				copies_end <= CE_TAG_CACHE_BASE + CE_TAG_CACHE_SIZE ?
+				(long)(copies_end - CE_TAG_CACHE_BASE) : tags_size;
+			boolean valid = tag_validate_tags_layout(layout, tag_cache, checked_size, header->file_length, "fuzz");
 
 			if (!valid || tag_validate_corrections())
 			{
@@ -1230,7 +1439,6 @@ static void fuzz_ce_load(unsigned char const *data, struct map_header const *hea
 			fuzz_ce_refused("model");
 			return;
 		}
-		ce_functions_tags_loaded(instances, (long)tag_count);
 		ce_shaders_tags_loaded(instances, (long)tag_count);
 		system_free(model_data);
 	}
@@ -1302,6 +1510,16 @@ static void fuzz_ce(unsigned char const *data, size_t size)
 	cache_files_windows.c reads it) */
 	if (!header_copy.file_length && size <= 0x7fffffff)
 		header_copy.file_length = (long)size;
+	/* (a HaloMD map's tag data size given as its file's length, read as
+	the rest of the file, as cache_file_header_verify reads it) */
+	{
+		long tag_data_size = ce_map_header_tag_data_size(header_copy.version, header_copy.file_length,
+			header_copy.tag_data_offset, header_copy.tag_data_size);
+
+		if (fuzz_verbose && tag_data_size != header_copy.tag_data_size)
+			fprintf(stderr, "map_fuzz: the header's tag data size is the file's length: read as %ld\n", tag_data_size);
+		header_copy.tag_data_size = tag_data_size;
+	}
 	if (!fuzz_header_valid(header, size) ||
 		(header->version != CACHE_VERSION_CUSTOM_EDITION && header->version != CACHE_VERSION_RETAIL))
 	{
@@ -1331,6 +1549,9 @@ static void fuzz_ce(unsigned char const *data, size_t size)
 		if (fuzz_verbose)
 			fprintf(stderr, "map_fuzz: the map passed its checks\n");
 		fuzz_ce_load(changed ? changed : data, header);
+		/* (a frame of the game under way: what the load left to tell the
+		player, ce_resources_update) */
+		ce_resources_update();
 		if (changed && changed != data)
 			free(changed);
 		/* (the resource maps as they were, for the next input) */
@@ -1579,6 +1800,32 @@ boolean pc_menu_owns(unsigned long address, long size)
 	(void)address;
 	(void)size;
 	return FALSE;
+}
+
+/* (SPV3 mode, spv3_mode.c, not in the harness: always off, so the checks
+see Custom Edition's own limits) */
+boolean spv3_mode_active(void) { return FALSE; }
+unsigned long spv3_mode_tag_cache_size(unsigned long custom_edition_size) { return custom_edition_size; }
+boolean spv3_mode_accepts_opensauce(char const *map_name, unsigned short flags)
+{
+	(void)map_name;
+	(void)flags;
+	return FALSE;
+}
+void spv3_mode_survey(char const *map_name, void const *cache_header, void const *tags, unsigned long tag_data_size,
+	unsigned long file_size)
+{
+	(void)map_name;
+	(void)cache_header;
+	(void)tags;
+	(void)tag_data_size;
+	(void)file_size;
+}
+void spv3_mode_log(char const *format, ...) { (void)format; }
+void spv3_mode_note_resource_miss(char const *kind, char const *tag_name)
+{
+	(void)kind;
+	(void)tag_name;
 }
 
 /* (tag_validate.c asks whether tag data is Stubbs the Zombie's own:

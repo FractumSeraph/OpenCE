@@ -126,6 +126,13 @@ enum
 	CE_SCENARIO_BSP_REFERENCE_SIZE = 0x20,
 	CE_MAXIMUM_BSPS = 16, /* (scenario.h's MAXIMUM_STRUCTURE_BSPS_PER_SCENARIO) */
 	CE_BSP_GROUP = 'sbsp',
+	/* a HaloMD map's last tag whose data begins where its tag data ends
+	(ce_tags_tail): a sound environment (sound_environment_definitions.h)
+	or a wind (wind_definitions.h), its root's bytes */
+	CE_SOUND_ENVIRONMENT_GROUP = 'snde',
+	CE_SOUND_ENVIRONMENT_SIZE = 0x48,
+	CE_WIND_GROUP = 'wind',
+	CE_WIND_SIZE = 0x40,
 	/* a weapon's magazines and triggers (weapon_definitions.h), no more
 	than its datum has room for (weapons.h: two of each), and a trigger's
 	magazine, NONE or one of them */
@@ -263,6 +270,12 @@ struct ce_map_digests
 	byte resources[CE_DIGEST_SIZE];
 	byte model_data[CE_DIGEST_SIZE];
 	byte bsps[CE_MAXIMUM_BSPS][CE_DIGEST_SIZE];
+	/* and the zeroes read after its tag data as its last tag's
+	(ce_tags_tail), which the load gives it too */
+	unsigned long tags_tail;
+	/* and the room it leaves free past what its models and BSP buffers
+	need (ce_map_checked_spare_room) */
+	unsigned long spare_room;
 };
 static struct ce_map_digests ce_checked_digests;
 static struct ce_map_digests ce_checking_digests;
@@ -370,7 +383,8 @@ OpenSauce's memory upgrades has tags laid out past Custom Edition's tag cache,
 which the checks below would refuse with no reason a player could act on.
 (As OpenCE's build-145 refuses them, MrBruh's finding.) */
 static boolean ce_needs_opensauce(
-	HANDLE file)
+	HANDLE file,
+	char const *map_name)
 {
 	byte header[8];
 	unsigned long signature;
@@ -380,7 +394,34 @@ static boolean ce_needs_opensauce(
 		return FALSE;
 	memcpy(&signature, header, sizeof(signature));
 	memcpy(&flags, header + CE_OPENSAUCE_HEADER_FLAGS_OFFSET, sizeof(flags));
-	return signature == (unsigned long)CE_OPENSAUCE_HEADER_SIGNATURE && flags != 0;
+	if (signature != (unsigned long)CE_OPENSAUCE_HEADER_SIGNATURE || !flags)
+		return FALSE;
+	/* (SPV3 mode reads OpenSauce's memory upgrades, and nothing else of its
+	header's asks: port/linux/game/spv3_mode.c) */
+	return !spv3_mode_accepts_opensauce(map_name, flags);
+}
+
+/* SPV3 mode's survey of a map (port/linux/game/spv3_mode.c): its header and
+its tag data read again, for the log only */
+static void ce_spv3_survey(
+	HANDLE file,
+	char const *map_name,
+	unsigned long file_size,
+	unsigned long tag_data_offset,
+	unsigned long tag_data_size)
+{
+	byte header[CE_HEADER_SIZE];
+	byte *tags;
+
+	if (!spv3_mode_active() || !ce_range_within(tag_data_offset, tag_data_size, file_size) ||
+		tag_data_size > SPV3_OPENSAUCE_TAG_CACHE_SIZE || !ce_file_read(file, 0, header, sizeof(header)))
+	{
+		return;
+	}
+	tags = malloc(tag_data_size);
+	if (tags && ce_file_read(file, tag_data_offset, tags, tag_data_size))
+		spv3_mode_survey(map_name, header, tags, tag_data_size, file_size);
+	free(tags);
 }
 
 /* the instance at a tag handle, if it is the handle of one */
@@ -394,6 +435,29 @@ static struct ce_tag_instance const *ce_tag_instance_get(
 	if (tag_index == 0xffffffff || index >= (unsigned long)tag_count || instances[index].tag_index != tag_index)
 		return NULL;
 	return &instances[index];
+}
+
+/* the bytes of zeroes a HaloMD map's last tag is read as, or 0: a sound
+environment or wind whose data begins exactly where the tag data ends
+(tags_end), with no bytes of its own. Some HaloMD tool wrote ten of the
+archive's maps so (alternate_1, corrupted_1, vast_1), and Halo PC read the
+tag from whatever followed its tag data; here it is an empty one, all
+zeroes, in room kept for it after the tag data (as the load keeps it:
+ce_map_checked_tags_tail). No other tag, and no other address, is taken */
+static unsigned long ce_tags_tail(
+	struct ce_tag_instance const *instances,
+	long tag_count,
+	unsigned long tags_end)
+{
+	struct ce_tag_instance const *last = &instances[tag_count - 1];
+
+	if (ce_map_cache_version != CE_CACHE_VERSION_RETAIL || last->indexed || last->base_address != tags_end ||
+		(last->tag_index & 0xffff) != (unsigned long)(tag_count - 1))
+	{
+		return 0;
+	}
+	return last->group_tag == CE_SOUND_ENVIRONMENT_GROUP ? CE_SOUND_ENVIRONMENT_SIZE :
+		last->group_tag == CE_WIND_GROUP ? CE_WIND_SIZE : 0;
 }
 
 static boolean ce_tag_index_check(
@@ -763,6 +827,26 @@ static boolean ce_map_check_tags(
 	/* (a protected map's tag table repaired first, as it is when the map
 	loads: ce_repairs.c) */
 	ce_repairs_protection(&image, ce_file_read_proc, (void *)file, file_size);
+	/* (a HaloMD map's last tag that begins where its tag data ends, read
+	as zeroes after it: ce_tags_tail) */
+	ce_checking_digests.tags_tail = ce_tags_tail(instances, tag_count, image.base + image.size);
+	if (ce_checking_digests.tags_tail)
+	{
+		struct ce_tag_instance const *last = &instances[tag_count - 1];
+		char const *name = ce_image_pointer(&image, last->name, 1);
+
+		if (tag_data_size > CE_IMAGE_TAG_CACHE_SIZE - ce_checking_digests.tags_tail)
+		{
+			ce_refusal_explain("It is too big for the game's tag cache.");
+			ce_refuse("its tag data (%lu bytes) and its last tag's are larger than the tag cache (%lu bytes)",
+				tag_data_size, (unsigned long)CE_IMAGE_TAG_CACHE_SIZE);
+			goto done;
+		}
+		memset(image.data + image.size, 0, ce_checking_digests.tags_tail);
+		image.size += ce_checking_digests.tags_tail;
+		error(_error_silent, "%s map: its last tag, %s, begins where its tag data ends: read as an empty one",
+			ce_map_family_name(), name && memchr(name, 0, image.base + image.size - last->name) ? name : "(no name)");
+	}
 	if (!ce_tag_index_check(&image, instances, tag_count))
 		goto done;
 	/* (what the checks repair, as loading does, writes nothing over the tag
@@ -786,9 +870,10 @@ static boolean ce_map_check_tags(
 		goto done;
 	}
 #ifdef HALO_CONSOLE_CE_SHARED_TAG_CACHE
-	/* (and on a 64 MB console, below what isn't memory beneath the BSPs) */
+	/* (and on a 64 MB console, below what isn't memory beneath the BSPs:
+	its tags and the zeroes kept after them for its last tag, ce_tags_tail) */
 	end_free = platform_ce_room_end(end_free);
-	if (end_free < CE_IMAGE_TAG_CACHE_BASE + tag_data_size)
+	if (end_free < image.base + image.size)
 	{
 		ce_refusal_explain_room();
 		ce_refuse("its tags and structure BSPs (from %08lx) need more of the tag cache than a 64 MB console has",
@@ -867,6 +952,7 @@ static boolean ce_map_check_tags(
 				needed - room);
 			goto done;
 		}
+		ce_checking_digests.spare_room = room - model_bytes - bsp_bytes;
 	}
 	valid = ce_shaders_check(&tags, instances, tag_count) && ce_hud_check(&tags, instances, tag_count) &&
 		ce_animations_check(&tags, instances, tag_count) && ce_weapons_check(&tags, instances, tag_count) &&
@@ -1211,9 +1297,10 @@ tag cache (where its tags, resources, models and BSP are), but from zeroed
 bytes of their own, and logged; else, as always, the address */
 #define CE_TAGS_SCRATCH_LIMIT 0x40000UL
 #ifdef HALO_CUSTOM_EDITION
-/* (the bounds the consoles' inline TAG_BLOCK_GET_ELEMENT checks: tag_groups.h) */
+/* (the bounds the consoles' inline TAG_BLOCK_GET_ELEMENT checks: tag_groups.h;
+Custom Edition's, as no console maps OpenSauce's larger window) */
 typedef char ce_tags_inline_bounds_assert[
-	TAG_GROUPS_CE_TAG_CACHE_BASE == CE_IMAGE_TAG_CACHE_BASE && TAG_GROUPS_CE_TAG_CACHE_SIZE == CE_IMAGE_TAG_CACHE_SIZE ? 1 : -1];
+	TAG_GROUPS_CE_TAG_CACHE_BASE == CE_IMAGE_TAG_CACHE_BASE && TAG_GROUPS_CE_TAG_CACHE_SIZE == CE_IMAGE_TAG_CACHE_STOCK_SIZE ? 1 : -1];
 #endif
 
 void *ce_tags_pointer(
@@ -1382,11 +1469,14 @@ boolean ce_map_check(
 	ce_checking = TRUE;
 	ce_checking_bsp_count = 0;
 	memset(&ce_checking_digests, 0, sizeof(ce_checking_digests));
+	/* (SPV3 mode's survey, logged before the checks: nothing in other modes) */
+	if (file_size != INVALID_FILE_SIZE && !file_size_high)
+		ce_spv3_survey(file, map_name, file_size, (unsigned long)tag_data_offset, (unsigned long)tag_data_size);
 	if (file_size == INVALID_FILE_SIZE || file_size_high || file_size > CE_MAXIMUM_FILE_SIZE)
 		valid = ce_refuse("its size could not be read, or is over 2 GB");
 	else if (file_length < CE_HEADER_SIZE || (unsigned long)file_length > file_size)
 		valid = ce_refuse("it is cut short: its header says %ld bytes, the file has %lu", file_length, file_size);
-	else if (ce_needs_opensauce(file))
+	else if (ce_needs_opensauce(file, map_name))
 	{
 		ce_refusal_explain("It needs OpenSauce.");
 		valid = ce_refuse("it needs OpenSauce (its OpenSauce header asks for memory upgrades or mod data)");
@@ -1397,6 +1487,7 @@ boolean ce_map_check(
 	if (!valid)
 	{
 		error(_error_silent, "%s map %s refused: %s", family, map_name, ce_refusal);
+		spv3_mode_log("%s: REFUSED by the map checks: %s", map_name, ce_refusal);
 		console_warning("%s map %s refused: %s", family, map_name, ce_refusal);
 		/* (the game shows it in place of the damaged disc error:
 		cache_files_windows.c) */
@@ -1544,6 +1635,32 @@ static boolean ce_map_loaded_matches(
 
 	ce_digest(data, size, digest);
 	return memcmp(digest, checked, CE_DIGEST_SIZE) ? ce_map_loaded_changed(what) : TRUE;
+}
+
+unsigned long ce_map_checked_tags_tail(
+	void)
+{
+	return ce_checked_digests.tags_tail;
+}
+
+unsigned long ce_map_checked_spare_room(
+	void)
+{
+	return ce_checked_digests.spare_room;
+}
+
+long ce_map_header_tag_data_size(
+	long version,
+	long file_length,
+	long tag_data_offset,
+	long tag_data_size)
+{
+	if (version == CE_CACHE_VERSION_RETAIL && tag_data_size == file_length && tag_data_offset >= CE_HEADER_SIZE &&
+		tag_data_offset < file_length)
+	{
+		return file_length - tag_data_offset;
+	}
+	return tag_data_size;
 }
 
 boolean ce_map_loaded_tags_unchanged(

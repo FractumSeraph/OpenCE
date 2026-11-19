@@ -1260,7 +1260,11 @@ then Metal's language (SPIRV-Cross) or Vulkan's container, a few
 milliseconds each. That is done
 on compiler threads, never in a frame: a draw whose shaders are not made
 yet is left out until they are (a frame or two, the first time a shader is
-seen). What they make is kept in the cache folder (paths.cache, safe to
+seen). On Metal they also compile the Metal source, as bgfx would in the
+frame that makes the shader (a frame of tens of milliseconds a shader, each
+time a new build sees it: Metal keeps its compiles for each build), so a
+shader read from the cache folder goes to them too, and bgfx's compile
+then finds Metal's. What they make is kept in the cache folder (paths.cache, safe to
 delete: bgfx/<backend>/<hash>.shader, by a hash of the shader's GLSL, the
 backend and the compilers' versions; an entry that does not match is
 ignored and made again), and each map's programs are listed there
@@ -1276,6 +1280,10 @@ Vulkan container's layout, the entries' format) */
 #define BG_SHADER_CACHE_MAXIMUM (64UL << 20)
 #define BG_SHADER_CACHE_TRIMMED (48UL << 20)
 #define BG_COMPILER_THREADS 2
+/* on Metal, where the threads also compile each shader's Metal source (tens
+of milliseconds the first time a build sees it): up to this many, half the
+processor's cores */
+#define BG_METAL_COMPILER_THREADS 6
 /* the most of a map's programs made in one frame of its loading screen */
 #define BG_WARM_PER_FRAME 48
 
@@ -1283,7 +1291,11 @@ struct bg_shader_job
 {
 	struct bg_shader_job *next;
 	struct bg_shader *shader;
+	/* the shader's Vulkan GLSL, to compile; or NULL and its code, read from
+	the cache folder, for Metal to compile (bg_metal_prepares) */
 	char *source;
+	char *code;
+	unsigned long code_size;
 	char what[32];
 };
 
@@ -1311,6 +1323,12 @@ static struct
 	BOOL warm_pending;
 	Uint64 *warm_list;
 	unsigned long warm_count, warm_next;
+	/* the listed programs whose shaders are still being made, in pairs */
+	struct bg_shader **warm_waiting;
+	unsigned long warm_waiting_count, warm_waiting_capacity;
+	/* on macOS, bgfx's Metal device: the threads compile each shader's Metal
+	source on it (macos_metal_library_prepare) */
+	void *metal_device;
 } bg_jobs = { PTHREAD_MUTEX_INITIALIZER, PTHREAD_COND_INITIALIZER, PTHREAD_COND_INITIALIZER };
 
 static void bg_cache_entry_path(char *path, size_t size, Uint64 hash)
@@ -1446,6 +1464,11 @@ static char *bg_compile(const char *source, BOOL fragment, const char *what, cha
 	return code;
 }
 
+#ifdef __APPLE__
+/* (port/macos/src/macos_video.c) */
+int macos_metal_library_prepare(void *device, const char *source);
+#endif
+
 static void *bg_compiler_thread(void *unused)
 {
 	(void)unused;
@@ -1464,9 +1487,23 @@ static void *bg_compiler_thread(void *unused)
 			bg_jobs.last = NULL;
 		pthread_mutex_unlock(&bg_jobs.lock);
 
-		msl = bg_compile(job->source, job->shader->fragment, job->what, &error, &size);
-		if (msl)
-			bg_cache_write(job->shader->hash, job->shader->uniform_size, msl, size);
+		if (job->code)
+		{
+			msl = job->code, job->code = NULL;
+			size = job->code_size;
+		}
+		else
+		{
+			msl = bg_compile(job->source, job->shader->fragment, job->what, &error, &size);
+			if (msl)
+				bg_cache_write(job->shader->hash, job->shader->uniform_size, msl, size);
+		}
+#ifdef __APPLE__
+		/* (Metal's compile of the source, kept by Metal: bgfx's of the same
+		source, in the frame that makes the shader, is then quick) */
+		if (msl && bg_jobs.metal_device)
+			macos_metal_library_prepare(bg_jobs.metal_device, msl);
+#endif
 
 		pthread_mutex_lock(&bg_jobs.lock);
 		job->shader->code = msl;
@@ -1476,6 +1513,27 @@ static void *bg_compiler_thread(void *unused)
 		pthread_cond_broadcast(&bg_jobs.finished);
 	}
 	return NULL;
+}
+
+/* whether the compiler threads make Metal's libraries too, so that a shader
+read from the cache folder goes to them as well (bg_shader_get, bg_warm) */
+static BOOL bg_metal_prepares(void)
+{
+	return bg_jobs.started && bg_jobs.metal_device != NULL;
+}
+
+static int bg_compiler_threads(void)
+{
+#ifdef __APPLE__
+	if (bg_jobs.metal_device)
+	{
+		int cores = SDL_GetNumLogicalCPUCores() / 2;
+
+		return cores < BG_COMPILER_THREADS ? BG_COMPILER_THREADS : cores > BG_METAL_COMPILER_THREADS ?
+			BG_METAL_COMPILER_THREADS : cores;
+	}
+#endif
+	return BG_COMPILER_THREADS;
 }
 
 /* the backend's name in the cache: its folder, and part of its versions */
@@ -1567,7 +1625,14 @@ static void bg_cache_start(void)
 		free(entries);
 		SDL_free(names);
 	}
-	for (index = 0; index < BG_COMPILER_THREADS; index++)
+#ifdef __APPLE__
+	{
+		const bgfx_internal_data_t *internal = bgfx_get_internal_data();
+
+		bg_jobs.metal_device = internal ? internal->context : NULL;
+	}
+#endif
+	for (index = 0; index < bg_compiler_threads(); index++)
 	{
 		pthread_t thread;
 
@@ -1619,12 +1684,13 @@ static BOOL bg_shader_ready(struct bg_shader *shader)
 	error = shader->error, shader->error = NULL;
 	job = shader->job, shader->job = NULL;
 	pthread_mutex_unlock(&bg_jobs.lock);
-	bg.account.translated++;
+	if (job->source)
+		bg.account.translated++;
 	if (msl)
 		bg_shader_finish(shader, msl, size, job->what);
 	else
 		bg_shader_failed(shader, job->what, error ? error : "it does not compile");
-	if (!msl && config_boolean("debug.gpu_stats"))
+	if (!msl && job->source && config_boolean("debug.gpu_stats"))
 		platform_log("%s", job->source);
 	free(msl);
 	free(error);
@@ -1658,6 +1724,29 @@ static struct bg_shader *bg_shader_add(Uint64 hash, BOOL fragment, unsigned long
 	return shader;
 }
 
+/* a shader handed to a compiler thread: its Vulkan GLSL to compile, or its
+code from the cache folder for Metal (both taken) */
+static void bg_shader_queue(struct bg_shader *shader, char *source, char *code, unsigned long code_size,
+	const char *what)
+{
+	struct bg_shader_job *job = calloc(1, sizeof(*job));
+
+	job->shader = shader;
+	job->source = source;
+	job->code = code;
+	job->code_size = code_size;
+	snprintf(job->what, sizeof(job->what), "%s", what);
+	shader->job = job;
+	pthread_mutex_lock(&bg_jobs.lock);
+	if (bg_jobs.last)
+		bg_jobs.last->next = job;
+	else
+		bg_jobs.first = job;
+	bg_jobs.last = job;
+	pthread_cond_signal(&bg_jobs.wake);
+	pthread_mutex_unlock(&bg_jobs.lock);
+}
+
 /* a shader of the translators' GLSL: found, read from the cache folder, or
 handed to a compiler thread (bg_shader_ready tells when it is made; wait
 waits for it, for the renderer's own shaders) */
@@ -1676,11 +1765,28 @@ static struct bg_shader *bg_shader_get(const char *glsl, BOOL fragment, int flag
 	if ((shader = bg_shader_find(hash)) != NULL)
 	{
 		free(source);
+		/* (asked for before, and still on a compiler thread: waited for) */
+		if (wait && shader->job)
+		{
+			pthread_mutex_lock(&bg_jobs.lock);
+			while (!shader->done)
+				pthread_cond_wait(&bg_jobs.finished, &bg_jobs.lock);
+			pthread_mutex_unlock(&bg_jobs.lock);
+			bg_shader_ready(shader);
+		}
 		return shader;
 	}
 	shader = bg_shader_add(hash, fragment, uniform_size);
 	if ((msl = bg_cache_read(hash, NULL, &size)) != NULL)
 	{
+		if (!wait && bg_metal_prepares())
+		{
+			bg_shader_queue(shader, NULL, msl, size, what);
+			free(source);
+			bg.account.loaded++;
+			bg.account.load_seconds += stats_seconds() - start;
+			return shader;
+		}
 		bg_shader_finish(shader, msl, size, what);
 		free(msl);
 		free(source);
@@ -1709,22 +1815,7 @@ static struct bg_shader *bg_shader_get(const char *glsl, BOOL fragment, int flag
 		bg.account.translate_seconds += stats_seconds() - start;
 		return shader;
 	}
-	{
-		struct bg_shader_job *job = calloc(1, sizeof(*job));
-
-		job->shader = shader;
-		job->source = source;
-		snprintf(job->what, sizeof(job->what), "%s", what);
-		shader->job = job;
-		pthread_mutex_lock(&bg_jobs.lock);
-		if (bg_jobs.last)
-			bg_jobs.last->next = job;
-		else
-			bg_jobs.first = job;
-		bg_jobs.last = job;
-		pthread_cond_signal(&bg_jobs.wake);
-		pthread_mutex_unlock(&bg_jobs.lock);
-	}
+	bg_shader_queue(shader, source, NULL, 0, what);
 	return shader;
 }
 
@@ -1910,16 +2001,58 @@ static void bg_warm(void)
 				if (msl)
 				{
 					pair[which] = bg_shader_add(hash, which == 1, uniform_size);
-					bg_shader_finish(pair[which], msl, size, which ? "pixel" : "vertex");
-					free(msl);
+					if (bg_metal_prepares())
+						bg_shader_queue(pair[which], NULL, msl, size, which ? "pixel" : "vertex");
+					else
+					{
+						bg_shader_finish(pair[which], msl, size, which ? "pixel" : "vertex");
+						free(msl);
+					}
 					bg.account.loaded++;
 				}
 			}
 		}
-		if (pair[0] && pair[1] && BGFX_HANDLE_IS_VALID(pair[0]->shader) && BGFX_HANDLE_IS_VALID(pair[1]->shader))
-			bg_program_get(pair[0], pair[1]);
+		/* (the program once both are made: a frame or more later on Metal,
+		whose threads compile them) */
+		if (pair[0] && pair[1] && !pair[0]->failed && !pair[1]->failed)
+		{
+			if (bg_jobs.warm_waiting_count + 2 > bg_jobs.warm_waiting_capacity)
+			{
+				unsigned long capacity = bg_jobs.warm_waiting_capacity ? bg_jobs.warm_waiting_capacity * 2 : 256;
+				struct bg_shader **grown = realloc(bg_jobs.warm_waiting, capacity * sizeof(*grown));
+
+				if (grown)
+				{
+					bg_jobs.warm_waiting = grown;
+					bg_jobs.warm_waiting_capacity = capacity;
+				}
+			}
+			if (bg_jobs.warm_waiting_count + 2 <= bg_jobs.warm_waiting_capacity)
+			{
+				bg_jobs.warm_waiting[bg_jobs.warm_waiting_count++] = pair[0];
+				bg_jobs.warm_waiting[bg_jobs.warm_waiting_count++] = pair[1];
+			}
+		}
 		bg_jobs.warm_next += 2;
 		made++;
+	}
+	{
+		unsigned long index, kept = 0;
+
+		for (index = 0; index < bg_jobs.warm_waiting_count; index += 2)
+		{
+			struct bg_shader *vertex = bg_jobs.warm_waiting[index], *fragment = bg_jobs.warm_waiting[index + 1];
+			BOOL vertex_ready = bg_shader_ready(vertex), fragment_ready = bg_shader_ready(fragment);
+
+			if (vertex_ready && fragment_ready)
+				bg_program_get(vertex, fragment);
+			else if (!vertex->failed && !fragment->failed)
+			{
+				bg_jobs.warm_waiting[kept++] = vertex;
+				bg_jobs.warm_waiting[kept++] = fragment;
+			}
+		}
+		bg_jobs.warm_waiting_count = kept;
 	}
 	if (bg_jobs.warm_next && bg_jobs.warm_next >= bg_jobs.warm_count)
 	{
@@ -3133,7 +3266,11 @@ static void bg_bind_textures(struct nv2a_pixel_shader_key *key, float texture_sc
 					}
 				}
 			}
-			if (description.linear)
+			/* port: a Halo PC map's linear bitmap is sampled as Halo PC samples every
+			texture, its coordinates 0 to 1 (the game's draws of its bitmaps give
+			them so: xbox_texture_cache.c's D3DCOMMON_PORT_PC_LAYOUT); the Xbox's own
+			linear textures by texel */
+			if (description.linear && !(texture->Common & D3DCOMMON_PORT_PC_LAYOUT))
 			{
 				texture_scale[stage][0] = 1.0f / (float)description.width;
 				texture_scale[stage][1] = 1.0f / (float)description.height;
@@ -4926,12 +5063,27 @@ static void bg_frame_account(char *text, size_t size)
 	memset(&bg.account, 0, sizeof(bg.account));
 }
 
-/* with vsync off, whether this frame goes to the window: a window's
-picture waits for the display (Metal hands out the next one only once the
-display has taken one, about 3 behind), so frames faster than the display
-draw the game but go to the window only as often as the display shows them,
-leaving the game to run faster as the OpenGL path does */
+/* with vsync off, whether this frame goes to the window. On Metal a
+window's picture waits for the display (Metal hands out the next one only
+once the display has taken one, about 3 behind), so frames faster than the
+display draw the game but go to the window only as often as the display
+shows them, leaving the game to run faster as the OpenGL path does. Vulkan
+(its immediate mode) and Direct3D 11 show a frame without waiting, so there
+every frame goes to the window, as OpenGL's do: held to the display's rate,
+a frame that came a little early was left out, and a frame limit at the
+refresh rate (display.max_fps 144 at 144 Hz) showed a frame twice a few
+times a second. A swap chain that waits all the same (no immediate mode:
+bgfx falls back to the display's pace) is noticed by its presents
+(bg_window_presented) and paced as Metal's. */
 static double bg_window_next, bg_window_interval = -1.0;
+static BOOL bg_window_paced
+#ifdef __APPLE__
+	= TRUE
+#endif
+	;
+/* presents in a row that waited for the display (bg_window_presented) */
+static int bg_window_waits;
+#define BG_WINDOW_WAITS_TO_PACE 30
 
 /* the display's frame interval, in seconds */
 static double bg_display_interval(void)
@@ -4952,6 +5104,8 @@ static BOOL bg_window_due(void)
 	if (bg.reset_flags & BGFX_RESET_VSYNC)
 		return TRUE;
 	interval = bg_display_interval();
+	if (!bg_window_paced)
+		return TRUE;
 	now = stats_seconds();
 	if (now < next)
 		return FALSE;
@@ -4962,10 +5116,26 @@ static BOOL bg_window_due(void)
 
 /* after a frame went to the window: when it waited for the display, the
 next goes an interval after the display took one (the display's own
-timing, which the count above drifts from) */
+timing, which the count above drifts from); unpaced, a swap chain whose
+presents keep waiting for the display is paced from then on */
 static void bg_window_presented(double start, double end)
 {
-	if (!(bg.reset_flags & BGFX_RESET_VSYNC) && end - start > bg_window_interval * 0.25)
+	if (bg.reset_flags & BGFX_RESET_VSYNC)
+		return;
+	if (!bg_window_paced)
+	{
+		/* (half an interval: a GPU-bound frame waits too, but not every one) */
+		bg_window_waits = end - start > bg_display_interval() * 0.5 ? bg_window_waits + 1 : 0;
+		if (bg_window_waits >= BG_WINDOW_WAITS_TO_PACE)
+		{
+			platform_log("bgfx: the window waits for the display with V-Sync off, so frames go to it at the "
+				"display's rate");
+			bg_window_paced = TRUE;
+			bg_window_next = end + bg_window_interval;
+		}
+		return;
+	}
+	if (end - start > bg_window_interval * 0.25)
 		bg_window_next = end + bg_window_interval;
 }
 
@@ -5369,6 +5539,42 @@ beside the shaders as <hash>.pipeline so that the next run makes them from
 what the driver made the last time. The driver checks the data is its own
 (the device's and the driver's versions are in it) and makes the pipeline
 from scratch when it is not. */
+/* the pipelines read from the cache folder this run, by their data's hash:
+bgfx hands each back to be written once it has made it, and when the
+driver made it from that data, that is the same data again. Writing it
+anyway was a file made and renamed for every pipeline a run first drew
+with, in its frame (on Windows, where a new file is scanned, a few
+milliseconds each) */
+#define BG_PIPELINE_READ_BUCKETS 512
+
+struct bg_pipeline_read
+{
+	struct bg_pipeline_read *next;
+	uint64_t id;
+	uint32_t size;
+	Uint64 check;
+};
+
+static struct bg_pipeline_read *bg_pipelines_read[BG_PIPELINE_READ_BUCKETS];
+
+static struct bg_pipeline_read *bg_pipeline_read_find(uint64_t id, BOOL add)
+{
+	struct bg_pipeline_read **bucket = &bg_pipelines_read[id % BG_PIPELINE_READ_BUCKETS], *entry;
+
+	for (entry = *bucket; entry; entry = entry->next)
+	{
+		if (entry->id == id)
+			return entry;
+	}
+	if (add && (entry = calloc(1, sizeof(*entry))) != NULL)
+	{
+		entry->id = id;
+		entry->next = *bucket;
+		*bucket = entry;
+	}
+	return entry;
+}
+
 static void bg_pipeline_path(char *path, size_t size, uint64_t id)
 {
 	snprintf(path, size, "%s/%016llx.pipeline", bg_jobs.folder, (unsigned long long)id);
@@ -5401,6 +5607,16 @@ static bool bg_callback_cache_read(bgfx_callback_interface_t *self, uint64_t id,
 		return false;
 	read = fread(data, 1, size, file) == size;
 	fclose(file);
+	if (read)
+	{
+		struct bg_pipeline_read *entry = bg_pipeline_read_find(id, TRUE);
+
+		if (entry)
+		{
+			entry->size = size;
+			entry->check = bg_hash(data, size, 14695981039346656037ULL);
+		}
+	}
 	return read;
 }
 
@@ -5412,6 +5628,12 @@ static void bg_callback_cache_write(bgfx_callback_interface_t *self, uint64_t id
 	(void)self;
 	if (!*bg_jobs.folder || !size)
 		return;
+	{
+		struct bg_pipeline_read *entry = bg_pipeline_read_find(id, FALSE);
+
+		if (entry && entry->size == size && entry->check == bg_hash(data, size, 14695981039346656037ULL))
+			return;
+	}
 	bg_pipeline_path(path, sizeof(path), id);
 	snprintf(temporary, sizeof(temporary), "%s.tmp", path);
 	if (!(file = fopen(temporary, "wb")))
@@ -5839,6 +6061,15 @@ static BOOL bg_initialize(void)
 		fragment = bg_shader_get(bg_crt_fragment_source, TRUE, 0, "CRT filter pixel", TRUE);
 		if (!vertex->failed && !fragment->failed)
 			bg.crt = bgfx_create_program(vertex->shader, fragment->shader, false);
+	}
+
+	/* (the overlay's shaders, which its first draw waits for, made by the
+	compiler threads meanwhile: on Metal its compile was a frame of over
+	100 ms the first time a build drew the overlay, in the menus) */
+	if (bg_metal_prepares())
+	{
+		bg_shader_get(bg_overlay_vertex_source, FALSE, 0, "overlay vertex", FALSE);
+		bg_shader_get(bg_overlay_fragment_source, TRUE, 0, "overlay pixel", FALSE);
 	}
 
 	/* (gl_initialize's: the guest memory writes that make textures stale,

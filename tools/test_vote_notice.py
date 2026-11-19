@@ -34,7 +34,10 @@ def test_votes_played_never_noted():
     # (ChupathingyCE's static distributed_handle_message, which the public one
     # calls, since the merge of its 38aae92ee)
     handle = text[text.index("static void distributed_handle_message("):]
-    unknown_call = handle.index("if (!distributed_kind_known(header.type))\n\t{\n\t\tdistributed_unknown_kind(machine_index, header.type);")
+    # (ChupathingyCE's server monitor counts the kind first)
+    unknown_call = handle.index("if (!distributed_kind_known(header.type))\n\t{\n"
+                                "\t\tnet_monitor_warning(_net_monitor_unknown_kind, header.type, size);\n"
+                                "\t\tdistributed_unknown_kind(machine_index, header.type);")
     # (the map vote's messages are network_map_vote.c's, taken before the kind check)
     assert handle.index("if (network_map_vote_handles_message(message, size))") < unknown_call
     # (the vote kick's are played, after it)

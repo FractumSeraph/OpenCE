@@ -33,7 +33,7 @@ NEGATIVE_CONTROLS = {
         "relative = *velocity;")], "host-deck-relative-speed"),
     "deck-velocity-unclamped": ("riding", [("if (speed > 0.0f)", "if (FALSE)")], "host-deck-advance-refused"),
     "commit-before-checks": ("network", [("	if (!((vehicle_riding_is_riding(&host) ?",
-        "	distributed_apply_state(unit_index, state, &target, &world_velocity, 0.0f, HOST_BLEND_DISTANCE, 0.0f, 0.0f);\n\tif (!((vehicle_riding_is_riding(&host) ?")], "host-deck-temporaries"),
+        "	distributed_apply_state(_net_monitor_host, unit_index, state, &target, &world_velocity, 0.0f, HOST_BLEND_DISTANCE, 0.0f, 0.0f);\n\tif (!((vehicle_riding_is_riding(&host) ?")], "host-deck-temporaries"),
     "ceiling-in-node": ("network", [("(vehicle_riding_is_riding(&host) ? place.z - ground_place_height",
         "(vehicle_riding_is_riding(&host) ? deck->place.z - ground_place_height")], "host-deck-node-forgery"),
     "deck-anchor-unchecked": ("network", [("else if (ticks <= 0 || !distributed_on_foot_move_valid(bound, &anchor, &target, ticks))",

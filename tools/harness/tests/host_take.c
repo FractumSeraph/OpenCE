@@ -52,6 +52,16 @@ static long apply_calls[MAXIMUM_TRACKED_PLAYERS], apply_phase[MAXIMUM_TRACKED_PL
 static boolean distributed_rider_pass[MAXIMUM_TRACKED_PLAYERS];
 static boolean riding_applies = TRUE;
 static struct { long corrections; } distributed_statistics;
+/* (ChupathingyCE's server monitor: what a correction moved, and its count) */
+enum { _net_monitor_own_player, _net_monitor_remote_player, _net_monitor_host = 6 };
+#define net_monitor_snap(distance, blend_distance) 0
+static void distributed_count_correction(int kind, float distance, int snap)
+{
+	(void)kind;
+	(void)distance;
+	(void)snap;
+	distributed_statistics.corrections++;
+}
 static real vehicle_write;
 static real pill_offset = -0.1f;
 static boolean replay_frames;
