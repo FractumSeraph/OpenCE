@@ -1250,15 +1250,6 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"The touch controls' swipe aiming gets a controller's aim assist: the\n"
 		"aim slows over a target and follows a moving one. false: none, as a\n"
 		"mouse (the bullets' own autoaim stays)." },
-#ifdef HALO_SWITCH_CONSOLE
-	/* gyro aiming (port/linux/src/xinput_sdl.c): the controller's gyroscope,
-	each local player from their own */
-	{ "input.gyro_aim", _config_string, "\"false\"", "HALO_GYRO_AIM", _environment_value, _platform_android,
-		"Aim with the controller's gyroscope. Each local player uses their own:\n"
-		"a Pro Controller, the console held in your hands, or one Joy-Con. With\n"
-		"two Joy-Cons, the right one is used. \"true\" always aims with it, \"zoom\"\n"
-		"only while zoomed in with a scope, and \"false\" never. Gamepads > Gyro\n"
-		"Aim sets it too. Changes at once." },
 #ifdef HALO_PORT_GYRO_AIM
 	/* gyro aiming (port/linux/src/gyro_aim.c, xinput_sdl.c): the
 	controller's gyroscope, each local player from their own. Off by

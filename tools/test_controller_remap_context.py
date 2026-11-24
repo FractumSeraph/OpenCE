@@ -10,6 +10,9 @@ def integrated_source():
             function((ROOT / 'source/interface/ui_widget.c').read_text(), 'ui_widgets_active_for_local_player') +
             source('port/linux/game/controller_remap_game.c') +
             source('port/linux/src/controller_remap_input.c') +
+            # (ChupathingyCE's Forge monitor, which flies the camera by its own
+            # controls, is none of these cases: built without it)
+            '#define HALO_CONSOLE_NO_FORGE\n' +
             function((ROOT / 'source/camera/director.c').read_text(), 'director_update_controls') + r'''
 static void layout_save(void) {
  unsigned char layout[CONTROLLER_REMAP_ACTIONS];char text[CONTROLLER_REMAP_TEXT];

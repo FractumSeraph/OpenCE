@@ -93,8 +93,10 @@ def test_every_join_goes_through_the_check():
                 if line[:match.start() - text.rfind("\n", 0, match.start()) - 1].count('"') % 2:
                     continue
                 callers.append((path.relative_to(ROOT).as_posix(), line.strip()))
+    # (port, this fork: after its name check, a refused name never taken in)
     assert callers == [("source/networking/network_server_message_handler.c",
-                        "if (network_game_server_accept_client_machine_into_game(server, server_client_machine))")]
+                        "if (!name_refused && network_game_server_accept_client_machine_into_game(server, "
+                        "server_client_machine))")]
     handler = _function(SERVER_HANDLER_C.read_text(encoding="utf-8"),
                         "static boolean network_game_server_handle_message_client_join_game_request(")
     # (a refusal says the check's reason)

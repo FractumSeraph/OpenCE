@@ -36,10 +36,15 @@ def test_copies_index_the_array():
     body = re.sub(r"\s+", " ", begin_body())
     # the first fog screen: every window's slot from the camera
     assert ("for (window_index = 0; window_index < MAXIMUM_WINDOWS; window_index++)" in body)
-    assert "csmemcpy( &previous_camera_matrix[ window_index], &global_window_parameters.camera," in body
+    # (port, this fork: OpenCE's bounds-checked previous_camera_matrix_for_window
+    # gives the slot the Xbox's array index does)
+    assert ("csmemcpy( previous_camera_matrix_for_window(window_index), &global_window_parameters.camera,"
+            in body)
     # each frame: this window's slot from its world-to-view matrix
-    assert ("csmemcpy( &previous_camera_matrix[ global_window_parameters.window_index], "
-            "&global_window_parameters.frustum.world_to_view," in body)
+    assert ("window_previous_camera_matrix = previous_camera_matrix_for_window(global_window_parameters.window_index);"
+            in body)
+    assert ("csmemcpy( window_previous_camera_matrix, &global_window_parameters.frustum.world_to_view,"
+            in body)
 
 
 def fog_compile_command():

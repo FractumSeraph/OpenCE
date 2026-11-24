@@ -1081,7 +1081,7 @@ void _rasterizer_environment_fog_screen_begin(
 			matrix4x3_multiply(&wind_matrix, &matrix, &matrix);
 			matrix4x3_multiply(&global_window_parameters.frustum.world_to_view, &matrix, &matrix);
 			csmemcpy(
-				previous_camera_matrix,
+				window_previous_camera_matrix,
 				&global_window_parameters.frustum.world_to_view,
 				sizeof(real_matrix4x3));
 			}

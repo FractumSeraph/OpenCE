@@ -197,7 +197,7 @@ static const struct settings_row settings_rows[] =
 	  crosshair_position_names, 0, 0 },
 
 #ifdef HALO_LAUNCHER
-	{ _in_audio, "OUTPUT", "audio.device", _kind_audio_devices, NULL, NULL, 1, 0 },
+	{ _in_audio, "OUTPUT", "audio.output_device", _kind_audio_devices, NULL, NULL, 1, 0 },
 #endif
 	{ _in_audio, "SPEAKERS", "audio.channels", _kind_choices, channels_choices, NULL, 1, 0 },
 	{ _in_audio, "HEADPHONE 3D", "audio.hrtf", _kind_choices, hrtf_choices, NULL, 0, 0 },
@@ -542,7 +542,7 @@ static const char *const sound_lines[] =
 };
 static const char *const game_lines[] =
 {
-	"game.forge", "game.mods",
+	"game.forge",
 	"#WORKSHOP", "game.workshop_steam", "paths.steam_downloads", "game.workshop_maps", "network.workshop_downloads",
 	"game.mcc_campaigns",
 	NULL

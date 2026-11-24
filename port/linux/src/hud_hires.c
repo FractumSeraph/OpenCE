@@ -48,8 +48,11 @@ long hud_hires_asset_at(unsigned long address, long width, long height);
 long hud_hires_asset_stock_custom_edition(unsigned long address, long width, long height, long asset);
 
 /* (the HUD's, both sets of titles and the MCC maps' sheets: 84, 35, 35
-and 80 now; the titles made from the player's files are counted apart) */
-#define MAXIMUM_TEXTURES 256
+and 80 now, and in this fork the button icons, controller pictures, Custom
+Edition layouts and OpenCE's MCC reticles too: 336 in all; the titles made
+from the player's files are counted apart. A texture past this is drawn as
+the map's own, hud_hires_initialize) */
+#define MAXIMUM_TEXTURES 448
 /* a PNG's inflated rows and its texels, which are held at once: 128 MB for
 a 4096 by 4096 sheet (the largest shipped, 2048 by 2048, takes 32 MB), and
 no more for a small file that names a large size (a menus folder's) */

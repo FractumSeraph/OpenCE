@@ -91,6 +91,8 @@ static void error(int level,char const *fmt,...){(void)level;(void)fmt;}
 #define network_map_vote_handle_message(m,p,s,r) ((void)0)
 #define net_monitor_message_in(type, size, game_time, in_batch, tick_sample) ((void)0)
 #define net_monitor_warning(warning, type, size) ((void)0)
+/* (ChupathingyCE's: when this client last heard its host, for the ping meter) */
+static struct {int heard; unsigned long time;} distributed_host_heard;
 '''
     import re
     # (ChupathingyCE's server monitor: the warnings the dispatch names; its
