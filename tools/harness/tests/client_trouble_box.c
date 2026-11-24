@@ -58,6 +58,9 @@ static boolean network_connection_idle(struct network_connection *connection, lo
 	return TRUE;
 }
 
+/* (this fork: OpenCE's MCC load handshake, which never runs out here) */
+static int mcc_load_network_client_expired(void) { return 0; }
+
 #include "under_test.inc"
 
 static struct network_connection connection;

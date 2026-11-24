@@ -13,7 +13,10 @@ struct unit_datum
 	struct { long player_index, driver_object_index, gunner_object_index, killing_spree_last_time;
 		short killing_spree_count; struct unit_attacker attackers[MAXIMUM_ATTACKERS_PER_UNIT]; } unit;
 };
-struct player_datum { short identifier, local_player_index; long unit_index; boolean quit_out_of_game; };
+/* (network_player_data: its machine, which ChupathingyCE's damage code asks
+network_game_server_port_machine_is_virtual about) */
+struct player_datum { short identifier, local_player_index; long unit_index; boolean quit_out_of_game;
+	struct { long machine_index; } network_player_data; };
 struct object_iterator { int absolute_index; unsigned long mask; };
 struct distributed_hit_report
 {
@@ -81,6 +84,8 @@ static boolean static_target(long index) { return FALSE; }
 static boolean static_target_damage(struct damage_data const *damage) { return FALSE; }
 /* (the host: whether a machine still reports a static target's own damage, test_network_rules) */
 static boolean network_game_server_machine_reports_static_damage(long machine_index) { return TRUE; }
+/* (ChupathingyCE's: a machine of the host's own making, a Custom Edition client's; none here) */
+boolean network_game_server_port_machine_is_virtual(long machine_index) { (void)machine_index; return FALSE; }
 static void distributed_damage_from_data(struct damage_data const *damage, struct damage_data *result) { *result = *damage; }
 static void object_get_origin(long index, real_point3d *point) { memset(point, 0, sizeof(*point)); }
 static long distributed_latest_host_time(void) { return 10; }

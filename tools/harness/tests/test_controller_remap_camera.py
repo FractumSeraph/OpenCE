@@ -20,6 +20,9 @@ def generated(fault=None):
     source = function(read("source/camera/director.c"), "director_update_controls")
     if fault:
         source = mutated(source, *fault)
+    # (ChupathingyCE's Forge monitor, which flies the camera by its own
+    # controls, is none of these cases: built without it)
+    source = "#define HALO_CONSOLE_NO_FORGE\n" + source
     return (("under_test.inc", source),
             ("actions.inc", enum_with(read("port/linux/include/controller_remap.h"), "PAD_CAMERA_UP")))
 

@@ -205,6 +205,15 @@ static boolean network_game_server_send_message_to_all_machines(struct network_g
 
 static void network_game_server_release_map_fetchers(struct network_game_server *s);
 
+/* (ChupathingyCE's virtual machines, a dedicated server's Custom Edition
+clients': none here) */
+static boolean network_game_server_client_machine_is_virtual(
+	struct network_game_server_client_machine const *machine)
+{
+	(void)machine;
+	return FALSE;
+}
+
 #include "under_test.inc"
 
 /* the dedicated server's own machine 0, and the players' machines 1 and 2 */

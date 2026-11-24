@@ -1580,6 +1580,12 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"are before they run. false: none of them is listed, played or\n"
 		"downloaded (OpenCE's setting)." },
 #if HALO_MCC
+#ifndef HALO_CONSOLE_NO_FORGE
+	{ "game.forge", _config_boolean, "false", "HALO_FORGE", _environment_value, _platform_desktop,
+		"Forge, the layout editor of the multiplayer maps: FORGE in the\n"
+		"Multiplayer menu, and the console's forge commands. Local games only.\n"
+		"FORGE in the Delta Guide's SETTINGS. See docs/forge.md." },
+#endif
 	{ "game.mcc_campaigns", _config_boolean, "true", "HALO_MCC_CAMPAIGNS", _environment_value, _platform_all,
 		"Use explicit MCC campaign manifests for mission discovery, ordering and\n"
 		"progression. Reopen the map list after changing this." },
@@ -2667,12 +2673,6 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"Workshop items. Empty uses automatic discovery: Windows registry, Linux\n"
 		"Steam/XDG hints, macOS's Steam folder, usual folders and their libraries. Windows paths use single\n"
 		"quotes: 'D:\\Steam'." },
-#ifndef HALO_CONSOLE_NO_FORGE
-	{ "game.forge", _config_boolean, "false", "HALO_FORGE", _environment_value, _platform_desktop,
-		"Forge, the layout editor of the multiplayer maps: FORGE in the\n"
-		"Multiplayer menu, and the console's forge commands. Local games only.\n"
-		"FORGE in the Delta Guide's SETTINGS. See docs/forge.md." },
-#endif
 	{ "paths.steamcmd", _config_string, "\"\"", "HALO_STEAMCMD", _environment_value, _platform_desktop,
 		"steamcmd, for the Workshop on macOS and Linux. Empty looks in the PATH and the\n"
 		"usual places." },

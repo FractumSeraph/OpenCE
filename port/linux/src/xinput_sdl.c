@@ -1498,6 +1498,7 @@ in the menus too) */
 static unsigned long keyboard_bound_actions(const struct platform_input_state *input)
 {
 	unsigned long held = 0;
+	unsigned long forge_held;
 	int action, slot;
 
 	bindings_read();
@@ -1509,6 +1510,22 @@ static unsigned long keyboard_bound_actions(const struct platform_input_state *i
 				held |= 1UL << action;
 		}
 	}
+	/* (ChupathingyCE's Forge keys: the monitor's, which only Forge reads,
+	and only while Forge is on; read here, where the fork reads the
+	bindings) */
+	forge_held = 0;
+	if (forge_keys_wanted())
+	{
+		for (action = 0; action < NUMBER_OF_HALO_FORGE_KEYS; action++)
+		{
+			for (slot = 0; slot < MAXIMUM_BINDINGS; slot++)
+			{
+				if (input_held(input, forge_bindings[action][slot]))
+					forge_held |= 1UL << action;
+			}
+		}
+	}
+	forge_keys_held = forge_held;
 	return held;
 }
 
@@ -1533,21 +1550,6 @@ static void keyboard_controls(unsigned long held, XINPUT_GAMEPAD *pad)
 	if (held & (1UL << HALO_KEYBOARD_SCOREBOARD))
 		pad->wButtons |= XINPUT_GAMEPAD_BACK;
 	keyboard_actions_held = held;
-	/* (Forge's keys: the monitor's, which only Forge reads, and only while
-	Forge is on) */
-	held = 0;
-	if (forge_keys_wanted())
-	{
-		for (action = 0; action < NUMBER_OF_HALO_FORGE_KEYS; action++)
-		{
-			for (slot = 0; slot < MAXIMUM_BINDINGS; slot++)
-			{
-				if (input_held(input, forge_bindings[action][slot]))
-					held |= 1UL << action;
-			}
-		}
-	}
-	forge_keys_held = held;
 }
 
 unsigned long halo_forge_keys(void)

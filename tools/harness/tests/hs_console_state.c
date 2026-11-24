@@ -252,7 +252,9 @@ int main(int argc,char **argv)
         literal.flags=5;literal.data=0;literal.type=_hs_type_string;
         CHECK(hs_console_syntax_node_valid(&literal));
         literal.flags=1;literal.constant_type=_hs_type_short_integer;literal.type=_hs_type_long_integer;
-        CHECK(hs_console_syntax_node_valid(&literal)==use_mcc);
+        /* (a short where a long is wanted: every map's since ChupathingyCE's
+        hs_short_to_long, not MCC's alone) */
+        CHECK(hs_console_syntax_node_valid(&literal));
         test_function.return_type=_hs_passthrough;hs_syntax_get(root)->type=_hs_type_string;
         CHECK(hs_console_state_capture());
         hs_syntax_get(root)->flags=2;
