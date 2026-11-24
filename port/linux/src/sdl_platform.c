@@ -493,6 +493,21 @@ static void data_check_maps(void)
 			maps.ui_version == 609 ? "Halo PC (Custom Edition)" : "Halo PC", where);
 		break;
 	default:
+		/* (Halo MCC's maps copied in, its ui.map version 13: said so, and
+		where they go) */
+		if (maps.ui_version == 13)
+		{
+			snprintf(message, sizeof(message),
+				"The maps folder holds Halo MCC maps, not the Xbox maps.%s\n\n%s\n\n"
+				"To copy the Xbox maps from your disc image, move this maps folder aside and start Chupathingy.",
+#if HALO_MCC
+				" They go in maps_mcc.",
+#else
+				"",
+#endif
+				where);
+			break;
+		}
 		/* (a maps folder without ui.map and no Halo PC maps in it, as "make
 		the folders" leaves it: the choices offered again; the launcher's Maps
 		has them) */
@@ -3026,6 +3041,36 @@ int platform_vsync_on(void)
 	return config_boolean("display.vsync") || platform_vrr();
 }
 
+/* (sdl_platform.h) */
+int platform_present_mode(void)
+{
+	if (!platform_vsync_on())
+		return PLATFORM_PRESENT_IMMEDIATE;
+	/* (not with VRR, which shows each frame as it is ready anyway) */
+	if (strcmp(config_string("tuning.present_mode"), "adaptive") || platform_vrr())
+		return PLATFORM_PRESENT_VBLANK;
+#if defined(__APPLE__) && !defined(HALO_IOS)
+	{
+		/* (neither OpenGL nor Metal on the Mac shows a late frame at once:
+		each waits there, on either renderer, which the log says once) */
+		static BOOL said;
+
+		if (!said)
+			platform_log("tuning: present=adaptive is not on macOS: each frame waits for the display");
+		said = TRUE;
+	}
+	return PLATFORM_PRESENT_VBLANK;
+#else
+	return PLATFORM_PRESENT_ADAPTIVE;
+#endif
+}
+
+/* (sdl_platform.h) */
+float platform_display_refresh_rate(void)
+{
+	return platform_refresh_rate();
+}
+
 #if !defined(__APPLE__) || defined(HALO_IOS)
 #ifdef SWAP_INTERVAL_IN_STEP
 /* whether gamescope runs the game: GAMESCOPE_WAYLAND_DISPLAY, which it sets
@@ -3058,10 +3103,11 @@ work by goatbutt and the OpenH1 team. */
 /* tuning.present_mode = "adaptive" (config.toml's [tuning]): with V-Sync, a
 frame that missed the display shown at once, with a tear, rather than a
 whole refresh later (a swap interval of -1, the drivers' late swap tearing).
-Not with VRR, which shows each frame as it is ready anyway. */
+Not with VRR, which shows each frame as it is ready anyway: the decision is
+platform_present_mode's, the same for every renderer. */
 static int platform_present_adaptive(void)
 {
-	return !strcmp(config_string("tuning.present_mode"), "adaptive") && !platform_vrr();
+	return platform_present_mode() == PLATFORM_PRESENT_ADAPTIVE;
 }
 
 static int platform_swap_interval_wanted(int vsync, long maximum)
@@ -3721,6 +3767,17 @@ static Uint64 frame_interval_ns(void)
 #endif
 	}
 	vrr_applied = vrr;
+#if defined(__APPLE__) && !defined(HALO_IOS)
+	/* (macOS's OpenGL: the context's swap interval does not hold a window's
+	frames to the display, 120 frames a second at 60 Hz on an M4 with V-Sync
+	on, half of them never shown; with V-Sync the clock holds them to the
+	refresh rate, as the Metal renderer's waits do) */
+	if (vsync && !vrr && platform_gl_context)
+	{
+		rate = platform_refresh_rate();
+		return rate > 0.0f ? (Uint64)(1e9f / rate) : 0;
+	}
+#endif
 	if (vrr)
 	{
 		/* (VRR's ceiling, or display.max_fps under it; vsync alone where
@@ -3985,6 +4042,9 @@ static void platform_swap_read_framebuffer(void)
 }
 #endif
 
+/* port/linux/game/stats_log.c's: display.stats_log's shown= */
+void stats_log_frame_shown(void);
+
 void platform_video_swap(void)
 {
 #ifndef HALO_BROWSER
@@ -4047,6 +4107,7 @@ void platform_video_swap(void)
 	{
 		platform_swap_read_framebuffer();
 		SDL_GL_SwapWindow(platform_window);
+		stats_log_frame_shown();
 	}
 	/* (a frame the graphics driver held for seconds: the game froze, and
 	online, a host stops hearing a machine after a few; the log says where) */
@@ -4399,6 +4460,25 @@ void platform_open_url(const char *url)
 #endif
 }
 #endif
+
+/* the battery, for the Guide's card: 1 running on it, 2 charging, 0 none
+(a desktop, or plugged in and full, or not known); its percent in percent
+(-1 not known). debug.battery stands in for one in screenshots ("40",
+"40c" charging) */
+int platform_power_state(int *percent)
+{
+	const char *fake = config_string("debug.battery");
+	SDL_PowerState state;
+
+	*percent = -1;
+	if (fake && fake[0])
+	{
+		*percent = atoi(fake);
+		return strchr(fake, 'c') ? 2 : 1;
+	}
+	state = SDL_GetPowerInfo(NULL, percent);
+	return state == SDL_POWERSTATE_ON_BATTERY ? 1 : state == SDL_POWERSTATE_CHARGING ? 2 : 0;
+}
 
 /* network.join_from_clipboard: "never" (the default), "ask" or "always"
 (true and false, of older versions, are "always" and "never":
@@ -5362,6 +5442,13 @@ void platform_pump_events(void)
 				menu_cursor_controller_used(input_state.ui_pointer);
 #endif
 			break;
+#ifdef HALO_PORT_GYRO_SDL
+		/* (gyro aim: only the pads whose sensors it turned on send these) */
+		case SDL_EVENT_GAMEPAD_SENSOR_UPDATE:
+			platform_gamepad_sensor(event.gsensor.which, event.gsensor.sensor, event.gsensor.data,
+				event.gsensor.sensor_timestamp ? event.gsensor.sensor_timestamp : event.gsensor.timestamp);
+			break;
+#endif
 		case SDL_EVENT_GAMEPAD_ADDED:
 #if defined(HALO_ARM64_GUEST) && !defined(HALO_IOS)
 			/* (the guest reaches SDL only through host_imports.list, which

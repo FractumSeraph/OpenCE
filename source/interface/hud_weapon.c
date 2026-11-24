@@ -1367,7 +1367,9 @@ static void crosshairs_draw(
 											mask, which keeps its size, so they keep theirs too,
 											or they slide off the mask in a wide view. CE warnings
 											retain HUD coordinates, independent of the aiming
-											reticle's FOV and passenger projection (port, this fork) */
+											reticle's FOV and passenger projection (port, this fork);
+											the zoomed world is drawn at the Xbox's width to match
+											(main.c, local_view_zoom_weight) */
 											struct hud_placement_definition placement = item->placement;
 											real reticle_scale = ce_hud_warning(state_index) ||
 												crosshair->states[_crosshair_state_zoom].value.reference_data > 0 ?

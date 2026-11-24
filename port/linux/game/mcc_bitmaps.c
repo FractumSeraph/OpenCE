@@ -26,6 +26,7 @@
 #define BCDEC_STATIC
 #define BCDEC_IMPLEMENTATION
 #include "../../third_party/bcdec/bcdec.h"
+#include "../../third_party/zlib/zlib_prefixed.h"
 #include "mcc_host_memory.h"
 
 /* port: GulchCE's dedicated server switch (config_server_mode_enabled); ours
@@ -48,6 +49,14 @@ struct mcc_texture {
     unsigned char *pixels;
     unsigned channels;
     uint32_t resource_handle, resource_index;
+    /* the HUD's sheets' first mip level as the map stores it, before its
+     * conversion (CRC-32): what the high-res HUD tells MCC's stock sheets
+     * by (port/linux/game/hud_hires_tags.c) */
+    uint32_t source_crc;
+    int source_crc_valid;
+    /* drawn by a HUD meter: its uncovered texels get the fill order of the
+     * shape beside them (mcc_meter_bleed) */
+    int meter;
 };
 struct mcc_bitmap_clone { uint32_t source, target; unsigned channels; };
 struct mcc_textures {
@@ -72,11 +81,14 @@ static void *mcc_bitmap_block(struct mcc_runtime *runtime,struct tag_block const
     return mcc_runtime_pointer(runtime,(uint32_t)block->address,(uint32_t)block->count*size);
 }
 
-static void mcc_bitmap_mark_one(struct mcc_textures *textures,struct bitmap_data *bitmap,unsigned channels)
+static void mcc_bitmap_mark_one(struct mcc_textures *textures,struct bitmap_data *bitmap,unsigned channels,int meter)
 {
     uint32_t index;
     for (index=0;index<textures->count;index++) {
-        if (textures->items[index].bitmap==bitmap) textures->items[index].channels|=channels;
+        if (textures->items[index].bitmap==bitmap) {
+            textures->items[index].channels|=channels;
+            textures->items[index].meter|=meter;
+        }
     }
 }
 
@@ -151,7 +163,7 @@ static int mcc_bitmap_specialize(struct mcc_runtime *runtime,struct mcc_textures
 
 /* Channels is a usage mask: ordinary=1, multipurpose=2, HUD meter=4. */
 static int mcc_bitmap_mark(struct mcc_runtime *runtime,struct mcc_textures *textures,
-    uint32_t *reference,short sequence,unsigned channels)
+    uint32_t *reference,short sequence,unsigned channels,int meter)
 {
     struct bitmap_group *group;
     struct bitmap_data *bitmaps;
@@ -175,16 +187,16 @@ static int mcc_bitmap_mark(struct mcc_runtime *runtime,struct mcc_textures *text
             for (index=0;index<(uint32_t)selected->sprites.count;index++) {
                 short n=sprites[index].bitmap_index;
                 if (n<0 || n>=group->bitmaps.count) return mcc_diagnostic_fail(runtime,"bitmap sequence %d sprites[%lu].bitmap_index=%d is outside 0..%ld",sequence,(unsigned long)index,n,group->bitmaps.count-1);
-                mcc_bitmap_mark_one(textures,&bitmaps[n],channels);
+                mcc_bitmap_mark_one(textures,&bitmaps[n],channels,meter);
             }
         } else {
             if (selected->first_bitmap_index<0 || selected->bitmap_count<0 ||
                 selected->first_bitmap_index>group->bitmaps.count-selected->bitmap_count) return mcc_diagnostic_fail(runtime,"bitmap sequence %d range (first %d, count %d) exceeds %ld bitmaps",sequence,selected->first_bitmap_index,selected->bitmap_count,group->bitmaps.count);
             for (index=0;index<(uint32_t)selected->bitmap_count;index++)
-                mcc_bitmap_mark_one(textures,&bitmaps[selected->first_bitmap_index+index],channels);
+                mcc_bitmap_mark_one(textures,&bitmaps[selected->first_bitmap_index+index],channels,meter);
         }
     } else {
-        for (index=0;index<(uint32_t)group->bitmaps.count;index++) mcc_bitmap_mark_one(textures,&bitmaps[index],channels);
+        for (index=0;index<(uint32_t)group->bitmaps.count;index++) mcc_bitmap_mark_one(textures,&bitmaps[index],channels,meter);
     }
     return 1;
 }
@@ -200,13 +212,13 @@ static int mcc_meter_usage(struct mcc_runtime *runtime,struct mcc_textures *text
      * authored opacity of one otherwise turns its shield and ammo black.
      * Fade and the explicitly Xbox-style meter convention remain intact. */
     if (channels==4) meter->opacity=0.0f;
-    return mcc_bitmap_mark(runtime,textures,(uint32_t *)&meter->meter_bitmap.index,meter->sequence_index,channels);
+    return mcc_bitmap_mark(runtime,textures,(uint32_t *)&meter->meter_bitmap.index,meter->sequence_index,channels,1);
 }
 
 static int mcc_static_usage(struct mcc_runtime *runtime,struct mcc_textures *textures,
     struct static_hud_element_definition *element)
 {
-    return mcc_bitmap_mark(runtime,textures,(uint32_t *)&element->interface_bitmap.index,element->sequence_index,1);
+    return mcc_bitmap_mark(runtime,textures,(uint32_t *)&element->interface_bitmap.index,element->sequence_index,1,0);
 }
 
 static int mcc_bitmap_model_usage(struct mcc_runtime *runtime,struct mcc_textures *textures,
@@ -225,7 +237,7 @@ static int mcc_bitmap_model_usage(struct mcc_runtime *runtime,struct mcc_texture
         unsigned channels=n==1 && !(flags&0x40) ? 2 : 1;
         static char const *const names[]={"base_map","multipurpose_map","detail_map","reflection_cube_map"};
         mcc_diagnostic_at(runtime,"%s",names[n]);
-        if (!mcc_bitmap_mark(runtime,textures,(uint32_t *)(shader+offsets[n]),NONE,channels)) return 0;
+        if (!mcc_bitmap_mark(runtime,textures,(uint32_t *)(shader+offsets[n]),NONE,channels,0)) return 0;
     }
     return 1;
 }
@@ -360,6 +372,42 @@ static void mcc_bitmap_decode(unsigned char const *input,uint32_t *output,
     }
 }
 
+/* A meter reads its fill order (blue) where its shape (alpha) is. Outside
+ * the shapes MCC's sheets have a fill order of 0, which a meter draws as
+ * always full: filtered at a shape's edge, those texels lit thin lines of
+ * the empty segments. Give each uncovered texel near a shape that shape's
+ * fill order, as the Xbox maps' high-res meters have (tools/hud_assets.py,
+ * bleed). Alpha, and a clone's coverage in green, stay as they are. */
+#define MCC_METER_BLEED_PASSES 2
+static void mcc_meter_bleed(uint32_t *texels,unsigned width,unsigned height,unsigned usage,unsigned char *state)
+{
+    static int const dx[4]={-1,1,0,0},dy[4]={0,0,-1,1};
+    uint32_t keep=usage==4 ? 0xFF00FF00u : 0xFF000000u;
+    unsigned x,y,pass,n;
+    if (!state) return;
+    for (y=0;y<height;y++) for (x=0;x<width;x++) state[y*width+x]=(texels[y*width+x]>>24)!=0;
+    for (pass=1;pass<=MCC_METER_BLEED_PASSES;pass++) {
+        for (y=0;y<height;y++) for (x=0;x<width;x++) {
+            uint32_t at=y*width+x,from=0;
+            unsigned best=0;
+            if (state[at]) continue;
+            for (n=0;n<4;n++) {
+                long nx=(long)x+dx[n],ny=(long)y+dy[n];
+                uint32_t other;
+                if (nx<0 || ny<0 || nx>=(long)width || ny>=(long)height) continue;
+                other=(uint32_t)ny*width+(uint32_t)nx;
+                /* (only texels covered before this pass: one texel a pass) */
+                if (!state[other] || state[other]>pass) continue;
+                if (!best || (texels[other]>>24)>(texels[from]>>24)) {from=other;best=1;}
+            }
+            if (best) {
+                texels[at]=(texels[at]&keep)|(texels[from]&~keep);
+                state[at]=(unsigned char)(pass+1);
+            }
+        }
+    }
+}
+
 static uint32_t mcc_morton_axis(unsigned value,unsigned width,unsigned height,unsigned depth,unsigned axis)
 {
     unsigned dimensions[3]={width,height,depth},bit,position=0,n;
@@ -468,7 +516,7 @@ static int mcc_texture_prepare(struct mcc_runtime *runtime,struct mcc_textures *
     unsigned level,faces=bitmap->type==2 ? 6 : 1;
     uint64_t raw_size=0,decoded_size=0;
     unsigned char *raw=NULL,*pixels=NULL,*hardware=NULL;
-    int convert=bitmap->format==18 || texture->channels==2 || texture->channels==4 ||
+    int convert=bitmap->format==18 || texture->channels==2 || texture->channels==4 || texture->meter ||
         ((bitmap->flags&16) && bitmap->format>=14 && bitmap->format<=17);
     int bytes_per_pixel=mcc_bitmap_bytes(bitmap->format);
     int non_power_two=bitmap->type==0 && ((bitmap->width&(bitmap->width-1)) || (bitmap->height&(bitmap->height-1)));
@@ -590,18 +638,39 @@ static int mcc_texture_prepare(struct mcc_runtime *runtime,struct mcc_textures *
     } else if (!mcc_runtime_read(runtime,bitmap->pixels_offset,(uint32_t)raw_size,raw)) {
         reason="embedded pixel payload could not be read from the map";goto failed;
     }
+    {
+        /* Only the HUD's folders: the checksum costs a pass over the pixels. */
+        uint32_t *entry=(uint32_t *)(runtime->tag_index+(texture->resource_handle&0xFFFF)*32);
+        char const *name=mcc_runtime_pointer(runtime,entry[4],256);
+        if (name && memchr(name,0,256) && (!strncmp(name,"ui\\hud\\bitmaps\\",sizeof("ui\\hud\\bitmaps\\")-1) ||
+            !strncmp(name,"weapons\\sniper rifle\\bitmaps\\",sizeof("weapons\\sniper rifle\\bitmaps\\")-1))) {
+            uint64_t level0=bytes_per_pixel ? (uint64_t)bitmap->width*bitmap->height*bytes_per_pixel :
+                (uint64_t)((bitmap->width+3)/4)*((bitmap->height+3)/4)*(bitmap->format==14 ? 8 : 16);
+            if (level0<=raw_size) {
+                texture->source_crc=(uint32_t)crc32(0L,raw,(uInt)level0);
+                texture->source_crc_valid=1;
+            }
+        }
+    }
     if (convert) {
+        unsigned char *bleed=NULL;
         pixels=malloc(allocation);
         if (!pixels) goto out_of_memory;
         memset(pixels,0,allocation);
+        if (texture->meter && bitmap->type==0) {
+            bleed=malloc((size_t)bitmap->width*bitmap->height);
+            if (!bleed) goto out_of_memory;
+        }
         for (level=0;level<=(unsigned)normalized.mipmap_count;level++) {
             unsigned w=MAX(bitmap->width>>level,1),h=MAX(bitmap->height>>level,1),d=MAX(bitmap->depth>>level,1),slice;
             unsigned source_bytes=bytes_per_pixel ? w*h*bytes_per_pixel : ((w+3)/4)*((h+3)/4)*(bitmap->format==14 ? 8 : 16);
             for (slice=0;slice<faces*d;slice++) {
                 mcc_bitmap_decode(raw+input_offset,(uint32_t *)(pixels+output_offset),w,h,bitmap->format,texture->channels);
+                if (bleed) mcc_meter_bleed((uint32_t *)(pixels+output_offset),w,h,texture->channels,bleed);
                 input_offset+=source_bytes;output_offset+=w*h*4;
             }
         }
+        free(bleed);
     } else {pixels=raw;raw=NULL;}
     if (raw) free(raw);
     raw=NULL;
@@ -802,6 +871,20 @@ void const *mcc_bitmaps_pixels(struct mcc_runtime *runtime,struct bitmap_data co
     if (bytes) *bytes=texture->size;
     if (coverage) *coverage=texture->channels==4;
     return texture->pixels;
+}
+
+int mcc_bitmaps_source_crc(struct mcc_runtime *runtime,struct bitmap_data const *bitmap,uint32_t *crc)
+{
+    struct mcc_textures *textures=runtime ? runtime->bitmaps : NULL;
+    uint32_t index;
+    for (index=0;textures && bitmap && index<textures->count;index++) {
+        struct mcc_texture const *texture=&textures->items[index];
+        if (texture->bitmap!=bitmap) continue;
+        if (!texture->source_crc_valid) return 0;
+        *crc=texture->source_crc;
+        return 1;
+    }
+    return 0;
 }
 
 #ifndef HALO_GLES

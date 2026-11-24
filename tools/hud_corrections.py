@@ -67,7 +67,7 @@ def rebuild():
         width=256, height=256, scale=2, crc=0, cells=[cell([0, 0, 256, 256], 'rocket', [92, 92, 1188, 1188])]),
         dict(name='mcc_sniper_scope', tag=r'mcc\hud\sniper_scope', bitmap=0, width=256, height=256, scale=2, crc=0,
              cells=scope_cells('mcc'))]}
-    (ASSETS / 'mcc_layout.json').write_text(json.dumps(mcc, indent=1)+'\n')
+    (ASSETS / 'mcc_reticles.json').write_text(json.dumps(mcc, indent=1)+'\n')
     for entry in mcc['assets']:
         write_asset(entry)
     for entry in json.loads(button_assets.LIST.read_text())['assets']:

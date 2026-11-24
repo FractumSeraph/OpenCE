@@ -2859,6 +2859,7 @@ symbols in this file:
 #include "mcc_syntax.h" /* port: port/linux/game/mcc_syntax.h */
 #include "mcc_scripts.h" /* port: port/linux/game/mcc_scripts.c */
 #include "lua_scripting.h" /* port: Lua's execute_script functions (port/linux/game/lua_scripting.c) */
+#include "ragdolls.h" /* port: display.ragdolls (port/linux/game/ragdolls.c) */
 
 /* ---------- constants */
 
@@ -16907,6 +16908,32 @@ static boolean hs_compile_and_evaluate_command(
 			return network_votekick_player_named(name);
 		}
 	}
+#ifdef HALO_PORT_RAGDOLLS
+	/* port: the ragdolls' commands ("ragdolls stats", and with
+	debug.ragdolls the tests': port/linux/game/ragdolls.c), which are no
+	script's */
+	{
+		char const *text = hs_host_player_command(expression, "ragdolls");
+
+		if (text)
+			return ragdolls_command(text);
+	}
+#endif
+#ifndef HALO_CONSOLE_NO_FORGE
+	/* port: Forge's commands ("forge start bloodgulch", "forge spawn <name>"
+	...: port/linux/game/forge.c), which are no script's; a local game's
+	alone (forge.c refuses the rest) */
+	{
+		char const *text = hs_host_player_command(expression, "forge");
+
+		if (text)
+		{
+			boolean forge_command(char const *arguments);
+
+			return forge_command(text);
+		}
+	}
+#endif
 	/* port: profile_reset_campaign, which clears the first player's
 	profile's campaign progress (player_ui_reset_campaign_progress) once
 	confirmed: "profile_reset_campaign yes" */

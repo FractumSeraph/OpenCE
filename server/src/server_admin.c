@@ -72,6 +72,8 @@ void host_rules_set_follow_camera(boolean allowed);
 boolean host_rules_host_follow_camera(void);
 void host_rules_set_late_join_hold(boolean wait);
 boolean host_rules_host_late_join_hold(void);
+void host_rules_set_air_turn_aim(boolean fixed);
+boolean host_rules_host_air_turn_aim(void);
 #ifdef HALO_SERVER
 /* (the shared ban lists', server_bans.h) */
 int server_bans_sharing(void);
@@ -1764,6 +1766,9 @@ static void setting_now(
 	case SERVER_SETTING_LATE_JOIN_HOLD:
 		snprintf(text, (size_t)size, "%s", host_rules_host_late_join_hold() ? "true" : "false");
 		break;
+	case SERVER_SETTING_AIR_TURN_AIM:
+		snprintf(text, (size_t)size, "%s", host_rules_host_air_turn_aim() ? "true" : "false");
+		break;
 	default: text[0] = 0; break;
 	}
 }
@@ -1812,6 +1817,7 @@ static boolean setting_applies_now(
 		setting == SERVER_SETTING_CE_WELCOME || setting == SERVER_SETTING_KEEP_PARTIES_TOGETHER ||
 		setting == SERVER_SETTING_LATE_JOIN_HOLD || setting == SERVER_SETTING_BAN_SHARE ||
 		setting == SERVER_SETTING_OPENCE_WELCOME || setting == SERVER_SETTING_OPENCE_WELCOME_TEXT ||
+		setting == SERVER_SETTING_AIR_TURN_AIM ||
 		(setting >= SERVER_SETTING_VOICE && setting <= SERVER_SETTING_VOICE_KBPS);
 }
 
@@ -1930,7 +1936,7 @@ boolean server_admin_set(
 				"allow_player_names, allow_follow_camera, max_machines_per_address, betrayal_kick, "
 				"afk_kick_minutes, ce_welcome, keep_parties_together, late_join_hold, ban_share, voice, voice_team, "
 				"voice_proximity, voice_everyone, voice_party, voice_lobby, voice_range, voice_kbps, opence_welcome, "
-				"opence_welcome_text)\n");
+				"opence_welcome_text, air_turn_aim)\n");
 		return FALSE;
 	}
 	environment = environment_value((short)setting);
@@ -2032,6 +2038,7 @@ boolean server_admin_set(
 	case SERVER_SETTING_BAN_SHARE: server_bans_set_sharing(change.values[setting] ? TRUE : FALSE); break;
 #endif
 	case SERVER_SETTING_LATE_JOIN_HOLD: host_rules_set_late_join_hold(change.values[setting] ? TRUE : FALSE); break;
+	case SERVER_SETTING_AIR_TURN_AIM: host_rules_set_air_turn_aim(change.values[setting] ? TRUE : FALSE); break;
 	}
 	error(_error_silent, "dedicated: a command sets %s to %s", server_settings_table[setting].key, line->words[2]);
 	command_output_printf(output, "%s is %s, saved in %s (%s)\n", server_settings_table[setting].key, line->words[2],

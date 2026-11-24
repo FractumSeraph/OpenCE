@@ -179,6 +179,8 @@ def main() -> int:
     parser.add_argument("config", choices=["debug", "release", "profile"])
     parser.add_argument("--alpine", action="store_true",
                         help="a server: build it in Alpine Linux's Docker container (musl, static)")
+    parser.add_argument("--without-ragdolls", action="store_true",
+                        help="without ragdolls and their Jolt Physics (configure.py --without-ragdolls)")
     args = parser.parse_args()
     server = args.platform.startswith("server-")
     # (the repository whose releases are these builds, as GitHub names the one
@@ -211,6 +213,8 @@ def main() -> int:
     launcher = os.environ.get("CI_COMPILER_LAUNCHER")
     if launcher:
         configure += ["--compiler-launcher", launcher]
+    if args.without_ragdolls:
+        configure.append("--without-ragdolls")
     # a fork's release (FractumSeraph/OpenCE: every push to its main, the
     # workflow's HALO_FORK_RELEASE): VERSION's with -fs.<run number>, five
     # digits, which the updater orders by its suffix (updater_newer); a

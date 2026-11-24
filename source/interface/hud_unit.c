@@ -650,7 +650,10 @@ void hud_render_damage_indicators(
 		real scale = hud_globals_get_scale(local_player_count() > 1);
 		byte damage_indicators[NUMBER_OF_HUD_DAMAGE_INDICATOR_DIRECTIONS];
 		short direction;
+		/* port: at display.hud_safe_zone's edges ("xbox": the window's) */
+		rectangle2d safe_bounds;
 
+		hud_safe_zone_bounds(&safe_bounds);
 		/* port: an MCC map's indicator bitmap's own scale (mcc_hud.c) */
 		scale *= mcc_hud_bitmap_scale(definition->indicator_bitmap.index);
 
@@ -675,7 +678,7 @@ void hud_render_damage_indicators(
 				case _hud_damage_indicator_top:
 					theta = _pi;
 					screen_position.y = (real)(
-						render.camera.window_bounds.y0 +
+						safe_bounds.y0 +
 						definition->top_offset);
 					screen_position.x = (real)(
 						(render.camera.viewport_bounds.x0 +
@@ -685,7 +688,7 @@ void hud_render_damage_indicators(
 				case _hud_damage_indicator_left:
 					theta = _pi / 2.0f;
 					screen_position.x = (real)(
-						render.camera.window_bounds.x0 +
+						safe_bounds.x0 +
 						definition->left_offset);
 					screen_position.y = (real)(
 						(render.camera.viewport_bounds.y0 +
@@ -695,7 +698,7 @@ void hud_render_damage_indicators(
 				case _hud_damage_indicator_bottom:
 					theta = 0.0f;
 					screen_position.y = (real)(
-						render.camera.window_bounds.y1 -
+						safe_bounds.y1 -
 						definition->bottom_offset);
 					screen_position.x = (real)(
 						(render.camera.viewport_bounds.x0 +
@@ -705,7 +708,7 @@ void hud_render_damage_indicators(
 				case _hud_damage_indicator_right:
 					theta = 3.0f * _pi / 2.0f;
 					screen_position.x = (real)(
-						render.camera.window_bounds.x1 -
+						safe_bounds.x1 -
 						definition->right_offset);
 					screen_position.y = (real)(
 						(render.camera.viewport_bounds.y0 +

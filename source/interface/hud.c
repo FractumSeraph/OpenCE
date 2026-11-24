@@ -360,6 +360,20 @@ static void hud_show_action_response(
 	short respawn_failure = players_get_respawn_failure();
 	short item_name_index;
 
+#ifndef HALO_CONSOLE_NO_FORGE
+	/* port: Forge's monitor (port/linux/game/forge.c): its hidden unit's
+	prompt is not its to act on, and one shown as the monitor started (a
+	weapon at the player's feet) is taken off the screen */
+	{
+		extern boolean forge_monitor_hides_prompt(short local_player_index);
+
+		if (forge_monitor_hides_prompt(render.local_player_index))
+		{
+			hud_enable_custom_state_message(render.local_player_index, FALSE);
+			return;
+		}
+	}
+#endif
 	if (respawn_failure != _player_respawn_failure_none &&
 		player->unit_index == NONE)
 	{
@@ -1608,6 +1622,15 @@ void hud_draw_screen(
 		/* port: text chat's lines (port/linux/game/chat.c; the browser's too) */
 		if (!cinematic_in_progress())
 			chat_draw(render.local_player_index);
+#endif
+#ifndef HALO_CONSOLE_NO_FORGE
+		/* port: Forge's monitor's HUD (port/linux/game/forge.c) */
+		if (!cinematic_in_progress())
+		{
+			extern void forge_draw(short local_player_index);
+
+			forge_draw(render.local_player_index);
+		}
 #endif
 
 		/* port: the match clock, in multiplayer */

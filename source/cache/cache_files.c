@@ -722,6 +722,10 @@ void scenario_tags_unload(
 #endif
 	sound_cache_close();
 	texture_cache_close();
+#ifdef HALO_CONSOLE_MARKER_LOOKUPS
+	/* port: model_find_marker's remembered answers were this map's */
+	model_marker_lookups_forget();
+#endif
 	/* port: the mods' tags go, after the sound and texture caches that held
 	their sounds and bitmaps (port/linux/game/mods.c) */
 	{
@@ -1049,8 +1053,9 @@ static boolean cache_file_stubbs_read(
 	if (offset < 0 || size <= 0 || offset > cache_file_globals.header.file_length - size)
 		return FALSE;
 	cache_file_read(NONE, offset, size, buffer, &read_complete, TRUE);
-	while (!read_complete)
+	while (!*(volatile boolean *)&read_complete)
 		SwitchToThread();
+	CACHE_FILE_READ_SEEN();
 	return read_complete == TRUE;
 }
 #endif
@@ -2006,6 +2011,15 @@ long scenario_tags_load(
 			cache_file_globals.tags_loaded = TRUE;
 			CACHE_FILE_TAG_COUNT_FOLLOW(TRUE);
 			menu_tags_loaded(scenario_name);
+			/* port: the MCC map's stock HUD sheets the high-res HUD stands
+			for (port/linux/game/hud_hires_tags.c) */
+#ifndef HALO_CONSOLE_NO_HIRES
+			{
+				extern void hud_hires_mcc_tags_loaded(void);
+
+				hud_hires_mcc_tags_loaded();
+			}
+#endif
 			/* (port, this fork: a map whose MCC pause menus cannot be built
 			from this build's menus, ChupathingyCE's, plays with those menus'
 			own pause screens instead of being refused:
@@ -2066,6 +2080,7 @@ long scenario_tags_load(
 				tag_cache_base_address, &read_complete, TRUE);
 			while (!read_complete)
 				SwitchToThread();
+			CACHE_FILE_READ_SEEN();
 			ce_header = tag_cache_base_address;
 			/* port: tags that did not all read, or whose header is not a tag
 			header (a damaged map, or one in a format this build does not
@@ -2266,6 +2281,7 @@ long scenario_tags_load(
 						&read_complete, TRUE);
 					while (!read_complete)
 						SwitchToThread();
+					CACHE_FILE_READ_SEEN();
 					if (!ce_models_tags_loaded(global_tag_instances, ce_header->tag_count, model_data,
 						ce_header->vertex_data_size, ce_header->model_data_size))
 					{
@@ -2379,6 +2395,7 @@ long scenario_tags_load(
 			{
 				SwitchToThread();
 			}
+			CACHE_FILE_READ_SEEN();
 
 			/* port: tags that did not all read, or whose header cannot be
 			trusted, are not loaded: the map is refused, as one whose header
@@ -2610,6 +2627,7 @@ boolean scenario_structure_bsp_load(
 				sound_idle();
 			}
 		}
+		CACHE_FILE_READ_SEEN();
 
 #ifdef HALO_CUSTOM_EDITION
 		/* port: a Custom Edition map's, only the one checked (the file

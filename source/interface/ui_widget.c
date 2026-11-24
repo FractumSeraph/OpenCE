@@ -700,6 +700,13 @@ void download_screen_render(void);
 /* port: Controller Buttons asking for a button (menu_functions.c) */
 boolean pc_menu_controller_capture(void);
 #endif
+#if !defined(HALO_CONSOLE) && !defined(HALO_XBOX_CONSOLE)
+/* port: the Konami code on the Chupathingy main menu (menu_functions.c): a
+controller's press, whether the menu should not get it; and the keyboard's
+B and A letters, each frame */
+boolean pc_menu_konami_event(boolean button, short index, short value);
+void pc_menu_konami_keys(void);
+#endif
 #if defined(HALO_GAME_BROWSER) || defined(HALO_CONSOLE_ONLINE_GAMES)
 /* the in-game server browser (port/linux/game/browser_screen.c; the
 console's, port/xbox/game/xbox_browser_screen.c): a screen of code over the
@@ -756,6 +763,12 @@ void guide_render(void);
 /* the pause menu's DELTA with what waits in it ("DELTA 2"), for
 its text's string list; NULL to leave it */
 wchar_t const *guide_pause_label(long string_list_tag);
+#endif
+#if defined(HALO_GUIDE) && !defined(HALO_CONSOLE_NO_FORGE)
+/* port: the Forge menu (port/linux/game/forge_menu.c): the Multiplayer
+menu's FORGE lobby, and a Forge game's menu, in the Guide's way */
+#include "../../port/linux/game/forge_menu.h"
+boolean forge_enabled(void);
 #endif
 /* (ONLINE GAMES, below: its list moves focus item by item) */
 boolean ui_widget_online_games_list(struct widget_instance *widget);
@@ -2587,6 +2600,9 @@ static boolean ui_widget_screens_of_code_active(
 #ifdef HALO_GUIDE
 	active = active || guide_active();
 #endif
+#if defined(HALO_GUIDE) && !defined(HALO_CONSOLE_NO_FORGE)
+	active = active || forge_menu_active();
+#endif
 
 #ifndef HALO_CONSOLE_NO_CONTROLS
 	active = active || controls_screen_active();
@@ -3965,10 +3981,18 @@ enum
 #else
 	ONLINE_GAMES_MAP_BROWSER_ADDED = 0,
 #endif
+#if defined(HALO_GUIDE) && !defined(HALO_CONSOLE_NO_FORGE)
+	/* FORGE (port/linux/game/forge_menu.c), another copy, before DELTA,
+	with game.forge and the Chupathingy menus (as they are when the tags
+	load: online_games.forge) */
+	ONLINE_GAMES_FORGE_MOST = 1,
+#else
+	ONLINE_GAMES_FORGE_MOST = 0,
+#endif
 #ifdef HALO_GUIDE
 	/* DELTA (port/linux/game/guide.c), another copy, last, with
 	delta.menu_item (as it is when the tags load: online_games.added) */
-	ONLINE_GAMES_ITEMS_MOST = 2 + ONLINE_GAMES_MAP_BROWSER_ADDED + ONLINE_GAMES_COOP_MOST,
+	ONLINE_GAMES_ITEMS_MOST = 2 + ONLINE_GAMES_MAP_BROWSER_ADDED + ONLINE_GAMES_COOP_MOST + ONLINE_GAMES_FORGE_MOST,
 #else
 	ONLINE_GAMES_ITEMS_MOST = 1 + ONLINE_GAMES_MAP_BROWSER_ADDED + ONLINE_GAMES_COOP_MOST,
 #endif
@@ -3990,17 +4014,22 @@ static struct
 	/* the DELTA row is in the list */
 	boolean delta;
 #endif
-	/* the items added (ONLINE GAMES, ONLINE CO-OP, MAP BROWSER, DELTA) */
+	/* the items added (ONLINE GAMES, ONLINE CO-OP, MAP BROWSER, FORGE, DELTA) */
 	short added;
 	/* the ONLINE CO-OP row is in the list (the Chupathingy menus') */
 	boolean coop;
 	boolean coop_described;
+	/* the FORGE row is in the list (game.forge) */
+	boolean forge;
+	boolean forge_described;
 } online_games = { NONE, NONE, NULL, FALSE };
 
 #define ONLINE_GAMES_ITEMS_ADDED online_games.added
 /* (the places after ONLINE GAMES: ONLINE CO-OP's, if it is there, first) */
 #define MAP_BROWSER_POSITION (ONLINE_GAMES_POSITION + 1 + online_games.coop)
-#define DELTA_ITEM_POSITION (ONLINE_GAMES_POSITION + 1 + online_games.coop + ONLINE_GAMES_MAP_BROWSER_ADDED)
+#define FORGE_ITEM_POSITION (ONLINE_GAMES_POSITION + 1 + online_games.coop + ONLINE_GAMES_MAP_BROWSER_ADDED)
+#define DELTA_ITEM_POSITION (ONLINE_GAMES_POSITION + 1 + online_games.coop + ONLINE_GAMES_MAP_BROWSER_ADDED + \
+	online_games.forge)
 
 #ifdef HALO_GAME_BROWSER
 static void ui_widget_setup_entry_tags_loaded(void);
@@ -4052,6 +4081,17 @@ void ui_widget_online_games_tags_loaded(
 			online_games.added--;
 	}
 #endif
+	online_games.forge = FALSE;
+#if defined(HALO_GUIDE) && !defined(HALO_CONSOLE_NO_FORGE)
+	/* (new UI is the Chupathingy menus': the Xbox's stay as shipped) */
+	{
+		extern boolean pc_menus_chupathingy(void);
+
+		online_games.forge = forge_enabled() && pc_menus_chupathingy();
+	}
+	if (!online_games.forge)
+		online_games.added--;
+#endif
 	children = system_malloc((ONLINE_GAMES_MENU_ITEMS + ONLINE_GAMES_ITEMS_MOST) * sizeof(*children));
 	online_games.children = children;
 	if (!children)
@@ -4065,6 +4105,10 @@ void ui_widget_online_games_tags_loaded(
 #endif
 #ifdef HALO_CONSOLE_MAP_BROWSER
 	children[MAP_BROWSER_POSITION] = old_children[ONLINE_GAMES_SYSTEM_LINK];
+#endif
+#if defined(HALO_GUIDE) && !defined(HALO_CONSOLE_NO_FORGE)
+	if (online_games.forge)
+		children[FORGE_ITEM_POSITION] = old_children[ONLINE_GAMES_SYSTEM_LINK];
 #endif
 #ifdef HALO_GUIDE
 	if (online_games.delta)
@@ -4257,7 +4301,7 @@ static boolean ui_widget_setup_entry_item(
 static wchar_t const *ui_widget_setup_entry_label(
 	short kind)
 {
-	return kind == _setup_entry_more_settings ? L"MORE SETTINGS" : L"SETUP";
+	return kind == _setup_entry_more_settings ? L"MORE SETTINGS" : L"ADVANCED SETUP";
 }
 
 static wchar_t const *ui_widget_setup_entry_words(
@@ -4319,6 +4363,17 @@ boolean ui_widget_coop_item(
 	return online_games.list_tag != NONE && online_games.coop && widget && widget->parent &&
 		widget->parent->definition_tag_index == online_games.list_tag &&
 		ui_widget_list_position(widget) == COOP_ITEM_POSITION;
+}
+#endif
+
+#if defined(HALO_GUIDE) && !defined(HALO_CONSOLE_NO_FORGE)
+/* the Multiplayer menu's FORGE (a copy of System Link's item) */
+static boolean ui_widget_forge_item(
+	struct widget_instance *widget)
+{
+	return online_games.list_tag != NONE && online_games.forge && widget && widget->parent &&
+		widget->parent->definition_tag_index == online_games.list_tag &&
+		ui_widget_list_position(widget) == FORGE_ITEM_POSITION;
 }
 #endif
 
@@ -4426,8 +4481,16 @@ short ui_widget_online_games_description(
 	online_games.delta_described = FALSE;
 #endif
 	online_games.coop_described = FALSE;
+	online_games.forge_described = FALSE;
 	if (online_games.list_tag == NONE || list_widget->definition_tag_index != online_games.list_tag)
 		return index;
+#if defined(HALO_GUIDE) && !defined(HALO_CONSOLE_NO_FORGE)
+	if (online_games.forge && index == FORGE_ITEM_POSITION)
+	{
+		online_games.forge_described = TRUE;
+		return ONLINE_GAMES_SYSTEM_LINK;
+	}
+#endif
 #ifdef HALO_GAME_BROWSER
 	if (online_games.coop && index == COOP_ITEM_POSITION)
 	{
@@ -4508,6 +4571,19 @@ static void event_handler_dispatch(
 
 			if (pc_menus_coop_online())
 				ui_play_audio_feedback_sound(_ui_audio_feedback_forward);
+		}
+		return;
+	}
+#endif
+#if defined(HALO_GUIDE) && !defined(HALO_CONSOLE_NO_FORGE)
+	/* FORGE (System Link's item copied): the Forge lobby over the menu, and
+	none of System Link's other buttons */
+	if (ui_widget_forge_item(widget))
+	{
+		if (handler->event_type == _gamepad_analog_button_a || handler->event_type == _gamepad_binary_button_start)
+		{
+			ui_play_audio_feedback_sound(_ui_audio_feedback_forward);
+			forge_menu_open_lobby();
 		}
 		return;
 	}
@@ -6845,6 +6921,12 @@ static void widget_instance_render_text_box(
 		else if (online_games.coop_described && widget->definition_tag_index == online_games.description_text_tag)
 			string = L"Host the campaign for friends\r\nto join from their own\r\nmachines.";
 #endif
+#if defined(HALO_GUIDE) && !defined(HALO_CONSOLE_NO_FORGE)
+		else if (ui_widget_forge_item(widget))
+			string = L"FORGE";
+		else if (online_games.forge_described && widget->definition_tag_index == online_games.description_text_tag)
+			string = L"Build a layout of a \r\nmultiplayer map, or play \r\none you saved.";
+#endif
 #ifdef HALO_GUIDE
 		else if (ui_widget_delta_item(widget))
 			string = L"DELTA";
@@ -8626,6 +8708,11 @@ static boolean ui_mouse_menus_active(
 	if (guide_active())
 		return TRUE;
 #endif
+#if defined(HALO_GUIDE) && !defined(HALO_CONSOLE_NO_FORGE)
+	/* (and the Forge menu, over a game too) */
+	if (forge_menu_active())
+		return TRUE;
+#endif
 	return virtual_keyboard_active() || ui_mouse_menu() != NULL || game_engine_showing_postgame();
 }
 
@@ -8838,6 +8925,11 @@ static void ui_widgets_process_mouse(
 #ifdef HALO_GUIDE
 	if (pointer_active && guide_active())
 		guide_pointer(&pointer);
+	else
+#endif
+#if defined(HALO_GUIDE) && !defined(HALO_CONSOLE_NO_FORGE)
+	if (pointer_active && forge_menu_active())
+		forge_menu_pointer(&pointer);
 	else
 #endif
 	if (pointer_active && !keyboard_active && invite_prompt_active())
@@ -9763,6 +9855,10 @@ void render_ui_widgets(
 #endif
 		moderation_screen_render();
 		invite_prompt_render();
+#if defined(HALO_GUIDE) && !defined(HALO_CONSOLE_NO_FORGE)
+		/* (the Forge menu, under the Guide) */
+		forge_menu_render();
+#endif
 #ifdef HALO_GUIDE
 		/* (over all of them) */
 		guide_render();
@@ -10808,9 +10904,14 @@ static boolean ui_check_for_pause_game(
 						network_game_client_get_machine_index(client);
 					char const *widget_name;
 
-					/* port: a campaign map has only the campaign's pause screen */
+					/* port: a campaign map has only the campaign's pause screens:
+					one player's, or two players' with a split screen of this
+					machine's (the one player's would be cut to the first
+					player's half) */
 					if (network_coop_active())
-						widget_name = "ui\\shell\\solo_game\\pause_game\\pause_game";
+						widget_name = local_player_count >= 2 ?
+							"ui\\shell\\solo_game\\pause_game\\pause_game_split_screen" :
+							"ui\\shell\\solo_game\\pause_game\\pause_game";
 					else switch (local_player_count)
 					{
 					case 1:
@@ -11071,6 +11172,9 @@ void process_ui_widgets(
 	boolean pause_pressed;
 	boolean modal_widget_active[MAXIMUM_NUMBER_OF_LOCAL_PLAYERS];
 	long widget_index;
+#if !defined(HALO_CONSOLE) && !defined(HALO_XBOX_CONSOLE)
+	boolean konami_on_main_menu;
+#endif
 
 	match_assert(
 		"c:\\halo\\SOURCE\\interface\\ui_widget.c",
@@ -11122,6 +11226,17 @@ void process_ui_widgets(
 	if (guide_active())
 	{
 		guide_process();
+		event_manager_flush();
+
+		return;
+	}
+#endif
+#if defined(HALO_GUIDE) && !defined(HALO_CONSOLE_NO_FORGE)
+	/* port: the Forge menu, over the menus or a Forge game, the same */
+	forge_menu_update();
+	if (forge_menu_active())
+	{
+		forge_menu_process();
 		event_manager_flush();
 
 		return;
@@ -11254,6 +11369,13 @@ void process_ui_widgets(
 
 		return;
 	}
+#if !defined(HALO_CONSOLE) && !defined(HALO_XBOX_CONSOLE)
+	/* port: the Konami code on the Chupathingy main menu, the keyboard's B
+	and A letters (menu_functions.c: the logo's duct tape) */
+	konami_on_main_menu = main_menu_screen_is_active() && pc_menus_chupathingy();
+	if (konami_on_main_menu)
+		pc_menu_konami_keys();
+#endif
 	pause_pressed = ui_check_for_pause_game();
 	any_modal_widget_active = FALSE;
 	for (widget_index = 0;
@@ -11303,6 +11425,18 @@ void process_ui_widgets(
 			{
 				do
 				{
+#if !defined(HALO_CONSOLE) && !defined(HALO_XBOX_CONSOLE)
+					/* port: the code's presses, seen first; its B and A
+					kept from the menu (B would ask to quit, A open a row) */
+					if (konami_on_main_menu &&
+						pc_menu_konami_event(
+							event.type == _event_type_button,
+							event.data.button.index,
+							event.data.button.value))
+					{
+						continue;
+					}
+#endif
 					if (!pause_pressed)
 					{
 						widget_instance_process_one_event_recursive(

@@ -136,6 +136,17 @@ struct config_setting
 #define DEFAULT_FULLSCREEN "true"
 #endif
 
+/* display.hud_safe_zone's default: "auto" (the Xbox's margins in a game
+alone, Halo PC's in split screen) on the desktop and Android; the Xbox's own
+("xbox") on the consoles, which play on televisions that overscan, where
+tighter margins can push the HUD off the picture */
+#if defined(HALO_CONSOLE) || defined(HALO_SWITCH_CONSOLE) || defined(HALO_WIIU_CONSOLE) || \
+	defined(HALO_XBOX_CONSOLE) || defined(HALO_XBOX360_CONSOLE)
+#define DEFAULT_HUD_SAFE_ZONE "\"xbox\""
+#else
+#define DEFAULT_HUD_SAFE_ZONE "\"auto\""
+#endif
+
 /* macOS's audio cuts out with SDL's 512-frame buffer when the mixer is late
 (a 10.6 ms budget at 48 kHz); 2048 frames (43 ms) rides that out. On
 Android each callback is handed to a thread that can run the guest
@@ -156,6 +167,15 @@ Ctrl+D, which moving and crouching would press, from the browser) */
 #define CROUCH_KEYS "\"C\""
 #else
 #define CROUCH_KEYS "\"Left Ctrl, C\""
+#endif
+
+/* The level's surfaces culled before they are drawn
+(port/linux/game/structure_culling.c), but on a console whose processor is
+what holds its frame rate (HALO_CONSOLE_NO_STRUCTURE_CULLING) */
+#ifdef HALO_CONSOLE_NO_STRUCTURE_CULLING
+#define DEFAULT_STRUCTURE_CULLING "false"
+#else
+#define DEFAULT_STRUCTURE_CULLING "true"
 #endif
 
 /* Headphone 3D (the Xbox's HRTF, dsound_sdl.c), on as the original Xbox
@@ -225,6 +245,9 @@ keep fewer (the Switch's particles, HALO_CONSOLE_PARTICLE_TICKS and
 HALO_CONSOLE_LIGHT_LIMITS); the desktop has the Xbox's look, unlimited */
 #if defined(HALO_CONSOLE_PARTICLE_LIMIT)
 #define DEFAULT_PARTICLE_LIMIT HALO_CONSOLE_PARTICLE_LIMIT
+#elif defined(HALO_XBOX_CONSOLE)
+/* (the original Xbox's own pool, which holds no more: particles.c) */
+#define DEFAULT_PARTICLE_LIMIT "1024"
 #elif defined(HALO_SWITCH_CONSOLE)
 #define DEFAULT_PARTICLE_LIMIT "2048"
 #else
@@ -452,10 +475,17 @@ static const struct config_setting config_settings[] =
 	{ "display.crosshair_position", _config_string, "\"retail\"", "HALO_CROSSHAIR_POSITION", _environment_value,
 		_platform_all,
 		"Where the crosshair and your aim sit: \"retail\" (the middle of the\n"
-		"title-safe frame, as on the Xbox), \"centered\" (the middle of your\n"
-		"view; only different in split screen) or \"lowered\" (a tenth of the\n"
+		"title-safe frame, as on the Xbox) or \"lowered\" (a tenth of the\n"
 		"view's height below the middle). The view moves with it, so shots\n"
 		"still go where the crosshair is. Zoomed, it's in the middle." },
+	{ "display.hud_safe_zone", _config_string, DEFAULT_HUD_SAFE_ZONE, "HALO_HUD_SAFE_ZONE", _environment_value,
+		_platform_all | _platform_xbox,
+		"How far the HUD sits from the screen's edges: \"xbox\" (48 and 36\n"
+		"in, as on the Xbox), \"pc\" (8 in, as Halo PC), \"auto\" (the Xbox's\n"
+		"alone, Halo PC's in split screen) or two numbers, \"24 18\" (8 to\n"
+		"48 across, 8 to 36 down). As Chimera's chimera_safe_zones. Other\n"
+		"than \"xbox\", each split screen view's crosshair and aim are in\n"
+		"its middle." },
 	{ "display.first_person_weapon", _config_boolean, "true", "HALO_FIRST_PERSON_WEAPON", _environment_value,
 		_platform_all,
 		"Draw your weapon and arms. false hides them." },
@@ -533,6 +563,9 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"The PC menus' language: \"maps\" for the language of the Custom Edition\n"
 		"whose loc.map is in custom_maps (as that edition shows them; English\n"
 		"without one), \"english\" for English. The port's own lines are English." },
+	{ "display.duct_tape_logo", _config_boolean, "false", "HALO_DUCT_TAPE_LOGO", _environment_value, _platform_all,
+		"Tape over the main menu's logo, in the Chupathingy menus. A certain\n"
+		"code on the main menu changes it." },
 	{ "display.map_show_new_game", _config_string, "\"all\"", "HALO_MAP_SHOW_NEW_GAME", _environment_value,
 		_platform_all,
 		"Which maps New Game's multiplayer list shows: \"all\", \"xbox\", \"ce\",\n"
@@ -694,11 +727,14 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"The console's picture on its way to the screen: 1.0 shows it as drawn;\n"
 		"higher values lift the dark areas (the picture is raised to 1/gamma),\n"
 		"lower ones deepen them. For matching the original Xbox on the same TV." },
-#ifndef HALO_CONSOLE_NO_LOADING_PICTURE
+/* (the join screen is the game list's: browser_screen.c) */
+#if defined(HALO_GAME_BROWSER) && !defined(HALO_CONSOLE_NO_LOADING_PICTURE)
 	{ "display.join_screen", _config_boolean, "true", "HALO_JOIN_SCREEN", _environment_value, _platform_all,
 		"Show the loading screen while a game is joined or its map downloads,\n"
 		"with what is going on and B to cancel. false: a small panel over the\n"
 		"game list." },
+#endif
+#ifndef HALO_CONSOLE_NO_LOADING_PICTURE
 	{ "display.xbox_loading_picture", _config_boolean, "true", "HALO_XBOX_LOADING_PICTURE", _environment_value,
 		_platform_all,
 		"true: the loading screen shows the Xbox's own picture, xbox_loading.tga\n"
@@ -875,13 +911,26 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"The blue sparks off a live plasma grenade, which the Xbox never drew\n"
 		"(at 30 frames a second they end before they are drawn). false: as on\n"
 		"the Xbox, at any frame rate. Thanks to ugoboom for the idea." },
+#ifdef HALO_PORT_RAGDOLLS
+	/* (port/linux/game/ragdolls.c; Video Setup's RAGDOLLS. Live) */
+	{ "display.ragdolls", _config_boolean, "false", "HALO_RAGDOLLS", _environment_value, _platform_desktop,
+		"true: a character killed plays its death animation and falls limp\n"
+		"partway through it, as in Halo 2 and 3 (one thrown into the air by an\n"
+		"explosion, a melee blow or a vehicle's hit flies in its airborne\n"
+		"death animation and goes limp where it lands), and comes to rest\n"
+		"where it lands (Jolt Physics). false (the\n"
+		"default): its death animation, as on the Xbox. Drawing only: the\n"
+		"body, hit boxes, saved games and the network are as before. The idea\n"
+		"is from jojoxdk's Halo 1 MCC Box3D Physics Mod." },
+#endif
 	{ "display.particle_limit", _config_integer, DEFAULT_PARTICLE_LIMIT, "HALO_PARTICLE_LIMIT", _environment_value,
-		_platform_all,
+		_platform_all | _platform_xbox,
 		"The most particles alive at once: sparks, smoke, casings and debris.\n"
 		"When it is full, the oldest goes to make room for a new one. The Xbox's\n"
 		"limit was 1024. 0 uses the port's own 8192, which a 64-player firefight\n"
 		"fills. Every particle costs CPU and GPU time. The default is 2048 on the\n"
-		"Switch and 4096 elsewhere. Changes at once." },
+		"Switch, 1024 (its most) on the original Xbox and 4096 elsewhere. A\n"
+		"network game never goes under 1024. Changes at once." },
 	{ "display.particle_ticks", _config_boolean, DEFAULT_PARTICLE_TICKS, "HALO_PARTICLE_TICKS", _environment_value,
 		_platform_all,
 		"Move the particles that are not attached to an object once a 30 Hz\n"
@@ -897,15 +946,16 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"and floor. The rest light only the objects near them. 0 means no limit,\n"
 		"as on the Xbox. Each light redraws the level it reaches twice, and in a\n"
 		"big firefight that is most of the GPU's time. The default is 0 on the\n"
-		"desktop, and 8 on the consoles. Changes at once." },
+		"desktop, and 8 on the consoles. A network game never goes under 8.\n"
+		"Changes at once." },
 	{ "display.specular_light_limit", _config_integer, DEFAULT_SPECULAR_LIGHT_LIMIT, "HALO_SPECULAR_LIGHT_LIMIT",
 		_environment_value, _platform_all | _platform_xbox,
 		"Of those lights, the most that also add their shine to metal and wet\n"
 		"floors. The first-person weapon's go first, then the biggest on screen.\n"
 		"The others still light the level, without the shine. 0 means no limit,\n"
 		"as on the Xbox. Near lights' shine is the costliest pass in a firefight.\n"
-		"The default is 0 on the desktop, and 2 on the consoles. Changes at\n"
-		"once." },
+		"The default is 0 on the desktop, and 2 on the consoles. A network game\n"
+		"never goes under 2. Changes at once." },
 	{ "display.texture_decode", _config_string, "\"auto\"", "HALO_TEXTURE_DECODE", _environment_value,
 		_platform_android,
 		"Where compressed textures are unpacked: \"gpu\" or \"cpu\". \"cpu\"\n"
@@ -979,6 +1029,14 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"Vulkan anyway. Read when Chupathingy starts." },
 #endif
 #endif
+#if !defined(HALO_GL_ES) && !defined(HALO_CONSOLE_GL_LAYER) && !defined(HALO_CONSOLE) && !defined(HALO_SWITCH_CONSOLE) && !defined(HALO_XBOX_CONSOLE) && !defined(HALO_SERVER)
+	{ "display.gl_buffer_ring", _config_boolean, "false", "HALO_GL_BUFFER_RING", _environment_value, _platform_desktop,
+		"OpenGL: stream the frame's vertices and indices through a ring of three\n"
+		"buffers, each reused once the GPU is done with it, instead of asking\n"
+		"the driver for a new 32 MB buffer every frame. Try it if OpenGL crashes\n"
+		"or stutters on Linux with Mesa. Off by default while it is tested.\n"
+		"Read when Chupathingy starts." },
+#endif
 
 	/* ---- tuning: performance knobs that change only what is drawn
 	(config_tuning_apply). The preset fills in the [display] limits it
@@ -995,9 +1053,37 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		_platform_all | _platform_xbox,
 		"With V-Sync on: \"vblank\" waits for the display before every frame.\n"
 		"\"adaptive\" shows a frame that missed the display at once, with a tear,\n"
-		"instead of waiting for the next. OpenGL on Windows, Linux and Android,\n"
-		"and the original Xbox; elsewhere it waits. Takes effect at the next\n"
-		"start." },
+		"instead of waiting for the next. OpenGL and Vulkan on Windows, Linux\n"
+		"and Android, and the original Xbox. Direct3D 11 and the Mac wait, as\n"
+		"the log says. Takes effect at the next start." },
+	/* (the drawing's knobs: render.c's render_tuning, which holds them in
+	network games) */
+	{ "tuning.particle_thinning", _config_integer, "1", "HALO_PARTICLE_THINNING", _environment_value,
+		_platform_all | _platform_xbox,
+		"Draw one in this many of the loose particles in the world: sparks,\n"
+		"debris, dust and the puffs of explosions, from 1 to 4. 1 draws every\n"
+		"one, as the Xbox. Particles on a weapon, player or vehicle are always\n"
+		"drawn. In a network game you never see fewer than the Xbox would.\n"
+		"Changes at once." },
+	{ "tuning.effects", _config_string, "\"full\"", "HALO_TUNING_EFFECTS", _environment_value,
+		_platform_all | _platform_xbox,
+		"\"full\" draws every pass, as the Xbox. \"reduced\" leaves out the\n"
+		"shine of lights, metal and water, mirrors and the grass on the ground.\n"
+		"\"minimal\" also leaves out decals, rain and snow. Lens flares and\n"
+		"contrails are always drawn, and in a network game the grass, rain and\n"
+		"snow too. Changes at once." },
+	{ "tuning.shadow_pixels", _config_integer, "30", "HALO_SHADOW_PIXELS", _environment_value,
+		_platform_all | _platform_xbox,
+		"How big an object must look, in pixels across, to cast a shadow, from\n"
+		"30 to 400. 30 is the Xbox's. Higher keeps the shadows of near objects\n"
+		"only. Changes at once." },
+	{ "tuning.object_cull_pixels", _config_integer, "0", "HALO_OBJECT_CULL_PIXELS", _environment_value,
+		_platform_all | _platform_xbox,
+		"Leave out objects that look smaller than this, in pixels across,\n"
+		"before they are lit, from 0 to 16. 0 draws every one, as the Xbox.\n"
+		"Players, AI, vehicles, shots and grenades are always drawn. In a\n"
+		"network game only debris is left out: never weapons, power-ups or\n"
+		"cover. Changes at once." },
 	{ "tuning.texture_cache", _config_string, "\"auto\"", NULL, _environment_value, _platform_xbox,
 		"The texture cache's size in MB, like \"20\", or \"auto\" for the\n"
 		"console's own. It is held between 19 MB and what the console's memory\n"
@@ -1010,6 +1096,7 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"The music's volume, from 0.0 to 1.0." },
 	{ "audio.effects_volume", _config_real, "1.0", "HALO_EFFECTS_VOLUME", _environment_value, _platform_all | _platform_xbox,
 		"The volume of effects and speech, from 0.0 to 1.0." },
+	/* (the original Xbox plays its own DirectSound: dsound_sdl.c's) */
 	{ "audio.enabled", _config_boolean, "true", "HALO_NO_AUDIO", _environment_set_is_false, _platform_all,
 		"Play sound." },
 	/* (audio.voice_device is kept for a voice output of its own, later:
@@ -1172,22 +1259,43 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"two Joy-Cons, the right one is used. \"true\" always aims with it, \"zoom\"\n"
 		"only while zoomed in with a scope, and \"false\" never. Gamepads > Gyro\n"
 		"Aim sets it too. Changes at once." },
+#ifdef HALO_PORT_GYRO_AIM
+	/* gyro aiming (port/linux/src/gyro_aim.c, xinput_sdl.c): the
+	controller's gyroscope, each local player from their own. Off by
+	default; the Switch's defaults as they were */
+	{ "input.gyro_aim", _config_string, "\"false\"", "HALO_GYRO_AIM", _environment_value, _platform_all,
+		"Aim with the controller's gyroscope (a DualSense, DualShock 4, Switch\n"
+		"Pro Controller or Joy-Con, the Steam Deck; on the Switch, the console\n"
+		"held in your hands too). Each local player uses their own. \"true\"\n"
+		"always aims with it, \"zoom\" only while zoomed in with a scope, and\n"
+		"\"false\" never. Changes at once." },
 	{ "input.gyro_sensitivity_horizontal", _config_real, "1.0", "HALO_GYRO_SENSITIVITY_HORIZONTAL",
-		_environment_value, _platform_android,
+		_environment_value, _platform_all,
 		"How far the view turns left and right with the gyroscope, when\n"
-		"input.gyro_aim is on. 1 is the sensor's own turn. From 0.25 to 10." },
+		"input.gyro_aim is on. 1 turns the view as far as the controller\n"
+		"turns (on the Switch, 1.5 times as far). From 0.25 to 10." },
 	{ "input.gyro_sensitivity_vertical", _config_real, "1.0", "HALO_GYRO_SENSITIVITY_VERTICAL",
-		_environment_value, _platform_android,
+		_environment_value, _platform_all,
 		"How far the view turns up and down with the gyroscope, when\n"
-		"input.gyro_aim is on. 1 is the sensor's own turn. From 0.25 to 10." },
+		"input.gyro_aim is on. 1 turns the view as far as the controller\n"
+		"turns (on the Switch, 1.5 times as far). From 0.25 to 10." },
 	{ "input.gyro_invert_horizontal", _config_boolean, "false", "HALO_GYRO_INVERT_HORIZONTAL",
-		_environment_value, _platform_android,
+		_environment_value, _platform_all,
 		"Invert the gyroscope's left and right. With true, turning the\n"
 		"controller right looks left. The stick's invert is separate." },
 	{ "input.gyro_invert_vertical", _config_boolean, "false", "HALO_GYRO_INVERT_VERTICAL",
-		_environment_value, _platform_android,
+		_environment_value, _platform_all,
 		"Invert the gyroscope's up and down. With true, tilting the controller\n"
 		"up looks down. The stick's invert is separate." },
+#ifdef HALO_PORT_GYRO_SDL
+	{ "input.gyro_horizontal_axis", _config_string, "\"yaw\"", "HALO_GYRO_HORIZONTAL_AXIS", _environment_value,
+		_platform_all,
+		"What turns the view left and right: \"yaw\", turning the controller,\n"
+		"or \"roll\", tilting it like a steering wheel." },
+	{ "input.gyro_deadzone", _config_real, "0.75", "HALO_GYRO_DEADZONE", _environment_value, _platform_all,
+		"Gyroscope motion slower than this many degrees a second does not\n"
+		"turn the view. From 0 to 10." },
+#endif
 #endif
 	{ "input.left_stick_dead_zone", _config_integer, "-1", "HALO_LEFT_STICK_DEAD_ZONE", _environment_value, _platform_all,
 		"How far the controller's left stick moves before it moves the player,\n"
@@ -1294,6 +1402,40 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"Leave it empty for the default." },
 #endif
 
+#ifndef HALO_CONSOLE_NO_FORGE
+	/* ---- Forge's monitor's keys (port/linux/game/forge.c, halo_keyboard.h's
+	halo_forge_key): only Forge reads them, and only while its player is the
+	monitor, so they may share the actions' keys */
+	{ "controls.forge_up", _config_string, "\"Space\"", "HALO_KEY_FORGE_UP", _environment_value, _platform_desktop,
+		"Forge's monitor: fly up." },
+	{ "controls.forge_down", _config_string, "\"Left Ctrl, C\"", "HALO_KEY_FORGE_DOWN", _environment_value, _platform_desktop,
+		"Forge's monitor: fly down." },
+	{ "controls.forge_fast", _config_string, "\"Left Shift\"", "HALO_KEY_FORGE_FAST", _environment_value, _platform_desktop,
+		"Forge's monitor: fly four times as fast while held." },
+	{ "controls.forge_grab", _config_string, "\"Mouse Left\"", "HALO_KEY_FORGE_GRAB", _environment_value, _platform_desktop,
+		"Forge's monitor: grab what the crosshair is on, and let go of what is\nheld." },
+	{ "controls.forge_rotate", _config_string, "\"Mouse Right\"", "HALO_KEY_FORGE_ROTATE", _environment_value, _platform_desktop,
+		"Forge's monitor: while held with something held, the mouse turns it\n(rotate mode)." },
+	{ "controls.forge_nearer", _config_string, "\"Wheel Down\"", "HALO_KEY_FORGE_NEARER", _environment_value, _platform_desktop,
+		"Forge's monitor: what is held comes nearer." },
+	{ "controls.forge_farther", _config_string, "\"Wheel Up\"", "HALO_KEY_FORGE_FARTHER", _environment_value, _platform_desktop,
+		"Forge's monitor: what is held goes farther away." },
+	{ "controls.forge_copy", _config_string, "\"F\"", "HALO_KEY_FORGE_COPY", _environment_value, _platform_desktop,
+		"Forge's monitor: a copy of what is held or aimed at, held." },
+	{ "controls.forge_delete", _config_string, "\"Delete, X\"", "HALO_KEY_FORGE_DELETE", _environment_value, _platform_desktop,
+		"Forge's monitor: delete what is held or aimed at." },
+	{ "controls.forge_upright", _config_string, "\"U\"", "HALO_KEY_FORGE_UPRIGHT", _environment_value, _platform_desktop,
+		"Forge's monitor: set what is held or aimed at upright." },
+	{ "controls.forge_speed", _config_string, "\"Q\"", "HALO_KEY_FORGE_SPEED", _environment_value, _platform_desktop,
+		"Forge's monitor: the next flying speed; in rotate mode, the next\nrotation snap." },
+	{ "controls.forge_nudge", _config_string, "\"N\"", "HALO_KEY_FORGE_NUDGE", _environment_value, _platform_desktop,
+		"Forge's monitor: in rotate mode, nudge mode on or off." },
+	{ "controls.forge_menu", _config_string, "\"E\"", "HALO_KEY_FORGE_MENU", _environment_value, _platform_desktop,
+		"Forge's monitor: the Forge menu (objects, properties, layouts, options)." },
+	{ "controls.forge_monitor", _config_string, "\"M\"", "HALO_KEY_FORGE_MONITOR", _environment_value, _platform_desktop,
+		"Forge: switch between the monitor and playing." },
+#endif
+
 #ifdef HALO_GUIDE
 	/* ---- DELTA (port/linux/game/guide.c); an older version's guide.* and
 	controls.guide names go on under these (config_renamed) */
@@ -1314,6 +1456,14 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"Open the Delta Guide with the controller's Guide button, where\n"
 		"Fractum Halo can read it (Steam and the Xbox Game Bar may keep it for\n"
 		"themselves)." },
+	{ "delta.confirm_button", _config_string, "\"bottom\"", "HALO_DELTA_CONFIRM_BUTTON", _environment_value,
+		_platform_all,
+		"The button that picks in the Delta Guide: \"bottom\", the Xbox's A,\n"
+		"or \"right\", as Nintendo's pads have it (the bottom one goes back).\n"
+		"The game's own menus keep the Xbox's." },
+	{ "delta.rumble", _config_boolean, "false", "HALO_DELTA_RUMBLE", _environment_value, _platform_all,
+		"A short buzz on the controller when a press in the Delta Guide can do\n"
+		"nothing there. Off by default, as the game's own menus have none." },
 	{ "delta.hold_back", _config_boolean, "false", "HALO_DELTA_HOLD_BACK", _environment_value, _platform_all,
 		"Open the Delta Guide by holding Back for about half a second in the\n"
 		"menus. While on, the menus get a Back tap once it is let go, never a\n"
@@ -1814,6 +1964,11 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		_platform_all,
 		"In games you host, players who join a game in progress watch until\n"
 		"the next game starts. Off spawns them at once, as Halo does." },
+	{ "network.air_turn_aim", _config_boolean, "false", "HALO_NET_AIR_TURN_AIM", _environment_value,
+		_platform_all,
+		"In games you host (and games you play alone), a shot fired while\n"
+		"turned around in mid-air goes where you aim (the \"180 glitch\" fixed).\n"
+		"Off plays as the Xbox did: the shot leaves at an angle." },
 #ifdef HALO_PORT_VOICE
 	/* ---- voice chat in games you host (port/linux/game/voice_game.c) */
 	{ "network.voice", _config_boolean, "true", "HALO_NET_VOICE", _environment_value, _platform_all,
@@ -2521,6 +2676,12 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"Workshop items. Empty uses automatic discovery: Windows registry, Linux\n"
 		"Steam/XDG hints, macOS's Steam folder, usual folders and their libraries. Windows paths use single\n"
 		"quotes: 'D:\\Steam'." },
+#ifndef HALO_CONSOLE_NO_FORGE
+	{ "game.forge", _config_boolean, "false", "HALO_FORGE", _environment_value, _platform_desktop,
+		"Forge, the layout editor of the multiplayer maps: FORGE in the\n"
+		"Multiplayer menu, and the console's forge commands. Local games only.\n"
+		"FORGE in the Delta Guide's SETTINGS. See docs/forge.md." },
+#endif
 	{ "paths.steamcmd", _config_string, "\"\"", "HALO_STEAMCMD", _environment_value, _platform_desktop,
 		"steamcmd, for the Workshop on macOS and Linux. Empty looks in the PATH and the\n"
 		"usual places." },
@@ -2796,7 +2957,7 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"Seconds after the start before anything is damaged." },
 	/* (port, this fork: no variable of its own; HALO_STRUCTURE_CULLING is
 	display.structure_culling's, OpenCE's tests as bits) */
-	{ "debug.structure_culling", _config_boolean, "true", NULL, _environment_value, _platform_all,
+	{ "debug.structure_culling", _config_boolean, DEFAULT_STRUCTURE_CULLING, NULL, _environment_value, _platform_all,
 		"Skip the level's surfaces that are off screen or face away. Turn it off\n"
 		"to draw them as the original game does, to check a missing wall." },
 	{ "debug.touch_targets", _config_boolean, "false", "HALO_TOUCH_TARGETS", _environment_set_is_true, _platform_all,
@@ -2855,6 +3016,13 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 	{ "debug.bot_trace", _config_integer, "0", "HALO_BOT_TRACE", _environment_value, _platform_all,
 		"Log each bot's state (bots.count) every this many seconds: where it is\n"
 		"and goes, its path, target and weapon; 0 never." },
+#ifdef HALO_PORT_RAGDOLLS
+	{ "debug.ragdolls", _config_integer, "0", "HALO_RAGDOLLS_DEBUG", _environment_value, _platform_desktop,
+		"1: a line in debug.txt each time a ragdoll starts, sleeps, wakes or is\n"
+		"let go, and their cost every ten seconds; 2: each one's rig too. Also\n"
+		"lets the console's ragdolls tests run in a local game\n"
+		"(port/linux/game/ragdolls.c). 0 for none." },
+#endif
 	{ "debug.determinism", _config_string, "\"\"", "HALO_DETERMINISM", _environment_value, _platform_all,
 		"The input replay check (tools/test_determinism.py). \"record:<file>\"\n"
 		"writes each tick's player actions to the file. \"replay:<file>\" plays\n"
@@ -2908,6 +3076,10 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"at a time, separated by ; (up, down, left, right, a, b, x, y, lb, rb,\n"
 		"start, back, lt, rt), for tests.\n"
 		"Debug builds only: a release build ignores it." },
+	{ "debug.battery", _config_string, "\"\"", "HALO_BATTERY", _environment_value, _platform_all,
+		"A battery for the Delta Guide's card to show, for screenshots: its\n"
+		"percent, with c after it while charging (\"40\", \"40c\"). Leave it\n"
+		"empty for the real one." },
 	{ "debug.delta_sample", _config_boolean, "false", "HALO_DELTA_SAMPLE", _environment_set_is_true, _platform_all,
 		"The Delta Guide signed in with made-up friends and a party, nothing\n"
 		"asked of the site, for screenshots. Debug builds only: a release build\n"
@@ -3032,6 +3204,9 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"them on the CPU except on NVIDIA. cpu or buffer forces one." },
 	{ "debug.door_portals_log", _config_boolean, "false", "HALO_DOOR_PORTALS_LOG", _environment_set_is_true, _platform_all,
 		"Log which level portals each door covers, as it is paired with them." },
+	{ "debug.time_code", _config_boolean, "false", "HALO_TIME_CODE", _environment_set_is_true, _platform_all,
+		"Draw the cutscene scripts' time code (time_code_show): the ticks since\n"
+		"it started, in the top-left corner, as Bungie's tools showed it." },
 #ifdef HALO_SHADER_PREP
 	{ "debug.draw_every_shader", _config_boolean, "false", "HALO_DRAW_EVERY_SHADER", _environment_set_is_true,
 		_platform_all,
@@ -3868,9 +4043,10 @@ Xbox's multiplayer by default (v0.9.0: no names above heads, no follow
 camera, no team changes in games you host). (Port, this fork: not
 ChupathingyCE's 6, the Xbox's own resampler for audio.resampling, which this
 fork's mixer, OpenCE's, reads only for "linear": audio.resampler.) 7, the
-original Xbox's 4:3 picture (v0.9.2). A file answered for an earlier
+original Xbox's 4:3 picture (v0.9.2). (Not 8, ChupathingyCE's audio.loudness,
+its mixer's: this fork plays OpenCE's.) A file answered for an earlier
 generation is asked about the later ones only */
-#define CONFIG_DEFAULTS_GENERATION 7
+#define CONFIG_DEFAULTS_GENERATION 8
 #define CONFIG_VERSION_LINE "config_version = 2\n"
 #define CONFIG_VERSION_LINES "# Fractum Halo uses this line to update the file. Leave it as it is.\n" CONFIG_VERSION_LINE
 #define CONFIG_VERSION_TEXT "\n" CONFIG_VERSION_LINES
@@ -4726,6 +4902,8 @@ static const struct
 	file that names "dashboard" keeps it; one that left it commented out
 	follows "off" (config_find_new_defaults: the Xbox asks nothing) */
 	{ "display.widescreen", "\"dashboard\"", 0, "The 4:3 picture, as the original game had", 7 },
+	/* the whole sum, 6 dB over the Xbox's level, the only one until 0.9.2
+	(a file from before the setting is asked; "louder" keeps it) */
 };
 
 #define NUMBER_OF_CONFIG_OLD_DEFAULTS (sizeof(config_old_defaults) / sizeof(config_old_defaults[0]))
@@ -5586,6 +5764,41 @@ static char *config_drop_retired_sections(const char *text)
 	return result;
 }
 
+/* display.crosshair_position "centered" (before) put a split screen
+view's crosshair and aim in the view's middle; display.hud_safe_zone does
+that now ("pc", and "auto" in split screen: compute_window_bounds). A file
+with "centered" gets "retail" in its place, and a display.hud_safe_zone
+of "xbox" (written, or the consoles' default) "auto", so that the player's
+split screen stays as it was and a game alone as the Xbox's. Said in the
+log. Returns the new text, or NULL if there was nothing to change */
+static char *config_retire_centered_crosshair(const char *text, toml_datum_t table)
+{
+	toml_datum_t position = toml_seek(table, "display.crosshair_position");
+	toml_datum_t safe_zone = toml_seek(table, "display.hud_safe_zone");
+	int xbox_safe_zone;
+	char *result;
+
+	if (position.type != TOML_STRING || strcmp(position.u.s, "centered"))
+		return NULL;
+	xbox_safe_zone = safe_zone.type == TOML_STRING ? !strcmp(safe_zone.u.s, "xbox") :
+		!strcmp(DEFAULT_HUD_SAFE_ZONE, "\"xbox\"");
+	result = config_text_with_line(text, "display.crosshair_position", "crosshair_position = \"retail\"\n");
+	if (result && xbox_safe_zone)
+	{
+		char *both = config_text_with_line(result, "display.hud_safe_zone", "hud_safe_zone = \"auto\"\n");
+
+		free(result);
+		result = both;
+	}
+	if (result)
+	{
+		platform_log("settings: display.crosshair_position = \"centered\" is retired; it is \"retail\" now%s "
+			"(display.hud_safe_zone puts each split screen view's crosshair in its middle)",
+			xbox_safe_zone ? ", and display.hud_safe_zone = \"auto\"" : "");
+	}
+	return result;
+}
+
 /* a file that holds a setting under its older name (config_renamed): that
 name's lines are taken out of it (its value, and its line commented out at
 the default with its help text of that day, each with the comment above it
@@ -5775,6 +5988,7 @@ static const struct
 	{ "display.theme", { "blue", "red", "green", "orange", "live", NULL }, "\"blue\"" },
 	{ "delta.guide_background", { "auto", "plain", "cellwall", NULL }, "\"auto\"" },
 	{ "display.mode", { "", "fullscreen", "borderless", "windowed", NULL }, "display.fullscreen's" },
+	{ "delta.confirm_button", { "bottom", "right", NULL }, "\"bottom\"" },
 	{ "display.resolution_scaling", { "native", "75%", "50%", "25%", "original", NULL }, RESOLUTION_SCALING },
 	{ "display.vrr", { "off", "on", "auto", NULL }, "\"off\"" },
 	{ "display.anti_aliasing", { "off", "fxaa", "smaa", "ssaa2x", "msaa2x", "msaa4x", "msaa8x", NULL }, NULL },
@@ -5794,10 +6008,15 @@ static const struct
 	{ "display.online_games_view", { "all", "public", "chupathingy", "opence", NULL }, "\"public\"" },
 	{ "display.opence_empty_servers", { "folded", "shown", NULL }, "\"folded\"" },
 	{ "display.texture_decode", { "auto", "gpu", "cpu", NULL }, "\"auto\"" },
-	{ "display.crosshair_position", { "retail", "centered", "lowered", NULL }, "\"retail\"" },
+	/* ("centered" is retired: config_retire_centered_crosshair) */
+	{ "display.crosshair_position", { "retail", "lowered", NULL }, "\"retail\"" },
+	/* (two numbers, "24 18", are taken too: the log line for anything else
+	is hud_draw.c's hud_safe_zone_margins) */
+	{ "display.hud_safe_zone", { "xbox", "pc", "auto", NULL }, NULL },
 	/* (the log line for another word is config_tuning_apply's, which uses the default) */
 	{ "tuning.preset", { "retail", "lan-party", "potato", NULL }, NULL },
 	{ "tuning.present_mode", { "vblank", "adaptive", NULL }, NULL },
+	{ "tuning.effects", { "full", "reduced", "minimal", NULL }, NULL },
 	{ "audio.resampling", { "xbox", "sinc", "linear", NULL }, "\"sinc\"" },
 	{ "input.touch_controls", { "on", "auto", "off", NULL }, "\"on\"" },
 	{ "game.console_log", { "important", "all", "none", NULL }, "\"important\"" },
@@ -5958,8 +6177,11 @@ the others stay where they were, the one place each value lives, and a
 preset only changes what "unset" means. Every knob changes only what is
 drawn, never the simulation, so a game plays the same whatever they say
 (display.particle_limit is held at the Xbox's 1024 or more in a network
-game: particles.c). A value out of a knob's range is held in it, and a word
-that is none of a knob's is its default, each said in the log.
+game: particles.c; the light limits at the consoles' 8 and 2:
+object_lights.c; and the drawing's knobs never hide players, vehicles,
+projectiles, pickups or cover there: render.c's render_tuning). A value out of a
+knob's range is held in it, and a word that is none of a knob's is its
+default, each said in the log.
 
 The log has every knob's value and where it came from at the start
 ("tuning: at=boot", with a line of those that differ from the defaults),
@@ -5968,8 +6190,8 @@ at each map's start ("tuning: at=map", config_tuning_log) and at each change
 (crash_report.c, log_send.c).
 
 Not knobs yet, needing engine work sized by testers' console.perf_log lines
-first: the explosions' particles, the effects' density, the decals' draw
-distance and the tire tracks. */
+first: the explosions' particles, the decals' draw distance and the tire
+tracks. */
 
 enum
 {
@@ -6028,20 +6250,50 @@ static const struct
 	long minimum, maximum;
 	/* the value each preset gives it (retail none): NULL leaves the default */
 	const char *preset[NUMBER_OF_TUNING_PRESETS];
+	/* the original Xbox's, whose own limits are already where the PC's
+	presets would put them: there "lan-party" is for big network games
+	(smaller shadows, no shine or reflections, a late frame shown at once:
+	only knobs that still count in one, so no light limit, which a network
+	game holds), and "potato" goes further below the
+	Xbox's own drawing (fewer particles, every other loose one drawn, the
+	decals and, outside network games, the grass and weather left out). A
+	network game holds the knobs that could hide a player or show one
+	(particles.c, object_lights.c, render.c's render_tuning) */
+	const char *xbox_preset[NUMBER_OF_TUNING_PRESETS];
 } config_tuning_knobs[] =
 {
-	{ "display.dynamic_light_limit", "lights", _tuning_limit, 0, TUNING_MAXIMUM_LIGHTS, { NULL, "16", "8" } },
-	{ "display.specular_light_limit", "specular", _tuning_limit, 0, TUNING_MAXIMUM_LIGHTS, { NULL, "4", "2" } },
-	{ "display.particle_limit", "particles", _tuning_limit, 0, TUNING_MAXIMUM_PARTICLES, { NULL, "2048", "1024" } },
-	{ "display.particle_ticks", "particle_ticks", 0, 0, 0, { NULL, "true", "true" } },
-	{ "display.shadow_resolution", "shadows", 0, 0, 0, { NULL, NULL, "128" } },
-	{ "display.anisotropic_filtering", "aniso", 0, 0, 0, { NULL, NULL, "0" } },
-	{ "display.anti_aliasing", "aa", 0, 0, 0, { NULL, NULL, "off" } },
-	{ "display.per_pixel_lighting", "per_pixel", 0, 0, 0, { NULL, NULL, "false" } },
-	{ "display.light_effects", "light_effects", 0, 0, 0, { NULL, NULL, "off" } },
-	{ "display.resolution_scaling", "scaling", 0, 0, 0, { NULL, NULL, "original" } },
-	{ "tuning.present_mode", "present", _tuning_words, 0, 0, { NULL, "adaptive", NULL } },
-	{ "tuning.texture_cache", "texture_cache", _tuning_megabytes, 19, 512, { NULL, NULL, NULL } },
+	{ "display.dynamic_light_limit", "lights", _tuning_limit, 0, TUNING_MAXIMUM_LIGHTS, { NULL, "16", "8" },
+		{ NULL, NULL, "2" } },
+	{ "display.specular_light_limit", "specular", _tuning_limit, 0, TUNING_MAXIMUM_LIGHTS, { NULL, "4", "2" },
+		{ NULL, NULL, "1" } },
+	{ "display.particle_limit", "particles", _tuning_limit, 0, TUNING_MAXIMUM_PARTICLES, { NULL, "2048", "1024" },
+		{ NULL, NULL, "512" } },
+	{ "display.particle_ticks", "particle_ticks", 0, 0, 0, { NULL, "true", "true" },
+		{ NULL, NULL, NULL } },
+	{ "display.shadow_resolution", "shadows", 0, 0, 0, { NULL, NULL, "128" },
+		{ NULL, NULL, NULL } },
+	{ "display.anisotropic_filtering", "aniso", 0, 0, 0, { NULL, NULL, "0" },
+		{ NULL, NULL, NULL } },
+	{ "display.anti_aliasing", "aa", 0, 0, 0, { NULL, NULL, "off" },
+		{ NULL, NULL, NULL } },
+	{ "display.per_pixel_lighting", "per_pixel", 0, 0, 0, { NULL, NULL, "false" },
+		{ NULL, NULL, NULL } },
+	{ "display.light_effects", "light_effects", 0, 0, 0, { NULL, NULL, "off" },
+		{ NULL, NULL, NULL } },
+	{ "display.resolution_scaling", "scaling", 0, 0, 0, { NULL, NULL, "original" },
+		{ NULL, NULL, NULL } },
+	{ "tuning.present_mode", "present", _tuning_words, 0, 0, { NULL, "adaptive", NULL },
+		{ NULL, "adaptive", "adaptive" } },
+	{ "tuning.particle_thinning", "thinning", 0, 1, 4, { NULL, NULL, NULL },
+		{ NULL, NULL, "2" } },
+	{ "tuning.effects", "effects", _tuning_words, 0, 0, { NULL, NULL, NULL },
+		{ NULL, "reduced", "minimal" } },
+	{ "tuning.shadow_pixels", "shadow_pixels", 0, 30, 400, { NULL, NULL, NULL },
+		{ NULL, "60", "120" } },
+	{ "tuning.object_cull_pixels", "cull_pixels", 0, 0, 16, { NULL, NULL, NULL },
+		{ NULL, "4", "8" } },
+	{ "tuning.texture_cache", "texture_cache", _tuning_megabytes, 19, 512, { NULL, NULL, NULL },
+		{ NULL, NULL, NULL } },
 };
 
 #define NUMBER_OF_TUNING_KNOBS (sizeof(config_tuning_knobs) / sizeof(config_tuning_knobs[0]))
@@ -6059,6 +6311,16 @@ static int config_tuning_said_preset = -1;
 player chose since the file was read (config_given stays the file's and
 the environment's, which config_chosen answers) */
 static signed char config_touched[NUMBER_OF_CONFIG_SETTINGS];
+
+/* the value a preset gives a knob on this build (NULL: its default) */
+static const char *config_tuning_knob_preset(size_t knob, int preset)
+{
+#ifdef HALO_XBOX_CONSOLE
+	return config_tuning_knobs[knob].xbox_preset[preset];
+#else
+	return config_tuning_knobs[knob].preset[preset];
+#endif
+}
 
 /* a knob's setting, or -1 for one that is not this build's */
 static long config_tuning_setting(size_t knob)
@@ -6224,7 +6486,7 @@ static void config_tuning_apply(long changed)
 		}
 		else if (!given)
 		{
-			const char *preset_value = config_tuning_knobs[knob].preset[preset];
+			const char *preset_value = config_tuning_knob_preset(knob, preset);
 
 			if (preset_value && (flags & _tuning_limit))
 			{
@@ -6310,9 +6572,9 @@ static void config_tuning_apply(long changed)
 			platform_log("tuning: change preset=%s->%s", config_tuning_presets[config_tuning_said_preset < 0 ?
 				_tuning_preset_retail : config_tuning_said_preset], config_tuning_presets[preset]);
 		}
-		/* a preset that sets nothing on this build (on the original Xbox,
-		potato: its limits are the console's own, the rest not its
-		settings) says so, rather than look like it did something */
+		/* a preset that sets nothing on this build (every knob it names
+		set by hand, or its limits this build's own) says so, rather than
+		look like it did something */
 		if (preset != _tuning_preset_retail && (start || config_tuning_said_preset != preset))
 		{
 			int preset_set = 0;
@@ -6785,6 +7047,29 @@ static void config_load(void)
 					{
 						toml_free(forwarded_result);
 						free(forwarded);
+					}
+				}
+			}
+			{
+				/* (display.crosshair_position "centered", retired) */
+				char *retired = config_retire_centered_crosshair(text, result.toptab);
+				toml_result_t retired_result;
+
+				if (retired)
+				{
+					retired_result = toml_parse(retired, (int)strlen(retired));
+					if (retired_result.ok)
+					{
+						toml_free(result);
+						free(text);
+						result = retired_result;
+						text = retired;
+						updated = text;
+					}
+					else
+					{
+						toml_free(retired_result);
+						free(retired);
 					}
 				}
 			}
@@ -7817,7 +8102,7 @@ const char *config_tuning_preset_value(const char *preset, const char *name)
 	for (knob = 0; knob < NUMBER_OF_TUNING_KNOBS; knob++)
 	{
 		if (!strcmp(config_tuning_knobs[knob].name, name))
-			return config_tuning_knobs[knob].preset[index];
+			return config_tuning_knob_preset(knob, index);
 	}
 	return NULL;
 }

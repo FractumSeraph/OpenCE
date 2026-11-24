@@ -47,8 +47,8 @@ map's decoded HUD pictures takes about 60 MB more at once) */
 long hud_hires_asset_at(unsigned long address, long width, long height);
 long hud_hires_asset_stock_custom_edition(unsigned long address, long width, long height, long asset);
 
-/* Include every embedded HUD and button style, including stick frames (the
-titles made from the player's files are counted apart). */
+/* (the HUD's, both sets of titles and the MCC maps' sheets: 84, 35, 35
+and 80 now; the titles made from the player's files are counted apart) */
 #define MAXIMUM_TEXTURES 256
 /* a PNG's inflated rows and its texels, which are held at once: 128 MB for
 a 4096 by 4096 sheet (the largest shipped, 2048 by 2048, takes 32 MB), and
@@ -190,6 +190,19 @@ int hud_hires_bitmap_affected(unsigned long address, long width, long height, un
 
 	return asset >= 0 && asset < hud_hires_asset_count() &&
 		(changed & (hud_hires_embedded[asset].title ? 2UL : 1UL)) != 0;
+}
+
+long hud_hires_asset_mcc(long asset)
+{
+	return asset >= 0 && asset < hud_hires_asset_count() && hud_hires_embedded[asset].mcc;
+}
+
+long hud_hires_asset_fits_mcc(long asset, long width, long height)
+{
+	const struct hud_hires_embedded *embedded = &hud_hires_embedded[asset];
+
+	return hud_hires_asset_mcc(asset) && width > 0 && height > 0 && embedded->width % width == 0 &&
+		embedded->height % height == 0 && embedded->width / width == embedded->height / height;
 }
 
 static int hud_enabled, titles_enabled, titles_cyborg, titles_from_files;
@@ -929,6 +942,9 @@ unsigned int hud_hires_override_texture(long asset, unsigned long *levels)
 #endif
 		if (!decoded)
 			pixels = png_decode((const unsigned char *)embedded->png, embedded->png_size, &width, &height);
+		/* (an MCC sheet's cells that stay the map's own) */
+		if (pixels && embedded->mcc && embedded->keep_count)
+			hud_hires_mcc_keep(asset, pixels, width, height);
 		textures[asset].texture = png_pixels_texture(pixels, width, height, &textures[asset].levels);
 	}
 	if (!textures[asset].texture)

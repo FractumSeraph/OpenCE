@@ -233,6 +233,10 @@ SCREENS = {
                 ("FAR CLIP:", "display.far_clip_distance",
                  [("1024 (XBOX)", "1024"), ("2048", "2048"), ("4096", "4096"), ("8192", "8192"), ("10000", "10000")],
                  "How far the world is drawn.", None),
+                # (port/linux/game/ragdolls.c: the builds with Jolt Physics,
+                # HALO_PORT_RAGDOLLS)
+                ("RAGDOLLS:", "display.ragdolls", ON_OFF,
+                 "Dead bodies fall limp and come to rest.\nOff looks like the Xbox.", "desktop"),
             ]),
             # (the first person's: port/linux/game/view_fov.c and the rest)
             ("viewmodels", "VIEWMODELS", "Your weapon, arms and legs in first person.", [
@@ -279,6 +283,11 @@ SCREENS = {
                 # BUTTON STYLE is ChupathingyCE's, below)
                 ("SHOW FRAMES:", "display.show_fps", ON_OFF,
                  "Draw the frame rate at the bottom right of a game,\ncounted over half a second.", None),
+                # (display.hud_safe_zone: hud_draw.c's hud_safe_zone_bounds;
+                # two numbers are in config.toml alone)
+                ("SAFE ZONES:", "display.hud_safe_zone",
+                 [("ON", "xbox"), ("SINGLE SCREEN ONLY", "auto"), ("OFF", "pc")],
+                 "Keep the HUD in from the screen's edges, as on the Xbox.\nOff moves it to the edges.", None),
                 # (the ~ key's console: terminal.c's drop-down one, or the
                 # Xbox's lines at the bottom)
                 ("CONSOLE:", "display.console_style", [("DROP-DOWN", "dropdown"), ("CLASSIC", "classic")],
@@ -688,6 +697,31 @@ CONTROLLER_LINKS = [
                  "Custom button layouts for P1-P4.\nUse / Reload stays combined.", NOT_CONSOLE),
     _screen_link("STICK DEAD ZONES", "dead_zones", "How far each stick moves before it does\nanything.",
                  NOT_CONSOLE),
+]
+
+# the controller's GYRO page (gyro aiming: port/linux/src/gyro_aim.c, the
+# input.gyro_* settings), the desktop's and Android's. The Switch's port has
+# its own page (its tools/switch_menus.py adds GYRO to CONTROLLER_PAGES and
+# its rows), so this one is left out when CONTROLLER_PAGES has GYRO already
+GYRO_SENSITIVITIES = [(f"{value:g}", f"{value:g}") for value in
+                      (0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 4, 5, 6, 7, 8, 9, 10)]
+GYRO_DEADZONES = [("OFF", "0")] + [(f"{value:g}", f"{value:g}") for value in (0.25, 0.5, 0.75, 1, 1.5, 2, 3, 5, 10)]
+GYRO_PLATFORMS = "desktop android"
+GYRO_ROWS = [
+    ("GYRO AIM:", "input.gyro_aim", ON_OFF + [("ONLY ON ZOOM", "zoom")],
+     "Turn the view with the gyroscope.", GYRO_PLATFORMS),
+    ("HORIZONTAL SENSITIVITY:", "input.gyro_sensitivity_horizontal", GYRO_SENSITIVITIES,
+     "How far the view turns left and right.", GYRO_PLATFORMS),
+    ("VERTICAL SENSITIVITY:", "input.gyro_sensitivity_vertical", GYRO_SENSITIVITIES,
+     "How far the view turns up and down.", GYRO_PLATFORMS),
+    ("HORIZONTAL AXIS:", "input.gyro_horizontal_axis", [("YAW", "yaw"), ("ROLL", "roll")],
+     "Turn the controller, or tilt it like a wheel.", GYRO_PLATFORMS),
+    ("INVERT HORIZONTAL:", "input.gyro_invert_horizontal", YES_NO,
+     "Turning it right looks left.", GYRO_PLATFORMS),
+    ("INVERT VERTICAL:", "input.gyro_invert_vertical", YES_NO,
+     "Tilting it up looks down.", GYRO_PLATFORMS),
+    ("DEADZONE:", "input.gyro_deadzone", GYRO_DEADZONES,
+     "Ignore motion slower than this (degrees a second).", GYRO_PLATFORMS),
 ]
 
 # Controls Setup: the keyboard and mouse's actions, in groups (the order of
@@ -1237,10 +1271,12 @@ def _controls_rows() -> tuple:
                      [])
     mark("mouse")
     settings(MOUSE_ROWS, 2)
-    # the controller's
-    mark("gamepad_buttons")
+    # the controller's (GYRO_ROWS' page too, unless the Switch's own is
+    # added: GYRO_PLATFORMS)
+    gyro = "GYRO" not in CONTROLLER_PAGES
+    mark("gamepad_buttons_gyro" if gyro else "gamepad_buttons")
     rows.append((f"{base}/op_page", NOT_CONSOLE, 1))
-    extra += _chooser(base, "page", "SHOW:", CONTROLLER_PAGES)
+    extra += _chooser(base, "page", "SHOW:", [*CONTROLLER_PAGES, "GYRO"] if gyro else CONTROLLER_PAGES)
     mark("gamepad")
     rows.append((f"{base}/op_layout", None, 2))
     extra += _widget(f"{base}/op_layout", [("width", 512), ("height", 28), ("flags", "pass_unhandled_to_focused_child"),
@@ -1277,6 +1313,9 @@ def _controls_rows() -> tuple:
     extra += _widget(f"{base}/button_value",
                      [("type", "text"), ("controller", 1), ("width", 147), ("height", 22), ("font", "ui\\large_ui"),
                       ("color", "#FF2896FF"), ("align", "center"), ("text_y", 3), ("text_flags", "no_focus_test")], [])
+    if gyro:
+        mark("gyro")
+        settings(GYRO_ROWS, 2)
     # (the settings' labels and helps, by label as the settings screens';
     # the other rows' helps are menu_functions.c's own)
     extra += _strings(f"{base}/labels", labels)

@@ -186,6 +186,16 @@ makes the host's objects at the host's datum indices, and deletes them only
 on the host's word */
 long network_objects_new_object_index(void);
 boolean network_objects_creating_host_object(void);
+#ifndef HALO_CONSOLE_NO_FORGE
+/* (port: Forge's placement, port/linux/game/forge.c: the object chosen, as
+it is, not the game type's in its place) */
+extern int forge_placing_exact;
+/* (port: the map's own objects a Forge layout takes away, and which object
+each placement made for the editor: port/linux/game/forge_map_objects.inc) */
+extern int forge_map_objects_active;
+boolean forge_map_placement_skipped(struct scenario_object_datum const *placement);
+void forge_map_placement_made(struct scenario_object_datum const *placement, long object_index);
+#endif
 boolean network_objects_may_delete(long object_index);
 /* source/networking/network_game_globals.c's */
 boolean network_game_distributed_client(void);
@@ -466,7 +476,27 @@ void objects_fix_for_deleted_object(
 	struct object_datum *object;
 
 	struct object_iterator iterator;
+#ifdef HALO_CONSOLE_FEWER_WALKS
+	unsigned long handling_types = object_types_handling_deleted_objects();
+
+#if defined(HALO_RELEASE) || defined(HALO_CONSOLE_NO_DEBUG_ASSERTS)
+	/* port: a release-style build visits only the objects of the types with
+	a handler (units and projectiles). The other reference cleared here, an
+	object's umbrella shield, is never anything but NONE: object_new sets it
+	so, nothing sets it to an object, damage.c only reads it. So the walk read every object
+	in the game (about a thousand in b30's beach fight) for every projectile
+	that hit or timed out, and found nothing to clear in all but those. The
+	headers are still walked in order and the handlers called for the same
+	objects in the same order. Builds with assertions visit every object and
+	check that no umbrella shield names the deleted object (from Lord
+	BirchWood's Vita port) */
+	object_iterator_new(&iterator, handling_types, 0);
+#else
 	object_iterator_new(&iterator, _object_mask_all, 0);
+#endif
+#else
+	object_iterator_new(&iterator, _object_mask_all, 0);
+#endif
 
 	for (object = (struct object_datum *)object_iterator_next(&iterator);
 		object;
@@ -474,8 +504,15 @@ void objects_fix_for_deleted_object(
 	{
 		if (object->object.umbrella_shield_object_index==deleted_object_index)
 		{
+#if defined(HALO_CONSOLE_FEWER_WALKS) && !defined(HALO_RELEASE) && !defined(HALO_CONSOLE_NO_DEBUG_ASSERTS)
+			match_vassert("c:\\halo\\SOURCE\\objects\\objects.c", __LINE__, FALSE,
+				"objects_fix_for_deleted_object: an umbrella shield named an object (a release build skips the objects that have no handler)");
+#endif
 			object->object.umbrella_shield_object_index = NONE;
 		}
+#ifdef HALO_CONSOLE_FEWER_WALKS
+		if (TEST_FLAG(handling_types, object->object.type))
+#endif
 		object_type_handle_deleted_object(iterator.index, deleted_object_index);
 	}
 
@@ -580,6 +617,11 @@ void objects_information_get(
 	return;
 }
 
+/* port: the structure BSP the co-op host's activating cluster was taken in
+(objects_port_set_activating_cluster), NONE for a cluster of this machine's
+own scripts */
+static short objects_port_activating_structure_bsp_index = NONE;
+
 void object_pvs_set_object(
 	long object_index)
 {
@@ -624,6 +666,7 @@ void object_pvs_set_camera_point(
 		{
 			object_globals->pvs_activation_type = _pvs_activation_cluster;
 			object_globals->pvs_activation.cluster_index = location.cluster_index;
+			objects_port_activating_structure_bsp_index = NONE;
 		}
 	}
 
@@ -641,6 +684,7 @@ void objects_port_set_activating_cluster(
 	}
 	object_globals->pvs_activation_type = _pvs_activation_cluster;
 	object_globals->pvs_activation.cluster_index = cluster_index;
+	objects_port_activating_structure_bsp_index = global_structure_bsp_index_get();
 }
 
 void object_pvs_clear(void)
@@ -659,6 +703,15 @@ short objects_get_activating_cluster_index(
 	switch (object_globals->pvs_activation_type)
 	{
 	case _pvs_activation_cluster:
+		/* port: not a co-op host's from before this machine's last BSP
+		switch: a cluster of another BSP, past the end of this one's (a halt
+		in a debug build, structure_bsp_get_cluster_pvs) or another place in
+		it. The host's next word on it brings the one in this BSP */
+		if (objects_port_activating_structure_bsp_index != NONE &&
+			objects_port_activating_structure_bsp_index != global_structure_bsp_index_get())
+		{
+			break;
+		}
 		result = object_globals->pvs_activation.cluster_index;
 		break;
 	case _pvs_activation_object:
@@ -3723,6 +3776,11 @@ long object_new(
 	if (game_engine_running() && definition_index!=NONE
 		/* (the host's object, which the host made as the game type has it) */
 		&& !network_objects_creating_host_object()
+#ifndef HALO_CONSOLE_NO_FORGE
+		/* (what Forge's monitor chose: a flamethrower, a Scorpion where the
+		vehicle set has Warthogs) */
+		&& !forge_placing_exact
+#endif
 		)
 	{
 		definition_index = game_engine_remap_object_definition(definition_index);
@@ -4319,6 +4377,12 @@ long object_new_from_scenario(
 	
 	long result = NONE;
 
+#ifndef HALO_CONSOLE_NO_FORGE
+	/* port: a placement a Forge layout takes away is not made (a Forge
+	game or a layout played alone) */
+	if (forge_map_objects_active && forge_map_placement_skipped(scenario_object))
+		return NONE;
+#endif
 	/* port: a palette entry the scenario has (a map's index; retail's are
 	all NONE or in range) */
 	if (VALID_INDEX(scenario_object->palette_entry_index, palette->count) &&
@@ -4357,6 +4421,10 @@ long object_new_from_scenario(
 					{
 						object_name_list_new(result, scenario_object->name_index);
 					}
+#ifndef HALO_CONSOLE_NO_FORGE
+					if (forge_map_objects_active)
+						forge_map_placement_made(scenario_object, result);
+#endif
 				}
 			}
 		}

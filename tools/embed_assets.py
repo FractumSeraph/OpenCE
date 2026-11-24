@@ -41,10 +41,16 @@ ROOT = Path(__file__).resolve().parent.parent
 HUD_ASSETS = Path("port/assets/hud")
 LAYOUT = HUD_ASSETS / "layout.json"
 CE_LAYOUT = HUD_ASSETS / "ce_layout.json"
-MCC_LAYOUT = HUD_ASSETS / "mcc_layout.json"
+# (OpenCE's MCC reticles, drawn through placeholders like the HUD's; this fork
+# keeps them apart from ChupathingyCE's MCC sheets, which have mcc_layout.json)
+MCC_RETICLES = HUD_ASSETS / "mcc_reticles.json"
 CE_STOCK = HUD_ASSETS / "ce_stock.json"
 # the HUD textures whose bitmaps Halo Custom Edition lays out alike
 CUSTOM_EDITION_HUD = HUD_ASSETS / "custom_edition.json"
+# the MCC maps' stock sheets (tools/hud_assets.py mcc-layout): only in the
+# builds that play MCC maps (HALO_MCC)
+MCC_HUD_ASSETS = HUD_ASSETS / "mcc"
+MCC_LAYOUT = HUD_ASSETS / "mcc_layout.json"
 TITLE_ASSETS = Path("port/assets/titles")
 TITLE_LIST = TITLE_ASSETS / "titles.json"
 BUTTON_ASSETS = Path("port/assets/buttons")
@@ -146,14 +152,14 @@ def font_files() -> List[str]:
 
 def textures() -> List[tuple]:
     """The textures: each one's folder, its entry in its list, and whether
-    it is the menus' (0: the HUD's, 1: a classic title or a button icon,
-    drawn with the high-res text, 2: a cyborg title)."""
+    it is the menus' (0: the HUD's or an MCC sheet's, 1: a classic title or a
+    button icon, drawn with the high-res text, 2: a cyborg title)."""
     result = []
     for folder, listing, title in ((HUD_ASSETS, LAYOUT, 0), (TITLE_ASSETS, TITLE_LIST, 1),
                                    (BUTTON_ASSETS, BUTTON_LIST, 1), (HUD_ASSETS, CE_LAYOUT, 0),
-                                   (HUD_ASSETS, MCC_LAYOUT, 0),
+                                   (HUD_ASSETS, MCC_RETICLES, 0),
                                    (CONTROLLER_ASSETS, CONTROLLER_LIST, 1),
-                                   (TITLE_CYBORG_ASSETS, TITLE_CYBORG_LIST, 2)):
+                                   (TITLE_CYBORG_ASSETS, TITLE_CYBORG_LIST, 2), (MCC_HUD_ASSETS, MCC_LAYOUT, 0)):
         if (ROOT / listing).is_file():
             result += [(folder, asset, title) for asset in json.loads((ROOT / listing).read_text())["assets"]]
     return result
@@ -201,7 +207,7 @@ def smaa_files() -> List[tuple]:
 
 def hud_asset_inputs() -> List[Path]:
     """The files the generated source is made from."""
-    inputs = [listing for listing in (LAYOUT, CE_LAYOUT, MCC_LAYOUT, CE_STOCK, CUSTOM_EDITION_HUD, TITLE_LIST,
+    inputs = [listing for listing in (LAYOUT, CE_LAYOUT, MCC_RETICLES, MCC_LAYOUT, CE_STOCK, CUSTOM_EDITION_HUD, TITLE_LIST,
                                       TITLE_CYBORG_LIST, BUTTON_LIST, CONTROLLER_LIST, FONT_LIST, MENU_LIST)
               if (ROOT / listing).is_file()]
     return [*inputs, *(folder / f"{asset['name']}.png" for folder, asset, _ in textures()),
@@ -219,7 +225,7 @@ def hud_configure_inputs() -> List[Path]:
     folders, for files added or removed), not each file, which a change of a
     list may rename or remove."""
     inputs = []
-    for folder, listing in ((HUD_ASSETS, LAYOUT), (HUD_ASSETS, CE_LAYOUT), (HUD_ASSETS, MCC_LAYOUT), (TITLE_ASSETS, TITLE_LIST), (BUTTON_ASSETS, BUTTON_LIST),
+    for folder, listing in ((HUD_ASSETS, LAYOUT), (HUD_ASSETS, CE_LAYOUT), (HUD_ASSETS, MCC_RETICLES), (MCC_HUD_ASSETS, MCC_LAYOUT), (TITLE_ASSETS, TITLE_LIST), (BUTTON_ASSETS, BUTTON_LIST),
                             (TITLE_CYBORG_ASSETS, TITLE_CYBORG_LIST), (CONTROLLER_ASSETS, CONTROLLER_LIST),
                             (FONT_ASSETS, FONT_LIST), (MENU_ASSETS, MENU_LIST)):
         if (ROOT / listing).is_file():
@@ -462,12 +468,18 @@ def main() -> None:
         scale = asset["scale"]
         if (width, height) != (asset["width"] * scale, asset["height"] * scale):
             sys.exit(f"{name}: {width}x{height}, not {scale}x its bitmap's {asset['width']}x{asset['height']}")
-        # (the cyborg titles only with HALO_TITLE_CHOICE)
-        choice = ["#ifdef HALO_TITLE_CHOICE"] if title == 2 else []
+        # (the cyborg titles only with HALO_TITLE_CHOICE, the MCC sheets
+        # only with HALO_MCC)
+        mcc = int(folder == MCC_HUD_ASSETS)
+        choice = ["#ifdef HALO_TITLE_CHOICE"] if title == 2 else ["#if HALO_MCC"] if mcc else []
         lines.extend(choice)
         lines.append(f"static const unsigned int asset{index}[] = {{")
         lines.extend(words(data))
         lines.append("};")
+        keep = asset.get("keep", [])
+        if keep:
+            values = ", ".join(str(value) for cell in keep for value in cell)
+            lines.append(f"static const unsigned short keep{index}[] = {{ {values} }};")
         lines.extend(["#endif"] if choice else [])
         lines.append("")
         tag = asset["tag"].replace("\\", "\\\\")
@@ -485,7 +497,8 @@ def main() -> None:
         table.append(f'\t{{ "{tag}", {asset["bitmap"]}, {width}, {height}, 0x{asset["crc"]:08x}u, {coverage}, '
                      f'{point_threshold}, {title}, 0x{sprites:x}u, '
                      f'{int(bool(ce))}, {int(asset.get("ce_only", False))}, {ce.get("width", 0)}, {ce.get("height", 0)}, '
-                     f'{ce.get("size", 0)}, 0x{ce.get("crc", 0):08x}u, asset{index}, {len(data)} }},')
+                     f'{ce.get("size", 0)}, 0x{ce.get("crc", 0):08x}u, asset{index}, {len(data)}, {mcc}, '
+                     f'{f"keep{index}" if keep else "0"}, {len(keep)} }},')
         table.extend(["#endif"] if choice else [])
     lines.append("const struct hud_hires_embedded hud_hires_embedded[] =")
     lines.append("{")

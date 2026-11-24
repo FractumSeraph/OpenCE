@@ -134,12 +134,15 @@ void halo_screen_anti_alias(short x0, short y0, short x1, short y1);
 anti-aliasing (source/render/render.c), and what the code drawing knows of
 the draws that follow (HALO_HDR_KIND_*, 0 none: port/linux/src/d3d8_gl.c's
 hdr_draw_tag, xgpu_tone_map.h) */
-/* (the ports with port/linux/src/d3d8_gl.c, the desktop's and Android's,
-have them; the others, the original Xbox's, the Switch's and the PS3's own
-renderers, draw into their own 8 bits: nothing to do, and no stub to add
-in their ports) */
-#if defined(HALO_LINUX_PLATFORM_LAYER) && !defined(HALO_XBOX_CONSOLE) && !defined(HALO_SWITCH_CONSOLE) && \
-	!defined(HALO_CONSOLE) && !defined(HALO_CONSOLE_GL_LAYER)
+/* (the ports with port/linux/src/d3d8_gl.c, the desktop's, Android's and
+iOS's, have them; the others, the original Xbox's, the Switch's and the
+PS3's own renderers, draw into their own 8 bits: nothing to do, and no stub
+to add in their ports. The dedicated server draws nothing. Only the game's
+units see this header (the prefix headers include it without
+HALO_LINUX_PLATFORM_LAYER), so that define can't be the test here) */
+#if !defined(HALO_XBOX_CONSOLE) && !defined(HALO_SWITCH_CONSOLE) && !defined(HALO_CONSOLE) && \
+	!defined(HALO_CONSOLE_GL_LAYER) && !defined(HALO_WIIU_CONSOLE) && !defined(HALO_XBOX360_CONSOLE) && \
+	!defined(HALO_SERVER)
 #define HALO_PORT_HDR 1
 #endif
 #ifdef HALO_PORT_HDR
@@ -200,6 +203,12 @@ char const *server_director_first_level(void);
 32767: input.left_stick_dead_zone and input.right_stick_dead_zone, else the
 game's own (port/linux/src/xinput_sdl.c) */
 short halo_stick_dead_range(short stick);
+#ifdef HALO_PORT_SAFE_SAVES
+/* the file at path (an Xbox path) made to hold size bytes of data whole, or
+left as it was: TRUE once it does (port/linux/src/xbox_files.c,
+halo_port_features.h) */
+int halo_file_write_whole(const char *path, const void *data, unsigned long size);
+#endif
 /* the mouse in the menus (source/interface/ui_widget.c) */
 #include "halo_ui_pointer.h"
 /* a level not in the maps folder (source/cache/cache_files_windows.c): a

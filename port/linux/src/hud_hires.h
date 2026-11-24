@@ -22,6 +22,9 @@ texture for, and the bitmap's other sprites from the bitmap as before.
 #ifndef HUD_HIRES_H
 #define HUD_HIRES_H
 
+/* (HALO_MCC: whether the MCC maps' sheets below are embedded) */
+#include "../include/halo_port_features.h"
+
 /* an embedded texture: an 8-bit RGBA PNG, and the bitmap it stands for (its
 bitmap group tag's name, its index there, and the CRC-32 of its first mip
 level's pixels as the English maps have them); coverage: a meter's, whose
@@ -36,7 +39,13 @@ display.high_res_text rather than display.high_res_hud: 1 a classic title
 (port/assets/titles_cyborg, with HALO_TITLE_CHOICE), drawn in its place when
 display.title_font is "cyborg"; sprites: the sequences of its bitmap's
 group (a bit each) whose sprites it is drawn for, through a placeholder,
-or 0: the whole bitmap, in its place */
+or 0: the whole bitmap, in its place; mcc: an MCC map's stock sheet's
+(port/assets/hud/mcc, made by tools/hud_assets.py mcc-layout), laid out
+as MCC's sheet is and found by the game for MCC maps alone
+(hud_hires_tags.c), its crc that of the sheet's first mip level as the map
+stores it; keep: that sheet's cells (left, top, right, bottom in its
+texels, keep_count of them) drawn with the map's own texels, which the
+game copies in before the texture is made (hud_hires_mcc_keep) */
 struct hud_hires_embedded
 {
 	const char *tag;
@@ -55,6 +64,9 @@ struct hud_hires_embedded
 	unsigned int ce_width, ce_height, ce_size, ce_crc;
 	const unsigned int *png;
 	unsigned int png_size;
+	int mcc;
+	const unsigned short *keep;
+	unsigned int keep_count;
 };
 
 extern const struct hud_hires_embedded hud_hires_embedded[];
@@ -82,6 +94,17 @@ texture was drawn for (another language's maps, which have their own text,
 or modified ones) */
 long hud_hires_override_find(unsigned long address, unsigned long width, unsigned long height,
 	unsigned long level0_size);
+/* whether the asset is an MCC map's stock sheet's, and whether it can
+stand for an MCC bitmap of this size (a whole multiple of it, the same
+both ways, as large or larger) */
+long hud_hires_asset_mcc(long asset);
+long hud_hires_asset_fits_mcc(long asset, long width, long height);
+/* the game's (port/linux/game/hud_hires_tags.c): the texture standing for
+an MCC map's bitmap, or -1 (mcc_texture_bridge.c asks as it registers
+one); and an MCC sheet's texture's kept cells filled in from the map's own
+texels (rgba: the decoded PNG, width by height) */
+long hud_hires_mcc_asset(void const *bitmap);
+void hud_hires_mcc_keep(long asset, unsigned char *rgba, unsigned long width, unsigned long height);
 /* how many times those settings have changed while the game runs: a
 texture whose stand-in was found before the last change is found again */
 unsigned long hud_hires_settings(void);

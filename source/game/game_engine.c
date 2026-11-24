@@ -643,6 +643,9 @@ boolean cache_file_tags_are_ce(void);
 #include "mcc_ui_teams.h"
 #include "game_modes.h" /* port: the game modes layer (docs/modes.md) */
 #include "game_engine_playlist.h" /* port: the built-ins' builders */
+#ifndef HALO_CONSOLE_NO_FORGE
+#include "forge.h" /* port: port/linux/game/forge.c */
+#endif
 
 /* network_game_globals.c's */
 boolean network_game_distributed_client(void);
@@ -1472,19 +1475,24 @@ static void game_engine_generate_title_string(
 	return;
 }
 
+/* port: the view's window with display.hud_safe_zone's margins (hud_draw.c) */
+void hud_safe_zone_bounds(rectangle2d *bounds);
+
 static void rasterize_in_game_score_draw_line(
 	wchar_t const *string,
 	boolean brighten,
 	real_argb_color *color,
 	long row_index)
 {
-	rectangle2d bounds = render.camera.window_bounds;
+	rectangle2d bounds;
 	short narrow_tab_stops[3];
 	short wide_tab_stops[3];
 	short *tab_stops;
 	boolean splitscreen;
 	long font_index;
 
+	/* port: at display.hud_safe_zone's edge ("xbox": the window's) */
+	hud_safe_zone_bounds(&bounds);
 	splitscreen = local_player_count() > 1;
 	font_index = hud_get_font_index();
 	narrow_tab_stops[0] = 80;
@@ -3519,6 +3527,35 @@ void game_engine_post_rasterize_post_game(
 	return;
 }
 
+/* port: whether any biped the search below can take (find_closest_player_
+callback: not invisible, not dead, not the player's own) stands within the
+20 world units of the camera that it asks of the one it chooses (the same
+distance_squared < 400.0f, from the same camera position to the same object
+position). With none, the search - every collideable object of every
+cluster the camera's cluster can see, then each biped's line of sight -
+chooses none, so it is not made. */
+static boolean find_closest_player_candidate_near(
+	long unit_index,
+	long player_index)
+{
+	struct object_iterator iterator;
+	struct object_datum *object;
+	real_point3d camera_position;
+
+	unit_get_camera_position(unit_index, &camera_position);
+	object_iterator_new(&iterator, _object_mask_biped, 0);
+	while ((object = object_iterator_next(&iterator)) != NULL)
+	{
+		if (find_closest_player_callback(iterator.index, &player_index) &&
+			distance_squared3d(&camera_position, &object->object.position) < 400.0f)
+		{
+			return TRUE;
+		}
+	}
+
+	return FALSE;
+}
+
 static long find_closest_player_index(
 	long player_index)
 {
@@ -3532,7 +3569,8 @@ static long find_closest_player_index(
 			player_control_get_target_object_index(player->local_player_index);
 	}
 
-	if (best_object_index == NONE)
+	if (best_object_index == NONE &&
+		find_closest_player_candidate_near(player->unit_index, player_index))
 	{
 		long object_indices[32];
 		real_point3d camera_position;
@@ -3559,25 +3597,22 @@ static long find_closest_player_index(
 			real distance_squared = distance_squared3d(
 				&camera_position,
 				&candidate->object.position);
-			real_point3d target_position;
-			real_vector3d target_direction;
-			real target_distance;
-			real target_angle;
 
-			if ((candidate->unit.active_camouflage < 1.0f ||
-				player->player_display_index == player_index_from_unit_index(candidate_object_index)) &&
-				autoaim_compute_target(
+			/* port: the same tests, the cheap ones first: a candidate more
+			than 20 units away or outside the 7.5 degrees is passed over
+			before its line of sight is cast (autoaim_target_within_angle).
+			None of the tests changes anything, so the one chosen is the one
+			chosen before. */
+			if (distance_squared < 400.0f &&
+				distance_squared < 900.0f &&
+				(candidate->unit.active_camouflage < 1.0f ||
+					player->player_display_index == player_index_from_unit_index(candidate_object_index)) &&
+				autoaim_target_within_angle(
 					object_indices[object_index],
 					&camera_position,
 					&facing_direction,
 					player->unit_index,
-					&target_position,
-					&target_direction,
-					&target_distance,
-					&target_angle) &&
-				fabs(target_angle) < 0.13083334267139435 &&
-				distance_squared < 400.0f &&
-				distance_squared < 900.0f)
+					0.13083334267139435))
 			{
 				best_object_index = object_indices[object_index];
 			}
@@ -5543,6 +5578,27 @@ static long game_engine_vehicle_home_current(
 	return object_index;
 }
 
+#ifndef HALO_CONSOLE_NO_FORGE
+/* port: Forge (port/linux/game/forge_map_objects.inc): the editor took the
+map's vehicle out of the map's own - deleted it, or made it one of the
+layout's -: its home goes, so that it is not put back on its pad */
+void game_engine_vehicle_home_forget(
+	long object_index)
+{
+	short index;
+
+	for (index = 0; index < game_engine_vehicle_home_count; index++)
+	{
+		if (game_engine_vehicle_homes[index].object_index != object_index)
+			continue;
+		csmemmove(&game_engine_vehicle_homes[index], &game_engine_vehicle_homes[index + 1],
+			sizeof(game_engine_vehicle_homes[0]) * (size_t)(game_engine_vehicle_home_count - index - 1));
+		game_engine_vehicle_home_count--;
+		return;
+	}
+}
+#endif
+
 static void game_engine_update_vehicle_respawn(
 	void)
 {
@@ -6519,7 +6575,13 @@ boolean game_engine_should_end_game(
 	/* port: Infection's round ends by its own rules (infection.c) */
 	if (infection_enabled())
 		return FALSE;
-	if (game_engine && !multiple_teams_alive())
+	if (game_engine && !multiple_teams_alive()
+#ifndef HALO_CONSOLE_NO_FORGE
+		/* port: a Forge game (the monitor editing a map, alone) does not end
+		because one team is left */
+		&& !forge_game_active()
+#endif
+		)
 		should_end_game = TRUE;
 	/* port: the gametype's time limit (game_variant_options) */
 	if (game_engine && game_variant_options_get()->time_limit > 0 &&
@@ -9956,16 +10018,12 @@ static void internal_rasterize_target_name(
 
 	player = player_get(player_index);
 	target_player_index = NONE;
-	if (player->local_player_index != NONE && player->unit_index != NONE)
-	{
-		target_player_index = find_closest_player_index(player_index);
-		if (target_player_index == player_index)
-			target_player_index = NONE;
-	}
 
 	/* This is drawn once a frame, several frames per tick
 	(render_interpolation.c): the hold time counts ticks, as it did on the
-	Xbox. */
+	Xbox. port: the player aimed at is looked for only on the frame that
+	counts the tick, the one frame that reads the answer; the frames between
+	ticks threw their search away. */
 	{
 		static long last_game_times[MAXIMUM_NUMBER_OF_LOCAL_PLAYERS];
 		long *last_game_time = NULL;
@@ -9977,6 +10035,12 @@ static void internal_rasterize_target_name(
 		}
 		if (!last_game_time || *last_game_time != game_time_get())
 		{
+			if (player->local_player_index != NONE && player->unit_index != NONE)
+			{
+				target_player_index = find_closest_player_index(player_index);
+				if (target_player_index == player_index)
+					target_player_index = NONE;
+			}
 			if (last_game_time)
 				*last_game_time = game_time_get();
 	if (player->player_display_index != target_player_index)
@@ -10555,7 +10619,13 @@ static void game_engine_update_item_spawn(
 				respawn_period = respawn_time * TICKS_PER_SECOND;
 			}
 
-			if (game_time_get() % respawn_period == 0)
+			if (game_time_get() % respawn_period == 0
+#ifndef HALO_CONSOLE_NO_FORGE
+				/* port: an item spawn a Forge layout takes away
+				(port/linux/game/forge_map_objects.inc) makes nothing */
+				&& !(forge_map_objects_active && forge_map_item_spawn_skipped(equipment_index))
+#endif
+				)
 			{
 				long definition_index =
 					random_item(equipment->item_collection.index);
@@ -10595,6 +10665,10 @@ static void game_engine_update_item_spawn(
 					}
 					item->item.last_owned_time +=
 						respawn_period - 30 * TICKS_PER_SECOND;
+#ifndef HALO_CONSOLE_NO_FORGE
+					if (forge_map_objects_active)
+						forge_map_item_spawn_made(equipment_index, object_index);
+#endif
 				}
 			}
 		}

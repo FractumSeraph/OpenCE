@@ -74,6 +74,11 @@ int halo_keyboard_binding_label(int action, int slot, char *shown, unsigned int 
 game and in the menus alike */
 int halo_push_to_talk_held(void);
 
+/* the letter keys (A to Z) down while the menus have the keyboard, bit 0
+for A to bit 25 for Z: none while the console, text chat, the Guide or a
+text box takes it (the main menu's Konami code, menu_functions.c) */
+unsigned long halo_keyboard_menu_letters(void);
+
 /* whether an action has a key or button bound to it */
 int halo_keyboard_action_bound(int action);
 
@@ -83,6 +88,37 @@ input.keyboard_prompts is false: platform_prompt_scheme), and the key of an acti
 Left"): 0 for one with none (xinput_sdl.c) */
 int halo_keyboard_prompts(void);
 int halo_keyboard_action_shown(int action, char *shown, unsigned long size);
+
+/* Forge's monitor's keys (port/linux/game/forge.c): config.toml's
+controls.forge_*, each up to two keys, mouse buttons or wheel turns named as
+the actions' are, read with them. Only Forge reads them, and only while its
+player is the monitor, so they may share keys with the actions (Space flies
+up and jumps). Held while the game has the keyboard, as the actions are;
+the monitor flies with the movement keys (controls.move_*) and looks with
+the mouse */
+enum halo_forge_key
+{
+	HALO_FORGE_KEY_UP,
+	HALO_FORGE_KEY_DOWN,
+	HALO_FORGE_KEY_FAST,
+	HALO_FORGE_KEY_GRAB,
+	HALO_FORGE_KEY_ROTATE,
+	HALO_FORGE_KEY_NEARER,
+	HALO_FORGE_KEY_FARTHER,
+	HALO_FORGE_KEY_COPY,
+	HALO_FORGE_KEY_DELETE,
+	HALO_FORGE_KEY_UPRIGHT,
+	HALO_FORGE_KEY_SPEED,
+	HALO_FORGE_KEY_NUDGE,
+	HALO_FORGE_KEY_MENU,
+	HALO_FORGE_KEY_MONITOR,
+	NUMBER_OF_HALO_FORGE_KEYS
+};
+
+/* the Forge keys held (a bit for each halo_forge_key), and a key's first
+binding as the prompts show it ("Mouse Left", "E"; 0 for none) */
+unsigned long halo_forge_keys(void);
+int halo_forge_key_shown(int key, char *shown, unsigned long size);
 
 /* text chat's line is being typed, or its log is open (chat.c): the
 keyboard's keys go to it alone, as with the console (none drives the

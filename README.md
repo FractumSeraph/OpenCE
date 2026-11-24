@@ -1226,6 +1226,11 @@ with their authors credited in each commit.
 - goatbutt and the OpenH1 team: the high-res text drawn from distance
   fields (sharp at any size), the fixed benchmark, the variable refresh
   cap and the camouflaged weapon fix.
+- [hkmodd](https://github.com/hkmodd) (OpenCE): HDR (`display.hdr`): the
+  OpenGL half-float path and the tone mapping curves, from his OpenCE pull
+  request 280 as it stood before OpenCE's license change. The glows past
+  white and the brightness in nits follow goatbutt's and the OpenH1 team's
+  HDR.
 - chestahh (GulchCE): lens flares and light
   glows back on AMD graphics, less stutter the first time a texture is drawn
   on Windows, host cheat and shadow setup fixes, and the Halo MCC map
@@ -1363,7 +1368,7 @@ with their authors credited in each commit.
   most of the Custom Edition fixes.
 - Sabriel, roundzabout and Mega: Grifball playtesting and the bugs and
   tweaks it turned up.
-- Testing, with bug reports and logs over many builds: FASTNOOB, FLTHY, Fujibayashi Kyou, Mega, OpenRift, roundzabout, Sabriel, Shadow Phoenix, snapchipper, TanFlo and ugoboom.
+- Testing, with bug reports and logs over many builds: FASTNOOB, FLTHY, Fujibayashi Kyou, Mega, OpenRift, roundzabout, Sabriel, Shadow Phoenix, snapchipper, TanFlo, ugoboom and Wonka.
 - Console testing on real hardware (original Xbox, Xbox 360, Wii U and
   Switch): BoganEsky, claire, deeechrome, grizz_85, JanusDuo, LD50 II, LukeShortCloud, magoostus, re4thewin, The Real Napsta, TomiG117, UncookedMoa, X-ISO, xpb4me and Xiyl.
 
