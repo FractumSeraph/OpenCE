@@ -52,6 +52,17 @@ SDL_Scancode SDL_GetScancodeFromName(const char *name)
 	return (SDL_Scancode)host_sdl_scancode_from_name(name);
 }
 
+/* (the Guide's battery, platform_power_state: not known in the guest, which
+has no host import for it, so the Guide shows none) */
+SDL_PowerState SDL_GetPowerInfo(int *seconds, int *percent)
+{
+	if (seconds)
+		*seconds = -1;
+	if (percent)
+		*percent = -1;
+	return SDL_POWERSTATE_UNKNOWN;
+}
+
 /* (the console's test keystrokes, platform_test_keystroke: the host's SDL
 has the layouts, but a US one, a hardware keyboard's usual labels there,
 spares a host import) */
