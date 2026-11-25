@@ -337,11 +337,13 @@ static int mcc_identity_matches(char const *name,unsigned char const digest[32],
 43-layout record here (its game speaks 41 and converts). This fork speaks 43
 natively: the record decodes into game->mcc_content_sha256 and
 mcc_metadata_sha256, which the identity rules below read, so this keeps
-nothing (network_client_message_handler.c still calls it) */
-void mcc_identity_wire_record(unsigned char const *record, long size)
+nothing (network_client_message_handler.c still calls it; recognized:
+another project's row, network_rules.h) */
+void mcc_identity_wire_record(unsigned char const *record, long size, int recognized)
 {
     (void)record;
     (void)size;
+    (void)recognized;
 }
 
 /* Only a known item ID establishes presence. Its older package may not yet

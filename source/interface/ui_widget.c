@@ -748,6 +748,7 @@ over the Xbox's and Gearbox's menus, and its dialogs over any */
 (port/linux/game/invite_prompt.c) */
 boolean invite_prompt_active(void);
 void invite_prompt_update(boolean menu_open);
+void direct_join_update(void);
 void invite_prompt_process(void);
 void invite_prompt_pointer(struct halo_ui_pointer const *pointer);
 /* moderation's screen: the same */
@@ -850,8 +851,8 @@ enum
 	_icon_use_equipment,
 	_icon_rotate_weapons,
 	_icon_rotate_grenades,
-	_icon_crouch,
 	_icon_zoom,
+	_icon_crouch,
 	_icon_accept,
 	_icon_back,
 	_icon_move,
@@ -1856,8 +1857,8 @@ static char button_mappings[_icon_custom_1 - _icon_action] =
 	4,		/* use-equipment -> melee */
 	3,		/* rotate-weapons -> switch weapons */
 	1,		/* rotate-grenades -> switch grenades */
+	11,		/* zoom -> zoom (port: zoom before crouch, as retail's tags and table) */
 	10,		/* crouch -> crouch */
-	11,		/* zoom -> zoom */
 	_icon_a_button,		/* accept */
 	_icon_b_button,		/* back */
 	_icon_left_stick,	/* move */
@@ -5724,6 +5725,23 @@ void draw_string_and_hack_in_icons(
 	return;
 }
 
+/* The menu music is looked up by name every frame until it starts; a ui map
+   without that tag (SPV3's ui.yelo starts its own music from its scenario
+   script) logged the miss every frame. Say it once per map. */
+static void ui_main_menu_music_missing(
+	void)
+{
+	static long logged_scenario_index = NONE;
+
+	if (logged_scenario_index != global_scenario_index)
+	{
+		logged_scenario_index = global_scenario_index;
+		error(_error_silent, "title music tag not found");
+	}
+
+	return;
+}
+
 void ui_start_main_menu_music(
 	void)
 {
@@ -5739,7 +5757,7 @@ void ui_start_main_menu_music(
 		}
 		else
 		{
-			error(_error_silent, "title music tag not found");
+			ui_main_menu_music_missing();
 		}
 	}
 
@@ -5760,7 +5778,7 @@ void ui_stop_main_menu_music(
 		}
 		else
 		{
-			error(_error_silent, "title music tag not found");
+			ui_main_menu_music_missing();
 		}
 		widget_globals.main_menu_music_active = FALSE;
 	}
@@ -11257,6 +11275,9 @@ void process_ui_widgets(
 #endif
 #if defined(HALO_GAME_BROWSER) || defined(HALO_CONSOLE_ONLINE_GAMES)
 #ifdef HALO_GAME_BROWSER
+	/* port: a join by address (Direct IP, connect: port/linux/game/
+	direct_join.c) looked for, its game joined once heard */
+	direct_join_update();
 	/* port: an invite on the clipboard, asked about over the menus */
 	invite_prompt_update(widget_globals.active_widgets[0] != NULL);
 	if (invite_prompt_active())

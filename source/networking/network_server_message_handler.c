@@ -914,6 +914,9 @@ void network_rules_settings_record_copy(unsigned char const *record, int options
 	unsigned char *out);
 int network_rules_host_takes_game_type(int size, int opence);
 #include "../../port/linux/game/network_rules.h" /* port: the game modes' rules (docs/modes.md) */
+/* (port/linux/src/port_config.c's: network.direct_ip_host, a game search answered at an
+internet address) */
+int config_boolean(char const *name);
 #ifdef HALO_GAME_BROWSER
 int delta_peer_hosting_delta(void);
 /* (the advertisement's game engine, as delta.h's DELTA_ADVERTISED_KIND_ENGINE
@@ -2358,8 +2361,40 @@ static boolean network_game_server_handle_message_client_broadcast_game_search(
 	{
 		struct network_game *game = network_game_server_get_game(server);
 
-		/* (the time taken only by a search answered; port: one off the client
-		port is always answered) */
+		/* port (ChupathingyCE): a search off the client port is answered
+		directly only when it came from a local network, or internet play's
+		peer, or else when the host allows internet addresses' searches
+		(network.direct_ip_host, off by default), no more than four answers a
+		second for all of them (network_rules.h). A search left unanswered
+		takes nothing else */
+		static struct network_rules_search_budget search_budget;
+
+		if (answer_directly &&
+			(source_address->address_length != IPV4_ADDRESS_LENGTH ||
+			!network_rules_search_answered((uint32_t)source_address->address.long_words[0],
+				config_boolean("network.direct_ip_host"), (uint32_t)now, &search_budget)))
+		{
+			return TRUE;
+		}
+
+		/* port (ChupathingyCE): a search from the client port of an internet
+		address (a player joining this host by its address, Direct IP:
+		port/linux/game/direct_join.c), which the broadcast never reaches, is
+		answered at its address by the same rule, on the same budget: only
+		when the host allows it (network.direct_ip_host; off, the player
+		still joins, after direct_join.c's DIRECT_JOIN_AFTER). Left
+		unanswered, it takes the broadcast's answer as ever */
+		if (!answer_directly && source_address->port && source_address->address_length == IPV4_ADDRESS_LENGTH &&
+			source_address->address.long_words[0] && source_address->address.long_words[0] != NONE &&
+			!network_rules_address_joins_as_lan((uint32_t)source_address->address.long_words[0]) &&
+			network_rules_search_answered((uint32_t)source_address->address.long_words[0],
+				config_boolean("network.direct_ip_host"), (uint32_t)now, &search_budget))
+		{
+			answer_directly = TRUE;
+		}
+
+		/* (the time taken only by a search answered; port: one answered
+		directly always is) */
 		if (game && !broadcast_due && !answer_directly)
 			return TRUE;
 		if (game)

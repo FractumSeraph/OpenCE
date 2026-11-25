@@ -34,6 +34,7 @@ and the debug keyboard that the game's console reads.
 #include "touch_input.h"
 #include "delta.h"
 #include "shared_bans.h"
+#include "networks_game.h"
 #include "map_repo.h"
 #include "crash_report.h"
 #include "../game/text_filter.h"
@@ -977,6 +978,10 @@ BOOL platform_sdl_initialize(void)
 	/* (the legacy table: a newer one fetched meanwhile; the browser's is the
 	page's, port/web/src/web_delta.c) */
 	delta_legacy_start();
+#ifdef HALO_DELTA_PEER_IDENTITY
+	/* (the networks whose players' names are checked: networks_game.h) */
+	networks_start();
+#endif
 	/* (port, this fork: the ban lists of network.shared_bans, shared_bans.c) */
 	shared_bans_start();
 	/* (a Discord account linked at a master server: its passes asked for
@@ -2905,6 +2910,18 @@ static void platform_vulkan_offer(void)
 #endif
 #ifdef HALO_BGFX
 
+/* the API bgfx draws with for display.renderer (d3d8_bgfx.inl, bg_initialize) */
+static const char *platform_bgfx_name(void)
+{
+#if defined(__APPLE__)
+	return "Metal";
+#elif defined(_WIN32)
+	return strcmp(config_string("display.renderer"), "d3d11") == 0 ? "Direct3D 11" : "Vulkan";
+#else
+	return "Vulkan";
+#endif
+}
+
 BOOL platform_bgfx_chosen(void)
 {
 	const char *renderer = config_string("display.renderer");
@@ -3616,7 +3633,10 @@ with an OpenGL context, for the OpenGL renderer, so that a computer whose
 Vulkan (or Metal) is missing or broken still shows the game */
 BOOL platform_video_reopen_for_gl(void)
 {
-	platform_log("renderer: bgfx did not start, so OpenGL");
+	/* (the one asked for and the one drawing, plainly: the reason is the
+	line before, bg_start's) */
+	platform_log("renderer: asked for %s (bgfx, display.renderer = \"%s\"), which did not start: drawing with OpenGL "
+		"for this start; the setting stays as it is", platform_bgfx_name(), config_string("display.renderer"));
 	platform_bgfx_refused = TRUE;
 	xgpu_bgfx = FALSE;
 	if (platform_window)
@@ -4627,7 +4647,9 @@ void platform_show_message(const char *title, const char *message)
 	pthread_mutex_unlock(&platform_message_lock);
 }
 
-#ifdef HALO_GAME_BROWSER
+/* a page to open in the web browser, from any thread: the main thread opens
+it (platform_url_requests). Every build has it: the Guide's and the
+Workshop list's links, not the game browser's alone */
 static pthread_mutex_t platform_url_lock = PTHREAD_MUTEX_INITIALIZER;
 static char platform_url[700];
 
@@ -4638,11 +4660,10 @@ void platform_open_url(const char *url)
 	pthread_mutex_unlock(&platform_url_lock);
 }
 
-/* (the main thread's: a page to open, a restored key to ask about) */
-static void platform_game_list_requests(void)
+/* (the main thread's: the page asked for opened) */
+static void platform_url_requests(void)
 {
 	char url[sizeof(platform_url)];
-	char new_id[64], old_id[64], message[512];
 
 	pthread_mutex_lock(&platform_url_lock);
 	snprintf(url, sizeof(url), "%s", platform_url);
@@ -4652,6 +4673,13 @@ static void platform_game_list_requests(void)
 	Discord link's page, player_link.c, comes here as well) */
 	if (url[0] && !SDL_OpenURL(url))
 		platform_log("could not open the web browser (%s): open %s", SDL_GetError(), url);
+}
+
+#ifdef HALO_GAME_BROWSER
+/* (the main thread's: a restored key to ask about) */
+static void platform_game_list_requests(void)
+{
+	char new_id[64], old_id[64], message[512];
 
 	if (browser_take_key_link(new_id, old_id, sizeof(new_id)))
 	{
@@ -5110,6 +5138,7 @@ void platform_pump_events(void)
 #endif
 	platform_show_pending_message();
 	platform_opengl_offer();
+	platform_url_requests();
 #ifdef HALO_GAME_BROWSER
 	platform_game_list_requests();
 #endif

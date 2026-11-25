@@ -1593,7 +1593,14 @@ static void public_address_update(void)
 	address = p2p_resolve(host);
 	if (!address)
 	{
-		platform_log("Internet play: cannot look up network.public_address %s", host);
+		{
+			/* (a host name of this machine's own leads to it: a tag, as
+			log_address_name writes it) */
+			char tag[LOG_ADDRESS_SIZE];
+
+			platform_log("Internet play: cannot look up network.public_address %s",
+				log_address_name(host, tag, sizeof(tag)));
+		}
 		p2p.has_public = 0;
 		return;
 	}

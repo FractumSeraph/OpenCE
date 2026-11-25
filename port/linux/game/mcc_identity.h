@@ -22,7 +22,7 @@ void mcc_identity_host_overlay(char const *map, long record_size, long name_offs
     unsigned char *data);
 void const *mcc_identity_host_settings(void const *game, long bytes, struct network_game *copy);
 /* port: (network_client_message_handler.c) a settings record received whole */
-void mcc_identity_wire_record(unsigned char const *record, long size);
+void mcc_identity_wire_record(unsigned char const *record, long size, int recognized);
 int mcc_identity_accept(struct network_game const *game);
 /* Acceptance may be provisional: these MCC-owned guards hold player addition,
  * precaching and game start until bounded frame updates finish admission. */
@@ -64,7 +64,7 @@ the shared code calls do nothing, their arguments unevaluated */
 #define mcc_identity_host_clear() ((void)0)
 #define mcc_identity_host_overlay(a0, a1, a2, a3, a4, a5) \
 	((void)sizeof(a0), (void)sizeof(a1), (void)sizeof(a2), (void)sizeof(a3), (void)sizeof(a4), (void)sizeof(a5))
-#define mcc_identity_wire_record(a0, a1) ((void)sizeof(a0), (void)sizeof(a1))
+#define mcc_identity_wire_record(a0, a1, a2) ((void)sizeof(a0), (void)sizeof(a1), (void)sizeof(a2))
 #endif
 
 #endif

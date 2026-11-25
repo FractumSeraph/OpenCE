@@ -37,6 +37,7 @@ never hosts.
 #include "shared_bans.h"
 #include "map_torrents.h"
 #include "server_master.h"
+#include "networks_game.h"
 #include "server_control.h"
 
 #include <signal.h>
@@ -378,6 +379,10 @@ static void server_arguments(void)
 	delta_legacy_start();
 	/* (port, this fork: the ban lists of network.shared_bans, shared_bans.c) */
 	shared_bans_start();
+#ifdef HALO_DELTA_PEER_IDENTITY
+	/* (the networks whose players' names are checked: networks_game.h) */
+	networks_start();
+#endif
 #ifdef _WIN32
 	/* Ctrl+C, Ctrl+Break and the window closed stop it at the next frame
 	(Windows has no SIGPIPE: a closed connection's write fails) */
