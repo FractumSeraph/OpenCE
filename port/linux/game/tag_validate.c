@@ -2049,15 +2049,17 @@ struct tag_validate_kept_state
 state waits: made by tag_validate_other_tags_room, before the other tags
 take their memory */
 static struct tag_validate_kept_state *tag_validate_kept;
+void *(*tag_validate_other_tags_allocate)(unsigned long size);
+void (*tag_validate_other_tags_release)(void *memory);
 
 boolean tag_validate_other_tags_room(
 	boolean wanted)
 {
-	if (wanted && !tag_validate_kept)
-		tag_validate_kept = malloc(sizeof(*tag_validate_kept));
-	else if (!wanted && tag_validate_kept)
+	if (wanted && !tag_validate_kept && tag_validate_other_tags_allocate)
+		tag_validate_kept = tag_validate_other_tags_allocate(sizeof(*tag_validate_kept));
+	else if (!wanted && tag_validate_kept && tag_validate_other_tags_release)
 	{
-		free(tag_validate_kept);
+		tag_validate_other_tags_release(tag_validate_kept);
 		tag_validate_kept = NULL;
 	}
 	return !wanted || tag_validate_kept != NULL;
@@ -2074,8 +2076,13 @@ boolean tag_validate_other_tags(
 
 	if (!kept)
 	{
-		error(_error_silent, "the map '%s''s tags cannot be checked: no room for the loaded map's check (%lu KB)",
-			map_name, (unsigned long)(sizeof(*kept) >> 10));
+		char message[MAXIMUM_MESSAGE_LENGTH];
+
+		/* (port, this fork: reported as the checks' own messages, not by
+		error(), which a validator alone has not) */
+		snprintf(message, sizeof(message), "the map '%s''s tags cannot be checked: no room for the loaded map's "
+			"check (%lu KB)", map_name, (unsigned long)(sizeof(*kept) >> 10));
+		tag_validate_report(message);
 		return FALSE;
 	}
 	kept->globals = tag_validate_globals;

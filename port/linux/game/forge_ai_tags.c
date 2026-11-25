@@ -89,6 +89,17 @@ SPDX-License-Identifier: GPL-3.0-or-later
 #include <stdlib.h>
 #include <string.h>
 
+/* (port, this fork: tag_validate_other_tags_room's memory, tag_schema.h) */
+static void *forge_ai_check_allocate(unsigned long size)
+{
+	return malloc(size);
+}
+
+static void forge_ai_check_release(void *memory)
+{
+	free(memory);
+}
+
 void platform_log(char const *format, ...);
 unsigned long system_milliseconds(void);
 char const *cache_files_map_directory(void);
@@ -2003,6 +2014,9 @@ takes memory: a 32-bit build has little left in one piece) */
 		platform_log("forge ai: none of the campaign maps there can be read");
 		goto refused;
 	}
+	/* (port, this fork: the room's memory, from the game's allocator) */
+	tag_validate_other_tags_allocate = forge_ai_check_allocate;
+	tag_validate_other_tags_release = forge_ai_check_release;
 	forge_ai_room = tag_validate_other_tags_room(TRUE) ? malloc(forge_ai_room_size) : NULL;
 	if (!forge_ai_room)
 	{

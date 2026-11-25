@@ -401,6 +401,12 @@ made (wanted) before the other tags are read, let go (not wanted) after:
 FALSE if it could not be made */
 boolean tag_validate_other_tags_room(
 	boolean wanted);
+/* port (this fork): where that room's memory comes from, set by the caller
+(forge_ai_tags.c) before it asks for it, so that tag_validate.c still links
+alone, without the game's allocator (tools/map_validate.c,
+tools/test_mcc_tag_validation.py); unset, no room is made */
+extern void *(*tag_validate_other_tags_allocate)(unsigned long size);
+extern void (*tag_validate_other_tags_release)(void *memory);
 
 /* the layout of the tags being checked (for checks: what differs between
 them, tag_schema_layout_flags) */

@@ -296,7 +296,7 @@ split): that decides which sounds are split, which is the content's. */
 #if !defined(HALO_CONSOLE) && !defined(HALO_XBOX_CONSOLE) && !defined(HALO_XBOX360_CONSOLE) && \
 	!defined(HALO_WIIU_CONSOLE) && !defined(HALO_SWITCH_CONSOLE) && !defined(HALO_CONSOLE_GL_LAYER) && \
 	!defined(HALO_CONSOLE_WINDOW_MAXIMUM) && !defined(HALO_CONSOLE_MEMORY_CLASS) && \
-	!defined(HALO_CONSOLE_XBOX_RENDER_SIZES) && !defined(HALO_SERVER)
+	!defined(HALO_CONSOLE_XBOX_RENDER_SIZES) && !defined(HALO_SERVER) && 	!defined(HALO_WEB) /* (port, this fork: the browser build's tab keeps the Xbox's) */
 #if defined(HALO_ANDROID) && !defined(HALO_64BIT)
 #define HALO_PORT_SOUND_CACHE_SIZE 0x1000000 /* (0x400000) */
 #define HALO_PORT_SOUND_CACHE_SOUNDS 1024 /* (512) */
@@ -340,21 +340,9 @@ HALO_CONSOLE_XBOX_RENDER_SIZES. */
 
 /* ---------- sounds
 
-The sound cache holds the sounds being played in 4 KB pages, 4 MB of them on
-the Xbox. Halo Custom Edition maps' sounds, converted when they load
-(port/linux/game/custom_edition_sounds.c), and those of sound tags loaded
-over a map's by mods (mod_sounds.c), are longer than the Xbox maps' and fill it (a
-campaign map's dialogue and music did, "SOUND CACHE BLOWN" in debug.txt).
-The desktop builds' cache is 16 MB; Android's and the web build's windows keep
-the Xbox's, as do the consoles' builds (a console's memory class sizes its own:
-cache/physical_memory_map.h). */
-
-#if defined(HALO_ARM64_GUEST) || (defined(HALO_ANDROID) && !defined(HALO_64BIT)) || defined(HALO_WEB) || \
-	defined(HALO_XBOX_CONSOLE)
-#define HALO_PORT_SOUND_CACHE_SIZE 0x400000 /* (0x400000) */
-#else
-#define HALO_PORT_SOUND_CACHE_SIZE 0x1000000 /* (0x400000) */
-#endif
+(port, this fork: the fork's own 16 MB desktop sound cache gave way to
+ChupathingyCE's sizes above, 2026-11-25; the browser build keeps the Xbox's
+4 MB and 512 sounds, as before.) */
 
 /* ---------- transparent geometry, particles and lights a frame draws
 

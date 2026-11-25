@@ -4466,20 +4466,6 @@ void platform_clipboard_set(const char *text)
 	SDL_SetClipboardText(text);
 }
 
-#ifndef HALO_GAME_BROWSER
-/* (with the game list, HALO_GAME_BROWSER, the window's thread opens it:
-platform_game_list_requests) */
-void platform_open_url(const char *url)
-{
-#ifdef HALO_WEB
-	web_js_post(5, url);
-#else
-	/* (the address logged too, for a machine whose browser does not open) */
-	if (!SDL_OpenURL(url))
-		platform_log("could not open the browser (%s): open %s", SDL_GetError(), url);
-#endif
-}
-#endif
 
 /* the battery, for the Guide's card: 1 running on it, 2 charging, 0 none
 (a desktop, or plugged in and full, or not known); its percent in percent
@@ -4671,8 +4657,14 @@ static void platform_url_requests(void)
 	pthread_mutex_unlock(&platform_url_lock);
 	/* (the address logged too, for a machine whose browser does not open: a
 	Discord link's page, player_link.c, comes here as well) */
+#ifdef HALO_WEB
+	/* (port, this fork: the browser build's page opens it, web_library.js) */
+	if (url[0])
+		web_js_post(5, url);
+#else
 	if (url[0] && !SDL_OpenURL(url))
 		platform_log("could not open the web browser (%s): open %s", SDL_GetError(), url);
+#endif
 }
 
 #ifdef HALO_GAME_BROWSER
