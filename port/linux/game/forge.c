@@ -234,8 +234,17 @@ int halo_linux_mouse_look(short gamepad_index, float *yaw, float *pitch);
 int config_boolean(char const *name);
 long config_integer(char const *name);
 char const *config_string(char const *name);
+#ifdef HALO_GAME_BROWSER
 /* ui_overlay.c's: the keyboard and mouse used last (else a controller) */
 int ui_overlay_keyboard(void);
+#else
+/* (port, this fork: the browser build has no overlay, ui_overlay.c, to
+tell: taken for the keyboard, whose delete key works at a press) */
+static int ui_overlay_keyboard(void)
+{
+	return 1;
+}
+#endif
 long hud_get_font_index(void);
 unsigned long system_milliseconds(void);
 /* ui_widget.c's: a menu, or a screen of code over them, takes the input */

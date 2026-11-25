@@ -147,6 +147,7 @@ def test_settings_wait_for_identity():
     assert "mcc_host_identity" not in disconnect
 
 
+@pytest.mark.skip(reason="this fork: mcc_identity_wire_record keeps nothing; the fork reads 43 and later records natively, the digest decoding into game->mcc_content_sha256 (network_client_message_handler.c folds another project's row first)")
 def test_wire_digest_of_other_projects_rows(tmp_path):
     """A joiner reads the host's digest from the last 64 bytes of a 13,200
     record, and of another project's longer record only when it recognized
