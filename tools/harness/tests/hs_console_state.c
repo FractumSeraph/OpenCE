@@ -124,6 +124,9 @@ static long hs_type_default_value(short type) {return type==_hs_type_void ? 0 : 
 /* (ChupathingyCE's: a thread's name for the halt screen's and the log's lines,
 which runtime.inc's hs_thread_delete gives) */
 static char const *hs_thread_format(long thread_index) {(void)thread_index;return "thread";}
+/* (ChupathingyCE's Forge: a mission left out of a Forge game, whose scripts
+then do not run; never here) */
+static boolean forge_mission_off(void) {return FALSE;}
 #include "runtime.inc"
 
 static struct hs_compile_globals hs_compile_globals;

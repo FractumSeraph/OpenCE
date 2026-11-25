@@ -154,8 +154,9 @@ if pytest:
     # build/UPDATING.md, "ChupathingyCE 7552a9c60")
     # (and mod_sound: its stand-ins are for ChupathingyCE's mods.c, sounds
     # only; this fork's plays bitmaps, text and models too, mod_files.c's
-    # harness test checking their bounds)
-    FORK_LEFT_OUT = {"client_messages", "distributed_messages", "mcc_prepare", "mod_sound", "server_messages"}
+    # harness test checking their bounds; client_messages_44 is
+    # client_messages's harness at network version 44, the same stand-ins)
+    FORK_LEFT_OUT = {"client_messages", "client_messages_44", "distributed_messages", "mcc_prepare", "mod_sound", "server_messages"}
 
     @pytest.mark.parametrize("name", sorted(TARGETS))
     def test_host_fuzz(name, tmp_path):
