@@ -1221,6 +1221,9 @@ typedef char network_game_client_settings_size_assert[
 	NETWORK_GAME_CLIENT_SETTINGS_EXTENDED_SIZE - NETWORK_GAME_CLIENT_SETTINGS_SIZE == HALO_PORT_LEGACY_OPTIONS_SHORTFALL &&
 	NETWORK_GAME_CLIENT_EXTENDED_OPTIONS_VERSION == HALO_PORT_GAME_MODES_NETWORK_VERSION ? 1 : -1];
 
+/* (interface/ui_widget.c's) */
+void display_error_text_when_main_menu_loaded(wchar_t const *text);
+
 /* port: the project whose plain game the host plays, by its last record
 (network_rules.h's NETWORK_RULES_FORK_NONE, -1: none, an OpenCE host's or
 ours), and that record's option byte the project's row names (-1: none) */

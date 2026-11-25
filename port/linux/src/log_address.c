@@ -169,13 +169,13 @@ const char *log_address_name(const char *name, char *text, int size)
 	if (!strcmp(name, "localhost") || config_boolean("debug.log_addresses"))
 	{
 		if (strcmp(name, "localhost"))
-			pthread_once(&whole_once, say_whole);
+			say_whole();
 		snprintf(text, (size_t)size, "%s", name);
 		return text;
 	}
 	if (length > 256)
 		length = 256;
-	pthread_once(&salt_once, make_salt);
+	make_salt();
 	memcpy(data, salt, SALT_SIZE);
 	/* (a name's tag apart from an address's of the same bytes) */
 	data[SALT_SIZE] = 0xFF;
