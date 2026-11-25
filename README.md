@@ -1,160 +1,115 @@
 # Halo in the browser and on every platform (FractumSeraph's fork)
 
 **Play it now in your browser: [halo.fractumseraph.net](https://halo.fractumseraph.net/)**,
-[download it](#download) for Windows, Mac, Linux and Android, or play it on a
+[download it](#download) for Windows, Mac, Linux, FreeBSD and Android, or play it on a
 **New Nintendo 3DS: [Fractum Halo 3DS](https://github.com/FractumSeraph/Fractum-Halo-3DS)**
 or a **smartwatch: [fractum-halo-android32.apk](https://github.com/FractumSeraph/OpenCE/releases/latest/download/fractum-halo-android32.apk)**
 (Wear OS watches with a 32-bit Android, such as the Galaxy Watch 8 Classic).
 
-This fork combines [ChupathingyCE](https://github.com/ChupathingyCE/chupathingyce)
-and [OpenCE](https://github.com/OpenCommunityEdition/OpenCE), the ports of the
-Halo: Combat Evolved decompilation, and keeps up with both: everything the
-official OpenCE has is here too, and the fork follows OpenCE's network
-version the day it changes, so OpenCE players join its games. What follows
-is what you get here that the official OpenCE doesn't have. Further down
-are [ChupathingyCE's](#chupathingyce) and [OpenCE's](#opence) own pages.
+This fork combines [OpenCE](https://github.com/OpenCommunityEdition/OpenCE)
+and [ChupathingyCE](https://github.com/ChupathingyCE/chupathingyce), the two
+ports of the Halo: Combat Evolved decompilation, and keeps up with both.
+Below: what only this fork has, then how it differs from the two, then
+everything else. Further down are [ChupathingyCE's](#chupathingyce) and
+[OpenCE's](#opence) own pages.
 
-## Additional features on this fork
+## Only in this fork
+
+Neither OpenCE nor ChupathingyCE has these.
 
 - **Halo on the New Nintendo 3DS.** [Fractum Halo 3DS](https://github.com/FractumSeraph/Fractum-Halo-3DS)
   ([download](https://github.com/FractumSeraph/Fractum-Halo-3DS/releases/latest)) is
   Generalkidd's Halo3DS with this fork's multiplayer: System Link with the
-  PC, Mac, Linux and Android builds, internet play with their servers,
-  the Online Games list, and Custom Edition maps downloaded as a game needs
-  them (map sharing). It follows this fork's releases.
+  PC, Mac, Linux and Android builds, internet play with their servers, the
+  Online Games list, and Custom Edition maps downloaded as a game needs
+  them. It follows this fork's releases.
 - **Halo on a smartwatch.** `fractum-halo-android32.apk` is a build for
   32-bit Android, which watches such as the Samsung Galaxy Watch 8 Classic
   (Wear OS 6) have: the HUD laid out inside a round display, the touch
   controls kept in the circle, and the rotating bezel to turn the view or
   switch weapons. It plays at 60 frames a second on that watch and updates
   itself (see [port/android/README.md](port/android/README.md), "Wear OS").
-- **Players of every version in one game.** OpenCE's builds join only hosts
-  of their own network version. This fork joins hosts of versions 11 to 45,
-  OpenCE's and ChupathingyCE's alike, and its hosts take OpenCE players of
-  the newest version (44) and ChupathingyCE players together, each sent the
-  game as its own version reads it ([below](#how-the-two-projects-play-together)).
-- **Every Custom Edition map, downloaded when a game needs it.** All 5,829
-  maps of the HaloMaps.org and HaloNet archives, and the newer maps approved
-  since, are unpacked at
-  [halomaps.fractumseraph.net](https://halomaps.fractumseraph.net/maps/),
-  each with a torrent, seeded around the clock. Join a game on a map you
-  don't have and the game downloads it, from the host and other players
-  (map sharing, never renaming a map you have), over BitTorrent and from
-  the site, checks it, and joins: nothing to find or install by hand. The
-  maps page also has every `.torrent` in one download.
-- **Only approved maps shared between players.** To keep malware from
-  spreading through map sharing, a map is offered or downloaded between
-  players only if it is on the fork's approved list
-  ([docs/map_torrents.md](docs/map_torrents.md)); anything else is refused
-  with its file name and hash, to send to @FractumSeraph for approval. The
-  game fetches the list as published (signed with the fork's release key)
-  when it starts and every hour, so a map approved after your build came out
-  downloads without an update.
-- **A browser version that plays with ChupathingyCE players too.**
+- **A browser version that plays with both projects' players.**
   [halo.fractumseraph.net](https://halo.fractumseraph.net/): no install, on
   computers, phones and tablets, with touch controls, and it installs as an
-  app. OpenCE's browser version plays with OpenCE's builds; this one plays
-  online with both projects' players (Windows, Mac, Linux and Android), from
-  the game's own menus (Create Game, the Server Browser) or with an invite
-  link, through the fork's own lobby and gateway, with voice chat and
-  ChupathingyCE's stats on [stats.chupathingy.org](https://stats.chupathingy.org).
-  Every Custom Edition map in the archive above downloads the first time it
-  is played, even when no one in the game has it, and stays in the browser.
-- **A Mac version.** One app for Apple silicon and Intel Macs
-  (ChupathingyCE's port); OpenCE's macOS port is still in progress.
+  app. OpenCE's browser version plays with OpenCE players only, and
+  ChupathingyCE has none; this one joins and hosts games with OpenCE and
+  ChupathingyCE players on Windows, Mac, Linux and Android, from the game's
+  own menus or an invite link, with voice chat and ChupathingyCE's stats.
 - **Watch games live, or again.** Servers can keep a public copy of every
   game (`network.record_public`): each player's moves, aim and kills, with
-  no address or hardware id, held back 30 seconds while the game is played
-  so that no one watching can help a player. Anyone watches them at
+  no address or hardware id, held back 30 seconds so that no one watching
+  can help a player. Anyone watches them at
   [halo.fractumseraph.net/watch](https://halo.fractumseraph.net/watch/),
-  live or once the game is over, through any player's eyes, behind them or
-  freely. The games are listed by server (a tab each, pinned while you
-  scroll), with a picture of each map, and found by a player's name, map,
-  game type or day, newest, busiest or longest first; a results card at the
-  end to save or share; heatmaps and kill lines, everyone's or
-  one player's; frame stepping; each game and player linked to their stats
-  on stats.chupathingy.org.
+  live or afterwards, through any player's eyes, behind them or freely, with
+  heatmaps, kill lines, frame stepping and a results card to share.
 - **Record your own games.** With RECORD MY GAMES on (Network Setup;
-  `network.record_my_games`), the network games you play, joined or hosted,
-  are recorded on your machine as you saw them, without anyone's address,
-  to watch again in the same viewer. The browser build keeps them in the
-  browser on your device, never on the server: the viewer lists them, and
-  they download as `.hrec` files. To watch one, open
-  [halo.fractumseraph.net/watch](https://halo.fractumseraph.net/watch/)
-  and press **Open a recording** (or drop the file on the page): Windows,
-  Mac and Linux keep them in `recordings` in the game's data folder (the
-  one with `maps`), Android in
-  `Android/data/net.fractumseraph.halo/files/recordings`; a game played in
-  the browser is already listed there. The game says where in its chat as
-  each recording starts. In a game you joined,
-  players far from you or out of sight move less exactly than in a host's
-  recording, as the host sends them less often; the replay viewer smooths
-  their path between the host's updates.
-- **Tools against cheaters.** A host checks each hit and move for shots
-  through walls, off aim, teleports and flying, and refuses or logs them
-  (`network.fair_play`; `sv_suspects` on a dedicated server); records every
-  game for its admins (`network.record_games`), who watch it in the replay
-  viewer with the hits it doubted marked; and its moderators can **Watch**
-  any player through their eyes, as Halo PC's SightJack did. Hosts can share
-  ban lists (`network.shared_bans`): FractumSeraph's servers publish theirs,
-  without IP addresses.
-- **ChupathingyCE's features.** Its stats on
-  [stats.chupathingy.org](https://stats.chupathingy.org) (a carnage report
-  for every game, medals, service records), the Bomb and Grifball game types
-  ([docs/bomb.md](docs/bomb.md)), HaloMD maps and community Xbox map packs,
-  the Delta Guide (friends, parties, clans), Forge (a layout editor for the
-  multiplayer maps), ragdolls for dead bodies and gyro aiming with a
-  controller (each a setting, off by default), surround sound and a
-  headphone 3D mode, Lua scripts, its dedicated server with a web control
-  panel, a FreeBSD build, and the rest of [its features](#chupathingyce).
+  `network.record_my_games`), the network games you play are recorded on
+  your device as you saw them, without anyone's address, to watch in the
+  same viewer (**Open a recording** on the watch page). The browser version
+  keeps them in the browser, never on a server.
+- **Tools against cheaters.** ChupathingyCE's hosts refuse a hit through a
+  wall; this fork's also check each move and hit for shots off aim,
+  teleports and flying, and refuse or log them (`network.fair_play`;
+  `sv_suspects` on a dedicated server); record every game for their admins
+  (`network.record_games`), who watch it with the doubted hits marked; let
+  moderators **Watch** any player through their eyes, as Halo PC's
+  SightJack did; and share ban lists (`network.shared_bans`), which
+  FractumSeraph's servers publish without IP addresses.
+- **Every Custom Edition map, over BitTorrent.** OpenCE downloads a missing
+  map from the players in the game, ChupathingyCE from community map
+  repositories; this fork does both, and also gets it over BitTorrent from
+  an archive of all 5,829 maps of HaloMaps.org and HaloNet and the newer ones
+  approved since, at [halomaps.fractumseraph.net](https://halomaps.fractumseraph.net/maps/),
+  seeded around the clock, each with a torrent
+  ([docs/map_torrents.md](docs/map_torrents.md)).
+- **The game's maps at the first start.** Both projects need your Xbox disc
+  image. This fork's builds also offer to download the maps: the
+  multiplayer maps alone (about 0.5 GB, with Custom Edition's shared maps)
+  or everything (about 2 GB), the campaign's later if you like
+  ([Game data](#game-data)).
+- **Invite links that last.** A host's `halo://join/` link can stay the
+  same from run to run (`network.lasting_invite`), to post on a website.
 - **ChupathingyCE's server on OpenCE's master servers.** With an approved
-  publisher key (`chupathingyce-server --keygen`), the ChupathingyCE
-  dedicated server is listed on master.opencommunityedition.com too, as
-  OpenCE's own server is, so OpenCE's server browser shows it as a dedicated
-  server ([server/docs/settings.md](server/docs/settings.md#opences-master-servers)).
-- **Invite links that last.** A host's `halo://join/` link can stay the same
-  from run to run (`network.lasting_invite`), to post on a website.
-- **The game's maps at the first start.** The Windows, Mac, Linux and
-  Android builds offer to download the Xbox maps instead of asking for a
-  disc image: the multiplayer maps alone (about 0.5 GB, with Halo Custom
-  Edition's shared maps), or everything with the campaign (about 2 GB); the
-  campaign's maps can be downloaded later (see [Game data](#game-data)).
-- **Fractum Halo for Android, signed.** An app of its own
-  (`net.fractumseraph.halo`), beside ChupathingyCE's, signed with this
-  fork's key so that every release installs over the last and updates
-  itself: [download page](https://halo.fractumseraph.net/assets/android/index.html).
-  The Windows and Linux builds keep their saves in a folder of their own
-  too (`%APPDATA%\FractumHalo`, `~/.local/share/fractum-halo`).
-- **Servers of its own.** Two dedicated servers, **FractumFFA** (free for
-  all Slayer on small Custom Edition maps) and **FractumKing** (free for
-  all King of the Hill, the hill moving), which update themselves when
-  empty and can be watched live; an
-  internet-play broker (`halovps.fractumseraph.net:1883`, the first of the
-  five in every build's list), the maps' BitTorrent tracker, the browser
-  lobby and the gateway that lets a browser join native games.
-- **Host the browser version yourself, with online play.** It comes as a
-  kit to run on your own computer, a VPS or a plain web host, with the
-  lobby and the gateway that let its players join the native builds' games
-  (see [Download](#download)).
+  publisher key, ChupathingyCE's dedicated server is listed on
+  master.opencommunityedition.com too, so OpenCE's server browser shows it
+  as a dedicated server ([server/docs/settings.md](server/docs/settings.md#opences-master-servers)).
+- **Host the browser version yourself, with online play.** A kit for your
+  own computer, a VPS or a plain web host, with the lobby and the gateway
+  that let its players join the native builds' games ([Download](#download)).
 
-### How the two projects play together
+## How it differs from OpenCE and ChupathingyCE
 
 Where the two projects do the same thing two ways, the fork keeps one
-working version; nothing sent over the network differs from theirs, so
-players of all three play together:
+working version. Nothing it sends over the network differs from theirs.
+
+| | This fork | OpenCE | ChupathingyCE |
+| --- | --- | --- | --- |
+| Platforms | Windows, Mac, Linux, FreeBSD, Android, browser, New 3DS, smartwatch | Windows, Linux, Android, browser (Mac in progress) | Windows, Mac, Linux, FreeBSD, Android (consoles in testing) |
+| Online play | Hosts announce OpenCE's newest network version (44); OpenCE and ChupathingyCE players join the same game | OpenCE players of its own version | ChupathingyCE players through its Delta network, and OpenCE players of version 39 |
+| Missing maps | From the players, ChupathingyCE's repositories, and the fork's BitTorrent archive; only approved maps are passed between players | From the players | From community repositories and maps.chupathingy.org (a signed index, a list of maps that crash games) |
+| Game types | OpenCE's SWAT, Infection, Gun Game and Hardcore, and ChupathingyCE's Bomb and Grifball | SWAT, Infection, Gun Game, Hardcore | SWAT and Hardcore (its own game modes), Bomb, Grifball |
+| Menus | The Xbox's, Chupathingy's and Halo PC's (`display.menus`) | Halo PC's | The Xbox's and Chupathingy's |
+| Sound | OpenCE's mixer, with ChupathingyCE's surround and headphone 3D | OpenCE's mixer | Its own mixer, at the Xbox's levels |
+| Voice chat | ChupathingyCE's on Windows, Mac, Linux and Android; OpenCE's in the browser | Its own | Its own |
+| On-screen ping | OpenCE's latency meter (`display.latency_meter`) | Latency meter | Ping meter |
+| Android app | "Fractum Halo" (`net.fractumseraph.halo`), installs beside the others | OpenCE's app | ChupathingyCE's app |
+| Releases | Every build of `main` that passes on every platform; the game updates from them | Every build of `main` that passes | Tested releases, and a nightly |
+| Public servers | FractumFFA and FractumKing, which update themselves when empty, and an internet-play broker | OpenCE Fleet (Zenith Hosting) | Its own servers around the clock |
+| Licence | AGPL-3.0 or later (ChupathingyCE's files stay GPL-3.0 or later) | AGPL-3.0 or later | GPL-3.0 or later |
+
+### How the projects play together
 
 - **Hosting.** This fork's games announce network version 44, OpenCE's
   newest, so OpenCE players join them, SWAT, Infection, Gun Game and
-  Hardcore included. ChupathingyCE players join them through
-  ChupathingyCE's Delta network, by the fork's wire `chupa-43a`, each sent
-  the game settings of its own version.
+  Hardcore included. ChupathingyCE players join them through Delta, by the
+  fork's wire `chupa-43a`, each sent the game settings of its own version.
 - **Joining.** This fork's builds join hosts of versions 11 to 45, in either
   project's form, reading an older host's game settings as it sends them
   and a newer one's as ChupathingyCE's signed table lays them out
   ([docs/delta.md](docs/delta.md), "Layouts").
-- **Game modes.** SWAT, Infection, Gun Game and Hardcore are OpenCE's here.
-  ChupathingyCE also has SWAT and Hardcore of its own: a ChupathingyCE host
-  of one of those turns this fork's players away with a notice.
+- **Game modes.** A ChupathingyCE host of its own SWAT or Hardcore turns
+  this fork's players away with a notice.
 - **Chat.** Both projects' text chats are one, by ChupathingyCE's own
   bridge: OpenCE players' lines reach ChupathingyCE players and theirs
   reach them, on a host of either ([docs/delta.md](docs/delta.md), Chat).
