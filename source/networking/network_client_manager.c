@@ -403,6 +403,7 @@ void network_game_client_reset_settings_staging(void); /* port: discard partial 
 #ifdef HALO_GAME_BROWSER
 #include "net_monitor.h" /* port: the server monitor (port/linux/game/net_monitor.c) */
 #endif
+#include "coop_progress.h" /* port: port/linux/game/coop_progress.c */
 
 #if defined(HALO_GAME_BROWSER) && !defined(HALO_CONSOLE_NO_DELTA_PROFILE)
 /* port: port/linux/game/profile_names.c's */
@@ -1234,6 +1235,9 @@ boolean network_game_client_switch_to_pregame(
 		/* port: a start put off is not this game's */
 		network_game_client_start_pending = FALSE;
 		network_event("switching to pregame");
+		/* port: a network co-op round over: the lobby's map says whether it
+		was won (coop_progress.c) */
+		coop_progress_client_round_ended();
 		network_game_reset_to_pregame_ui();
 		network_connection_keep_alive(client->connection);
 	}
@@ -1570,6 +1574,10 @@ boolean network_game_client_game_settings_updated(
 			map_family_from_wire_name(message_packet->map.name, map_name, sizeof(map_name));
 			csmemcpy(message_packet->map.name, map_name, sizeof(map_name));
 		}
+		/* port: the lobby after a network co-op round: its map, the
+		campaign's next level, says the round was won (coop_progress.c) */
+		if (client->state == _network_game_client_state_pregame)
+			coop_progress_client_lobby_map(message_packet->map.name);
 		if (csstrcmp(message_packet->map.name, client->game.map.name) ||
 			/* port: MCC validation also belongs to the advertised origin in the name tail. */
 			(mcc_level_name(message_packet->map.name) &&

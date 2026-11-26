@@ -393,6 +393,7 @@ symbols in this file:
 #ifdef HALO_WEB
 #include <emscripten.h> /* port: the browser runs the main loop (port/web/README.md) */
 #endif
+#include "coop_progress.h" /* port: port/linux/game/coop_progress.c */
 #include "camera/director.h"
 #include "units/units.h" /* port: the vehicle field of view */
 #include "units/unit_definitions.h" /* port: a zoomed view's width */
@@ -3228,7 +3229,16 @@ static void main_won_map_private(
 
 		main_globals.won_map = FALSE;
 		level = game ? main_get_solo_level_from_name(game->map.name) : NONE;
+		/* port: the level from the network game's map, on its difficulty, in
+		every local player's profile (coop_progress.c). The solo map name
+		player_profile_save_level_completed reads is never set by a network
+		game: it recorded nothing, or a level played alone before. The
+		original Xbox's build has no coop_progress.c: as before there */
+#ifdef HALO_XBOX_CONSOLE
 		player_profile_save_level_completed(0);
+#else
+		coop_progress_host_won(level, game ? game->difficulty : NONE);
+#endif
 		network_game_server_port_cooperative_won(next[0] ? next : level != NONE ?
 			main_get_solo_level_name((level + 1) % NUMBER_OF_SINGLE_PLAYER_LEVELS) : NULL);
 		return;

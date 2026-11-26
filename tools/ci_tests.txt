@@ -43,6 +43,7 @@ tools/test_coop_level_prompt.py
 tools/test_coop_spectate.py
 tools/test_crash_null_call.py
 tools/test_crosshair_position.py
+tools/test_d3d9_effect.py
 tools/test_debug_camera.py
 tools/test_delta.py
 tools/test_delta_compat.py
@@ -78,6 +79,7 @@ tools/test_http_url_rules.py
 tools/test_hud_mcc_layout.py
 tools/test_hud_safe_zone.py
 tools/test_identity.py
+tools/test_invite_declined.py
 tools/test_join_password.py
 tools/test_join_password_pair.py
 tools/test_join_reasons.py
@@ -90,6 +92,7 @@ tools/test_link_register.py
 tools/test_linux_port.py
 tools/test_listen_address.py
 tools/test_lobby_budget.py
+tools/test_lobby_host_crown.py
 tools/test_lobby_layout.py
 tools/test_lobby_switch_prompt.py
 tools/test_log_paths.py
@@ -137,10 +140,12 @@ tools/test_mcc_validation.py
 tools/test_mcc_workshop.py
 tools/test_medal_rules.py
 tools/test_menu_text_fit.py
+tools/test_menu_unique_rows.py
 tools/test_mod_archives.py
 tools/test_net43_host.py
 tools/test_network_rules.py
 tools/test_network_test_startup.py
+tools/test_no_game_browser_calls.py
 tools/test_online_games_list.py
 tools/test_opence_welcome.py
 tools/test_opensauce_scripts.py
@@ -148,6 +153,7 @@ tools/test_p2p_copies.py
 tools/test_p2p_host_port.py
 tools/test_p2p_public_address.py
 tools/test_p2p_signal_sockets.py
+tools/test_p2p_spoofed_source.py
 tools/test_packaged_install.py
 tools/test_party_teams.py
 tools/test_pause_leave.py
@@ -160,7 +166,6 @@ tools/test_playlist_maps.py
 tools/test_preview_cache.py
 tools/test_prompt_schemes.py
 tools/test_ragdolls.py
-tools/test_rename_stub.py
 tools/test_report_clip.py
 tools/test_retry_backoff.py
 tools/test_save_folder.py

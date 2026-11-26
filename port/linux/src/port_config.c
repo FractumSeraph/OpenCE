@@ -81,6 +81,10 @@ enum config_environment
 	_environment_set_is_false,
 };
 
+/* the longest value config_write takes (a longer one is refused, said in
+the log, and the file left as it is) */
+#define CONFIG_WRITE_MAXIMUM_VALUE 256
+
 /* the builds a setting means something in, and is written for */
 enum
 {
@@ -429,6 +433,12 @@ static const struct config_setting config_settings[] =
 		"instead of clipping it. The glows the game draws (teleporters, light\n"
 		"fixtures, energy shields, plasma bolts, the weapon's displays) go\n"
 		"past white. false draws into 8 bits a channel, as the Xbox does." },
+	{ "display.opensauce_post_processing", _config_boolean, "true", "HALO_OPENSAUCE_POST_PROCESSING",
+		_environment_value, _platform_desktop,
+		"Draw the post-processing an OpenSauce map carries (SPV3's look: its\n"
+		"bloom, tone mapping, depth of field, ambient occlusion, visor and the\n"
+		"rest of its effects), with the OpenGL renderer. Only maps that have it\n"
+		"change; false draws them without it, for performance." },
 	{ "display.hdr_output", _config_boolean, "false", "HALO_HDR_OUTPUT", _environment_value, _platform_desktop,
 		"With display.hdr, send HDR to a display that has it (the operating\n"
 		"system's HDR must be on): the bgfx renderer's HDR10 swap chain, or\n"
@@ -7388,15 +7398,21 @@ int config_write(const char *name, const char *value)
 	const char *dot = strchr(name, '.');
 	long index = config_setting_index(name);
 	char section[64], key[64], path[1024];
-	size_t size = 0, line_size;
+	size_t size = 0, line_size, maximum;
 	char *text, *changed, *line_text;
 	int succeeded;
 
+	if (index < 0 || !dot || (size_t)(dot - name) >= sizeof(section))
+		return 0;
 	/* (a string as long as a server's rotation, server_rotation.h's
-	SERVER_ROTATION_MAXIMUM_TEXT; any other value is a word or a number) */
-	if (index < 0 || !dot || (size_t)(dot - name) >= sizeof(section) ||
-		strlen(value) > (config_settings[index].type == _config_string ? CONFIG_MAXIMUM_WRITTEN_STRING : 256))
+	SERVER_ROTATION_MAXIMUM_TEXT; any other value is a word or a number.
+	Port, this fork: ChupathingyCE's CONFIG_WRITE_MAXIMUM_VALUE for every
+	setting would cut a rotation short; its log line is kept) */
+	maximum = config_settings[index].type == _config_string ? CONFIG_MAXIMUM_WRITTEN_STRING : CONFIG_WRITE_MAXIMUM_VALUE;
+	if (strlen(value) > maximum)
 	{
+		platform_log("settings: %s not written: its value is %lu characters, more than %lu",
+			name, (unsigned long)strlen(value), (unsigned long)maximum);
 		return 0;
 	}
 	/* (the line: its key, and its value with each character escaped as
@@ -7447,6 +7463,9 @@ int config_write(const char *name, const char *value)
 	{
 		char *end = line_text + snprintf(line_text, line_size, "%s = \"", key);
 		const char *character;
+		/* (the key, ' = "', each character twice at most, '"\n' and the end) */
+		size_t room = strlen(key) + 4 + 2 * strlen(string) + 3;
+		char *end;
 
 		/* (a TOML basic string: quotes and backslashes escaped, and control
 		characters, so that a value cannot end its line) */
@@ -7461,13 +7480,15 @@ int config_write(const char *name, const char *value)
 				*end++ = '\\';
 			*end++ = *character;
 		}
-		strcpy(end, "\"\n");
+		memcpy(end, "\"\n", 3);
+		line_text = string_line;
 		break;
 	}
 	}
 	config_path(path, sizeof(path));
 	text = config_read_file(path, &size);
-	changed = config_text_with_line(text ? text : "", name, line_text);
+	changed = config_settings[index].type == _config_string && !string_line ? NULL :
+		config_text_with_line(text ? text : "", name, line_text);
 	succeeded = changed && config_write_file(path, changed);
 	config_touched[index] = 1;
 	config_tuning_apply(index);
