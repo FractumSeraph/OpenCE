@@ -1235,12 +1235,13 @@ static void test_fork_layout_record(void)
 
 /* (port, this fork: ChupathingyCE's tests of chupa-43a's facts, which its
 41 game takes for 43, built in or from a table's row of 43. This fork's game
-plays 42 and 43 natively, OpenCE's way, with a 12-byte header: its built-in
-layouts of them have none of those facts, and a table's facts apply past 43
-only (network_rules_layout_built_in, network_rules_layout_apply). So these
-tests take the same facts from a table's row of 44, the way the fork would
-learn them, and widen the fork's own 12-byte header (NETWORK_RULES_HEADER_SIZE)
-by a layout's further bytes) */
+plays 42 on natively, OpenCE's way, with a 12-byte header: its layouts of
+them have none of those facts, built in or from a table
+(network_rules_layout_native), as test_layouts_43 checks. The facts' own
+tests take them from a table's row of 44 as ChupathingyCE's builds learn them
+(test_layout_learned: built in, then network_rules_layout_apply) and widen
+the fork's own 12-byte header (NETWORK_RULES_HEADER_SIZE) by a layout's
+further bytes) */
 /* the facts ChupathingyCE says of OpenCE's network version 43 (docs/delta.md,
 "Layouts"): the record 64 bytes longer, the join request's version word,
 4 further header bytes with a checkpoint epoch and boundary (96), the unit
@@ -1268,6 +1269,18 @@ static void test_fact_43(struct delta_layout_fact *fact)
 		fact->dropped[dropped[index] >> 3] |= (uint8_t)(1 << (dropped[index] & 7));
 }
 
+/* a version's layout as a ChupathingyCE build learns it from the test's
+table: built in, then the facts applied (network_rules_layout leaves out
+chupa-43a's from 42 on in this fork) */
+static void test_layout_learned(unsigned version, struct network_rules_layout *layout)
+{
+	struct delta_layout_fact facts[DELTA_LAYOUT_FACTS];
+	int count = test_source(facts, DELTA_LAYOUT_FACTS);
+
+	network_rules_layout_built_in(version, layout);
+	network_rules_layout_apply(layout, facts, count);
+}
+
 static void test_layouts_43(void)
 {
 	struct network_rules_layout layout;
@@ -1284,17 +1297,20 @@ static void test_layouts_43(void)
 	CHECK(layout.unit_part_size[6] == 0 && layout.unit_part_size[7] == 0 && layout.rider_ejection_up == 0);
 	CHECK(network_rules_join_request_tail(43, tail, sizeof(tail)) == 236 && tail[234] == 0 && tail[235] == 0);
 
-	/* (the same facts in a row of 44) */
+	/* (the same facts in a row of 44: this fork's 44 is OpenCE's, 43's
+	layout under a new number, which it plays natively too. The record and
+	the join request's length are taken, chupa-43a's facts not: an OpenCE
+	host of 44 sends the fork's own 12-byte header, and widening it by 4 more
+	read every message off, its player never spawned) */
 	test_fact_count = 0;
 	test_fact_43(test_fact(44));
 	network_rules_layout(44, &layout);
 	CHECK(layout.refused == 0);
 	CHECK(layout.settings_size == 0x3390 && layout.options_size == 0x2C);
-	CHECK(layout.join_request_extra == 236 && layout.join_request_version_at == 234);
-	CHECK(layout.header_extra == 4 && layout.epoch_kind == 96);
-	CHECK(layout.unit_part_size[7] == 28 && layout.unit_part_at[7] == DELTA_LAYOUT_PART_AFTER_UP);
-	CHECK(layout.unit_part_size[6] == 30 && layout.unit_part_at[6] == DELTA_LAYOUT_PART_LAST);
-	CHECK(network_rules_rider_ejection_up(&layout) > 0.1999f && network_rules_rider_ejection_up(&layout) < 0.2001f);
+	CHECK(layout.join_request_extra == 236 && layout.join_request_version_at == -1);
+	CHECK(layout.header_extra == 0 && layout.epoch_kind == 0);
+	CHECK(layout.unit_part_size[6] == 0 && layout.unit_part_size[7] == 0 && layout.rider_ejection_up == 0);
+	CHECK(network_rules_rider_ejection_up(&layout) == 0.0f);
 	/* (and what the fork's own 42 and 43 drop already, 96 to 107: OpenCE's
 	MCC kinds and 107, none of them 41's) */
 	for (index = 96; index <= 107; index++)
@@ -1304,37 +1320,30 @@ static void test_layouts_43(void)
 	CHECK(network_rules_settings_size(44) == 13200 && 13200 - 3 * 0xE00 == 2448);
 	CHECK(network_rules_settings_size_taken(44, 13200) && !network_rules_settings_size_taken(44, 13136));
 	CHECK(network_rules_host_settings_size(44, 0, 0) == 13200);
-	/* (the join request: 0x70 + 236 = 0x15C, the version word last) */
-	CHECK(NETWORK_RULES_JOIN_REQUEST_SIZE + network_rules_join_request_tail(44, tail, sizeof(tail)) == 0x15C);
-	/* (big-endian, the packet codec's order: 00 2C) */
-	CHECK(tail[234] == 0x00 && tail[235] == 0x2C);
-	for (index = 0; index < 234; index++)
-	{
-		if (tail[index])
-			break;
-	}
-	CHECK(index == 234);
+	/* (the join request: 236 bytes of zeros past 0x70, as 43's; the word is
+	the fork's own field, OpenCE's way, and a host of 44 checks its own) */
+	CHECK(network_rules_join_request_tail(44, tail, sizeof(tail)) == 236 && tail[234] == 0 && tail[235] == 0);
 	CHECK(network_rules_join_request_tail(44, tail, 235) == -1);
 	CHECK(network_rules_join_request_tail(41, tail, sizeof(tail)) == 234);
 	CHECK(network_rules_join_request_tail(NETWORK_RULES_VERSION_UNKNOWN, tail, sizeof(tail)) == 0);
-	/* (a host of 44: its own number taken, another refused; a request
-	without the word refused) */
-	network_rules_join_request_tail(44, tail, sizeof(tail));
-	CHECK(!network_rules_join_request_refused(44, tail, 236));
-	tail[235] = 43;
-	CHECK(network_rules_join_request_refused(44, tail, 236));
-	/* (the little-endian word, 0x2C00: refused) */
-	tail[234] = 0x2C;
-	tail[235] = 0x00;
-	CHECK(network_rules_join_request_refused(44, tail, 236));
-	CHECK(network_rules_join_request_refused(44, tail, 234) && network_rules_join_request_refused(44, tail, 0));
-	CHECK(network_rules_join_request_refused(44, NULL, 0));
-	/* (a host of 43 or 41, whose layouts have no word: none refused here;
-	the fork's 43 host checks its own, OpenCE's way) */
+	CHECK(!network_rules_join_request_refused(44, tail, 236) && !network_rules_join_request_refused(44, NULL, 0));
 	CHECK(!network_rules_join_request_refused(43, tail, 236) && !network_rules_join_request_refused(43, NULL, 0));
 	CHECK(!network_rules_join_request_refused(41, tail, 236) && !network_rules_join_request_refused(41, tail, 234));
 	CHECK(!network_rules_join_request_refused(41, NULL, 0));
 	CHECK(!network_rules_join_request_refused(NETWORK_RULES_VERSION_UNKNOWN, tail, 236));
+	/* (a later version's row too: the fork plays OpenCE's newest natively) */
+	test_fact_43(test_fact(45));
+	network_rules_layout(45, &layout);
+	CHECK(layout.header_extra == 0 && layout.epoch_kind == 0 && layout.join_request_version_at == -1);
+	CHECK(layout.unit_part_size[6] == 0 && layout.unit_part_size[7] == 0 && layout.rider_ejection_up == 0);
+	/* (the facts as ChupathingyCE's builds learn them from that row) */
+	test_layout_learned(44, &layout);
+	CHECK(layout.refused == 0);
+	CHECK(layout.join_request_extra == 236 && layout.join_request_version_at == 234);
+	CHECK(layout.header_extra == 4 && layout.epoch_kind == 96);
+	CHECK(layout.unit_part_size[7] == 28 && layout.unit_part_at[7] == DELTA_LAYOUT_PART_AFTER_UP);
+	CHECK(layout.unit_part_size[6] == 30 && layout.unit_part_at[6] == DELTA_LAYOUT_PART_LAST);
+	CHECK(network_rules_rider_ejection_up(&layout) > 0.1999f && network_rules_rider_ejection_up(&layout) < 0.2001f);
 
 	/* (41: none of them) */
 	network_rules_layout(41, &layout);
@@ -1375,10 +1384,10 @@ static void test_layouts_43_hostile(void)
 	fact = test_fact(47);
 	fact->header_extra = 2;
 	network_rules_set_layout_source(test_source);
-	network_rules_layout(45, &layout);
+	test_layout_learned(45, &layout);
 	CHECK(layout.refused == 4 && layout.epoch_kind == 96 && layout.unit_part_size[2] == 0 &&
 		layout.unit_part_size[7] == 28 && layout.unit_part_size[6] == 30 && layout.unit_part_at[6] == DELTA_LAYOUT_PART_LAST);
-	network_rules_layout(47, &layout);
+	test_layout_learned(47, &layout);
 	CHECK(layout.refused == 8 && layout.header_extra == 4 && layout.join_request_version_at == 234 &&
 		layout.rider_ejection_up == 200);
 	/* 48: the header longer, a new kind for the boundary, the word moved */
@@ -1387,13 +1396,13 @@ static void test_layouts_43_hostile(void)
 	fact->epoch_kind = 120;
 	fact->join_request_version_said = 1;
 	fact->join_request_version_at = 0;
-	network_rules_layout(48, &layout);
+	test_layout_learned(48, &layout);
 	CHECK(layout.header_extra == 8 && layout.epoch_kind == 120 && layout.join_request_version_at == 0);
 	/* 49: the request shorter, the word gone with it only if past it */
 	fact = test_fact(49);
 	fact->join_request_said = 1;
 	fact->join_request_extra = 100;
-	network_rules_layout(49, &layout);
+	test_layout_learned(49, &layout);
 	CHECK(layout.join_request_extra == 100 && layout.join_request_version_at == 0);
 	network_rules_set_layout_source(NULL);
 }
@@ -1538,7 +1547,7 @@ static void test_unit_parts(void)
 	test_fact_count = 0;
 	test_fact_43(test_fact(44));
 	network_rules_set_layout_source(test_source);
-	network_rules_layout(44, &layout);
+	test_layout_learned(44, &layout);
 	/* (the built-in parts alone: none further, anywhere) */
 	CHECK(network_rules_unit_part_bytes(&layout, 0x3F, DELTA_LAYOUT_PART_AFTER_UP, 1, 1) == 0);
 	CHECK(network_rules_unit_part_bytes(&layout, 0x3F, DELTA_LAYOUT_PART_LAST, 0, 0) == 0);
@@ -1718,7 +1727,7 @@ static void test_unit_state_length(void)
 	test_fact_count = 0;
 	test_fact_43(test_fact(44));
 	network_rules_set_layout_source(test_source);
-	network_rules_layout(44, &layout);
+	test_layout_learned(44, &layout);
 	memset(record, 0, sizeof(record));
 	/* (dead, a killer; dead, none) */
 	record[1] = 0;
@@ -1754,7 +1763,7 @@ static void test_unit_state_length(void)
 		struct delta_layout_fact *fact = test_fact(45);
 
 		fact->header_extra = 2;
-		network_rules_layout(45, &layout);
+		test_layout_learned(45, &layout);
 		CHECK(layout.header_extra == 4 && layout.epoch_kind == 96 && layout.refused == 1);
 	}
 	network_rules_set_layout_source(NULL);

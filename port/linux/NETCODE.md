@@ -594,9 +594,14 @@ facts"): a version word in the join request, more bytes in every distributed
 header (a checkpoint epoch, with the host's boundary message before its
 objects and at each co-op revert), unit state parts a reader passes over,
 and the height of a vehicle's up that throws its riders. This fork plays 42
-and 43 natively, OpenCE's way, so its built-in layouts of them have none of
-those facts (`network_rules_layout_built_in`); a signed table's facts apply
-to it only for versions past 43.
+on natively, OpenCE's way (its 12-byte header carries the epoch), so none of
+its layouts of them have those facts: not its built-in 42 and 43
+(`network_rules_layout_built_in`), nor a later version a signed table
+describes (`network_rules_layout_native`). A table's record and join request
+sizes and dropped kinds still apply past 43. Until 2026-11-26 the fork took
+the table's facts for 44 (43's under a new number) on top of its own header,
+so its clients read an OpenCE host of 44 4 bytes off and their players never
+spawned ("Waiting for space to clear"), and OpenCE clients its hosts.
 
 A host plays by the number it announces (`delta_legacy_announce()`: the
 built-in one, 39 in this fork, or a legacy table's, which only raises it

@@ -951,6 +951,38 @@ void network_rules_set_layout_source(int (*source)(struct delta_layout_fact *fac
 	network_rules_layout_source = source;
 }
 
+/* port (this fork): a layout of 42 or later without chupa-43a's facts.
+ChupathingyCE's table says them of OpenCE's 42 to 44 for ChupathingyCE's
+game, whose own is 41's: the join request's version word, the header's 4
+further bytes with the checkpoint epoch and its boundary (96), the unit
+state's pose and deck parts, the riders' ejection. This fork's game is
+OpenCE's own from 42 on (it follows OpenCE's newest number), so it has all
+of them already: its 12-byte header carries the epoch, its join request the
+word, its unit states the parts. Taken again from a table's row of 44, they
+widened every header by 4 more bytes: a client of an OpenCE host of 44 read
+every message 4 bytes off (a kind 0, nothing more applied, its player never
+spawned: "Waiting for space to clear"), and an OpenCE client of this fork's
+host the same. Its built-in 42 and 43 have none (network_rules_layout_built_in);
+so has every later version. A table's record and join request sizes, shield
+effects and dropped kinds still apply. */
+static void network_rules_layout_native(struct network_rules_layout *layout)
+{
+	int bit;
+
+	layout->join_request_version_at = -1;
+	layout->header_extra = 0;
+	layout->epoch_kind = 0;
+	for (bit = 0; bit < 8; bit++)
+	{
+		if (!(NETWORK_RULES_UNIT_PARTS_BUILT_IN & (1u << bit)))
+		{
+			layout->unit_part_size[bit] = 0;
+			layout->unit_part_at[bit] = 0;
+		}
+	}
+	layout->rider_ejection_up = 0;
+}
+
 void network_rules_layout(unsigned version, struct network_rules_layout *layout)
 {
 	network_rules_layout_built_in(version, layout);
@@ -963,6 +995,8 @@ void network_rules_layout(unsigned version, struct network_rules_layout *layout)
 		network_rules_layout_apply(layout, facts, count < 0 ? 0 : count > DELTA_LAYOUT_FACTS ? DELTA_LAYOUT_FACTS :
 			count);
 	}
+	if (version != NETWORK_RULES_VERSION_UNKNOWN && version >= NETWORK_RULES_MCC_VERSION)
+		network_rules_layout_native(layout);
 }
 
 unsigned network_rules_layout_newest(void)

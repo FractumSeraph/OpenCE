@@ -562,9 +562,10 @@ a vehicle on its side (0.2) */
 /* (this fork: its game speaks 43 natively, OpenCE's way: the version word
 is a field of its join request, the epoch in every distributed header,
 the pose and deck parts and message 107 its own. Its built-in layouts of 42
-and 43 have none of these facts (network_rules_layout_built_in), so that
-nothing is added twice; the values below describe the wire, for
-ChupathingyCE's machines, the tests and tables past 43) */
+and 43 have none of these facts (network_rules_layout_built_in), and
+network_rules_layout takes none from a table for 42 or later either, 44's
+among them, so that nothing is added twice; the values below describe the
+wire, for ChupathingyCE's machines and the tests) */
 /* (NETWORK_RULES_EPOCH_VERSION, 42, above; and NETWORK_RULES_EPOCH_SIZE) */
 #define NETWORK_RULES_DECK_VERSION 43
 #define NETWORK_RULES_EPOCH_SETTINGS_SIZE 13200

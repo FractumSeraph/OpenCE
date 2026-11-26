@@ -422,7 +422,10 @@ and plays 42 to 44 natively, as OpenCE's game, MCC package sharing (103 to
 106) included: its hosts play 44 alone (a Delta machine of an older version
 refused), its clients join hosts of 42 to 44 and of the versions before them
 (42's header and record converted at the client's connection,
-network_rules.h); a table's facts apply to it past 43, 44's being 43's.
+network_rules.h); a table's facts apply to it past 43, 44's being 43's,
+but for chupa-43a's own (the header's epoch, the request's word, the unit
+parts, the ejection), which its game has natively from 42 on
+(network_rules_layout_native).
 chupa-44b (ChupathingyCE's): their game modes layer (docs/modes.md), SWAT and
 Hardcore by OpenCE's version 35 rules; this fork plays OpenCE's own
 (game_modes.c) and keeps chupa-44b's row, as a mode game's host refuses
