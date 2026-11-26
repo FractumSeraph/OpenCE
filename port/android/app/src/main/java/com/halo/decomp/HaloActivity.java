@@ -218,17 +218,6 @@ public class HaloActivity extends SDLActivity {
         }
     }
 
-    @Override
-    public boolean dispatchKeyEvent(KeyEvent event) {
-        if (touchControls != null && event.getAction() == KeyEvent.ACTION_DOWN
-                && event.getRepeatCount() == 0
-                && (event.isFromSource(InputDevice.SOURCE_GAMEPAD)
-                    || event.isFromSource(InputDevice.SOURCE_DPAD))) {
-            touchControls.controllerUsed();
-        }
-        return super.dispatchKeyEvent(event);
-    }
-
     /**
      * a watch's rotating bezel or crown, to the touch controls
      * (TouchControls.rotary); a controller's stick, which hides them
@@ -405,10 +394,18 @@ public class HaloActivity extends SDLActivity {
      * panels or a dialog took it), the key went to the activity, whose back
      * SDL traps (SDL_ANDROID_TRAP_BACK_BUTTON), and nothing happened. A
      * controller's back button and a mouse's back button go on as before
-     * (SDL's joystick and its mouse handling).
+     * (SDL's joystick and its mouse handling). A controller's button also
+     * hides the touch controls with input.touch_controls = "auto"
+     * (TouchControls.controllerUsed).
      */
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
+        if (touchControls != null && event.getAction() == KeyEvent.ACTION_DOWN
+                && event.getRepeatCount() == 0
+                && (event.isFromSource(InputDevice.SOURCE_GAMEPAD)
+                    || event.isFromSource(InputDevice.SOURCE_DPAD))) {
+            touchControls.controllerUsed();
+        }
         if (event.getKeyCode() == KeyEvent.KEYCODE_BACK &&
             !SDLControllerManager.isDeviceSDLJoystick(event.getDeviceId()) &&
             (event.getSource() & InputDevice.SOURCE_MOUSE) != InputDevice.SOURCE_MOUSE) {

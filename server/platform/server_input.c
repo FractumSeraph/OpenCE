@@ -230,6 +230,18 @@ int halo_chat_taps(float *x, float *y)
 	return 0;
 }
 
+/* (OpenCE's chat line on Android's own keyboard: never here) */
+int halo_chat_system_keyboard(int show)
+{
+	(void)show;
+	return 0;
+}
+
+int halo_chat_system_keyboard_lost(void)
+{
+	return 0;
+}
+
 void test_input_press(unsigned long buttons)
 {
 	(void)buttons;

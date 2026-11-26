@@ -20,8 +20,8 @@ NAMES = ["config_setting_index", "config_text_is_false", "config_set_from_text",
 
 # a fault in the code, the function it is in, and the case that must catch it
 NEGATIVE_CONTROLS = {
-    "strings-kept-short": (("CONFIG_MAXIMUM_WRITTEN_STRING : 256", "256 : 256"), "config_write", "long-string"),
-    "no-limit": (("strlen(value) > (config_settings", "strlen(value) > 99999 + 0 * (config_settings"), "config_write",
+    "strings-kept-short": (("CONFIG_MAXIMUM_WRITTEN_STRING : CONFIG_WRITE_MAXIMUM_VALUE", "256 : 256"), "config_write", "long-string"),
+    "no-limit": (("if (strlen(value) > maximum)", "if (strlen(value) > 99999 + 0 * maximum)"), "config_write",
                  "too-long"),
     "probe-writes": (("\tif (config_answer_only)\n", "\tif (0)\n"), "config_write", "answer-only"),
 }
@@ -34,6 +34,7 @@ def generated(fault=None, faulty_function=None):
         enum_with(source, "_platform_desktop = 1"), structure(source, "config_setting"),
         structure(source, "config_value"), structure(source, "config_text"),
         f"#define CONFIG_MAXIMUM_WRITTEN_STRING {constant(source, 'CONFIG_MAXIMUM_WRITTEN_STRING')}",
+        f"#define CONFIG_WRITE_MAXIMUM_VALUE {constant(source, 'CONFIG_WRITE_MAXIMUM_VALUE')}",
         enum_with(source, "CONFIG_INDEX_GUESSES = 64"),
         "static long config_index_guesses[CONFIG_INDEX_GUESSES];",
     ]) + "\n"

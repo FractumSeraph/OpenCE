@@ -44,7 +44,7 @@ static void *vehicle_specific_definition_get(long definition_index)
 	CHECK(definition_index == VEHICLE_DEFINITION, "a biped's definition read as a vehicle's");
 	return NULL;
 }
-static boolean custom_edition_cache_tags_loaded(void) { return custom_edition_tags; }
+static boolean cache_file_tags_are_ce(void) { return custom_edition_tags; } /* (port, this fork: OpenCE's custom_edition_cache_tags_loaded) */
 static struct actor_datum *actor_get(long index) { return &actor; }
 static struct actor_datum *actor_try_and_get(long index) { return &actor; }
 static struct actor_definition *actor_definition_get(long index) { return &definition; }

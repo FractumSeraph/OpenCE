@@ -11,7 +11,7 @@ from harness import CHECK_FAILED, build, enum_with, function, mutated, read, run
 
 CASES = ["ce-biped", "ce-vehicle", "xbox-vehicle"]
 CONTROLS = [
-    ("custom_edition_cache_tags_loaded() ? _object_mask_unit : _object_mask_vehicle", "_object_mask_vehicle"),
+    ("cache_file_tags_are_ce() ? _object_mask_unit : _object_mask_vehicle", "_object_mask_vehicle"),
     ("if (!allow_any_seat && vehicle->object.type == _object_type_vehicle)", "if (!allow_any_seat)"),
 ]
 
