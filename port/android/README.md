@@ -324,6 +324,15 @@ Bluetooth or USB keyboard types into the names in the same way, with or
 without Android's keyboard (`port/linux/src/sdl_platform.c`, "the system's
 on-screen keyboard").
 
+In a network game, the touch controls' D-pad Up brings up Android's keyboard
+to type a text chat line to all the players: Enter sends the line, and back
+(or a tap on the game above the keyboard) cancels it. The touch controls
+hide while it is up. As for a name, the line is typed as a visible password
+(so that Android's keyboard offers no suggestions), and only ASCII letters,
+numbers and symbols type into it. A controller's D-pad Up opens the chat's own
+on-screen keyboard instead, which the controller drives
+(`port/linux/README.md`, "Text chat").
+
 After a multiplayer game, the carnage report shows buttons in place of its
 prompt at the bottom: the host's CONTINUE goes on to the next game (PICK
 GAME), as A does, and LEAVE leaves the game, as B does (the host's LEAVE
@@ -352,7 +361,7 @@ controller for player 1. With the default buttons of the profile:
 | Crouch, Zoom | left and right stick clicks |
 | Light, Gren. type | white, black |
 | Pause, Back | start, back |
-| Up, Down, Left, Right | D-pad (in a network game, Up opens the text chat's keyboard) |
+| Up, Down, Left, Right | D-pad (in a network game, Up brings up Android's keyboard for a text chat line) |
 
 The names on the buttons follow the profile's "Button layout" (Settings >
 Gamepads): with "Swap triggers", the right trigger's button says "Grenade".
@@ -377,23 +386,27 @@ The touch controls show only while a game is played, from 200 ms after
 it starts. While the game starts, at the main menu, between maps, in the
 menus, during cinematics and while a movie plays they hide, and the
 touchscreen operates the menus as described above. They also show when a
-controller is connected: push "Hide" to play with the controller. A device
-without a touchscreen (a TV) never shows them. The setting
-`input.touch_controls` changes this (refer to "Settings"). The game's log
-has a line `touch: in a game` or `touch: menus`, with the setting's value,
-each time this changes.
+controller is connected: push "Hide" to play with the controller. With
+`input.touch_controls = "auto"`, a connected controller (a handheld's
+built-in one too, such as the AYN Odin 2 Portal's) starts with them hidden:
+the first tap shows them, and moving a stick or pressing a controller
+button hides them again. Gyroscope aiming and vibration, when enabled, work
+while they are hidden. A device without a touchscreen (a TV) never shows
+them. The setting `input.touch_controls` changes this (refer to
+"Settings"). The game's log has a line `touch: in a game` or `touch: menus`,
+with the setting's value, each time this changes.
 
 The buttons at the top of the screen:
 
-- "Hide" removes the controls, and the "Options" button with them (and
-  stops the gyroscope aiming and the vibration), until you push "Touch"; the
-  app remembers it.
+- "Hide" removes the touch buttons, and the "Options" button with them,
+  and turns off swipe aiming until you push "Touch". Gyroscope aiming and
+  vibration keep working when enabled. The app remembers it.
 - "Options" opens these items:
   - "General": the phone's vibration (on by default; it follows the
     vibration setting of the game's profile), aiming with the gyroscope
     (off by default), a floating move stick (off by default: the stick goes
     where your thumb lands in the lower left of the screen), the opacity of
-    the controls, "Held buttons don't aim" (off by default: a finger
+    the controls (5% to 100%), "Held buttons don't aim" (off by default: a finger
     that swipes from a button only holds it),
     "Hide or add buttons" (hide a button, add a copy of a
     button) and "Edit buttons size".
@@ -449,7 +462,7 @@ These settings are only for Android:
 | Setting | Function |
 | --- | --- |
 | `input.touch_aim_assist` | `true` (the default): the touch controls' swipe aiming gets the aim assist of a controller (the aim slows over a target and follows a moving one). `false`: none, as with a mouse; the bullets' own autoaim stays. |
-| `input.touch_controls` | The touch controls in a game. `"on"` (the default): shown on a touchscreen, also with a controller connected. `"auto"`: shown only while no controller is connected. `"off"`: never shown. A device without a touchscreen never shows them. The carnage report's CONTINUE and LEAVE buttons follow the same rule (otherwise it shows its A and B prompt), and so does a cinematic's SKIP button (otherwise any tap skips it). The menus take taps with each value. |
+| `input.touch_controls` | The touch controls in a game. `"on"` (the default): shown on a touchscreen, also with a controller connected (a controller's input hides only the toolbar). `"auto"`: shown when you touch the screen, hidden when you use a controller. `"off"`: never shown, with no gyroscope aiming or vibration. A device without a touchscreen never shows them. The carnage report's CONTINUE and LEAVE buttons follow the same rule (otherwise it shows its A and B prompt), and so does a cinematic's SKIP button (otherwise any tap skips it): with `"auto"` and a controller connected, or with `"off"`, they use the controller's prompts. The menus take taps with each value. |
 | `display.screen_width` | The number of columns of the 480-line picture. `0` (the default): the shape of the display (1068 on a 20:9 phone). `640`: the 4:3 shape of the Xbox. |
 | `display.round_screen` | A round display, a watch's (refer to "Wear OS"). `"auto"` (the default): as the system says (`Configuration.isScreenRound`). `"on"`: the HUD is laid out inside the circle on any display. `"off"`: where the Xbox puts it. |
 | `display.resolution_limit` | The lines the game draws at, scaled to the display. `"480"` (the default): the game's own. `"720"`, `"900"`, `"1080"` (or any number from 240): sharper, but more work for the GPU and the battery; fewer: less. `"native"`: the display's own. Never more than the display shows: a watch's 438x438 display shows the 4:3 picture on 328 lines, which the game then draws at. Video Setup's Resolution sets it, and a change applies at once. |

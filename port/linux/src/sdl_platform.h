@@ -266,6 +266,11 @@ Android also the game's own keyboard: the system's on-screen keyboard up
 while it is, where there is one that text input shows (Steam's, Android's on
 a touchscreen); each field begun brings it up again */
 void platform_screen_keyboard(BOOL show, BOOL password);
+#ifdef HALO_ANDROID
+/* whether the keyboard last brought up is gone though the game still asks for
+it (closed by hand, with back), or never came */
+BOOL platform_screen_keyboard_lost(void);
+#endif
 BOOL platform_next_keystroke(struct platform_keystroke *keystroke);
 /* debug.test_input's typing (press: and type:): a key pressed and let go,
 as the keyboard's would be, into the keystrokes the game reads (a text

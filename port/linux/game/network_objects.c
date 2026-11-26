@@ -3333,6 +3333,18 @@ static void distributed_client_release_item(
 	}
 }
 
+/* deactivates a weapon or rider that distributed_client_delete dropped outside the map,
+after its unit was deleted in another structure bsp.
+objects_update asserts that an active object has a cluster. */
+static void distributed_client_let_go(
+	long object_index)
+{
+	struct object_header_datum *header = object_header_get(object_index);
+
+	if (TEST_FLAG(header->flags, _object_header_active_bit) && header->cluster_index == NONE)
+		object_deactivate(object_index);
+}
+
 /* deletes an object (the host's, on its word, or one the host has not
 told of), undoing what refers to it first */
 static void distributed_client_delete(
@@ -3365,7 +3377,10 @@ static void distributed_client_delete(
 			if (unit->unit.weapon_object_indices[weapon_slot] != NONE &&
 				network_objects_client_has(unit->unit.weapon_object_indices[weapon_slot]))
 			{
+				long weapon_index = unit->unit.weapon_object_indices[weapon_slot];
+
 				unit_network_drop_weapon(object_index, weapon_slot);
+				distributed_client_let_go(weapon_index);
 			}
 		}
 		child_index = unit->object.first_child_object_index;
@@ -3378,6 +3393,7 @@ static void distributed_client_delete(
 				unit_get(child_index)->unit.parent_seat_index != NONE)
 			{
 				unit_exit_seat_end(child_index);
+				distributed_client_let_go(child_index);
 			}
 			child_index = next_index;
 		}
@@ -4929,13 +4945,13 @@ void network_objects_client_tick(
 	/* (names whose objects came since, or were held then) */
 	delta_client_apply_names();
 #endif
-	/* (who it is, as its Discord told it, and its build: once its ready went, which makes
-	it a machine the host takes messages of) */
-	if (objects_client_ready_time != NONE)
-	{
-		distributed_client_send_identity();
-		distributed_client_send_build();
-	}
+	/* (who it is, as its Discord told it, and its build: the checkpoint gate above means the
+	host has answered a ready, which makes this a machine it takes messages of. Not
+	"once the ready's time is set": a checkpoint boundary adopted in the same read as
+	the snapshot's end clears that time (network_objects_reverted) with no tick in
+	between to ask again, and both were then never sent) */
+	distributed_client_send_identity();
+	distributed_client_send_build();
 }
 
 /* ---------- the game */

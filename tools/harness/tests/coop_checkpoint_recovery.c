@@ -73,7 +73,8 @@ struct object_datum {
     } unit;
     struct {struct weapon_magazine magazines[2];real age;long game_time_last_fired;} weapon;
 };
-struct object_header { short identifier; struct object_datum *datum; };
+struct object_header { short identifier; unsigned short flags; short cluster_index; struct object_datum *datum; };
+#define object_header_datum object_header
 struct player_datum {
     short identifier, local_player_index;
     long unit_index, team_index, action_object_index, teleporter_index;
@@ -183,6 +184,8 @@ static struct distributed_object_change description(long index);
 
 #include "data.inc"
 
+static struct object_header *object_header_get(long index) {return datum_get(object_header_data,index);}
+
 static struct object_datum *object_try_and_get(long index) {
     struct object_header *h=datum_try_and_get(object_header_data,index);
     return h?h->datum:NULL;
@@ -214,7 +217,7 @@ static void distributed_restore_checkpoint(void) {
     int i;
     recovery_barriers++;memset(objects_client_checkpoint_pending,TRUE,sizeof(objects_client_checkpoint_pending));
     for(i=0;i<MAXIMUM_LOCAL_PLAYERS;i++)objects_client_own_inventories[i].unit_index=NONE;
-    objects_client_synchronized=FALSE;
+    objects_client_synchronized=FALSE;objects_client_ready_time=NONE;
 }
 static int effect_cleanups;
 static void effects_discard_gameplay(void) {effect_cleanups++;}
@@ -244,6 +247,7 @@ static void object_detach(long index) {
         while(*link!=NONE&&*link!=index){CHECK(++steps<16,"fixture attachment cycle");link=&object_get(*link)->object.next_object_index;}
         CHECK(*link==index,"fixture child is attached");*link=o->object.next_object_index;}
     o->object.parent_object_index=o->object.next_object_index=NONE;
+    SET_FLAG(object_header_get(index)->flags,_object_header_active_bit,TRUE);
 }
 static void attach_child(long parent,long child) {
     struct object_datum *p=object_get(parent),*c=object_get(child);
@@ -277,7 +281,7 @@ static void object_delete_immediately(long index) {
     object_delete_recursive(index,FALSE);
 }
 static void object_deleted_procs_call(long index) {(void)index;}
-static void object_deactivate(long index) {(void)index;}
+static void object_deactivate(long index) {SET_FLAG(object_header_get(index)->flags,_object_header_active_bit,FALSE);}
 static void object_delete_attachments(long index) {(void)index;}
 static void object_type_delete(long index) {object_detach(index);}
 static void object_header_delete(struct data_array *data,long index) {datum_delete(data,index);deleted++;}
@@ -296,6 +300,8 @@ static long object_new(struct object_placement_data *p) {
     CHECK(datum_new_at_index(object_header_data,index)==index,"exact handle allocation");
     h=datum_get(object_header_data,index);o=&world[DATUM_INDEX_TO_ABSOLUTE_INDEX(index)];
     memset(o,0,sizeof(*o));h->datum=o;
+    /* This fixture keeps objects inside cluster zero; out-of-BSP drops have their own fixture. */
+    h->cluster_index=0;h->flags=FLAG(_object_header_active_bit);
     o->definition_index=p->definition_index;o->object.type=definitions[p->definition_index].object.type;
     o->object.flags=FLAG(_object_connected_to_map_bit);o->object.position=p->position;
     o->object.owner_player_index=p->owner_player_index;o->object.owner_team_index=p->owner_team_index;
@@ -388,8 +394,9 @@ static void distributed_client_ready_picked_up_weapons(void) {prediction_ticks++
 static void mcc_network_client_tick(void) {prediction_ticks++;}
 static void distributed_client_send_vehicles(void) {prediction_ticks++;}
 static void distributed_client_carry_unsteered_vehicles(void) {prediction_ticks++;}
-static void distributed_client_send_identity(void) {prediction_ticks++;}
-static void distributed_client_send_build(void) {prediction_ticks++;}
+static int identity_sends,build_sends;
+static void distributed_client_send_identity(void) {prediction_ticks++;identity_sends++;}
+static void distributed_client_send_build(void) {prediction_ticks++;build_sends++;}
 
 /* (port, this fork: what ChupathingyCE's network code calls besides: a
 static target's nearest (its name for static_target_near), the host's
@@ -562,6 +569,19 @@ static int exercise(char const *name) {
     network_objects_handle_changes(&change,1);finish_snapshot();CHECK(constructed==1,"initial replica");
     corpse=object_get(index);state=live_state(index);
     if(!strncmp(name,"snapshot-",9))return snapshot_inventory_case(index,!strcmp(name,"snapshot-batches"));
+    if(!strcmp(name,"identity-after-boundary")){
+        int identity_before,build_before;
+        objects_client_synchronized=FALSE;network_objects_client_tick();
+        CHECK(client_ready_sends==1&&objects_client_ready_time==now,"a ready went");
+        begin_checkpoint();CHECK(objects_client_ready_time==NONE,"the boundary cleared the ready's time");
+        /* the snapshot's end came in the same read: no tick between to ask again */
+        finish_snapshot();network_objects_handle_synchronized();
+        identity_before=identity_sends;build_before=build_sends;
+        now++;network_objects_client_tick();
+        CHECK(objects_client_synchronized&&identity_sends==identity_before+1&&build_sends==build_before+1,
+            "identity and build go once the snapshot is whole, though the boundary cleared the ready's time");
+        return 0;
+    }
     if(!strcmp(name,"partial-producers")){
         long projectile,child;
         int prediction_resets;
@@ -735,12 +755,14 @@ static int exercise(char const *name) {
             CHECK(!objects_client_retried_inventory_count,"completed inventory consumed");
         }else{
             CHECK(network_objects_client_has(weapon)&&object_get(weapon)->object.parent_object_index==NONE,"host weapon survives unit replacement");
+            CHECK(TEST_FLAG(object_header_get(weapon)->flags,_object_header_active_bit),"in-map weapon stays active");
             distributed_client_apply_inventory(&inventory);
         }
         CHECK(object_get(index)->unit.weapon_object_indices[0]==weapon&&object_get(weapon)->object.parent_object_index==index,"inventory returns to replacement");
         CHECK(object_get(index)->unit.grenade_counts[0]==2&&object_get(index)->unit.desired_weapon_index==0,"host equipment restored");
         CHECK(object_get(weapon)->weapon.magazines[0].rounds_total==77&&object_get(weapon)->weapon.magazines[0].rounds_loaded==11,"host ammunition restored");
         if(rider!=NONE){CHECK(network_objects_client_has(rider)&&object_get(rider)->object.parent_object_index==NONE,"seated child survives replacement");
+            CHECK(TEST_FLAG(object_header_get(rider)->flags,_object_header_active_bit),"in-map rider stays active");
             CHECK(!object_try_and_get(cosmetic),"non-preserved child follows real recursive deletion");}
     }
     if(!strcmp(name,"repeat")){

@@ -66,6 +66,7 @@ def generated(fault=None):
         structure(distributed_h, "distributed_message_header"),
         enum_with(read("source/objects/object_types.h"), "_object_mask_all ="),
         enum_with(objects_h, "_object_dead_bit,"),
+        enum_with(objects_h, "_object_header_active_bit = 0"),
         enum_with(objects_h, "_object_connected_to_map_bit,"),
         enum_with(objects_h, "NUMBER_OF_OBJECT_CHANGE_COLORS,"),
         enum_with(units_h, "_unit_active_camouflaged_bit,"),
@@ -126,7 +127,7 @@ def generated(fault=None):
         "unit_kill", "unit_kill_silent", "unit_kill_no_statistics",
         "unit_network_forget_weapon", "unit_network_add_weapon", "unit_network_drop_weapon"))
     code += "\n" + "\n".join(function(objects, name) for name in (
-        "distributed_client_release_item", "distributed_client_delete",
+        "distributed_client_release_item", "distributed_client_let_go", "distributed_client_delete",
         "distributed_client_request_objects", "distributed_client_create_failed",
         "network_objects_expect_live_unit", "distributed_client_own_object",
         "distributed_client_change_valid", "distributed_client_apply_change",
@@ -180,6 +181,7 @@ def test_reconstructed_unit_rejects_old_life_kill():
     "invalid-identifier", "outside-pool", "allocation-failure", "repeat", "retry",
     "inventory", "hierarchy", "late-inventory", "projectiles", "partial-producers", "same-epoch-create", "snapshot-empty", "snapshot-batches",
     "kill-current", "kill-unknown", "kill-invalid-number", "kill-invalid-tag", "kill-invalid-node",
+    "identity-after-boundary",
 ])
 def test_replica_controls(case):
     status, output = run(build("coop_checkpoint_recovery", generated()), case)
@@ -200,6 +202,9 @@ def test_replica_controls(case):
     ("distributed_host_send_inventories_to_machine(machine_index);", "(void)machine_index;", "snapshot-empty"),
     ("if (!distributed_checkpoint_ready())\n\t\treturn;", "(void)0;", "snapshot-empty"),
     ("network_objects_discard_client_effects();", "(void)0;", "partial-producers"),
+    ("\tdistributed_client_send_identity();\n\tdistributed_client_send_build();\n}",
+     "\tif (objects_client_ready_time != NONE)\n\t{\n\t\tdistributed_client_send_identity();\n"
+     "\t\tdistributed_client_send_build();\n\t}\n}", "identity-after-boundary"),
     ("network_damage_new_game();", "(void)0;", "partial-producers"),
     ("if (!distributed_checkpoint_synchronized)\n\t\t\t{", "if (TRUE)\n\t\t\t{", "partial-producers"),
     ("short limit = MIN(MAXIMUM_ENTRIES_PER_MESSAGE, RELIABLE_ENTRIES(struct distributed_inventory));",
