@@ -34,7 +34,10 @@ typedef int BOOL;
 #define FALSE 0
 #define SDL_strncasecmp(a, b, n) strncasecmp((a), (b), (n))
 #define SDL_strcasecmp(a, b) strcasecmp((a), (b))
-typedef int pthread_mutex_t;
+/* (the lock unused: one thread; renamed, as glibc's headers above declare
+the real type) */
+typedef int harness_mutex;
+#define pthread_mutex_t harness_mutex
 #define pthread_mutex_lock(lock) ((void)(lock))
 #define pthread_mutex_unlock(lock) ((void)(lock))
 #define DATA_PATH_SEPARATOR "/"
