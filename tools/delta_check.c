@@ -214,13 +214,22 @@ int main(int count, char **arguments)
 		}
 		else if (!strcmp(arguments[index], "layout43") && index + 1 < count)
 		{
-			/* (chupa-43a's facts of a version's layout) */
+			/* (chupa-43a's facts of a version's layout, as the loader gives
+			them: built in, then the table's facts applied, as ChupathingyCE's
+			builds take them; this fork's own layouts leave them out from 42
+			on, network_rules_layout: "native" below) */
 			struct network_rules_layout layout;
+			struct delta_layout_fact facts[DELTA_LAYOUT_FACTS];
 			unsigned version = (unsigned)strtoul(arguments[++index], NULL, 10);
-			int bit;
+			int bit, got;
 
 			network_rules_set_layout_source(delta_legacy_layouts);
-			network_rules_layout(version, &layout);
+			network_rules_layout_built_in(version, &layout);
+			if (version > DELTA_LEGACY_NEWEST)
+			{
+				got = delta_legacy_layouts(facts, DELTA_LAYOUT_FACTS);
+				network_rules_layout_apply(&layout, facts, got < 0 ? 0 : got > DELTA_LAYOUT_FACTS ? DELTA_LAYOUT_FACTS : got);
+			}
 			printf("layout43 %u version_at %d header %d epoch %d ejection %d parts", version,
 				layout.join_request_version_at, layout.header_extra, layout.epoch_kind, layout.rider_ejection_up);
 			for (bit = 0; bit < 8; bit++)
@@ -229,6 +238,19 @@ int main(int count, char **arguments)
 					printf(" %d:%d@%d", bit, layout.unit_part_size[bit], layout.unit_part_at[bit]);
 			}
 			printf(" refused %d\n", layout.refused);
+		}
+		else if (!strcmp(arguments[index], "native") && index + 1 < count)
+		{
+			/* (port, this fork: its own layout of a version, chupa-43a's facts
+			left out from 42 on) */
+			struct network_rules_layout layout;
+			unsigned version = (unsigned)strtoul(arguments[++index], NULL, 10);
+
+			network_rules_set_layout_source(delta_legacy_layouts);
+			network_rules_layout(version, &layout);
+			printf("native %u version_at %d header %d epoch %d ejection %d parts %d settings %d join %d\n", version,
+				layout.join_request_version_at, layout.header_extra, layout.epoch_kind, layout.rider_ejection_up,
+				layout.unit_part_size[6] + layout.unit_part_size[7], layout.settings_size, layout.join_request_extra);
 		}
 		else if (!strcmp(arguments[index], "wait") && index + 1 < count)
 		{

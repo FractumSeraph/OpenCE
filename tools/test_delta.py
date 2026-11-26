@@ -1031,8 +1031,13 @@ def test_loader_reads_generic_layouts(keys, checker, tmp_path):
                                   "46": {"unit_state_parts": [{"bit": 6, "size": 30, "at": "middle"}]}})
     table = write_signed(keys, tmp_path / "t12", document(serial=12, row=row))
     output = run_checker(checker, tmp_path, "layout43", 43, "offer", table, "layout43", 41, "layout43", 44,
-                         "layout", 44, "layout43", 45, "layout43", 46, "state")
+                         "layout", 44, "layout43", 45, "layout43", 46, "native", 44, "native", 45, "state")
     assert "offer 1" in output
+    # (port, this fork: its own layouts of 44 and later take the table's
+    # record and join request sizes, never chupa-43a's facts, which its game
+    # has natively: network_rules_layout_native)
+    assert "native 44 version_at -1 header 0 epoch 0 ejection 0 parts 0 settings 13210 join 236" in output
+    assert "native 45 version_at -1 header 0 epoch 0 ejection 0 parts 0 " in output
     lines = [line for line in output.splitlines() if line.startswith("layout43 ")]
     # (43 built in, before any table. Port, this fork: its game plays 43
     # natively, OpenCE's way, so its built-in 43 has none of chupa-43a's
