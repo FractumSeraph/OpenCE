@@ -64,6 +64,8 @@ static short players_in_game(void)
 }
 static boolean game_engine_player_is_odd_man_out(long player_index) { return FALSE; }
 static boolean game_engine_player_is_out_of_lives(long player_index) { return people[player_index].out_of_lives; }
+/* (port, this fork: a Forge game never ends for one team; none here) */
+static boolean forge_game_active(void) { return FALSE; }
 #include "under_test.inc"
 
 /* a player of a team: alive (a unit), dead and waiting to respawn, or out of

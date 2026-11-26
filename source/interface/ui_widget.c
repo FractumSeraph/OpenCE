@@ -6194,6 +6194,29 @@ void display_error_damaged_media_text(
 	return;
 }
 
+/* port (this fork): whether a level is a campaign one, as OpenCE's
+custom_edition_maps_level_campaign: the Xbox's levels (main.c), a Halo PC
+family's campaign maps (map_families.c) and MCC's */
+static boolean ui_network_level_campaign(
+	char const *level_name)
+{
+	short main_get_solo_level_from_name(char const *name);
+
+	if (!level_name || !level_name[0])
+		return FALSE;
+	if (main_get_solo_level_from_name(level_name) != NONE || mcc_maps_level_campaign(level_name))
+		return TRUE;
+#ifdef HALO_CUSTOM_EDITION
+	{
+		boolean map_family_campaign(char const *map);
+
+		if (map_family_campaign(level_name))
+			return TRUE;
+	}
+#endif
+	return FALSE;
+}
+
 /* port: whether this machine hosts network co-op on a campaign level */
 static boolean ui_network_server_hosting_cooperative(
 	void)
@@ -6201,7 +6224,7 @@ static boolean ui_network_server_hosting_cooperative(
 	struct network_game *game = network_game_get_game();
 
 	return global_network_game_server_get() && game && !game->variant.game_engine_index &&
-		custom_edition_maps_level_campaign(game->map.name);
+		ui_network_level_campaign(game->map.name);
 }
 
 void network_game_reset_to_pregame_ui(

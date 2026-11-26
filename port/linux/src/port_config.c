@@ -7476,13 +7476,10 @@ int config_write(const char *name, const char *value)
 	{
 		char *end = line_text + snprintf(line_text, line_size, "%s = \"", key);
 		const char *character;
-		/* (the key, ' = "', each character twice at most, '"\n' and the end) */
-		size_t room = strlen(key) + 4 + 2 * strlen(string) + 3;
-		char *end;
 
 		/* (a TOML basic string: quotes and backslashes escaped, and control
 		characters, so that a value cannot end its line) */
-		for (character = config_values[index].string; *character; character++)
+		for (character = config_values[index].string ? config_values[index].string : ""; *character; character++)
 		{
 			if ((unsigned char)*character < 0x20 || *character == 0x7F)
 			{
@@ -7494,14 +7491,12 @@ int config_write(const char *name, const char *value)
 			*end++ = *character;
 		}
 		memcpy(end, "\"\n", 3);
-		line_text = string_line;
 		break;
 	}
 	}
 	config_path(path, sizeof(path));
 	text = config_read_file(path, &size);
-	changed = config_settings[index].type == _config_string && !string_line ? NULL :
-		config_text_with_line(text ? text : "", name, line_text);
+	changed = config_text_with_line(text ? text : "", name, line_text);
 	succeeded = changed && config_write_file(path, changed);
 	config_touched[index] = 1;
 	config_tuning_apply(index);

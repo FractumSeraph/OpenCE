@@ -13,7 +13,7 @@ static char const *screen;
 
 static struct network_game *network_game_get_game(void) { return missing_game ? NULL : &game; }
 static void *global_network_game_server_get(void) { return host ? &game : NULL; }
-static boolean custom_edition_maps_level_campaign(char const *name) { return campaign; }
+static boolean ui_network_level_campaign(char const *name) { return campaign; }
 static boolean network_game_is_splitscreen_local(void) { return splitscreen; }
 static boolean network_game_is_quickstart_local(void) { return quickstart; }
 static boolean mcc_ui_network_restart_pregame(void) { return restart; }

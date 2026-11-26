@@ -83,7 +83,7 @@ symbols in this file:
 #include "units/vehicle_definitions.h"
 #include "units/vehicles.h"
 
-#include "custom_edition_cache.h" /* port: port/linux/game/custom_edition_cache.c */
+#include "cache/cache_files.h" /* port: cache_file_tags_are_ce (this fork's Custom Edition loader) */
 
 /* ---------- constants */
 
@@ -367,7 +367,7 @@ static boolean action_vehicle_evaluate_seat(
 				/* port: on Custom Edition maps any unit's seat, as on Halo PC.
 				Their scripts send AI to bipeds, and ai_scripting_go_to_vehicle_internal takes any unit. */
 				struct unit_datum *vehicle = object_get_and_verify_type(vehicle_index,
-					custom_edition_cache_tags_loaded() ? _object_mask_unit : _object_mask_vehicle);
+					cache_file_tags_are_ce() ? _object_mask_unit : _object_mask_vehicle);
 				real_vector2d to_seat_direction;
 				real facing_dot;
 				boolean within_range;

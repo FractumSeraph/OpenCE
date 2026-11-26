@@ -42,7 +42,9 @@ NEGATIVE_CONTROLS = {
 def android_keyboard(platform):
     """sdl_platform.c's Android half of the system's on-screen keyboard (the desktop's has the same names)."""
     start = platform.index("/* ---------- the system's on-screen keyboard (Android's)")
-    return platform[start:platform.index("\n#endif", start)]
+    # (port, this fork: up to the #endif after its last function; the native
+    # apps' host_sdl_text_input block has an #endif of its own before it)
+    return platform[start:platform.index("\n#endif", platform.index("static void screen_keyboard_update", start))]
 
 
 def generated(fault=None, faulty_function=None):
