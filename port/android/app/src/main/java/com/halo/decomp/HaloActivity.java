@@ -304,6 +304,46 @@ public class HaloActivity extends SDLActivity {
         }).start();
     }
 
+    /**
+     * Halo MCC's shared files (MapsDownloader.MCC_SHARED: its bitmaps.map and
+     * sounds.map, which Workshop maps that leave textures and sounds to MCC's
+     * need), downloaded while the game runs: the touch controls' Options, as
+     * the game's message about such a map says (sdl_platform.c's
+     * platform_mcc_shared_message). The game finds them the next time the map
+     * is chosen.
+     */
+    public void downloadMccShared() {
+        java.io.File dataRoot = getExternalFilesDir(null);
+        if (dataRoot == null)
+            return;
+        if (MapsDownloader.haveMccShared(dataRoot)) {
+            Toast.makeText(this, "MCC's shared files are already here.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("Downloading MCC's shared files")
+            .setMessage("Asking for the list of files... (about 350 MB; play on while it downloads)")
+            .setPositiveButton("Hide", null)
+            .create();
+        dialog.show();
+        new Thread(() -> {
+            try {
+                MapsDownloader.download(dataRoot, MapsDownloader.MCC_SHARED,
+                    (text, permille) -> runOnUiThread(() -> dialog.setMessage(text)));
+                runOnUiThread(() -> {
+                    dialog.dismiss();
+                    Toast.makeText(this, "MCC's shared files are downloaded.", Toast.LENGTH_LONG).show();
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    dialog.dismiss();
+                    Toast.makeText(this, "Downloading MCC's shared files failed: " + e.getMessage(),
+                        Toast.LENGTH_LONG).show();
+                });
+            }
+        }).start();
+    }
+
     /** Halo PC maps from the system's file picker (MapImporter); no storage permission */
     public void chooseMapFiles() {
         MapImporter.choose(this);

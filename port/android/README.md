@@ -195,7 +195,8 @@ guarantee that every device makes this address available.
 The game needs the `maps/` folder of the game. The app downloads it from
 this fork's site (https://halo.fractumseraph.net/assets/maps/: the
 multiplayer maps alone, about 0.5 GB with Halo Custom Edition's shared maps,
-or everything with the campaign's, about 2 GB; `MapsDownloader.java`),
+or everything with the campaign's and Halo MCC's shared files, about 2.3 GB;
+`MapsDownloader.java`),
 or extracts it from an Xbox disc image (`.xiso` or `.iso`) of any version of
 the game, with the Bink movies (`bink/`) that the folder lacks, which the
 game plays (a download has none: the movies are skipped). The app keeps the
@@ -208,6 +209,15 @@ Multiplayer only, the campaign's maps come from the touch controls' Options
 (**Download campaign maps**, while the game runs) or the app icon's
 shortcut of that name (hold the icon); a campaign level played without them
 says so.
+
+Some Steam Workshop MCC maps leave their textures and sounds to MCC's own
+shared files (MCC's `halo1/maps/bitmaps.map`, and `bitmaps.map` and
+`sounds.map` from `halo1/maps/custom_edition`). **Download everything**
+includes them. Otherwise the touch controls' Options has **Download MCC
+shared files** (about 350 MB, while the game runs), and choosing such a map
+without them says so. They go into `mcc_maps/_shared/singleplayer` and
+`multiplayer` (`maps_mcc/_shared` where the game has that folder). A copy
+already there, imported or downloaded from Steam, is kept.
 
 To install the data from a disc image:
 

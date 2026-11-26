@@ -318,12 +318,48 @@ static void mcc_cache_require_log(char const *name, char const *message)
         strspn(package, "0123456789") == strlen(package) ? "Workshop item" : "package", package, level, reason, path);
 }
 
+/* port (this fork): whether one of MCC's shared files (mcc_package.c's base
+ * sets: the singleplayer set's bitmaps.map, the multiplayer set's bitmaps.map
+ * and sounds.map) is neither in maps_mcc/_shared nor found by Steam discovery */
+static boolean mcc_cache_shared_missing(void)
+{
+    unsigned type, set;
+    for (set = 1; set < MCC_PACKAGE_BASE_SETS; set++) {
+        for (type = 1; type <= 2; type++) {
+            char path[128];
+            FILE *file;
+            if (set == 1 && type == 2) continue;
+            if (!mcc_package_base_resource_path(type, set, path)) continue;
+            file = fopen(path, "rb");
+            if (!file) return TRUE;
+            fclose(file);
+        }
+    }
+    return FALSE;
+}
+
 boolean mcc_cache_require(char const *name, unsigned long checksum)
 {
     char message[512];
     wchar_t text[512];
     size_t i;
     if (mcc_cache_present(name, checksum, message, sizeof(message))) return TRUE;
+    /* port (this fork): a map that leaves textures or sounds to MCC's shared
+     * files while they aren't here: they are offered for download from the
+     * fork's site (sdl_platform.c, data.download_url; once a run), and the map
+     * checked again once they are. Where the game cannot download them itself
+     * (Android: the app does), the message says how */
+    if ((strstr(message, "bitmaps.map") || strstr(message, "sounds.map")) && mcc_cache_shared_missing()) {
+        if (platform_offer_mcc_shared()) {
+            mcc_cache_precache_clear();
+            if (mcc_cache_present(name, checksum, message, sizeof(message))) return TRUE;
+        } else {
+            size_t length = strlen(message);
+            if (length + 2 < sizeof(message) &&
+                platform_mcc_shared_message(message + length + 1, (int)(sizeof(message) - length - 1)))
+                message[length] = ' ';
+        }
+    }
     mcc_cache_require_log(name, message);
     for (i = 0; message[i] && i < NUMBEROF(text) - 1; ++i) text[i] = (unsigned char)message[i];
     text[i] = 0;

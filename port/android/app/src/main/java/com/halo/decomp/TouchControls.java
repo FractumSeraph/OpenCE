@@ -1025,7 +1025,7 @@ public final class TouchControls extends View implements SensorEventListener, In
 
     private void showOptions() {
         String[] items = {"General", "Edit buttons layout", "Look sensitivity", "Import maps",
-            "Download campaign maps"};
+            "Download campaign maps", "Download MCC shared files"};
         AlertDialog dialog = new AlertDialog.Builder(getContext())
             .setTitle("Options")
             .setItems(items, (d, which) -> {
@@ -1039,9 +1039,12 @@ public final class TouchControls extends View implements SensorEventListener, In
                 } else if (which == 3) {
                     // (ChupathingyCE's: Halo PC maps from the system's file picker)
                     ((HaloActivity) getContext()).chooseMapFiles();
-                } else {
+                } else if (which == 4) {
                     // (this fork: the campaign's maps a Multiplayer only first start left out)
                     ((HaloActivity) getContext()).downloadCampaignMaps();
+                } else {
+                    // (this fork: Halo MCC's shared files, which some Workshop maps need)
+                    ((HaloActivity) getContext()).downloadMccShared();
                 }
             })
             .setNegativeButton("Close", null)

@@ -332,7 +332,8 @@ public class LauncherActivity extends Activity {
         TextView message = new TextView(this);
         message.setText("Download the game's maps folder into the app's storage: the multiplayer maps alone "
             + "(about 0.5 GB, with Halo Custom Edition's shared maps; the campaign's can be downloaded later, "
-            + "from the touch controls' Options), or everything with the campaign (about 2 GB). Or choose "
+            + "from the touch controls' Options), or everything with the campaign and the shared files Halo "
+            + "MCC's Workshop maps can need (about 2.3 GB). Or choose "
             + "an Xbox disc image of Halo: Combat Evolved (an .iso or .xiso file, any version) on this "
             + "device to copy it from; you can delete the image afterwards.\n\n"
             + "You can also copy a maps folder from a computer:\n"
@@ -354,7 +355,7 @@ public class LauncherActivity extends Activity {
             LinearLayout.LayoutParams.WRAP_CONTENT));
 
         downloadAll = new Button(this);
-        downloadAll.setText("Download everything, with the campaign (2 GB)");
+        downloadAll.setText("Download everything, with the campaign (2.3 GB)");
         downloadAll.setOnClickListener(v -> {
             setBusy(true);
             status.setText("Asking for the list of maps...");

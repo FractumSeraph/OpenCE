@@ -432,6 +432,20 @@ int platform_missing_map_message(const char *name, char *text, int size)
 	return 0;
 }
 
+/* nor MCC's shared files (sdl_platform.c's): a server's admin installs them
+(maps_mcc/_shared) */
+BOOL platform_offer_mcc_shared(void)
+{
+	return FALSE;
+}
+
+int platform_mcc_shared_message(char *text, int size)
+{
+	(void)text;
+	(void)size;
+	return 0;
+}
+
 /* as sdl_platform.c's (display.interpolation, on unless set off): the game's
 main loop then runs unthrottled by the Xbox's 60 Hz display, which with no
 display to wait for would spin; the director paces it (dedicated.c) */

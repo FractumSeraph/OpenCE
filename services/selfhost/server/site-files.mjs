@@ -4,6 +4,7 @@
 // for; static-site.mjs writes them once as files, for a host that serves
 // files only (the page on a web host, the services on a VPS).
 
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -103,8 +104,36 @@ export function customMapList(folder, mapHashes) {
 // Custom Edition's shared maps (bitmaps.map, sounds.map, loc.map), which
 // every Custom Edition map needs, when the custom_maps folder beside it has
 // them, as custom_maps/<name>: the games put them in maps_ce, and builds
-// from before skip such lines (a name with a folder).
+// from before skip such lines (a name with a folder). Last Halo MCC's shared
+// sets (MCC's halo1/maps/bitmaps.map, and halo1/maps/custom_edition's
+// bitmaps.map and sounds.map, which some Workshop maps leave their textures
+// and sounds to), when the mcc_shared folder beside it has them, as
+// mcc_shared/<set>/<name>: the games put them in maps_mcc/_shared/<set>,
+// with Everything or when an MCC map needs them. Their lines carry each
+// file's SHA-256 as a third column: the games check the download by it, and
+// copy maps_ce's bitmaps.map and sounds.map in place of the multiplayer
+// set's when they are the same file (MCC's are Custom Edition's own).
+const fileHashes = new Map();
+
+function fileSha256(file, stat) {
+  const key = `${file}|${stat.size}|${Math.floor(stat.mtimeMs)}`;
+  if (fileHashes.has(key)) return fileHashes.get(key);
+  const hash = crypto.createHash("sha256");
+  const bytes = Buffer.alloc(1 << 20);
+  const descriptor = fs.openSync(file, "r");
+  try {
+    let read;
+    while ((read = fs.readSync(descriptor, bytes, 0, bytes.length, null)) > 0) hash.update(bytes.subarray(0, read));
+  } finally {
+    fs.closeSync(descriptor);
+  }
+  const digest = hash.digest("hex");
+  fileHashes.set(key, digest);
+  return digest;
+}
+
 export const CUSTOM_EDITION_SHARED_MAPS = ["bitmaps.map", "sounds.map", "loc.map"];
+export const MCC_SHARED_FILES = ["singleplayer/bitmaps.map", "multiplayer/bitmaps.map", "multiplayer/sounds.map"];
 
 export function gameMapList(folder) {
   let lines = [];
@@ -123,6 +152,15 @@ export function gameMapList(folder) {
         if (stat.isFile()) lines.push(`custom_maps/${name}\t${stat.size}`);
       } catch {
         // (not here: the games fetch it when a Custom Edition map needs it)
+      }
+    }
+    for (const name of MCC_SHARED_FILES) {
+      try {
+        const file = path.join(folder, "..", "mcc_shared", ...name.split("/"));
+        const stat = fs.statSync(file);
+        if (stat.isFile()) lines.push(`mcc_shared/${name}\t${stat.size}\t${fileSha256(file, stat)}`);
+      } catch {
+        // (not here: players install MCC's own)
       }
     }
   }

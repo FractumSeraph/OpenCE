@@ -192,6 +192,15 @@ Halo Custom Edition's shared maps (`bitmaps.map`, `sounds.map`, `loc.map`),
 `maps.txt` names them too, as `custom_maps/<name>`, and the games put them in
 `maps_ce`; builds from before skip those lines.
 
+Halo MCC's shared files, which some Workshop MCC maps leave their textures
+and sounds to, go in **`public/assets/mcc_shared/`**: MCC's
+`halo1/maps/bitmaps.map` as `singleplayer/bitmaps.map`, and
+`halo1/maps/custom_edition/bitmaps.map` and `sounds.map` in `multiplayer/`.
+`maps.txt` names them as `mcc_shared/<set>/<name>`, with a third column, each
+file's SHA-256. The desktop games download them when an MCC map needs them,
+and with Everything; the Android app from its Options. They go into
+`maps_mcc/_shared/<set>`. Serve them only if you may share them.
+
 Put the loading screen's picture beside them as `loading.tga`, and the game
 draws the Xbox's loading screen (the Halo ring and LOADING...) instead of
 clouds of its own. No disc has it as a file: the game's `default.xbe` holds

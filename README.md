@@ -66,8 +66,14 @@ Neither OpenCE nor ChupathingyCE has these.
 - **The game's maps at the first start.** Both projects need your Xbox disc
   image. This fork's builds also offer to download the maps: the
   multiplayer maps alone (about 0.5 GB, with Custom Edition's shared maps)
-  or everything (about 2 GB), the campaign's later if you like
+  or everything (about 2.3 GB), the campaign's later if you like
   ([Game data](#game-data)).
+- **MCC's shared files without Steam.** Some Workshop MCC maps keep their
+  textures and sounds in MCC's own shared files. Both projects read them
+  from a Steam installation of MCC or a copy you install, and OpenCE's
+  Android app downloads them with your Steam account. This fork's builds
+  download them from its site the first time such a map is chosen (about
+  350 MB, [Shared MCC resources](#shared-mcc-resources)).
 - **Invite links that last.** A host's `halo://join/` link can stay the
   same from run to run (`network.lasting_invite`), to post on a website.
 - **ChupathingyCE's server on OpenCE's master servers.** With an approved
@@ -198,11 +204,13 @@ image of Halo: Combat Evolved, as ChupathingyCE's builds do (see its
   waits for them. On Android they come from the touch controls' Options,
   or from the app icon's **Download campaign maps** shortcut (hold the
   icon).
-- **Everything** (about 2 GB): the campaign's maps as well.
+- **Everything** (about 2.3 GB): the campaign's maps as well, and Halo
+  MCC's shared files ([Shared MCC resources](#shared-mcc-resources)).
 
 A copy of Custom Edition's shared maps already in `maps_ce` is kept as it
 is. The site's `maps.txt` names those three as `custom_maps/<name>` (its
-folder beside `maps/`); builds from before this skip such lines.
+folder beside `maps/`), and MCC's shared files as `mcc_shared/<set>/<name>`
+with each one's SHA-256; builds from before this skip such lines.
 
 ## MCC maps
 
@@ -283,6 +291,17 @@ Use MCC's files, not standalone Custom Edition resources. Package-supplied
 resources take priority. On Android, use the shared-resource import options.
 Self-contained maps need no shared files; missing or incompatible resources
 produce a diagnostic.
+
+This fork's builds also download them from its site, beside the game's maps
+(`data.download_url`), when they aren't there. Choosing a map that needs them
+offers the download (about 350 MB) and loads the map once they are here. On
+Android the touch controls' Options has **Download MCC shared files**. The
+first start's **Everything** includes them. They go into `maps_mcc/_shared`
+(`mcc_maps/_shared` where only that folder is). Copies already there, or
+found in Steam's MCC installation, are kept. MCC's multiplayer set is the
+same file as the Custom Edition `bitmaps.map` and `sounds.map` the site
+serves, so a matching copy in `maps_ce` is copied instead of downloaded
+again (checked by SHA-256). The browser can't use them yet.
 
 ### Hosting and sharing
 

@@ -217,6 +217,13 @@ download (port/linux/src/sdl_platform.c; nonzero once it is here), and the
 words the damaged disc error says instead for it (nonzero for such a map) */
 int platform_offer_missing_map(const char *name);
 int platform_missing_map_message(const char *name, char *text, int size);
+/* Halo MCC's shared files (bitmaps.map and sounds.map of its shared sets,
+into maps_mcc/_shared) an MCC map needs and this machine lacks
+(port/linux/game/mcc_cache.c): offered for download (sdl_platform.c; nonzero
+once they are here), and the words saying how to get them where the game
+cannot download them itself (nonzero when there are any) */
+int platform_offer_mcc_shared(void);
+int platform_mcc_shared_message(char *text, int size);
 /* the debug camera's mouse and keys (source/camera/director.c): whether the
 middle button, R and F are held, and the wheel's notches since the last call
 (port/linux/src/xinput_sdl.c) */
