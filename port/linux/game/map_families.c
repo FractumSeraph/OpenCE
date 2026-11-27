@@ -1752,7 +1752,7 @@ static void family_list(
 			/* (a map that needs OpenSauce's memory upgrades, which only
 			this game reads: never in the lists games are hosted from, for
 			now; Load Level lists the campaigns) */
-			if (type != CACHE_TYPE_CAMPAIGN && cache_file_local_only(path))
+			if (type != CACHE_TYPE_SOLO && cache_file_local_only(path))
 				continue;
 #endif
 			snprintf(listed[listed_count++], MAP_FAMILY_FILE_LENGTH, "%s", file);
@@ -1765,7 +1765,7 @@ static void family_list(
 	/* (and the campaigns in maps_os, OpenSauce's, <file>.yelo or .map: in the
 	campaign's lists only, for now; opensauce_maps.c) */
 	if (family == _map_family_custom_edition && version == family_cache_version(family) &&
-		type == CACHE_TYPE_CAMPAIGN)
+		type == CACHE_TYPE_SOLO)
 	{
 		static char const *const patterns[] = { "d:\\" OPENSAUCE_MAPS_FOLDER "\\*.yelo",
 			"d:\\" OPENSAUCE_MAPS_FOLDER "\\*.map" };
