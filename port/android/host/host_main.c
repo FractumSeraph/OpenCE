@@ -59,7 +59,8 @@ void host_log(int priority, const char *text)
 
 void host_fatal(const char *format, ...)
 {
-	char message[1024];
+	/* (room for host_memory_unavailable_reason's lines too) */
+	char message[2048];
 	va_list arguments;
 
 	va_start(arguments, format);
@@ -388,6 +389,7 @@ static void *game_main(void *unused)
 	if (host_load_image(image, image_size) != 0)
 	{
 		FILE *report;
+		char reason[700];
 
 		if (!host_memory_fixed_unavailable())
 			host_fatal("cannot load the game image; see logcat (tag \"" HOST_LOG_TAG "\") for details");
@@ -397,13 +399,16 @@ static void *game_main(void *unused)
 		host_memory_report_low_mappings(report);
 		if (report)
 			fclose(report);
-		/* (and the app, at its next start, offers the 64-bit build while
-		this file is there: LauncherActivity.java) */
-		host_fatal("The game cannot start: the memory it needs at 0x80000000 is taken by Android's "
-			"Java runtime on this device.\n\nThe 64-bit build (chupathingyce-android64 on the release page) "
-			"needs no fixed address: open the app again to install it over this one, keeping your data and "
-			"saves. Restarting the device may also help.\n\nThe memory map is in memory_map.txt in\n%s",
-			data_root);
+		/* (the reason on the screen itself: a screenshot of it is often all
+		a report has, and Android/data cannot be opened on newer devices;
+		and the app, at its next start, offers the 64-bit build while
+		memory_map.txt is there: LauncherActivity.java) */
+		host_memory_unavailable_reason(reason, sizeof(reason));
+		host_fatal("The game cannot start: the memory it needs at 0x80000000 is in use on this device.\n\n"
+			"%s\n\nThe 64-bit build (chupathingyce-android64 on the release page) needs no fixed address: "
+			"open the app again to install it over this one, keeping your data and saves. Restarting the "
+			"device may also help.\n\nPlease report it with a screenshot of this message (or memory_map.txt "
+			"from %s).", reason, data_root);
 	}
 	/* (a start that works: the 64-bit build is no longer offered) */
 	{

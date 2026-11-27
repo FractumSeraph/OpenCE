@@ -892,7 +892,10 @@ Thus:
 
 If the addresses are not available, the game shows a message, and writes
 the mappings below 4 GB to `memory_map.txt` in the data folder and to the
-log. At the next start, while that file is there, the app offers the native
+log. The message itself names the device, its Android version and Java
+heap, and why the addresses could not be had (each mapping in the way, and
+whether it was in use), so a screenshot of it is enough to tell the cases
+apart: newer devices do not let the Files app open `Android/data`. At the next start, while that file is there, the app offers the native
 64-bit build of the same version (refer to "The native 64-bit build"), which
 needs no fixed address: a release build downloads it from the release and
 installs it over this one, and other builds open the release page. "Try
