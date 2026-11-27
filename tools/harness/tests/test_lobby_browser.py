@@ -11,6 +11,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from harness import CHECK_FAILED, build, constant, enum_with, function, mutated, read, run, structure
 
 
+def range_defines(limits):
+    """OpenCE's range names (HALO_PORT_NETWORK_VERSION_OLDEST and the rest), each #define whole, its
+    continued lines too"""
+    out, keep = [], False
+    for line in limits.splitlines():
+        if re.match(r'#define HALO_PORT_NETWORK_VERSION_(OLDEST|OLDEST_MCC|ADVERTISED|PLAYS)\b', line):
+            keep = True
+        if keep:
+            out.append(line)
+            keep = line.endswith('\\')
+    return out
+
+
 def generated(fault=None):
     header = read('port/linux/src/p2p.h')
     version = constant(read('port/linux/include/halo_port_limits.h'), 'HALO_PORT_NETWORK_VERSION')
@@ -22,6 +35,8 @@ def generated(fault=None):
                        f'#define HALO_PORT_NETWORK_VERSION_MAXIMUM {maximum}',
                        'static int delta_legacy_minimum(void) { return HALO_PORT_NETWORK_VERSION_MINIMUM; }',
                        'static int delta_legacy_maximum(void) { return HALO_PORT_NETWORK_VERSION_MAXIMUM; }',
+                       # (OpenCE's range names, which the host's admission and its tests read)
+                       *range_defines(read('port/linux/include/halo_port_limits.h')),
                        enum_with(header, 'P2P_LISTING_NAME_SIZE = 32'),
                        enum_with(header, 'P2P_LOBBY_SOURCE_ALL'),
                        enum_with(header, 'P2P_LOBBY_MAPS_YES'),
@@ -64,7 +79,8 @@ def test_case(case):
     (('*reverse = text && *text == \'-\';', '*reverse = 0;'), 'sort_text'),
     (('\treturn P2P_LOBBY_SORT_PLAYERS;', '\treturn P2P_LOBBY_SORT_DEDICATED;'), 'sort_text'),
     (('"dedicated", "players",', '"servers", "players",'), 'sort_text'),
-    (('int other_version = !HALO_PORT_NETWORK_VERSION_PLAYS(game.network_version, 0);',
+    # (port, this fork: its own range, version_joinable's)
+    (('int other_version = !version_joinable(game.network_version);',
       'int other_version = game.network_version != HALO_PORT_NETWORK_VERSION;'), 'older_in_range'),
 ])
 def test_negative_control(fault, case):

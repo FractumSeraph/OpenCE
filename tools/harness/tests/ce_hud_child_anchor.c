@@ -8,6 +8,10 @@ struct hud_absolute_placement_definition { short corner, pad; };
 /* ce_hud.c's state */
 static boolean ce_hud_child_anchors;
 static long ce_hud_meter_bitmap_count, ce_hud_button_icon_group_count;
+/* (port, this fork: OpenCE's Custom Edition HUD state, which ce_hud_tags_unloaded
+resets too) */
+static long ce_hud_mixed_meter_bitmap_count, ce_hud_static_group_count;
+static unsigned long ce_hud_behaviours;
 /* an MCC map's anchor (mcc_hud_child_placement), MCC's own: here it takes
 the element's first short when an MCC map is loaded */
 static int mcc;

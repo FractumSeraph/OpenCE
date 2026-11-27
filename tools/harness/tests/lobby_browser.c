@@ -185,7 +185,9 @@ int main(int argc, char **argv)
 		add("Golf older", "bloodgulch", 1, 15, 16, 0, 0);
 		games[count - 1].network_version = HALO_PORT_NETWORK_VERSION_OLDEST;
 		add("Hotel too old", "bloodgulch", 1, 14, 16, 0, 0);
-		games[count - 1].network_version = HALO_PORT_NETWORK_VERSION_OLDEST - 1;
+		/* (port, this fork: older than the oldest it joins, which is older
+		than OpenCE's range) */
+		games[count - 1].network_version = HALO_PORT_NETWORK_VERSION_MINIMUM - 1;
 		shown = p2p_lobby_filter(games, count, &choices, NULL);
 		p2p_lobby_sort(games, shown, P2P_LOBBY_SORT_PLAYERS, 0);
 		CHECK(!strcmp(games[0].name, "Golf older"), "the oldest version played with: first, with the most players");

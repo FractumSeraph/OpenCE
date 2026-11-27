@@ -48,6 +48,7 @@ async function build() {
     [path.join(root, 'port/linux/src/posix_dtls.c'), []],
     [path.join(root, 'port/linux/src/p2p_webrtc.c'), []],
     [path.join(root, 'port/linux/src/p2p_crypto.c'), []],
+    [path.join(root, 'port/linux/game/content_sha256.c'), []],
     [path.join(monocypher, 'monocypher.c'), ['-w']],
     [path.join(monocypher, 'monocypher-ed25519.c'), ['-w']],
     [path.join(root, 'port/web/tests/webrtc_native.c'), []],

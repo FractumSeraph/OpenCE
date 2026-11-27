@@ -18,6 +18,8 @@ gives none. test_ce_map_pictures.py takes the code (under_test.inc).
 #include "under_test.inc"
 
 #define PIXELS "ui\\shell\\bitmaps\\mp_map_grafix__pixels"
+/* (port, this fork: the tag ce_picture_pixels takes, as ce_bitmap_read reads any of ui.map's) */
+#define PICTURES_TAG "ui\\shell\\bitmaps\\mp_map_grafix"
 #define PICTURE_SIZE 16384UL
 
 /* a table of up to 8 resources, their paths one after another */
@@ -67,14 +69,14 @@ int main(int argc, char **argv)
 		table_add(&maker, "ui\\shell\\bitmaps\\other__pixels", 0x100, 0x10);
 		table_add(&maker, PIXELS, 21 * PICTURE_SIZE, 0xd62628);
 		found = 0;
-		CHECK(ce_picture_pixels(&maker.table, 19, 0xd62628 + 19 * PICTURE_SIZE, PICTURE_SIZE, &found),
+		CHECK(ce_picture_pixels(&maker.table, PICTURES_TAG, 19, 0xd62628 + 19 * PICTURE_SIZE, PICTURE_SIZE, &found),
 			"the unknown level's picture was not found");
 		CHECK(found == 0xd62628 + 19 * PICTURE_SIZE, "found at 0x%lx", found);
-		CHECK(ce_picture_pixels(&maker.table, 0, 0xd62628, PICTURE_SIZE, &found) && found == 0xd62628,
+		CHECK(ce_picture_pixels(&maker.table, PICTURES_TAG, 0, 0xd62628, PICTURE_SIZE, &found) && found == 0xd62628,
 			"the first picture was not found where it is");
-		CHECK(!ce_picture_pixels(&maker.table, 20, 0xd62628 + 20 * PICTURE_SIZE + 1, PICTURE_SIZE, &found),
+		CHECK(!ce_picture_pixels(&maker.table, PICTURES_TAG, 20, 0xd62628 + 20 * PICTURE_SIZE + 1, PICTURE_SIZE, &found),
 			"a picture running past its resource was taken");
-		CHECK(!ce_picture_pixels(&maker.table, 0, 0xd62628 - 1, PICTURE_SIZE, &found),
+		CHECK(!ce_picture_pixels(&maker.table, PICTURES_TAG, 0, 0xd62628 - 1, PICTURE_SIZE, &found),
 			"a picture starting before its resource was taken");
 		return 0;
 	}
@@ -87,15 +89,15 @@ int main(int argc, char **argv)
 		table_add(&maker, "UI\\Shell\\Bitmaps\\MP_Map_Grafix_19", PICTURE_SIZE, 0x2a31c70);
 		table_add(&maker, "ui\\shell\\bitmaps\\mp_map_grafix_1", PICTURE_SIZE / 2, 0x29e9c70);
 		found = 0;
-		CHECK(ce_picture_pixels(&maker.table, 19, 0xdae628, PICTURE_SIZE, &found) && found == 0x2a31c70,
+		CHECK(ce_picture_pixels(&maker.table, PICTURES_TAG, 19, 0xdae628, PICTURE_SIZE, &found) && found == 0x2a31c70,
 			"the unknown level's picture was not found by its path (0x%lx)", found);
-		CHECK(ce_picture_pixels(&maker.table, 0, 0xd62628, PICTURE_SIZE, &found) && found == 0x29e5c70,
+		CHECK(ce_picture_pixels(&maker.table, PICTURES_TAG, 0, 0xd62628, PICTURE_SIZE, &found) && found == 0x29e5c70,
 			"the first picture was not found by its path (0x%lx)", found);
-		CHECK(!ce_picture_pixels(&maker.table, 1, 0xd66628, PICTURE_SIZE, &found),
+		CHECK(!ce_picture_pixels(&maker.table, PICTURES_TAG, 1, 0xd66628, PICTURE_SIZE, &found),
 			"a picture of another size was taken");
-		CHECK(!ce_picture_pixels(&maker.table, 2, 0xd6a628, PICTURE_SIZE, &found),
+		CHECK(!ce_picture_pixels(&maker.table, PICTURES_TAG, 2, 0xd6a628, PICTURE_SIZE, &found),
 			"a picture the file has not was taken");
-		CHECK(!ce_picture_pixels(&maker.table, 1, 0x29e9c70, PICTURE_SIZE, &found),
+		CHECK(!ce_picture_pixels(&maker.table, PICTURES_TAG, 1, 0x29e9c70, PICTURE_SIZE, &found),
 			"a picture was taken at an offset without its resource");
 		return 0;
 	}
@@ -106,13 +108,13 @@ int main(int argc, char **argv)
 		table_begin(&maker, 0x100000);
 		table_add(&maker, PIXELS, 0x10000, 0xf8000);
 		CHECK(ce_bitmaps_resource(&maker.table, PIXELS) == NONE, "a resource running past the file was found");
-		CHECK(!ce_picture_pixels(&maker.table, 0, 0xf8000, PICTURE_SIZE, &found), "pixels past the file were taken");
+		CHECK(!ce_picture_pixels(&maker.table, PICTURES_TAG, 0, 0xf8000, PICTURE_SIZE, &found), "pixels past the file were taken");
 		table_begin(&maker, 0x100000);
 		table_add(&maker, PIXELS, 0x10000, 0xf0000);
 		CHECK(ce_bitmaps_resource(&maker.table, PIXELS) == 0, "the file's last resource was not found");
-		CHECK(!ce_picture_pixels(&maker.table, 0, 0xFFFFFFF0UL, 0x20, &found), "an offset that wraps was taken");
-		CHECK(!ce_picture_pixels(&maker.table, 0, 0xf0010, 0xFFFFFFF8UL, &found), "a size that wraps was taken");
-		CHECK(ce_picture_pixels(&maker.table, 0, 0xf0000 + 0x10000 - PICTURE_SIZE, PICTURE_SIZE, &found),
+		CHECK(!ce_picture_pixels(&maker.table, PICTURES_TAG, 0, 0xFFFFFFF0UL, 0x20, &found), "an offset that wraps was taken");
+		CHECK(!ce_picture_pixels(&maker.table, PICTURES_TAG, 0, 0xf0010, 0xFFFFFFF8UL, &found), "a size that wraps was taken");
+		CHECK(ce_picture_pixels(&maker.table, PICTURES_TAG, 0, 0xf0000 + 0x10000 - PICTURE_SIZE, PICTURE_SIZE, &found),
 			"the resource's last picture was refused");
 		/* (a path's offset past the paths) */
 		maker.resources[0] = maker.table.paths_size;
@@ -186,7 +188,7 @@ int main(int argc, char **argv)
 			}
 			size = next_random(&state) % 2 ? PICTURE_SIZE : next_random(&state);
 			offset = next_random(&state);
-			if (ce_picture_pixels(&maker.table, picture, offset, size, &found))
+			if (ce_picture_pixels(&maker.table, PICTURES_TAG, picture, offset, size, &found))
 			{
 				CHECK(found <= maker.table.file_size && size <= maker.table.file_size - found,
 					"a picture outside its file was found: 0x%lx bytes at 0x%lx of 0x%lx", size, found,
