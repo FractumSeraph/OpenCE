@@ -76,7 +76,7 @@ def generated(fault=None):
         enum_with(read("source/game/players.h"), "NUMBER_OF_PLAYER_POWERUPS,"),
         enum_with(damage_h, "NUMBER_OF_DAMAGE_DATA_FLAGS,"),
         enum_with(damage_h, "_object_being_damaged_body_depleted_bit ="),
-        enum_with(read("source/game/game_globals.h"), "NUMBER_OF_MATERIAL_TYPES,"),
+        enum_with(read("source/game/game_globals.h"), "NUMBER_OF_HALO_MATERIAL_TYPES,"),
         # (port, this fork: ChupathingyCE's data arrays hold their elements by XPTR)
         "#define DATA_ARRAY_OWN_ELEMENTS(array) ((void *)((array) + 1))",
         structure(read("source/memory/data.h"), "data_array"),
@@ -143,8 +143,9 @@ def generated(fault=None):
         "distributed_client_retry_inventory", "distributed_client_forget_retried_inventory",
         "distributed_client_apply_inventory", "distributed_client_apply_retried_inventories"))
     code += "\n" + "\n".join(function(damage, name) for name in (
-        "distributed_damage_to_data", "distributed_damage_indices_valid",
-        "distributed_damage_numbers_valid", "network_damage_handle_events", "damage_host_tables_reset",
+        "network_damage_material_types", "distributed_damage_to_data", "distributed_damage_indices_valid",
+        "distributed_damage_numbers_valid", "network_damage_handle_events",
+        "damage_host_tables_reset",
         "network_damage_new_game", "network_damage_client_tick"))
     code += "\n" + function(distributed, "distributed_message_epoch_valid")
     code += "\n" + "\n".join(function(objects, name) for name in (

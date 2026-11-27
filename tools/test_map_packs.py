@@ -76,6 +76,12 @@ void spv3_mode_log(char const *format, ...) { (void)format; }
 /* (SPV3's own ui.yelo open: HARNESS_SPV3_UI) */
 boolean spv3_mode_own_ui_open(char const *map_name) { return getenv("HARNESS_SPV3_UI") && !strcmp(map_name, "ui"); }
 #ifdef HALO_CUSTOM_EDITION
+/* (this fork's map_families.c with Halo PC's maps: its settings, OpenCE's
+custom maps folder and the Custom Edition tag cache, none here) */
+int config_boolean(const char *name) { (void)name; return 1; }
+const char *platform_custom_edition_root(void) { return ""; }
+int platform_ce_tag_cache_ready = 1;
+char platform_ce_tag_cache_error[160];
 /* (OpenSauce's module, opensauce_map.c and the rest, not in the harness:
 opensauce_maps.c alone, for an OpenSauce mod's folder) */
 #include "opensauce.h"
