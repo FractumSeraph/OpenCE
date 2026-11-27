@@ -107,8 +107,13 @@ typedef struct
 typedef const DSI3DL2BUFFER *LPCDSI3DL2BUFFER;
 #endif
 
-/* (the IMA ADPCM step the mixer decodes with: ChupathingyCE's one, content_audio.c) */
+/* (the IMA ADPCM step the mixer decodes with: ChupathingyCE's one, content_audio.c,
+or a negative control's faulty copy of it, test_mixer.py) */
+#if __has_include("content_audio_fault.c")
+#include "content_audio_fault.c"
+#else
 #include "../../../port/linux/game/content_audio.c"
+#endif
 #include "under_test.inc"
 
 #endif

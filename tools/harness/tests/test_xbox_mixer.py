@@ -36,7 +36,8 @@ NEGATIVE_CONTROLS = {
  'adpcm-no-header-sample': (('unsigned long sample = group * 8 + byte * 2 + 1;',
                              'unsigned long sample = group * 8 + byte * 2;'),
                             'adpcm'),
- 'adpcm-index-87': (('if (*index > 88) *index = 88;', 'if (*index > 87) *index = 87;'), 'adpcm'),
+ # (port, this fork: the clamp is ChupathingyCE's content_audio.c's, test_mixer.generated)
+ 'adpcm-index-87': (('if (*step > 88) *step = 88;', 'if (*step > 87) *step = 87;'), 'adpcm'),
  'adpcm-not-interleaved': (('(group * channels + channel) * 4', '(channel * 8 + group) * 4'), 'adpcm'),
  'doppler-off': (('\t\tdoppler_heard(stream);', '\t\t1.0;'), 'doppler'),
  'doppler-glide': (('stream->current_doppler = doppler_ratio(stream);',

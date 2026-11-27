@@ -85,9 +85,19 @@ def generated(source=None, fault=None, scalar=False):
         "packet_release", "stream_complete_head", "stream_from_interface",
         "stream_flush", "stream_release", "stream_process", "IDirectSoundStream_Pause"))
     code += "\n#ifdef UNDER_TEST_I3DL2_SOURCE\n" + function(text, "IDirectSoundStream_SetI3DL2Source") + "\n#endif\n"
-    if fault:
+    # (port, this fork: the IMA ADPCM step is ChupathingyCE's content_audio.c,
+    # which mixer_fixture.h includes; a fault in it goes into a copy the
+    # fixture takes instead)
+    audio = Path(__file__).resolve().parents[3] / "port/linux/game/content_audio.c"
+    audio_text = audio.read_text(encoding="utf-8")
+    extra = ()
+    if fault and fault[0] not in code and fault[0] in audio_text:
+        header = (audio.parent / "content_audio.h").as_posix()
+        audio_text = audio_text.replace('#include "content_audio.h"', f'#include "{header}"')
+        extra = (("content_audio_fault.c", mutated(audio_text, *fault)),)
+    elif fault:
         code = mutated(code, *fault)
-    return (("under_test.inc", ("#define RESAMPLER_SCALAR\n" if scalar else "") + code),)
+    return (("under_test.inc", ("#define RESAMPLER_SCALAR\n" if scalar else "") + code),) + extra
 
 
 # The flush regression uses a real mixer thread on both native platforms.
