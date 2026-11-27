@@ -28,6 +28,7 @@ packs never take these paths.
 #include "scenario/scenario_definitions.h"
 #include "units/unit_definitions.h"
 #include "ai/actor_definitions.h"
+#include "models/model_animation_definitions.h"
 #include "stubbs_mode.h"
 #include "stubbs_engine.h" /* (its special attacks, before the rewrite) */
 #include "stubbs_possession.h" /* (its possession seat, before the rewrite) */
@@ -142,19 +143,44 @@ typedef char stubbs_actor_variant_size_assert[
 	STUBBS_ACTOR_VARIANT_SIZE - STUBBS_ACTOR_VARIANT_MOVEMENT_OFFSET ==
 		HALO_ACTOR_VARIANT_SIZE - HALO_ACTOR_VARIANT_MOVEMENT_OFFSET ? 1 : -1];
 
-static void stubbs_actor_variant_convert(unsigned char *definition)
+enum
 {
+	STUBBS_ACTOR_VARIANT_WEAPON_OFFSET = 0xB0,
+};
+
+/* FALSE (left as it is) unless Stubbs's weapon reference is where his
+layout has it: a weap reference, or none */
+static boolean stubbs_actor_variant_convert(unsigned char *definition)
+{
+	unsigned long group;
+	long index;
+
+	memcpy(&group, definition + STUBBS_ACTOR_VARIANT_WEAPON_OFFSET, 4);
+	memcpy(&index, definition + STUBBS_ACTOR_VARIANT_WEAPON_OFFSET + 0x0C, 4);
+	if (group != 'weap' && index != NONE)
+		return FALSE;
 	memmove(definition + HALO_ACTOR_VARIANT_MOVEMENT_OFFSET, definition + STUBBS_ACTOR_VARIANT_MOVEMENT_OFFSET,
 		HALO_ACTOR_VARIANT_SIZE - HALO_ACTOR_VARIANT_MOVEMENT_OFFSET);
 	memset(definition + ACTOR_VARIANT_STUBBS_OWN_OFFSET, 0,
 		HALO_ACTOR_VARIANT_MOVEMENT_OFFSET - ACTOR_VARIANT_STUBBS_OWN_OFFSET);
+	return TRUE;
 }
 
 /* the tags being converted (stubbs_mode_convert_tags) */
 static unsigned char *stubbs_tags_base;
 static unsigned long stubbs_tags_size;
 
-static unsigned char *stubbs_host(unsigned char *base, unsigned long size, unsigned long address,
+/* the tag header and the tag index (offsets into the tags, end past the
+last byte), which no tag's data may overlap: a map that has a tag there
+would have the conversion rewrite its index under it */
+enum
+{
+	STUBBS_TAG_HEADER_SIZE = 0x24,
+};
+static unsigned long stubbs_tags_index_start;
+static unsigned long stubbs_tags_index_end;
+
+static unsigned char *stubbs_tags_at(unsigned char *base, unsigned long size, unsigned long address,
 	unsigned long length)
 {
 	unsigned long offset = address - STUBBS_XBOX_TAG_CACHE_BASE;
@@ -162,6 +188,28 @@ static unsigned char *stubbs_host(unsigned char *base, unsigned long size, unsig
 	if (address < STUBBS_XBOX_TAG_CACHE_BASE || offset > size || length > size - offset)
 		return NULL;
 	return base + offset;
+}
+
+/* the tag index's count elements, at instances */
+static unsigned char *stubbs_index(unsigned char *base, unsigned long size, unsigned long instances,
+	unsigned long count)
+{
+	return stubbs_tags_at(base, size, instances, count * 0x20);
+}
+
+/* a tag's data: in the tags, and clear of their header and index */
+static unsigned char *stubbs_host(unsigned char *base, unsigned long size, unsigned long address,
+	unsigned long length)
+{
+	unsigned char *host = stubbs_tags_at(base, size, address, length);
+	unsigned long offset = address - STUBBS_XBOX_TAG_CACHE_BASE;
+
+	if (!host || offset < STUBBS_TAG_HEADER_SIZE ||
+		(offset < stubbs_tags_index_end && offset + length > stubbs_tags_index_start))
+	{
+		return NULL;
+	}
+	return host;
 }
 
 /* Stubbs's unit's melee: a block of his own at 0x330 (reclaimer reads it as
@@ -297,6 +345,10 @@ enum
 	TAG_DATA_SIZE_OFFSET = 0x00,
 	TAG_DATA_FILE_OFFSET_OFFSET = 0x08,
 	TAG_DATA_ADDRESS_OFFSET = 0x0C,
+	/* (the most frame data read for one map: a map file holds far less. A
+	sum past it is no map's, and its frame data is not read; the cap keeps
+	the sum from wrapping 32 bits, as sizes near 2 GB each would) */
+	MAXIMUM_STUBBS_ANIMATION_DATA = 0x10000000,
 };
 
 static void *stubbs_animation_data;
@@ -342,7 +394,7 @@ static unsigned char *stubbs_animation_data_owner(unsigned char *animation)
 
 		memcpy(&handle, animation + ANIMATION_SHARED_GRAPH_OFFSET, 4);
 		memcpy(&index, animation + ANIMATION_SHARED_INDEX_OFFSET, 2);
-		instance = stubbs_host(stubbs_tags_base, stubbs_tags_size, stubbs_tags_instances, stubbs_tags_count * 0x20);
+		instance = stubbs_index(stubbs_tags_base, stubbs_tags_size, stubbs_tags_instances, stubbs_tags_count);
 		if (!instance || index < 0 || (handle & 0xFFFF) >= stubbs_tags_count)
 			return NULL;
 		instance += (handle & 0xFFFF) * 0x20;
@@ -403,6 +455,22 @@ static unsigned long stubbs_animation_data_share(unsigned char *animation, unsig
 	return 1;
 }
 
+/* a sharing animation still with a size and no data, its size made 0 as
+stubbs_animation_data_share does: 1 if it was. (Tags that overlap each
+other can have a later rewrite land on an animation already shared) */
+static unsigned long stubbs_animation_data_unshared_clear(unsigned char *animation, unsigned char *into)
+{
+	long data_size, address, none = 0;
+
+	(void)into;
+	memcpy(&data_size, animation + HALO_ANIMATION_DATA_OFFSET + TAG_DATA_SIZE_OFFSET, 4);
+	memcpy(&address, animation + HALO_ANIMATION_DATA_OFFSET + TAG_DATA_ADDRESS_OFFSET, 4);
+	if (data_size <= 0 || address || !stubbs_animation_shares_data(animation))
+		return 0;
+	memcpy(animation + HALO_ANIMATION_DATA_OFFSET + TAG_DATA_SIZE_OFFSET, &none, 4);
+	return 1;
+}
+
 static unsigned long stubbs_animation_data_read(unsigned char *animation, unsigned char *into)
 {
 	unsigned long data_size = stubbs_animation_data_size(animation);
@@ -422,6 +490,113 @@ static unsigned long stubbs_animation_data_read(unsigned char *animation, unsign
 static void stubbs_weapon_class_animations_order(unsigned char *base, unsigned long size, unsigned char *block,
 	unsigned char *sets, unsigned long set_count);
 
+/* an animation graph's sounds: Stubbs's may name an effect instead of a
+sound (390 in the twelve levels: footsteps' dust, the zombies' gore), which
+Halo's graphs never do. Each one's effect is kept in the element's unused
+long and its reference made none, so the graph is Halo's; the unit plays the
+effect where Halo would play the sound (stubbs_engine_animation_effect). The
+others' unused long is made none */
+enum
+{
+	ANIMATION_GRAPH_SOUND_REFERENCES_OFFSET = 0x54,
+	ANIMATION_GRAPH_SOUND_REFERENCE_SIZE = 0x14,
+	ANIMATION_GRAPH_SOUND_REFERENCE_EFFECT_OFFSET = 0x10,
+};
+typedef char stubbs_animation_sound_references_offset_assert[
+	offsetof(struct animation_graph, sound_references) == ANIMATION_GRAPH_SOUND_REFERENCES_OFFSET ? 1 : -1];
+
+static boolean stubbs_tag_is(unsigned char *base, unsigned long size, long handle, unsigned long group)
+{
+	unsigned char *instance;
+	unsigned long instance_group;
+	long instance_handle;
+
+	if (handle == NONE || (unsigned long)(handle & 0xFFFF) >= stubbs_tags_count)
+		return FALSE;
+	instance = stubbs_tags_at(base, size, stubbs_tags_instances + (unsigned long)(handle & 0xFFFF) * 0x20, 0x20);
+	if (!instance)
+		return FALSE;
+	memcpy(&instance_group, instance, 4);
+	memcpy(&instance_handle, instance + 0x0C, 4);
+	return instance_group == group && instance_handle == handle;
+}
+
+static long stubbs_animation_effects_convert(unsigned char *base, unsigned long size, unsigned char *graph)
+{
+	unsigned long count, address, index;
+	unsigned char *references;
+	long effects = 0;
+
+	memcpy(&count, graph + ANIMATION_GRAPH_SOUND_REFERENCES_OFFSET, 4);
+	memcpy(&address, graph + ANIMATION_GRAPH_SOUND_REFERENCES_OFFSET + 4, 4);
+	references = count && count <= 0x1000 ?
+		stubbs_host(base, size, address, count * ANIMATION_GRAPH_SOUND_REFERENCE_SIZE) : NULL;
+	for (index = 0; references && index < count; index++)
+	{
+		unsigned char *reference = references + index * ANIMATION_GRAPH_SOUND_REFERENCE_SIZE;
+		unsigned long group;
+		long handle, effect = NONE;
+
+		memcpy(&group, reference, 4);
+		memcpy(&handle, reference + 0x0C, 4);
+		if (group == 'effe' && stubbs_tag_is(base, size, handle, 'effe'))
+		{
+			unsigned long sound_group = 'snd!';
+			long none = NONE;
+
+			effect = handle;
+			memcpy(reference, &sound_group, 4);
+			memcpy(reference + 0x0C, &none, 4);
+			effects++;
+		}
+		memcpy(reference + ANIMATION_GRAPH_SOUND_REFERENCE_EFFECT_OFFSET, &effect, 4);
+	}
+	return effects;
+}
+
+static long stubbs_animation_effects;
+
+/* an animation graph's unit damage animations: Halo's are 4 types (soft
+ping, hard ping, soft kill, hard kill) of 4 directions of 11 parts, 176;
+Stubbs's 6 types, 264: soft ping, hard ping, then two of his own (a melee
+ping, "m-ping", and one no graph fills), then the soft and hard kills. So
+read from the names of a10's. Halo's four are taken from Stubbs's places */
+enum
+{
+	HALO_UNIT_DAMAGE_ANIMATION_COUNT = 176,
+	STUBBS_UNIT_DAMAGE_ANIMATION_COUNT = 264,
+	UNIT_DAMAGE_ANIMATIONS_PER_TYPE = 44,
+	ANIMATION_GRAPH_UNIT_DAMAGE_ANIMATIONS_OFFSET = 0x3C,
+};
+typedef char stubbs_unit_damage_animations_assert[
+	offsetof(struct animation_graph, unit_damage_animations) == ANIMATION_GRAPH_UNIT_DAMAGE_ANIMATIONS_OFFSET &&
+	HALO_UNIT_DAMAGE_ANIMATION_COUNT == 4 * UNIT_DAMAGE_ANIMATIONS_PER_TYPE &&
+	STUBBS_UNIT_DAMAGE_ANIMATION_COUNT == 6 * UNIT_DAMAGE_ANIMATIONS_PER_TYPE ? 1 : -1];
+
+static long stubbs_unit_damage_animations_convert(unsigned char *base, unsigned long size, unsigned char *graph)
+{
+	static unsigned char const stubbs_types[4] = { 0, 1, 4, 5 };
+	unsigned long count, address, index;
+	unsigned char *list;
+
+	memcpy(&count, graph + ANIMATION_GRAPH_UNIT_DAMAGE_ANIMATIONS_OFFSET, 4);
+	memcpy(&address, graph + ANIMATION_GRAPH_UNIT_DAMAGE_ANIMATIONS_OFFSET + 4, 4);
+	if (count != STUBBS_UNIT_DAMAGE_ANIMATION_COUNT ||
+		(list = stubbs_host(base, size, address, count * 2)) == NULL)
+	{
+		return 0;
+	}
+	/* (each Halo entry from one at or past its own place: in place, in order) */
+	for (index = 0; index < HALO_UNIT_DAMAGE_ANIMATION_COUNT; index++)
+		memmove(list + index * 2, list + (stubbs_types[index / UNIT_DAMAGE_ANIMATIONS_PER_TYPE] *
+			UNIT_DAMAGE_ANIMATIONS_PER_TYPE + index % UNIT_DAMAGE_ANIMATIONS_PER_TYPE) * 2, 2);
+	count = HALO_UNIT_DAMAGE_ANIMATION_COUNT;
+	memcpy(graph + ANIMATION_GRAPH_UNIT_DAMAGE_ANIMATIONS_OFFSET, &count, 4);
+	return 1;
+}
+
+static long stubbs_unit_damage_animations;
+
 static long stubbs_animation_convert(unsigned char *base, unsigned long size, unsigned long address)
 {
 	unsigned char *graph = stubbs_host(base, size, address, 0x80);
@@ -430,6 +605,8 @@ static long stubbs_animation_convert(unsigned char *base, unsigned long size, un
 
 	if (!graph)
 		return 0;
+	stubbs_animation_effects += stubbs_animation_effects_convert(base, size, graph);
+	stubbs_unit_damage_animations += stubbs_unit_damage_animations_convert(base, size, graph);
 	memcpy(&count, graph + ANIMATION_GRAPH_UNITS_OFFSET, 4);
 	memcpy(&seats_address, graph + ANIMATION_GRAPH_UNITS_OFFSET + 4, 4);
 	{
@@ -493,9 +670,11 @@ static long stubbs_animation_convert(unsigned char *base, unsigned long size, un
 	return 1;
 }
 
-/* a weapon class's animations in Halo's order. Stubbs's classes have 69
-of their own order, one set of them for each way of moving (the sets, in
-order: standing, forward, back, left, right, then the four diagonals),
+/* a weapon class's animations in Halo's order. Stubbs's classes have up to 69
+of their own order (some fewer, the same order cut short: the vehicles'
+seats 67, the zombies' maimed seat 68, the head 61), one set of them for
+each way of moving (the sets, in order: standing, forward, back, left,
+right, then the four diagonals),
 where Halo has one list of 55 with a slot for each direction. Their order is
 read from the names of a10's classes ("stand unarmed idle", "... move b",
 "... melee s-l"); slots Halo has and Stubbs doesn't are left empty, which
@@ -505,6 +684,7 @@ attack-n, whistle and more) have no slot in Halo's list yet. */
 enum
 {
 	STUBBS_WEAPON_CLASS_ANIMATION_COUNT = 69,
+	STUBBS_WEAPON_CLASS_ANIMATION_COUNT_FEWEST = 61,
 	HALO_WEAPON_CLASS_ANIMATION_COUNT = 55,
 	STUBBS_SET_STANDING = 0,
 	STUBBS_SET_FORWARD,
@@ -571,7 +751,7 @@ static void stubbs_weapon_class_animations_order(unsigned char *base, unsigned l
 	memcpy(&count, block, 4);
 	memcpy(&address, block + 4, 4);
 	/* (only Stubbs's own order: anything else is left as it is) */
-	if (!sets || count != STUBBS_WEAPON_CLASS_ANIMATION_COUNT)
+	if (!sets || count < STUBBS_WEAPON_CLASS_ANIMATION_COUNT_FEWEST || count > STUBBS_WEAPON_CLASS_ANIMATION_COUNT)
 		return;
 	list = stubbs_host(base, size, address, count * 2);
 	if (!list)
@@ -585,14 +765,19 @@ static void stubbs_weapon_class_animations_order(unsigned char *base, unsigned l
 		{
 			memcpy(&set_animation_count, sets + set_index * STUBBS_ANIMATION_SET_SIZE + STUBBS_ANIMATION_SET_ANIMATIONS_OFFSET, 4);
 			memcpy(&set_address, sets + set_index * STUBBS_ANIMATION_SET_SIZE + STUBBS_ANIMATION_SET_ANIMATIONS_OFFSET + 4, 4);
-			if (set_animation_count == STUBBS_WEAPON_CLASS_ANIMATION_COUNT)
+			if (set_animation_count == count)
 				set_list = stubbs_host(base, size, set_address, set_animation_count * 2);
 		}
-		/* (a direction it lacks: the standing set's) */
+		/* (a direction it lacks: the standing set's; the slots past a
+		shorter list's end: none) */
+		for (index = 0; index < STUBBS_WEAPON_CLASS_ANIMATION_COUNT; index++)
+			slots[set_index][index] = -1;
 		if (set_list)
-			memcpy(slots[set_index], set_list, sizeof(slots[set_index]));
+			memcpy(slots[set_index], set_list, count * 2);
+		else if (set_index)
+			memcpy(slots[set_index], slots[STUBBS_SET_STANDING], sizeof(slots[set_index]));
 		else
-			memcpy(slots[set_index], set_index ? slots[STUBBS_SET_STANDING] : (short const *)list, sizeof(slots[set_index]));
+			memcpy(slots[set_index], list, count * 2);
 	}
 	for (index = 0; index < HALO_WEAPON_CLASS_ANIMATION_COUNT; index++)
 		halo[index] = -1;
@@ -669,7 +854,7 @@ static unsigned long stubbs_animations_each(unsigned char *base, unsigned long s
 
 	for (index = 0; index < count; index++)
 	{
-		unsigned char *instance = stubbs_host(base, size, instances, count * 0x20) + index * 0x20;
+		unsigned char *instance = stubbs_index(base, size, instances, count) + index * 0x20;
 		unsigned long group, address, animation_count, animations_address, animation_index;
 		unsigned char *graph, *animations;
 
@@ -688,7 +873,16 @@ static unsigned long stubbs_animations_each(unsigned char *base, unsigned long s
 		{
 			unsigned long used = visit(animations + animation_index * HALO_ANIMATION_SIZE, into ? into + total : NULL);
 
-			total += visit == stubbs_animation_data_measure ? (used + 15) & ~15UL : used;
+			if (visit == stubbs_animation_data_measure)
+			{
+				/* (saturates just past the most, never wraps) */
+				used = used > MAXIMUM_STUBBS_ANIMATION_DATA ? MAXIMUM_STUBBS_ANIMATION_DATA + 1UL : (used + 15) & ~15UL;
+				total = total > MAXIMUM_STUBBS_ANIMATION_DATA ? total : total + used;
+			}
+			else
+			{
+				total += used;
+			}
 		}
 	}
 	return total;
@@ -872,6 +1066,9 @@ void stubbs_mode_convert_tags(
 	long converted_weapon_huds = 0;
 	long converted_actor_variants = 0;
 
+	stubbs_animation_effects = 0;
+	stubbs_unit_damage_animations = 0;
+
 	if (!stubbs_mode_active() || tag_data_size < 0x28)
 		return;
 	memcpy(&instances, base, 4);
@@ -880,6 +1077,9 @@ void stubbs_mode_convert_tags(
 	stubbs_tags_size = tag_data_size;
 	stubbs_tags_instances = instances;
 	stubbs_tags_count = count;
+	/* (nothing clear of an index past the tags: it is checked below) */
+	stubbs_tags_index_start = 0;
+	stubbs_tags_index_end = tag_data_size;
 	/* (this map's units noted afresh, not added to the last map's: their
 	pointers are into the tag cache this map replaced, so they go even when
 	this map's tags turn out not to be Stubbs's) */
@@ -888,14 +1088,16 @@ void stubbs_mode_convert_tags(
 	stubbs_player_tags_new_map();
 	/* (no more tags than a tag index holds: a count past it would wrap the
 	32-bit size of the index checked below) */
-	if (count > 0xFFFF || !stubbs_host(base, tag_data_size, instances, count * 0x20))
+	if (count > 0xFFFF || !stubbs_index(base, tag_data_size, instances, count))
 	{
 		stubbs_mode_log("the tag header is not Stubbs's: nothing converted");
 		return;
 	}
+	stubbs_tags_index_start = instances - STUBBS_XBOX_TAG_CACHE_BASE;
+	stubbs_tags_index_end = stubbs_tags_index_start + count * 0x20;
 	for (index = 0; index < count; index++)
 	{
-		unsigned char *instance = stubbs_host(base, tag_data_size, instances, count * 0x20) + index * 0x20;
+		unsigned char *instance = stubbs_index(base, tag_data_size, instances, count) + index * 0x20;
 		unsigned long group, address;
 		unsigned long halo_part = 0;
 		unsigned char *definition;
@@ -939,11 +1141,8 @@ void stubbs_mode_convert_tags(
 		{
 			unsigned char *variant = stubbs_host(base, tag_data_size, address, STUBBS_ACTOR_VARIANT_SIZE);
 
-			if (variant)
-			{
-				stubbs_actor_variant_convert(variant);
+			if (variant && stubbs_actor_variant_convert(variant))
 				converted_actor_variants++;
-			}
 			continue;
 		}
 		if (group == 'wphi')
@@ -970,6 +1169,8 @@ void stubbs_mode_convert_tags(
 	}
 	stubbs_mode_log("%ld bipeds and %ld vehicles rewritten in Halo's unit layout", converted[0], converted[1]);
 	stubbs_mode_log("%ld animation graphs rewritten in Halo's layout", converted_animations);
+	stubbs_mode_log("%ld animation sounds that are effects played as effects", stubbs_animation_effects);
+	stubbs_mode_log("%ld graphs' damage animations rewritten in Halo's order", stubbs_unit_damage_animations);
 	stubbs_mode_log("%ld sounds of classes Halo lacks played as the nearest class before", converted_sounds);
 	stubbs_mode_log("%ld collision models' materials and regions rewritten in Halo's layout", converted_collision);
 	stubbs_mode_log("%ld weapon HUDs' image effects left out of their screen effects", converted_weapon_huds);
@@ -984,6 +1185,11 @@ void stubbs_mode_convert_tags(
 			system_free(stubbs_animation_data);
 			stubbs_animation_data = NULL;
 		}
+		if (needed > MAXIMUM_STUBBS_ANIMATION_DATA)
+		{
+			stubbs_mode_log("animation frame data: more than %lu bytes, not read", (unsigned long)MAXIMUM_STUBBS_ANIMATION_DATA);
+			needed = 0;
+		}
 		if (needed)
 			stubbs_animation_data = system_calloc(1, (long)needed + 16);
 		stubbs_animation_data_bytes = stubbs_animation_data ? needed : 0;
@@ -995,6 +1201,10 @@ void stubbs_mode_convert_tags(
 		/* (last: nothing after it rewrites an animation) */
 		stubbs_mode_log("%lu animations read the frame data of another they share it with",
 			stubbs_animations_each(base, tag_data_size, instances, count, stubbs_animation_data_share, NULL));
+		/* (none left with a size and no data, which would refuse the map:
+		each pass only clears sizes, so it ends; a map's tags need none) */
+		while (stubbs_animations_each(base, tag_data_size, instances, count, stubbs_animation_data_unshared_clear, NULL))
+			;
 	}
 }
 

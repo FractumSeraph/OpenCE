@@ -31,17 +31,14 @@ know, which are put right when the map's tags load:
     fills in) and draws only where there is alpha (its shape). Halo PC keeps
     those the other way round, the shape in the color and the fill order in
     alpha. Every bitmap a unit or weapon HUD interface draws as a meter is
-    listed (ce_hud_bitmap_is_meter), and the texture cache has the renderer
-    sample its channels from where Halo PC keeps them (xbox_texture_cache.c,
-    D3DCOMMON_PORT_PC_METER; xbox_textures.c, a texture swizzle; on the
-    original Xbox, a 32-bit one's channels are swapped as it loads and the
-    meter shader reads a compressed one's where they are,
-    rasterizer_xbox_dynavobgeom.c). A meter
-    bitmap whose group a static element draws too (artwork as it is: a
-    custom HUD's shared sheet) keeps its channels, and only its meter's draw
-    samples them so (ce_hud_bitmap_is_mixed_meter: hud_draw.c,
-    halo_custom_edition_hud_meter; OpenCE's 384d9ba5, its "mixed-use"
-    sheets). A meter
+    listed (ce_hud_bitmap_is_meter), and the meter shader reads its
+    channels where Halo PC keeps them (rasterizer_xbox_dynavobgeom.c), and
+    draws it as Chimera does (hud_draw.c, hud_meter_custom_edition). The
+    bitmap itself is drawn as it is, since many custom HUDs draw the same
+    one as a static element too (the meter's empty marks). On the original
+    Xbox, a 32-bit one's channels are swapped as it loads, and the meter
+    shader reads a compressed one's where they are (xbox_texture_cache.c
+    still marks a meter's texture, D3DCOMMON_PORT_PC_METER). A meter
     flagged "use Xbox shading" (MCC's flag, which Chimera reads too) has
     its bitmap in the Xbox's order, as halopc-restored's Xbox order meters
     and custom HUDs do, so its bitmap is not listed and is drawn as the
@@ -679,36 +676,6 @@ static void ce_hud_block_static_bitmaps(
 		return;
 	for (index = 0; index < count; index++)
 		ce_hud_static_bitmap((byte *)xbox_pointer(address) + index * element_size + offset);
-}
-
-/* the meter bitmaps whose groups static elements draw too, taken off the
-meters' list (their textures keep their channels: the artwork's are right)
-onto the mixed meters' (their meters' draws sample them as a meter's) */
-static void ce_hud_mixed_meters_find(
-	void)
-{
-	long index = 0;
-
-	ce_hud_mixed_meter_bitmap_count = 0;
-	while (index < ce_hud_meter_bitmap_count)
-	{
-		long group;
-
-		for (group = 0; group < ce_hud_static_group_count; group++)
-		{
-			if (ce_hud_static_groups[group] == ce_hud_meter_groups[index])
-				break;
-		}
-		if (group == ce_hud_static_group_count)
-		{
-			index++;
-			continue;
-		}
-		ce_hud_mixed_meter_bitmaps[ce_hud_mixed_meter_bitmap_count++] = ce_hud_meter_bitmaps[index];
-		ce_hud_meter_bitmap_count--;
-		ce_hud_meter_bitmaps[index] = ce_hud_meter_bitmaps[ce_hud_meter_bitmap_count];
-		ce_hud_meter_groups[index] = ce_hud_meter_groups[ce_hud_meter_bitmap_count];
-	}
 }
 
 /* the meter elements of a block, at `offset` in each element */
@@ -1443,7 +1410,10 @@ void ce_hud_tags_loaded(
 		}
 	}
 	ce_hud_image = NULL;
-	ce_hud_mixed_meters_find();
+	/* (no meters taken off as mixed any more: ChupathingyCE's meter shader
+	reads every meter's channels where Halo PC keeps them and leaves the
+	bitmap as it is, so a static element drawing it keeps its colors;
+	OpenCE's per-draw swap, ce_hud_mixed_meters_find, is left unused) */
 	ce_hud_child_anchors = TRUE;
 	error(_error_silent, "Custom Edition maps: %ld HUD placements at half their scale or less, %ld meter bitmaps sampled in "
 		"Halo PC's channels (%ld more as their meters draw them, drawn as artwork too)", ce_hud_placements_halved,

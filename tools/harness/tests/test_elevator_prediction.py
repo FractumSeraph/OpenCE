@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from harness import CHECK_FAILED, build, function, mutated, read, run, structure  # noqa: E402
 
 SOURCE = "port/linux/game/network_distributed.c"
-CASES = ["riding-up", "elevator-at-rest", "stopped-elevator-standing", "stopped-elevator-left", "on-foot"]
+CASES = ["mcc-host-movement", "riding-up", "elevator-at-rest", "stopped-elevator-standing", "stopped-elevator-left", "on-foot"]
 FUNCTIONS = ("distributed_floor_elevator", "distributed_riding_elevator", "distributed_air_part_vehicle",
              "distributed_take_prediction")
 
@@ -23,6 +23,8 @@ NEGATIVE_CONTROLS = {
                              "if (0)\n\t\tposition.z"), "distributed_take_prediction", "riding-up"),
     "remembered-elevator-rides": (("distributed_floor_elevator(unit_index) != NONE)", "1)"),
                                   "distributed_riding_elevator", "stopped-elevator-left"),
+    "mcc-movement-taken": (("if (mcc_script_effects_host_movement())", "if (0)"), "distributed_take_prediction",
+                           "mcc-host-movement"),
 }
 
 
@@ -39,6 +41,8 @@ def generated(fault=None, faulty_function=None):
                            source.replace("\r\n", "\n"), re.M | re.S)
     assert apart and divergence, f"distributed_divergence not found in {SOURCE}"
     config += apart.group(0) + "\n" + divergence.group(0) + "\n"
+    # (network_rules.c's elevator rules come compiled whole, below, not
+    # copied into config.inc as ChupathingyCE's test does)
     text = ""
     for name in FUNCTIONS:
         code = function(source, name)

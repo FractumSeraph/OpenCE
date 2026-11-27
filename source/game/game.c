@@ -204,6 +204,7 @@ struct game_options;
 #include "game_modes.h" /* port: the game modes layer (docs/modes.md) */
 #include "lua_scripting.h" /* port: mods' Lua scripts (port/linux/game/lua_scripting.c) */
 #include "ragdolls.h" /* port: display.ragdolls (port/linux/game/ragdolls.c) */
+#include "opensauce_transforms.h" /* port: port/linux/game/opensauce_transforms.c */
 
 /* network_game_globals.c's */
 boolean network_game_distributed_client(void);
@@ -452,6 +453,10 @@ void game_tick(
 	}
 #endif
 	profile_scope(game_tick_recorded_animations_section, recorded_animations_update();)
+	/* port: an OpenSauce map's actor variant transforms step on, before the
+	objects, as OpenSauce's do (port/linux/game/opensauce_transforms.c); any
+	other map, nothing */
+	opensauce_transforms_update();
 	HALO_PERF_BEGIN(_halo_perf_tick_objects);
 	profile_scope(game_tick_objects_section, objects_update();)
 	HALO_PERF_END(_halo_perf_tick_objects);

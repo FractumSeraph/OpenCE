@@ -343,6 +343,11 @@ def main() -> int:
     shutil.copy2(ROOT / "port/third_party/expat/COPYING", dist / "expat-COPYING.txt")
     # MCC's texture decoder is distributed under bcdec's MIT option.
     shutil.copy2(ROOT / "port/third_party/bcdec/LICENSE", dist / "bcdec-LICENSE.txt")
+    # the movies' FFmpeg (tools/ffmpeg_build.py), linked in statically unless
+    # configured --without-ffmpeg: its LGPL asks copies to carry its text and
+    # where its source is (port/notices/FFmpeg-LICENSE.txt, components.json)
+    if ffmpeg_built(args.platform):
+        shutil.copy2(ROOT / "port/notices/FFmpeg-LICENSE.txt", dist / "FFmpeg-LICENSE.txt")
     if args.platform == "android":
         # the Steam Workshop screen's Steam client (port/android/host/steam_*.c):
         # Zstandard's decoder, whose BSD license asks binaries to carry its
@@ -410,6 +415,16 @@ def main() -> int:
         shutil.copy2(ROOT / "deploy/halo-server", dist / "halo-server")
         shutil.copytree(ROOT / "deploy", dist / "deploy", ignore=shutil.ignore_patterns("*.zip", "__pycache__"))
     return 0
+
+
+def ffmpeg_built(platform: str) -> bool:
+    """whether this build linked the movies' FFmpeg: its libraries are in its
+    build folder (build/<platform>/ffmpeg, or ffmpeg-<arch> for each of the
+    macOS application's architectures; ChupathingyCE's)"""
+    folder = ROOT / "build" / platform
+    return any(path.is_file() for pattern in ("ffmpeg/build/libavcodec/libavcodec.a",
+                                              "third_party/ffmpeg-*/build/libavcodec/libavcodec.a")
+               for path in folder.glob(pattern))
 
 
 def alpine_build(platform: str, config: str) -> int:

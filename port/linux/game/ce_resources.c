@@ -50,6 +50,7 @@ for one not there) they are found in Custom Edition's by their tags' paths
 #include "halo_map_families.h"
 #include "ce_locale.h"
 #include "halopc_bitmap_offsets.h"
+#include "opensauce_survey.h"
 
 #include <xtl.h>
 #include <stdio.h>
@@ -1307,8 +1308,8 @@ static boolean ce_retail_bitmaps(
 			{
 				if (*stood_in < 16)
 					error(_error_silent, "HaloMD map: bitmap %ld of %s is not in bitmaps.map: stood in for", index, name);
-				/* (SPV3 mode's log counts every one: spv3_mode.c) */
-				spv3_mode_note_resource_miss("bitmap (not in bitmaps.map)", name);
+				/* (an OpenSauce map's log counts every one: opensauce_survey.c) */
+				opensauce_survey_note_resource_miss("bitmap (not in bitmaps.map)", name);
 			}
 			(*stood_in)++;
 		}
@@ -3117,7 +3118,7 @@ static void ce_sounds_decode(
 						{
 							error(_error_silent, "Custom Edition maps: %s: a long Ogg Vorbis permutation could not be "
 								"decoded; it does not play", ce_loaded_tag_name(instance));
-							spv3_mode_note_resource_miss("sound (Ogg Vorbis permutation that does not play)",
+							opensauce_survey_note_resource_miss("sound (Ogg Vorbis permutation that does not play)",
 								ce_loaded_tag_name(instance));
 							all = FALSE;
 							break;
@@ -3201,7 +3202,7 @@ static void ce_sounds_decode(
 					error(_error_silent, "Custom Edition maps: %s: an Ogg Vorbis permutation of %d channels at %d Hz "
 						"in a sound of %d at %d Hz; it does not play", ce_loaded_tag_name(instance),
 						channels, rate, encoding ? 2 : 1, played_rate);
-					spv3_mode_note_resource_miss("sound (Ogg Vorbis permutation that does not play)",
+					opensauce_survey_note_resource_miss("sound (Ogg Vorbis permutation that does not play)",
 						ce_loaded_tag_name(instance));
 					ce_vorbis_free(samples);
 					all = FALSE;

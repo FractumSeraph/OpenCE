@@ -31,6 +31,9 @@ CONTROLS = {
     'transport-not-terminated': ('transport_server_terminate();', ';', 'windows', 'back'),
     'connections-not-closed': ('network_connection_delete(server->connection);', ';', 'windows', 'reopen'),
     'server-state-not-cleared': ('csmemset(server, 0, sizeof(*server));', ';', 'windows', 'back'),
+    'number-still-held': ('delta_legacy_hold(FALSE);', ';', 'windows', 'back'),
+    'damage-tables-kept': ('network_damage_host_tables_free();', ';', 'windows', 'back'),
+    'late-joiners-kept': ('network_game_server_late_joiners_free();', ';', 'windows', 'reopen'),
 }
 
 

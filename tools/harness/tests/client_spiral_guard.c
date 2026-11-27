@@ -59,6 +59,8 @@ and the main menu's own clock, none of them in these cases) */
 #define profile_scope(variable, statement) { statement }
 static boolean halo_fixed_step(void) { return FALSE; }
 static boolean game_time_menu_scene(void) { return FALSE; }
+/* (debug.freeze_at_tick: never) */
+static boolean game_time_frozen_at_tick(void) { return FALSE; }
 /* (a bsp is always loaded: no switch fails here) */
 struct structure_bsp { int unused; };
 static struct structure_bsp bsp;

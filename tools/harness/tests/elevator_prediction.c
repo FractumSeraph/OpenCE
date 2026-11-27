@@ -96,7 +96,6 @@ struct distributed_unit_state
 #define HOST_BLEND_DISTANCE 0.5f
 
 #include "config.inc"
-#include "network_rules.c"
 
 static struct
 {
@@ -181,6 +180,12 @@ enum { _vehicle_riding_host_world, _vehicle_riding_host_deck };
 #define vehicle_riding_host_target(path, client_node, host_node, host_base, deck, client_base, base) ((void)0)
 #define biped_get_physics_pill(unit, base, height, width) ((void)0)
 
+/* a refusal, counted for the server's moderators (host_evidence.h) */
+static int refusals;
+#define _host_evidence_movement 0
+#define _net_monitor_host 0
+#define host_evidence_note(machine, kind) ((void)(machine), (void)(kind), refusals++)
+
 #include "under_test.inc"
 
 /* ---------- a ride */
@@ -224,7 +229,8 @@ static void ride(long elevator_index, real rise, long round_trip)
 		distributed_predictions[0].state.position.y = 0.0f;
 		distributed_predictions[0].state.position.z = floor - rise * (real)round_trip;
 		distributed_take_prediction(0, UNIT, &bound);
-		CHECK(objects[UNIT].object.position.x == client_x, "tick %ld: across at %f, not the client's %f", tick,
+		/* (within a float's rounding: the 32-bit build may hold client_x wider) */
+		CHECK(objects[UNIT].object.position.x - client_x < 0.0001f && client_x - objects[UNIT].object.position.x < 0.0001f, "tick %ld: across at %f, not the client's %f", tick,
 			objects[UNIT].object.position.x, client_x);
 		CHECK(objects[UNIT].object.position.z >= floor - 0.001f,
 			"tick %ld: %f under the elevator's floor at %f, to fall through it", tick,

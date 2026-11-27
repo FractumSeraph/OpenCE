@@ -88,6 +88,12 @@ struct _biped_datum
 	real_point3d riding_body_position;
 	real_vector3d riding_body_forward;
 	real_vector3d riding_body_up;
+	/* port: an OpenSauce map's third and fourth grenade counts
+	(port/linux/game/mcc_grenades.c). ChupathingyCE keeps them in the two
+	bytes of padding after the limp body counts; this fork's riding fields
+	have those, so they come last here (the datum is BIPED_DATUM_SIZE) */
+	char opensauce_grenade_counts[2];
+	short opensauce_grenade_pad;
 };
 
 struct biped_datum
@@ -100,7 +106,7 @@ struct biped_datum
 
 /* port: a biped's game datum, riding fields included (object_types.c's
 biped row; game_state.c refuses saved games of another size) */
-#define BIPED_DATUM_SIZE 0x4EC
+#define BIPED_DATUM_SIZE 0x4F0
 typedef char biped_datum_size_assert[sizeof(struct biped_datum) == BIPED_DATUM_SIZE ? 1 : -1];
 
 /* ---------- prototypes/BIPEDS.C */

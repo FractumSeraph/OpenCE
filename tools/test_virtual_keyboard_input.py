@@ -89,8 +89,6 @@ enum {
     trigger's: Online Games' next sort) */
     SDL_SCANCODE_F2, SDL_SCANCODE_X
 };
-static int last_input_scheme;
-static BOOL last_input_seen;
 enum {XINPUT_GAMEPAD_A, XINPUT_GAMEPAD_B, XINPUT_GAMEPAD_X, XINPUT_GAMEPAD_Y, XINPUT_GAMEPAD_BLACK,
     XINPUT_GAMEPAD_WHITE, XINPUT_GAMEPAD_LEFT_TRIGGER, XINPUT_GAMEPAD_RIGHT_TRIGGER};
 enum {XINPUT_GAMEPAD_DPAD_UP=1, XINPUT_GAMEPAD_DPAD_DOWN=2,
@@ -99,6 +97,9 @@ enum {XINPUT_GAMEPAD_DPAD_UP=1, XINPUT_GAMEPAD_DPAD_DOWN=2,
 typedef struct {unsigned short wButtons;BYTE bAnalogButtons[8];SHORT sThumbLX,sThumbLY;} XINPUT_GAMEPAD;
 struct platform_input_state {unsigned char keys[32],mouse_buttons[8];int mouse_released;};
 #define platform_screen_keyboard(show,password) ((void)0)
+/* xinput_sdl.c's input scheme, which keyboard_gamepad updates */
+static int last_input_scheme = 1;
+static BOOL last_input_seen = FALSE;
 '''
 
 MAIN = r'''

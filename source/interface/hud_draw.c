@@ -286,7 +286,10 @@ struct rasterizer_meter_parameters
 	pixel32 flash_color;
 	boolean flash_color_is_negative;
 	boolean tint_mode_2;
-	byte pad12[2];
+	/* port: a Custom Edition meter's minimum alpha, as a byte, or zero
+	(rasterizer_xbox_dynavobgeom.c) */
+	byte port_minimum_alpha;
+	byte pad13;
 	pixel32 tint_color;
 	real gradient;
 };
@@ -2029,12 +2032,10 @@ static void hud_draw_bitmap_internal(
 		parameters.map_wrapped[0] = 2;
 #endif
 
-	/* port: shared CE HUD sheets need meter channels only for this draw
-	(port/linux/src/xbox_textures.c), leaving their static artwork intact.
-	(OpenCE's; the sheets, ChupathingyCE's loader's: port/linux/game/ce_hud.c) */
-	halo_custom_edition_hud_meter(meter_parameters && ce_hud_bitmap_is_mixed_meter(bitmap));
+	/* (port: OpenCE's per-draw meter channel swap for shared CE HUD sheets,
+	halo_custom_edition_hud_meter, isn't used: ChupathingyCE's meter shader
+	reads every CE meter's channels itself, hud_meter_custom_edition) */
 	rasterizer_psuedo_dynamic_screen_quad_draw(&parameters, vertices);
-	halo_custom_edition_hud_meter(FALSE); /* port: end the CE meter draw scope */
 
 	match_assert_stack_frame("c:\\halo\\SOURCE\\interface\\hud_draw.c", 985);
 
@@ -2286,6 +2287,41 @@ void hud_draw_bitmap_direct(
 	return;
 }
 
+#ifdef HALO_CUSTOM_EDITION
+/* port: a Custom Edition map's meter whose bitmap is in Halo PC's channels
+(ce_hud_bitmap_is_meter: the shape in its color, the fill order in its
+alpha) is drawn as Chimera (SnowyMouse, GPL-3) draws Halo PC's meters with
+the Xbox's shader:
+- its opacity doesn't darken its color: Halo PC's meters ignore it, and a
+  meter made for them with an opacity of 1 drew black (Shipment's cracked
+  glass; mcc_bitmaps.c does the same for MCC's Gearbox meters);
+- its minimum alpha (MCC's and Chimera's field) says how much of the shape
+  a pixel needs to be drawn whole, and less fades it into what's behind.
+  Left at zero, as in nearly every map, it is 1, or 0.5 for a meter with a
+  fade of half or more, Chimera's choice from the maps it was tried on.
+The renderer reads the shape and fill order from where Halo PC keeps them
+(rasterizer_xbox_dynavobgeom.c), so a static element drawing the same
+bitmap, as many custom HUDs do for a meter's empty marks, keeps its own
+colors. */
+static void hud_meter_custom_edition(
+	struct meter_hud_element_definition const *meter,
+	struct bitmap_data const *bitmap,
+	struct rasterizer_meter_parameters *parameters)
+{
+	extern boolean ce_hud_bitmap_is_meter(void const *bitmap);
+	real minimum_alpha;
+
+	if (!ce_hud_bitmap_is_meter(bitmap))
+		return;
+	parameters->tint_color = real_alpha_intensity_to_pixel32(PIN(meter->fade, 0.0f, 1.0f), 1.0f);
+	if (meter->min_alpha > 0.0f)
+		minimum_alpha = PIN(meter->min_alpha, 0.001f, 1.0f);
+	else
+		minimum_alpha = meter->fade < 0.5f ? 1.0f : 0.5f;
+	parameters->port_minimum_alpha = (byte)MAX(1, fast_ftol_C(minimum_alpha * UNSIGNED_CHAR_MAX));
+}
+#endif
+
 void hud_draw_meter(
 	short local_player_index,
 	struct hud_absolute_placement_definition const *absolute_placement,
@@ -2394,6 +2430,11 @@ void hud_draw_meter(
 		meter_parameters.gradient = 1.0f;
 		meter_parameters.flash_color_is_negative = FALSE;
 		meter_parameters.tint_mode_2 = TRUE;
+		meter_parameters.port_minimum_alpha = 0;
+		meter_parameters.pad13 = 0;
+#ifdef HALO_CUSTOM_EDITION
+		hud_meter_custom_edition(meter, bitmap, &meter_parameters);
+#endif
 
 		hud_draw_bitmap_with_meter(
 			&meter_parameters,
