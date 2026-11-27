@@ -105,6 +105,28 @@ int main(int argc, char **argv)
 			!data_is_mcc_shared(DATA_FOLDER_MCC_SINGLEPLAYER, "a10.map"), "a set's names");
 		return 0;
 	}
+	/* each start's shared files: every shared file, Halo PC's too, and no
+	map of the maps folder; Halo PC's in no download but this and Everything */
+	if (!strcmp(case_name, "shared"))
+	{
+		for (index = 0; index < sizeof(campaign) / sizeof(campaign[0]); index++)
+			CHECK(!data_download_wanted(DATA_MAPS_SHARED_FILES, campaign[index], DATA_FOLDER_MAPS), "%s taken",
+				campaign[index]);
+		for (index = 0; index < sizeof(others) / sizeof(others[0]); index++)
+			CHECK(!data_download_wanted(DATA_MAPS_SHARED_FILES, others[index], DATA_FOLDER_MAPS), "%s taken",
+				others[index]);
+		CHECK(data_download_wanted(DATA_MAPS_SHARED_FILES, "loc.map", DATA_FOLDER_CUSTOM_EDITION) &&
+			data_download_wanted(DATA_MAPS_SHARED_FILES, "bitmaps.map", DATA_FOLDER_MCC_SINGLEPLAYER) &&
+			data_download_wanted(DATA_MAPS_SHARED_FILES, "sounds.map", DATA_FOLDER_MCC_MULTIPLAYER) &&
+			data_download_wanted(DATA_MAPS_SHARED_FILES, "sounds.map", DATA_FOLDER_HALO_PC), "a shared file left out");
+		CHECK(!data_download_wanted(DATA_MAPS_MULTIPLAYER, "bitmaps.map", DATA_FOLDER_HALO_PC) &&
+			!data_download_wanted(DATA_MAPS_CAMPAIGN, "bitmaps.map", DATA_FOLDER_HALO_PC) &&
+			!data_download_wanted(DATA_MAPS_MCC_SHARED, "bitmaps.map", DATA_FOLDER_HALO_PC), "Halo PC's taken");
+		CHECK(data_download_wanted(DATA_MAPS_ALL, "bitmaps.map", DATA_FOLDER_HALO_PC), "Halo PC's left out of Everything");
+		CHECK(data_is_halo_pc_shared("SOUNDS.MAP") && data_is_halo_pc_shared("bitmaps.map") &&
+			!data_is_halo_pc_shared("loc.map") && !data_is_halo_pc_shared("ui.map"), "Halo PC's names");
+		return 0;
+	}
 	fprintf(stderr, "unknown case %s\n", case_name);
 	return 2;
 }

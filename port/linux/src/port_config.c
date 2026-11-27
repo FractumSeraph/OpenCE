@@ -2778,6 +2778,12 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		"there is none: an https:// folder holding its files and maps.txt (the\n"
 		"files' names and sizes, a line each; services/selfhost's\n"
 		"assets/maps/). Empty offers only an Xbox disc image." },
+	{ "data.shared_files", _config_boolean, "true", "HALO_DATA_SHARED_FILES", _environment_value, _platform_desktop,
+		"At each start, download in the background the shared files maps need\n"
+		"that aren't here yet, from the same site: Custom Edition's bitmaps.map,\n"
+		"sounds.map and loc.map (maps_ce), MCC's shared sets (maps_mcc/_shared)\n"
+		"and Halo PC's bitmaps.map and sounds.map (maps_pc). Never maps, and\n"
+		"never a file you have. false: only when asked." },
 
 #ifdef HALO_SWITCH_CONSOLE
 	/* ---- performance (the Switch host's: port/switch/host/host_main.c) */

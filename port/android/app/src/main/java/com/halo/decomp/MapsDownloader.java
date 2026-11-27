@@ -31,6 +31,12 @@ import java.util.Locale;
  * (maps_mcc where the game has that folder): ALL takes them, and MCC_SHARED
  * takes them alone (the touch controls' Options); a copy already there is
  * kept too (the desktop games: sdl_platform.c's DATA_MAPS_MCC_SHARED).
+ * And Halo PC's own bitmaps.map and sounds.map as pc_shared/<name>, into
+ * maps_pc, where Halo PC retail maps and HaloMD's read their stock textures
+ * and sounds. SHARED_FILES takes every shared file and no map: the game
+ * downloads those it lacks at each start, in the background, without asking
+ * (HaloActivity.downloadSharedFiles; the desktop's data.shared_files).
+ * One download at a time: they may write the same files.
  */
 final class MapsDownloader {
     /* where the maps folder can be downloaded from (services/selfhost's
@@ -38,22 +44,26 @@ final class MapsDownloader {
     static final String MAPS_URL = "https://halo.fractumseraph.net/assets/maps/";
     static final String CUSTOM_MAPS_URL = "https://halo.fractumseraph.net/assets/custom_maps/";
     static final String MCC_SHARED_URL = "https://halo.fractumseraph.net/assets/mcc_shared/";
+    static final String PC_SHARED_URL = "https://halo.fractumseraph.net/assets/pc_shared/";
 
     static final int ALL = 0;
     static final int MULTIPLAYER = 1;
     static final int CAMPAIGN = 2;
     static final int MCC_SHARED = 3;
+    static final int SHARED_FILES = 4;
 
     /* the folder a file of the list goes into */
     private static final int FOLDER_MAPS = 0;
     private static final int FOLDER_CUSTOM_EDITION = 1;
     private static final int FOLDER_MCC_SINGLEPLAYER = 2;
     private static final int FOLDER_MCC_MULTIPLAYER = 3;
+    private static final int FOLDER_HALO_PC = 4;
 
     private static final String[] CAMPAIGN_LEVELS = {
         "a10", "a30", "a50", "b30", "b40", "c10", "c20", "c40", "d20", "d40"
     };
     private static final String[] CUSTOM_EDITION_SHARED = { "bitmaps.map", "sounds.map", "loc.map" };
+    private static final String[] HALO_PC_SHARED = { "bitmaps.map", "sounds.map" };
     /* MCC's shared sets' files, as the game looks for them (mcc_package.c) */
     private static final String[] MCC_SHARED_FILES = {
         "singleplayer/bitmaps.map", "multiplayer/bitmaps.map", "multiplayer/sounds.map"
@@ -111,7 +121,7 @@ final class MapsDownloader {
         return true;
     }
 
-    /** whether a download (ALL, MULTIPLAYER, CAMPAIGN or MCC_SHARED) takes a file of the list */
+    /** whether a download (ALL, MULTIPLAYER, CAMPAIGN, MCC_SHARED or SHARED_FILES) takes a file of the list */
     private static boolean wanted(int wanted, String name, int folder) {
         if (wanted == CAMPAIGN)
             return folder == FOLDER_MAPS && isCampaignMap(name);
@@ -119,6 +129,8 @@ final class MapsDownloader {
             return folder == FOLDER_CUSTOM_EDITION || (folder == FOLDER_MAPS && !isCampaignMap(name));
         if (wanted == MCC_SHARED)
             return folder == FOLDER_MCC_SINGLEPLAYER || folder == FOLDER_MCC_MULTIPLAYER;
+        if (wanted == SHARED_FILES)
+            return folder != FOLDER_MAPS;
         return true;
     }
 
@@ -133,13 +145,14 @@ final class MapsDownloader {
     }
 
     /**
-     * downloads the files wanted (ALL, MULTIPLAYER, CAMPAIGN or MCC_SHARED) into dataRoot's maps, maps_ce
-     * and the MCC maps folder's _shared
+     * downloads the files wanted (ALL, MULTIPLAYER, CAMPAIGN, MCC_SHARED or SHARED_FILES) into dataRoot's
+     * maps, maps_ce, the MCC maps folder's _shared and maps_pc
      */
-    static void download(File dataRoot, int wanted, Progress progress) throws IOException {
+    static synchronized void download(File dataRoot, int wanted, Progress progress) throws IOException {
         File folder = new File(dataRoot, "maps");
         File customEditionFolder = new File(dataRoot, "maps_ce");
         File mccShared = new File(mccFolder(dataRoot), "_shared");
+        File haloPcFolder = new File(dataRoot, "maps_pc");
         folder.mkdirs();
         List<String> names = new ArrayList<>();
         List<Long> sizes = new ArrayList<>();
@@ -171,6 +184,14 @@ final class MapsDownloader {
                     kind = file.toLowerCase(Locale.ROOT).startsWith("singleplayer/")
                         ? FOLDER_MCC_SINGLEPLAYER : FOLDER_MCC_MULTIPLAYER;
                     name = file.substring(file.indexOf('/') + 1);
+                } else if (name.startsWith("pc_shared/")) {
+                    name = name.substring("pc_shared/".length());
+                    kind = FOLDER_HALO_PC;
+                    boolean known = false;
+                    for (String shared : HALO_PC_SHARED)
+                        known |= shared.equalsIgnoreCase(name);
+                    if (!known)
+                        continue;
                 }
                 if (!name.matches("[A-Za-z0-9_-][A-Za-z0-9_.-]{0,62}"))
                     continue;
@@ -190,7 +211,7 @@ final class MapsDownloader {
         }
         if (names.isEmpty())
             throw new IOException(wanted == MCC_SHARED ? "the site lists no MCC shared files"
-                : "the list of maps is empty");
+                : wanted == SHARED_FILES ? "the site lists no shared files" : "the list of maps is empty");
         long done = 0;
         byte[] buffer = new byte[1 << 16];
         for (int which = 0; which < names.size(); which++) {
@@ -201,9 +222,9 @@ final class MapsDownloader {
             boolean shared = kind != FOLDER_MAPS;
             String set = kind == FOLDER_MCC_SINGLEPLAYER ? "singleplayer" : "multiplayer";
             File target = kind == FOLDER_MAPS ? folder : kind == FOLDER_CUSTOM_EDITION ? customEditionFolder
-                : new File(mccShared, set);
+                : kind == FOLDER_HALO_PC ? haloPcFolder : new File(mccShared, set);
             File file = new File(target, name);
-            // (a player's own copy of a shared map, Custom Edition's or MCC's, is kept)
+            // (a player's own copy of a shared map, Custom Edition's, MCC's or Halo PC's, is kept)
             if (shared ? file.exists() : file.isFile() && file.length() == size) {
                 done += size;
                 continue;
@@ -225,9 +246,10 @@ final class MapsDownloader {
                 partial.delete();
             }
             String url = kind == FOLDER_MAPS ? MAPS_URL + name : kind == FOLDER_CUSTOM_EDITION
-                ? CUSTOM_MAPS_URL + name : MCC_SHARED_URL + set + "/" + name;
+                ? CUSTOM_MAPS_URL + name : kind == FOLDER_HALO_PC ? PC_SHARED_URL + name
+                : MCC_SHARED_URL + set + "/" + name;
             String shown = kind == FOLDER_MAPS ? "maps/" : kind == FOLDER_CUSTOM_EDITION ? "maps_ce/"
-                : mccShared.getParentFile().getName() + "/_shared/" + set + "/";
+                : kind == FOLDER_HALO_PC ? "maps_pc/" : mccShared.getParentFile().getName() + "/_shared/" + set + "/";
             HttpURLConnection connection = open(url);
             try (InputStream in = connection.getInputStream();
                  OutputStream out = new FileOutputStream(partial)) {

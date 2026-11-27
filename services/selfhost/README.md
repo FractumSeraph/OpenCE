@@ -201,6 +201,18 @@ file's SHA-256. The desktop games download them when an MCC map needs them,
 and with Everything; the Android app from its Options. They go into
 `maps_mcc/_shared/<set>`. Serve them only if you may share them.
 
+Halo PC's own `bitmaps.map` and `sounds.map` (from a Halo PC retail install,
+not Custom Edition's), which Halo PC retail maps and HaloMD maps read their
+stock textures and sounds from, go in **`public/assets/pc_shared/`**.
+`maps.txt` names them as `pc_shared/<name>`, with their SHA-256, and the
+games put them in `maps_pc`. Serve them only if you may share them.
+
+Every start of the desktop games and the Android app downloads, in the
+background and without asking, the shared files of these three
+(`custom_maps/`, `mcc_shared/`, `pc_shared/`) it doesn't have yet:
+`data.shared_files` (desktop) turns that off. A player's own copy is never
+replaced. Only shared files are downloaded this way, never maps.
+
 Put the loading screen's picture beside them as `loading.tga`, and the game
 draws the Xbox's loading screen (the Halo ring and LOADING...) instead of
 clouds of its own. No disc has it as a file: the game's `default.xbe` holds

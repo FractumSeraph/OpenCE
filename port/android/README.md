@@ -219,6 +219,14 @@ without them says so. They go into `mcc_maps/_shared/singleplayer` and
 `multiplayer` (`maps_mcc/_shared` where the game has that folder). A copy
 already there, imported or downloaded from Steam, is kept.
 
+Each time the game starts, it also downloads, in the background and without
+asking, the shared files that maps need and the device doesn't have yet:
+Custom Edition's `bitmaps.map`, `sounds.map` and `loc.map` (`maps_ce`),
+MCC's shared files, and Halo PC's own `bitmaps.map` and `sounds.map`
+(`maps_pc`, which Halo PC retail maps and HaloMD maps read their textures
+and sounds from) when the site has them. It never downloads maps this way,
+and never replaces a file you have. (Your log says what it downloaded.)
+
 To install the data from a disc image:
 
 1. Copy the disc image to the phone.

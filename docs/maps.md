@@ -147,6 +147,15 @@ name), though the repositories have copies: they're Microsoft's and
 Gearbox's, so the game asks you to copy them from your own Halo PC or Custom
 Edition install instead ("Install this map yourself").
 
+**Shared files.** The files maps need besides themselves come by
+themselves: each start, the game downloads in the background the ones you
+don't have yet from the site it got the Xbox maps from (`data.download_url`):
+Custom Edition's `bitmaps.map`, `sounds.map` and `loc.map` into `maps_ce`,
+MCC's shared files into `maps_mcc/_shared`, and Halo PC's own `bitmaps.map`
+and `sounds.map` into `maps_pc` when the site has them. It never replaces a
+file you have, and never downloads a map this way. `data.shared_files =
+false` turns it off.
+
 **Chupathingy maps.** If the community repositories don't have the map (or
 not the host's version of it), the game asks Chupathingy maps
 (maps.chupathingy.org) next. It's our own map repository, for the maps HaloNet
@@ -303,7 +312,8 @@ HaloMD maps were made for Halo PC's own `bitmaps.map` and `sounds.map`,
 which hold more than Custom Edition's (the campaign's textures and sounds,
 which many HaloMD maps use). Copy those two files from your Halo PC (retail)
 install into `maps_pc`, and the game reads each map's stock textures and
-sounds from them, as Halo PC did. Without them, those textures are stand-ins
+sounds from them, as Halo PC did. (The game downloads them into `maps_pc` by itself
+when its site has them: Shared files, above.) Without them, those textures are stand-ins
 and those sounds are silent, and the game says on screen which file to add.
 Chupathingy never ships or downloads these files: they are yours.
 

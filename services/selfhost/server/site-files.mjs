@@ -113,6 +113,12 @@ export function customMapList(folder, mapHashes) {
 // file's SHA-256 as a third column: the games check the download by it, and
 // copy maps_ce's bitmaps.map and sounds.map in place of the multiplayer
 // set's when they are the same file (MCC's are Custom Edition's own).
+// After them Halo PC's own bitmaps.map and sounds.map (a Halo PC retail
+// install's), when the pc_shared folder beside it has them, as
+// pc_shared/<name> with their SHA-256: the games put them in maps_pc, where
+// Halo PC retail maps and HaloMD's read their stock textures and sounds.
+// Every start downloads the shared files it lacks in the background
+// (data.shared_files); the maps themselves come only with the first start.
 const fileHashes = new Map();
 
 function fileSha256(file, stat) {
@@ -134,6 +140,7 @@ function fileSha256(file, stat) {
 
 export const CUSTOM_EDITION_SHARED_MAPS = ["bitmaps.map", "sounds.map", "loc.map"];
 export const MCC_SHARED_FILES = ["singleplayer/bitmaps.map", "multiplayer/bitmaps.map", "multiplayer/sounds.map"];
+export const HALO_PC_SHARED_MAPS = ["bitmaps.map", "sounds.map"];
 
 export function gameMapList(folder) {
   let lines = [];
@@ -161,6 +168,15 @@ export function gameMapList(folder) {
         if (stat.isFile()) lines.push(`mcc_shared/${name}\t${stat.size}\t${fileSha256(file, stat)}`);
       } catch {
         // (not here: players install MCC's own)
+      }
+    }
+    for (const name of HALO_PC_SHARED_MAPS) {
+      try {
+        const file = path.join(folder, "..", "pc_shared", name);
+        const stat = fs.statSync(file);
+        if (stat.isFile()) lines.push(`pc_shared/${name}\t${stat.size}\t${fileSha256(file, stat)}`);
+      } catch {
+        // (not here: players copy their own Halo PC's)
       }
     }
   }

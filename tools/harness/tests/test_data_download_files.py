@@ -12,9 +12,10 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from harness import build, constant, enum_with, function, mutated, read, structure  # noqa: E402
 
-CASES = ["mcc", "fallback-folder", "kept", "corrupt", "everything", "multiplayer"]
+CASES = ["mcc", "fallback-folder", "kept", "corrupt", "everything", "multiplayer", "shared"]
 
-FUNCTIONS = ("data_is_campaign_map", "data_is_custom_edition_shared", "data_is_mcc_shared", "data_download_wanted",
+FUNCTIONS = ("data_is_campaign_map", "data_is_custom_edition_shared", "data_is_mcc_shared", "data_is_halo_pc_shared",
+             "data_download_wanted",
              "data_download_received", "data_download_name_valid", "data_file_size", "data_parse_sha256",
              "data_file_matches", "data_copy_file", "data_mcc_folder", "data_download")
 
@@ -31,6 +32,11 @@ NEGATIVE_CONTROLS = {
     "half-digits": (("digest[index / 2] |= (unsigned char)value;", "digest[index / 2] = (unsigned char)value;"),
                     "data_parse_sha256", "mcc"),
     "any-set-name": (("if (!data_is_mcc_shared(kind, name))\n\t\t\t\tcontinue;", ""), "data_download", "mcc"),
+    # (each start's shared files: Halo PC's into maps_pc, none of its other names, no map)
+    "pc-any-name": (("if (!data_is_halo_pc_shared(name))\n\t\t\t\tcontinue;", ""), "data_download", "shared"),
+    "pc-wrong-folder": (("\"%s\" DATA_PATH_SEPARATOR \"maps_pc\", extraction->destination);",
+                         "\"%s\" DATA_PATH_SEPARATOR \"maps_ce\", extraction->destination);"), "data_download", "shared"),
+    "shared-takes-maps": (("return folder != DATA_FOLDER_MAPS;", "return TRUE;"), "data_download_wanted", "shared"),
 }
 
 

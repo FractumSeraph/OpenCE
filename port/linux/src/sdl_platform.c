@@ -311,6 +311,10 @@ void dsound_sdl_output_device_check(void);
 /* updater.c's: the desktop self-updater */
 void updater_start(void);
 void updater_poll(SDL_Window *window);
+#ifndef HALO_WEB
+/* the shared files' background download (below, "the shared files") */
+static void data_shared_files_start(void);
+#endif
 #ifndef HALO_GLES
 /* the windows' icon, a PNG (tools/embed_assets.py, from port/assets/icon) */
 extern const unsigned int platform_window_icon[];
@@ -971,6 +975,11 @@ BOOL platform_sdl_initialize(void)
 		/* (a player's public game on the master servers too, with a
 		publisher key: server_master.c) */
 		server_master_start_host();
+#ifndef HALO_WEB
+		/* (the shared files maps need, downloaded in the background:
+		data.shared_files) */
+		data_shared_files_start();
+#endif
 	}
 #if !defined(_WIN32) && !defined(HALO_WEB)
 	/* (a browser's tab has no crashes of its own to report) */
@@ -1115,26 +1124,34 @@ Edition map needs them), and Halo MCC's shared sets as
 mcc_shared/singleplayer/<name> and mcc_shared/multiplayer/<name> (MCC's
 halo1/maps/bitmaps.map, and halo1/maps/custom_edition's bitmaps.map and
 sounds.map: Workshop maps that leave their textures and sounds to MCC's
-need them), which go into maps_mcc/_shared/<set> (mcc_package.c). Everything
-takes those too, and an MCC map that needs them offers them alone
-(DATA_MAPS_MCC_SHARED, platform_offer_mcc_shared). A build that does not
-know such lines skips them, as names with a folder */
+need them), which go into maps_mcc/_shared/<set> (mcc_package.c), and Halo
+PC's own bitmaps.map and sounds.map as pc_shared/<name>, which go into
+maps_pc (Halo PC retail maps, and HaloMD's, take their stock textures and
+sounds from them). Everything takes those too, and an MCC map that needs
+them offers MCC's alone (DATA_MAPS_MCC_SHARED, platform_offer_mcc_shared).
+Every start takes the shared files of all three that are not here yet, in
+the background, without asking (DATA_MAPS_SHARED_FILES,
+data_shared_files_start): the files maps need to play, never the maps
+themselves. A build that does not know such lines skips them, as names with
+a folder */
 enum
 {
 	DATA_MAPS_ALL,
 	DATA_MAPS_MULTIPLAYER,
 	DATA_MAPS_CAMPAIGN,
-	DATA_MAPS_MCC_SHARED
+	DATA_MAPS_MCC_SHARED,
+	DATA_MAPS_SHARED_FILES
 };
 
 /* the folder a file of the list goes into (data_download_file's folder):
-the maps folder, maps_ce, or one of MCC's shared sets */
+the maps folder, maps_ce, one of MCC's shared sets, or maps_pc */
 enum
 {
 	DATA_FOLDER_MAPS,
 	DATA_FOLDER_CUSTOM_EDITION,
 	DATA_FOLDER_MCC_SINGLEPLAYER,
-	DATA_FOLDER_MCC_MULTIPLAYER
+	DATA_FOLDER_MCC_MULTIPLAYER,
+	DATA_FOLDER_HALO_PC
 };
 
 struct data_download_file
@@ -1181,9 +1198,17 @@ static BOOL data_is_mcc_shared(int folder, const char *name)
 		(folder == DATA_FOLDER_MCC_MULTIPLAYER && !SDL_strcasecmp(name, "sounds.map"));
 }
 
+/* whether a name is one of Halo PC's shared maps (DATA_FOLDER_HALO_PC),
+the only files a list may name in pc_shared/ */
+static BOOL data_is_halo_pc_shared(const char *name)
+{
+	return !SDL_strcasecmp(name, "bitmaps.map") || !SDL_strcasecmp(name, "sounds.map");
+}
+
 /* whether a download takes a file of the list (DATA_MAPS_*) that goes into
-folder (DATA_FOLDER_*): the campaign's maps alone; all but them and MCC's
-shared sets; MCC's shared sets alone; or everything */
+folder (DATA_FOLDER_*): the campaign's maps alone; all but them, MCC's
+shared sets and Halo PC's; MCC's shared sets alone; every shared file and
+no map of the maps folder; or everything */
 static BOOL data_download_wanted(int wanted, const char *name, int folder)
 {
 	if (wanted == DATA_MAPS_CAMPAIGN)
@@ -1192,6 +1217,8 @@ static BOOL data_download_wanted(int wanted, const char *name, int folder)
 		return folder == DATA_FOLDER_CUSTOM_EDITION || (folder == DATA_FOLDER_MAPS && !data_is_campaign_map(name));
 	if (wanted == DATA_MAPS_MCC_SHARED)
 		return folder == DATA_FOLDER_MCC_SINGLEPLAYER || folder == DATA_FOLDER_MCC_MULTIPLAYER;
+	if (wanted == DATA_MAPS_SHARED_FILES)
+		return folder != DATA_FOLDER_MAPS;
 	return TRUE;
 }
 
@@ -1293,7 +1320,10 @@ static BOOL data_parse_sha256(const char *text, unsigned char digest[32])
 /* whether the file at path is size bytes whose SHA-256 is digest */
 static BOOL data_file_matches(const char *path, unsigned long long size, const unsigned char digest[32])
 {
-	static unsigned char buffer[1 << 16];
+	/* (each call's own buffer: the first start's or an offer's download and
+	the shared files' in the background may both be checking a file) */
+	enum { BUFFER_SIZE = 1 << 16 };
+	unsigned char *buffer;
 	struct content_sha256 hash;
 	unsigned char actual[32];
 	size_t read;
@@ -1301,10 +1331,17 @@ static BOOL data_file_matches(const char *path, unsigned long long size, const u
 
 	if (data_file_size(path) != (long long)size || !(file = fopen(path, "rb")))
 		return FALSE;
+	buffer = malloc(BUFFER_SIZE);
+	if (!buffer)
+	{
+		fclose(file);
+		return FALSE;
+	}
 	content_sha256_begin(&hash);
-	while ((read = fread(buffer, 1, sizeof(buffer), file)) > 0)
+	while ((read = fread(buffer, 1, BUFFER_SIZE, file)) > 0)
 		content_sha256_add(&hash, buffer, (int)read);
 	fclose(file);
+	free(buffer);
 	content_sha256_end(&hash, actual);
 	return !memcmp(actual, digest, 32);
 }
@@ -1312,14 +1349,16 @@ static BOOL data_file_matches(const char *path, unsigned long long size, const u
 /* copies from to to, its progress reported as a download's */
 static BOOL data_copy_file(const char *from, const char *to, struct data_download_progress *progress)
 {
-	static unsigned char buffer[1 << 20];
+	/* (each call's own buffer, as data_file_matches's) */
+	enum { BUFFER_SIZE = 1 << 20 };
+	unsigned char *buffer = malloc(BUFFER_SIZE);
 	unsigned long long copied = 0;
 	size_t read;
-	FILE *in = fopen(from, "rb");
+	FILE *in = buffer ? fopen(from, "rb") : NULL;
 	FILE *out = in ? fopen(to, "wb") : NULL;
 	BOOL succeeded = in && out;
 
-	while (succeeded && (read = fread(buffer, 1, sizeof(buffer), in)) > 0)
+	while (succeeded && (read = fread(buffer, 1, BUFFER_SIZE, in)) > 0)
 	{
 		succeeded = fwrite(buffer, 1, read, out) == read;
 		copied += read;
@@ -1331,13 +1370,16 @@ static BOOL data_copy_file(const char *from, const char *to, struct data_downloa
 		fclose(in);
 	if (out && fclose(out) != 0)
 		succeeded = FALSE;
+	free(buffer);
 	return succeeded;
 }
 #endif
 
 static BOOL data_download(struct data_extraction *extraction)
 {
-	static struct data_download_file files[DATA_DOWNLOAD_FILES];
+	/* (each download's own: the shared files' runs in the background beside
+	the others, data_shared_files_start) */
+	struct data_download_file files[DATA_DOWNLOAD_FILES];
 	static const char *const mcc_sets[] = { "singleplayer", "multiplayer" };
 	char folder[1100];
 	char custom_edition_folder[1100];
@@ -1361,7 +1403,9 @@ static BOOL data_download(struct data_extraction *extraction)
 		return FALSE;
 	}
 	snprintf(url, sizeof(url), "%smaps.txt", extraction->url);
-	snprintf(partial, sizeof(partial), "%s" DATA_PATH_SEPARATOR "maps.txt.partial", folder);
+	/* (named for the download: the shared files' may be running beside
+	another) */
+	snprintf(partial, sizeof(partial), "%s" DATA_PATH_SEPARATOR "maps.txt.%d.partial", folder, extraction->wanted);
 	if (!update_download(url, partial, 1ULL << 20, NULL, NULL, extraction->error, sizeof(extraction->error)))
 		return FALSE;
 	list = fopen(partial, "r");
@@ -1391,6 +1435,13 @@ static BOOL data_download(struct data_extraction *extraction)
 			if (!data_is_mcc_shared(kind, name))
 				continue;
 		}
+		else if (!strncmp(line, "pc_shared/", 10))
+		{
+			name = line + 10;
+			kind = DATA_FOLDER_HALO_PC;
+			if (!data_is_halo_pc_shared(name))
+				continue;
+		}
 		if (!data_download_name_valid(name) || !size || !data_download_wanted(extraction->wanted, name, kind))
 			continue;
 		snprintf(files[count].name, sizeof(files[count].name), "%s", name);
@@ -1406,16 +1457,17 @@ static BOOL data_download(struct data_extraction *extraction)
 	if (!count)
 	{
 		snprintf(extraction->error, sizeof(extraction->error), extraction->wanted == DATA_MAPS_MCC_SHARED ?
-			"%s lists no MCC shared files." : "%s lists no files.", url);
+			"%s lists no MCC shared files." : extraction->wanted == DATA_MAPS_SHARED_FILES ?
+			"%s lists no shared files." : "%s lists no files.", url);
 		return FALSE;
 	}
 	pthread_mutex_lock(&extraction->lock);
 	extraction->total = total;
 	pthread_mutex_unlock(&extraction->lock);
 
-	/* (custom_maps/ and mcc_shared/: folders beside the URL's,
+	/* (custom_maps/, mcc_shared/ and pc_shared/: folders beside the URL's,
 	https://host/assets/maps/ -> https://host/assets/custom_maps/; their
-	files go into maps_ce and maps_mcc/_shared/<set>) */
+	files go into maps_ce, maps_mcc/_shared/<set> and maps_pc) */
 	snprintf(custom_edition_folder, sizeof(custom_edition_folder), "%s" DATA_PATH_SEPARATOR "maps_ce",
 		extraction->destination);
 	data_mcc_folder(extraction->destination, mcc_folder, sizeof(mcc_folder));
@@ -1437,10 +1489,13 @@ static BOOL data_download(struct data_extraction *extraction)
 			char target[1200];
 			const char *set = kind == DATA_FOLDER_MCC_SINGLEPLAYER ? mcc_sets[0] : mcc_sets[1];
 
-			/* (a player's own copy of a shared map, Custom Edition's or an MCC
-			set's, is never replaced, whatever its size) */
+			/* (a player's own copy of a shared map, Custom Edition's, an MCC
+			set's or Halo PC's, is never replaced, whatever its size: another
+			language's, say) */
 			if (kind == DATA_FOLDER_CUSTOM_EDITION)
 				snprintf(target, sizeof(target), "%s", custom_edition_folder);
+			else if (kind == DATA_FOLDER_HALO_PC)
+				snprintf(target, sizeof(target), "%s" DATA_PATH_SEPARATOR "maps_pc", extraction->destination);
 			else
 				snprintf(target, sizeof(target), "%s" DATA_PATH_SEPARATOR "_shared" DATA_PATH_SEPARATOR "%s",
 					mcc_folder, set);
@@ -1450,7 +1505,7 @@ static BOOL data_download(struct data_extraction *extraction)
 				done += files[which].size;
 				continue;
 			}
-			if (kind != DATA_FOLDER_CUSTOM_EDITION)
+			if (kind == DATA_FOLDER_MCC_SINGLEPLAYER || kind == DATA_FOLDER_MCC_MULTIPLAYER)
 			{
 				char shared[1200];
 
@@ -1492,6 +1547,8 @@ static BOOL data_download(struct data_extraction *extraction)
 #endif
 			if (kind == DATA_FOLDER_CUSTOM_EDITION)
 				snprintf(url, sizeof(url), "%scustom_maps/%s", site_url, files[which].name);
+			else if (kind == DATA_FOLDER_HALO_PC)
+				snprintf(url, sizeof(url), "%spc_shared/%s", site_url, files[which].name);
 			else
 				snprintf(url, sizeof(url), "%smcc_shared/%s/%s", site_url, set, files[which].name);
 		}
@@ -2184,9 +2241,80 @@ static BOOL data_download_url_usable(const char *url)
 	return !strncmp(url, "https://", 8) && url[strlen(url) - 1] == '/';
 }
 
+/* ---------- the shared files, in the background
+
+Every start (data_shared_files_start, once the maps are found) downloads the
+shared files maps need that aren't here yet, as the site lists them
+(DATA_MAPS_SHARED_FILES): Halo Custom Edition's bitmaps.map, sounds.map and
+loc.map (maps_ce), Halo MCC's shared sets (maps_mcc/_shared) and Halo PC's
+bitmaps.map and sounds.map (maps_pc). Nothing is asked and nothing is shown;
+the log says what was downloaded. A player's own copy is never replaced, and
+a list without them (an older site's) downloads nothing. Never a map: maps
+come with the first start's download, or by map sharing when a game needs
+one. data.shared_files = false turns it off. */
+static struct data_extraction shared_files;
+static BOOL shared_files_started;
+
+static void *data_shared_files_thread(void *context)
+{
+	struct data_extraction *download = context;
+	BOOL succeeded = data_download(download);
+
+	if (succeeded)
+		platform_log("shared files: every one the site lists is here");
+	else
+		platform_log("shared files: %s", download->error);
+	pthread_mutex_lock(&download->lock);
+	download->succeeded = succeeded;
+	download->finished = TRUE;
+	pthread_mutex_unlock(&download->lock);
+	return NULL;
+}
+
+static void data_shared_files_start(void)
+{
+	const char *url = config_string("data.download_url");
+	pthread_t thread;
+
+	if (shared_files_started || !config_boolean("data.shared_files") || !data_download_url_usable(url) ||
+		config_boolean("debug.hidden_window") || config_real("debug.exit_after") > 0.0)
+	{
+		return;
+	}
+	shared_files_started = TRUE;
+	memset(&shared_files, 0, sizeof(shared_files));
+	pthread_mutex_init(&shared_files.lock, NULL);
+	shared_files.running = TRUE;
+	shared_files.wanted = DATA_MAPS_SHARED_FILES;
+	snprintf(shared_files.url, sizeof(shared_files.url), "%s", url);
+	snprintf(shared_files.destination, sizeof(shared_files.destination), "%s", platform_data_root());
+	if (pthread_create(&thread, NULL, data_shared_files_thread, &shared_files) != 0)
+	{
+		shared_files.running = FALSE;
+		platform_log("shared files: could not start their download");
+		return;
+	}
+	/* (the Windows port's threads cannot be joined) */
+	pthread_detach(thread);
+}
+
+/* whether the shared files' background download is under way */
+static BOOL data_shared_files_busy(void)
+{
+	BOOL busy;
+
+	if (!shared_files_started)
+		return FALSE;
+	pthread_mutex_lock(&shared_files.lock);
+	busy = shared_files.running && !shared_files.finished;
+	pthread_mutex_unlock(&shared_files.lock);
+	return busy;
+}
+
 /* MCC's shared files an MCC map needs (mcc_cache.c): offered for download
 with the site's maps (mcc_shared/<set>/ beside its maps folder), once a run;
-TRUE once they are here */
+TRUE once they are here. While the shared files' background download runs
+(data_shared_files_start), which takes them too, nothing is asked */
 BOOL platform_offer_mcc_shared(void)
 {
 	static const SDL_MessageBoxButtonData buttons[] =
@@ -2202,6 +2330,11 @@ BOOL platform_offer_mcc_shared(void)
 	int answer = 0;
 	SDL_MessageBoxData question = { SDL_MESSAGEBOX_INFORMATION, NULL, "Fractum Halo", message, 2, buttons, NULL };
 
+	if (data_shared_files_busy())
+	{
+		platform_log("MCC's shared files are still downloading in the background");
+		return FALSE;
+	}
 	if (asked || !data_download_url_usable(url) || config_boolean("debug.hidden_window") ||
 		config_real("debug.exit_after") > 0.0)
 	{
@@ -2230,7 +2363,10 @@ int platform_mcc_shared_message(char *text, int size)
 {
 	if (!data_download_url_usable(config_string("data.download_url")))
 		return 0;
-	snprintf(text, (size_t)size, "Choose the map again to download MCC's shared files (about 350 MB).");
+	if (data_shared_files_busy())
+		snprintf(text, (size_t)size, "MCC's shared files are downloading. Choose the map again in a minute.");
+	else
+		snprintf(text, (size_t)size, "Choose the map again to download MCC's shared files (about 350 MB).");
 	return 1;
 }
 #else

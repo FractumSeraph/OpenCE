@@ -198,6 +198,28 @@ public class HaloActivity extends SDLActivity {
         acquireMulticastLock();
         // a new version looked for while the game starts
         Updater.start(this);
+        downloadSharedFiles();
+    }
+
+    /**
+     * The shared files maps need (MapsDownloader.SHARED_FILES: Custom
+     * Edition's, MCC's and Halo PC's bitmaps.map, sounds.map and loc.map)
+     * that aren't here yet, downloaded in the background at each start,
+     * without asking and without a dialog, as the desktop games do
+     * (data.shared_files). Never maps, and never a file the player has.
+     */
+    private void downloadSharedFiles() {
+        java.io.File dataRoot = getExternalFilesDir(null);
+        if (dataRoot == null)
+            return;
+        new Thread(() -> {
+            try {
+                MapsDownloader.download(dataRoot, MapsDownloader.SHARED_FILES, (text, permille) -> { });
+                android.util.Log.i("halo", "shared files: every one the site lists is here");
+            } catch (Exception e) {
+                android.util.Log.i("halo", "shared files: " + e.getMessage());
+            }
+        }, "shared-files").start();
     }
 
     /**

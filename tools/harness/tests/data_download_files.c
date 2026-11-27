@@ -191,6 +191,8 @@ static void sha256_text(const char *text, char hex[65])
 #define MULTIPLAYER_BITMAPS "mcc multiplayer bitmaps"
 #define MULTIPLAYER_SOUNDS "mcc multiplayer sounds."
 #define OTHER_SOUNDS "a custom edition sounds"
+#define HALO_PC_BITMAPS "halo pc bitmaps"
+#define HALO_PC_SOUNDS "halo pc sounds"
 
 static char root[512];
 
@@ -205,7 +207,7 @@ static void make_world(const char *base, BOOL corrupt)
 {
 	char path[1024];
 	char list[2048];
-	char singleplayer[65], multiplayer[65], sounds[65];
+	char singleplayer[65], multiplayer[65], sounds[65], pc_bitmaps[65];
 
 	snprintf(site, sizeof(site), "%s/site", base);
 	snprintf(root, sizeof(root), "%s/root", base);
@@ -234,9 +236,18 @@ static void make_world(const char *base, BOOL corrupt)
 	write_file(path, MULTIPLAYER_BITMAPS);
 	snprintf(path, sizeof(path), "%s/assets/mcc_shared/multiplayer/sounds.map", site);
 	write_file(path, corrupt ? "mcc multiplayer sounds!" : MULTIPLAYER_SOUNDS);
+	snprintf(path, sizeof(path), "%s/assets/pc_shared", site);
+	make_folder(path);
+	snprintf(path, sizeof(path), "%s/assets/pc_shared/bitmaps.map", site);
+	write_file(path, HALO_PC_BITMAPS);
+	snprintf(path, sizeof(path), "%s/assets/pc_shared/sounds.map", site);
+	write_file(path, HALO_PC_SOUNDS);
+	snprintf(path, sizeof(path), "%s/assets/pc_shared/loc.map", site);
+	write_file(path, "loc.!");
 	sha256_text(SINGLEPLAYER_BITMAPS, singleplayer);
 	sha256_text(MULTIPLAYER_BITMAPS, multiplayer);
 	sha256_text(MULTIPLAYER_SOUNDS, sounds);
+	sha256_text(HALO_PC_BITMAPS, pc_bitmaps);
 	snprintf(list, sizeof(list),
 		"ui.map\t2\n"
 		"custom_maps/bitmaps.map\t%u\n"
@@ -245,11 +256,16 @@ static void make_world(const char *base, BOOL corrupt)
 		"mcc_shared/multiplayer/sounds.map\t%u\t%s\n"
 		"mcc_shared/singleplayer/sounds.map\t5\n"
 		"mcc_shared/multiplayer/loc.map\t5\n"
-		"mcc_shared/other/bitmaps.map\t5\n",
+		"mcc_shared/other/bitmaps.map\t5\n"
+		"pc_shared/bitmaps.map\t%u\t%s\n"
+		"pc_shared/sounds.map\t%u\n"
+		"pc_shared/loc.map\t5\n",
 		(unsigned)strlen(MULTIPLAYER_BITMAPS),
 		(unsigned)strlen(SINGLEPLAYER_BITMAPS), singleplayer,
 		(unsigned)strlen(MULTIPLAYER_BITMAPS), multiplayer,
-		(unsigned)strlen(MULTIPLAYER_SOUNDS), sounds);
+		(unsigned)strlen(MULTIPLAYER_SOUNDS), sounds,
+		(unsigned)strlen(HALO_PC_BITMAPS), pc_bitmaps,
+		(unsigned)strlen(HALO_PC_SOUNDS));
 	snprintf(path, sizeof(path), "%s/assets/maps/maps.txt", site);
 	write_file(path, list);
 	fetched[0] = 0;
@@ -365,16 +381,46 @@ int main(int argc, char **argv)
 		path_of(path, sizeof(path), "maps_mcc/_shared/multiplayer/bitmaps.map");
 		CHECK(!strcmp(read_file(path), MULTIPLAYER_BITMAPS), "multiplayer bitmaps.map");
 		CHECK(!strstr(fetched, "mcc_shared/multiplayer/bitmaps.map"), "maps_ce's copy downloaded again:\n%s", fetched);
+		path_of(path, sizeof(path), "maps_pc/sounds.map");
+		CHECK(!strcmp(read_file(path), HALO_PC_SOUNDS), "maps_pc/sounds.map");
 		return 0;
 	}
-	/* Multiplayer only: not MCC's */
+	/* Multiplayer only: not MCC's, nor Halo PC's */
 	if (!strcmp(case_name, "multiplayer"))
 	{
 		make_world(base, FALSE);
 		CHECK(download(DATA_MAPS_MULTIPLAYER, error, sizeof(error)), "failed: %s", error);
 		CHECK(!strstr(fetched, "mcc_shared"), "MCC's fetched:\n%s", fetched);
+		CHECK(!strstr(fetched, "pc_shared"), "Halo PC's fetched:\n%s", fetched);
 		path_of(path, sizeof(path), "maps_mcc");
 		CHECK(!exists(path), "maps_mcc made");
+		return 0;
+	}
+	/* each start's shared files: Custom Edition's, MCC's and Halo PC's,
+	never a map of the maps folder, never a name a set has not, and a
+	player's own copy kept */
+	if (!strcmp(case_name, "shared"))
+	{
+		make_world(base, FALSE);
+		path_of(path, sizeof(path), "maps_pc");
+		make_folder(path);
+		path_of(path, sizeof(path), "maps_pc/sounds.map");
+		write_file(path, "the player's own");
+		CHECK(download(DATA_MAPS_SHARED_FILES, error, sizeof(error)), "failed: %s", error);
+		CHECK(!strstr(fetched, "maps/ui.map"), "a map fetched:\n%s", fetched);
+		path_of(path, sizeof(path), "maps/ui.map");
+		CHECK(!exists(path), "ui.map downloaded");
+		path_of(path, sizeof(path), "maps_ce/bitmaps.map");
+		CHECK(!strcmp(read_file(path), MULTIPLAYER_BITMAPS), "maps_ce/bitmaps.map: '%s'", read_file(path));
+		path_of(path, sizeof(path), "maps_mcc/_shared/singleplayer/bitmaps.map");
+		CHECK(!strcmp(read_file(path), SINGLEPLAYER_BITMAPS), "singleplayer bitmaps.map: '%s'", read_file(path));
+		path_of(path, sizeof(path), "maps_pc/bitmaps.map");
+		CHECK(!strcmp(read_file(path), HALO_PC_BITMAPS), "maps_pc/bitmaps.map: '%s'", read_file(path));
+		path_of(path, sizeof(path), "maps_pc/sounds.map");
+		CHECK(!strcmp(read_file(path), "the player's own"), "the player's maps_pc/sounds.map replaced");
+		CHECK(!strstr(fetched, "pc_shared/sounds.map"), "the player's sounds.map downloaded:\n%s", fetched);
+		path_of(path, sizeof(path), "maps_pc/loc.map");
+		CHECK(!exists(path), "a name Halo PC's shared files have not was taken");
 		return 0;
 	}
 	fprintf(stderr, "unknown case %s\n", case_name);
