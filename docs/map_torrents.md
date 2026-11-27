@@ -174,8 +174,8 @@ whole-file BLAKE2b's first 32 bits) are; a fork host offers no other. Anything
 else is refused before a byte comes, and the player is told the file name
 and the hash (the whole hash from a host's offer; the host's version, its
 first 8 digits, in Online Games) and to contact `MAP_APPROVAL_CONTACT`
-(@FractumSeraph). The tracker takes only the index's info hashes
-(`/etc/opentracker/whitelist.txt`), so the three agree.
+(@FractumSeraph). The games' checks are the approval: since 2026-11-27 the
+tracker takes any torrent (no whitelist).
 
 `tools/map_share_hash.c` prints the map sharing hash of map files (built
 with Monocypher: `cc -O2 -o map_share_hash tools/map_share_hash.c
@@ -192,9 +192,8 @@ files itself.
    with it> --torrents <the torrents folder>`, which writes its torrent and its
    line, every column included.
 3. Put the map on the web seed (`halomaps.fractumseraph.net/maps/`) and its
-   torrent in `torrents/`, add its info hash to the tracker's
-   `/etc/opentracker/whitelist.txt` (then `systemctl reload opentracker`), and
-   seed it.
+   torrent in `torrents/`, and seed it. (The tracker has no whitelist, so
+   nothing needs adding there.)
 4. Commit the index and push it to main: `map-index.yml` publishes it, and
    players' games and the dedicated servers take it within the hour (sooner
    for one that was just refused the map: below), with no release. The next
@@ -252,8 +251,11 @@ with the maps in a folder), makes it found at once. The archive's own seed
 box, tracker and web seed are these, and the settings' defaults:
 
 - tracker: `udp://halovps.fractumseraph.net:6969/announce` and
-  `http://halovps.fractumseraph.net:6969/announce` (opentracker, taking only
-  the index's torrents);
+  `http://halovps.fractumseraph.net:6969/announce` (opentracker, built from
+  Ubuntu's source package without its whitelist: any torrent is tracked;
+  `/usr/local/sbin/opentracker-open`, systemd drop-in
+  `opentracker.service.d/no-whitelist.conf`, so Ubuntu's updates to the
+  package don't replace it: rebuild by hand);
 - web seed: `http://halomaps.fractumseraph.net/maps/` (every map of the
   index under its file name; plain HTTP, as the client has no TLS);
 - seed box: the same machine, seeding all of them with a libtorrent
