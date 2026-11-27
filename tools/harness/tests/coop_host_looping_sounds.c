@@ -13,6 +13,8 @@ typedef unsigned short word;
 #define TICKS_PER_SECOND 30
 #define SOUND_DEFINITION_TAG 0x736e6421UL
 #define TAG_BLOCK_GET_ELEMENT(block, index, type) (&((type *)(block)->address)[(index)])
+/* (the scripts' objects: none in this world, as a deleted one is: game_sound.c's #1861 checks) */
+#define object_try_and_get(index) ((void)(index), (void *)0)
 
 struct tag_block_definition;
 #include "types.inc"

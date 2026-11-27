@@ -28,6 +28,8 @@ static boolean distributed_tag_of_group(long tag_index,unsigned long group)
  return group==LOOPING_SOUND_DEFINITION_TAG&&tag_index>=0&&tag_index<DEFINITIONS;
 }
 static boolean network_objects_client_has(long object_index){(void)object_index;return FALSE;}
+/* (the scripts' objects: none in this world, as a deleted one is: game_sound.c's #1861 checks) */
+#define object_try_and_get(index) ((void)(index), (void *)0)
 
 /* the playing looping sounds (game_sound.c's data) */
 struct game_looping_sound_datum {long definition_index;unsigned long flags;real scale;boolean used;};

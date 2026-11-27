@@ -102,12 +102,18 @@ def generated(fault=None):
         following = mutated(following, 'return object_list_skip_deleted(\n\t\treference_list_get_next_datum_index('
                             'object_list_data, reference_index),\n\t\treference_index);',
                             'return reference_list_get_next_datum_index(object_list_data, reference_index);')
+    # (port, this fork: ChupathingyCE's guards, #1861, an object_try_and_get
+    # before the get, which the faults take away)
     if fault == 'kill':
-        kill = mutated(kill, 'unit_try_and_get(unit_index)', 'unit_get(unit_index)')
+        kill = mutated(kill, 'if (!object_try_and_get(unit_index))\n\t\treturn;\n', '')
     if fault == 'kill-silent':
-        kill_silent = mutated(kill_silent, 'unit_try_and_get(unit_index)', 'unit_get(unit_index)')
+        kill_silent = mutated(kill_silent, 'if (!object_try_and_get(unit_index))\n\t\treturn;\n', '')
     if fault == 'scenery':
-        animation_time = mutated(animation_time, 'scenery_try_and_get(object_index)', 'scenery_get(object_index)')
+        animation_time = mutated(animation_time, 'if (!object_try_and_get(object_index))\n\t\treturn 0;\n', '')
+    # (and its trigger volume test's, #1861, which no checks takes away too)
+    volume_test = function(read('source/scenario/scenario.c'), 'scenario_trigger_volume_test_object')
+    if fault == 'no-checks':
+        volume_test = mutated(volume_test, 'if (object_try_and_get(object_index))', 'if (object_index != NONE)')
 
     code = function(data, 'datum_try_and_get') + '\n' + function(data, 'datum_get') + '\n'
     code += function(data, 'datum_delete') + '\n'
@@ -125,7 +131,7 @@ def generated(fault=None):
                  'hs_global_evaluate'):
         code += function(runtime, name) + '\n'
     code += arguments + '\n'
-    code += function(read('source/scenario/scenario.c'), 'scenario_trigger_volume_test_object') + '\n'
+    code += volume_test + '\n'
     for name in ('hs_trigger_volume_test_objects', 'hs_trigger_volume_test_objects_all',
                  'hs_trigger_volume_test_objects_any', 'hs_object_list_get_element'):
         code += function(external, name) + '\n'

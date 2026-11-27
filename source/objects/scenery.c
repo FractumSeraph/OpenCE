@@ -170,10 +170,14 @@ short scenery_get_animation_time(
 {
 	struct animation *animation;
 	struct animation_graph *animation_graph;
-	/* port: a script's scenery may be none (hs_value_still_exists) */
-	struct scenery_datum *scenery = scenery_try_and_get(object_index);
+	struct scenery_datum *scenery;
 
-	if (scenery && TEST_FLAG(scenery->flags, 0))
+	/* port: none, or a scenery object deleted since the script had it, has
+	no animation time left rather than halting the game (#1861) */
+	if (!object_try_and_get(object_index))
+		return 0;
+	scenery = scenery_get(object_index);
+	if (TEST_FLAG(scenery->flags, 0))
 	{
 		animation_graph = animation_graph_definition_get(
 			scenery->object.object.animation.animation_graph_index);

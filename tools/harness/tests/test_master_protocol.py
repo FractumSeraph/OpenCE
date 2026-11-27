@@ -246,7 +246,11 @@ def crypto_includes():
         ("monocypher-ed25519.h", read("port/third_party/monocypher/monocypher-ed25519.h")),
         ("monocypher.inc", read("port/third_party/monocypher/monocypher.c")),
         ("monocypher_ed25519.inc", read("port/third_party/monocypher/monocypher-ed25519.c")),
-        ("p2p_crypto.inc", read("port/linux/src/p2p_crypto.c")),
+        # (p2p_crypto.c's SHA-256 is ChupathingyCE's one, content_sha256.c: compiled first, its headers beside it)
+        ("content_sha256.h", read("port/linux/game/content_sha256.h")),
+        ("mcc_sha256.h", read("port/linux/game/mcc_sha256.h")),
+        ("p2p_crypto.inc", read("port/linux/game/content_sha256.c") + "\n" +
+         read("port/linux/src/p2p_crypto.c").replace('#include "../game/content_sha256.h"', '#include "content_sha256.h"')),
         ("jsmn.h", read("port/third_party/jsmn/jsmn.h")),
         ("server_json.h", read("port/linux/src/server_json.h")),
         ("server_json.inc", server_json),

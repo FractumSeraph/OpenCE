@@ -107,6 +107,8 @@ typedef struct
 typedef const DSI3DL2BUFFER *LPCDSI3DL2BUFFER;
 #endif
 
+/* (the IMA ADPCM step the mixer decodes with: ChupathingyCE's one, content_audio.c) */
+#include "../../../port/linux/game/content_audio.c"
 #include "under_test.inc"
 
 #endif

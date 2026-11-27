@@ -80,6 +80,8 @@ def generated(fault=None, faulty_function=None):
     # (ChupathingyCE's Xbox button icons for HUD messages, which ce_hud_tags_loaded adds first, read from
     # ui.map: none here, as these maps' HUD scale is what is tested)
     text += "static long ce_hud_button_icon_group_count;\n"
+    # (ChupathingyCE's: the byte readers ce_hud.c reads with, and its child anchors' flag)
+    text += '#include "content_bytes.h"\nstatic boolean ce_hud_child_anchors;\n'
     text += ("static void ce_hud_button_icons(byte *hud, struct ce_image const *image)\n"
              "{\n\t(void)hud;\n\t(void)image;\n}\n")
     for name in FUNCTIONS:
@@ -88,7 +90,8 @@ def generated(fault=None, faulty_function=None):
             code = mutated(code, *fault)
         text += code + "\n"
     return (("config.inc", config), ("under_test.inc", text),
-            ("custom_edition_behaviours.inc", read("port/linux/game/custom_edition_behaviours.inc")))
+            ("custom_edition_behaviours.inc", read("port/linux/game/custom_edition_behaviours.inc")),
+            ("content_bytes.h", read("port/linux/game/content_bytes.h")))
 
 
 @pytest.mark.parametrize("case", CASES)

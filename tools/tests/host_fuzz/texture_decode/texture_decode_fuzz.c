@@ -70,6 +70,58 @@ const char *config_string(const char *name)
 	return "";
 }
 
+/* (ChupathingyCE's: the settings' change count its cache reads, its upload
+statistics, and its OpenSauce HUD overlays, none here) */
+unsigned long config_changes(void)
+{
+	return 0;
+}
+
+void xgpu_statistics_texture_upload(unsigned long bytes)
+{
+	(void)bytes;
+}
+
+unsigned long hud_hires_settings_changed(void)
+{
+	return 0;
+}
+
+int hud_hires_bitmap_affected(unsigned long address, long width, long height, unsigned long changed)
+{
+	(void)address;
+	(void)width;
+	(void)height;
+	(void)changed;
+	return 0;
+}
+
+unsigned int hud_hires_placeholder_texture(unsigned long data, unsigned long *levels)
+{
+	(void)data;
+	(void)levels;
+	return 0;
+}
+
+long hud_hires_upscale_at(unsigned long address, long width, long height)
+{
+	(void)address;
+	(void)width;
+	(void)height;
+	return 0;
+}
+
+unsigned int hud_hires_upscale_texture(const unsigned char *bgra, unsigned long width,
+	unsigned long height, long kind, unsigned long *levels)
+{
+	(void)bgra;
+	(void)width;
+	(void)height;
+	(void)kind;
+	(void)levels;
+	return 0;
+}
+
 void platform_log(const char *format, ...)
 {
 	(void)format;

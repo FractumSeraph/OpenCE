@@ -56,6 +56,13 @@ int config_boolean(const char *name)
 	return 1;
 }
 
+/* (network.advertise_version: not set, the announced number) */
+long config_integer(const char *name)
+{
+	(void)name;
+	return 0;
+}
+
 int delta_legacy_minimum(void)
 {
 	return 29;

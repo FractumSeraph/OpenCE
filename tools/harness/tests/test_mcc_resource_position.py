@@ -17,11 +17,15 @@ def code(source=SOURCE):
                            [function(source, name) for name in (
                                # (port, this fork: its items sorted, and MCC's shared sets read for a
                                # Workshop item's map, mcc_resource_read_from)
-                               "mcc_resource_word", "mcc_resource_compare", "mcc_resource_close", "mcc_resource_open",
+                               "mcc_resource_compare", "mcc_resource_close", "mcc_resource_open",
                                "mcc_resource_read_from", "mcc_resource_read",
                                "mcc_resource_check", "mcc_resource_equal", "mcc_resources_select_paths",
                                "mcc_resources_dispose")])
-    return build("mcc_resource_position", (("limits.inc", limits), ("under_test.inc", under_test)))
+    # (its header and table read by ChupathingyCE's one reader of resource maps, header only)
+    under_test = '#include "content_resource_map.h"\n' + under_test
+    return build("mcc_resource_position", (("limits.inc", limits), ("under_test.inc", under_test),
+                                           ("content_resource_map.h", read("port/linux/game/content_resource_map.h")),
+                                           ("content_bytes.h", read("port/linux/game/content_bytes.h"))))
 
 
 @pytest.mark.parametrize("case", ["lookups", "decoding", "shared"])

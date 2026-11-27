@@ -52,7 +52,9 @@ def generated(fault=None, faulty_function=None):
                                                                                  '#include "delta.h"')),
             ("network_rules.h", read("port/linux/game/network_rules.h")),
             # (ChupathingyCE 0.8.0h's network_rules.c reads delta.h's layouts)
-            ("delta.h", read("port/linux/include/delta.h")))
+            ("delta.h", read("port/linux/include/delta.h")),
+            # (and its byte readers, ChupathingyCE's one set)
+            ("content_bytes.h", read("port/linux/game/content_bytes.h")))
 
 
 @pytest.mark.parametrize("case", CASES)
