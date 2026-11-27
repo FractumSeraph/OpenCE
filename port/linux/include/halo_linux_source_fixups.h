@@ -25,6 +25,8 @@ int halo_interpolation_enabled(void);
 float game_time_get_tick_fraction(void);
 void render_interpolation_tick(void);
 void render_interpolation_reset(void);
+/* the scripts cut to a new shot (camera_scripting.c) */
+void render_interpolation_cut(void);
 void render_interpolation_frame_begin(void);
 void render_interpolation_frame_end(void);
 float render_interpolation_fraction(void);
@@ -49,6 +51,7 @@ void render_interpolation_view_turn(long unit_index, union real_point3d *positio
 	union real_vector3d *up);
 void render_interpolation_first_person(short local_player_index, long weapon_index, long animation_graph_index,
 	struct real_matrix4x3 *node_matrices, short node_count, struct render_camera const *camera);
+void render_interpolation_first_person_cut(short local_player_index);
 float render_interpolation_game_time_sec(long ticks);
 float render_interpolation_ticks_since(long now, long then);
 

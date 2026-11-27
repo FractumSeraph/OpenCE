@@ -5230,7 +5230,7 @@ it (ChupathingyCE's): the game looks things up in them by direction (the
 vector normalization cube map of the lightmap pass), where it sharpens
 nothing, and Mesa's llvmpipe drew such lookups black with it (walls seen at
 a slant on the Custom Edition and HaloMD maps, whose normalization cube map
-has mip levels). */
+has mip levels). Not for a bump map either (OpenCE: configure_sampler). */
 static long anisotropic_level = -1;
 static unsigned long anisotropic_level_read_at;
 
@@ -5263,8 +5263,10 @@ static DWORD anisotropic_filtering(void)
 filtered and from its mip levels whatever the game asks: the HUD's meters are
 point sampled for one player, to keep the Xbox bitmaps' texels sharp.
 rendered: a render target the game draws into; flat: a 2D texture (not a
-cube or 3D one), the only kind given forced anisotropy */
-static void configure_sampler(int stage, BOOL mipmapped, BOOL hires, BOOL rendered, BOOL flat)
+cube or 3D one), the only kind given forced anisotropy.
+palettized: a P8 texture, which in the Xbox maps is only ever a bump map
+(their p8 bump format) */
+static void configure_sampler(int stage, BOOL mipmapped, BOOL hires, BOOL rendered, BOOL flat, BOOL palettized)
 {
 	/* the texture stage state each stage's sampler was last chosen by */
 	static DWORD configured[D3DTSS_MAXSTAGES][SAMPLER_STATE_WORDS];
@@ -5285,8 +5287,12 @@ static void configure_sampler(int stage, BOOL mipmapped, BOOL hires, BOOL render
 	inputs[10] = hires;
 	/* (display.anisotropic_filtering, over the game's linear filtering of
 	the maps' 2D textures with mip levels; not of what the game renders, the
-	water's ripples, whose finer levels seen far off are noise) */
-	if (!hires && mipmapped && flat && !rendered && inputs[1] != D3DTEXF_NONE &&
+	water's ripples, whose finer levels seen far off are noise, nor of a bump
+	map: its finer levels at a grazing angle turn every texel's normal, so
+	the lightmap's light and the reflections it bends speckle the floors
+	(the Covenant's and the Forerunners') with single bright pixels, which
+	multisampling cannot smooth; the Xbox's own filtering averages them) */
+	if (!hires && mipmapped && flat && !rendered && !palettized && inputs[1] != D3DTEXF_NONE &&
 		(inputs[0] == D3DTEXF_LINEAR || inputs[0] == D3DTEXF_ANISOTROPIC) && anisotropic_filtering() > 1)
 	{
 		inputs[0] = D3DTEXF_ANISOTROPIC;
@@ -5739,7 +5745,8 @@ static void bind_textures(struct nv2a_pixel_shader_key *key, float texture_scale
 			}
 			gl_targets[stage] = gl_target;
 			gl_textures[stage] = gl_texture;
-			configure_sampler(stage, description.levels > 1, description.hires, target != NULL, gl_target == GL_TEXTURE_2D);
+			configure_sampler(stage, description.levels > 1, description.hires, target != NULL, gl_target == GL_TEXTURE_2D,
+				description.format == D3DFMT_P8);
 			if (stage == 0)
 			{
 				key->coverage_alpha = description.hires_coverage != FALSE;

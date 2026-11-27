@@ -4327,6 +4327,13 @@ static Uint64 platform_ticks_ns(void)
 	return (Uint64)now.tv_sec * 1000000000ull + (Uint64)now.tv_nsec;
 }
 
+/* port/android/guest/runtime/guest_host.h: the frame starts now, after the
+limiter's sleep, which spaces frames interval nanoseconds apart (0: no
+limit), for the performance hint's work and target (host_sdl.c) */
+/* (the guest build's host import alone: this fork's native Android builds,
+android64 and android32, have no host_sdl.c) */
+void host_frame_paced(long long interval);
+
 static void platform_sleep_ns(Uint64 duration)
 {
 	struct timespec request, remaining;
@@ -4444,7 +4451,12 @@ void platform_video_swap(void)
 		interval = refresh_period_ns();
 #endif
 	if (!interval)
+	{
+#if defined(HALO_ANDROID) && defined(HALO_ARM64_GUEST)
+		host_frame_paced(0);
+#endif
 		return;
+	}
 #ifdef HALO_ANDROID
 	now = platform_ticks_ns();
 #else
@@ -4461,6 +4473,9 @@ void platform_video_swap(void)
 	}
 	/* (a frame more than an interval late starts the count again) */
 	next_frame = now - next_frame > interval ? now + interval : next_frame + interval;
+#if defined(HALO_ANDROID) && defined(HALO_ARM64_GUEST)
+	host_frame_paced((long long)interval);
+#endif
 #endif
 }
 

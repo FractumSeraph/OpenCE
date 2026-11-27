@@ -699,6 +699,14 @@ void objects_port_set_activating_cluster(
 	objects_port_activating_structure_bsp_index = global_structure_bsp_index_get();
 }
 
+/* port: a scripted camera cluster belongs to one BSP. An object override
+resolves its cluster from the object after reconnection. */
+void objects_clear_activating_cluster(void)
+{
+	if (object_globals->pvs_activation_type == _pvs_activation_cluster)
+		object_pvs_clear();
+}
+
 void object_pvs_clear(void)
 {
 	object_globals->pvs_activation_type = _pvs_activation_normal;

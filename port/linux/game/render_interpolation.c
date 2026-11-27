@@ -24,6 +24,15 @@ are told apart by the weapon and its animation graph instead, since its own
 animations (a rocket launcher's melee) move further in a tick than any
 distance that would tell them from another weapon's.
 
+A cut the scripts make (a cinematic's camera set to another point at once,
+an animated camera started, the scripted camera turned on or off) is a new
+shot: the tick it comes on, the camera and every object are drawn as they
+are, not blended from the shot before. The Xbox drew that tick's frame from
+the new shot alone; blended, the camera swept between two shots too close
+together to be told for a cut (CAMERA_CUT_DISTANCE: a10's bridge, 1 to 2
+world units apart), and what the script moved for the new shot (a crewman
+put by a console, Johnson's next walk) slid there from where it stood.
+
 Particles, contrails and other effects already move every frame
 (game_frame). A stream of particles from an object, made in the tick all at
 once, is held back to be made through the frames between the ticks, on the
@@ -247,6 +256,9 @@ struct interpolated_first_person
 	long animation_graph_index;
 	short node_count;
 	boolean has_previous;
+	/* the game cut to an animation since the latest pose was taken
+	(render_interpolation_first_person_cut) */
+	boolean cut;
 	real_matrix4x3 previous[MAXIMUM_INTERPOLATED_NODES];
 	real_matrix4x3 latest[MAXIMUM_INTERPOLATED_NODES];
 };
@@ -302,6 +314,10 @@ static struct smoothed_flashlight smoothed_flashlights[SMOOTHED_FLASHLIGHT_COUNT
 static boolean smoothed_flashlights_ready;
 #endif
 
+/* a cut the scripts made in the tick being simulated (render_interpolation_cut),
+and the latest tick a cut came on (NONE: none since the map began) */
+static boolean interpolation_cut_pending;
+static long interpolation_cut_tick = NONE;
 static long interpolation_frame;
 static boolean interpolation_rendering;
 #ifdef HALO_PORT_RAGDOLLS
@@ -555,9 +571,13 @@ void render_interpolation_tick(void)
 	struct object_iterator iterator;
 	struct object_datum *object;
 	long previous_tick = interpolation_tick++;
+	boolean cut = interpolation_cut_pending;
 
+	interpolation_cut_pending = FALSE;
 	if (!halo_interpolation_enabled())
 		return;
+	if (cut)
+		interpolation_cut_tick = interpolation_tick;
 	/* the cameras' corrections a tick on, as the objects' (below) */
 	{
 		short local_player_index;
@@ -635,9 +655,11 @@ void render_interpolation_tick(void)
 			record->node_capacity = node_count;
 			record->object_index = NONE; /* the old snapshots moved */
 		}
+		/* (none at a cut: the new shot is drawn as it is) */
 		continuing = record->object_index == iterator.index &&
 			record->node_count == node_count &&
-			record->tick == previous_tick;
+			record->tick == previous_tick &&
+			!cut;
 		if (continuing)
 		{
 			record->latest ^= 1;
@@ -716,7 +738,17 @@ void render_interpolation_reset(void)
 	{
 		interpolated_first_person[index].node_count = 0;
 		interpolated_first_person[index].has_previous = FALSE;
+		interpolated_first_person[index].cut = FALSE;
 	}
+	interpolation_cut_pending = FALSE;
+	interpolation_cut_tick = NONE;
+}
+
+/* the scripts cut to a new shot in the tick being simulated
+(camera_scripting.c): its snapshots are drawn as they are */
+void render_interpolation_cut(void)
+{
+	interpolation_cut_pending = TRUE;
 }
 
 /* ---------- frames */
@@ -1769,7 +1801,10 @@ static struct observer_result const *render_interpolation_blended_camera(
 		camera->latest_time = timed ? now : (double)interpolation_tick;
 		camera->timed = timed;
 #endif
-		camera->has_previous = camera->valid;
+		/* (none from before a cut the scripts made since the last snapshot:
+		OpenCE's render_interpolation_cut) */
+		camera->has_previous = camera->valid &&
+			!(interpolation_cut_tick != NONE && interpolation_cut_tick > camera->tick);
 		camera->previous = camera->latest;
 		camera->latest = *observer;
 #ifndef HALO_CONSOLE_VIEW_INTERPOLATION
@@ -1952,6 +1987,17 @@ static struct observer_result const *render_interpolation_blended_camera(
 
 /* ---------- first-person weapon */
 
+/* the game started a local player's first-person animation without blending
+into it, in the tick being simulated (first_person_weapon_set_state: a melee,
+the weapon readied or overheated): the pose cuts to the animation's first
+frame, as on the Xbox. Blended, the shotgun's melee swept the gun and the arm
+across the view, from where they were held to where the swing begins. */
+void render_interpolation_first_person_cut(short local_player_index)
+{
+	if (local_player_index >= 0 && local_player_index < MAXIMUM_LOCAL_PLAYERS)
+		interpolated_first_person[local_player_index].cut = TRUE;
+}
+
 /* The first-person weapon and hands are posed in world space from the drawn
 camera each frame, from animation state that changes once a tick: blend the
 pose relative to the camera. */
@@ -1981,16 +2027,20 @@ void render_interpolation_first_person(
 	matrix4x3_inverse(&camera_matrix, &inverse_camera);
 	if (first_person->tick != interpolation_tick ||
 		first_person->weapon_index != weapon_index ||
-		first_person->animation_graph_index != animation_graph_index)
+		first_person->animation_graph_index != animation_graph_index ||
+		first_person->cut)
 	{
 		/* the pose drawn last, if that was at the end of the tick just
 		before: not one left from before the view was last away from first
-		person (zoomed, in a vehicle, dead, in a cinematic), seconds old, and
-		not another weapon's or skeleton's (of as many nodes) */
+		person (zoomed, in a vehicle, dead, in a cinematic), seconds old, not
+		another weapon's or skeleton's (of as many nodes), and not one the
+		game cut from */
 		first_person->has_previous = first_person->tick == interpolation_tick - 1 &&
 			first_person->node_count == node_count &&
 			first_person->weapon_index == weapon_index &&
-			first_person->animation_graph_index == animation_graph_index;
+			first_person->animation_graph_index == animation_graph_index &&
+			!first_person->cut;
+		first_person->cut = FALSE;
 		memcpy(first_person->previous, first_person->latest, sizeof(first_person->previous));
 		first_person->tick = interpolation_tick;
 		first_person->weapon_index = weapon_index;
