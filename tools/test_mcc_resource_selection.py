@@ -53,9 +53,9 @@ def build_resource_tool(work, android=False):
     if android:
         # (the same driver as Android builds it: its host hash jobs in play)
         (work / 'android.c').write_text('#define HALO_ANDROID 1\n#include "driver.c"\n')
-        return compile_tool(work, [work / 'android.c', work / 'identity.c', package, GAME / 'mcc_sha256.c',
+        return compile_tool(work, [work / 'android.c', work / 'identity.c', package, GAME / 'content_sha256.c',
                                   work / 'crc.c'])
-    return compile_tool(work, [work / 'driver.c', work / 'identity.c', package, GAME / 'mcc_sha256.c',
+    return compile_tool(work, [work / 'driver.c', work / 'identity.c', package, GAME / 'content_sha256.c',
                               work / 'crc.c'])
 
 

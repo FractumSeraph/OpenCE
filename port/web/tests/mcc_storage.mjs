@@ -36,7 +36,7 @@ try {
   const compile = spawnSync(process.env.WEB_EMCC || 'emcc', [
     'port/web/tests/mcc_storage_test.c', 'port/web/src/web_mcc_storage.c',
     'port/linux/game/mcc_share_stage.c', 'port/linux/game/mcc_share_rules.c',
-    'port/linux/game/mcc_sha256.c', 'port/linux/src/posix_mcc_share.c',
+    'port/linux/game/content_sha256.c', 'port/linux/src/posix_mcc_share.c',
     '-Iport/web/src', '-Iport/linux/game', '-Iport/linux/src', '-DHALO_WEB=1',
     '-DWEB_MCC_STORAGE_WAIT_MS=mcc_storage_test_wait_ms()', '-include', timeoutDeclaration,
     '-std=gnu89', '-O1', '-pthread', '-sPROXY_TO_PTHREAD=1', '-sPTHREAD_POOL_SIZE=5',

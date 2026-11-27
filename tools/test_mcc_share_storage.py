@@ -182,7 +182,7 @@ def storage_tool(tmp_path_factory):
     source.write_text(DRIVER + "\n" + parser)
     filesystem = ROOT / "port/windows/src/win32_files.c" if sys.platform == "win32" else SRC / "posix_files.c"
     sources = [source, GAME / "mcc_share_storage.c", GAME / "mcc_share_stage.c",
-               GAME / "mcc_share_rules.c", GAME / "mcc_package.c", GAME / "mcc_sha256.c",
+               GAME / "mcc_share_rules.c", GAME / "mcc_package.c", GAME / "content_sha256.c",
                SRC / "posix_mcc_share.c", filesystem]
     # (port, this fork: ChupathingyCE's posix_files.c describes code addresses
     # with dladdr, which glibc declares with _GNU_SOURCE, as tools/linux_build.py has it)

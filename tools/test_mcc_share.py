@@ -11,7 +11,7 @@ from mcc_test_support import compile_tool
 ROOT = Path(__file__).resolve().parents[1]
 GAME = ROOT / "port/linux/game"
 SOURCES = [ROOT / "tools/tests/mcc_share_session.c", GAME / "mcc_share_stage.c", GAME / "mcc_share_session.c",
-           GAME / "mcc_share_list.c", GAME / "mcc_share_rules.c", GAME / "mcc_package.c", GAME / "mcc_sha256.c",
+           GAME / "mcc_share_list.c", GAME / "mcc_share_rules.c", GAME / "mcc_package.c", GAME / "content_sha256.c",
            ROOT / "port/linux/src/posix_mcc_share.c"]
 CASES = ["list", "admit", "manifest", "redirect", "stage_cancel", "stage_hash_and_size", "stage_exists",
          "stage_install", "stage_race", "stage_move_failure", "stage_names", "transfer", "rate", "cancel",

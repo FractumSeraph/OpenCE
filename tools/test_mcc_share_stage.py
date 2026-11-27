@@ -17,7 +17,7 @@ def stage_tool(tmp_path_factory):
         ROOT / "port/linux/game/mcc_share_stage.c",
         ROOT / "port/linux/game/mcc_share_rules.c",
         ROOT / "port/linux/game/mcc_package.c",
-        ROOT / "port/linux/game/mcc_sha256.c",
+        ROOT / "port/linux/game/content_sha256.c",
         ROOT / "port/linux/src/posix_mcc_share.c",
     ])
 

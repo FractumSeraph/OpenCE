@@ -103,7 +103,7 @@ def metadata_tool(tmp_path_factory):
     sources = [work / "driver.c", SRC / "mcc_share_metadata.c", SRC / "mcc_preview_image.c",
                SRC / "mcc_menu_metadata.c", SRC / "posix_mcc_preview.c", SRC / "mcc_manifest.c",
                SRC / "server_json.c", SRC / "steam_workshop.c",
-               ROOT / "port/linux/game/mcc_sha256.c", files, *sorted(ZLIB.glob("*.c"))]
+               ROOT / "port/linux/game/content_sha256.c", files, *sorted(ZLIB.glob("*.c"))]
     result = subprocess.run([compiler, *flags, "-std=gnu11", "-DZ_PREFIX", "-I", str(SRC), "-I", str(ZLIB),
                              *map(str, sources), "-o", str(exe)], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
