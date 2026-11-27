@@ -62,7 +62,7 @@ static int mcc_resources_host_fingerprint(struct mcc_runtime *runtime,unsigned c
 
 struct mcc_resource_check {
     struct mcc_runtime runtime;
-    struct mcc_sha256 hash;
+    struct content_sha256 hash;
     uint32_t crc, offset, size;
     unsigned type, mask;
     int framed;
@@ -208,8 +208,8 @@ struct mcc_resource_check *mcc_resources_check_begin_candidate(char const *name,
         if (usable && check->host_paths[0][0]) check->host_job=-1;
     }
 #endif
-    mcc_sha256_begin(&check->hash);
-    mcc_sha256_add(&check->hash,"GulchCE MCC content v1",sizeof("GulchCE MCC content v1")-1);
+    content_sha256_begin(&check->hash);
+    content_sha256_add(&check->hash,"GulchCE MCC content v1",sizeof("GulchCE MCC content v1")-1);
     return check;
 failed:
     if (reason && size) snprintf(reason,size,"%s",check->runtime.failure[0] ?
@@ -277,7 +277,7 @@ int mcc_resources_check_step(struct mcc_resource_check *check, uint32_t *checksu
                 check->crc=(uint32_t)crc32(check->crc,buffer,(uInt)bytes);
             } else if (!check->runtime.source.read(check->runtime.source.context,
                 check->offset,bytes,buffer)) return -1;
-            mcc_sha256_add(&check->hash,buffer,(int)bytes);
+            content_sha256_add(&check->hash,buffer, bytes);
             check->offset+=bytes;
             spent+=bytes;
         }
@@ -290,7 +290,7 @@ int mcc_resources_check_step(struct mcc_resource_check *check, uint32_t *checksu
             if (check->type>2) {
                 *checksum=check->crc;
                 if (!*checksum) *checksum=1;
-                mcc_sha256_end(&check->hash,digest);
+                content_sha256_end(&check->hash,digest);
                 return 1;
             }
             check->offset=0;

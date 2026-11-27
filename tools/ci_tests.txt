@@ -39,6 +39,8 @@ tools/test_console_meter_stages.py
 tools/test_console_packager.py
 tools/test_console_shell.py
 tools/test_console_structure_culling.py
+tools/test_content_golden.py
+tools/test_content_map_probe.py
 tools/test_coop_level_prompt.py
 tools/test_coop_spectate.py
 tools/test_crash_null_call.py
@@ -76,6 +78,7 @@ tools/test_host_console_objects.py
 tools/test_host_evidence.py
 tools/test_host_fuzz.py
 tools/test_http_url_rules.py
+tools/test_hud_counter_alignment.py
 tools/test_hud_mcc_layout.py
 tools/test_hud_safe_zone.py
 tools/test_identity.py
@@ -105,6 +108,7 @@ tools/test_map_host_download.py
 tools/test_map_installed.py
 tools/test_map_list_view.py
 tools/test_map_name.py
+tools/test_map_pack_folders.py
 tools/test_map_packs.py
 tools/test_map_put_in_place.py
 tools/test_map_repo.py
@@ -134,6 +138,7 @@ tools/test_mcc_projectiles.py
 tools/test_mcc_recordings.py
 tools/test_mcc_score_hint.py
 tools/test_mcc_seats.py
+tools/test_mcc_sha256_shim.py
 tools/test_mcc_share_decline.py
 tools/test_mcc_skulls.py
 tools/test_mcc_validation.py
@@ -176,6 +181,7 @@ tools/test_server_control.py
 tools/test_server_mcc_playable.py
 tools/test_server_monitor.py
 tools/test_server_roles.py
+tools/test_settings_generated.py
 tools/test_settings_layout.py
 tools/test_settings_pages.py
 tools/test_social.py

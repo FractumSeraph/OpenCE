@@ -1529,7 +1529,8 @@ void unit_set_enterable_by_player(
 	long unit_index,
 	boolean enterable_by_player)
 {
-	if (unit_index!=NONE)
+	/* port: a unit deleted since the script had it is none (#1861) */
+	if (object_try_and_get(unit_index))
 	{
 		struct unit_datum *unit = unit_get(unit_index);
 		SET_FLAG(unit->unit.flags, _unit_not_enterable_by_player_bit, !enterable_by_player);
@@ -1542,7 +1543,8 @@ void unit_aim_without_turning(
 	long unit_index,
 	boolean aim_without_turning)
 {
-	if (unit_index!=NONE)
+	/* port: a unit deleted since the script had it is none (#1861) */
+	if (object_try_and_get(unit_index))
 	{
 		struct unit_datum *unit = unit_get(unit_index);
 		SET_FLAG(unit->unit.flags, _unit_aim_without_turning_bit, aim_without_turning);
@@ -1577,7 +1579,8 @@ void unit_scripting_can_blink(
 	long unit_index,
 	boolean can_blink)
 {
-	if (unit_index!=NONE)
+	/* port: a unit deleted since the script had it is none (#1861) */
+	if (object_try_and_get(unit_index))
 	{
 		struct unit_datum *unit = unit_get(unit_index);
 
@@ -1591,7 +1594,8 @@ void unit_set_desired_flashlight_state(
 	long unit_index,
 	boolean desired_state)
 {
-	if (unit_index!=NONE)
+	/* port: a unit deleted since the script had it is none (#1861) */
+	if (object_try_and_get(unit_index))
 	{
 		struct unit_datum *unit = unit_get(unit_index);
 
@@ -1700,7 +1704,8 @@ long unit_scripting_unit_riders(
 {
 	long object_list_index = NONE;
 
-	if (unit_index!=NONE)
+	/* port: a unit deleted since the script had it is none (#1861) */
+	if (object_try_and_get(unit_index))
 	{
 		struct unit_datum *unit = unit_get(unit_index);
 
@@ -1739,7 +1744,8 @@ boolean unit_scripting_vehicle_test_seat_list(
 {
 	boolean result = FALSE;
 
-	if (vehicle_index!=NONE)
+	/* port: a vehicle deleted since the script had it is none (#1861) */
+	if (object_try_and_get(vehicle_index))
 	{
 		short seat_index;
 		struct unit_datum *vehicle = unit_get(vehicle_index);
@@ -1794,7 +1800,8 @@ boolean unit_scripting_vehicle_test_seat(
 {
 	boolean result = FALSE;
 
-	if (vehicle_index!=NONE && unit_index!=NONE)
+	/* port: a vehicle or unit deleted since the script had it is none (#1861) */
+	if (object_try_and_get(vehicle_index) && object_try_and_get(unit_index))
 	{
 		short seat_index;
 		struct unit_datum *vehicle = unit_get(vehicle_index);
@@ -2373,7 +2380,8 @@ void unit_scripting_set_emotion_animation(
 	long unit_index,
 	char const *animation_name)
 {
-	if (unit_index!=NONE)
+	/* port: a unit deleted since the script had it is none (#1861) */
+	if (object_try_and_get(unit_index))
 	{
 		struct unit_datum *unit = unit_get(unit_index);
 		short animation_index = animation_graph_get_animation_by_name(unit->object.animation.animation_graph_index, animation_name);
@@ -2397,7 +2405,8 @@ void unit_scripting_suspended(
 {
 	/* port: co-op players the scripts can't name go with player0 */
 	coop_scripts_suspend_followers(unit_index, suspended);
-	if (unit_index!=NONE)
+	/* port: a unit deleted since the script had it is none (#1861) */
+	if (object_try_and_get(unit_index))
 	{
 		struct unit_datum *unit = unit_get(unit_index);
 
@@ -3858,7 +3867,8 @@ void unit_scripting_set_seat(
 	long unit_index,
 	char const *seat_label)
 {
-	if (unit_index!=NONE)
+	/* port: a unit deleted since the script had it is none (#1861) */
+	if (object_try_and_get(unit_index))
 	{
 		struct unit_datum *unit = unit_get(unit_index);
 		unit->unit.magic_seat_index = seat_label_to_base_seat_index(seat_label);
@@ -4182,7 +4192,8 @@ boolean unit_get_current_flashlight_state(
 {
 	boolean flashlight_on = FALSE;
 
-	if (unit_index!=NONE)
+	/* port: a unit deleted since the script had it is none (#1861) */
+	if (object_try_and_get(unit_index))
 	{
 		flashlight_on = TEST_FLAG(unit_get(unit_index)->unit.flags, _unit_integrated_light_on_bit);
 	}
@@ -4270,7 +4281,8 @@ void unit_set_emotion(
 	long unit_index,
 	word emotion_index)
 {
-	if (unit_index!=NONE)
+	/* port: a unit deleted since the script had it is none (#1861) */
+	if (object_try_and_get(unit_index))
 	{
 		unit_get(unit_index)->unit.animation.emotion_index = emotion_index;
 		object_start_interpolation(unit_index, 6);
@@ -4282,7 +4294,8 @@ void unit_set_emotion(
 boolean unit_is_playing_custom_animation(
 	long unit_index)
 {
-	if (unit_index!=NONE)
+	/* port: a unit deleted since the script had it is none (#1861) */
+	if (object_try_and_get(unit_index))
 	{
 		return unit_get(unit_index)->unit.animation.state==_unit_state_user_animation;
 	}
@@ -4293,7 +4306,8 @@ boolean unit_is_playing_custom_animation(
 short unit_get_custom_animation_time(
 	long unit_index)
 {
-	if (unit_index!=NONE)
+	/* port: a unit deleted since the script had it is none (#1861) */
+	if (object_try_and_get(unit_index))
 	{
 		struct unit_datum *unit = unit_get(unit_index);
 
@@ -4316,7 +4330,8 @@ boolean unit_start_user_animation(
 {
 	boolean animation_started = FALSE;
 
-	if (unit_index != NONE)
+	/* port: a unit deleted since the script had it is none (#1861) */
+	if (object_try_and_get(unit_index))
 	{
 		if (animation_graph_index != NONE)
 		{
@@ -4452,7 +4467,8 @@ boolean unit_flying_through_air(
 void unit_stop_custom_animation(
 	long unit_index)
 {
-	if (unit_index!=NONE && unit_get(unit_index)->unit.animation.state==_unit_state_user_animation)
+	/* port: a unit deleted since the script had it is none (#1861) */
+	if (object_try_and_get(unit_index) && unit_get(unit_index)->unit.animation.state==_unit_state_user_animation)
 	{
 		unit_animation_set_state(unit_index, _unit_state_idle);
 		network_coop_note_unit_animation(unit_index, NONE, NONE, FALSE);
@@ -5023,7 +5039,8 @@ void unit_scripting_enter_vehicle(
 	long vehicle_index,
 	char const *seat_name)
 {
-	if (unit_index!=NONE && vehicle_index!=NONE && csstrlen(seat_name)>0)
+	/* port: a unit or vehicle deleted since the script had it is none (#1861) */
+	if (object_try_and_get(unit_index) && object_try_and_get(vehicle_index) && csstrlen(seat_name)>0)
 	{
 		struct unit_datum *unit = unit_get(unit_index);
 
@@ -5137,7 +5154,8 @@ short vehicle_scripting_unload(
 {
 	long unloaded_count = 0;
 
-	if (vehicle_index!=NONE)
+	/* port: a vehicle deleted since the script had it is none (#1861) */
+	if (object_try_and_get(vehicle_index))
 	{
 		struct unit_datum *vehicle = unit_get(vehicle_index);
 		struct unit_definition *vehicle_definition = unit_definition_get(vehicle->definition_index);
@@ -5177,7 +5195,8 @@ short vehicle_scripting_unload(
 void unit_scripting_exit_vehicle(
 	long unit_index)
 {
-	if (unit_index!=NONE)
+	/* port: a unit deleted since the script had it is none (#1861) */
+	if (object_try_and_get(unit_index))
 	{
 		struct unit_datum *unit = unit_get(unit_index);
 		long vehicle_index = unit->object.parent_object_index;
@@ -5613,7 +5632,8 @@ short vehicle_scripting_load_magic(
 {
 	long loaded_count = 0;
 
-	if (vehicle_index!=NONE)
+	/* port: a vehicle deleted since the script had it is none (#1861) */
+	if (object_try_and_get(vehicle_index))
 	{
 		struct unit_datum *vehicle = unit_get(vehicle_index);
 		struct unit_definition *vehicle_definition = unit_definition_get(vehicle->definition_index);
@@ -5637,9 +5657,10 @@ short vehicle_scripting_load_magic(
 
 		while (unit_index!=NONE)
 		{
-			struct object_datum *object = object_get(unit_index);
+			/* port: a listed object deleted since is passed over (#1861) */
+			struct object_datum *object = object_try_and_get(unit_index);
 
-			if (TEST_FLAG(_object_mask_unit, object->object.type) &&
+			if (object && TEST_FLAG(_object_mask_unit, object->object.type) &&
 				!TEST_FLAG(vehicle->object.damage_flags, _object_dead_bit))
 			{
 				struct unit_datum *unit = (struct unit_datum *)object;
@@ -5705,7 +5726,7 @@ short vehicle_scripting_load_magic(
 			unit_index != NONE;
 			unit_index = object_list_get_next(object_list_index, &reference_index))
 		{
-			if (object_get(unit_index)->object.parent_object_index == vehicle_index)
+			if (object_try_and_get(unit_index) && object_get(unit_index)->object.parent_object_index == vehicle_index)
 				coop_scripts_board_followers(unit_index, vehicle_index, seat_name);
 		}
 	}
@@ -5716,7 +5737,8 @@ short vehicle_scripting_load_magic(
 void unit_open(
 	long unit_index)
 {
-	if (unit_index!=NONE)
+	/* port: a unit deleted since the script had it is none (#1861) */
+	if (object_try_and_get(unit_index))
 	{
 		network_coop_note_unit_open(unit_index, TRUE);
 		unit_animation_set_state(unit_index, _unit_state_opening);
@@ -5728,7 +5750,8 @@ void unit_open(
 void unit_close(
 	long unit_index)
 {
-	if (unit_index!=NONE)
+	/* port: a unit deleted since the script had it is none (#1861) */
+	if (object_try_and_get(unit_index))
 	{
 		network_coop_note_unit_open(unit_index, FALSE);
 		unit_animation_set_state(unit_index, _unit_state_closing);

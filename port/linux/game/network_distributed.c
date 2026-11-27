@@ -1121,22 +1121,6 @@ void distributed_vector_unpack(
 	result->k = (real)vector->k / scale;
 }
 
-void distributed_unit_vector_unpack(
-	struct distributed_vector const *vector,
-	real_vector3d *result)
-{
-	real length;
-
-	distributed_vector_unpack(vector, DISTRIBUTED_UNIT_SCALE, result);
-	length = (real)sqrt(result->i * result->i + result->j * result->j + result->k * result->k);
-	if (length > 0.0f)
-	{
-		result->i /= length;
-		result->j /= length;
-		result->k /= length;
-	}
-}
-
 word distributed_vitality_pack(
 	real value)
 {
@@ -8542,7 +8526,7 @@ void *distributed_wire_copy(
 }
 #endif
 
-#if defined(HALO_BIG_ENDIAN) || defined(HALO_NETWORK_WIRE_CAPTURE)
+#ifdef HALO_NETWORK_WIRE_SAMPLES
 /* ---------- the wire's samples (network_distributed.h)
 
 Every kind of message the byte order turns, filled field by field with
@@ -9124,4 +9108,17 @@ long network_wire_self_test(
 	return failed;
 }
 #endif
+#endif
+
+#if defined(HALO_BIG_ENDIAN) && !defined(HALO_NETWORK_WIRE_SAMPLES)
+/* the self-test without its samples, which are a developer tool on a
+big-endian build (--console-debug-tools): none compared, none failed */
+long network_wire_self_test(
+	char *report,
+	long report_size)
+{
+	if (report_size > 0)
+		snprintf(report, (size_t)report_size, "not checked (debug tools only)");
+	return 0;
+}
 #endif

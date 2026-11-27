@@ -40,13 +40,11 @@ and the debug keyboard that the game's console reads.
 #include "../game/text_filter.h"
 #include "launcher.h"
 #include "vrr.h"
-#ifndef HALO_MCC
-#include "../include/halo_port_features.h"
-#endif
+#include "map_pack_folders.h"
 /* (MCC's multiplayer set copied from maps_ce when it is the same:
-data_download; mcc_sha256.c is built where MCC or Custom Edition maps are) */
-#if !defined(HALO_ANDROID) && !defined(HALO_WEB) && (!defined(HALO_MCC) || HALO_MCC || defined(HALO_CUSTOM_EDITION))
-#include "../game/mcc_sha256.h"
+data_download; the game's one SHA-256, content_sha256.c) */
+#if !defined(HALO_ANDROID) && !defined(HALO_WEB)
+#include "../game/content_sha256.h"
 #define DATA_DOWNLOAD_SHA256 1
 #endif
 
@@ -1294,18 +1292,18 @@ static BOOL data_parse_sha256(const char *text, unsigned char digest[32])
 static BOOL data_file_matches(const char *path, unsigned long long size, const unsigned char digest[32])
 {
 	static unsigned char buffer[1 << 16];
-	struct mcc_sha256 hash;
+	struct content_sha256 hash;
 	unsigned char actual[32];
 	size_t read;
 	FILE *file;
 
 	if (data_file_size(path) != (long long)size || !(file = fopen(path, "rb")))
 		return FALSE;
-	mcc_sha256_begin(&hash);
+	content_sha256_begin(&hash);
 	while ((read = fread(buffer, 1, sizeof(buffer), file)) > 0)
-		mcc_sha256_add(&hash, buffer, (int)read);
+		content_sha256_add(&hash, buffer, (int)read);
 	fclose(file);
-	mcc_sha256_end(&hash, actual);
+	content_sha256_end(&hash, actual);
 	return !memcmp(actual, digest, 32);
 }
 
@@ -1850,13 +1848,16 @@ static BOOL data_make_folders(const char *destination)
 		snprintf(path, sizeof(path), "%s/%s", destination, folders[index]);
 		posix_make_directory(path);
 	}
+	/* (and the map packs' folders, each with its README.txt) */
+	map_pack_folders_make(destination);
 	platform_log("made the maps folders in %s", destination);
 	snprintf(message, sizeof(message),
 		"The folders are in %s:\n\n"
 		"maps: the Xbox maps, with ui.map. Required.\n"
 		"maps_ce: Custom Edition maps, with bitmaps.map, sounds.map and loc.map.\n"
 		"maps_pc: the maps from your Halo PC disc.\n"
-		"maps_md: HaloMD maps.\n\n"
+		"maps_md: HaloMD maps.\n"
+		"maps_cex, maps_spv3, maps_mcc: Halo CE+ Xbox, SPV3 and Halo MCC maps. Each has a README.txt.\n\n"
 		"Put the files in, then choose Check again.",
 		destination);
 	for (;;)

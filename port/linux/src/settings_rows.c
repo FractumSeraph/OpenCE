@@ -207,6 +207,9 @@ static const struct settings_row settings_rows[] =
 	  reticle_size_names, 0, 0 },
 	{ _in_display | _in_guide, "CROSSHAIR", "display.crosshair_position", _kind_choices, crosshair_position_choices,
 	  crosshair_position_names, 0, 0 },
+	/* (port, this fork: ChupathingyCE's row, lost in an earlier merge while
+	the Display page kept listing it) */
+	{ _in_display | _in_guide, "WEAPON MODEL", "display.first_person_weapon", _kind_toggle, NULL, NULL, 0, 0 },
 
 #ifdef HALO_LAUNCHER
 	{ _in_audio, "OUTPUT", "audio.output_device", _kind_audio_devices, NULL, NULL, 1, 0 },

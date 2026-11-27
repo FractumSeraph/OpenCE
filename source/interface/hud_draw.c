@@ -701,6 +701,88 @@ static boolean hud_point_sampled(
 		xy_scale->j == 1.0f;
 }
 
+/* the rasterizer's combine for a multitexture overlay's blending function */
+static short hud_multitexture_blend_code(
+	short blending_function)
+{
+	switch (blending_function)
+	{
+	case _hud_multitexture_overlay_blend_function_add:
+		return _shader_framebuffer_blend_function_alpha_blend;
+	case _hud_multitexture_overlay_blend_function_subtract:
+		return _shader_framebuffer_blend_function_double_multiply;
+	case _hud_multitexture_overlay_blend_function_multiply:
+		return _shader_framebuffer_blend_function_multiply;
+	case _hud_multitexture_overlay_blend_function_multiply2x:
+		return _shader_framebuffer_blend_function_add;
+	case _hud_multitexture_overlay_blend_function_dot:
+		return _shader_framebuffer_blend_function_subtract;
+	}
+	return _shader_framebuffer_blend_function_alpha_blend;
+}
+
+#ifdef HALO_CUSTOM_EDITION
+#include "opensauce.h"
+
+/* port: Halo PC picks the pixel shader of a three map overlay from a list of
+its 25 pairs of blending functions (add, dot, multiply, multiply 2x, subtract
+for each of the two), but one place too early: it draws the pair before the
+one the tag asks for, and for add then add the first map alone. Chimera
+fixes the order for every map and keeps Halo PC's order only for a list of
+older Custom Edition maps (matched by name and tag checksum). OpenSauce maps
+(SPV3's) were made against Halo PC's order, so we keep it for them: their
+overlays are drawn with the pair Halo PC draws (SPV3's dynamic reticles drew
+a flat square at the crosshair with the pair asked for). FALSE, and the overlay drawn as the Xbox draws it, for any
+other map. Two map overlays are left as they are: Halo PC's second pair
+there reads a texture stage nothing set. */
+static boolean hud_multitexture_overlay_gearbox_pair(
+	short const blending_function[2],
+	short pc_blending_function[2],
+	boolean *first_map_only)
+{
+	/* each blending function's place in Halo PC's list, and back */
+	static short const place[NUMBER_OF_HUD_MULTITEXTURE_OVERLAY_BLEND_FUNCTIONS] =
+	{
+		0, /* add */
+		4, /* subtract */
+		2, /* multiply */
+		3, /* multiply 2x */
+		1, /* dot */
+	};
+	static short const function_at[NUMBER_OF_HUD_MULTITEXTURE_OVERLAY_BLEND_FUNCTIONS] =
+	{
+		_hud_multitexture_overlay_blend_function_add,
+		_hud_multitexture_overlay_blend_function_dot,
+		_hud_multitexture_overlay_blend_function_multiply,
+		_hud_multitexture_overlay_blend_function_multiply2x,
+		_hud_multitexture_overlay_blend_function_subtract,
+	};
+	static boolean logged = FALSE;
+	short pair;
+
+	if (!opensauce_map_active() ||
+		blending_function[0] < 0 || blending_function[0] >= NUMBER_OF_HUD_MULTITEXTURE_OVERLAY_BLEND_FUNCTIONS ||
+		blending_function[1] < 0 || blending_function[1] >= NUMBER_OF_HUD_MULTITEXTURE_OVERLAY_BLEND_FUNCTIONS)
+	{
+		return FALSE;
+	}
+	if (!logged)
+	{
+		logged = TRUE;
+		error(_error_silent, "OpenSauce map: HUD multitexture overlays drawn with Halo PC's blending functions");
+	}
+	pair = place[blending_function[0]] * NUMBER_OF_HUD_MULTITEXTURE_OVERLAY_BLEND_FUNCTIONS +
+		place[blending_function[1]] - 1;
+	*first_map_only = pair < 0;
+	if (pair >= 0)
+	{
+		pc_blending_function[0] = function_at[pair / NUMBER_OF_HUD_MULTITEXTURE_OVERLAY_BLEND_FUNCTIONS];
+		pc_blending_function[1] = function_at[pair % NUMBER_OF_HUD_MULTITEXTURE_OVERLAY_BLEND_FUNCTIONS];
+	}
+	return TRUE;
+}
+#endif
+
 static void hud_draw_multitexture_overlay(
 	struct multitexture_overlay_hud_element_definition const *overlay,
 	short local_player_index,
@@ -852,33 +934,8 @@ static void hud_draw_multitexture_overlay(
 			};
 
 			/* port: (Halo PC's, on the maps that rely on it) */
-			switch (hud_multitexture_overlay_blend_function(overlay->map_blending_function[map_index]))
-			{
-			case _hud_multitexture_overlay_blend_function_add:
-				*out_modes[map_index] =
-					_shader_framebuffer_blend_function_alpha_blend;
-				break;
-
-			case _hud_multitexture_overlay_blend_function_subtract:
-				*out_modes[map_index] =
-					_shader_framebuffer_blend_function_double_multiply;
-				break;
-
-			case _hud_multitexture_overlay_blend_function_multiply:
-				*out_modes[map_index] =
-					_shader_framebuffer_blend_function_multiply;
-				break;
-
-			case _hud_multitexture_overlay_blend_function_multiply2x:
-				*out_modes[map_index] =
-					_shader_framebuffer_blend_function_add;
-				break;
-
-			case _hud_multitexture_overlay_blend_function_dot:
-				*out_modes[map_index] =
-					_shader_framebuffer_blend_function_subtract;
-				break;
-			}
+			*out_modes[map_index] = hud_multitexture_blend_code(
+				hud_multitexture_overlay_blend_function(overlay->map_blending_function[map_index]));
 		}
 		else
 		{
@@ -1072,13 +1129,41 @@ static void hud_draw_multitexture_overlay(
 		}
 	}
 
-	/* port: Halo PC adds a Halo PC map's overlay's color weighted by its
-	alpha, where those overlays keep their shape (bigass_v3's dynamic DMR
-	reticle added its whole square): for this draw alone (OpenCE's) */
-	rasterizer_screen_quad_alpha_weighted = cache_file_tags_are_ce() &&
-		parameters.framebuffer_blend_function == _shader_framebuffer_blend_function_add;
-	rasterizer_psuedo_dynamic_screen_quad_draw(&parameters, vertices);
-	rasterizer_screen_quad_alpha_weighted = FALSE;
+	/* port: an overlay without a first map has nothing to draw. The
+	rasterizer asserts it has one; without it the quad took whatever texture
+	and pixel shader the last screen quad left (CE+ Xbox's cex_overscan has
+	such an empty overlay: #1460) */
+#ifdef HALO_CUSTOM_EDITION
+	if (parameters.map[0] && parameters.map[1] && parameters.map[2])
+	{
+		short pc_blending_function[2];
+		boolean first_map_only = FALSE;
+
+		if (hud_multitexture_overlay_gearbox_pair(overlay->map_blending_function, pc_blending_function, &first_map_only))
+		{
+			if (first_map_only)
+			{
+				parameters.map[1] = NULL;
+				parameters.map[2] = NULL;
+			}
+			else
+			{
+				parameters.map0_to_1_blend_function = hud_multitexture_blend_code(pc_blending_function[0]);
+				parameters.map1_to_2_blend_function = hud_multitexture_blend_code(pc_blending_function[1]);
+			}
+		}
+	}
+#endif
+	if (parameters.map[0])
+	{
+		/* port: Halo PC adds a Halo PC map's overlay's color weighted by its
+		alpha, where those overlays keep their shape (bigass_v3's dynamic DMR
+		reticle added its whole square): for this draw alone (OpenCE's) */
+		rasterizer_screen_quad_alpha_weighted = cache_file_tags_are_ce() &&
+			parameters.framebuffer_blend_function == _shader_framebuffer_blend_function_add;
+		rasterizer_psuedo_dynamic_screen_quad_draw(&parameters, vertices);
+		rasterizer_screen_quad_alpha_weighted = FALSE;
+	}
 
 	match_assert_stack_frame("c:\\halo\\SOURCE\\interface\\hud_draw.c", 1372);
 

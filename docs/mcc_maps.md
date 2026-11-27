@@ -513,7 +513,10 @@ so a later native editor cannot be closed by stale MCC state.
 Campaign layouts display the scenario's current mission objectives through
 the native objective-text callback. Owned objective and confirmation text
 boxes wrap their instance copies using the current font's metrics and clip
-to their bounds. The map's objective data, custom HUD
+to their bounds. So does the objective's text box of an MCC map's own
+campaign pause screen (the one the Xbox and Chupathingy menus show), as MCC
+wraps it: a campaign's objective written as one long line ends on the next
+line instead of past the box's edge. The map's objective data, custom HUD
 and embedded widgets remain present. Scripts that explicitly open embedded
 widgets can still use the MCC callback adapter described below. The new
 pause labels and confirmation text are currently English; localization of
@@ -616,7 +619,7 @@ are not an MCC implementation dependency. The independent components are:
 | `port/linux/game/mcc_maps.c` | Catalog, display identities, names and descriptions. |
 | `port/linux/game/mcc_cache_format.c` | Portable little-endian version-13 reader and file-range audit. |
 | `port/linux/game/mcc_cache.c` | MCC path admission, read-only file lifetime, conversion and streaming dispatch. |
-| `port/linux/game/mcc_identity.c`, `mcc_sha256.c` and `mcc_precache.c` | SHA-256 session content checks, local package resolution and metadata-based readiness caching. |
+| `port/linux/game/mcc_identity.c`, `content_sha256.c` and `mcc_precache.c` | SHA-256 session content checks, local package resolution and metadata-based readiness caching. |
 | `port/linux/game/mcc_main.c` | MCC load-failure recovery through the native main-menu lifecycle. |
 | `port/linux/game/mcc_ui.c` and `mcc_ui_network.inl` | MCC in-map widget actions, settings routing, checkpoint/quit behavior and synchronized network restarts. |
 | `port/linux/game/mcc_pause.c` and `mcc_pause_runtime.c` | Generated stock-style pause layouts, objective display, independent UI art and atomic publication/lifetime of the appended tags. |
@@ -625,7 +628,7 @@ are not an MCC implementation dependency. The independent components are:
 | `port/linux/game/mcc_geometry.c` | New model descriptors, model vertex/index conversion, external BSP vertex streams and node palettes. |
 | `port/linux/game/mcc_audio.c` | MCC sound decoding, resampling and Xbox ADPCM encoding into an MCC virtual stream. |
 | `port/linux/game/mcc_resources.c` | MCC-only resource selection, dependency fingerprints, indexed reads and file lifetime. |
-| `port/linux/game/mcc_vorbis.c` | Private namespaced Vorbis decoder, bounded Ogg validation and empty residue vector compatibility. |
+| `port/linux/game/content_vorbis.c` (`mcc_vorbis_decode`) | MCC's Vorbis decoder over the game's one stb_vorbis: bounded Ogg validation and empty residue vector compatibility. |
 | `port/linux/game/mcc_bitmaps.c` | MCC pixel layout, BC7 decoding and shader/HUD channel normalization into an MCC virtual stream. |
 | `port/linux/game/mcc_texture_cache.c` and `port/linux/src/mcc_texture_bridge.c` | Direct bindings of checked MCC pixel allocations and lazy GPU textures, independent of the Xbox/CE staging cache. |
 | `port/linux/game/mcc_tags.c` | MCC metadata, shader-type, HUD placement and widget normalization. |
@@ -852,6 +855,25 @@ the selected button style and split-screen scaling. Low-resolution glyphs
 retain their existing geometry. Mercury Falling's pistol, ability counters
 and vehicle prompts exposed these separate cases; the rules do not depend
 on map or weapon names. Descent's custom layouts remain separate.
+
+With High-Res HUD on (`display.high_res_hud`, the default), an MCC map
+that uses MCC's stock HUD sheets draws the restored art the Xbox maps' HUD
+uses, laid out as MCC's sheets (`port/assets/hud/mcc`, made by
+`tools/hud_assets.py mcc-layout`). Each sheet is recognized as its map
+loads by its tag, bitmap index, size and the CRC-32 of its first mip level
+as the map stores it, before conversion (`hud_hires_tags.c`,
+`mcc_bitmaps.c`); a map's own art keeps its look whatever its tags are
+named. Cells the layout can't match surely, MCC's controller buttons among
+them, are copied from the map's own pixels into the texture. The health,
+shield and ammo meters use the Xbox maps' high-res meters, laid out as MCC's
+meter sheets (`tools/hud_assets.py mcc-meters`), with their exact segment
+thresholds and coverage. A meter sheet is replaced whole or not at all, so a
+meter never mixes MCC's pieces with ours. The unit HUD's sheets (its panels'
+backgrounds and their meters, `hud_unit_backgrounds` and `hud_unit_meters`)
+are replaced together: a map with one of them its own, as a campaign mod's
+`bitmaps.map` can have, keeps them all its own, so a vehicle's health panel
+never puts MCC's wrench beside ours. Turning High-Res HUD off restores MCC's
+sheets at once.
 
 The asset-free ownership and normalization cases in
 `tools/test_mcc_hud_normalization.py` exercise the whole converter, including

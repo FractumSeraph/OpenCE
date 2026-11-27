@@ -181,6 +181,9 @@ def main() -> int:
                         help="a server: build it in Alpine Linux's Docker container (musl, static)")
     parser.add_argument("--without-ragdolls", action="store_true",
                         help="without ragdolls and their Jolt Physics (configure.py --without-ragdolls)")
+    parser.add_argument("--window-rebase", action="store_true",
+                        help="windows: the Xbox memory window wherever it fits (configure.py --window-rebase), "
+                        "as Chupathingy32's Windows build has it")
     args = parser.parse_args()
     server = args.platform.startswith("server-")
     # (the repository whose releases are these builds, as GitHub names the one
@@ -215,6 +218,10 @@ def main() -> int:
         configure += ["--compiler-launcher", launcher]
     if args.without_ragdolls:
         configure.append("--without-ragdolls")
+    if args.window_rebase:
+        if args.platform != "windows":
+            parser.error("--window-rebase builds the 32-bit Windows build only")
+        configure.append("--window-rebase")
     # a fork's release (FractumSeraph/OpenCE: every push to its main, the
     # workflow's HALO_FORK_RELEASE): VERSION's with -fs.<run number>, five
     # digits, which the updater orders by its suffix (updater_newer); a

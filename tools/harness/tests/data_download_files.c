@@ -42,9 +42,10 @@ typedef int harness_mutex;
 #define pthread_mutex_unlock(lock) ((void)(lock))
 #define DATA_PATH_SEPARATOR "/"
 
-/* (the port's own SHA-256, which the game builds) */
+/* (the game's one SHA-256, which it builds: content_sha256.c, and its
+old names, mcc_sha256.h) */
 #define HALO_MCC 1
-#include "../../../port/linux/game/mcc_sha256.c"
+#include "../../../port/linux/game/content_sha256.c"
 #define DATA_DOWNLOAD_SHA256 1
 
 /* SDL's path information, from stat */

@@ -612,7 +612,7 @@
 		<string text="What the Server Browser lists and its order: the\nsame settings as its Filters screen."/>
 		<string text="What stats and reports are sent."/>
 		<string text="Check for a new version at startup."/>
-		<string text="Testing gets new features first and may have bugs. Going back waits for the next release."/>
+		<string text="Testing gets new features first and may have bugs.\nGoing back waits for the next release."/>
 		<string text="Download the new version. Chupathingy restarts."/>
 		<string text="Text chat with other players."/>
 		<string text="Choose whose chat lines show."/>

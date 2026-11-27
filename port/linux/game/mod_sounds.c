@@ -44,7 +44,7 @@ address space, and is stored as an Xbox address (XBOX_ADDRESS).
 
 From OpenCE (its commit 71bf206b, by MrBruh), with the Xbox ADPCM converter
 its Custom Edition maps' sounds use brought here (this build plays those
-otherwise) and Ogg Vorbis decoded by ce_vorbis.c.
+otherwise) and Ogg Vorbis decoded by content_vorbis.c.
 */
 
 /* ---------- headers */
@@ -67,7 +67,7 @@ otherwise) and Ogg Vorbis decoded by ce_vorbis.c.
 /* the game's (port) */
 char *tag_get_name(long tag_index);
 
-/* Halo PC's Ogg Vorbis decoded to 16-bit PCM (ce_vorbis.c) */
+/* Halo PC's Ogg Vorbis decoded to 16-bit PCM (content_vorbis.c) */
 int ce_vorbis_decode(const unsigned char *data, int size, int *channels, int *sample_rate, short **samples);
 void ce_vorbis_free(short *samples);
 
@@ -91,7 +91,7 @@ void ce_vorbis_free(short *samples);
 
 /* The most frames a permutation has at any stage (decoded, or brought to
 the rate the game plays): over six minutes at 44 kHz, and 64 MB of stereo
-samples, as ce_vorbis.c decodes no more. Every buffer of frames is sized
+samples, as content_vorbis.c decodes no more. Every buffer of frames is sized
 from a count within it (frames_allocate), so that count * channels * 2
 cannot wrap a 32-bit size_t */
 #define MAXIMUM_FRAMES 0x1000000L
@@ -341,7 +341,7 @@ static short *frames_allocate(
 }
 
 /* the Ogg Vorbis stream `data`, at its own channel count and rate
-(ce_vorbis.c, which refuses one of more than two channels or longer than
+(content_vorbis.c, which refuses one of more than two channels or longer than
 any sound as soon as that shows); FALSE when it cannot be decoded */
 static boolean vorbis_decode(
 	byte const *data,

@@ -231,7 +231,7 @@
 		<string text="The microphone voice chat listens to."/>
 		<string text="Stereo or surround. Takes effect on restart."/>
 		<string text="3D sound as on the Xbox. Turn off for speakers."/>
-		<string text="Room echo, and muffled sound behind walls."/>
+		<string text="Echo that matches the place you are in."/>
 		<string text="Pitch shift of moving sounds, as on the Xbox."/>
 		<string text="Shift stereo sounds' pitch as they come and go,\nas 3D sounds' is. The Xbox played them flat."/>
 		<string text="Xbox models the original sound. Sinc reduces\naliasing; linear gives a brighter sound."/>

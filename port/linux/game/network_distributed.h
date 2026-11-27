@@ -391,7 +391,6 @@ boolean distributed_axes_make_valid(real_vector3d *forward, real_vector3d *up);
 /* the vectors in 16 bits a part (struct distributed_vector) */
 void distributed_vector_pack(real_vector3d const *vector, real scale, struct distributed_vector *result);
 void distributed_vector_unpack(struct distributed_vector const *vector, real scale, real_vector3d *result);
-void distributed_unit_vector_unpack(struct distributed_vector const *vector, real_vector3d *result);
 #define DISTRIBUTED_UNIT_SCALE 32767.0f
 #define DISTRIBUTED_VELOCITY_SCALE 1024.0f
 #define DISTRIBUTED_ANGULAR_VELOCITY_SCALE 4096.0f
@@ -662,7 +661,16 @@ byte *distributed_wire_put(byte *cursor, void const *data, short size, short par
 boolean distributed_wire_take(byte const **cursor, byte const *end, void *data, short size, short part);
 #endif
 
-#if defined(HALO_BIG_ENDIAN) || defined(HALO_NETWORK_WIRE_CAPTURE)
+/* the wire's samples are in a little-endian build made to capture them
+(HALO_NETWORK_WIRE_CAPTURE) and in a big-endian one with its developer tools
+(HALO_CONSOLE_DEBUG_TOOLS, configure.py --console-debug-tools), whose
+network_wire_self_test compares them; a big-endian build without them has
+the self-test alone, which says so */
+#if defined(HALO_NETWORK_WIRE_CAPTURE) || (defined(HALO_BIG_ENDIAN) && defined(HALO_CONSOLE_DEBUG_TOOLS))
+#define HALO_NETWORK_WIRE_SAMPLES
+#endif
+
+#ifdef HALO_NETWORK_WIRE_SAMPLES
 /* ---------- the wire's samples (network_distributed.c's
 network_wire_self_test)
 
