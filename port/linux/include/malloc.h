@@ -17,4 +17,6 @@ which it includes (the native 64-bit Android build) */
 #define _alloca __builtin_alloca
 #define alloca __builtin_alloca
 
+size_t _msize(void *pointer);
+
 #endif

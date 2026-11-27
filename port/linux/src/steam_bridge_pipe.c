@@ -25,7 +25,7 @@ SPDX-License-Identifier: MIT
 #include <stdio.h>
 #include <string.h>
 
-#if defined(HALO_STEAM_CONTENT) && !defined(HALO_ANDROID)
+#if defined(HALO_STEAM_CONTENT) && !defined(HALO_ANDROID) && !defined(HALO_WEB)
 
 #include "steam_content/steam_content.h"
 #ifdef HALO_GAME_BROWSER

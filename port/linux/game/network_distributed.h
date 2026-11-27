@@ -467,6 +467,9 @@ later one: a client by its host's advertised version (one not known plays
 by the older rules, until its game settings record shows it is of 35 or
 later), a host by the number it announces (delta_legacy_announce) */
 boolean network_rules_of_version(unsigned int version);
+/* a client: the host's shield effects (0 stock to 6, message 91), stock
+until it says; this build draws stock whatever they are */
+short network_shield_effects(void);
 
 /* ---------- prototypes/NETWORK_CHAT.C */
 

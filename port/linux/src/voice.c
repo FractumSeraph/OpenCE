@@ -726,6 +726,13 @@ int voice_speaker_talking(unsigned long now, int speaker_machine)
 	return speaker && now - speaker->heard_time < VOICE_TALKING_TIME;
 }
 
+int voice_speaker_channel(int speaker_machine)
+{
+	struct speaker *speaker = speaker_of(speaker_machine, 0);
+
+	return speaker ? speaker->channel : 0;
+}
+
 void voice_reset(void)
 {
 	int index;

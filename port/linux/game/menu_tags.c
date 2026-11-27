@@ -2854,15 +2854,18 @@ static boolean network_coop_campaign_map(void)
 main menu's note says how to open DELTA instead, guide.c)
 
 With it, each main menu has DELTA (DELTA over it, on PARTY: a party started, friends
-invited, the party brought to a game): the row in
-chupathingy/main_menu.xml put in the Chupathingy menus' main menu list
-before QUIT here. The list is patched as the menus load, so a change shows
-the next time they do. The Xbox's main menu stays the Xbox's (its
+invited, the party brought to a game), in every menu set: the row in
+chupathingy/main_menu.xml put in the main menu's list before QUIT here, in
+the Chupathingy menus' and Gearbox's (its list is tools/ce_menus.py's, from
+the PC version's tags), and DELTA in Gearbox's Multiplayer button bar. The
+lists are patched as the menus load, so a change shows the next time they
+do. The Xbox's main menu stays the Xbox's (its
 rows are ui.map's pictures): there DELTA is the Multiplayer menu's row
 (ui_widget.c), the key and the Guide button. Not on the consoles (no DELTA
 there yet) nor with split screen's players (DELTA is the first player's). */
 
 #define DELTA_ROW "chupathingy/main_menu_delta"
+#define GEARBOX_MAIN_MENU_LIST "main_menu/main_menu_select_list"
 
 /* (delta.menu_item, as it is when the menus load: a change shows the
 next time they do) */
@@ -2914,12 +2917,13 @@ static boolean list_row_insert(struct ui_widget_definition *list, long at, long 
 	return TRUE;
 }
 
-/* the Chupathingy menus' main menu list: the DELTA row before QUIT */
+/* the main menu (Gearbox's or the Chupathingy menus' list): the DELTA row
+before QUIT */
 #define CHUPATHINGY_MAIN_MENU_LIST "chupathingy/main_menu_list"
 
 static void main_menu_delta_patch(void)
 {
-	long list = widget_named(CHUPATHINGY_MAIN_MENU_LIST);
+	long list = widget_named(menus_chosen() == _menus_chupathingy ? CHUPATHINGY_MAIN_MENU_LIST : GEARBOX_MAIN_MENU_LIST);
 	long row = widget_named(DELTA_ROW);
 	struct ui_widget_definition *definition;
 
@@ -3006,7 +3010,7 @@ short pc_menus_set(
 {
 	short menus = menus_chosen();
 
-	return menus == _menus_chupathingy ? 2 : 0;
+	return menus == _menus_pc ? 1 : menus == _menus_chupathingy ? 2 : 0;
 }
 
 /* whether the Chupathingy menus are up */
@@ -3740,7 +3744,12 @@ mcc_settings:
 		system_link_direct_ip_patch();
 #endif
 	}
-	if (menus_chosen() == _menus_chupathingy && !game_map)
+	if (menus_chosen() == _menus_pc && !game_map)
+	{
+		main_menu_delta_patch();
+		multiplayer_delta_patch_gearbox();
+	}
+	else if (menus_chosen() == _menus_chupathingy && !game_map)
 		main_menu_delta_patch();
 	platform_log("menus: %ld widgets, %ld string lists and %ld bitmaps added to the map's %ld tags",
 		widget_count, own_lists + menus->string_list_count, menus->bitmap_count, build.first_index);

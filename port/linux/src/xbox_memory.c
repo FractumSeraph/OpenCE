@@ -300,6 +300,10 @@ void xbox_address_out_of_range(void const *pointer)
 	abort();
 }
 
+void platform_xbox_window_ensure(void)
+{
+	xbox_address_space_reserve();
+}
 #else
 __attribute__((constructor(101)))
 #ifdef HALO_64BIT
