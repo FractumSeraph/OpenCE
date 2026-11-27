@@ -134,6 +134,17 @@ enum
 
 /* ---------- structures */
 
+/* port, this fork: an entry of a resource map's table, as the locale's
+reader (custom_edition_locale_open, below) takes loc.map's; ChupathingyCE's
+other readers have one reader of their own now (its "one reader for resource
+maps' headers and tables") */
+struct ce_resource
+{
+	unsigned long path_offset;
+	unsigned long size;
+	unsigned long offset;
+};
+
 struct ce_resource_map
 {
 	HANDLE file;

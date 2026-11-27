@@ -486,7 +486,7 @@ static void write_loading_picture(struct xiso_image *image, const struct xiso_en
 		goto done;
 	for (at = 0; at + 8 <= xbe->size && pixel != PIXELS; at++)
 	{
-		if (read_u32(data + at) != WIDTH || read_u32(data + at + 4) != HEIGHT)
+		if (content_u32le(data + at) != WIDTH || content_u32le(data + at + 4) != HEIGHT)
 			continue;
 		for (pixel = 0, next = at + 8; next < xbe->size && pixel < PIXELS; next++)
 		{
