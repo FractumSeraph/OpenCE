@@ -256,8 +256,12 @@ box, tracker and web seed are these, and the settings' defaults:
   `/usr/local/sbin/opentracker-open`, systemd drop-in
   `opentracker.service.d/no-whitelist.conf`, so Ubuntu's updates to the
   package don't replace it: rebuild by hand);
-- web seed: `http://halomaps.fractumseraph.net/maps/` (every map of the
-  index under its file name; plain HTTP, as the client has no TLS);
+- web seed: `http://halomaps.fractumseraph.net/maps/` (one version of each
+  file name in the index; plain HTTP, as the client has no TLS). Another
+  version of a name maps/ already has (166 from the CE3 archive, campaign
+  mods saved as `a10.map` among them) is in `maps_versions/<CHECKSUM>/`
+  instead, which the seeder seeds from; players get those from peers, not
+  the web seed;
 - seed box: the same machine, seeding all of them with a libtorrent
   seeder (Transmission could not keep up with some 6,000 torrents); the
   `.torrent` files are in `http://halomaps.fractumseraph.net/torrents/`.
