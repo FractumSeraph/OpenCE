@@ -60,6 +60,12 @@ static inline boolean stubbs_mode_owns_data(void const *address, long size)
     (void)size;
     return FALSE;
 }
+/* (ChupathingyCE's Stubbs tag layout, never this test's: the Xbox's) */
+static inline boolean stubbs_mode_active(void)
+{
+    return FALSE;
+}
+#define tag_schema_stubbs_layout tag_schema_xbox_layout
 #endif
 """)
     (directory / "tag_files/tag_groups.h").write_text("""

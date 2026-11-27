@@ -2162,7 +2162,9 @@ BOOL platform_offer_game_data(char *destination, unsigned long size)
 	static BOOL offering;
 	BOOL found;
 
-	if (data_download_offered())
+	/* (not for CI's bgfx shader check, HALO_BGFX_SHADER_CHECK: with no maps,
+	it goes on as ChupathingyCE's does, to the check before any window) */
+	if (data_download_offered() && !getenv("HALO_BGFX_SHADER_CHECK"))
 		return data_offer_message_boxes(destination);
 	/* not for runs nobody is watching, nor under gamescope (the player adds
 	the maps from the desktop) */
