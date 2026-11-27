@@ -88,12 +88,9 @@ static void distributed_damage_from_data(struct damage_data const *damage, struc
 static void object_get_origin(long index, real_point3d *point) { memset(point, 0, sizeof(*point)); }
 static long distributed_latest_host_time(void) { return 10; }
 static void distributed_damage_material(struct damage_data *damage, long index, short material) { material_calls++; }
-static void *object_try_and_get(long index) { return index >= 0 && index < 12 ? &objects[index] : NULL; }
 /* (network_rules.h: this build's rules, every version's) */
 enum { NETWORK_RULES_STATIC_SHIELDS_VERSION = 34 };
 static boolean network_rules_of_version(long version) { return TRUE; }
-static boolean network_game_server_port_machine_is_virtual(long machine_index) { return FALSE; }
-static boolean network_game_server_machine_reports_static_damage(long machine_index) { return FALSE; }
 #define csmemset memset
 #include "under_test.inc"
 

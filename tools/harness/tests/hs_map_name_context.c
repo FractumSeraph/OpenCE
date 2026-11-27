@@ -27,6 +27,9 @@ static void main_script_map_name(char const *name) { (void)name; restricted++; }
 /* (this fork: a string argument is an Xbox address, and a known map pack's
 menus and Stubbs mode's levels switch as the console does: neither here) */
 static boolean hs_scenario_pack_menus = FALSE;
+/* (ChupathingyCE's hs_map_name_set: SPV3's ui.yelo's levels, none here, so
+main_set_map_name as it is) */
+static void hs_map_name_set(char const *name) { main_set_map_name(name); }
 static void hs_return(long index, long value) { (void)index; (void)value; returned++; }
 #define _error_silent 0
 static void error(int severity, char const *message) { (void)severity; (void)message; refused++; }

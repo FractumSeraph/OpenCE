@@ -71,6 +71,9 @@ static void vectors3d_from_euler_angles3d(real_vector3d *forward, real_vector3d 
 #define _pi 3.14159265359f
 static int spv3_mode_active(void) { return 0; }
 static void spv3_mode_note_correction(char const *what) { (void)what; }
+/* (and ChupathingyCE's OpenSauce maps, which narrow them too: off here) */
+static int opensauce_map_active(void) { return 0; }
+static void opensauce_survey_note_correction(char const *what) { (void)what; }
 /* the cuts the scripts make, as the frames' interpolation hears them */
 static int interpolation_cuts;
 static void render_interpolation_cut(void) { interpolation_cuts++; }

@@ -36,10 +36,11 @@ def generated(fault=None):
 
 
 def test_wired():
-    """A texture's bind tells configure_sampler whether it is P8."""
+    """A texture's bind tells configure_sampler whether it is P8 (and, this fork's, ChupathingyCE's, whether it is
+    a 2D texture)."""
     source = read(SOURCE).replace("\r\n", "\n")
-    assert "configure_sampler(stage, description.levels > 1, description.hires, target != NULL,\n" \
-        "\t\t\t\tdescription.format == D3DFMT_P8);" in source
+    assert "configure_sampler(stage, description.levels > 1, description.hires, target != NULL, " \
+        "gl_target == GL_TEXTURE_2D,\n\t\t\t\tdescription.format == D3DFMT_P8);" in source
 
 
 @pytest.mark.parametrize("case", CASES)

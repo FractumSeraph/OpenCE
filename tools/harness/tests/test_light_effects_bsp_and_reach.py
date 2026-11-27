@@ -27,21 +27,18 @@ def lf(text):
 
 def test_new_structure_bsp_sees_its_flares_anew():
     """The switch clears the bsp markers' visibilities and their slots, which the old bsp's markers at the same
-    indices left, once the new bsp is current; a console's build keeps what it had."""
+    indices left, once the new bsp is current. (This fork's rasterizer_lights.c has OpenCE's occlusion slots, not
+    ChupathingyCE's test slots, buckets and cursor: the reset clears those, as a new map does.)"""
     lights = lf(read("source/rasterizer/rasterizer_lights.c"))
     reset = function(lights, "rasterizer_lights_reset_for_new_structure_bsp")
     results = "memset(local_lens_flare_occlusion_test_results2, 0, sizeof(local_lens_flare_occlusion_test_results2));"
-    slots = "memset(lens_flare_test_slots, 0, sizeof(lens_flare_test_slots));"
-    buckets = "memset(lens_flare_test_buckets, 0, sizeof(lens_flare_test_buckets));"
-    for line in (results, slots, buckets, "lens_flare_test_cursor = 0;"):
+    slots = "memset(lens_flare_occlusion_slots, 0, sizeof(lens_flare_occlusion_slots));"
+    for line in (results, slots):
         assert line in reset, line
     # the same slots a new map clears
     new_map = function(lights, "rasterizer_lights_reset_for_new_map")
-    for line in (results, slots, buckets):
+    for line in (results, slots):
         assert line in new_map, line
-    # never on a console (the Xbox's waited tests read their own index's slot)
-    console = reset.index("defined(HALO_XBOX_CONSOLE)")
-    assert reset.index("#if !(") < console < reset.index(results)
     switch = function(lf(read("source/scenario/scenario.c")), "scenario_switch_structure_bsp")
     assert switch.index("global_structure_bsp_index = structure_bsp_index;") < \
         switch.index("rasterizer_lights_reset_for_new_structure_bsp();")
