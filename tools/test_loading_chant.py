@@ -27,6 +27,10 @@ class LoadingChantTests(unittest.TestCase):
         backend = mixer_source()
         fixture = (ROOT / "tools/harness/tests/mixer_fixture.h").read_text()
         types = fixture[fixture.index("typedef int BOOL;"):fixture.index('#include "under_test.inc"')]
+        # (port, this fork: the fixture's IMA ADPCM step, ChupathingyCE's
+        # content_audio.c, from where this copy is built)
+        types = types.replace('"../../../port/linux/game/content_audio.c"',
+                              '"' + (ROOT / "port/linux/game/content_audio.c").as_posix() + '"')
         implementation = backend[backend.index("#define OUTPUT_RATE"):backend.index("/* ---------- output")]
         buffers = backend[backend.index("/* ---------- buffers"):]
         game = (ROOT / "source/interface/progress_bar.c").read_text()

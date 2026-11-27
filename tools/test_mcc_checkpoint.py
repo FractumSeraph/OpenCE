@@ -140,8 +140,10 @@ def checkpoint_tool(tmp_path_factory):
         "static void *datum_get(struct data_array *data,long index) {void *p=datum_try_and_get(data,index);if(!p)abort();return p;}",
         function(data_source, "datum_delete"),
         function(objects, "object_try_and_get_and_verify_type")))
-    grenade_units = "\n".join(function(grenades, name) for name in
-        ("mcc_grenades_reset", "mcc_grenade_u32", "mcc_grenades_snapshot", "mcc_grenades_snapshot_validate", "mcc_grenades_restore"))
+    # (port, this fork: its records read by ChupathingyCE's byte readers, content_bytes.h)
+    grenade_units = f'#include "{(ROOT / "port/linux/game/content_bytes.h").as_posix()}"\n'
+    grenade_units += "\n".join(function(grenades, name) for name in
+        ("mcc_grenades_reset", "mcc_grenades_snapshot", "mcc_grenades_snapshot_validate", "mcc_grenades_restore"))
     for name in ("mcc_grenades_snapshot_validate", "mcc_grenades_snapshot", "mcc_grenades_restore", "mcc_grenades_reset"):
         grenade_units = grenade_units.replace(name, name.replace("mcc_", "real_", 1))
     source = r'''
@@ -159,6 +161,10 @@ def checkpoint_tool(tmp_path_factory):
 #define TEST_FLAG(flags,bit) ((flags)&(1u<<(bit)))
 #define match_assert(file,line,test) do {if(!(test))abort();} while(0)
 #define MAXIMUM_OBJECTS_PER_MAP 8192
+/* (port, this fork: the checks' little-endian word; mcc_checkpoint.c reads
+with ChupathingyCE's content_u32le now) */
+static uint32_t mcc_checkpoint_word(void const *data)
+{unsigned char const *b=data;return (uint32_t)b[0]|(uint32_t)b[1]<<8|(uint32_t)b[2]<<16|(uint32_t)b[3]<<24;}
 static int real_units_mode,real_restore_calls;
 struct mcc_grenade_inventory {long handle;unsigned char counts[2];};
 static struct mcc_grenade_inventory mcc_grenade_inventories[MAXIMUM_OBJECTS_PER_MAP];

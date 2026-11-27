@@ -35,6 +35,10 @@ typedef unsigned char boolean; typedef unsigned short word;
     # the build has MCC maps, by a path from its own folder: a desktop's has; and it
     # includes cseries_windows.h, nothing of which it uses here)
     (tmp_path/'cseries_windows.h').write_text('')
+    # (and asks mcc_cache.c whether an MCC map's tags are loaded, for its own
+    # campaign pause screen's objective, #1827: none here)
+    (tmp_path/'mcc_cache.h').write_text('static boolean mcc_cache_tags_loaded(void) { return FALSE; }\n'
+                                        '#define tag_get(group, handle) ((void)(group), (void)(handle), (void *)0)\n')
     source='#define HALO_MCC 1\n'+source
     run_c(tmp_path,source+r'''
 #include <assert.h>

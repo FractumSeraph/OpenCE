@@ -9,10 +9,12 @@
 #include "mcc_sha256.h"
 int denied;
 static int fingerprints;
-static void counted_sha256_end(struct mcc_sha256 *hash,unsigned char digest[32]) {
-    fingerprints++;mcc_sha256_end(hash,digest);
+/* (port, this fork: the fingerprints by ChupathingyCE's one SHA-256,
+content_sha256.h, the name mcc_resources.c calls) */
+static void counted_sha256_end(struct content_sha256 *hash,unsigned char digest[32]) {
+    fingerprints++;content_sha256_end(hash,digest);
 }
-#define mcc_sha256_end counted_sha256_end
+#define content_sha256_end counted_sha256_end
 static struct mcc_precache_snapshot stamps;
 static int unused,both,reads,stamp_reads,change_at;
 static size_t counted_read(void *p,size_t n,size_t count,FILE *f) {reads++;return fread(p,n,count,f);}

@@ -76,7 +76,10 @@ def test_client_sends_the_tail_the_rules_give():
     call = body[body.index("create_network_game_message_with_tail("):]
     call = call[:call.index(";")]
     assert re.search(r"sizeof\(join_game_request\),\s*tail\)$", call), call
-    assert "join_game_request.network_version = HALO_PORT_NETWORK_VERSION;" in body
+    # (OpenCE's range: an older host's number this build plays with, else its
+    # own, which a host of a version not known gets)
+    assert ("join_game_request.network_version = version >= HALO_PORT_NETWORK_VERSION_OLDEST &&\n"
+            "\t\tversion < HALO_PORT_NETWORK_VERSION ? (word)version : HALO_PORT_NETWORK_VERSION;") in body
 
 
 def test_unknown_version_takes_the_whole_request():
@@ -99,10 +102,11 @@ def test_requests_end_with_the_version_word():
 
 
 def test_host_compares_the_version_it_decoded():
-    """the host refuses a request whose decoded version is not its own, which
-    is what the harness's reading checks against"""
+    """the host refuses a request whose decoded version it does not play
+    (OpenCE's range, its own the newest), which is what the harness's reading
+    checks against"""
     source = SERVER.read_text(encoding="utf-8")
-    assert "if (join_game_request.network_version != HALO_PORT_NETWORK_VERSION)" in source
+    assert "if (!HALO_PORT_NETWORK_VERSION_PLAYS(join_game_request.network_version, mcc))" in source
     assert "join requires OpenCE network version" in source
     assert "_network_game_packet_class_client_pregame))" in source
 
