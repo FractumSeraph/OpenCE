@@ -195,7 +195,7 @@ int network_rules_header_widen(uint8_t const *message, int size, uint8_t *out, i
 		at = NETWORK_RULES_LEGACY_HEADER_SIZE;
 		while (at + 2 <= size)
 		{
-			int length = get16(message + at);
+			int length = content_u16le(message + at);
 			int inner = NETWORK_RULES_EPOCH_OFFSET - 2;
 
 			if (length > size - at - 2 || length < inner)
@@ -212,7 +212,7 @@ int network_rules_header_widen(uint8_t const *message, int size, uint8_t *out, i
 	}
 	if (written > 0xFFF)
 		return 0;
-	put16(out, (uint16_t)((get16(out) & 0xF) | (written << 4)));
+	put16(out, (uint16_t)((content_u16le(out) & 0xF) | (written << 4)));
 	return written;
 }
 
@@ -233,7 +233,7 @@ int network_rules_header_narrow(uint8_t *message, int size)
 		at = NETWORK_RULES_HEADER_SIZE;
 		while (at + 2 <= size)
 		{
-			int length = get16(message + at);
+			int length = content_u16le(message + at);
 			int inner = NETWORK_RULES_EPOCH_OFFSET - 2;
 
 			if (length > size - at - 2 || length < inner + NETWORK_RULES_EPOCH_SIZE)
@@ -246,7 +246,7 @@ int network_rules_header_narrow(uint8_t *message, int size)
 			at += 2 + length;
 		}
 	}
-	put16(message, (uint16_t)((get16(message) & 0xF) | (written << 4)));
+	put16(message, (uint16_t)((content_u16le(message) & 0xF) | (written << 4)));
 	return written;
 }
 

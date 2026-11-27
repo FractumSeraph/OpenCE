@@ -1121,6 +1121,22 @@ void distributed_vector_unpack(
 	result->k = (real)vector->k / scale;
 }
 
+void distributed_unit_vector_unpack(
+	struct distributed_vector const *vector,
+	real_vector3d *result)
+{
+	real length;
+
+	distributed_vector_unpack(vector, DISTRIBUTED_UNIT_SCALE, result);
+	length = (real)sqrt(result->i * result->i + result->j * result->j + result->k * result->k);
+	if (length > 0.0f)
+	{
+		result->i /= length;
+		result->j /= length;
+		result->k /= length;
+	}
+}
+
 word distributed_vitality_pack(
 	real value)
 {

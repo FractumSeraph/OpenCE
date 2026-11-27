@@ -391,6 +391,7 @@ boolean distributed_axes_make_valid(real_vector3d *forward, real_vector3d *up);
 /* the vectors in 16 bits a part (struct distributed_vector) */
 void distributed_vector_pack(real_vector3d const *vector, real scale, struct distributed_vector *result);
 void distributed_vector_unpack(struct distributed_vector const *vector, real scale, real_vector3d *result);
+void distributed_unit_vector_unpack(struct distributed_vector const *vector, real_vector3d *result);
 #define DISTRIBUTED_UNIT_SCALE 32767.0f
 #define DISTRIBUTED_VELOCITY_SCALE 1024.0f
 #define DISTRIBUTED_ANGULAR_VELOCITY_SCALE 4096.0f
