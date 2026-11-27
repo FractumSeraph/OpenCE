@@ -25,7 +25,7 @@ FUNCTIONS = ("ce_range_within", "ce_hud_read_long", "ce_hud_tag_cache_pointer", 
              "ce_hud_bitmap_group", "ce_hud_block_elements", "ce_hud_placement", "ce_hud_element_placement", "ce_hud_block_placements",
              "ce_hud_items_placements", "ce_hud_bitmap_scale_flags_clear", "ce_hud_digits_halve",
              "ce_hud_meter_bitmap", "ce_hud_block_meter_bitmaps", "ce_hud_static_bitmap", "ce_hud_block_static_bitmaps",
-             "ce_hud_mixed_meters_find", "ce_hud_unit_interface", "ce_hud_weapon_interface",
+             "ce_hud_unit_interface", "ce_hud_weapon_interface",
              "ce_hud_grenade_interface", "ce_hud_tags_loaded", "ce_hud_tags_unloaded", "ce_hud_map_identity",
              "ce_hud_halo_pc_overlay_blend_functions", "ce_hud_overlays_blocked", "ce_hud_gearbox_meters",
              "ce_hud_bitmap_is_meter", "ce_hud_bitmap_is_mixed_meter")
@@ -43,8 +43,6 @@ NEGATIVE_CONTROLS = {
     "shaders-by-another-behaviour": (("BEHAVIOUR_FLAG(_ce_behaviour_invert_detail_after_reflection))\n",
                                       "BEHAVIOUR_FLAG(_ce_behaviour_hud_number_scale))\n"),
                                      "ce_hud_tags_loaded", "detail-after-reflection"),
-    "mixed-by-any-group": (("if (ce_hud_static_groups[group] == ce_hud_meter_groups[index])", "if (1)"),
-                           "ce_hud_mixed_meters_find", "mixed-meters"),
     "xbox-ammo-by-name-only": (("(ce_hud_behaviours & BEHAVIOUR_FLAG(_ce_behaviour_xbox_ammo_meter_channels)) && ", ""),
                                "ce_hud_meter_bitmap", "mixed-meters"),
 }

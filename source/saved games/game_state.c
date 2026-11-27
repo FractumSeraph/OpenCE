@@ -254,14 +254,15 @@ static game_state_after_load_proc after_load_procs[] =
 	/* port: Stubbs mode's region rows start again from the objects put back
 	(port/linux/game/stubbs_regions.c) */
 	stubbs_regions_forget,
-	/* port: a cinematic's skip goes back to the checkpoint gone back to */
-	cinematic_port_checkpoint,
 	/* port: an OpenSauce map's transforms under way end where they stood
 	(port/linux/game/opensauce_transforms.c) */
 	opensauce_transforms_game_state_loaded,
 	/* port: an OpenSauce map's lightmap and sky sets as they were saved
 	(port/linux/game/opensauce_bsp_sets.c) */
-	opensauce_bsp_sets_game_state_loaded
+	opensauce_bsp_sets_game_state_loaded,
+	/* port: a cinematic's skip goes back to the checkpoint gone back to
+	(last: once everything else is as it was) */
+	cinematic_port_checkpoint
 };
 
 /* ---------- public code */

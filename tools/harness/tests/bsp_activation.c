@@ -20,6 +20,10 @@ struct collision_bsp { int unused; };
 #define main_goto_main_menu() CHECK(FALSE, "original BSP should recover")
 #define structure_culling_structure_bsp_loaded() ((void)0)
 #define rasterizer_lights_reset_for_new_structure_bsp() ((void)0)
+/* (this fork's: structure culling's settings and an OpenSauce map's
+lightmap and sky sets, read as a bsp loads: nothing here) */
+#define structure_culling_load_settings() ((void)0)
+#define opensauce_bsp_sets_structure_bsp_loaded(index) ((void)(index))
 
 enum { _pvs_activation_normal, _pvs_activation_object, _pvs_activation_cluster };
 static struct { short pvs_activation_type; } activation, *object_globals = &activation;

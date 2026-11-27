@@ -410,21 +410,22 @@ int main(int argc, char **argv)
 		CHECK(!ce_hud_gearbox_meters(), "another map: Gearbox's meters");
 		return 0;
 	}
-	/* a meter bitmap whose group a static draws too: not a Halo PC meter's
-	texture, a mixed one (its meters' draws sample it so); one of a group of
-	its own a meter's; none of either once the map is unloaded */
+	/* a meter bitmap whose group a static draws too: a Halo PC meter's like
+	any other (ChupathingyCE's meter shader reads its channels where Halo PC
+	keeps them and leaves the bitmap as it is for the static: no "mixed" ones
+	since the merge of 2026-11-27); none once the map is unloaded */
 	CASE("mixed-meters")
 	{
 		load("some map", 0x12345678);
-		CHECK(!ce_hud_bitmap_is_meter(at(BITMAP_PLAIN + GROUP_BITMAP)) &&
-			ce_hud_bitmap_is_mixed_meter(at(BITMAP_PLAIN + GROUP_BITMAP)), "the plain bitmap: %d, %d",
+		CHECK(ce_hud_bitmap_is_meter(at(BITMAP_PLAIN + GROUP_BITMAP)) &&
+			!ce_hud_bitmap_is_mixed_meter(at(BITMAP_PLAIN + GROUP_BITMAP)), "the plain bitmap: %d, %d",
 			ce_hud_bitmap_is_meter(at(BITMAP_PLAIN + GROUP_BITMAP)),
 			ce_hud_bitmap_is_mixed_meter(at(BITMAP_PLAIN + GROUP_BITMAP)));
 		CHECK(ce_hud_bitmap_is_meter(at(BITMAP_METER + GROUP_BITMAP)) &&
 			!ce_hud_bitmap_is_mixed_meter(at(BITMAP_METER + GROUP_BITMAP)), "the meter's own bitmap");
 		CHECK(ce_hud_bitmap_is_meter(at(BITMAP_WIPS + GROUP_BITMAP)), "the sheet on another map");
 		ce_hud_tags_unloaded();
-		CHECK(!ce_hud_bitmap_is_mixed_meter(at(BITMAP_PLAIN + GROUP_BITMAP)) &&
+		CHECK(!ce_hud_bitmap_is_meter(at(BITMAP_PLAIN + GROUP_BITMAP)) &&
 			!ce_hud_bitmap_is_meter(at(BITMAP_METER + GROUP_BITMAP)), "after the map is unloaded");
 		return 0;
 	}
