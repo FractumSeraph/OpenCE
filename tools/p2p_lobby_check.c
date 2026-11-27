@@ -50,6 +50,7 @@ static const unsigned char *hosting_token;
 void posix_random_bytes(void *buffer, unsigned long size) { memset(buffer, 0x5a, size); }
 unsigned long p2p_now(void) { return clock_now; }
 int config_boolean(const char *name) { (void)name; return 1; }
+long config_integer(const char *name) { (void)name; return 0; }
 void platform_log(const char *format, ...) { (void)format; }
 /* (delta.c's legacy number: the built-in one) */
 int delta_legacy_announce(void) { return HALO_PORT_NETWORK_VERSION; }
@@ -577,7 +578,7 @@ static void probe_order_checks(void)
 	{
 		lobby_update(token, 0, 16);
 		check(probe_count == 0, "no probe starts while listings wait to be checked");
-		show(P2P_LOBBY_SORT_SERVERS, 0, 4);
+		show(P2P_LOBBY_SORT_DEDICATED, 0, 4);
 	}
 	lobby_update(token, 0, 16);
 	check_cost = 0;

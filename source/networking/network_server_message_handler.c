@@ -285,6 +285,10 @@ boolean map_share_handles_message(word const *message, word size);
 /* port/linux/game/mcc_share.c's: MCC package sharing, in the lobby too */
 boolean mcc_share_game_handles_message(word const *message, word size);
 void mcc_share_game_handle_message(long machine_index, word const *message, word size, boolean from_stream);
+/* port: port/linux/game/mcc_cache.c's (a level of an MCC map) and
+port/linux/src/p2p_lobby.c's (the network version advertised) */
+boolean mcc_level_name(char const *name);
+unsigned int network_version_advertised(int mcc);
 #include "mcc_load_network.h" /* port: MCC send-only loading progress */
 #include "mcc_admission.h" /* port: MCC validation before players and precaching */
 #include "mcc_ui_teams.h" /* port: port/linux/game/mcc_ui_teams.c */
@@ -2454,8 +2458,14 @@ static boolean network_game_server_handle_message_client_broadcast_game_search(
 			delta_legacy_hold) */
 			delta_legacy_hold(network_game_server_get_state(server, NULL) != _network_game_server_state_pregame ||
 				network_game_server_game_is_loading(server));
-			advertisement.reserved[HALO_PORT_ADVERTISED_VERSION_OFFSET] = (byte)(delta_legacy_announce() & 0xFF);
-			advertisement.reserved[HALO_PORT_ADVERTISED_VERSION_OFFSET + 1] = (byte)(delta_legacy_announce() >> 8);
+			{
+				/* (the version advertised: network.advertise_version's, else the
+				one this host announces, p2p_lobby.c) */
+				unsigned int version = network_version_advertised(mcc_level_name(game->map.name));
+
+				advertisement.reserved[HALO_PORT_ADVERTISED_VERSION_OFFSET] = (byte)(version & 0xFF);
+				advertisement.reserved[HALO_PORT_ADVERTISED_VERSION_OFFSET + 1] = (byte)(version >> 8);
+			}
 			advertisement.reserved[HALO_PORT_ADVERTISED_FLAGS_OFFSET] =
 				HALO_PORT_ADVERTISED_DISTRIBUTED_FLAG;
 #ifdef HALO_GAME_BROWSER
@@ -2700,26 +2710,34 @@ static boolean network_game_server_handle_message_client_join_game_request(
 			boolean full = network_game_server_get_state(server, NULL) == _network_game_server_state_pregame &&
 				!network_game_has_free_player_slot(network_game_server_get_game(server));
 
-			/* port: discovery is advisory; direct joins must prove the same
-			shared recovery agreement before ordinary admission. */
-			if (join_game_request.network_version != HALO_PORT_NETWORK_VERSION)
+			/* port: discovery is advisory; direct joins must prove a shared
+			recovery agreement before ordinary admission: a version this
+			build plays with, in a game on an MCC map one that plays MCC
+			sharing as this build does (halo_port_limits.h) */
 			{
-				/* (port, this fork: told so, as OpenCE's clients are by the
-				advertisement, rather than left to time out) */
-				struct message_server_machine_rejected rejection;
-				struct network_message *reply;
+				struct network_game const *joined = network_game_server_get_game(server);
+				boolean mcc = joined && mcc_level_name(joined->map.name);
 
-				network_event("join requires OpenCE network version %u (client %u)",
-					HALO_PORT_NETWORK_VERSION, join_game_request.network_version);
-				rejection.reason = join_game_request.network_version > HALO_PORT_NETWORK_VERSION ?
-					_rejection_code_version_too_new : _rejection_code_version_too_old;
-				reply = create_network_game_message(_message_server_machine_rejected, &rejection, sizeof(rejection));
-				if (reply)
+				if (!HALO_PORT_NETWORK_VERSION_PLAYS(join_game_request.network_version, mcc))
 				{
-					network_game_server_write(network_game_server_get_client_connection(server_client_machine), reply,
-						GET_MESSAGE_SIZE(reply->header), NULL, 1);
+					/* (port, this fork: told so, as OpenCE's clients are by the
+					advertisement, rather than left to time out) */
+					struct message_server_machine_rejected rejection;
+					struct network_message *reply;
+
+					network_event("join requires OpenCE network version %u to %u (client %u)",
+						mcc ? HALO_PORT_NETWORK_VERSION_OLDEST_MCC : HALO_PORT_NETWORK_VERSION_OLDEST,
+						HALO_PORT_NETWORK_VERSION, join_game_request.network_version);
+					rejection.reason = join_game_request.network_version > HALO_PORT_NETWORK_VERSION ?
+						_rejection_code_version_too_new : _rejection_code_version_too_old;
+					reply = create_network_game_message(_message_server_machine_rejected, &rejection, sizeof(rejection));
+					if (reply)
+					{
+						network_game_server_write(network_game_server_get_client_connection(server_client_machine), reply,
+							GET_MESSAGE_SIZE(reply->header), NULL, 1);
+					}
+					return FALSE;
 				}
-				return FALSE;
 			}
 
 			/* port: its hardware id, as it tells it: hex only (anything else

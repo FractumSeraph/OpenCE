@@ -516,7 +516,7 @@ SCREENS = {
                 # word, menu_functions.c's setting_value_index, and writes it again only if another is chosen.
                 # The PING column's order is the menus' own, not written)
                 ("SORT BY:", "network.browser_sort",
-                 [("DEDICATED FIRST", "servers"), ("PLAYERS", "players"), ("NAME", "name"), ("MAP", "map"),
+                 [("PLAYERS", "players"), ("DEDICATED FIRST", "dedicated"), ("NAME", "name"), ("MAP", "map"),
                   ("GAME TYPE", "type"), ("LOCKED FIRST", "locked")],
                  "The list's order. Its column titles sort it too;\nchoosing one again reverses it.", None),
                 ("MASTER SERVERS:", "network.masters_file", None,
@@ -779,8 +779,8 @@ TEAMPLAY_ROWS = [
     # (network_chat.c: one row for the chat and its links, as Teamplay
     # Options has room for one more)
     ("text_chat", "TEXT CHAT:", ["ON", "WITH LINKS", "OFF"], [
-        "Players can type to each other; lines with links\\nare refused. Off in a public internet game.",
-        "Players can type to each other, links too. Off\\nin a public internet game.",
+        "Players can type to each other; lines with links\\nare refused.",
+        "Players can type to each other, links too.",
         "No text chat in the game.",
     ]),
 ]

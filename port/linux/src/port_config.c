@@ -1804,6 +1804,13 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		_environment_value, _platform_all | _platform_server,
 		"How many megabytes of public copies (network.record_public) to keep:\n"
 		"the oldest go first. 0 keeps them all." },
+	{ "network.advertise_version", _config_integer, "0", "HALO_NET_ADVERTISE_VERSION", _environment_value,
+		_platform_all | _platform_server,
+		"When you host: the network version your game says it is of. 0: the one\n"
+		"this build announces. Builds from before OpenCE's version range join only\n"
+		"a host of their own version: an older one this build plays with (43) lets\n"
+		"that version's players join, and turns away those of this version; this\n"
+		"build and later ones join either. An MCC map's game says 44 at least." },
 	{ "network.host_public", _config_boolean, "true", "HALO_NET_HOST_PUBLIC", _environment_value, _platform_all,
 		"New internet games you host start as PUBLIC. false starts them as\n"
 		"PRIVATE." },
@@ -2284,12 +2291,12 @@ entry, which ChupathingyCE fixed in e3bd5a15) */
 		_platform_all,
 		"The server browser lists games of one kind only: \"any\", \"ctf\",\n"
 		"\"slayer\", \"oddball\", \"king\" or \"race\" (its Filters screen)." },
-	{ "network.browser_sort", _config_string, "\"servers\"", "HALO_NET_BROWSER_SORT", _environment_value,
+	{ "network.browser_sort", _config_string, "\"players\"", "HALO_NET_BROWSER_SORT", _environment_value,
 		_platform_all,
-		"The server browser's order: \"servers\" (dedicated servers first, then by\n"
-		"players), \"players\", \"name\", \"map\", \"type\" or \"locked\" (a password's\n"
-		"first); \"-\" before one reverses it (\"-players\"). A column title sorts by\n"
-		"it, and again the other way." },
+		"The server browser's order: \"players\" (the most players first),\n"
+		"\"dedicated\" (dedicated servers first, then by players), \"name\", \"map\",\n"
+		"\"type\" or \"locked\" (a password's first); \"-\" before one reverses it\n"
+		"(\"-players\"). A column title sorts by it, and again the other way." },
 	{ "network.stun_servers", _config_string, "\"stun.l.google.com:19302,stun.cloudflare.com:3478\"",
 		"HALO_NET_STUN", _environment_value, _platform_all | _platform_xbox | _platform_server,
 		"STUN servers that find this machine's internet address, as host:port,\n"

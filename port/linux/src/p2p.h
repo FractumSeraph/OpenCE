@@ -222,9 +222,13 @@ reached only by its invite. Going private makes a new invite, if the old one
 was listed */
 void p2p_set_hosting_public(int public);
 /* whether the game this machine hosts is listed in everyone's server
-browser (PUBLIC, and network.public_lobby): the text chat is off in one a
-player hosts (a dedicated server's follows network.text_chat) */
+browser (PUBLIC, and network.public_lobby) */
 int p2p_hosting_listed(void);
+/* the network version a host advertises (its game's advertisement, its
+server browser listing): network.advertise_version's when this build plays
+with it, else HALO_PORT_NETWORK_VERSION_ADVERTISED; in a game on an MCC map
+(mcc) one an MCC game plays with (halo_port_limits.h) */
+unsigned int network_version_advertised(int mcc);
 /* the password of the game hosted for the internet (Server Setup's
 PASSWORD; NULL or empty: none): its listing lets only those who know it
 join from the server browser, and its invite link is a locked one, which
@@ -338,14 +342,8 @@ invite), remembering its host: nonzero if it held an invite */
 int p2p_join_listing(const struct p2p_listing *listing);
 /* whether this machine is in the public game it joined from the server
 browser: the tunnel still reaches its host, and no other invite was joined
-since. Such a game has no text chat, whatever its host says
-(port/linux/game/network_chat.c), unless it is a dedicated server's: */
+since */
 int p2p_joined_listed_host(void);
-/* whether the public game joined (p2p_joined_listed_host) is a dedicated
-server's that a master server lists: an approved operator's, whose chat
-follows its network.text_chat (a listing's own dedicated flag, which any
-host may set, is not enough) */
-int p2p_joined_listed_dedicated(void);
 /* the key ids of the masters that listed the game being joined, if it was
 joined from the server browser (master_key_ids): how many, 0 if not known (an
 invite's, a LAN's) */
@@ -424,11 +422,11 @@ enum
 };
 /* network.browser_sort's orders (a column title's), each in its own first
 direction: dedicated servers first, then the most players, then by name
-(servers); the most players; by name, map or type (A to Z); those with a
-password first */
+(dedicated); the most players (players, the default); by name, map or type
+(A to Z); those with a password first */
 enum
 {
-	P2P_LOBBY_SORT_SERVERS,
+	P2P_LOBBY_SORT_DEDICATED,
 	P2P_LOBBY_SORT_PLAYERS,
 	P2P_LOBBY_SORT_NAME,
 	P2P_LOBBY_SORT_MAP,
@@ -455,7 +453,9 @@ int p2p_lobby_filter(struct p2p_listing *games, int count, const struct p2p_lobb
 network version last; equal ones keep their order */
 void p2p_lobby_sort(struct p2p_listing *games, int count, int order, int reverse);
 /* network.browser_sort's text: an order's name, "-" before it reversed
-("-players"); an unknown one is servers' */
+("-players"); an unknown one is players', and so is "servers" (the name
+dedicated's order had while it was the default, which every config.toml
+was written with) */
 int p2p_lobby_sort_parse(const char *text, int *reverse);
 void p2p_lobby_sort_text(int order, int reverse, char *text, int size);
 

@@ -986,6 +986,7 @@ the setting for one start of the game. It has priority over the file.
 | `network.share_presence` | `true` | `HALO_NET_SHARE_PRESENCE` | While you play a Delta game that has an invite, tell the game list which game about once a minute (`POST /v1/presence` with this copy's player key and the game's invite), so your Delta profile shows it. The site shows the game only to people the player allows and the invite only to those allowed to join. Nothing from the menus, never another player's key, never for a game whose host doesn't speak Delta. The profile's "Show when I'm playing" hides it too. Not on the consoles yet. |
 | `network.platform_limits` | `"on"` | `HALO_NET_PLATFORM_LIMITS` | `"on"`: Delta hosts keep a game to the players this platform takes (an original Xbox joins up to 32). `"off"`: this machine joins games of any size. |
 | `network.host_platform_limits` | `true` | `HALO_NET_HOST_PLATFORM_LIMITS` | `true`: a game this machine hosts keeps to the players its Delta machines' platforms take. `false`: their limits are ignored, for testing. |
+| `network.advertise_version` | `0` | `HALO_NET_ADVERTISE_VERSION` | When you host: the network version your game says it is of. `0`: the one this build announces (Delta's, 44). Builds from before OpenCE's version range join only a host of their own version: `43` lets OpenCE's Build 344 players join and turns away those of 44's builds from before the range; this build and later ones join either. An MCC map's game says 44 at least. |
 | `network.public_lobby` | `true` | `HALO_NET_PUBLIC_LOBBY` | `true`: the server browser. Public games are listed, and Join Game > Server Browser shows them. `false`: no games are listed or shown. Refer to "Server browser". |
 | `network.doorbell` | `true` | `HALO_NET_DOORBELL` | `true`: with this copy linked to Delta, invites, friend requests and friends coming online show up right away. Internet play's connections to our own brokers (mqtt.chupathingy.org, doorbell.chupathingy.org in `brokers.txt`) also listen for a ring from the site; the ring carries nothing personal and only makes the copy ask the site sooner. `false`: friends are checked on the usual schedule only. Refer to docs/delta/link.md, "The doorbell". |
 | `network.ping_games` | `true` | `HALO_NET_PING_GAMES` | `true`: Online Games pings the listed games whose hosts answer pings, before joining (the host sees your public address, as when you join). `false`: no pings; only the estimated ones (`~85`). Refer to docs/delta/list.md, "Pings before joining". |
@@ -1055,7 +1056,7 @@ the setting for one start of the game. It has priority over the file.
 | `network.browser_show_empty`, `network.browser_show_full` | `true` | `HALO_NET_BROWSER_SHOW_EMPTY`, `HALO_NET_BROWSER_SHOW_FULL` | `false`: the server browser does not list the games with no player, the full games. The server browser's Filters screen sets them. |
 | `network.browser_maps` | `"yes"` | `HALO_NET_BROWSER_MAPS` | `"yes"`: the server browser lists the games on maps this computer does not have. `"no"`: it does not. `"downloadable"`: only those of a Custom Edition map that the host shares. |
 | `network.browser_gametype` | `"any"` | `HALO_NET_BROWSER_GAMETYPE` | The server browser lists the games of one kind only: `"any"`, `"ctf"`, `"slayer"`, `"oddball"`, `"king"` or `"race"` (the Filters screen). |
-| `network.browser_sort` | `"servers"` | `HALO_NET_BROWSER_SORT` | The server browser's order. `"servers"`: dedicated servers first, then by players. `"players"`, `"name"`, `"map"`, `"type"` or `"locked"` (games with a password first). A `-` before one reverses it (`"-players"`). A column's title sorts by it, and again the other way. |
+| `network.browser_sort` | `"players"` | `HALO_NET_BROWSER_SORT` | The server browser's order. `"players"`: the games with the most players first. `"dedicated"`: dedicated servers first, then by players. `"name"`, `"map"`, `"type"` or `"locked"` (games with a password first). `"servers"`, the name `"dedicated"` had while it was the default, reads as `"players"`. A `-` before one reverses it (`"-players"`). A column's title sorts by it, and again the other way. |
 | `server.enabled` | `false` | `HALO_SERVER` | `true`: run as a dedicated server, as `halo --server` does. Refer to "Dedicated server". The `server.*` settings are written to `config.toml` only by a dedicated server. |
 | `server.name` | `"OpenCE Server"` | `HALO_SERVER_NAME` | The game's name in the lobby and the server browser: 15 characters of printable ASCII. |
 | `server.max_players` | `16` | `HALO_SERVER_MAX_PLAYERS` | The most players (2 to 127). |
@@ -1326,8 +1327,9 @@ Steam is asked once a run, without signing in, so the name shows a moment
 after the map is shown, and not at all offline or in the web build (Steam
 does not answer a web page's requests).
 
-All map families use network version 44 (camera mode 32745); older peers
-cannot join, including OpenCE protocol 43 peers. MCC content identity, sharing
+All map families use network version 44 (camera mode 32745). Version 43
+(Build 344) plays with 44, except on an MCC
+map: refer to "Versions" in `NETCODE.md` and `network.advertise_version`. MCC content identity, sharing
 consent and load-progress checks remain separate from the existing Xbox/CE paths;
 see [the network agreement](NETCODE.md#opence-network-agreement).
 
@@ -1795,18 +1797,14 @@ ON (the default: a line with a link, such as `discord.gg/...`,
 `example.com`, `www.`, an address, or `example [dot] com`, is refused),
 WITH LINKS, or OFF. A domain that is a word as well (`.me`, `.to`, `.is`)
 counts only with a path after it (`youtu.be/...`), so that `go.to` and
-`he.is` are not refused. A game a player hosts that is listed in
-the server browser (a public internet game) never has the text chat,
-whatever it says (TEXT CHAT shows OFF there, and cannot be changed, while
-LISTING is PUBLIC); a private game, joined by its invite, and a LAN game have
-it as chosen. A player who joins such a game from the server browser has no
-text chat in it even if its host turns it on: their game takes no line from
-that host and sends none. A dedicated server is the exception: its own
-`network.text_chat` decides (on by default, and its operator can turn it
-off, or allow links), listed or not, and a player who joins it from the
-server browser's dedicated servers (a master server's list, which names
-approved operators alone) has the chat as it says. Pressing T where the chat
-is off says so, and a refused line tells its sender why.
+`he.is` are not refused. Every game has the chat as its host chose: a
+public internet game a player hosts (listed in the server browser), a
+private game joined by its invite, a LAN game, and a dedicated server's
+(whose operator sets `network.text_chat`, on by default, live with `sv_set`).
+Players on a build older than this one have no text chat in a public game a
+player hosts: their game takes no line from that host and sends none.
+Pressing T where the chat is off says so, and a refused line tells its
+sender why.
 
 On the scoreboard (right-click, then click the player), Mute voice and chat
 mutes a player for you alone: you no longer see their lines or hear their
@@ -1952,16 +1950,16 @@ master servers, or only the brokers.
   The titles are: server name, map, game, players, the lock (the games
   with a password first) and the dedicated icon (dedicated servers first).
   A second choice of the same title reverses the order, and an arrow on
-  the title shows the direction. The default order is dedicated servers
-  first, then the games with the most players, then by name. The browser
-  keeps the order in `network.browser_sort`.
+  the title shows the direction. The default order is the games with the
+  most players first, then by name, dedicated or not. The browser keeps the
+  order in `network.browser_sort`.
 - FILTERS opens the Filters screen of Custom Edition. It has SHOW EMPTY
   SERVERS, SHOW FULL SERVERS, GAME TYPE (ANY or one game engine) and SHOW
   MISSING MAPS (NO, YES, or IF DOWNLOADABLE, for a Custom Edition map that
   Map Sharing can download when you join). OK writes the
   `network.browser_*` settings. Settings > Network Setup > SERVER BROWSER
-  writes the same settings, and also shows LISTS, SORT BY (DEDICATED FIRST,
-  PLAYERS, NAME, MAP, GAME TYPE or LOCKED FIRST; an order that a title reversed
+  writes the same settings, and also shows LISTS, SORT BY (PLAYERS,
+  DEDICATED FIRST, NAME, MAP, GAME TYPE or LOCKED FIRST; an order that a title reversed
   shows as the same choice) and MASTER SERVERS
   (the number of master servers that answered the last request of the
   browser, for example `2 OF 2`). The PING and TEAMPLAY OPTIONS rows of
@@ -1969,9 +1967,10 @@ master servers, or only the brokers.
 - A dedicated server's row shows the dedicated icon of Custom Edition.
   Instead of a ping, a dedicated server shows its region (EU, NA-E),
   because the browser does not ping the servers that the master servers
-  list. The row shows JOINING while a join runs. A game of another network
-  version stays in the list in grey, after the other games, with NEWER or
-  OLDER. Its row does not join the game: it shows the message about the
+  list. The row shows JOINING while a join runs. A game of a network
+  version this build does not play with stays in the list in grey, after
+  the other games, with NEWER or OLDER (a game of an older version it plays
+  with, such as 43, is listed as any other). Its row does not join the game: it shows the message about the
   version. The server count above the list adds the number of dedicated
   servers (`SERVERS: 8 (5 dedicated)`) when the list shows all the games on
   one page. PAGE shows only when the list has more than one page.

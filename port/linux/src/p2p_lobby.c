@@ -354,14 +354,46 @@ static int put_text(unsigned char *bytes, const char *text, int maximum)
 	return 1 + length;
 }
 
+/* (p2p.h: the host's advertisement's version, and its listing's. Port, this
+fork: the number its host announces, delta_legacy_announce (Delta's: a legacy
+table may raise it), unless network.advertise_version chooses another this
+build plays with) */
+unsigned int network_version_advertised(int mcc)
+{
+	long chosen = config_integer("network.advertise_version");
+	unsigned int version = (unsigned int)delta_legacy_announce();
+
+	if (chosen > 0 && chosen <= 0xFFFF && HALO_PORT_NETWORK_VERSION_PLAYS(chosen, 0))
+		version = (unsigned int)chosen;
+	if (mcc && !HALO_PORT_NETWORK_VERSION_PLAYS(version, 1))
+		version = HALO_PORT_NETWORK_VERSION;
+	return version;
+}
+
+/* whether a map is an MCC map's level: "mcc_maps", then a separator, in
+either case (as port/linux/game/mcc_cache.c's mcc_level_name has it) */
+static int listing_mcc_map(const char *map)
+{
+	static const char prefix[] = "mcc_maps";
+	size_t index;
+
+	for (index = 0; index < sizeof(prefix) - 1; index++)
+	{
+		if ((map[index] >= 'A' && map[index] <= 'Z' ? map[index] + 'a' - 'A' : map[index]) != prefix[index])
+			return 0;
+	}
+	return map[index] == '\\' || map[index] == '/';
+}
+
 /* the listing of the game hosted, signed: flags (_listing_closed for a
 tombstone), with the invite's token */
 static int listing_make_token(unsigned char *bytes, int flags, const unsigned char *token)
 {
 	unsigned char *signed_part = bytes;
 	unsigned char data[sizeof(signature_label) - 1 + MAXIMUM_LISTING_SIZE];
+	/* (the version advertised: network.advertise_version's) */
+	int version = (int)network_version_advertised(listing_mcc_map(lobby.map));
 	int size = 0;
-	int version = delta_legacy_announce();
 
 	if (lobby.has_password && !(flags & _listing_closed))
 		flags |= _listing_password;
@@ -602,7 +634,8 @@ static void update_hosting(const unsigned char *token, int player_count, int max
 		return;
 	}
 	if ((lobby.republish_wanted && (long)(p2p_now() - lobby.republish_time) >= 0) ||
-		elapsed(lobby.published_time, REPUBLISH_INTERVAL) || delta_legacy_announce() != lobby.listing_version)
+		elapsed(lobby.published_time, REPUBLISH_INTERVAL) ||
+		(int)network_version_advertised(listing_mcc_map(lobby.map)) != lobby.listing_version)
 	{
 		publish();
 	}
@@ -1512,7 +1545,7 @@ int p2p_lobby_brokers_reached(void)
 
 static const char *const sort_names[NUMBER_OF_P2P_LOBBY_SORTS] =
 {
-	"servers", "players", "name", "map", "type", "locked",
+	"dedicated", "players", "name", "map", "type", "locked",
 };
 
 int p2p_lobby_filter(struct p2p_listing *games, int count, const struct p2p_lobby_choices *choices,
@@ -1581,7 +1614,7 @@ static int sort_order(const struct p2p_listing *first, const struct p2p_listing 
 	case P2P_LOBBY_SORT_LOCKED:
 		difference = second->locked - first->locked;
 		break;
-	case P2P_LOBBY_SORT_SERVERS:
+	case P2P_LOBBY_SORT_DEDICATED:
 		/* (as p2p_lobby_games has them: then those joining has not failed,
 		and the open ones) */
 		difference = second->dedicated - first->dedicated;
@@ -1635,12 +1668,12 @@ int p2p_lobby_sort_parse(const char *text, int *reverse)
 			return order;
 	}
 	*reverse = 0;
-	return P2P_LOBBY_SORT_SERVERS;
+	return P2P_LOBBY_SORT_PLAYERS;
 }
 
 void p2p_lobby_sort_text(int order, int reverse, char *text, int size)
 {
 	if (order < 0 || order >= NUMBER_OF_P2P_LOBBY_SORTS)
-		order = P2P_LOBBY_SORT_SERVERS;
+		order = P2P_LOBBY_SORT_PLAYERS;
 	snprintf(text, (size_t)size, "%s%s", reverse ? "-" : "", sort_names[order]);
 }

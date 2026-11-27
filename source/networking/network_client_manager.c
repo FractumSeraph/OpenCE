@@ -856,7 +856,6 @@ network_game_client_link_down is set): network_game_client_network_lost */
 static unsigned long network_game_client_link_down_time;
 static unsigned long network_game_client_link_checked_time;
 static boolean network_game_client_link_down;
-
 /* each advertised game's host's network version and netcode, and the game's
 kind (game_modes_kind), by its place in the client's available_games
 (HALO_PORT_NETWORK_VERSION) */
@@ -2569,7 +2568,6 @@ boolean network_game_client_initiate_join_game(
 		&client->join_parameters,
 		join_parameters,
 		sizeof(*join_parameters));
-
 	success = network_connection_connect(client->connection, address, 0);
 
 	if (success == TRUE)
@@ -3613,7 +3611,11 @@ static void network_game_client_send_join_request(
 	message_header *message;
 
 	csmemset(&join_game_request, 0, sizeof(join_game_request));
-	join_game_request.network_version = HALO_PORT_NETWORK_VERSION; /* port: explicit shared agreement */
+	/* port: explicit shared agreement: the host's version when it is an
+	older one this build plays with (OpenCE's range: a host of a build from
+	before it takes only its own), else this build's */
+	join_game_request.network_version = version >= HALO_PORT_NETWORK_VERSION_OLDEST &&
+		version < HALO_PORT_NETWORK_VERSION ? (word)version : HALO_PORT_NETWORK_VERSION;
 	network_game_generate_local_machine_name(join_game_request.machine_name);
 	csmemcpy(
 		join_game_request.join_token,

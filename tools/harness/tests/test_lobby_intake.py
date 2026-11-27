@@ -23,6 +23,12 @@ def size(source, name):
     return sum(int(part) for part in value.split("+"))
 
 
+def versions():
+    """halo_port_limits.h's range: the oldest versions this build plays with and HALO_PORT_NETWORK_VERSION_PLAYS"""
+    return ''.join(line + '\n' for line in re.findall(r'^#define HALO_PORT_NETWORK_VERSION_\w+(?:.*\\\n)*.*',
+                                                       read('port/linux/include/halo_port_limits.h'), re.M))
+
+
 def generated(fault=None):
     source = read('port/linux/src/p2p_lobby.c')
     headers = read('port/linux/src/p2p_internal.h') + read('port/linux/src/p2p.h')

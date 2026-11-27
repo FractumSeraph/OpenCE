@@ -208,6 +208,34 @@ one (delta.c), and a Delta machine whose HELLO says an older one is refused
 /* ... and whether a game this machine hosts is under way, which holds the
 number announced until its end (delta.h, auto-announce) */
 void delta_legacy_hold(int hold);
+/* (port, this fork: OpenCE's range, below, is what its host admits
+(network_server_message_handler.c) and what its join request says to a
+host of an older version in it (network_client_manager.c); the client's
+own range is the wider one above, Delta's) */
+/* The oldest network version this build plays with. A version raised for a
+change that machines of the version before it still play with (what they
+send each other laid out as before, and nothing either side does that the
+other's game needs to know) leaves it where it is; a change that older
+machines cannot play with raises it to the new version. 43 plays with 44:
+44 changed MCC package sharing alone (port/linux/network_format.txt is the
+same; NETCODE.md, "Versions"), so a build of 44 joins a host of 43 and takes
+its machines, but not on an MCC map: a host of 44 leaves out of a package
+the base resources a machine of 43 cannot find on its own, so an MCC game
+takes no machine older than HALO_PORT_NETWORK_VERSION_OLDEST_MCC. */
+#define HALO_PORT_NETWORK_VERSION_OLDEST 43
+#define HALO_PORT_NETWORK_VERSION_OLDEST_MCC 44
+/* The version a host advertises when network.advertise_version chooses no
+other (p2p_lobby.c's network_version_advertised). A build released before
+there was a range joins only a host that advertises its own version, so
+while a newer version plays with an older one, keep this at the version the
+builds players have are of: theirs still join, and this build's join a host
+of either. */
+#define HALO_PORT_NETWORK_VERSION_ADVERTISED HALO_PORT_NETWORK_VERSION
+/* whether a machine of network version theirs plays with this one (mcc: in
+a game on an MCC map) */
+#define HALO_PORT_NETWORK_VERSION_PLAYS(theirs, mcc) \
+	((unsigned int)(theirs) >= ((mcc) ? HALO_PORT_NETWORK_VERSION_OLDEST_MCC : HALO_PORT_NETWORK_VERSION_OLDEST) && \
+	(unsigned int)(theirs) <= HALO_PORT_NETWORK_VERSION)
 /* ... the advertisement's reserved bytes: the version (a little-endian word),
 then flags, then (version 37) the game's kind: an OpenCE gametype's mode in
 the low seven bits, Hardcore in bit 7 (port/linux/game/game_modes.h's

@@ -134,11 +134,11 @@ int main(int argc, char **argv)
 		choices.maps = P2P_LOBBY_MAPS_YES;
 		shown = p2p_lobby_filter(games, count, &choices, map_state);
 		CHECK(shown == 6, "YES: every map");
-	} else CASE("servers_default") {
+	} else CASE("dedicated_first") {
 		static const char *const expected[] = { "Bravo dedicated", "Echo dedicated empty", "delta full",
 			"alpha player", "Charlie empty" };
 
-		p2p_lobby_sort(games, count, P2P_LOBBY_SORT_SERVERS, 0);
+		p2p_lobby_sort(games, count, P2P_LOBBY_SORT_DEDICATED, 0);
 		CHECK(order_is(expected, count), "dedicated servers first, then the most players, then by name");
 	} else CASE("sort_each_way") {
 		static const char *const names[] = { "alpha player", "Bravo dedicated", "Charlie empty", "delta full",
@@ -173,24 +173,48 @@ int main(int argc, char **argv)
 		games[count - 1].network_version = HALO_PORT_NETWORK_VERSION_MAXIMUM + 1;
 		shown = p2p_lobby_filter(games, count, &choices, NULL);
 		CHECK(shown == 6 && has(shown, "Golf newer"), "kept: shown greyed");
-		p2p_lobby_sort(games, shown, P2P_LOBBY_SORT_SERVERS, 0);
+		p2p_lobby_sort(games, shown, P2P_LOBBY_SORT_DEDICATED, 0);
 		CHECK(!strcmp(games[shown - 1].name, "Golf newer"), "last, though it has the most players");
 		p2p_lobby_sort(games, shown, P2P_LOBBY_SORT_PLAYERS, 1);
 		CHECK(!strcmp(games[shown - 1].name, "Golf newer"), "last the other way too");
 		CHECK(!strcmp(games[0].name, "Charlie empty") || !strcmp(games[0].name, "Echo dedicated empty"),
 			"the fewest first");
+	} else CASE("older_in_range") {
+		/* an older version this build plays with: listed as any other; one
+		older than the oldest, last */
+		add("Golf older", "bloodgulch", 1, 15, 16, 0, 0);
+		games[count - 1].network_version = HALO_PORT_NETWORK_VERSION_OLDEST;
+		add("Hotel too old", "bloodgulch", 1, 14, 16, 0, 0);
+		games[count - 1].network_version = HALO_PORT_NETWORK_VERSION_OLDEST - 1;
+		shown = p2p_lobby_filter(games, count, &choices, NULL);
+		p2p_lobby_sort(games, shown, P2P_LOBBY_SORT_PLAYERS, 0);
+		CHECK(!strcmp(games[0].name, "Golf older"), "the oldest version played with: first, with the most players");
+		CHECK(!strcmp(games[shown - 1].name, "Hotel too old"), "older than the oldest: last");
+		CHECK(HALO_PORT_NETWORK_VERSION_PLAYS(HALO_PORT_NETWORK_VERSION, 1) &&
+			!HALO_PORT_NETWORK_VERSION_PLAYS(HALO_PORT_NETWORK_VERSION + 1, 0) &&
+			HALO_PORT_NETWORK_VERSION_PLAYS(HALO_PORT_NETWORK_VERSION_OLDEST, 0) &&
+			!HALO_PORT_NETWORK_VERSION_PLAYS(HALO_PORT_NETWORK_VERSION_OLDEST_MCC - 1, 1),
+			"the range: this version always, a newer one never, an MCC map's from its own oldest");
 	} else CASE("sort_text") {
 		int reverse;
 		char text[32];
 
 		CHECK(p2p_lobby_sort_parse("players", &reverse) == P2P_LOBBY_SORT_PLAYERS && !reverse, "players");
 		CHECK(p2p_lobby_sort_parse("-map", &reverse) == P2P_LOBBY_SORT_MAP && reverse, "-map: reversed");
-		CHECK(p2p_lobby_sort_parse("nonsense", &reverse) == P2P_LOBBY_SORT_SERVERS && !reverse, "unknown: servers");
-		CHECK(p2p_lobby_sort_parse("-", &reverse) == P2P_LOBBY_SORT_SERVERS && !reverse, "a lone -: servers");
+		CHECK(p2p_lobby_sort_parse("dedicated", &reverse) == P2P_LOBBY_SORT_DEDICATED && !reverse, "dedicated");
+		CHECK(p2p_lobby_sort_parse("servers", &reverse) == P2P_LOBBY_SORT_PLAYERS && !reverse,
+			"servers, the old default's name: players");
+		CHECK(p2p_lobby_sort_parse("-servers", &reverse) == P2P_LOBBY_SORT_PLAYERS && !reverse,
+			"-servers: players, not reversed");
+		CHECK(p2p_lobby_sort_parse("nonsense", &reverse) == P2P_LOBBY_SORT_PLAYERS && !reverse, "unknown: players");
+		CHECK(p2p_lobby_sort_parse("-", &reverse) == P2P_LOBBY_SORT_PLAYERS && !reverse, "a lone -: players");
+		CHECK(p2p_lobby_sort_parse(NULL, &reverse) == P2P_LOBBY_SORT_PLAYERS && !reverse, "none: players");
 		p2p_lobby_sort_text(P2P_LOBBY_SORT_TYPE, 1, text, sizeof(text));
 		CHECK(!strcmp(text, "-type"), "written back");
 		p2p_lobby_sort_text(99, 0, text, sizeof(text));
-		CHECK(!strcmp(text, "servers"), "an unknown order written as servers");
+		CHECK(!strcmp(text, "players"), "an unknown order written as players");
+		p2p_lobby_sort_text(P2P_LOBBY_SORT_DEDICATED, 0, text, sizeof(text));
+		CHECK(!strcmp(text, "dedicated"), "dedicated's name");
 	} else return 2;
 	return 0;
 }
