@@ -4631,6 +4631,10 @@ void platform_exit_window_closed(void)
 	quit_watchdog_stand_down();
 #endif
 	platform_log("window closed");
+#ifdef HALO_BGFX
+	if (xgpu_bgfx)
+		xgpu_bgfx_closing();
+#endif
 #ifdef HALO_ANDROID
 	/* (port, this fork: the Android app's guest has no SDL_GL_DestroyContext
 	nor SDL_DestroyWindow, and its process goes as the activity does) */
