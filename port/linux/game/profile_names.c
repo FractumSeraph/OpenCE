@@ -36,6 +36,7 @@ without one it proves as the copy's own account.
 #include "../src/identity.h"
 #include "../src/networks.h"
 #include "../src/developer_flames_rules.h"
+#include "../src/fork_developers.h"
 #include "halo_profile_screen.h"
 
 #include <stdio.h>
@@ -474,6 +475,11 @@ boolean profile_names_developer(
 	by the host) */
 	card.bound = identity.bound;
 	card.capabilities = (unsigned long)identity.capabilities;
+	/* (Fractum Halo: the fork's own developers, by the handle this network
+	signed into their certificate, as if it carried the mark: every other
+	rule above still holds; fork_developers.h) */
+	if (!identity.other_network && fork_developer_handle(identity.handle))
+		card.capabilities |= DEVELOPER_FLAMES_MARK;
 	return developer_flames_card_shows(&card) ? TRUE : FALSE;
 }
 

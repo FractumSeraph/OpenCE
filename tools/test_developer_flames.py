@@ -94,3 +94,43 @@ def test_setting():
     rows = (ROOT / "port" / "linux" / "src" / "settings_rows.c").read_text()
     assert re.search(r'_in_guide, "DEVELOPER FLAMES", "display\.developer_flames", _kind_toggle', rows)
     assert '"display.developer_flames"' in rows[rows.index("display_lines[]"):]
+
+
+def test_fork_developers(tmp_path):
+    """Fractum Halo: the fork's developers (fork_developers.h) are matched by
+    their verified handle exactly, and nothing else is."""
+    cc = compiler()
+    if not cc:
+        pytest.skip("no C compiler")
+    source = tmp_path / "fork_developers_test.c"
+    source.write_text(
+        '#include "fork_developers.h"\n'
+        '#include <stdio.h>\n'
+        'int main(void) {\n'
+        '  int bad = 0;\n'
+        '  bad |= !fork_developer_handle("fractumseraph");\n'
+        '  bad |= fork_developer_handle("fractumseraph2") | fork_developer_handle("fractumserap")\n'
+        '      | fork_developer_handle("FractumSeraph") | fork_developer_handle("") | fork_developer_handle(0);\n'
+        '  if (bad) puts("fork developer handles: wrong match");\n'
+        '  return bad;\n'
+        '}\n')
+    binary = tmp_path / "fork_developers_test"
+    build = subprocess.run(
+        [cc, "-std=gnu89", "-Wall", "-Wextra", "-Werror", "-I", str(ROOT / "port" / "linux" / "src"),
+         str(source), "-o", str(binary)],
+        capture_output=True, text=True,
+    )
+    assert build.returncode == 0, build.stdout + build.stderr
+    result = subprocess.run([str(binary)], capture_output=True, text=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_fork_developers_keep_the_rules():
+    """The fork's list only stands in for the developer mark: a home network
+    card, before developer_flames_card_shows decides with every other rule."""
+    names = (ROOT / "port" / "linux" / "game" / "profile_names.c").read_text()
+    body = names[names.index("boolean profile_names_developer("):]
+    body = body[:body.index("\n}\n")]
+    assert re.search(r"if \(!identity\.other_network && fork_developer_handle\(identity\.handle\)\)\s*"
+                     r"card\.capabilities \|= DEVELOPER_FLAMES_MARK;\s*return developer_flames_card_shows\(&card\)",
+                     body)
