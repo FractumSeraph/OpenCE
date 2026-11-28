@@ -74,11 +74,6 @@ Neither OpenCE nor ChupathingyCE has these.
   Android app downloads them with your Steam account. This fork's builds
   download them from its site the first time such a map is chosen (about
   350 MB, [Shared MCC resources](#shared-mcc-resources)).
-- **The fork's developers' blue flame.** ChupathingyCE's verified
-  developers get a blue flame on their helmet in Delta games. This fork's
-  builds also give it to the fork's own developers, by the Delta handle the
-  network signed (`port/linux/src/fork_developers.h`), with the same checks
-  (`display.developer_flames` turns all of them off).
 - **Invite links that last.** A host's `halo://join/` link can stay the
   same from run to run (`network.lasting_invite`), to post on a website.
 - **ChupathingyCE's server on OpenCE's master servers.** With an approved
